@@ -53,7 +53,7 @@ pub(crate) struct RestPolicy {
 
 #[derive(Debug)]
 pub(crate) struct RestProtocol<C> {
-    codec: C,
+    codec: std::sync::Arc<C>,
     policy: RestPolicy,
     // Plans for ordinary output serialization. Streaming heads use a different strategy.
     response_plans: ResponsePlanCache,
@@ -65,7 +65,7 @@ pub(crate) struct RestProtocol<C> {
 impl<C> RestProtocol<C> {
     pub(crate) fn new(codec: C, policy: RestPolicy) -> Self {
         Self {
-            codec,
+            codec: std::sync::Arc::new(codec),
             policy,
             response_plans: Default::default(),
             error_plans: Default::default(),
@@ -109,11 +109,15 @@ impl<C> RestProtocol<C> {
     }
 
     pub(crate) fn codec(&self) -> &C {
-        &self.codec
+        self.codec.as_ref()
     }
 
     pub(crate) fn policy(&self) -> &RestPolicy {
         &self.policy
+    }
+
+    pub(crate) fn shared_codec(&self) -> std::sync::Arc<C> {
+        self.codec.clone()
     }
 
     /// The `Content-Type` a response for `output` carries, if any: the runtime mirror of the
@@ -165,7 +169,7 @@ impl<C: Codec> RestProtocol<C> {
             request.body(),
         )?;
         Ok(Box::new(RestRequestDeserializer::new(
-            &self.codec,
+            self.codec.as_ref(),
             request.uri_ref(),
             request.headers(),
             request.body(),
@@ -177,7 +181,7 @@ impl<C: Codec> RestProtocol<C> {
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<Response, SerdeError> {
-        self.serialize_response_with_codec(&self.codec, output, value)
+        self.serialize_response_with_codec(self.codec.as_ref(), output, value)
     }
 
     /// Uses a protocol-configured codec while retaining the shared HTTP binding plans and policy.
@@ -228,7 +232,7 @@ impl<C: Codec> RestProtocol<C> {
         body: BoxBody,
     ) -> Result<Response, SerdeError> {
         let parts = serialize_response_parts(
-            &self.codec,
+            self.codec.as_ref(),
             output,
             value,
             ResponseBindings::Rest,
@@ -341,10 +345,11 @@ mod cache_tests {
                 serializer.write_integer(&STATUS, 202)
             }
         }
-        let actual = snapshot(cached.serialize_streaming_response(&STREAM_OUTPUT, &Head, stream())).await;
+        let actual =
+            snapshot(cached.serialize_streaming_response(&STREAM_OUTPUT, &Head, &STREAM, Some(stream()))).await;
         assert_eq!(
             actual,
-            snapshot(uncached.serialize_streaming_response(&STREAM_OUTPUT, &Head, stream())).await
+            snapshot(uncached.serialize_streaming_response(&STREAM_OUTPUT, &Head, &STREAM, Some(stream()))).await
         );
         assert_eq!(actual.2.as_ref(), b"stream");
     }

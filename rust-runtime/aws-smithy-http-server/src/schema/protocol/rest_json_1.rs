@@ -127,6 +127,16 @@ impl ServerProtocol for RestJson1Protocol {
         self.inner.deserialize_request(input, request)
     }
 
+    fn deserialize_data_stream(
+        &self,
+        _input: &'static Schema<'static>,
+        streaming_member: &'static Schema<'static>,
+        request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
+        let _ = streaming_member;
+        crate::schema::StreamingRequestDecoder::rest(request, self.inner.shared_codec())
+    }
+
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
         self.inner
             .serialize_response(output, value)
@@ -137,10 +147,11 @@ impl ServerProtocol for RestJson1Protocol {
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
-        body: BoxBody,
+        _streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
     ) -> Response {
         self.inner
-            .serialize_streaming_response(output, value, body)
+            .serialize_streaming_response(output, value, body.unwrap_or_else(crate::body::empty))
             .unwrap_or_else(serialization_failure)
     }
 
@@ -172,6 +183,15 @@ impl ServerProtocol for RestJson1Protocol {
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         use crate::protocol::rest::router::Error;
         use crate::schema::routing::RoutingErrorKind;
+        if err.kind() == RoutingErrorKind::MissingContentType {
+            return self.serialize_rejection(
+                crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime: err.expected_content_type().cloned(),
+                    found_mime: None,
+                }
+                .into(),
+            );
+        }
         let error = match err.kind() {
             RoutingErrorKind::MethodNotAllowed => Error::MethodNotAllowed,
             _ => Error::NotFound,

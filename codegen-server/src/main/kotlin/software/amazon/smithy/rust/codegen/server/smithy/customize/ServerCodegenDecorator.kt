@@ -8,9 +8,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.customize
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
@@ -20,6 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConfigMethod
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStreamingOperationCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import java.util.logging.Logger
@@ -80,14 +83,26 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
     fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
 
     /**
-     * Additional protocol registries for the schema-serde path. Each writable renders a
-     * `&'static aws_smithy_http_server::schema::ProtocolRegistry` expression — typically a
-     * reference to a crate's static registry, which keeps every protocol the crate provides,
-     * and each protocol's ordering constraints, in one place. The built-in registry is always
-     * consulted; a registry registering a protocol another registry (built-ins included)
-     * already registers fails the service build.
+     * Static runtime registries contributed by this extension for the schema-serde service.
+     * A registry can provide several protocols and their ordering constraints. This hook is
+     * called once per service, only on the schema HTTP serde path.
      */
-    fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> = emptyList()
+    fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> = emptyList()
+
+    /**
+     * Additional `map.insert(...)` statements for a shape's lazy schema trait map.
+     * This lets downstream generators attach typed metadata without adding fields to Schema.
+     */
+    fun schemaTraitInsertions(
+        codegenContext: ServerCodegenContext,
+        shape: Shape,
+    ): List<Writable> = emptyList()
+
+    /** Streaming glue for an operation whose transport stream is hidden behind a generated wrapper. */
+    fun schemaStreamingOperation(
+        codegenContext: ServerCodegenContext,
+        operation: OperationShape,
+    ): ServerStreamingOperationCustomization? = null
 }
 
 /**
@@ -150,8 +165,19 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
         orderedDecorators.flatMap { it.configMethods(codegenContext) }
 
-    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> =
+    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> =
         orderedDecorators.flatMap { it.protocolRegistries(codegenContext) }
+
+    override fun schemaTraitInsertions(
+        codegenContext: ServerCodegenContext,
+        shape: Shape,
+    ): List<Writable> = orderedDecorators.flatMap { it.schemaTraitInsertions(codegenContext, shape) }
+
+    override fun schemaStreamingOperation(
+        codegenContext: ServerCodegenContext,
+        operation: OperationShape,
+    ): ServerStreamingOperationCustomization? =
+        orderedDecorators.firstNotNullOfOrNull { it.schemaStreamingOperation(codegenContext, operation) }
 
     companion object {
         fun fromClasspath(

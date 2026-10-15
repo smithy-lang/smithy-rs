@@ -122,7 +122,7 @@ internal class ServerCargoMetadataTest {
                 "codegen": {"schemaSerde": true, "http-1x": true,
                             "addValidationExceptionToConstrainedOperations": false, "rpcV2CborAddCapitalizedRoute": true},
                 "customizationConfig": {"protocols": {
-                    "global": {"requestBodyMaxBytes": 4096},
+                    "common": {"requestBodyMaxBytes": 4096},
                     "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false},
                     "aws.protocols#restXml": {"acceptTextXml": true},
                     "example#custom": {"nested": {"enabled": true, "limit": 3, "names": ["one", "two"]}}
@@ -137,7 +137,7 @@ internal class ServerCargoMetadataTest {
         codegen.toMap().size shouldBe 4
         val protocols = metadata.protocolTables()
         protocols.containsKey(ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID) shouldBe false
-        protocols["global"] shouldBe mapOf("requestBodyMaxBytes" to 4096L)
+        protocols["common"] shouldBe mapOf("requestBodyMaxBytes" to 4096L)
         protocols["aws.protocols#restXml"] shouldBe mapOf("acceptTextXml" to true)
         protocols["example#custom"] shouldBe mapOf("nested" to mapOf("enabled" to true, "limit" to 3L, "names" to listOf("one", "two")))
     }
@@ -201,14 +201,14 @@ internal class ServerCargoMetadataTest {
                             "codegen": {"schemaSerde": true, "http-1x": true,
                                         "debugMode": false, "publicConstrainedTypes": false, "formatTimeoutSeconds": 20.0},
                             "customizationConfig": {"example": {"enabled": true},
-                                                    "protocols": {"global": {"requestBodyMaxBytes": 1024}}}
+                                                    "protocols": {"common": {"requestBodyMaxBytes": 1024}}}
             }""",
                         ).expectObjectNode(),
                 ),
                 testCoverage = HttpTestType.Default,
             ).single()
         val metadata = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("package.metadata")
-        metadata.getLong("customizationConfig.protocols.global.requestBodyMaxBytes") shouldBe 1024L
+        metadata.getLong("customizationConfig.protocols.common.requestBodyMaxBytes") shouldBe 1024L
         metadata.getBoolean("codegen.schemaSerde") shouldBe true
         metadata.getBoolean("codegen.http-1x") shouldBe true
         metadata.getList<String>("smithy.protocol") shouldBe listOf("aws.protocols#restJson1")
@@ -238,7 +238,7 @@ internal class ServerCargoMetadataTest {
                             Node.objectNode().withMember("codegen", codegen).withMember(
                                 "customizationConfig",
                                 Node.parse(
-                                    """{"example": {"enabled": true}, "protocols": {"global": {"requestBodyMaxBytes": 1024}}}""",
+                                    """{"example": {"enabled": true}, "protocols": {"common": {"requestBodyMaxBytes": 1024}}}""",
                                 ),
                             ),
                         cargoCommand = "cargo test --quiet --lib --tests",

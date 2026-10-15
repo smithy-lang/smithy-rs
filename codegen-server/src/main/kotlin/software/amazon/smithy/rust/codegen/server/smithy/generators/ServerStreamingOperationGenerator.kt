@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -57,10 +58,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
  * The half that does not stream is written in terms of the collected path: `DeserializableShape` for the
  * input, `ServerProtocol::serialize_response` for the output.
  */
+interface ServerStreamingOperationCustomization {
+    fun deserializeInput(generator: ServerStreamingOperationGenerator): Writable? = null
+
+    fun serializeOutput(generator: ServerStreamingOperationGenerator): Writable? = null
+}
+
 class ServerStreamingOperationGenerator(
     private val codegenContext: ServerCodegenContext,
     private val operationShape: OperationShape,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+    private val customization: ServerStreamingOperationCustomization? = null,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -97,10 +105,12 @@ class ServerStreamingOperationGenerator(
             "ShapeDeserializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeDeserializer"),
             "SharedServerProtocol" to smithyHttpServer.resolve("schema::SharedServerProtocol"),
             "StreamingInputFuture" to smithyHttpServer.resolve("operation::StreamingInputFuture"),
+            "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
+            "RequestBody" to smithyHttpServer.resolve("body::RequestBody"),
+            "deserialize_streaming_request" to smithyHttpServer.resolve("operation::deserialize_streaming_request"),
             "StreamingOperationShape" to smithyHttpServer.resolve("operation::StreamingOperationShape"),
             "apply_initial_request" to schemaEventStream.resolve("apply_initial_request"),
             "boxed" to smithyHttpServer.resolve("body::boxed"),
-            "empty" to smithyHttpServer.resolve("body::empty"),
             "event_stream_response_body" to schemaEventStream.resolve("event_stream_response_body"),
             "InitialResponsePolicy" to schemaEventStream.resolve("InitialResponsePolicy"),
             "futures_util" to ServerCargoDependency.FuturesUtil.toType(),
@@ -117,11 +127,10 @@ class ServerStreamingOperationGenerator(
             """
             impl #{StreamingOperationShape} for $operationName {
                 fn deserialize_streaming_input(
-                    deserializer: &mut dyn #{ShapeDeserializer},
-                    body: #{SdkBody},
+                    request: #{Request}<#{RequestBody}>,
                     protocol: #{SharedServerProtocol},
                 ) -> #{StreamingInputFuture}<Self::Input> {
-                    #{deserialize:W}
+                    #{entry:W}
                 }
 
                 fn serialize_streaming_output(output: Self::Output, protocol: &#{SharedServerProtocol}) -> #{Response} {
@@ -130,10 +139,76 @@ class ServerStreamingOperationGenerator(
             }
             """,
             *codegenScope,
-            "deserialize" to deserializeInput(),
-            "serialize" to serializeOutput(),
+            "entry" to deserializeEntry(),
+            "serialize" to (customization?.serializeOutput(this) ?: serializeOutput()),
         )
     }
+
+    private fun deserializeEntry(): Writable =
+        writable {
+            val member = streamingBlobInputMember(codegenContext, inputShape)
+            if (member == null) {
+                rustTemplate(
+                    """
+                #{deserialize_streaming_request}(
+                    <Self as #{SchemaOperationShape}>::SCHEMA, request, protocol,
+                    |deserializer, body, protocol| { #{deserialize:W} },
+                )
+                """,
+                    *codegenScope,
+                    "deserialize" to (customization?.deserializeInput(this@ServerStreamingOperationGenerator) ?: deserializeInput()),
+                )
+            } else {
+                val builder = inputShape.serverBuilderSymbol(codegenContext)
+                val missing =
+                    ServerBuilderConstraintViolations(codegenContext, inputShape, true, validationExceptionConversionGenerator).forMember(member)
+
+                rustTemplate(
+                    """
+                #{Box}::pin(async move {
+                    let schema = <Self as #{SchemaOperationShape}>::SCHEMA;
+                    protocol.validate_request_headers(schema, request.headers())?;
+                    let decoder = protocol.deserialize_data_stream(
+                        schema.input(), schema.input().members()[${inputShape.allMembers.values.indexOf(member)}], request,
+                    )?;
+                    #{StreamingInput}::prepare(
+                        decoder, #{Builder}::default(), #{Input}::${ServerSchemaDeserializeGenerator.INTO_FUNCTION_NAME},
+                        |builder, present| {
+                            #{presence:W}
+                            #{finish:W}
+                        },
+                    ).await
+                })
+                """,
+                    *codegenScope,
+                    "StreamingInput" to smithyHttpServer.resolve("schema::StreamingInput"),
+                    "Builder" to builder,
+                    "Input" to symbolProvider.toSymbol(inputShape),
+                    "presence" to
+                        writable {
+                            if (missing != null) {
+                                rustTemplate(
+                                    """
+                            if !present {
+                                return #{Err}(#{DeserializeError}::ConstraintViolation(#{Box}::new(
+                                    #{ValidationException}::from(#{Violation}::${missing.name()})
+                                )));
+                            }
+                            """,
+                                    *codegenScope,
+                                    "ValidationException" to validationExceptionSymbol(),
+                                    "Violation" to (if (codegenContext.settings.codegenConfig.publicConstrainedTypes) codegenContext.constraintViolationSymbolProvider else software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider(codegenContext.constraintViolationSymbolProvider)).toSymbol(inputShape),
+                                )
+                            } else {
+                                rustTemplate("let _ = present;")
+                            }
+                        },
+                    "finish" to finishInput(),
+                )
+            }
+        }
+
+    fun validationExceptionSymbol() = validationExceptionConversionGenerator.validationExceptionSymbol()
 
     // ---- request side ----
 
@@ -150,15 +225,18 @@ class ServerStreamingOperationGenerator(
                     return #{Box}::pin(#{ready}(#{Err}(#{DeserializeError}::from(err))));
                 }
                 #{Box}::pin(async move {
-                    #{attach:W}
-                    builder.$field = #{Some}(streaming);
+                    #{attachAndSet:W}
                     #{finish:W}
                 })
                 """,
                 *codegenScope,
                 "Builder" to builderSymbol,
                 "Input" to inputSymbol,
-                "attach" to attachStreamingInput(streamingMember, inputSymbol),
+                "attachAndSet" to
+                    writable {
+                        attachStreamingInput(streamingMember, inputSymbol)(this)
+                        rustTemplate("builder.$field = #{Some}(streaming);", *preludeScope)
+                    },
                 "finish" to finishInput(),
             )
         }
@@ -181,10 +259,9 @@ class ServerStreamingOperationGenerator(
         inputSymbol: software.amazon.smithy.codegen.core.Symbol,
     ): Writable =
         writable {
-            if (member.isEventStream(model)) {
-                val unionShape = model.expectShape(member.target, UnionShape::class.java)
-                rustTemplate(
-                    """
+            val unionShape = model.expectShape(member.target, UnionShape::class.java)
+            rustTemplate(
+                """
                     let unmarshaller = #{unmarshaller}::new(protocol.clone());
                     let mut streaming = <#{Receiver}>::new(unmarshaller, body);
                     #{apply_initial_request}(|message_type| streaming.try_recv_initial(message_type), &protocol, |deser| {
@@ -192,26 +269,22 @@ class ServerStreamingOperationGenerator(
                     })
                     .await?;
                     """,
-                    *codegenScope,
-                    "Input" to inputSymbol,
-                    "unmarshaller" to unmarshaller(unionShape),
-                    "Receiver" to symbolProvider.toSymbol(member).mapRustType { it.stripOuter<RustType.Option>() },
-                )
-            } else {
-                // A streaming blob is the body as is; the protocol has nothing to add.
-                rustTemplate(
-                    """
-                    let _ = &protocol;
-                    let streaming = #{ByteStream}::new(body);
-                    """,
-                    *codegenScope,
-                )
-            }
+                *codegenScope,
+                "Input" to inputSymbol,
+                "unmarshaller" to unmarshaller(unionShape),
+                "Receiver" to symbolProvider.toSymbol(member).mapRustType { it.stripOuter<RustType.Option>() },
+            )
         }
 
     private fun finishInput(): Writable =
         writable {
-            if (inputShape.canReachConstrainedShape(model, symbolProvider)) {
+            val fallible =
+                if (streamingBlobInputMember(codegenContext, inputShape) != null) {
+                    ServerBuilderConstraintViolations(codegenContext, inputShape, true, validationExceptionConversionGenerator).all.isNotEmpty()
+                } else {
+                    inputShape.canReachConstrainedShape(model, symbolProvider)
+                }
+            if (fallible) {
                 // A constraint violation becomes the modeled validation exception, exactly as the collected path
                 // and the legacy `RequestRejection` path do.
                 rustTemplate(
@@ -253,10 +326,15 @@ class ServerStreamingOperationGenerator(
                 """
                 let mut output = output;
                 let body = match #{take} {
-                    #{Some}(streaming) => { #{body:W} }
-                    #{None} => #{empty}(),
+                    #{Some}(streaming) => #{Some}({ #{body:W} }),
+                    #{None} => #{None},
                 };
-                protocol.serialize_streaming_response(<Self as #{SchemaOperationShape}>::SCHEMA.output(), &output, body)
+                protocol.serialize_streaming_response(
+                    <Self as #{SchemaOperationShape}>::SCHEMA.output(),
+                    &output,
+                    <Self as #{SchemaOperationShape}>::SCHEMA.output().members()[${outputShape.allMembers.values.indexOf(streamingMember)}],
+                    body,
+                )
                 """,
                 *codegenScope,
                 "body" to streamingBody(streamingMember),
@@ -275,7 +353,7 @@ class ServerStreamingOperationGenerator(
         }
 
     /** A stand-in left behind in the output when its required streaming member is moved out. */
-    private fun placeholder(member: MemberShape): Writable =
+    fun placeholder(member: MemberShape): Writable =
         writable {
             if (member.isEventStream(model)) {
                 rustTemplate("#{EventStreamSender}::from(#{futures_util}::stream::empty())", *codegenScope)
@@ -327,7 +405,7 @@ class ServerStreamingOperationGenerator(
     // ---- the generated shape dispatch in `crate::event_stream_serde` ----
 
     /** The historical `crate::event_stream_serde::<Union>Marshaller` name, aliased to the runtime generic. */
-    private fun marshaller(unionShape: UnionShape): RuntimeType {
+    fun marshaller(unionShape: UnionShape): RuntimeType {
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val name = "${unionSymbol.name.toPascalCase()}Marshaller"
         return RuntimeType.forInlineFun(name, eventStreamSerdeModule) {
@@ -346,7 +424,7 @@ class ServerStreamingOperationGenerator(
      * The historical `crate::event_stream_serde::<Union>ErrorMarshaller` name, plus the
      * `SerializableEventError` dispatch naming each modeled error's `:exception-type`.
      */
-    private fun errorMarshaller(unionShape: UnionShape): RuntimeType {
+    fun errorMarshaller(unionShape: UnionShape): RuntimeType {
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val name = "${unionSymbol.name.toPascalCase()}ErrorMarshaller"
         if (unionShape.eventStreamErrors().isEmpty()) {
@@ -399,7 +477,7 @@ class ServerStreamingOperationGenerator(
      * `DeserializableEventStream` dispatch handing each frame to the named event struct's
      * schema-guided walker.
      */
-    private fun unmarshaller(unionShape: UnionShape): RuntimeType {
+    fun unmarshaller(unionShape: UnionShape): RuntimeType {
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val name = "${unionSymbol.name.toPascalCase()}Unmarshaller"
         val errorSymbol =
@@ -460,19 +538,29 @@ class ServerStreamingOperationGenerator(
                     )
                     return@forEach
                 }
-                val target = model.expectShape(member.target, StructureShape::class.java)
+                val target = model.expectShape(member.target)
                 rustBlockTemplate("${member.memberName.dq()} =>", *codegenScope) {
                     rustTemplate(
                         """
                         let mut deser = frame.deserializer();
                         let parsed = #{Target}::${ServerSchemaDeserializeGenerator.FUNCTION_NAME}(&mut deser)
                             .map_err(|err| #{EventStreamError}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}")))?;
+                        #{require_variant}
                         #{finish:W}
                         #{Ok}(#{Some}(#{Union}::$variantName(parsed)))
                         """,
                         *codegenScope,
                         "Target" to symbolProvider.toSymbol(target),
                         "Union" to unionSymbol,
+                        "require_variant" to
+                            writable {
+                                if (target is UnionShape && codegenContext.settings.codegenConfig.allowMissingUnionVariant) {
+                                    rustTemplate(
+                                        """let parsed = parsed.ok_or_else(|| #{EventStreamError}::unmarshalling("missing event union variant"))?;""",
+                                        *codegenScope,
+                                    )
+                                }
+                            },
                         "finish" to constrainedBuild(target, "failed to unmarshall ${member.memberName} due to constraint violation: {err}"),
                     )
                 }
@@ -523,11 +611,21 @@ class ServerStreamingOperationGenerator(
      * maps constraint violations to the historical unmarshalling error text.
      */
     private fun constrainedBuild(
-        target: StructureShape,
+        target: Shape,
         errorText: String,
     ): Writable =
         writable {
-            if (target.canReachConstrainedShape(model, symbolProvider)) {
+            if (target is UnionShape && target.canReachConstrainedShape(model, symbolProvider)) {
+                rustTemplate(
+                    """
+                    let parsed: #{Target} = parsed.try_into()
+                        .map_err(|err: #{ConstraintViolation}| #{EventStreamError}::unmarshalling(format!(${errorText.dq()})))?;
+                    """,
+                    *codegenScope,
+                    "Target" to symbolProvider.toSymbol(target),
+                    "ConstraintViolation" to codegenContext.constraintViolationSymbolProvider.toSymbol(target),
+                )
+            } else if (target.canReachConstrainedShape(model, symbolProvider)) {
                 rustTemplate(
                     """
                     let parsed = parsed.build()
@@ -537,4 +635,21 @@ class ServerStreamingOperationGenerator(
                 )
             }
         }
+}
+
+/** Only schema-driven operation inputs move their streaming blob into StreamingInput<T>. */
+internal fun streamingBlobInputMember(
+    context: ServerCodegenContext,
+    shape: software.amazon.smithy.model.shapes.StructureShape,
+): MemberShape? {
+    if (!context.usesSchemaHttpSerde) return null
+    if (software.amazon.smithy.model.knowledge.TopDownIndex.of(context.model)
+            .getContainedOperations(context.serviceShape).none { it.input.orElse(null) == shape.id }
+    ) {
+        return null
+    }
+    return shape.members().firstOrNull {
+        val target = context.model.expectShape(it.target)
+        target.isBlobShape && target.hasTrait(software.amazon.smithy.model.traits.StreamingTrait::class.java)
+    }
 }

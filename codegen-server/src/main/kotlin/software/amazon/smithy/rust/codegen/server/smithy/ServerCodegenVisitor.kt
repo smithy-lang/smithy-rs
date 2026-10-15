@@ -9,6 +9,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -150,16 +151,11 @@ open class ServerCodegenVisitor(
                 codegenDecorator,
                 RustServerCodegenPlugin::baseSymbolProvider,
             )
-        protocolGeneratorFactories =
-            codegenDecorator.protocols(
-                service.id,
-                ServerProtocolLoader.defaultProtocols { it ->
-                    codegenDecorator.httpCustomizations(
-                        serverSymbolProviders.symbolProvider,
-                        it,
-                    )
-                },
-            )
+        val builtInFactories =
+            ServerProtocolLoader.defaultProtocols {
+                codegenDecorator.httpCustomizations(serverSymbolProviders.symbolProvider, it)
+            }
+        protocolGeneratorFactories = codegenDecorator.protocols(service.id, builtInFactories)
         val (protocolShape, protocolGeneratorFactory) =
             ServerProtocolLoader(protocolGeneratorFactories).protocolFor(context.model, service)
         codegenContext =
@@ -340,7 +336,12 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.schemaSerde) {
-            ServerSchemaConstantGenerator(codegenContext, writer, shape).render()
+            ServerSchemaConstantGenerator(
+                codegenContext,
+                writer,
+                shape,
+                codegenDecorator.schemaTraitInsertions(codegenContext, shape),
+            ).render()
         }
     }
 
@@ -356,11 +357,13 @@ open class ServerCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) {
+            val streamingBlob = software.amazon.smithy.rust.codegen.server.smithy.generators.streamingBlobInputMember(codegenContext, shape)
+            val fieldsShape = if (streamingBlob == null) shape else shape.toBuilder().removeMember(streamingBlob.memberName).build()
             StructureGenerator(
                 model,
                 codegenContext.symbolProvider,
                 this,
-                shape,
+                fieldsShape,
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                 structSettings = codegenContext.structSettings(),
             ).render()
@@ -752,7 +755,14 @@ open class ServerCodegenVisitor(
                 codegenContext,
                 serverProtocol,
                 isConfigBuilderFallible,
-                codegenDecorator.protocolRegistries(codegenContext),
+                if (codegenContext.usesSchemaHttpSerde) {
+                    codegenDecorator.protocolRegistries(codegenContext)
+                } else {
+                    emptyList()
+                },
+                TopDownIndex.of(model).getContainedOperations(shape)
+                    .filter { codegenDecorator.schemaStreamingOperation(codegenContext, it) != null }
+                    .map { it.id }.toSet(),
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)
@@ -785,9 +795,13 @@ open class ServerCodegenVisitor(
 
         // Under `schemaSerde`, a streaming operation runs on the schema path end to end: its
         // `StreamingOperationShape` glue replaces the legacy `FromRequest`/`IntoResponse` pair.
+        val streamingCustomization = codegenDecorator.schemaStreamingOperation(codegenContext, shape)
         val schemaStreaming =
             codegenContext.usesSchemaHttpSerde &&
-                (shape.inputShape(model).hasStreamingMember(model) || shape.outputShape(model).hasStreamingMember(model))
+                (
+                    streamingCustomization != null ||
+                        shape.inputShape(model).hasStreamingMember(model) || shape.outputShape(model).hasStreamingMember(model)
+                )
 
         // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
@@ -797,6 +811,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
+                    streamingCustomization,
                 ).render(this)
             }
         }

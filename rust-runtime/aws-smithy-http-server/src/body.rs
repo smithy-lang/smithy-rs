@@ -33,31 +33,29 @@ pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 /// that need thread safety guarantees.
 pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 
-/// A request body on the schema-routing pipeline, generic over the transport body `B`.
+/// A request body on the schema-routing pipeline.
 ///
-/// A request entering through the transport keeps its concrete body — hyper's
-/// [`Incoming`](hyper::body::Incoming) by default — inside the `Passthrough` state, unerased and
-/// monomorphized. The routing service replaces it with the `Buffered` state after collecting for
-/// a body-first protocol. Sources that are not the transport body (tests, upgrade layers, Lambda
-/// events) enter through [`RequestBody::new`], which erases them into a boxed state.
+/// A request entering through hyper keeps its [`Incoming`](hyper::body::Incoming) body
+/// inside the `Hyper` state, without boxing. The routing service replaces it with the
+/// `Buffered` state after collecting for a body-first protocol. Other compatible HTTP bodies
+/// enter through [`RequestBody::new`], which erases them into a boxed state.
 ///
 /// The states are private so buffering and transport-specific optimizations can evolve.
 ///
-/// `RequestBody<B>` is `Send`, and `Sync` whenever `B` is. The `Sync` bound is required so a
-/// request body can be handed to [`SdkBody::from_body_1_x`] when an operation input has a
-/// streaming member; `SdkBody` only accepts `Sync` bodies.
+/// `RequestBody` is `Send` and `Sync`, so it can be handed to [`SdkBody::from_body_1_x`]
+/// when an operation input has a streaming member; `SdkBody` only accepts `Sync` bodies.
 ///
 /// [`SdkBody::from_body_1_x`]: aws_smithy_types::body::SdkBody::from_body_1_x
 #[derive(Debug)]
-pub struct RequestBody<B = hyper::body::Incoming>(BodyInner<B>);
+pub struct RequestBody(BodyInner);
 
 /// The default request body: the schema pipeline over hyper's transport body.
-pub type Body = RequestBody<hyper::body::Incoming>;
+pub type Body = RequestBody;
 
 #[derive(Debug)]
-enum BodyInner<B> {
-    /// The transport's own body, untouched. May have been partially polled.
-    Passthrough(B),
+enum BodyInner {
+    /// A hyper incoming body. May have been partially polled.
+    Hyper(hyper::body::Incoming),
     /// An erased body from a non-transport source. May have been partially polled.
     Boxed(BoxBodySync),
     /// Content held in memory, replayed as a data frame then an optional trailers frame.
@@ -67,19 +65,18 @@ enum BodyInner<B> {
     },
 }
 
-impl<B> RequestBody<B> {
+impl RequestBody {
     /// Wraps any compatible HTTP body without polling it.
     ///
-    /// The transport body `B` and an already-wrapped `RequestBody<B>` stay unerased; any other
+    /// A hyper incoming body and an already-wrapped `RequestBody` stay unerased; any other
     /// body type is erased into a boxed state.
     pub fn new<T>(body: T) -> Self
     where
-        B: 'static,
         T: http_body::Body<Data = Bytes> + Send + Sync + 'static,
         T::Error: Into<BoxError>,
     {
         try_downcast::<Self, T>(body)
-            .or_else(|body| try_downcast::<B, T>(body).map(|body| Self(BodyInner::Passthrough(body))))
+            .or_else(|body| try_downcast::<hyper::body::Incoming, T>(body).map(|body| Self(BodyInner::Hyper(body))))
             .unwrap_or_else(|body| Self(BodyInner::Boxed(boxed_sync(body))))
     }
 
@@ -95,7 +92,7 @@ impl<B> RequestBody<B> {
     pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
         match &self.0 {
             BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
-            BodyInner::Passthrough(_) | BodyInner::Boxed(_) => None,
+            BodyInner::Hyper(_) | BodyInner::Boxed(_) => None,
         }
     }
 
@@ -116,57 +113,52 @@ impl<B> RequestBody<B> {
     }
 }
 
-impl<B> Default for RequestBody<B> {
+impl Default for RequestBody {
     fn default() -> Self {
         Self::empty()
     }
 }
 
-/// The transport body enters unerased, in the `Passthrough` state.
+/// The transport body enters unerased, in the `Hyper` state.
 ///
-/// A generic `From<B>` would overlap the content conversions below, so the conversion is
-/// offered for the concrete transport type.
+/// Other compatible HTTP bodies can be wrapped with [`RequestBody::new`].
 impl From<hyper::body::Incoming> for Body {
     fn from(body: hyper::body::Incoming) -> Self {
-        Self(BodyInner::Passthrough(body))
+        Self(BodyInner::Hyper(body))
     }
 }
 
-impl<B> From<Bytes> for RequestBody<B> {
+impl From<Bytes> for RequestBody {
     fn from(bytes: Bytes) -> Self {
         Self::from_bytes(bytes)
     }
 }
 
-impl<B> From<Vec<u8>> for RequestBody<B> {
+impl From<Vec<u8>> for RequestBody {
     fn from(bytes: Vec<u8>) -> Self {
         Self::from_bytes(bytes.into())
     }
 }
 
-impl<B> From<&'static [u8]> for RequestBody<B> {
+impl From<&'static [u8]> for RequestBody {
     fn from(bytes: &'static [u8]) -> Self {
         Self::from_bytes(Bytes::from_static(bytes))
     }
 }
 
-impl<B> From<String> for RequestBody<B> {
+impl From<String> for RequestBody {
     fn from(string: String) -> Self {
         Self::from_bytes(string.into())
     }
 }
 
-impl<B> From<&'static str> for RequestBody<B> {
+impl From<&'static str> for RequestBody {
     fn from(string: &'static str) -> Self {
         Self::from_bytes(Bytes::from_static(string.as_bytes()))
     }
 }
 
-impl<B> http_body::Body for RequestBody<B>
-where
-    B: http_body::Body<Data = Bytes> + Unpin,
-    B::Error: Into<BoxError>,
-{
+impl http_body::Body for RequestBody {
     type Data = Bytes;
     type Error = Error;
 
@@ -175,7 +167,7 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Result<http_body::Frame<Bytes>, Error>>> {
         match &mut self.0 {
-            BodyInner::Passthrough(body) => std::pin::Pin::new(body)
+            BodyInner::Hyper(body) => std::pin::Pin::new(body)
                 .poll_frame(cx)
                 .map(|frame| frame.map(|result| result.map_err(Error::new))),
             BodyInner::Boxed(body) => std::pin::Pin::new(body).poll_frame(cx),
@@ -192,7 +184,7 @@ where
 
     fn is_end_stream(&self) -> bool {
         match &self.0 {
-            BodyInner::Passthrough(body) => body.is_end_stream(),
+            BodyInner::Hyper(body) => body.is_end_stream(),
             BodyInner::Boxed(body) => body.is_end_stream(),
             BodyInner::Buffered { bytes, trailers } => {
                 bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
@@ -201,7 +193,7 @@ where
     }
     fn size_hint(&self) -> http_body::SizeHint {
         match &self.0 {
-            BodyInner::Passthrough(body) => body.size_hint(),
+            BodyInner::Hyper(body) => body.size_hint(),
             BodyInner::Boxed(body) => body.size_hint(),
             BodyInner::Buffered { bytes, .. } => {
                 http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
@@ -355,7 +347,7 @@ impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
 ///
 /// Passing `limit == 0` disables the check and collects the entire body (the
 /// historical behavior, *not* recommended — see the security notes on the
-/// `customizationConfig.protocols.global.requestBodyMaxBytes` setting).
+/// `customizationConfig.protocols.common.requestBodyMaxBytes` setting).
 /// Collection yields after 64 ready frame polls, including empty frames and trailers.
 #[doc(hidden)]
 pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
@@ -599,6 +591,61 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn request_body_preserves_buffered_bytes_and_trailers() {
+        use http_body_util::BodyExt;
+
+        for body in [
+            RequestBody::from(Bytes::from_static(b"data")),
+            RequestBody::from(b"data".to_vec()),
+        ] {
+            let mut body = RequestBody::new(body);
+            assert_eq!(body.buffered_content().unwrap(), "data");
+            assert_eq!(body.size_hint().exact(), Some(4));
+            assert_eq!(body.frame().await.unwrap().unwrap().into_data().unwrap(), "data");
+            assert!(body.is_end_stream());
+        }
+
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("x-checksum", http::HeaderValue::from_static("complete"));
+        let mut body = RequestBody::new(RequestBody::buffered(
+            Bytes::from_static(b"data"),
+            Some(trailers.clone()),
+        ));
+        assert_eq!(body.frame().await.unwrap().unwrap().into_data().unwrap(), "data");
+        assert!(!body.is_end_stream());
+        assert_eq!(body.frame().await.unwrap().unwrap().into_trailers().unwrap(), trailers);
+        assert!(body.is_end_stream());
+        assert!(body.frame().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn request_body_boxes_custom_stream_without_polling_ahead() {
+        use http_body_util::BodyExt;
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use std::task::Poll;
+
+        let polls = Arc::new(AtomicUsize::new(0));
+        let observed = polls.clone();
+        let frames = futures_util::stream::poll_fn(move |_| {
+            Poll::Ready(match observed.fetch_add(1, Ordering::SeqCst) {
+                0 => Some(Ok(http_body::Frame::data(Bytes::from_static(b"data")))),
+                1 => Some(Err(Error::new(std::io::Error::other("stream failed")))),
+                _ => None,
+            })
+        });
+        let mut body = RequestBody::new(http_body_util::StreamBody::new(frames));
+        assert!(matches!(&body.0, BodyInner::Boxed(_)));
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(body.frame().await.unwrap().unwrap().into_data().unwrap(), "data");
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+        assert!(body.frame().await.unwrap().is_err());
+        assert!(body.frame().await.is_none());
+    }
 
     #[test]
     fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {

@@ -30,11 +30,10 @@ use tower::{Service, ServiceExt};
 fn strict_context(targets: &[OperationTarget]) -> RouterBuildContext<'_> {
     static CONFIG: std::sync::LazyLock<crate::schema::ServiceConfig> = std::sync::LazyLock::new(Default::default);
     RouterBuildContext {
-        service: &REST_JSON,
+        service: &REST_JSON_AND_RPC_V2_CBOR,
         targets,
         config: &CONFIG,
         protocol_settings: None,
-        claim_mode: ClaimMode::Strict,
     }
 }
 
@@ -45,6 +44,69 @@ async fn assert_wire_response(actual: Response<BoxBody>, expected: Response<BoxB
         actual.into_body().collect().await.unwrap().to_bytes(),
         expected.into_body().collect().await.unwrap().to_bytes(),
     );
+}
+
+#[test]
+fn external_routers_inspect_service_protocols_from_the_schema() {
+    use crate::schema::ProtocolRegistration;
+    use aws_smithy_types::Document;
+
+    static BODY_SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("test", "bodyRouting"),
+            shape_id!("smithy.protocols", "rpcv2Cbor"),
+        ],
+        OPERATIONS,
+    );
+    static METADATA_SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("test", "metadataRouting"),
+            shape_id!("smithy.protocols", "rpcv2Cbor"),
+        ],
+        OPERATIONS,
+    );
+    static ORDER: &[ProtocolOrder] = &[
+        ProtocolOrder::Before("aws.protocols#restJson1"),
+        ProtocolOrder::After("smithy.protocols#rpcv2Cbor"),
+    ];
+
+    for (service, id, registration) in [
+        (
+            &BODY_SERVICE,
+            shape_id!("test", "bodyRouting"),
+            ProtocolRegistration::body_routed::<BodyProtocol>("test#bodyRouting"),
+        ),
+        (
+            &METADATA_SERVICE,
+            shape_id!("test", "metadataRouting"),
+            ProtocolRegistration::metadata_routed::<MetadataProtocol>("test#metadataRouting"),
+        ),
+    ] {
+        let expected = Document::Array(
+            ["aws.protocols#restJson1", id.as_str(), "smithy.protocols#rpcv2Cbor"]
+                .into_iter()
+                .map(|id| Document::String(id.into()))
+                .collect(),
+        );
+        let options = ProtocolOptions::default().with_protocol_settings(HashMap::from([(
+            id,
+            Document::Object(HashMap::from([("expectedServiceProtocols".into(), expected)])),
+        )]));
+        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
+            service,
+            [registry_of(registration.with_order(ORDER))],
+            OPERATIONS.iter().map(|operation| echo(operation)),
+            options,
+        )
+        .build()
+        .unwrap();
+    }
 }
 
 #[tokio::test]
@@ -253,7 +315,7 @@ async fn sole_custom_metadata_router_retains_control_of_claims() {
 }
 
 #[test]
-fn streaming_recognition_agrees_with_strict_and_sole_claims() {
+fn streaming_recognition_agrees_with_single_and_multiple_enabled_protocols() {
     static EVENT: Schema<'static> = Schema::new_member(
         shape_id!("test", "EventsInput", "events"),
         ShapeType::Union,
@@ -267,9 +329,10 @@ fn streaming_recognition_agrees_with_strict_and_sole_claims() {
             .with_http(HttpTrait::new("POST", "/events", Some(200)));
     static OPERATION: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &INPUT, &UNIT, &[]);
     let targets = [OperationTarget::new(0, &OPERATION)];
-    for mode in [ClaimMode::Strict, ClaimMode::SoleProtocol] {
+    for service in [&REST_JSON_AND_RPC_V2_CBOR, &REST_JSON] {
         let mut context = strict_context(&targets);
-        context.claim_mode = mode;
+        context.service = service;
+        let is_sole_protocol = context.service_protocols().len() == 1;
         let rest = rest_router(&context, "application/json", &[]).unwrap();
         let aws = aws_json_router(&context, "application/x-amz-json-1.1").unwrap();
         let cbor = rpc_v2_cbor_router(&context).unwrap();
@@ -286,8 +349,7 @@ fn streaming_recognition_agrees_with_strict_and_sole_claims() {
                     builder = builder.header("content-type", content_type);
                 }
                 let request = builder.body(()).unwrap();
-                let expected =
-                    mode == ClaimMode::SoleProtocol || content_type == Some("application/vnd.amazon.eventstream");
+                let expected = is_sole_protocol || content_type == Some("application/vnd.amazon.eventstream");
                 assert_eq!(router.recognizes_streaming_input(&request), expected);
                 assert_eq!(
                     matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)),
@@ -307,15 +369,15 @@ fn streaming_recognition_agrees_with_strict_and_sole_claims() {
                 cbor.recognizes_streaming_input(&request),
                 protocol_header == Some("rpc-v2-cbor")
             );
-            match (mode, protocol_header) {
-                (ClaimMode::Strict, Some("rpc-v2-cbor")) => {
+            match (is_sole_protocol, protocol_header) {
+                (false, Some("rpc-v2-cbor")) => {
                     assert!(matches!(cbor.claim(&request), RouteClaim::Claimed));
                 }
-                (ClaimMode::SoleProtocol, Some("rpc-v2-cbor")) => {
+                (true, Some("rpc-v2-cbor")) => {
                     assert!(matches!(cbor.claim(&request), RouteClaim::ClaimedWithRoute(_)));
                 }
-                (ClaimMode::Strict, _) => assert!(matches!(cbor.claim(&request), RouteClaim::NoClaim)),
-                (ClaimMode::SoleProtocol, _) => {
+                (false, _) => assert!(matches!(cbor.claim(&request), RouteClaim::NoClaim)),
+                (true, _) => {
                     assert!(matches!(cbor.claim(&request), RouteClaim::DeferredRejection(_)));
                 }
             }
@@ -859,13 +921,13 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
     static BOTH: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &EVENT, &BLOB, &[]);
 
     let config = ProtocolOptions::default();
-    for (operation, input, output, blob) in [
-        (&FIRST, false, false, false),
-        (&INPUT_BLOB, true, false, true),
-        (&OUTPUT_BLOB, false, true, true),
-        (&INPUT_EVENT, true, false, false),
-        (&OUTPUT_EVENT, false, true, false),
-        (&BOTH, true, true, true),
+    for (operation, input, output, blob, event_input) in [
+        (&FIRST, false, false, false, false),
+        (&INPUT_BLOB, true, false, true, false),
+        (&OUTPUT_BLOB, false, true, true, false),
+        (&INPUT_EVENT, true, false, false, true),
+        (&OUTPUT_EVENT, false, true, false, false),
+        (&BOTH, true, true, true, true),
     ] {
         // Metadata and CBOR eligibility must not depend on a dense handler-index table.
         let target = OperationTarget::new(usize::MAX, operation);
@@ -875,10 +937,9 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
         assert_eq!(target.has_streaming_output(), output);
         assert_eq!(target.has_streaming_blob(), blob);
 
-        for claim_mode in [ClaimMode::Strict, ClaimMode::SoleProtocol] {
+        for service in [&REST_JSON_AND_RPC_V2_CBOR, &RPC] {
             let router = rpc_v2_cbor_router(&RouterBuildContext {
-                claim_mode,
-                service: &REST_JSON,
+                service,
                 targets: &[target],
                 config: &config.service_config,
                 protocol_settings: None,
@@ -890,16 +951,12 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
                 .header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor")
                 .body(())
                 .unwrap();
-            assert_eq!(router.recognizes_streaming_input(&request), input && !blob);
-            if blob {
-                assert_eq!(router.route(&request).unwrap_err().status_code(), 404);
-                if claim_mode == ClaimMode::Strict {
-                    assert!(matches!(router.claim(&request), RouteClaim::Claimed));
-                } else {
-                    assert!(matches!(router.claim(&request), RouteClaim::DeferredRejection(_)));
-                }
+            assert_eq!(router.recognizes_streaming_input(&request), event_input);
+            assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
+            if service.protocols().len() > 1 {
+                assert!(matches!(router.claim(&request), RouteClaim::Claimed));
             } else {
-                assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
+                assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
             }
         }
     }
@@ -910,8 +967,7 @@ fn cbor_claim_requires_the_header_post_and_a_known_service_operation() {
     let options = ProtocolOptions::default();
     let targets = [OperationTarget::new(0, &FIRST)];
     let router = rpc_v2_cbor_router(&RouterBuildContext {
-        claim_mode: ClaimMode::Strict,
-        service: &RPC,
+        service: &REST_JSON_AND_RPC_V2_CBOR,
         targets: &targets,
         config: &options.service_config,
         protocol_settings: None,
@@ -1241,6 +1297,149 @@ mod multi_protocol {
     }
 
     #[tokio::test]
+    async fn deferred_rest_claims_yield_to_definite_claims_and_replay_collected_bodies() {
+        static AFTER: &[ProtocolOrder] = &[ProtocolOrder::After("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(AFTER)]);
+        // A later body protocol definitely selects another operation.
+        assert_eq!(
+            send(&app, post("/first"), "second\npayload").await,
+            (StatusCode::OK, "test#bodyRouting second second\npayload".to_owned()),
+        );
+        // A later decline leaves the first deferred route intact and replays the body.
+        for mode in [
+            None,
+            Some("deferred-head"),
+            Some("deferred-body"),
+            Some("defer-head"),
+            Some("defer-body"),
+        ] {
+            let mut request = post("/first");
+            if let Some(mode) = mode {
+                request = request.header("x-body-claim", mode);
+            }
+            assert_eq!(
+                send(&app, request, "unknown\npayload").await,
+                (
+                    StatusCode::OK,
+                    "aws.protocols#restJson1 first unknown\npayload".to_owned()
+                ),
+                "{mode:?}",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn earlier_body_deferred_claims_win_until_a_definite_rest_claim() {
+        static BEFORE: &[ProtocolOrder] = &[ProtocolOrder::Before("aws.protocols#restJson1")];
+        let app = app(&WITH_BODY_ROUTING, [body_routing(BEFORE)]);
+        for mode in ["deferred-head", "deferred-body"] {
+            assert_eq!(
+                send(&app, post("/first").header("x-body-claim", mode), "payload").await,
+                (StatusCode::OK, "test#bodyRouting first payload".to_owned()),
+            );
+            assert_eq!(
+                send(
+                    &app,
+                    post("/first")
+                        .header("x-body-claim", mode)
+                        .header("content-type", "application/json"),
+                    "payload",
+                )
+                .await,
+                (StatusCode::OK, "aws.protocols#restJson1 first payload".to_owned()),
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn deferred_rest_claims_preserve_headerless_requests_when_rpc_protocols_are_added() {
+        static LABEL: Schema<'static> =
+            Schema::new_member(shape_id!("test", "Input", "id"), ShapeType::String, "id", 0).with_http_label();
+        static GET: Schema<'static> = Schema::new_struct(shape_id!("test", "Get"), ShapeType::Structure, &[&LABEL])
+            .with_original_name("Get")
+            .with_http(HttpTrait::new("GET", "/widgets/{id}", Some(200)));
+        static DELETE: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Delete"), ShapeType::Structure, &[&LABEL])
+                .with_original_name("Delete")
+                .with_http(HttpTrait::new("DELETE", "/widgets/{id}", Some(200)));
+        static GET_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &GET, &UNIT, &[]);
+        static DELETE_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &DELETE, &UNIT, &[]);
+        static REST: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restJson1")],
+            &[&GET_OP, &DELETE_OP],
+        );
+        static CBOR: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+            ],
+            &[&GET_OP, &DELETE_OP],
+        );
+        static JSON: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("aws.protocols", "awsJson1_1"),
+            ],
+            &[&GET_OP, &DELETE_OP],
+        );
+        static XML: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[shape_id!("aws.protocols", "restXml")],
+            &[&GET_OP, &DELETE_OP],
+        );
+        static XML_CBOR: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restXml"),
+                shape_id!("smithy.protocols", "rpcv2Cbor"),
+            ],
+            &[&GET_OP, &DELETE_OP],
+        );
+        static XML_JSON: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restXml"),
+                shape_id!("aws.protocols", "awsJson1_1"),
+            ],
+            &[&GET_OP, &DELETE_OP],
+        );
+        for (schema, protocol) in [
+            (&REST, "aws.protocols#restJson1"),
+            (&CBOR, "aws.protocols#restJson1"),
+            (&JSON, "aws.protocols#restJson1"),
+            (&XML, "aws.protocols#restXml"),
+            (&XML_CBOR, "aws.protocols#restXml"),
+            (&XML_JSON, "aws.protocols#restXml"),
+        ] {
+            let app = app(schema, []);
+            for (method, operation) in [("GET", "first"), ("DELETE", "second")] {
+                assert_eq!(
+                    send(&app, Request::builder().method(method).uri("/widgets/123"), "").await,
+                    (StatusCode::OK, format!("{protocol} {operation} ")),
+                );
+            }
+        }
+        assert_eq!(
+            send(
+                &app(&CBOR, []),
+                post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor"),
+                "",
+            )
+            .await,
+            (StatusCode::OK, "smithy.protocols#rpcv2Cbor first ".to_owned()),
+        );
+    }
+
+    #[tokio::test]
     async fn each_builtin_claims_by_its_identifying_characteristics() {
         let app = app(&BUILTINS, []);
         let cases = [
@@ -1275,6 +1474,8 @@ mod multi_protocol {
                 post("/second").header("content-type", "application/xml"),
                 "aws.protocols#restXml second ",
             ),
+            // No definite protocol identification: the first deferred REST claim wins.
+            (post("/first"), "aws.protocols#restJson1 first "),
         ];
         for (request, expected) in cases {
             assert_eq!(send(&app, request, "").await, (StatusCode::OK, expected.to_owned()));
@@ -1287,8 +1488,6 @@ mod multi_protocol {
         let unclaimed = [
             // A REST route whose `Content-Type` no REST protocol derives.
             post("/first").header("content-type", "text/plain"),
-            // An empty body does not waive the required content type for claiming.
-            post("/first"),
             // awsJson without its media type.
             post("/").header("x-amz-target", "Service.first"),
             Request::builder().method("GET").uri("/nowhere"),
@@ -1576,7 +1775,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn rpc_v2_cbor_rejects_streaming_blobs_while_rest_serves_them() {
+    async fn rpc_v2_cbor_routes_blob_operations_as_legacy_does_while_rest_serves_them() {
         static DATA: Schema<'static> =
             Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
                 .with_streaming()
@@ -1605,7 +1804,7 @@ mod multi_protocol {
         let rpc = || post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor");
         for service in [&BOTH, &CBOR_ONLY] {
             let (status, _) = send(&app(service, []), rpc(), "").await;
-            assert_eq!(status, StatusCode::NOT_FOUND, "{:?}", service.protocols());
+            assert_eq!(status, StatusCode::OK, "{:?}", service.protocols());
         }
         let (status, text) = send(
             &app(&BOTH, []),
@@ -1619,9 +1818,9 @@ mod multi_protocol {
         );
     }
 
-    /// Inputs with only URI bindings still use each protocol's default for identification.
+    /// Headerless REST requests use protocol priority; a present Content-Type identifies the codec.
     #[tokio::test]
-    async fn rest_claims_uri_bound_inputs_by_the_protocol_default() {
+    async fn rest_json_plus_rest_xml_without_content_type_uses_protocol_priority() {
         static ID_LABEL: Schema<'static> =
             Schema::new_member(shape_id!("test", "Widget", "id"), ShapeType::String, "id", 0).with_http_label();
         static WIDGET: Schema<'static> =
@@ -1629,6 +1828,9 @@ mod multi_protocol {
                 .with_original_name("Widget")
                 .with_http(HttpTrait::new("GET", "/widgets/{id}", Some(200)));
         static GET_WIDGET: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &WIDGET, &UNIT, &[]);
+        static PING_INPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Ping"), ShapeType::Structure, &[])
+            .with_http(HttpTrait::new("POST", "/ping", Some(200)));
+        static PING: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &PING_INPUT, &UNIT, &[]);
         static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
             None,
@@ -1636,8 +1838,25 @@ mod multi_protocol {
                 shape_id!("aws.protocols", "restJson1"),
                 shape_id!("aws.protocols", "restXml"),
             ],
-            &[&GET_WIDGET],
+            &[&GET_WIDGET, &PING],
         );
+        static REVERSED_SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restXml"),
+                shape_id!("aws.protocols", "restJson1"),
+            ],
+            &[&GET_WIDGET, &PING],
+        );
+        for schema in [&SERVICE, &REVERSED_SERVICE] {
+            for (method, uri, operation) in [("GET", "/widgets/123", "first"), ("POST", "/ping", "second")] {
+                assert_eq!(
+                    send(&app(schema, []), Request::builder().method(method).uri(uri), "").await,
+                    (StatusCode::OK, format!("aws.protocols#restJson1 {operation} ")),
+                );
+            }
+        }
         let app = app(&SERVICE, []);
         for (content_type, expected) in [
             ("application/json", "aws.protocols#restJson1 first "),
@@ -1656,15 +1875,63 @@ mod multi_protocol {
                 (StatusCode::OK, expected.to_owned()),
             );
         }
-        for request in [
-            Request::builder().method("GET").uri("/widgets/123"),
-            Request::builder()
-                .method("GET")
-                .uri("/widgets/123")
-                .header("content-type", "text/plain"),
-        ] {
-            assert_eq!(send(&app, request, "").await.0, StatusCode::NOT_FOUND);
+        // Unmatched routes retain the generic XML response without reading the request body.
+        for method in ["GET", "POST"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri("/no-such-route")
+                        .body(untouchable_body())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            assert!(response.headers().is_empty());
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "<UnknownOperationException/>\n",
+            );
         }
+        assert_eq!(
+            send(
+                &app,
+                Request::builder()
+                    .method("GET")
+                    .uri("/widgets/123")
+                    .header("content-type", "text/plain"),
+                "",
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND,
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_rest_protocol_claims_yield_to_later_definite_claims() {
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            SERVICE_ID,
+            None,
+            &[
+                shape_id!("aws.protocols", "restJson1"),
+                shape_id!("aws.protocols", "restXml"),
+                shape_id!("test", "bodyRouting"),
+            ],
+            OPERATIONS,
+        );
+        static AFTER: &[ProtocolOrder] = &[ProtocolOrder::After("aws.protocols#restXml")];
+        assert_eq!(
+            send(
+                &app(&SERVICE, [body_routing(AFTER)]),
+                post("/first").header("x-body-claim", "known-route"),
+                "payload",
+            )
+            .await,
+            (StatusCode::OK, "test#bodyRouting first payload".to_owned()),
+        );
     }
 
     /// Both buffered and streaming blob payloads derive application/octet-stream.
@@ -2536,7 +2803,7 @@ fn rest_payload_claims_respect_modeled_media_types_and_shape_defaults() {
 }
 
 #[test]
-fn rest_claims_synthetic_empty_inputs_by_the_protocol_default() {
+fn rest_defers_claims_for_headerless_synthetic_empty_inputs() {
     let targets = [OperationTarget::new(0, &FIRST)];
     for codec_content_type in ["application/json", "application/xml"] {
         let router = rest_router(&strict_context(&targets), codec_content_type, &[]).unwrap();
@@ -2548,8 +2815,217 @@ fn rest_claims_synthetic_empty_inputs_by_the_protocol_default() {
             .unwrap();
         assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
         let request = Request::builder().method("POST").uri("/first").body(()).unwrap();
-        assert!(matches!(router.claim(&request), RouteClaim::NoClaim));
+        assert!(matches!(router.claim(&request), RouteClaim::DeferredClaim(_)));
     }
+}
+
+#[tokio::test]
+async fn headerless_rest_claims_depend_on_required_body_members_and_non_null_defaults() {
+    use aws_smithy_schema::{AnnotationTrait, DocumentTrait, TraitMap};
+    use aws_smithy_types::Document;
+    use std::sync::LazyLock;
+
+    static REQUIRED: LazyLock<TraitMap> = LazyLock::new(|| {
+        let mut traits = TraitMap::new();
+        traits.insert(Box::new(AnnotationTrait::new(shape_id!("smithy.api", "required"))));
+        traits
+    });
+    static DEFAULTED: LazyLock<TraitMap> = LazyLock::new(|| {
+        let mut traits = TraitMap::new();
+        traits.insert(Box::new(AnnotationTrait::new(shape_id!("smithy.api", "required"))));
+        traits.insert(Box::new(DocumentTrait::new(
+            shape_id!("smithy.api", "default"),
+            Document::String("fallback".into()),
+        )));
+        traits
+    });
+    static NULL_DEFAULT: LazyLock<TraitMap> = LazyLock::new(|| {
+        let mut traits = TraitMap::new();
+        traits.insert(Box::new(AnnotationTrait::new(shape_id!("smithy.api", "required"))));
+        traits.insert(Box::new(DocumentTrait::new(
+            shape_id!("smithy.api", "default"),
+            Document::Null,
+        )));
+        traits
+    });
+    static REQUIRED_VALUE: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Required", "value"), ShapeType::String, "value", 0)
+            .with_traits(&REQUIRED);
+    static DEFAULT_VALUE: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Defaulted", "value"), ShapeType::String, "value", 0)
+            .with_traits(&DEFAULTED);
+    static NULL_VALUE: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Null", "value"), ShapeType::String, "value", 0)
+            .with_traits(&NULL_DEFAULT);
+    static LABEL: Schema<'static> = Schema::new_member(shape_id!("test", "Bound", "id"), ShapeType::String, "id", 0)
+        .with_traits(&REQUIRED)
+        .with_http_label();
+    static HEADER: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Bound", "header"), ShapeType::String, "header", 1)
+            .with_traits(&REQUIRED)
+            .with_http_header("x-required");
+    static QUERY: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Bound", "query"), ShapeType::String, "query", 2)
+            .with_traits(&REQUIRED)
+            .with_http_query("required");
+    static REQUIRED_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Required"), ShapeType::Structure, &[&REQUIRED_VALUE])
+            .with_http(HttpTrait::new("POST", "/required", Some(200)));
+    static DEFAULT_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "Defaulted"), ShapeType::Structure, &[&DEFAULT_VALUE])
+            .with_http(HttpTrait::new("POST", "/defaulted", Some(200)));
+    static NULL_INPUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Null"),
+        ShapeType::Structure,
+        &[&NULL_VALUE],
+    )
+    .with_http(HttpTrait::new("POST", "/null", Some(200)));
+    static BOUND_INPUT: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Bound"),
+        ShapeType::Structure,
+        &[&LABEL, &HEADER, &QUERY],
+    )
+    .with_http(HttpTrait::new("GET", "/bound/{id}", Some(200)));
+    static REQUIRED_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &REQUIRED_INPUT, &UNIT, &[]);
+    static DEFAULT_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &DEFAULT_INPUT, &UNIT, &[]);
+    static NULL_OP: OperationSchema<'static> = OperationSchema::new(shape_id!("test", "null"), &NULL_INPUT, &UNIT, &[]);
+    static BOUND_OP: OperationSchema<'static> =
+        OperationSchema::new(shape_id!("test", "bound"), &BOUND_INPUT, &UNIT, &[]);
+    let targets = [
+        OperationTarget::new(0, &REQUIRED_OP),
+        OperationTarget::new(1, &DEFAULT_OP),
+        OperationTarget::new(2, &NULL_OP),
+        OperationTarget::new(3, &BOUND_OP),
+    ];
+    for codec in ["application/json", "application/xml"] {
+        let router = rest_router(&strict_context(&targets), codec, &[]).unwrap();
+        for uri in ["/required", "/null"] {
+            let request = Request::builder().method("POST").uri(uri).body(()).unwrap();
+            let RouteClaim::DeferredRejection(error) = router.claim(&request) else {
+                panic!("required body input must defer a rejection");
+            };
+            assert_eq!(error.kind(), RoutingErrorKind::MissingContentType);
+            assert_eq!(error.expected_content_type().unwrap().essence_str(), codec);
+        }
+        for (method, uri) in [("POST", "/defaulted"), ("GET", "/bound/123")] {
+            let request = Request::builder().method(method).uri(uri).body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::DeferredClaim(_)));
+        }
+    }
+    static REST_JSON: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("smithy.protocols", "rpcv2Cbor"),
+        ],
+        &[&REQUIRED_OP],
+    );
+    static REST_XML: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restXml"),
+            shape_id!("smithy.protocols", "rpcv2Cbor"),
+        ],
+        &[&REQUIRED_OP],
+    );
+    static BOTH_REST: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("aws.protocols", "restXml"),
+        ],
+        &[&REQUIRED_OP],
+    );
+    let mut context = strict_context(&targets);
+    context.service = &BOTH_REST;
+    for codec in ["application/json", "application/xml"] {
+        let router = rest_router(&context, codec, &[]).unwrap();
+        for uri in ["/required", "/null"] {
+            let request = Request::builder().method("POST").uri(uri).body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::DeferredRejection(_)));
+        }
+        for (method, uri) in [("POST", "/defaulted"), ("GET", "/bound/123")] {
+            let request = Request::builder().method(method).uri(uri).body(()).unwrap();
+            assert!(matches!(router.claim(&request), RouteClaim::DeferredClaim(_)));
+        }
+    }
+    for (schema, codec) in [
+        (&REST_JSON, "application/json"),
+        (&REST_XML, "application/xml"),
+        (&BOTH_REST, "application/json"),
+    ] {
+        let app = app(schema, []);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/required")
+                    .body(Body::new(http_body_util::StreamBody::new(
+                        futures_util::stream::poll_fn(|_| -> Poll<Option<Result<Frame<Bytes>, Error>>> {
+                            panic!("schema-based deferred rejection must not read the body")
+                        }),
+                    )))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+        let protocol = app
+            .state
+            .protocols
+            .iter()
+            .find(|entry| {
+                entry
+                    .protocol
+                    .protocol_id()
+                    .as_str()
+                    .ends_with(if codec == "application/json" {
+                        "restJson1"
+                    } else {
+                        "restXml"
+                    })
+            })
+            .unwrap();
+        let expected = protocol.protocol.serialize_rejection(
+            crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
+                expected_mime: Some(codec.parse().unwrap()),
+                found_mime: None,
+            }
+            .into(),
+        );
+        assert_wire_response(response, expected).await;
+    }
+    // Even a known REST rejection yields to a later definite body claim.
+    static WITH_BODY: ServiceSchema<'static> = ServiceSchema::new(
+        SERVICE_ID,
+        None,
+        &[
+            shape_id!("aws.protocols", "restJson1"),
+            shape_id!("test", "bodyRouting"),
+        ],
+        &[&REQUIRED_OP],
+    );
+    static AFTER: &[ProtocolOrder] = &[ProtocolOrder::After("aws.protocols#restJson1")];
+    let response = app(&WITH_BODY, [body_routing(AFTER)])
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/required")
+                .header("x-body-claim", "known-route")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes(),
+        "test#bodyRouting first "
+    );
 }
 
 #[test]

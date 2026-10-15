@@ -79,6 +79,10 @@ impl OperationTarget {
     pub fn has_streaming_input(self) -> bool {
         self.metadata.input_streaming.is_some()
     }
+    /// Whether the operation consumes an event stream, rather than a streaming blob.
+    pub fn has_event_stream_input(self) -> bool {
+        self.metadata.input_streaming == Some(StreamingKind::EventStream)
+    }
     /// Whether the operation produces a streaming output.
     pub fn has_streaming_output(self) -> bool {
         self.metadata.output_streaming.is_some()
@@ -123,27 +127,15 @@ impl ProtocolOptions {
     }
 }
 
-/// Whether the router participates in protocol arbitration.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ClaimMode {
-    /// Apply normal protocol ownership checks.
-    #[default]
-    Strict,
-    /// This is the only installed protocol. Built-in metadata routers use native
-    /// operation routing and leave Content-Type validation to deserialization.
-    SoleProtocol,
-}
-
 /// Everything a protocol sees when building its router: the service, the
 /// assigned targets, the shared service configuration, and the protocol's own
-/// settings section and claim mode. Constructed by the routing service builder, so a protocol never
-/// sees another protocol's settings.
+/// settings section. [`Self::service_protocols`] lets a protocol detect conflicting
+/// combinations or adapt its claim behavior using the existing service schema.
+/// Constructed by the routing service builder, so a protocol never sees another
+/// protocol's settings.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct RouterBuildContext<'a> {
-    /// Whether this router is the sole protocol or participates in arbitration.
-    /// The router remains responsible for its own claim behavior in either mode.
-    pub claim_mode: ClaimMode,
     /// The service schema.
     pub service: &'static ServiceSchema<'static>,
     /// The operations to route, with targets assigned by the routing service.
@@ -153,6 +145,17 @@ pub struct RouterBuildContext<'a> {
     /// This protocol's section of [`ProtocolOptions::protocol_settings`], when
     /// one was configured.
     pub protocol_settings: Option<&'a Document>,
+}
+
+impl RouterBuildContext<'_> {
+    /// Returns the protocols served by this service in schema order, not claim order.
+    ///
+    /// Includes this protocol, but excludes registered protocols the service does
+    /// not serve. The slice borrows the static service schema and can be retained
+    /// by the router without copying it or borrowing the build context.
+    pub fn service_protocols(&self) -> &'static [ShapeId<'static>] {
+        self.service.protocols()
+    }
 }
 
 /// Failure to bind handlers, resolve protocols, or construct service routing.
@@ -197,18 +200,22 @@ pub enum ProtocolResolutionError {
 /// A protocol's answer to whether a request is its own.
 ///
 /// A multi-protocol service asks its protocols in priority order and dispatches to the first that
-/// claims the request. Once claimed, routing errors are terminal and framed by that protocol.
+/// definitely claims the request. If none does, the first deferred claim owns it.
+/// Once selected, routing errors are terminal and framed by that protocol.
 #[derive(Debug)]
 pub enum RouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly.
     ClaimedWithRoute(OperationTarget),
+    /// The protocol can handle the operation if no protocol makes a definite claim.
+    /// Continue arbitration; the first deferred claim wins over deferred rejections.
+    DeferredClaim(OperationTarget),
     /// The protocol claims the request. Call [`MetadataProtocolRouter::route`] or
     /// [`BodyProtocolRouter::route_with_body`] to select the operation or return a terminal
     /// routing error. No other protocol is asked.
     Claimed,
     /// The request signals this protocol but does not meet its claiming requirements.
-    /// Continue asking other protocols. If none claims, the first deferred rejection
-    /// in protocol precision order is serialized by the protocol that supplied it.
+    /// Continue asking other protocols. If none definitely or provisionally claims,
+    /// the first deferred rejection in precision order is serialized by its protocol.
     DeferredRejection(RoutingError),
     /// The protocol does not identify the request; the next protocol is asked.
     NoClaim,
@@ -267,6 +274,9 @@ pub enum BodyRouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly without
     /// calling [`BodyProtocolRouter::route_with_body`].
     ClaimedWithRoute(OperationTarget),
+    /// Offer an operation without collecting the body. A later definite claim wins;
+    /// otherwise the first deferred claim in precision order is dispatched.
+    DeferredClaim(OperationTarget),
     /// The protocol claims the request. The service collects the complete body,
     /// then calls [`BodyProtocolRouter::route_with_body`].
     /// No other protocol is asked, including when routing returns an error.
@@ -275,7 +285,7 @@ pub enum BodyRouteClaim {
     /// collects the complete body and calls [`BodyProtocolRouter::claim_with_body`].
     NeedsBodyToClaim,
     /// Defer a rejection from the head without collecting the body. A later claim wins;
-    /// otherwise the first deferred rejection in precision order supplies the response.
+    /// otherwise a deferred claim wins, or the first deferred rejection supplies the response.
     DeferredRejection(RoutingError),
     /// The request is not this protocol's; the next protocol is asked.
     NoClaim,
@@ -292,7 +302,8 @@ pub enum BodyRouteClaim {
 /// streaming input, `NeedsBodyToClaim` is skipped; head claims retain priority.
 ///
 /// Routing errors are terminal and serialized by the claiming protocol.
-/// An unclaimed request uses the first deferred rejection, if any, or the
+/// Without a definite claim, the first deferred claim is dispatched. An unclaimed
+/// request uses the first deferred rejection, if any, or the
 /// service's protocol-neutral response, including for a single-protocol service.
 pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
     /// Checks the request head, requesting body collection if needed.

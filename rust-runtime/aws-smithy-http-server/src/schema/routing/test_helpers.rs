@@ -38,6 +38,15 @@ pub(super) static PROTOCOLS: &[ShapeId<'static>] = &[shape_id!("test", "bodyRout
 pub(super) static SERVICE: ServiceSchema<'static> = ServiceSchema::new(SERVICE_ID, None, PROTOCOLS, OPERATIONS);
 pub(super) static REST_JSON: ServiceSchema<'static> =
     ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restJson1")], OPERATIONS);
+pub(super) static REST_JSON_AND_RPC_V2_CBOR: ServiceSchema<'static> = ServiceSchema::new(
+    SERVICE_ID,
+    None,
+    &[
+        shape_id!("aws.protocols", "restJson1"),
+        shape_id!("smithy.protocols", "rpcv2Cbor"),
+    ],
+    OPERATIONS,
+);
 pub(super) static REST_XML: ServiceSchema<'static> =
     ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "restXml")], OPERATIONS);
 pub(super) static AWS_JSON_10: ServiceSchema<'static> = ServiceSchema::new(
@@ -117,12 +126,16 @@ impl BodyProtocolRouter for BodyRouter {
     fn claim(&self, request: &Request<()>) -> BodyRouteClaim {
         match claim_mode(request.headers()) {
             Some("known-route") => BodyRouteClaim::ClaimedWithRoute(self.targets[0]),
+            Some("deferred-head") => BodyRouteClaim::DeferredClaim(self.targets[0]),
             Some("envelope") => BodyRouteClaim::Claimed,
             Some("defer-head") => BodyRouteClaim::DeferredRejection(RoutingError::malformed(InvalidName)),
             _ => BodyRouteClaim::NeedsBodyToClaim,
         }
     }
     fn claim_with_body(&self, request: &Request<CollectedBody>) -> RouteClaim {
+        if claim_mode(request.headers()) == Some("deferred-body") {
+            return RouteClaim::DeferredClaim(self.targets[0]);
+        }
         if claim_mode(request.headers()) == Some("defer-body") {
             return RouteClaim::DeferredRejection(RoutingError::malformed(InvalidName));
         }
@@ -147,6 +160,21 @@ impl BodyProtocolRouter for BodyRouter {
         self.select(request)?.ok_or_else(RoutingError::unknown_operation)
     }
 }
+fn assert_service_protocols(ctx: &RouterBuildContext<'_>) {
+    let protocols: &'static [ShapeId<'static>] = ctx.service_protocols();
+    if let Some(expected) = ctx
+        .protocol_settings
+        .and_then(|settings| settings.as_object())
+        .and_then(|settings| settings.get("expectedServiceProtocols"))
+        .and_then(|expected| expected.as_array())
+    {
+        assert_eq!(
+            protocols.iter().map(|id| id.as_str()).collect::<Vec<_>>(),
+            expected.iter().map(|id| id.as_string().unwrap()).collect::<Vec<_>>(),
+        );
+    }
+}
+
 impl crate::schema::BodyRoutedProtocol for BodyProtocol {
     fn from_build_context(ctx: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
         Ok(Self {
@@ -158,17 +186,7 @@ impl crate::schema::BodyRoutedProtocol for BodyProtocol {
         &self,
         ctx: RouterBuildContext<'_>,
     ) -> Result<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
-        // Registries can contain many available protocols; only the service's resolved
-        // protocols determine whether arbitration is needed. These fixtures resolve all
-        // declared protocols, including the body-only and mixed service cases.
-        assert_eq!(
-            ctx.claim_mode,
-            if ctx.service.protocols().len() == 1 {
-                ClaimMode::SoleProtocol
-            } else {
-                ClaimMode::Strict
-            }
-        );
+        assert_service_protocols(&ctx);
         if let Some(config) = self.factory_body_config {
             assert_eq!(config, ctx.config.request_body.global);
         }
@@ -177,6 +195,58 @@ impl crate::schema::BodyRoutedProtocol for BodyProtocol {
         })
     }
 }
+/// A metadata-only fixture that reuses REST routing and serialization.
+#[derive(Debug, Default)]
+pub(super) struct MetadataProtocol {
+    inner: crate::schema::protocol::RestJson1Protocol,
+}
+
+impl crate::schema::MetadataRoutedProtocol for MetadataProtocol {
+    fn from_build_context(_: &crate::schema::ProtocolBuildContext<'_>) -> Result<Self, RouterBuildError> {
+        Ok(Self::default())
+    }
+
+    fn build_router(
+        &self,
+        ctx: RouterBuildContext<'_>,
+    ) -> Result<impl MetadataProtocolRouter + 'static + use<>, RouterBuildError> {
+        assert_service_protocols(&ctx);
+        rest_router(&ctx, "application/json", &[])
+    }
+}
+
+impl ServerProtocol for MetadataProtocol {
+    fn protocol_id(&self) -> &'static ShapeId<'static> {
+        static ID: ShapeId<'static> = shape_id!("test", "metadataRouting");
+        &ID
+    }
+    fn deserialize_request<'a>(
+        &'a self,
+        input: &Schema<'_>,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
+        self.inner.deserialize_request(input, request)
+    }
+    fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response<BoxBody> {
+        self.inner.serialize_response(output, value)
+    }
+    fn serialize_streaming_response(
+        &self,
+        output: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
+    ) -> Response<BoxBody> {
+        self.inner.serialize_streaming_response(output, value, streaming_member, body)
+    }
+    fn serialize_error(&self, error: &dyn HttpModeledError) -> Response<BoxBody> {
+        self.inner.serialize_error(error)
+    }
+    fn serialize_rejection(&self, error: DeserializeError) -> Response<BoxBody> {
+        self.inner.serialize_rejection(error)
+    }
+}
+
 impl ServerProtocol for BodyProtocol {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOLS[0]
@@ -195,9 +265,10 @@ impl ServerProtocol for BodyProtocol {
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
-        body: BoxBody,
+        streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
     ) -> Response<BoxBody> {
-        self.inner.serialize_streaming_response(output, value, body)
+        self.inner.serialize_streaming_response(output, value, streaming_member, body)
     }
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response<BoxBody> {
         self.inner.serialize_error(error)

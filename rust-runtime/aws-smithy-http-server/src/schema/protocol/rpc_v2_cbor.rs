@@ -160,6 +160,16 @@ impl ServerProtocol for RpcV2CborProtocol {
         self.inner.deserialize_request(input, request)
     }
 
+    fn deserialize_data_stream(
+        &self,
+        _input: &'static Schema<'static>,
+        streaming_member: &'static Schema<'static>,
+        request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
+        let _ = streaming_member;
+        crate::schema::StreamingRequestDecoder::cbor(streaming_member, request, self.inner.shared_codec())
+    }
+
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
         self.inner
             .serialize_response(output, value)
@@ -171,10 +181,26 @@ impl ServerProtocol for RpcV2CborProtocol {
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
-        body: BoxBody,
+        streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
     ) -> Response {
+        if streaming_member.shape_type() == aws_smithy_schema::ShapeType::Blob {
+            let Some(body) = body else {
+                return self.serialize_response(output, value);
+            };
+            return match super::rpc_v2_cbor_streaming::body(self.inner.codec(), output, value, streaming_member, body) {
+                Ok(body) => with_protocol_header(
+                    http::Response::builder()
+                        .status(200)
+                        .header(http::header::CONTENT_TYPE, CONTENT_TYPE)
+                        .body(body)
+                        .expect("static CBOR response headers are valid"),
+                ),
+                Err(err) => serialization_failure(err),
+            };
+        }
         self.inner
-            .serialize_streaming_response(output, value, body)
+            .serialize_streaming_response(output, value, body.unwrap_or_else(crate::body::empty))
             .map(with_protocol_header)
             .unwrap_or_else(serialization_failure)
     }

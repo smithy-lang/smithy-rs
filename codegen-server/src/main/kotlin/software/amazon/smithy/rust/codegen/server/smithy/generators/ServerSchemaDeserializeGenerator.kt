@@ -68,8 +68,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
  * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
- * builder ([INTO_FUNCTION_NAME]) that skips the streaming member; the operation's streaming glue attaches
- * that member and builds.
+ * builder ([INTO_FUNCTION_NAME]) that skips the streaming member. Event-stream glue attaches the
+ * event receiver before building; StreamingInput retains the ordinary-field builder until finish().
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
  * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
@@ -103,8 +103,10 @@ class ServerSchemaDeserializeGenerator(
             is StructureShape ->
                 if (shape.isReachableFromOperationInput() && !hasStreamingMember(shape)) {
                     renderStructure(shape)
-                } else if (shape.isReachableFromOperationInput() && isOperationInput(shape)) {
                     renderStructureInto(shape)
+                } else if (shape.isReachableFromOperationInput()) {
+                    renderStructureInto(shape)
+                    if (!isOperationInput(shape)) renderStructure(shape)
                 }
             is UnionShape ->
                 if (shape.isReachableFromOperationInput() && !shape.hasTrait<StreamingTrait>()) {
@@ -207,6 +209,9 @@ class ServerSchemaDeserializeGenerator(
             "arms" to
                 writable {
                     members.forEachIndexed { index, member ->
+                        if (member.isEventStream(model) || model.expectShape(member.target).hasTrait<StreamingTrait>()) {
+                            return@forEachIndexed
+                        }
                         val fieldName = symbolProvider.toMemberName(member)
                         val assignment =
                             if (yieldsOption(member)) {
@@ -235,9 +240,8 @@ class ServerSchemaDeserializeGenerator(
     }
 
     /**
-     * The walker of a streaming operation input: reads every non-streaming member into `builder`. The
-     * streaming member has no wire representation a [ShapeDeserializer] could hand over, so the operation's
-     * streaming glue attaches it and calls `build()`.
+     * Reads ordinary members into the existing builder. Streaming blobs are owned by the runtime
+     * input session, and event receivers are attached by event-stream glue.
      */
     private fun renderStructureInto(shape: StructureShape) {
         val symbol = symbolProvider.toSymbol(shape)
@@ -247,7 +251,7 @@ class ServerSchemaDeserializeGenerator(
         writer.rustTemplate(
             """
             impl ${symbol.name} {
-                /// Reads the non-streaming members of this shape from a [`ShapeDeserializer`](#{ShapeDeserializer})
+                /// Reads the document members of this shape from a [`ShapeDeserializer`](#{ShapeDeserializer})
                 /// guided by [`Self::SCHEMA`] into `builder`.
                 ##[allow(dead_code, unused_variables, unused_mut, clippy::match_single_binding, clippy::single_match)]
                 pub(crate) fn $INTO_FUNCTION_NAME(
@@ -270,7 +274,12 @@ class ServerSchemaDeserializeGenerator(
             "arms" to
                 writable {
                     members.forEachIndexed { index, member ->
-                        if (member.isEventStream(model) || model.expectShape(member.target).hasTrait<StreamingTrait>()) {
+                        if (member.isEventStream(model)) {
+                            return@forEachIndexed
+                        }
+                        if (model.expectShape(member.target) is BlobShape &&
+                            model.expectShape(member.target).hasTrait<StreamingTrait>()
+                        ) {
                             return@forEachIndexed
                         }
                         val fieldName = symbolProvider.toMemberName(member)

@@ -14,7 +14,8 @@ pub(super) static TYPE_MEMBER: Schema<'static> = Schema::new_member(
     ShapeId::from_parts("smithy.api#String", "smithy.api", "String"),
     ShapeType::String,
     "__type",
-    0,
+    // This synthetic member must not reuse a modeled member's response-binding plan.
+    usize::MAX - 1,
 );
 
 /// What the `__type` member carries.

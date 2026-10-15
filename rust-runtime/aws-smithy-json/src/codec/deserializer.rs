@@ -42,6 +42,13 @@ impl<'a> JsonDeserializer<'a> {
         }
     }
 
+    /// Returns the current byte offset relative to the input slice supplied at construction.
+    ///
+    /// Calling this method does not advance the deserializer.
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
     /// Resolves a JSON field name to a member schema.
     fn resolve_member<'s>(
         &self,

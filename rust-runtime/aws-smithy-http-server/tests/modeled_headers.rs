@@ -18,6 +18,15 @@ use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
 use aws_smithy_types::DateTime;
 use bytes::Bytes;
 
+// These head-only tests supply an event stream member; its body is supplied separately.
+static STREAMING_MEMBER: Schema = Schema::new_member(
+    shape_id!("test", "StreamingOutput", "events"),
+    ShapeType::Union,
+    "events",
+    0,
+)
+.with_streaming();
+
 fn member(kind: ShapeType) -> Schema<'static> {
     Schema::new_member(shape_id!("test", "Headers", "value"), kind, "value", 0)
 }
@@ -128,7 +137,12 @@ fn sensitive_header_diagnostics_are_redacted_across_protocols() {
                     .finish();
                 let response = tracing::subscriber::with_default(subscriber, || {
                     if streaming {
-                        protocol.serialize_streaming_response(&schema, &value, aws_smithy_http_server::body::empty())
+                        protocol.serialize_streaming_response(
+                            &schema,
+                            &value,
+                            &STREAMING_MEMBER,
+                            Some(aws_smithy_http_server::body::empty()),
+                        )
                     } else {
                         protocol.serialize_response(&schema, &value)
                     }

@@ -30,12 +30,12 @@ use std::{
 };
 use tower::Service;
 
-pub(super) struct BoundHandler<B> {
+pub(super) struct BoundHandler {
     pub(super) operation: &'static OperationSchema<'static>,
     pub(super) collection_config: RequestBodyCollectionConfig,
-    pub(super) handler_route: SyncRoute<crate::body::RequestBody<B>>,
+    pub(super) handler_route: SyncRoute<crate::body::RequestBody>,
 }
-impl<B> Clone for BoundHandler<B> {
+impl Clone for BoundHandler {
     fn clone(&self) -> Self {
         Self {
             operation: self.operation,
@@ -44,7 +44,7 @@ impl<B> Clone for BoundHandler<B> {
         }
     }
 }
-impl<B> fmt::Debug for BoundHandler<B> {
+impl fmt::Debug for BoundHandler {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BoundHandler")
             .field("operation", &self.operation.shape_id())
@@ -62,22 +62,22 @@ pub(super) struct ProtocolAndRouter {
 /// A service routing normalized requests to a shared handler collection through the protocols the
 /// service declares.
 ///
-/// Generic over the transport body `B`: requests entering with the transport's own body flow to
-/// handlers unerased. The default is hyper's body; any other request body — tests, upgrade
-/// layers, other transports — is accepted and erased into a boxed state on entry.
+/// Hyper incoming bodies flow to handlers without boxing. Other compatible request bodies
+/// are accepted and erased into a boxed state on entry; normalized request bodies retain
+/// their existing representation.
 ///
 /// Clones share all routing state through one `Arc`. Routing clones only the
 /// selected handler, so cloning the service for each request stays cheap.
-pub struct MultiProtocolRoutingService<B = hyper::body::Incoming> {
-    pub(super) state: Arc<RoutingState<B>>,
+pub struct MultiProtocolRoutingService {
+    pub(super) state: Arc<RoutingState>,
 }
 
 /// Routers, handlers, and configuration shared by service clones and in-flight requests.
-pub(super) struct RoutingState<B> {
+pub(super) struct RoutingState {
     /// The served protocols in priority order. Every configuration checks claims;
     /// a single metadata router can do so without an async routing loop.
     pub(super) protocols: Box<[ProtocolAndRouter]>,
-    pub(super) handlers: Box<[BoundHandler<B>]>,
+    pub(super) handlers: Box<[BoundHandler]>,
     /// Indices into `protocols` of metadata routers checked for streaming inputs before body
     /// collection. `None` when the service has no streaming-input operations; otherwise includes
     /// all metadata routers. Recognized streaming inputs skip claims that require body I/O.
@@ -85,14 +85,14 @@ pub(super) struct RoutingState<B> {
     /// The provisional allowance the service collects under for body-first routing.
     pub(super) body_collection_config: RequestBodyCollectionConfig,
 }
-impl<B> Clone for MultiProtocolRoutingService<B> {
+impl Clone for MultiProtocolRoutingService {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
         }
     }
 }
-impl<B> fmt::Debug for MultiProtocolRoutingService<B> {
+impl fmt::Debug for MultiProtocolRoutingService {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MultiProtocolRoutingService")
             .field("protocols", &self.state.protocols)
@@ -115,18 +115,14 @@ fn unclaimed() -> Response<BoxBody> {
         .expect("a status and static body response is valid")
 }
 
-impl<B> MultiProtocolRoutingService<B>
-where
-    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: Into<BoxError>,
-{
+impl MultiProtocolRoutingService {
     /// Hands the routed request to its handler, recording the selection for downstream consumers.
     fn handle(
         &self,
         selected: OperationTarget,
         protocol: usize,
-        mut request: Request<crate::body::RequestBody<B>>,
-    ) -> crate::routing::route::SyncRouteFuture<crate::body::RequestBody<B>> {
+        mut request: Request<crate::body::RequestBody>,
+    ) -> crate::routing::route::SyncRouteFuture<crate::body::RequestBody> {
         let binding = &self.state.handlers[selected.index()];
         debug_assert!(
             std::ptr::eq(binding.operation, selected.operation()),
@@ -140,7 +136,7 @@ where
         binding.handler_route.clone().call_owned(request)
     }
 
-    fn route_request(&self, request: Request<crate::body::RequestBody<B>>) -> MultiProtocolRoutingFuture<B> {
+    fn route_request(&self, request: Request<crate::body::RequestBody>) -> MultiProtocolRoutingFuture {
         let state = match &self.state.protocols[..] {
             // A single metadata router can check its claim synchronously.
             [ProtocolAndRouter {
@@ -156,13 +152,13 @@ where
     }
 
     /// Checks the service's only metadata protocol without allocating a routing future.
-    fn route(&self, router: &dyn MetadataProtocolRouter, request: Request<crate::body::RequestBody<B>>) -> State<B> {
+    fn route(&self, router: &dyn MetadataProtocolRouter, request: Request<crate::body::RequestBody>) -> State {
         // Probe with the head only: the parts move over and back, nothing is cloned,
         // and the router stays free of the transport body type.
         let (parts, body) = request.into_parts();
         let probe = Request::from_parts(parts, ());
         let selected = match router.claim(&probe) {
-            RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+            RouteClaim::ClaimedWithRoute(selected) | RouteClaim::DeferredClaim(selected) => Ok(selected),
             RouteClaim::Claimed => router.route(&probe),
             RouteClaim::DeferredRejection(error) => Err(error),
             RouteClaim::NoClaim => {
@@ -187,18 +183,23 @@ where
     /// Tries protocols in canonical order, retaining the collected body if a router declines.
     async fn route_protocols(
         self,
-        request: Request<crate::body::RequestBody<B>>,
+        request: Request<crate::body::RequestBody>,
     ) -> Result<Response<BoxBody>, Infallible> {
         let (parts, mut body) = request.into_parts();
         let mut probe = Request::from_parts(parts, ());
         let mut collected: Option<Bytes> = None;
         let mut streaming = None;
         let mut deferred = None;
+        let mut deferred_claim = None;
 
         for (index, protocol) in self.state.protocols.iter().enumerate() {
             let selected = match &protocol.router {
                 SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
                     RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+                    RouteClaim::DeferredClaim(selected) => {
+                        deferred_claim.get_or_insert((index, selected));
+                        continue;
+                    }
                     RouteClaim::Claimed => router.route(&probe),
                     RouteClaim::DeferredRejection(error) => {
                         deferred.get_or_insert((index, error));
@@ -210,6 +211,10 @@ where
                     let claim = router.claim(&probe);
                     match claim {
                         BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
+                        BodyRouteClaim::DeferredClaim(selected) => {
+                            deferred_claim.get_or_insert((index, selected));
+                            continue;
+                        }
                         BodyRouteClaim::NoClaim => continue,
                         BodyRouteClaim::DeferredRejection(error) => {
                             deferred.get_or_insert((index, error));
@@ -267,6 +272,10 @@ where
                             };
                             let selected = match claim {
                                 RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
+                                RouteClaim::DeferredClaim(selected) => {
+                                    deferred_claim.get_or_insert((index, selected));
+                                    None
+                                }
                                 RouteClaim::Claimed => Some(router.route_with_body(&request)),
                                 RouteClaim::NoClaim => None,
                                 RouteClaim::DeferredRejection(error) => {
@@ -286,6 +295,9 @@ where
                 Err(error) => Ok(self.reject(index, error)),
             };
         }
+        if let Some((index, selected)) = deferred_claim {
+            return self.handle(selected, index, probe.map(|()| body)).await;
+        }
         Ok(match deferred {
             Some((index, error)) => self.reject(index, error),
             None => unclaimed(),
@@ -300,13 +312,13 @@ where
 
 pin_project_lite::pin_project! {
     #[project = StateProj]
-    enum State<B> {
+    enum State {
         Routing {
             future: Pin<Box<dyn Future<Output = Result<Response<BoxBody>, Infallible>> + Send>>,
         },
         Handling {
             #[pin]
-            future: crate::routing::route::SyncRouteFuture<crate::body::RequestBody<B>>,
+            future: crate::routing::route::SyncRouteFuture<crate::body::RequestBody>,
         },
         Rejected {
             response: Option<Response<BoxBody>>,
@@ -316,16 +328,12 @@ pin_project_lite::pin_project! {
 
 pin_project_lite::pin_project! {
     /// Response future for schema routing.
-    pub struct MultiProtocolRoutingFuture<B = hyper::body::Incoming> {
+    pub struct MultiProtocolRoutingFuture {
         #[pin]
-        inner: State<B>,
+        inner: State,
     }
 }
-impl<B> Future for MultiProtocolRoutingFuture<B>
-where
-    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: Into<BoxError>,
-{
+impl Future for MultiProtocolRoutingFuture {
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project().inner.project() {
@@ -336,25 +344,23 @@ where
     }
 }
 
-impl<B> MultiProtocolRoutingService<B> {
+impl MultiProtocolRoutingService {
     /// Starts configuring routing for the supplied service schema.
-    pub fn builder(service: &'static ServiceSchema<'static>) -> MultiProtocolRoutingServiceBuilder<B> {
+    pub fn builder(service: &'static ServiceSchema<'static>) -> MultiProtocolRoutingServiceBuilder {
         MultiProtocolRoutingServiceBuilder::new(service)
     }
 }
-/// Any compatible body enters. The transport body `B` and an already-normalized
-/// [`RequestBody<B>`](crate::body::RequestBody) stay unerased; any other body — tests, adapters,
+/// Any compatible body enters. A hyper incoming body and an already-normalized
+/// [`RequestBody`](crate::body::RequestBody) stay unerased; any other body — tests, adapters,
 /// upgrade layers — is erased into a boxed state (see [`RequestBody::new`](crate::body::RequestBody::new)).
-impl<B, RB> Service<Request<RB>> for MultiProtocolRoutingService<B>
+impl<RB> Service<Request<RB>> for MultiProtocolRoutingService
 where
-    B: http_body::Body<Data = Bytes> + Send + Unpin + 'static,
-    B::Error: Into<BoxError>,
     RB: http_body::Body<Data = Bytes> + Send + Sync + 'static,
     RB::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
     type Error = Infallible;
-    type Future = MultiProtocolRoutingFuture<B>;
+    type Future = MultiProtocolRoutingFuture;
     fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
         Poll::Ready(Ok(()))
     }
@@ -372,8 +378,8 @@ mod tests {
     use tower::ServiceExt;
 
     #[tokio::test]
-    async fn send_only_transport_bodies_preserve_shared_routing() {
-        use crate::body::{BoxBody, RequestBody};
+    async fn normalized_and_boxed_bodies_preserve_shared_routing() {
+        use crate::body::RequestBody;
         use aws_smithy_schema::shape_id;
         use http_body_util::BodyExt;
 
@@ -387,21 +393,21 @@ mod tests {
             &[&FIRST, &SECOND],
         );
 
-        fn route() -> SyncRoute<RequestBody<BoxBody>> {
-            SyncRoute::new(tower::service_fn(|request: Request<RequestBody<BoxBody>>| async {
+        fn route() -> SyncRoute<RequestBody> {
+            SyncRoute::new(tower::service_fn(|request: Request<RequestBody>| async {
                 assert!(request.extensions().get::<SelectedOperation>().is_some());
                 let bytes = request.into_body().collect().await.unwrap().to_bytes();
                 Ok::<_, Infallible>(Response::new(crate::body::to_boxed(bytes)))
             }))
         }
 
-        // Sharing handler services does not require their request bodies to be Sync.
-        crate::test_helpers::assert_send::<MultiProtocolRoutingService<BoxBody>>();
-        crate::test_helpers::assert_sync::<MultiProtocolRoutingService<BoxBody>>();
-        crate::test_helpers::assert_sync::<SyncRoute<RequestBody<BoxBody>>>();
+        // Normalized bodies and shared handler services retain their thread-safety guarantees.
+        crate::test_helpers::assert_send::<MultiProtocolRoutingService>();
+        crate::test_helpers::assert_sync::<MultiProtocolRoutingService>();
+        crate::test_helpers::assert_sync::<SyncRoute<RequestBody>>();
 
         for schema in [&REST_JSON, &MULTI] {
-            let service = MultiProtocolRoutingServiceBuilder::<BoxBody>::new(schema)
+            let service = MultiProtocolRoutingServiceBuilder::new(schema)
                 .operation_handler_bindings([(&FIRST, route()), (&SECOND, route())])
                 .build()
                 .unwrap();
@@ -418,10 +424,10 @@ mod tests {
                 .method("POST")
                 .uri("/second")
                 .header("content-type", "application/json")
-                .body(RequestBody::<BoxBody>::from_bytes(Bytes::from_static(b"normalized")))
+                .body(RequestBody::from_bytes(Bytes::from_static(b"normalized")))
                 .unwrap();
 
-            // Exercise public ingress and the Send-only normalized body concurrently,
+            // Exercise public ingress and the buffered normalized body concurrently,
             // through both the single-protocol shortcut and the async claim walk.
             let ingress = tokio::spawn(cloned.oneshot(request));
             let routing = tokio::spawn(service.route_request(normalized));

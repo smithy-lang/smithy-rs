@@ -5,7 +5,7 @@
 
 //! The standard routing rejection shared by every schema-mode protocol router.
 //!
-//! Routers classify a rejection into one of three [`RoutingErrorKind`]s; how a kind looks on
+//! Routers classify a rejection into a [`RoutingErrorKind`]; how a kind looks on
 //! the wire is each protocol's decision, made in
 //! [`serialize_routing_error`](crate::schema::ServerProtocol::serialize_routing_error). The
 //! default there keeps the historical smithy-rs responses: every kind collapses into one of
@@ -63,6 +63,9 @@ pub enum RoutingErrorKind {
     /// The request claims the protocol but violates its framing rules — forbidden headers,
     /// a malformed rpcv2 path, an invalid header value.
     MalformedRequest,
+    /// A matched REST input has a required body member without a default, but the
+    /// request omits Content-Type. REST protocols frame this as unsupported media type.
+    MissingContentType,
 }
 
 /// A schema-mode routing rejection: a [`RoutingErrorKind`] plus an optional diagnostic
@@ -71,6 +74,7 @@ pub enum RoutingErrorKind {
 pub struct RoutingError {
     kind: RoutingErrorKind,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    expected_content_type: Option<mime::Mime>,
 }
 
 impl RoutingError {
@@ -79,6 +83,7 @@ impl RoutingError {
         Self {
             kind: RoutingErrorKind::UnknownOperation,
             source: None,
+            expected_content_type: None,
         }
     }
 
@@ -87,6 +92,7 @@ impl RoutingError {
         Self {
             kind: RoutingErrorKind::MethodNotAllowed,
             source: None,
+            expected_content_type: None,
         }
     }
 
@@ -96,7 +102,27 @@ impl RoutingError {
         Self {
             kind: RoutingErrorKind::MalformedRequest,
             source: Some(Box::new(source)),
+            expected_content_type: None,
         }
+    }
+
+    /// A missing Content-Type for an input that requires body data.
+    pub fn missing_content_type(expected: mime::Mime) -> Self {
+        Self {
+            kind: RoutingErrorKind::MissingContentType,
+            source: Some(Box::new(
+                crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime: Some(expected.clone()),
+                    found_mime: None,
+                },
+            )),
+            expected_content_type: Some(expected),
+        }
+    }
+
+    /// The expected media type for a missing-content-type rejection.
+    pub fn expected_content_type(&self) -> Option<&mime::Mime> {
+        self.expected_content_type.as_ref()
     }
 
     /// Attaches a diagnostic source.
@@ -117,6 +143,7 @@ impl std::fmt::Display for RoutingError {
             RoutingErrorKind::UnknownOperation => f.write_str("unknown operation"),
             RoutingErrorKind::MethodNotAllowed => f.write_str("method not allowed"),
             RoutingErrorKind::MalformedRequest => f.write_str("malformed request"),
+            RoutingErrorKind::MissingContentType => f.write_str("missing content type"),
         }
     }
 }

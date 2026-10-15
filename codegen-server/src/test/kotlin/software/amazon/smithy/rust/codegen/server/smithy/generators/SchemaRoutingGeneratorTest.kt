@@ -4,10 +4,12 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -16,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -30,6 +33,107 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class SchemaRoutingGeneratorTest {
+    @Test
+    fun `adding RPC protocols preserves headerless REST requests and defers required body rejections`() {
+        for ((extraProtocol, extraTrait) in listOf(
+            "" to "",
+            "use smithy.protocols#rpcv2Cbor" to "@rpcv2Cbor",
+            "use aws.protocols#awsJson1_1" to "@awsJson1_1",
+        )) {
+            val model =
+                """
+                namespace test
+                use aws.protocols#restJson1
+                $extraProtocol
+                @restJson1
+                $extraTrait
+                service Example { operations: [Read, Remove, OptionalBody, RequiredBody, DefaultBody, Empty] }
+                @http(method: "GET", uri: "/items/{id}")
+                operation Read { input := { @required @httpLabel id: String } output := {} }
+                @http(method: "DELETE", uri: "/items/{id}")
+                operation Remove { input := { @required @httpLabel id: String } output := {} }
+                @http(method: "POST", uri: "/optional")
+                operation OptionalBody { input := { value: String } output := {} }
+                @http(method: "POST", uri: "/required")
+                operation RequiredBody { input := { @required value: String } output := {} }
+                @http(method: "POST", uri: "/default")
+                operation DefaultBody { input := { @required @default("fallback") value: String } output := {} }
+                @http(method: "POST", uri: "/empty")
+                operation Empty { input := {} output := {} }
+                """.asSmithyModel(smithyVersion = "2")
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                    cargoCommand = "cargo test --quiet --lib --tests",
+                ),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+            ) { context, crate ->
+                crate.testModule {
+                    tokioTest("headerless_requests_reach_the_existing_handler") {
+                        val handlers =
+                            listOf(
+                                Triple("Read", "read", """assert_eq!(input.id, "123");"""),
+                                Triple("Remove", "remove", """assert_eq!(input.id, "123");"""),
+                                Triple("OptionalBody", "optional_body", "assert!(input.value.is_none());"),
+                                Triple("RequiredBody", "required_body", """assert_eq!(input.value, "present");"""),
+                                Triple("DefaultBody", "default_body", """assert_eq!(input.value, "fallback");"""),
+                                Triple("Empty", "empty", "let _ = input;"),
+                            ).joinToString("\n") { (operation, method, assertion) ->
+                                val operationShape = context.model.expectShape(ShapeId.from("test#$operation"), OperationShape::class.java)
+                                val output = "crate::output::${operation}Output {}"
+                                val result = if (operationShape.errors.isEmpty()) output else "#{Ok}($output)"
+                                """
+                                .$method(move |input: crate::input::${operation}Input| async move {
+                                    $assertion
+                                    $result
+                                })
+                                """
+                            }
+                        rustTemplate(
+                            """
+                            use #{Tower}::ServiceExt;
+                            let service = crate::Example::builder(crate::ExampleConfig::builder().build())
+                                $handlers
+                                .build_unchecked();
+                            let request = |method: &str, uri: &str, body: &str, content_type: #{Option}<&str>| {
+                                let mut builder = #{Http}::Request::builder().method(method).uri(uri);
+                                if let #{Some}(content_type) = content_type {
+                                    builder = builder.header("content-type", content_type);
+                                }
+                                builder.body(#{Server}::body::Body::from_bytes(#{Bytes}::copy_from_slice(body.as_bytes()))).unwrap()
+                            };
+                            // These exact requests are replayed for the sole REST service and both RPC additions.
+                            for (method, uri) in [
+                                ("GET", "/items/123"), ("DELETE", "/items/123"),
+                                ("POST", "/optional"), ("POST", "/default"), ("POST", "/empty"),
+                            ] {
+                                let response = service.clone().oneshot(request(method, uri, "", #{None})).await.unwrap();
+                                assert_eq!(response.status(), 200, "{method} {uri}");
+                            }
+                            let response = service.clone().oneshot(request("POST", "/optional", r##"{"value":"present"}"##, #{None})).await.unwrap();
+                            assert_eq!(response.status(), 415);
+                            for body in ["", "{}", r##"{"value":"present"}"##] {
+                                let response = service.clone().oneshot(request("POST", "/required", body, #{None})).await.unwrap();
+                                // A sole REST protocol retains legacy zero-byte required-field validation.
+                                let expected = if ${extraTrait.isEmpty()} && body.is_empty() { 400 } else { 415 };
+                                assert_eq!(response.status(), expected);
+                            }
+                            let response = service.clone().oneshot(request("POST", "/required", r##"{"value":"present"}"##, #{Some}("application/json"))).await.unwrap();
+                            assert_eq!(response.status(), 200);
+                            """,
+                            "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                            "Http" to RuntimeType.http(context.runtimeConfig),
+                            "Tower" to ServerCargoDependency.tower(context).toType(),
+                            "Bytes" to RuntimeType.Bytes,
+                            *RuntimeType.preludeScope,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `schema builders never invoke protocol routing codegen and layers run after selection`() {
         val model =
@@ -248,6 +352,9 @@ class SchemaRoutingGeneratorTest {
                     override val name = "Body routing streaming validation"
                     override val order: Byte = 0
 
+                    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> =
+                        listOf(testProtocolRegistry(codegenContext, bodyRouting))
+
                     override fun protocols(
                         serviceId: ShapeId,
                         currentProtocols: ServerProtocolMap,
@@ -263,85 +370,6 @@ class SchemaRoutingGeneratorTest {
 
                                     override fun support() = ServerRestJsonFactory().support()
                                 }
-                        )
-
-                    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<Writable> =
-                        listOf(
-                            {
-                                rustTemplate(
-                                    """
-                                    {
-                                        use #{Server}::schema::{ProtocolBuildContext, ProtocolRegistration, ProtocolRegistry, ServerProtocol};
-                                        use #{Server}::schema::routing::{BodyProtocolRouter, BodyRouteClaim, RouterBuildContext, RouterBuildError};
-                                        use #{Server}::body::BoxBody;
-                                        use #{Schema}::{Schema, ShapeId};
-                                        use #{Http}::{Request, Response};
-                                        ##[derive(Debug)] ##[allow(dead_code)] // unused on the metadata-routed pass
-                                        struct BodyRouter;
-                                        impl BodyProtocolRouter for BodyRouter {
-                                            // The test only builds the service; no request routes.
-                                            fn claim(&self, _: &Request<()>) -> BodyRouteClaim { unreachable!() }
-                                        }
-                                        ##[derive(Debug)]
-                                        struct TestProtocol;
-                                        impl ServerProtocol for TestProtocol {
-                                            fn protocol_id(&self) -> &'static ShapeId<'static> {
-                                                static ID: ShapeId<'static> = #{Schema}::shape_id!("test", "bodyRouting");
-                                                &ID
-                                            }
-                                            fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{RuntimeApi}::http::Request<#{Bytes}>)
-                                                -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{Server}::schema::DeserializeError> { unreachable!() }
-                                            fn serialize_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct) -> Response<BoxBody> { unreachable!() }
-                                            fn serialize_streaming_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: BoxBody) -> Response<BoxBody> { unreachable!() }
-                                            fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
-                                            fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
-                                        }
-                                        ${
-                                        if (bodyRouting) {
-                                            """
-                                        impl #{Server}::schema::BodyRoutedProtocol for TestProtocol {
-                                            fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
-                                                #{Ok}(TestProtocol)
-                                            }
-                                            fn build_router(&self, _ctx: RouterBuildContext<'_>)
-                                                -> #{Result}<impl BodyProtocolRouter + 'static + use<>, RouterBuildError> {
-                                                #{Ok}(BodyRouter)
-                                            }
-                                        }
-                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
-                                            ProtocolRegistration::body_routed::<TestProtocol>("test##bodyRouting"),
-                                        ]);
-                            """
-                                        } else {
-                                            """
-                                        impl #{Server}::schema::MetadataRoutedProtocol for TestProtocol {
-                                            fn from_build_context(_ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
-                                                #{Ok}(TestProtocol)
-                                            }
-                                            fn build_router(&self, ctx: RouterBuildContext<'_>)
-                                                -> #{Result}<impl #{Server}::schema::routing::MetadataProtocolRouter + 'static + use<>, RouterBuildError> {
-                                                // `use<>` on the subtraits admits delegating through a temporary protocol.
-                                                #{Server}::schema::MetadataRoutedProtocol::build_router(
-                                                    &#{Server}::schema::protocol::RestJson1Protocol::default(), ctx)
-                                            }
-                                        }
-                                        static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
-                                            ProtocolRegistration::metadata_routed::<TestProtocol>("test##bodyRouting"),
-                                        ]);
-                            """
-                                        }
-                                    }
-                            &REGISTRY
-                            }
-                            """,
-                                    "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-                                    "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig),
-                                    "Http" to RuntimeType.http(codegenContext.runtimeConfig),
-                                    "Bytes" to RuntimeType.Bytes,
-                                    "RuntimeApi" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig),
-                                    *RuntimeType.preludeScope,
-                                )
-                            },
                         )
                 }
             serverIntegrationTest(
@@ -375,6 +403,126 @@ class SchemaRoutingGeneratorTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `one service decorator supplies five runtime protocols through one registry`() {
+        val model =
+            """
+            namespace test
+            @protocolDefinition
+            @trait(selector: "service")
+            structure first {}
+            @protocolDefinition
+            @trait(selector: "service")
+            structure second {}
+            @protocolDefinition
+            @trait(selector: "service")
+            structure third {}
+            @protocolDefinition
+            @trait(selector: "service")
+            structure fourth {}
+            @protocolDefinition
+            @trait(selector: "service")
+            structure unused {}
+            @first
+            @second
+            service Example { operations: [Ping] }
+            @http(method: "POST", uri: "/ping")
+            operation Ping { input := {} output := {} }
+            """.asSmithyModel(smithyVersion = "2")
+        var calls = 0
+        val protocolIds = listOf("test#first", "test#second", "test#third", "test#fourth", "test#unused")
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name = "Shared protocol registry"
+                override val order: Byte = 0
+
+                override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> {
+                    codegenContext.servedProtocols shouldBe listOf(ShapeId.from("test#first"), ShapeId.from("test#second"))
+                    calls++
+                    return listOf(testProtocolRegistry(codegenContext, true, protocolIds))
+                }
+
+                override fun protocols(
+                    serviceId: ShapeId,
+                    currentProtocols: ServerProtocolMap,
+                ): ServerProtocolMap =
+                    currentProtocols +
+                        protocolIds.associate { id ->
+                            ShapeId.from(id) to
+                                object : ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext> {
+                                    override fun protocol(codegenContext: ServerCodegenContext) =
+                                        ServerRestJsonProtocol(codegenContext)
+
+                                    override fun buildProtocolGenerator(codegenContext: ServerCodegenContext) =
+                                        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestJsonProtocol(codegenContext))
+
+                                    override fun support() = ServerRestJsonFactory().support()
+                                }
+                        }
+            }
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                cargoCommand = "cargo test --quiet --lib --tests",
+            ),
+            additionalDecorators = listOf(decorator),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("a_shared_registry_builds_without_duplicate_protocol_registrations") {
+                    rustTemplate(
+                        """
+                        // One registry contains all five protocols. Only the two declared
+                        // by the service are constructed, and both builders must succeed.
+                        let builder = || crate::Example::builder(crate::ExampleConfig::builder().build());
+                        let _: crate::Example = builder().build_unchecked();
+                        let checked = builder().ping_custom(#{Tower}::service_fn(|_: #{Http}::Request<#{Server}::body::Body>| async {
+                            #{Ok}::<_, ::std::convert::Infallible>(#{Http}::Response::new(#{Server}::body::empty()))
+                        })).build();
+                        assert!(checked.is_ok());
+                        """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to ServerCargoDependency.tower(context).toType(),
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            }
+        }
+        calls shouldBe 1
+    }
+
+    @Test
+    fun `legacy codegen never requests schema protocol registries`() {
+        val model =
+            """
+            namespace test
+            use aws.protocols#restJson1
+            @restJson1
+            service Example { operations: [Ping] }
+            @http(method: "POST", uri: "/ping")
+            operation Ping { input := {} output := {} }
+            """.asSmithyModel(smithyVersion = "2")
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name = "Legacy registry guard"
+                override val order: Byte = 0
+
+                override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> =
+                    error("Legacy codegen requested a schema protocol registry")
+            }
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+                cargoCommand = "cargo test --quiet --lib --tests",
+            ),
+            additionalDecorators = listOf(decorator),
+            testCoverage = HttpTestType.ALL,
+        )
     }
 
     @Test
@@ -464,7 +612,7 @@ class SchemaRoutingGeneratorTest {
                                 ObjectNode.builder().withMember("capitalizeRoutes", true).build(),
                             )
                             // Codegen translates this into typed body configuration for every protocol.
-                            .withMember("global", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
+                            .withMember("common", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
                             // An unrelated protocol's section passes through without being consulted.
                             .withMember(
                                 "com.amazon.coral#rpcv1",
@@ -658,4 +806,96 @@ class SchemaRoutingGeneratorTest {
             }
         }
     }
+
+    private fun testProtocolRegistry(
+        codegenContext: ServerCodegenContext,
+        bodyRouting: Boolean,
+        protocolIds: List<String> = listOf("test#bodyRouting"),
+    ): RuntimeType =
+        RuntimeType.forInlineFun("REGISTRY", RustModule.private("test_protocol")) {
+            val shapeIds =
+                protocolIds.joinToString(", ") { id ->
+                    "#{Schema}::shape_id!(${id.substringBefore("#").dq()}, ${id.substringAfter("#").dq()})"
+                }
+            val registrationMethod = if (bodyRouting) "body_routed" else "metadata_routed"
+            val registrations =
+                protocolIds.mapIndexed { index, id ->
+                    val order =
+                        if (index == 0) {
+                            ""
+                        } else {
+                            ".with_order(&[#{Server}::schema::ProtocolOrder::After(${protocolIds[index - 1].replace("#", "##").dq()})])"
+                        }
+                    "ProtocolRegistration::$registrationMethod::<TestProtocol<$index>>(${id.replace("#", "##").dq()})$order,"
+                }.joinToString("\n")
+            val routing =
+                if (bodyRouting) {
+                    """
+                    impl<const INDEX: usize> #{Server}::schema::BodyRoutedProtocol for TestProtocol<INDEX> {
+                        fn from_build_context(ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
+                            assert!(ctx.service.protocols().contains(TestProtocol::<INDEX>.protocol_id()));
+                            #{Ok}(TestProtocol)
+                        }
+                        fn build_router(&self, _ctx: RouterBuildContext<'_>)
+                            -> #{Result}<impl BodyProtocolRouter + 'static + use<INDEX>, RouterBuildError> {
+                            #{Ok}(BodyRouter)
+                        }
+                    }
+                    """
+                } else {
+                    """
+                    impl<const INDEX: usize> #{Server}::schema::MetadataRoutedProtocol for TestProtocol<INDEX> {
+                        fn from_build_context(ctx: &ProtocolBuildContext<'_>) -> #{Result}<Self, RouterBuildError> {
+                            assert!(ctx.service.protocols().contains(TestProtocol::<INDEX>.protocol_id()));
+                            #{Ok}(TestProtocol)
+                        }
+                        fn build_router(&self, ctx: RouterBuildContext<'_>)
+                            -> #{Result}<impl #{Server}::schema::routing::MetadataProtocolRouter + 'static + use<INDEX>, RouterBuildError> {
+                            // `use<INDEX>` admits delegating through a temporary protocol.
+                            #{Server}::schema::MetadataRoutedProtocol::build_router(
+                                &#{Server}::schema::protocol::RestJson1Protocol::default(), ctx)
+                        }
+                    }
+                    """
+                }
+            rustTemplate(
+                """
+                use #{Server}::schema::{ProtocolBuildContext, ProtocolRegistration, ProtocolRegistry, ServerProtocol};
+                use #{Server}::schema::routing::{BodyProtocolRouter, BodyRouteClaim, RouterBuildContext, RouterBuildError};
+                use #{Server}::body::BoxBody;
+                use #{Schema}::{Schema, ShapeId};
+                use #{Http}::{Request, Response};
+                ##[derive(Debug)] ##[allow(dead_code)] // Unused on the metadata-routed pass.
+                struct BodyRouter;
+                impl BodyProtocolRouter for BodyRouter {
+                    // These tests build the service; no request routes through this protocol.
+                    fn claim(&self, _: &Request<()>) -> BodyRouteClaim { unreachable!() }
+                }
+                ##[derive(Debug)]
+                struct TestProtocol<const INDEX: usize>;
+                impl<const INDEX: usize> ServerProtocol for TestProtocol<INDEX> {
+                    fn protocol_id(&self) -> &'static ShapeId<'static> {
+                        static IDS: [ShapeId<'static>; ${protocolIds.size}] = [$shapeIds];
+                        &IDS[INDEX]
+                    }
+                    fn deserialize_request<'a>(&'a self, _: &Schema<'_>, _: &'a #{RuntimeApi}::http::Request<#{Bytes}>)
+                        -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{Server}::schema::DeserializeError> { unreachable!() }
+                    fn serialize_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct) -> Response<BoxBody> { unreachable!() }
+                    fn serialize_streaming_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: &Schema<'_>, _: Option<BoxBody>) -> Response<BoxBody> { unreachable!() }
+                    fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
+                    fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
+                }
+                $routing
+                pub(crate) static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[
+                    $registrations
+                ]);
+                """,
+                "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+                "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig),
+                "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+                "Bytes" to RuntimeType.Bytes,
+                "RuntimeApi" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig),
+                *RuntimeType.preludeScope,
+            )
+        }
 }

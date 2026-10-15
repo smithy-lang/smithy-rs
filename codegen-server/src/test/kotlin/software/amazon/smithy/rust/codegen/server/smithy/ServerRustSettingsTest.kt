@@ -101,10 +101,10 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
-    fun `requestBodyMaxBytes is read from the global protocols section`() {
+    fun `requestBodyMaxBytes is read from the common protocols section`() {
         settings("").requestBodyMaxBytes() shouldBe 0L
-        settings("", """{ "protocols": { "global": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
-        settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
+        settings("", """{ "protocols": { "common": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
+        settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
     }
 
     @Test
@@ -113,7 +113,7 @@ internal class ServerRustSettingsTest {
             val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
             settings.requestBodyMaxBytes() shouldBe 1024L
             settings.customizationConfig shouldBe
-                Node.parse("""{ "protocols": { "global": { "requestBodyMaxBytes": 1024 } } }""").expectObjectNode()
+                Node.parse("""{ "protocols": { "common": { "requestBodyMaxBytes": 1024 } } }""").expectObjectNode()
         }
     }
 
@@ -122,19 +122,19 @@ internal class ServerRustSettingsTest {
         val settings =
             settings(
                 """"requestBodyMaxBytes": 1024""",
-                """{ "example": true, "protocols": { "global": { "otherSetting": 1 }, "example#protocol": { "enabled": true } } }""",
+                """{ "example": true, "protocols": { "common": { "otherSetting": 1 }, "example#protocol": { "enabled": true } } }""",
             )
         settings.requestBodyMaxBytes() shouldBe 1024L
         settings.customizationConfig shouldBe
             Node.parse(
-                """{ "example": true, "protocols": { "global": { "otherSetting": 1, "requestBodyMaxBytes": 1024 }, "example#protocol": { "enabled": true } } }""",
+                """{ "example": true, "protocols": { "common": { "otherSetting": 1, "requestBodyMaxBytes": 1024 }, "example#protocol": { "enabled": true } } }""",
             ).expectObjectNode()
     }
 
     @Test
-    fun `explicit global body limit takes precedence over the legacy setting including zero`() {
+    fun `explicit common body limit takes precedence over the legacy setting including zero`() {
         for (limit in listOf(0, 2048)) {
-            val customization = """{ "protocols": { "global": { "requestBodyMaxBytes": $limit } } }"""
+            val customization = """{ "protocols": { "common": { "requestBodyMaxBytes": $limit } } }"""
             val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
             settings.requestBodyMaxBytes() shouldBe limit.toLong()
             settings.customizationConfig shouldBe Node.parse(customization).expectObjectNode()
@@ -151,11 +151,11 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
-    fun `invalid explicit global limit is not replaced by the legacy setting`() {
+    fun `invalid explicit common limit is not replaced by the legacy setting`() {
         shouldThrow<Exception> {
             settings(
                 """"requestBodyMaxBytes": 1024""",
-                """{ "protocols": { "global": { "requestBodyMaxBytes": null } } }""",
+                """{ "protocols": { "common": { "requestBodyMaxBytes": null } } }""",
             )
         }
     }
@@ -163,7 +163,7 @@ internal class ServerRustSettingsTest {
     @Test
     fun `negative requestBodyMaxBytes is rejected when settings are loaded`() {
         shouldThrow<IllegalArgumentException> {
-            settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": -1 } } }""")
+            settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": -1 } } }""")
         }
     }
 
@@ -171,11 +171,11 @@ internal class ServerRustSettingsTest {
     fun `invalid request body limits are rejected during codegen`() {
         for (value in listOf("1.5", "9223372036854775808", "true", "null", "\"8\"")) {
             shouldThrow<Exception> {
-                settings("", """{ "protocols": { "global": { "requestBodyMaxBytes": $value } } }""")
+                settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": $value } } }""")
             }
         }
         shouldThrow<Exception> {
-            settings("", """{ "protocols": { "global": "not an object" } }""")
+            settings("", """{ "protocols": { "common": "not an object" } }""")
         }
     }
 

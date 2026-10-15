@@ -55,8 +55,8 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 import java.util.logging.Logger
 
 /**

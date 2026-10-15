@@ -366,7 +366,7 @@ internal class ServerSchemaStreamingTest {
                 -> #{Result}<#{Box}<dyn #{Schema}::serde::ShapeDeserializer + 'a>, #{SmithyHttpServer}::schema::DeserializeError> { unreachable!() }
             fn serialize_response(&self, _: &#{Schema}::Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct)
                 -> #{SmithyHttpServer}::response::Response { unreachable!() }
-            fn serialize_streaming_response(&self, _: &#{Schema}::Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: #{SmithyHttpServer}::body::BoxBody)
+            fn serialize_streaming_response(&self, _: &#{Schema}::Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: &#{Schema}::Schema<'_>, _: #{Option}<#{SmithyHttpServer}::body::BoxBody>)
                 -> #{SmithyHttpServer}::response::Response { unreachable!() }
             fn serialize_error(&self, _: &dyn #{SmithyHttpServer}::schema::HttpModeledError)
                 -> #{SmithyHttpServer}::response::Response { unreachable!() }
@@ -525,11 +525,8 @@ internal class ServerSchemaStreamingTest {
         assert!(receiver.try_recv_initial(#{SmithyHttp}::event_stream::InitialMessageType::Request).await.unwrap().is_none());
         assert!(matches!(receiver.recv().await.unwrap(), #{Some}(crate::model::ChatEvents::Message(_))));
         for bytes in [body, #{Vec}::new(), b"malformed frame".to_vec()] {
-            let request = #{RuntimeApi}::http::Request::new(#{Bytes}::new());
-            let future = {
-                let mut deserializer = protocol.deserialize_request(crate::input::ChatInput::SCHEMA, &request).unwrap();
-                crate::operation_shape::Chat::deserialize_streaming_input(&mut *deserializer, #{SdkBody}::from(bytes), protocol.clone())
-            };
+            let request = #{RuntimeApi}::http::Request::new(#{SmithyHttpServer}::body::RequestBody::from(bytes));
+            let future = crate::operation_shape::Chat::deserialize_streaming_input(request, protocol.clone());
             assert!(future.await.is_err());
         }
         """
@@ -557,7 +554,7 @@ internal class ServerSchemaStreamingTest {
                             """
                         let config = crate::service::ChatServiceConfig::builder().build();
                         let service = crate::service::ChatService::builder(config)
-                            .blob_echo(|input: crate::input::BlobEchoInput| async move {
+                            .blob_echo(|input: #{SmithyHttpServer}::schema::StreamingInput<crate::input::BlobEchoInput>| async move {
                                 #{Ok}::<_, crate::error::BlobEchoError>(crate::output::BlobEchoOutput { data: input.data })
                             }).build_unchecked();
                         let request = #{Http}::Request::builder().method("POST").uri("/blob")

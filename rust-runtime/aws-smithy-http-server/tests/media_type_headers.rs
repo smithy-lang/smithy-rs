@@ -14,6 +14,15 @@ use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
 use bytes::Bytes;
 
+// These head-only tests supply an event stream member; its body is supplied separately.
+static STREAMING_MEMBER: Schema = Schema::new_member(
+    shape_id!("test", "StreamingOutput", "events"),
+    ShapeType::Union,
+    "events",
+    0,
+)
+.with_streaming();
+
 static ELEMENT: Schema = Schema::new_member(
     shape_id!("test", "MediaStrings", "member"),
     ShapeType::String,
@@ -125,7 +134,10 @@ fn media_list_elements_are_base64_encoded_in_outputs_errors_and_streaming_heads(
                 for (response, status) in [
                     (protocol.serialize_response(&OUTPUT, &value), 200),
                     (protocol.serialize_error(&value), 422),
-                    (protocol.serialize_streaming_response(&OUTPUT, &value, empty()), 200),
+                    (
+                        protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(empty())),
+                        200,
+                    ),
                 ] {
                     assert_eq!(response.status(), status);
                     assert_eq!(header_values(response.headers(), "x-media"), expected);
@@ -151,7 +163,7 @@ fn empty_media_list_elements_are_omitted_like_legacy() {
             for response in [
                 protocol.serialize_response(&OUTPUT, &value),
                 protocol.serialize_error(&value),
-                protocol.serialize_streaming_response(&OUTPUT, &value, empty()),
+                protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(empty())),
             ] {
                 assert_eq!(header_values(response.headers(), "x-media"), expected);
             }

@@ -84,7 +84,7 @@ class ServerOperationGenerator(
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
                 const ID: $shapeIdType = #{OperationId};
 
-                type Input = crate::input::${operationName}Input;
+                type Input = #{Input:W};
                 type Output = crate::output::${operationName}Output;
                 type Error = #{Error:W};
             }
@@ -102,6 +102,15 @@ class ServerOperationGenerator(
                 }
             }
             """,
+            "Input" to
+                writable {
+                    val input = model.expectShape(operation.input.orElseThrow(), software.amazon.smithy.model.shapes.StructureShape::class.java)
+                    if (schemaSerde && streamingBlobInputMember(codegenContext as ServerCodegenContext, input) != null) {
+                        rustTemplate("#{SmithyHttpServer}::schema::StreamingInput<crate::input::${operationName}Input>", *codegenScope)
+                    } else {
+                        rust("crate::input::${operationName}Input")
+                    }
+                },
             "Error" to operationError(),
             "OperationId" to id,
             "RequestValue" to requestFmt.value,

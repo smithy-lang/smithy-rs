@@ -85,10 +85,20 @@ class ServerSchemaGenerator(
     private val writer: RustWriter,
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter =
-        SchemaTraitFilter(codegenContext.model, additionalTraits = setOf(ErrorTrait.ID, HttpErrorTrait.ID)),
+        SchemaTraitFilter(
+            codegenContext.model,
+            additionalTraits =
+                setOf(
+                    ErrorTrait.ID,
+                    HttpErrorTrait.ID,
+                    software.amazon.smithy.model.traits.RequiredTrait.ID,
+                    software.amazon.smithy.model.traits.DefaultTrait.ID,
+                ),
+        ),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
     /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
     val schemaPrefix: String? = null,
+    private val additionalTraitInsertions: List<Writable> = emptyList(),
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -897,74 +907,79 @@ class ServerSchemaGenerator(
         }
 
     /** Generates `map.insert(...)` calls for traits that are NOT known direct fields on Schema. */
-    private fun generateUnknownTraitInsertions(shape: Shape) =
-        writable {
-            val traits = traitFilter.traitsFor(shape)
-            val codegenScope =
-                arrayOf(
-                    *RuntimeType.preludeScope,
-                    "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
-                    "StringTrait" to smithySchema.resolve("StringTrait"),
-                    "DocumentTrait" to smithySchema.resolve("DocumentTrait"),
-                    "ShapeId" to smithySchema.resolve("ShapeId"),
-                    "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
-                    "traits" to smithySchema.resolve("traits"),
-                    "HttpErrorTrait" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("schema::traits::HttpErrorTrait"),
-                )
-            for (trait in traits) {
-                // Skip known traits — they're handled by with_*() setters
-                if (knownTraitSetter(trait) != null) continue
+    private fun generateUnknownTraitInsertions(
+        shape: Shape,
+        includeAdditionalTraits: Boolean = true,
+    ) = writable {
+        val traits = traitFilter.traitsFor(shape)
+        val codegenScope =
+            arrayOf(
+                *RuntimeType.preludeScope,
+                "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
+                "StringTrait" to smithySchema.resolve("StringTrait"),
+                "DocumentTrait" to smithySchema.resolve("DocumentTrait"),
+                "ShapeId" to smithySchema.resolve("ShapeId"),
+                "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+                "traits" to smithySchema.resolve("traits"),
+                "HttpErrorTrait" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("schema::traits::HttpErrorTrait"),
+            )
+        for (trait in traits) {
+            // Skip known traits — they're handled by with_*() setters
+            if (knownTraitSetter(trait) != null) continue
 
-                if (trait is HttpErrorTrait) {
-                    rustTemplate(
-                        "map.insert(#{Box}::new(#{HttpErrorTrait}::new(${trait.code})));",
-                        *codegenScope,
-                    )
+            if (trait is HttpErrorTrait) {
+                rustTemplate(
+                    "map.insert(#{Box}::new(#{HttpErrorTrait}::new(${trait.code})));",
+                    *codegenScope,
+                )
+                continue
+            }
+
+            // Check extension for custom rendering
+            val customProvider = traitExtension.providerFor(trait)
+            if (customProvider != null) {
+                val customWritable = customProvider.render(trait)
+                if (customWritable != null) {
+                    rust("map.insert(")
+                    customWritable(this)
+                    rust(");")
                     continue
                 }
+            }
 
-                // Check extension for custom rendering
-                val customProvider = traitExtension.providerFor(trait)
-                if (customProvider != null) {
-                    val customWritable = customProvider.render(trait)
-                    if (customWritable != null) {
-                        rust("map.insert(")
-                        customWritable(this)
-                        rust(");")
-                        continue
-                    }
-                }
-
-                // Fall back: annotation, string, or document
-                val traitNs = trait.toShapeId().namespace
-                val traitName = trait.toShapeId().name
-                val stringValue = trait.stringValue()
-                if (trait.isAnnotationTrait()) {
-                    rustTemplate(
-                        """map.insert(#{Box}::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
-                        *codegenScope,
-                    )
-                } else if (stringValue != null) {
-                    rustTemplate(
-                        """map.insert(#{Box}::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
-                        *codegenScope,
-                    )
-                } else {
-                    // Render the trait's structured value as a structured `Document`
-                    // (object/array/number/bool/string), preserving the shape of the
-                    // value instead of flattening it to a JSON string. The runtime
-                    // `Document` type can represent the full Smithy data model, so an
-                    // unknown trait's value round-trips structurally (per the SEP:
-                    // unknown trait values "should be represented with a document data
-                    // type").
-                    rustTemplate(
-                        """map.insert(#{Box}::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
-                        *codegenScope,
-                        "docValue" to nodeToDocument(trait.toNode()),
-                    )
-                }
+            // Fall back: annotation, string, or document
+            val traitNs = trait.toShapeId().namespace
+            val traitName = trait.toShapeId().name
+            val stringValue = trait.stringValue()
+            if (trait.isAnnotationTrait()) {
+                rustTemplate(
+                    """map.insert(#{Box}::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
+                    *codegenScope,
+                )
+            } else if (stringValue != null) {
+                rustTemplate(
+                    """map.insert(#{Box}::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
+                    *codegenScope,
+                )
+            } else {
+                // Render the trait's structured value as a structured `Document`
+                // (object/array/number/bool/string), preserving the shape of the
+                // value instead of flattening it to a JSON string. The runtime
+                // `Document` type can represent the full Smithy data model, so an
+                // unknown trait's value round-trips structurally (per the SEP:
+                // unknown trait values "should be represented with a document data
+                // type").
+                rustTemplate(
+                    """map.insert(#{Box}::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
+                    *codegenScope,
+                    "docValue" to nodeToDocument(trait.toNode()),
+                )
             }
         }
+        if (includeAdditionalTraits) {
+            additionalTraitInsertions.forEach { it(this) }
+        }
+    }
 
     /**
      * Renders a Smithy trait value [Node] as a [Writable] that constructs the
@@ -1325,7 +1340,7 @@ class ServerSchemaGenerator(
 
     /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
     private fun hasUnknownTraits(shape: Shape): Boolean =
-        traitFilter.traitsFor(shape).any { knownTraitSetter(it) == null }
+        additionalTraitInsertions.isNotEmpty() || traitFilter.traitsFor(shape).any { knownTraitSetter(it) == null }
 
     /**
      * Returns a `.with_*()` call for a known trait, or null if the trait
@@ -1532,6 +1547,23 @@ class ServerSchemaGenerator(
                     val escapedMemberId = memberId.toString().replace("#", "##")
                     val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
                     val traitChain = memberTraitChain(member)
+                    val unknownTraitChain =
+                        if (traitFilter.traitsFor(member).any { knownTraitSetter(it) == null }) {
+                            writer.rustTemplate(
+                                """
+                                static ${memberConstName}_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
+                                    let mut map = #{TraitMap}::new();
+                                    #{insertions}
+                                    map
+                                });
+                                """,
+                                "TraitMap" to smithySchema.resolve("TraitMap"),
+                                "insertions" to generateUnknownTraitInsertions(member, includeAdditionalTraits = false),
+                            )
+                            "\n    .with_traits(&${memberConstName}_TRAITS)"
+                        } else {
+                            ""
+                        }
 
                     // For map / list members, emit key/value/element sub-schemas so the XML
                     // codec can resolve entry element names. Recurses through nested
@@ -1551,7 +1583,7 @@ class ServerSchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$traitChain$mapMembersChain;
+                        )$traitChain$mapMembersChain$unknownTraitChain;
                         """,
                         *codegenScope,
                     )

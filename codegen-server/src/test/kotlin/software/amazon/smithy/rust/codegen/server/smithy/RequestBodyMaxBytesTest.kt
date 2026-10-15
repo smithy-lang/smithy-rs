@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 internal class RequestBodyMaxBytesTest {
     private fun requestBodyMaxBytes(maxBytes: Long): ObjectNode =
         Node.parse(
-            """{"customizationConfig": {"protocols": {"global": {"requestBodyMaxBytes": $maxBytes}}}}""",
+            """{"customizationConfig": {"protocols": {"common": {"requestBodyMaxBytes": $maxBytes}}}}""",
         ).expectObjectNode()
 
     private val model =

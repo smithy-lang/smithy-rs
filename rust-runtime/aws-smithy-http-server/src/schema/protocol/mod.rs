@@ -33,6 +33,7 @@ mod rest_xml;
 #[doc(hidden)]
 pub mod rpc;
 mod rpc_v2_cbor;
+mod rpc_v2_cbor_streaming;
 #[cfg(test)]
 mod tests;
 
@@ -75,8 +76,11 @@ pub struct SharedServerProtocol(ProtocolKind);
 
 #[derive(Clone, Debug)]
 enum ProtocolKind {
+    /// Routes using request metadata alone and may support event-stream framing.
     Metadata(std::sync::Arc<dyn ErasedMetadataRoutedProtocol>),
+    /// Routes non-streaming operations with access to collected request bodies when needed.
     BodyCollected(std::sync::Arc<dyn ErasedBodyRoutedProtocol>),
+    /// Provides serialization and deserialization without routing or event-stream support.
     SerdeOnly(std::sync::Arc<dyn ServerProtocol>),
 }
 
@@ -277,9 +281,8 @@ impl<'a> EventStreamFraming<'a> {
 /// everything after routing works through that erased handle, so nothing downstream names a
 /// concrete protocol.
 ///
-/// Nothing is precomputed per operation. Bindings, media types, URI templates and status codes are
-/// derived from the schema on every call, so a struct serialized from middleware with a
-/// hand-written schema is framed exactly like an operation output with the same schema.
+/// A response plan is precomputed per operation: Bindings, Media types, URI templates
+/// and status codes are cached.
 ///
 /// `Debug` is a supertrait, as on the client's protocol trait, so generated marshallers holding
 /// the handle can derive it.
@@ -322,6 +325,17 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
+    /// Creates an owned streaming-blob decoding session. Generated glue retains the
+    /// ordinary-field builder until the handler finishes reading the blob and calls finish.
+    fn deserialize_data_stream(
+        &self,
+        _input: &'static Schema<'static>,
+        _streaming_member: &'static Schema<'static>,
+        _request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
+        Err(aws_smithy_schema::serde::SerdeError::unsupported("streaming blob input").into())
+    }
+
     /// Validates request headers for the selected operation before upgrade body collection
     /// and [`Self::deserialize_request`]. Header failures therefore take precedence over
     /// deserialization failures. The built-in protocols check `Accept` against the response
@@ -337,8 +351,8 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// Specifies whether deserialization needs the request body. The default collects it.
     ///
     /// Returning [`BodyDirective::Skip`] leaves the deserialization request's body empty.
-    /// Streaming inputs bypass collection regardless of this requirement; their live body
-    /// is passed separately to the generated streaming glue.
+    /// Event-stream inputs bypass collection. Streaming blob inputs instead own their request
+    /// through [`Self::deserialize_data_stream`], including any surrounding document framing.
     fn request_body_requirement(&self, _operation: &OperationSchema<'_>) -> BodyDirective {
         BodyDirective::Collect
     }
@@ -368,11 +382,18 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// precedence without length-specific validation or normalization.
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response;
 
-    /// Serializes the head of a streaming response for `output` around a caller-supplied `body`.
+    /// Serializes a streaming response for `output` around a caller-supplied `body`.
     ///
-    /// Status, `@httpHeader`-bound members and the content type come from `output` and `value`;
-    /// no body member is written. The generated streaming glue builds `body` from the event
-    /// stream or streaming blob member.
+    /// The protocol interprets `output` and `value` to produce the response head and any
+    /// ordinary body members. Generated glue builds `body` from the streaming blob or
+    /// preframed event stream. CBOR frames blob chunks after the ordinary serialized members.
+    ///
+    /// `None` means the modeled streaming member is absent. `Some(body)` means it is
+    /// present, even when the body yields no bytes. CBOR must distinguish these cases:
+    /// absence omits the blob member; a present empty blob encodes an explicit empty byte string.
+    /// REST and event-stream responses use an empty payload when the member is absent.
+    /// The body is passed separately because `serialize_members` omits streaming members
+    /// and the response must own their streams.
     ///
     /// Built-in protocols do not infer a length or collect the stream. Matching legacy generated
     /// responses, modeled `Content-Length` values are preserved without length-specific validation
@@ -381,7 +402,8 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
         &self,
         output: &Schema<'_>,
         value: &dyn SerializableStruct,
-        body: BoxBody,
+        streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
     ) -> Response;
 
     /// Serializes a modeled error with the protocol's discriminator framing.

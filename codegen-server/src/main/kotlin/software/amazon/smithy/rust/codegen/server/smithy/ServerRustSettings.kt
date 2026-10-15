@@ -67,7 +67,7 @@ data class ServerRustSettings(
      * with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
      *
      * Protocol sections are passed through to the generated `ProtocolOptions` as documents keyed
-     * by shape ID. The global request body limit is emitted as typed body configuration instead.
+     * by shape ID. The common request body limit is emitted as typed body configuration instead.
      * Protocol authors parse their own documents when constructing their protocol or router.
      */
     fun protocolSettings(): Map<String, ObjectNode> {
@@ -77,7 +77,12 @@ data class ServerRustSettings(
                 ?.members
                 ?.entries
                 ?.associate { (key, value) ->
-                    key.value to
+                    val protocolId =
+                        when (key.value) {
+                            "awsJson1_0", "awsJson1_1" -> "aws.protocols#${key.value}"
+                            else -> key.value
+                        }
+                    protocolId to
                         value.expectObjectNode(
                             "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.${key.value}` must be a JSON object",
                         )
@@ -102,7 +107,7 @@ data class ServerRustSettings(
 
     /**
      * The maximum number of bytes buffered for a non-streaming request body, from
-     * `customizationConfig.protocols.global.requestBodyMaxBytes`. `0` (the default) means no
+     * `customizationConfig.protocols.common.requestBodyMaxBytes`. `0` (the default) means no
      * limit, which allows memory exhaustion via `Transfer-Encoding: chunked` or very large
      * `Content-Length` values; services should set a positive value.
      *
@@ -111,9 +116,9 @@ data class ServerRustSettings(
      * Schema routing stores the result in its typed request body configuration.
      */
     fun requestBodyMaxBytes(): Long {
-        val key = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$GLOBAL_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY"
+        val key = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$COMMON_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY"
         val value =
-            protocolSettings()[GLOBAL_PROTOCOL_SETTINGS_KEY]
+            protocolSettings()[COMMON_PROTOCOL_SETTINGS_KEY]
                 ?.getNumberMemberOrDefault(REQUEST_BODY_MAX_BYTES_KEY, 0L) ?: 0L
         val maxBytes =
             try {
@@ -145,7 +150,7 @@ data class ServerRustSettings(
         const val CAPITALIZE_ROUTES_KEY = "capitalizeRoutes"
 
         /** Key under `customizationConfig.protocols` for the section every protocol shares. */
-        const val GLOBAL_PROTOCOL_SETTINGS_KEY = "global"
+        const val COMMON_PROTOCOL_SETTINGS_KEY = "common"
 
         /** Key in the shared section for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_KEY = "requestBodyMaxBytes"
@@ -156,13 +161,13 @@ data class ServerRustSettings(
         ): ObjectNode? {
             val legacyValue = codegenConfig?.getMember(REQUEST_BODY_MAX_BYTES_KEY)?.orNull() ?: return customizationConfig
             val protocols = customizationConfig?.getObjectMember(PROTOCOLS_CUSTOMIZATION_KEY)?.orNull() ?: ObjectNode.objectNode()
-            val global = protocols.getObjectMember(GLOBAL_PROTOCOL_SETTINGS_KEY).orNull() ?: ObjectNode.objectNode()
-            if (global.containsMember(REQUEST_BODY_MAX_BYTES_KEY)) {
+            val common = protocols.getObjectMember(COMMON_PROTOCOL_SETTINGS_KEY).orNull() ?: ObjectNode.objectNode()
+            if (common.containsMember(REQUEST_BODY_MAX_BYTES_KEY)) {
                 return customizationConfig
             }
             return (customizationConfig ?: ObjectNode.objectNode()).withMember(
                 PROTOCOLS_CUSTOMIZATION_KEY,
-                protocols.withMember(GLOBAL_PROTOCOL_SETTINGS_KEY, global.withMember(REQUEST_BODY_MAX_BYTES_KEY, legacyValue)),
+                protocols.withMember(COMMON_PROTOCOL_SETTINGS_KEY, common.withMember(REQUEST_BODY_MAX_BYTES_KEY, legacyValue)),
             )
         }
 

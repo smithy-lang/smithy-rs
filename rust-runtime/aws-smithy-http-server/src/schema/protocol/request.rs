@@ -55,11 +55,6 @@ pub(crate) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s
     schema.members().iter().copied().find(|m| m.http_payload().is_some())
 }
 
-/// `true` when `schema` has an event stream or streaming blob (including RPC members without `@httpPayload`).
-pub(super) fn has_streaming_payload(schema: &Schema<'_>) -> bool {
-    schema.members().iter().any(|member| member.streaming())
-}
-
 /// The `Content-Type` rules for a REST request with this input.
 ///
 /// A `@httpPayload` member fixes the expected type: `@mediaType` when present, `text/plain` for
@@ -106,7 +101,11 @@ pub(crate) fn expected_request_content_type(
 }
 
 /// Checks the `Content-Type` header against `expected`, or against one of `aliases` for it.
-fn check_content_type(headers: &Headers, expected: Option<&str>, aliases: &[&str]) -> Result<(), DeserializeError> {
+pub(crate) fn check_content_type(
+    headers: &Headers,
+    expected: Option<&str>,
+    aliases: &[&str],
+) -> Result<(), DeserializeError> {
     let actual = headers.get(http::header::CONTENT_TYPE.as_str());
     let parse = |s: &str| {
         s.parse::<mime::Mime>()

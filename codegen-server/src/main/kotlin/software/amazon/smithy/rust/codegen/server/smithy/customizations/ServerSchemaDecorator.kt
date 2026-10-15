@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 
 /**
  * Generates the `crate::schema` service and operation descriptors for the schema request path.

@@ -2151,7 +2151,8 @@ mod tests {
                 &self,
                 _: &Schema<'_>,
                 _: &dyn SerializableStruct,
-                _: BoxBody,
+                _streaming_member: &Schema<'_>,
+                _: Option<BoxBody>,
             ) -> crate::response::Response {
                 unreachable!()
             }

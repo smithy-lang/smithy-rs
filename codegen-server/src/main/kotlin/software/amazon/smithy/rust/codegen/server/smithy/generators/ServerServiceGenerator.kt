@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
@@ -42,7 +43,8 @@ class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
     private val isConfigBuilderFallible: Boolean,
-    private val protocolRegistries: List<Writable> = emptyList(),
+    private val protocolRegistries: List<RuntimeType> = emptyList(),
+    private val additionalStreamingOperations: Set<software.amazon.smithy.model.shapes.ShapeId> = emptySet(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -77,7 +79,8 @@ class ServerServiceGenerator(
     private val syncBound = if (schemaSerde) " + Sync" else ""
 
     private fun streams(operation: OperationShape): Boolean =
-        operation.inputShape(model).findStreamingMember(model) != null ||
+        operation.id in additionalStreamingOperations ||
+            operation.inputShape(model).findStreamingMember(model) != null ||
             operation.outputShape(model).findStreamingMember(model) != null
 
     /** On the schema path every operation runs on one of the two schema plugins; nothing uses the legacy upgrade. */
@@ -871,8 +874,8 @@ class ServerServiceGenerator(
                         rustTemplate(handler, *codegenScope)
                     }
                 }.join(",")
-            // Each decorator-contributed writable renders a `&'static ProtocolRegistry`; the
-            // built-in registry is always consulted by the routing service itself.
+            // Service decorators supply static registry symbols. The routing service also
+            // consults the built-in registry.
             val registries =
                 if (protocolRegistries.isEmpty()) {
                     writable { rust("::std::iter::empty()") }
@@ -880,7 +883,7 @@ class ServerServiceGenerator(
                     writable {
                         rust("[")
                         protocolRegistries.forEach { registry ->
-                            registry(this)
+                            rustTemplate("&#{Registry}", "Registry" to registry)
                             rust(",")
                         }
                         rust("]")
@@ -909,11 +912,11 @@ class ServerServiceGenerator(
 
     private fun schemaServiceStruct(): Writable =
         writable {
-            // Protocol sections use shape IDs and are parsed once into Documents. The global
+            // Protocol sections use shape IDs and are parsed once into Documents. The common
             // body limit is emitted directly into the typed request body configuration.
             val protocolSettings =
                 codegenContext.settings.protocolSettings()
-                    .filterKeys { it != ServerRustSettings.GLOBAL_PROTOCOL_SETTINGS_KEY }
+                    .filterKeys { it != ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY }
                     .entries.map { (protocolId, section) ->
                         val shapeId = ShapeId.from(protocolId)
                         require(!shapeId.hasMember()) { "Protocol settings must be keyed by a protocol shape ID: $protocolId" }
@@ -987,7 +990,7 @@ class ServerServiceGenerator(
                 impl<L, HttpPl, ModelPl> $builderName<L, HttpPl, ModelPl> {
                     /// Replaces the global and per-operation body collection configuration.
                     ///
-                    /// Replaces the default from `customizationConfig.protocols.global.requestBodyMaxBytes`.
+                    /// Replaces the default from `customizationConfig.protocols.common.requestBodyMaxBytes`.
                     /// A configuration that sets no global byte limit allows any body size.
                     pub fn request_body_config(mut self, config: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig) -> Self {
                         self.routing_options.service_config.request_body = config;

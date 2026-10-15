@@ -6,16 +6,17 @@
 //! The built-in awsJson router: `X-Amz-Target` on `POST /`.
 
 use crate::schema::routing::RoutingError;
+use crate::schema::ServiceSchema;
 use http::Request;
 
 use super::content_type_is;
 use crate::schema::routing::{
-    ClaimMode, MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
+    MetadataProtocolRouter, OperationTarget, RouteClaim, RouterBuildContext, RouterBuildError,
 };
 
 #[derive(Debug)]
 struct AwsJsonProtocolRouter {
-    claim_mode: ClaimMode,
+    service_schema: &'static ServiceSchema<'static>,
     router: crate::protocol::aws_json::router::AwsJsonRouter<OperationTarget>,
     content_type: &'static str,
 }
@@ -27,21 +28,15 @@ impl AwsJsonProtocolRouter {
             return None;
         }
         let target = self.router.match_target(request)?;
-        let event_stream_input = target
-            .operation()
-            .input()
-            .members()
-            .iter()
-            .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Union);
         (content_type_is(request, self.content_type)
-            || (event_stream_input && content_type_is(request, "application/vnd.amazon.eventstream")))
+            || (target.has_event_stream_input() && content_type_is(request, "application/vnd.amazon.eventstream")))
         .then_some(target)
     }
 }
 
 impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
-        if self.claim_mode == ClaimMode::SoleProtocol {
+        if self.service_schema.protocols().len() == 1 {
             return self.route(request).is_ok_and(|target| target.has_streaming_input());
         }
         self.matching_target(request)
@@ -54,7 +49,7 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
-        if self.claim_mode == ClaimMode::SoleProtocol {
+        if self.service_schema.protocols().len() == 1 {
             return match self.route(request) {
                 Ok(target) => RouteClaim::ClaimedWithRoute(target),
                 Err(error) => RouteClaim::DeferredRejection(error),
@@ -89,7 +84,7 @@ pub fn aws_json_router(
         (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target)
     });
     Ok(AwsJsonProtocolRouter {
-        claim_mode: ctx.claim_mode,
+        service_schema: ctx.service,
         router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
         content_type,
     })
