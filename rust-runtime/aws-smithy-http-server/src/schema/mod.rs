@@ -13,7 +13,9 @@ pub(crate) mod response_bindings;
 pub mod routing;
 mod service;
 pub mod settings;
+pub mod streaming_input;
 mod timestamp;
+pub use streaming_input::{StreamingInput, StreamingInputError, StreamingRequestDecoder};
 pub mod traits;
 
 pub use config::ServiceConfig;

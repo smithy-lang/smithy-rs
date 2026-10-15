@@ -9,16 +9,14 @@
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeType};
 
 use crate::body::BoxBody;
 use crate::response::Response;
 use crate::schema::response_bindings::{serialize_response_parts, ResponseBindings, ResponseValueKind};
 use crate::schema::DeserializeError;
 
-use super::request::{
-    accept_permits, check_accept, has_streaming_payload, rpc_request_deserializer, EVENT_STREAM_CONTENT_TYPE,
-};
+use super::request::{accept_permits, check_accept, rpc_request_deserializer, EVENT_STREAM_CONTENT_TYPE};
 use super::response::{assemble_response, assemble_streaming_response};
 
 /// Determines which RPC operations advertise a response entity to the `Accept` gate.
@@ -45,7 +43,7 @@ pub enum RpcStreaming {
 /// those are wire policy, not codec mechanics.
 #[derive(Debug)]
 pub struct RpcProtocol<C> {
-    codec: C,
+    codec: std::sync::Arc<C>,
     content_type: &'static str,
     content_type_mime: mime::Mime,
     /// The `Content-Type` of a response whose output was not modeled by the user: awsJson stamps
@@ -64,7 +62,7 @@ impl<C> RpcProtocol<C> {
         streaming: RpcStreaming,
     ) -> Self {
         Self {
-            codec,
+            codec: std::sync::Arc::new(codec),
             content_type,
             content_type_mime: content_type
                 .parse()
@@ -76,7 +74,11 @@ impl<C> RpcProtocol<C> {
     }
 
     pub fn codec(&self) -> &C {
-        &self.codec
+        self.codec.as_ref()
+    }
+
+    pub(crate) fn shared_codec(&self) -> std::sync::Arc<C> {
+        self.codec.clone()
     }
 
     /// The legacy RPC deserializers never touch the body of a memberless input.
@@ -92,7 +94,12 @@ impl<C> RpcProtocol<C> {
         if !gated {
             return Ok(());
         }
-        if has_streaming_payload(output) && matches!(self.streaming, RpcStreaming::EventStreamContentType) {
+        if output
+            .members()
+            .iter()
+            .any(|member| member.streaming() && member.shape_type() == ShapeType::Union)
+            && matches!(self.streaming, RpcStreaming::EventStreamContentType)
+        {
             let event_stream = &*super::request::EVENT_STREAM_MIME;
             return if accept_permits(headers, event_stream) || accept_permits(headers, &self.content_type_mime) {
                 Ok(())
@@ -117,7 +124,7 @@ impl<C: Codec> RpcProtocol<C> {
         input: &Schema<'_>,
         request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
-        rpc_request_deserializer(&self.codec, self.content_type, input, request)
+        rpc_request_deserializer(self.codec.as_ref(), self.content_type, input, request)
     }
 
     /// A user-modeled output is always a codec document, `{}` or `bf ff` when nothing is set; a
@@ -128,7 +135,7 @@ impl<C: Codec> RpcProtocol<C> {
         value: &dyn SerializableStruct,
     ) -> Result<Response, SerdeError> {
         let parts = serialize_response_parts(
-            &self.codec,
+            self.codec.as_ref(),
             output,
             value,
             ResponseBindings::BodyOnly,
@@ -152,7 +159,7 @@ impl<C: Codec> RpcProtocol<C> {
         body: BoxBody,
     ) -> Result<Response, SerdeError> {
         let parts = serialize_response_parts(
-            &self.codec,
+            self.codec.as_ref(),
             output,
             value,
             ResponseBindings::BodyOnly,

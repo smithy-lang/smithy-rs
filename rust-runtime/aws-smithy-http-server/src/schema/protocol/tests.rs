@@ -505,11 +505,64 @@ fn streaming_outputs_gate_accept_the_way_the_legacy_server_does() {
         .is_ok());
 }
 
+#[test]
+fn rpcv2_cbor_blob_outputs_require_cbor_accept_even_when_the_model_marks_them_streaming() {
+    static DATA: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Download", "data"), ShapeType::Blob, "data", 0).with_streaming();
+    static OUTPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Download"), ShapeType::Structure, &[&DATA])
+        .with_original_name("Download");
+    for accept in ["application/cbor", "*/*"] {
+        let req = request("/", &[("accept", accept)], b"");
+        assert!(RPC_V2_CBOR
+            .validate_request_headers(&head_op(&OUTPUT), req.headers())
+            .is_ok());
+    }
+    let req = request("/", &[("accept", "application/vnd.amazon.eventstream")], b"");
+    assert!(matches!(
+        RPC_V2_CBOR.validate_request_headers(&head_op(&OUTPUT), req.headers()),
+        Err(DeserializeError::NotAcceptable)
+    ));
+}
+
+#[tokio::test]
+async fn rpcv2_cbor_blob_outputs_use_a_document_instead_of_a_raw_streaming_response() {
+    static DATA: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Download", "data"), ShapeType::Blob, "data", 0).with_streaming();
+    static OUTPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "Download"), ShapeType::Structure, &[&DATA])
+        .with_original_name("Download");
+    struct Output;
+    impl SerializableStruct for Output {
+        fn schema(&self) -> &Schema<'_> {
+            &OUTPUT
+        }
+        fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            Ok(())
+        }
+    }
+    let protocol = crate::schema::SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default());
+    let response =
+        protocol.serialize_streaming_response(&OUTPUT, &Output, &DATA, Some(crate::body::to_boxed("raw blob")));
+    assert_eq!(response.status(), http::StatusCode::OK);
+    assert_eq!(response.headers()[http::header::CONTENT_TYPE], "application/cbor");
+    assert_eq!(response.headers()[&SMITHY_PROTOCOL_HEADER], "rpc-v2-cbor");
+    assert!(!response.headers().contains_key(http::header::CONTENT_LENGTH));
+    let body = body_bytes(response).await;
+    assert_eq!(body.as_ref(), b"\xbf\x64data\x5f\x48raw blob\xff\xff");
+    let mut decoder = aws_smithy_cbor::Decoder::new(&body);
+    let count = decoder.map().unwrap();
+    assert_eq!(decoder.str().unwrap(), "data");
+    assert_eq!(decoder.blob().unwrap().as_ref(), b"raw blob");
+    if count.is_none() {
+        decoder.skip().unwrap();
+    }
+    assert_eq!(decoder.position(), body.len());
+}
+
 #[tokio::test]
 async fn streaming_responses_carry_the_head_only() {
     let body = || crate::body::to_boxed("frames");
 
-    let response = REST_JSON.serialize_streaming_response(&STREAM_OUT, &StreamOutput, body());
+    let response = REST_JSON.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
     assert_eq!(response.status(), http::StatusCode::ACCEPTED);
     assert_eq!(
         response.headers().get("content-type").unwrap(),
@@ -521,19 +574,56 @@ async fn streaming_responses_carry_the_head_only() {
 
     // awsJson stamps its own content type on event stream responses; rpcv2Cbor the event stream
     // type plus its protocol header. Neither writes REST headers.
-    let response = AWS_JSON_10.serialize_streaming_response(&STREAM_OUT, &StreamOutput, body());
+    let response = AWS_JSON_10.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
+    assert_eq!(response.status(), http::StatusCode::OK);
     assert_eq!(
         response.headers().get("content-type").unwrap(),
         "application/x-amz-json-1.0"
     );
     assert_eq!(response.headers().get("x-tag").unwrap(), "tagged");
-    let response = RPC_V2_CBOR.serialize_streaming_response(&STREAM_OUT, &StreamOutput, body());
+    assert_eq!(body_bytes(response).await.as_ref(), b"frames");
+    let response = RPC_V2_CBOR.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
     assert_eq!(
         response.headers().get("content-type").unwrap(),
         "application/vnd.amazon.eventstream"
     );
     assert_eq!(response.headers().get(&SMITHY_PROTOCOL_HEADER).unwrap(), "rpc-v2-cbor");
     assert_eq!(body_bytes(response).await.as_ref(), b"frames");
+}
+
+#[tokio::test]
+async fn absent_streams_preserve_empty_payload_response_heads() {
+    for protocol in [
+        &*REST_JSON as &dyn ServerProtocol,
+        &*REST_XML,
+        &*AWS_JSON_10,
+        &*AWS_JSON_11,
+        &*RPC_V2_CBOR,
+    ] {
+        let absent = protocol.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, None);
+        let present = protocol.serialize_streaming_response(
+            &STREAM_OUT,
+            &StreamOutput,
+            &EVENTS_MEMBER,
+            Some(crate::body::empty()),
+        );
+        assert_eq!(absent.status(), present.status());
+        assert_eq!(absent.headers(), present.headers());
+        assert!(body_bytes(absent).await.is_empty());
+        assert!(body_bytes(present).await.is_empty());
+    }
+    static BLOB: Schema = Schema::new_member(shape_id!("test", "StreamOut", "data"), ShapeType::Blob, "data", 0)
+        .with_http_payload()
+        .with_streaming();
+    for protocol in [&*REST_JSON as &dyn ServerProtocol, &*REST_XML] {
+        let absent = protocol.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &BLOB, None);
+        let present =
+            protocol.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &BLOB, Some(crate::body::empty()));
+        assert_eq!(absent.status(), present.status());
+        assert_eq!(absent.headers(), present.headers());
+        assert!(body_bytes(absent).await.is_empty());
+        assert!(body_bytes(present).await.is_empty());
+    }
 }
 
 // --- body collection ---
@@ -643,7 +733,8 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
             &self,
             _: &Schema<'_>,
             _: &dyn SerializableStruct,
-            _: crate::body::BoxBody,
+            _streaming_member: &Schema<'_>,
+            _: Option<crate::body::BoxBody>,
         ) -> Response {
             unimplemented!()
         }

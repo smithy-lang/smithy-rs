@@ -56,9 +56,10 @@ impl ServerProtocol for HttpOnly {
         &self,
         _: &Schema<'_>,
         _: &dyn SerializableStruct,
-        body: BoxBody,
+        _streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
     ) -> http::Response<BoxBody> {
-        http::Response::new(body)
+        http::Response::new(body.unwrap_or_else(crate::body::empty))
     }
     fn serialize_error(&self, _: &dyn HttpModeledError) -> http::Response<BoxBody> {
         panic!("unexpected error")
@@ -94,8 +95,7 @@ macro_rules! operation {
         }
         impl StreamingOperationShape for $name {
             fn deserialize_streaming_input(
-                _: &mut dyn ShapeDeserializer,
-                _: SdkBody,
+                _: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
                 _: SharedServerProtocol,
             ) -> crate::operation::StreamingInputFuture<()> {
                 Box::pin(async { Ok(()) })
@@ -171,11 +171,12 @@ fn streaming_upgrade_budgets_body_reads_by_the_handler() {
     }
     impl StreamingOperationShape for StreamingInput {
         fn deserialize_streaming_input(
-            _: &mut dyn ShapeDeserializer,
-            body: SdkBody,
-            _: SharedServerProtocol,
+            request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+            protocol: SharedServerProtocol,
         ) -> crate::operation::StreamingInputFuture<SdkBody> {
-            Box::pin(async move { Ok(body) })
+            deserialize_streaming_request(Self::SCHEMA, request, protocol, |_, body, _| {
+                Box::pin(async move { Ok(body) })
+            })
         }
         fn serialize_streaming_output(_: (), _: &SharedServerProtocol) -> http::Response<BoxBody> {
             http::Response::new(crate::body::empty())

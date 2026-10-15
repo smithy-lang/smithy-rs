@@ -21,6 +21,15 @@ use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 
+// These head-only tests supply an event stream member; its body is supplied separately.
+static STREAMING_MEMBER: Schema = Schema::new_member(
+    shape_id!("test", "StreamingOutput", "events"),
+    ShapeType::Union,
+    "events",
+    0,
+)
+.with_streaming();
+
 static SCALAR: Schema = Schema::new_member(shape_id!("test", "Headers", "scalar"), ShapeType::String, "scalar", 0)
     .with_http_header("x-scalar");
 static ITEMS: Schema = Schema::new_member(shape_id!("test", "Headers", "items"), ShapeType::List, "items", 1)
@@ -161,7 +170,7 @@ fn all_header_values_survive_outputs_errors_and_streaming_heads() {
         let error = protocol.serialize_error(&value);
         assert_eq!(error.status(), 422);
         assert_bound_headers(error.headers());
-        let streaming = protocol.serialize_streaming_response(&OUTPUT, &value, empty());
+        let streaming = protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(empty()));
         assert_eq!(streaming.status(), 200);
         assert_bound_headers(streaming.headers());
         assert!(streaming.headers().get("content-length").is_none());
@@ -317,7 +326,7 @@ fn timestamp_headers_use_member_and_element_formats() {
             (protocol.serialize_response(&TIMESTAMP_HEADERS, &value), 200),
             (protocol.serialize_error(&value), 422),
             (
-                protocol.serialize_streaming_response(&TIMESTAMP_HEADERS, &value, empty()),
+                protocol.serialize_streaming_response(&TIMESTAMP_HEADERS, &value, &STREAMING_MEMBER, Some(empty())),
                 200,
             ),
         ] {
@@ -511,7 +520,10 @@ fn modeled_length_collisions_match_legacy_generated_header_assembly() {
             for (response, status) in [
                 (protocol.serialize_response(&OUTPUT, &value), 200),
                 (protocol.serialize_error(&value), 422),
-                (protocol.serialize_streaming_response(&OUTPUT, &value, empty()), 200),
+                (
+                    protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(empty())),
+                    200,
+                ),
             ] {
                 assert_eq!(response.status(), status);
                 assert_eq!(
@@ -536,7 +548,7 @@ fn modeled_content_type_overrides_defaults_without_losing_other_values() {
             for response in [
                 protocol.serialize_response(&OUTPUT, &value),
                 protocol.serialize_error(&value),
-                protocol.serialize_streaming_response(&OUTPUT, &value, empty()),
+                protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(empty())),
             ] {
                 assert_eq!(values(response.headers(), "content-type"), ["text/custom"]);
                 assert_bound_headers(response.headers());
@@ -557,17 +569,17 @@ fn streaming_lengths_are_not_inferred_or_validated_and_bodies_are_not_polled() {
             }))
         };
         let mut value = HeadersOutput::default();
-        let response = protocol.serialize_streaming_response(&OUTPUT, &value, body());
+        let response = protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(body()));
         assert!(response.headers().get("content-length").is_none());
         value.length = Some("006".into());
         value.prefix.push(("length".into(), "6".into()));
-        let response = protocol.serialize_streaming_response(&OUTPUT, &value, body());
+        let response = protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(body()));
         assert_eq!(response.status(), 200);
         assert_eq!(values(response.headers(), "content-length"), ["6", "006"]);
         assert_bound_headers(response.headers());
         for length in ["7", "invalid", "-1", "1, 1", "18446744073709551616", ""] {
             value.prefix.last_mut().unwrap().1 = length.into();
-            let response = protocol.serialize_streaming_response(&OUTPUT, &value, body());
+            let response = protocol.serialize_streaming_response(&OUTPUT, &value, &STREAMING_MEMBER, Some(body()));
             assert_eq!(response.status(), 200);
             assert_eq!(values(response.headers(), "content-length"), [length, "006"]);
         }

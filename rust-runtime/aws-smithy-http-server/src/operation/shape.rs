@@ -8,12 +8,12 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 
 use super::{Handler, IntoService, Normalize, OperationService};
+use crate::body::RequestBody;
 use crate::response::Response;
 use crate::schema::OperationSchema;
 use crate::schema::{DeserializeError, SharedServerProtocol};
 use crate::shape_id::ShapeId;
-use aws_smithy_schema::serde::ShapeDeserializer;
-use aws_smithy_types::body::SdkBody;
+use aws_smithy_runtime_api::http::Request;
 
 /// Models the [Smithy Operation shape].
 ///
@@ -51,18 +51,18 @@ pub type StreamingInputFuture<I> = Pin<Box<dyn Future<Output = Result<I, Deseria
 /// collected path: [`DeserializableShape`](crate::schema::DeserializableShape) for the input,
 /// [`ServerProtocol::serialize_response`](crate::schema::ServerProtocol::serialize_response) for the output.
 pub trait StreamingOperationShape: SchemaOperationShape {
-    /// Reads the input: the HTTP bindings from `deserializer`, the streaming member from `body`.
+    /// Reads the input from an owned request, including its routing extensions.
     ///
-    /// `body` is the live request body when the input streams and an empty body otherwise. The
-    /// walk over `deserializer` happens before the returned future is polled; the future reads
-    /// the initial frame when the protocol carries one.
+    /// Generated glue prepares HTTP bindings and the live stream inside the returned future.
+    /// Request-body collection limits come from the routed operation's request extension.
     fn deserialize_streaming_input(
-        deserializer: &mut dyn ShapeDeserializer,
-        body: SdkBody,
+        request: Request<RequestBody>,
         protocol: SharedServerProtocol,
     ) -> StreamingInputFuture<Self::Input>;
 
     /// Serializes the output: the streaming member becomes the body, the rest the response head.
+    ///
+    /// Response construction is synchronous; the body streams asynchronously, including document-bound blobs.
     fn serialize_streaming_output(output: Self::Output, protocol: &SharedServerProtocol) -> Response;
 }
 

@@ -204,8 +204,9 @@ where
 
 /// Schema-driven, protocol-neutral HTTP upgrade plugin for operations with a streaming member.
 ///
-/// The request body is never collected when the input streams; it is handed to the generated
-/// [`StreamingOperationShape`] glue as an [`SdkBody`]. That conversion needs the body to be
+/// A streaming payload is handed to the generated [`StreamingOperationShape`] glue as an
+/// [`SdkBody`]. A protocol that treats a streaming blob as a document member instead collects
+/// and decodes the request body. The live-body conversion needs the body to be
 /// `Sync`, so services with streaming operations run on a `Sync` body such as
 /// [`BoxBodySync`](crate::body::BoxBodySync) or hyper's incoming body.
 #[derive(Debug, Clone)]
@@ -311,53 +312,75 @@ where
                 Ok(value) => value,
                 Err(err) => return Ok(err.into_response()),
             };
-            let mut request = match convert_request(parts, body) {
-                Ok(request) => request.map(Some),
+            let request = match convert_request(parts, crate::body::RequestBody::new(body)) {
+                Ok(request) => request,
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
-            if let Err(err) = protocol.validate_request_headers(operation, request.headers()) {
-                return Ok(protocol.serialize_rejection(err));
-            }
-            let directive = protocol.request_body_requirement(operation);
-            let body = request.body_mut().take().expect("request body is present");
-            let input_streams = operation.input().members().iter().any(|member| member.streaming());
-            let (bytes, body) = if input_streams {
-                let body = crate::body::wrap_streaming_body(body);
-                (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
-            } else if directive == BodyDirective::Collect {
-                match collect_request_body(body, &selected.request_body_config()).await {
-                    Ok(bytes) => (bytes, SdkBody::empty()),
-                    Err(err) => {
-                        return Ok(crate::schema::body_collection_rejection(
-                            &**protocol,
-                            err.map_body_error(crate::Error::new),
-                        ))
-                    }
-                }
-            } else {
-                (bytes::Bytes::new(), SdkBody::empty())
-            };
-            let request = request.map(|_| bytes);
-            // The deserializer borrows the request and is not `Send`; the walk over it happens
-            // inside `deserialize_streaming_input` before the future is returned, so it is dropped
-            // before the first await.
-            let future = {
-                let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
-                    Ok(value) => value,
-                    Err(err) => return Ok(protocol.serialize_rejection(err)),
-                };
-                Op::deserialize_streaming_input(&mut *deserializer, body, protocol.clone())
-            };
+            let future = Op::deserialize_streaming_input(request, protocol.clone());
             let input = match future.await {
                 Ok(value) => value,
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
             match service.oneshot((input, extractors)).await {
-                Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
+                Ok(output) => Ok(Op::serialize_streaming_output(output, &protocol)),
                 Err(err) => Ok(protocol.serialize_error(&err)),
             }
         })
     }
+}
+
+/// Prepares the existing collected/event-stream input path from an owned request.
+///
+/// The synchronous callback consumes the borrowed HTTP deserializer before its returned future
+/// is awaited. The live stream and decoded bindings can therefore outlive request preparation.
+#[doc(hidden)]
+pub fn deserialize_streaming_request<I, F>(
+    operation: &'static crate::schema::OperationSchema<'static>,
+    request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+    protocol: crate::schema::SharedServerProtocol,
+    deserialize: F,
+) -> super::StreamingInputFuture<I>
+where
+    I: Send + 'static,
+    F: FnOnce(
+            &mut dyn aws_smithy_schema::serde::ShapeDeserializer,
+            SdkBody,
+            crate::schema::SharedServerProtocol,
+        ) -> super::StreamingInputFuture<I>
+        + Send
+        + 'static,
+{
+    Box::pin(async move {
+        protocol.validate_request_headers(operation, request.headers())?;
+        let config = request
+            .extension::<SelectedOperation>()
+            .map(SelectedOperation::request_body_config);
+        let mut request = request.map(Some);
+        let body = request.body_mut().take().expect("request body is present");
+        let input_streams = operation.input().members().iter().any(|member| member.streaming());
+        let (bytes, body) = if input_streams {
+            let body = crate::body::wrap_streaming_body(body);
+            (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
+        } else if protocol.request_body_requirement(operation) == BodyDirective::Collect {
+            let config = config.ok_or_else(|| {
+                DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
+                    "selected operation missing while preparing collected input",
+                )))
+            })?;
+            let bytes = collect_request_body(body, &config).await.map_err(|error| {
+                DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(error.to_string()))
+            })?;
+            (bytes, SdkBody::empty())
+        } else {
+            (bytes::Bytes::new(), SdkBody::empty())
+        };
+        let request = request.map(|_| bytes);
+        let future = {
+            let mut deserializer = protocol.deserialize_request(operation.input(), &request)?;
+            deserialize(&mut *deserializer, body, protocol.clone())
+        };
+        future.await
+    })
 }
 
 /// An empty `500 Internal Server Error`: the answer when generated glue cannot even build a

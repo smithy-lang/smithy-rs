@@ -10,12 +10,19 @@
 //! complete body. Body routers receive only operations with no streaming input or output.
 //!
 //! Every service, including a single-protocol service, checks protocol claims. Routers
-//! are asked in protocol precision order. The first claim
+//! are asked in protocol precision order. The first definite claim
 //! owns the request: it either identifies the operation or proceeds to routing, whose
 //! errors are terminal and serialized by that protocol.
-//! A [`RouteClaim::DeferredRejection`] lets later protocols try to claim. If none does,
-//! the first deferred rejection supplies the response; otherwise the service returns
-//! its protocol-neutral rejection.
+//! A [`RouteClaim::DeferredClaim`] offers an operation while later protocols try to
+//! claim definitively. If none does, the first deferred claim owns the request.
+//! A [`RouteClaim::DeferredRejection`] also lets later protocols try. If no definite
+//! or deferred claim succeeds, the first deferred rejection supplies the response;
+//! otherwise the service returns its protocol-neutral rejection.
+//!
+//! Each router can inspect the service's protocol IDs through
+//! [`RouterBuildContext::service_protocols`]. When both restJson1 and restXml are
+//! enabled, eligible requests without `Content-Type` offer deferred claims.
+//! If no protocol claims definitively, protocol priority selects restJson1.
 //!
 //! Body routers first inspect the head with [`BodyProtocolRouter::claim`]. A
 //! [`BodyRouteClaim::ClaimedWithRoute`] dispatches without collecting the body.
@@ -38,6 +45,7 @@ mod builder;
 mod protocol_router;
 pub mod route_errors;
 mod routers;
+mod routing_table;
 mod service;
 #[cfg(test)]
 mod test_helpers;
@@ -46,8 +54,8 @@ mod tests;
 
 pub use builder::MultiProtocolRoutingServiceBuilder;
 pub use protocol_router::{
-    BodyProtocolRouter, BodyRouteClaim, ClaimMode, CollectedBody, MetadataProtocolRouter, OperationTarget,
-    ProtocolOptions, ProtocolResolutionError, RouteClaim, RouterBuildContext, RouterBuildError, SharedProtocolRouter,
+    BodyProtocolRouter, BodyRouteClaim, CollectedBody, MetadataProtocolRouter, OperationTarget, ProtocolOptions,
+    ProtocolResolutionError, RouteClaim, RouterBuildContext, RouterBuildError, SharedProtocolRouter,
 };
 pub use route_errors::{RoutingError, RoutingErrorKind};
 pub(crate) use routers::rpc_v2_cbor_router;

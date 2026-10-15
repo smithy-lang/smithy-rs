@@ -28,18 +28,15 @@ use tower::{layer::util::Identity, Service};
 /// The service schema is required. Built-in protocols are always available; additional
 /// registries contribute protocols implemented outside this crate.
 #[derive(Debug)]
-pub struct MultiProtocolRoutingServiceBuilder<B = hyper::body::Incoming, L = Identity> {
+pub struct MultiProtocolRoutingServiceBuilder<L = Identity> {
     service: &'static ServiceSchema<'static>,
     registries: Vec<&'static ProtocolRegistry>,
-    bindings: Vec<(
-        &'static OperationSchema<'static>,
-        SyncRoute<crate::body::RequestBody<B>>,
-    )>,
+    bindings: Vec<(&'static OperationSchema<'static>, SyncRoute<crate::body::RequestBody>)>,
     options: ProtocolOptions,
     layer: L,
 }
 
-impl<B> MultiProtocolRoutingServiceBuilder<B> {
+impl MultiProtocolRoutingServiceBuilder {
     /// Starts configuring routing for the supplied schema.
     pub fn new(service: &'static ServiceSchema<'static>) -> Self {
         Self {
@@ -55,12 +52,7 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
     pub fn from_operation_handler_bindings(
         service: &'static ServiceSchema<'static>,
         registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-        bindings: impl IntoIterator<
-            Item = (
-                &'static OperationSchema<'static>,
-                SyncRoute<crate::body::RequestBody<B>>,
-            ),
-        >,
+        bindings: impl IntoIterator<Item = (&'static OperationSchema<'static>, SyncRoute<crate::body::RequestBody>)>,
     ) -> Self {
         Self::new(service)
             .registries(registries)
@@ -71,19 +63,14 @@ impl<B> MultiProtocolRoutingServiceBuilder<B> {
     pub fn from_operation_handler_bindings_with_options(
         service: &'static ServiceSchema<'static>,
         registries: impl IntoIterator<Item = &'static ProtocolRegistry>,
-        bindings: impl IntoIterator<
-            Item = (
-                &'static OperationSchema<'static>,
-                SyncRoute<crate::body::RequestBody<B>>,
-            ),
-        >,
+        bindings: impl IntoIterator<Item = (&'static OperationSchema<'static>, SyncRoute<crate::body::RequestBody>)>,
         options: ProtocolOptions,
     ) -> Self {
         Self::from_operation_handler_bindings(service, registries, bindings).options(options)
     }
 }
 
-impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
+impl<L> MultiProtocolRoutingServiceBuilder<L> {
     /// Replaces the external registries. [`ProtocolRegistry::BUILTIN`] is always consulted.
     pub fn registries(mut self, registries: impl IntoIterator<Item = &'static ProtocolRegistry>) -> Self {
         self.registries = registries.into_iter().collect();
@@ -93,12 +80,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
     /// Replaces the protocol-independent `(operation schema, handler route)` bindings.
     pub fn operation_handler_bindings(
         mut self,
-        bindings: impl IntoIterator<
-            Item = (
-                &'static OperationSchema<'static>,
-                SyncRoute<crate::body::RequestBody<B>>,
-            ),
-        >,
+        bindings: impl IntoIterator<Item = (&'static OperationSchema<'static>, SyncRoute<crate::body::RequestBody>)>,
     ) -> Self {
         self.bindings = bindings.into_iter().collect();
         self
@@ -114,7 +96,7 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
     ///
     /// The layer is applied during construction. It runs after routing, with the selected
     /// operation in request extensions. Compose multiple layers with a Tower layer stack.
-    pub fn layer<N>(self, layer: N) -> MultiProtocolRoutingServiceBuilder<B, N> {
+    pub fn layer<N>(self, layer: N) -> MultiProtocolRoutingServiceBuilder<N> {
         MultiProtocolRoutingServiceBuilder {
             service: self.service,
             registries: self.registries,
@@ -125,16 +107,15 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
     }
 
     /// Validates the configuration and builds protocol routers and layered handlers.
-    pub fn build(self) -> Result<MultiProtocolRoutingService<B>, RouterBuildError>
+    pub fn build(self) -> Result<MultiProtocolRoutingService, RouterBuildError>
     where
-        B: 'static,
-        L: tower::Layer<SyncRoute<crate::body::RequestBody<B>>>,
-        L::Service: Service<Request<crate::body::RequestBody<B>>, Response = Response<BoxBody>, Error = Infallible>
+        L: tower::Layer<SyncRoute<crate::body::RequestBody>>,
+        L::Service: Service<Request<crate::body::RequestBody>, Response = Response<BoxBody>, Error = Infallible>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<Request<crate::body::RequestBody<B>>>>::Future: Send + 'static,
+        <L::Service as Service<Request<crate::body::RequestBody>>>::Future: Send + 'static,
     {
         let Self {
             service,
@@ -144,11 +125,6 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
             layer,
         } = self;
         let resolved = resolve_protocols(service, registries, &options)?;
-        let claim_mode = if resolved.len() == 1 {
-            super::ClaimMode::SoleProtocol
-        } else {
-            super::ClaimMode::Strict
-        };
 
         // The operaiton must be listed in the Service shape.
         let mut seen = HashSet::new();
@@ -191,7 +167,6 @@ impl<B, L> MultiProtocolRoutingServiceBuilder<B, L> {
         for protocol in resolved {
             let router = protocol.build_router(
                 RouterBuildContext {
-                    claim_mode,
                     service,
                     targets: &targets,
                     config: &options.service_config,
@@ -386,7 +361,6 @@ mod tests {
     use super::super::test_helpers::*;
     use super::super::MultiProtocolRoutingService;
     use super::*;
-    use crate::body::Body;
     use crate::response::Response;
     use crate::schema::SelectedOperation;
     use aws_smithy_schema::shape_id;
@@ -480,7 +454,7 @@ mod tests {
             OPERATIONS,
         );
         // Missing registrations fail even before the missing operation bindings are checked.
-        let error = MultiProtocolRoutingServiceBuilder::<Body>::from_operation_handler_bindings(&PARTIAL, [], [])
+        let error = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(&PARTIAL, [], [])
             .build()
             .unwrap_err();
         assert_eq!(
@@ -672,26 +646,26 @@ mod tests {
             .options(ProtocolOptions::default())
             .build();
         assert!(app.is_ok());
-        let invalid = MultiProtocolRoutingService::<hyper::body::Incoming>::builder(&REST_JSON);
+        let invalid = MultiProtocolRoutingService::builder(&REST_JSON);
         assert!(matches!(invalid.build(), Err(RouterBuildError::Binding(_))));
     }
 
     #[tokio::test]
-    async fn builder_supports_custom_transport_bodies_with_handler_layers() {
+    async fn builder_supports_boxed_bodies_with_handler_layers() {
         type Transport = http_body_util::Full<Bytes>;
         for schema in [&REST_JSON, &SERVICE] {
             let bindings = schema.operations().iter().map(|operation| {
                 (
                     *operation,
                     SyncRoute::new(tower::service_fn(
-                        |request: Request<crate::body::RequestBody<Transport>>| async move {
+                        |request: Request<crate::body::RequestBody>| async move {
                             assert!(request.extensions().get::<SelectedOperation>().is_some());
                             Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
                         },
                     )),
                 )
             });
-            let app = MultiProtocolRoutingService::<Transport>::builder(schema)
+            let app = MultiProtocolRoutingService::builder(schema)
                 .registries([registry()])
                 .operation_handler_bindings(bindings)
                 .layer(tower::util::MapResponseLayer::new(|mut response: Response<BoxBody>| {

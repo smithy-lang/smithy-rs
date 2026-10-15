@@ -275,10 +275,11 @@ macro_rules! aws_json_protocol {
                 &self,
                 output: &Schema<'_>,
                 value: &dyn SerializableStruct,
-                body: BoxBody,
+                _streaming_member: &Schema<'_>,
+                body: Option<BoxBody>,
             ) -> Response {
                 self.inner
-                    .serialize_streaming_response(output, value, body)
+                    .serialize_streaming_response(output, value, body.unwrap_or_else(crate::body::empty))
                     .and_then(|response| {
                         apply_response_bindings(
                             response,
