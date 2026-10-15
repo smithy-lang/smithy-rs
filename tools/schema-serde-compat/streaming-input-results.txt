@@ -1,0 +1,139 @@
+Streaming blob inputs: implementation and verification
+
+Implemented
+- StreamingOperationShape::deserialize_streaming_input takes an owned
+  Request<RequestBody> and SharedServerProtocol (phase 1).
+- ServerProtocol::deserialize_data_stream is a synchronous factory for an owned
+  StreamingRequestDecoder. The existing synchronous deserialize_request remains.
+- Generated blob handlers accept StreamingInput<UploadInput>. UploadInput and its
+  builders contain ordinary fields only; their runtime schema retains the blob
+  member. The generated member schema selects the wire name without a runtime scan.
+- StreamingInput<T> exposes data: ByteStream and is_present(). finish(&mut self)
+  reads trailing fields and validates T. Calling finish before blob EOF returns
+  StreamNotFinished without draining, and cancellation leaves it resumable.
+- into_input_and_blob(self) collects and finishes, returning (T, Option<Blob>).
+  into_blob(self) also validates the complete input, then returns just Option<Blob>.
+  These methods reject previously delivered bytes. None preserves absence;
+  Some(empty) preserves a present empty blob. REST's payload is always present.
+- Collection honors the selected operation's byte limit, counting all raw wire
+  bytes including prefix/framing, and uses one deadline across collection+finish.
+  Polling defaults are unchanged: 64 consecutive ready frames for collection,
+  32 for ordinary streaming. The parser also yields during buffered framing work.
+- CBOR definite/indefinite byte strings stream incrementally. Ordinary values are
+  passed to the existing configured codec in complete single-member envelopes.
+  No borrowed deserializer survives an await and no mutex is held across an await.
+- REST continues exposing raw payload bytes. Event streams retain their existing
+  glue, initial-frame handling, and encoding paths.
+- streaming_blob_is_document() has been removed from runtime and codegen.
+- No shared serde trait changes. No Rust runtime source changes outside
+  aws-smithy-http-server. Nothing committed or pushed.
+
+Approved compatibility differences and error timing
+- Fresh legacy duplicate baseline: {data: h'01', data: h'02'} succeeds and uses
+  h'02'. HTTP 200, content-type application/cbor, smithy-protocol rpc-v2-cbor,
+  content-length 9, body bf64646174614102ff.
+- User explicitly approved rejecting duplicate streaming members. The new session
+  rejects them at finish when they follow the delivered blob, because delivered
+  bytes cannot be replaced. A duplicate before any blob is exposed can fail during
+  preparation. Null still counts as a key occurrence.
+- Validation and parse errors after the blob are returned to the handler. The
+  handler decides how to respond; the runtime cannot replace a response that the
+  handler has already started. The comparison harness explicitly applies the
+  protocol rejection renderer to late errors; this is test handler policy.
+- Trailing bytes remain invalid. The comparison rejection is HTTP 400,
+  application/cbor, body a0. Required-field/constraint errors retain the generated
+  validation exception conversion, including with private generated builders.
+- Existing CBOR output streaming framing is unchanged by this task: indefinite
+  blob chunks differ intentionally from legacy definite blob output. REST output
+  remains raw. This work does not fix client-side CBOR blob extraction.
+
+Verification
+- cargo test --quiet --manifest-path rust-runtime/aws-smithy-http-server/Cargo.toml
+  passed 417 runtime tests (360 unit + 57 integration), plus 33 doctests;
+  17 doctests ignored. This includes the request-binding and routing tests.
+- Final targeted streaming_input run: 14 tests passed (13 new module tests plus
+  one existing matching test). Covers fragmented headers/keys/payloads, nested
+  structures/maps/lists/nulls, absence/empty, duplicate/trailing/malformed input,
+  errors before/after data, cancellation, limits including prefix bytes, timeout
+  through trailing fields, backpressure, cooperative yields, and source drop.
+- Targeted codegen command:
+  ./gradlew :codegen-server:test --tests '*ServerSchemaStreamingTest'
+    --tests '*SchemaRoutingGeneratorTest'
+    --tests '*RpcV2CborStreamingBlobCompatibilityTest'
+    --tests '*CborLiveBlobTest' --tests '*StreamingBlobInputTest' --quiet
+  17 Kotlin integration cases passed: 4 + 9 + 2 + 1 + 1 respectively.
+- StreamingBlobInputTest generates fresh legacy/schema crates and uses a real
+  TCP HTTP/1 client and server. Eight successful one-megabyte uploads:
+  2 legacy CBOR orders, 2 schema CBOR orders + REST with public builders, and
+  those same 3 cases with private builders. The schema handler starts before the
+  client sends any blob bytes or EOF. Fields before/after the blob both work.
+  Additional generated tests cover missing optional blobs, empty blobs, required
+  trailing fields, length constraints, and an input without ordinary fields.
+  Captures: .runs/streaming-blob-input-13766994143754332524/
+  CBOR: HTTP 200, application/cbor, smithy-protocol rpc-v2-cbor, length 2, bfff.
+  REST: HTTP 200, application/json, length 2, 7b7d (the empty operation output).
+- Blob compatibility corpus: 100 comparisons (88 CBOR + 12 REST), with exactly
+  4 approved differences: two accepted duplicate cases against each schema mode.
+  The remaining 96 compare equal. Raw headers and bytes are retained in *.wire.
+  .runs/cbor-streaming-blob-9023831008877507418/
+  .runs/rest-streaming-blob-3017967579166174893/
+- Fresh live HTTP/2 event streams: 21 legacy + 21 schema tests passed.
+  .runs/streaming-input-20261015T003018.860392Z/
+  Uses the repository's manual event-stream client, not a generated client.
+  Covers initial frames, required/optional initial data, signed/unsigned events,
+  empty/multiple events, and initial-data rejection. It is not exhaustive coverage
+  of every transport failure or modeled event-error union variant.
+- Checked-in Pokemon SDK: cargo check --quiet passed.
+- Targeted Kotlin formatting, Rust formatting, and git diff --check passed.
+- Fresh run_c01.py: 64 comparisons, zero differences.
+  .runs/C01-20261015T003037.901484Z/
+- Fresh run_c02.py: 52 comparisons, zero differences.
+  .runs/C02-20261015T003106.984682Z/
+- Fresh run_c03.py: 64 HTTP comparisons + 8 preexisting explicit
+  legacy-panic/schema-error exceptions, zero unexpected differences.
+  .runs/C03-20261015T003135.498930Z/
+  The preexisting C03 implementation already converts all-empty media-typed
+  prefix-header panics into errors. This differs from the earlier plan's panic
+  parity target; neither its code nor its expectations were changed by this task.
+- Aggregate final logs: .runs/streaming-input-final-20261015T003005/
+
+Intermediate failures resolved
+- Corrected generated constraint-violation symbol references.
+- Used explicit @default(null) for the modeled optional streaming blob.
+- Corrected optional presence validation and private-builder unused variants.
+- Added the REST content-type signal required by the shared protocol router.
+- Replaced an unsupported CBOR Document fixture with modeled nested containers.
+- Added a regression for floating-point bits incorrectly resembling a null value.
+- Earlier phase-1 simultaneous Gradle invocations collided writing reports; all
+  subsequent Gradle invocations were sequential. Final listed checks passed.
+
+Exact source files changed across both input phases (run artifacts excluded)
+1. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/ServerCodegenVisitor.kt
+2. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderConstraintViolations.kt
+3. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt
+4. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt
+5. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationGenerator.kt
+6. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerSchemaDeserializeGenerator.kt
+7. codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerStreamingOperationGenerator.kt
+8. codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/customizations/ServerSchemaStreamingTest.kt
+9. codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/RpcV2CborStreamingBlobCompatibilityTest.kt
+10. codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/StreamingBlobInputTest.kt
+11. codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/StreamingInputLiveGenerationTest.kt
+12. examples/pokemon-service-server-sdk/Cargo.toml
+13. examples/pokemon-service-server-sdk/src/operation_shape.rs
+14. rust-runtime/aws-smithy-http-server/src/operation/shape.rs
+15. rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs
+16. rust-runtime/aws-smithy-http-server/src/operation/upgrade/tests.rs
+17. rust-runtime/aws-smithy-http-server/src/schema/mod.rs
+18. rust-runtime/aws-smithy-http-server/src/schema/protocol/mod.rs
+19. rust-runtime/aws-smithy-http-server/src/schema/protocol/request.rs
+20. rust-runtime/aws-smithy-http-server/src/schema/protocol/rest.rs
+21. rust-runtime/aws-smithy-http-server/src/schema/protocol/rest_json_1.rs
+22. rust-runtime/aws-smithy-http-server/src/schema/protocol/rest_xml.rs
+23. rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc.rs
+24. rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc_v2_cbor.rs
+25. rust-runtime/aws-smithy-http-server/src/schema/streaming_input.rs
+26. rust-runtime/aws-smithy-http-server/src/schema/streaming_input/cbor.rs
+27. rust-runtime/aws-smithy-http-server/src/schema/streaming_input/tests.rs
+28. tools/schema-serde-compat/run_streaming_input.py
+29. tools/schema-serde-compat/streaming-input-results.txt

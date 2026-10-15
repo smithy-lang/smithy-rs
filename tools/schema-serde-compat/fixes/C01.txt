@@ -1,0 +1,69 @@
+C01: trailing slashes in HTTP URI templates
+Validated 2026-10-14 against freshly generated legacy and schema servers.
+
+Problem and fix
+  Legacy ServerHttpBoundProtocolGenerator.serverRenderUriPathParser consumes
+  httpTrait.uri.segments. Smithy's UriPattern drops trailing empty template
+  segments, as does schema routing. Schema extract_labels previously retained
+  them. Valid routed requests then failed with 400, or a greedy label lost its
+  final slash. extract_labels now removes trailing template slashes before
+  splitting. Request paths are preserved, including empty greedy segments.
+
+Repeat on another machine (from the repository root)
+  python3 tools/schema-serde-compat/run_c01.py
+
+  This uses the existing audit runner's runtime_snapshot helper. It copies the
+  current runtime into an isolated build, excludes Markdown, and replaces doc
+  include attributes only in that copy. It neither reads nor restores Markdown.
+  Use the repository Rust toolchain, Java/Gradle and Python 3. Generated crates,
+  Cargo.lock files, cargo logs, source hashes and observations remain under
+  tools/schema-serde-compat/.runs/C01-<UTC timestamp>/.
+  Exit zero means the JUnit regression passed; a nonzero exit requires reading
+  gradle.log and the per-service cargo logs. comparison.json records HTTP diffs.
+
+  The JUnit regression also runs directly through :codegen-server:test with
+  --tests '*TrailingSlashLabelsCompatibilityTest'. The Python entry point is
+  preferred for preserved artifacts and builds that omit repository Markdown.
+
+Live reference and assertions
+  The checked-in model is models/trailing-slash-labels.smithy in this directory's
+  parent. Both REST JSON and REST XML are generated with schemaSerde=false and
+  schemaSerde=true, using HTTP 1.x. All four servers are compiled and exercised
+  through their actual routing services; no hand-written reference parser.
+  Handlers echo the parsed label as an HTTP payload.
+  Each legacy server must first meet 32 explicit status/value controls. Then
+  every schema status, response header and exact response byte must match its
+  live legacy counterpart. This prevents shared early rejection from passing.
+  Logging compatibility is a separate audit item and is not asserted here.
+
+Coverage
+  Ordinary labels, trailing-template labels, greedy labels with and without
+  trailing templates, greedy labels with a literal suffix, query-literal
+  templates, percent decoding, empty captures, repeated request slashes,
+  trailing request slashes, missing segments, extra segments and route rejection.
+
+Direct results
+  Before: C01-20261014T060210.210744Z
+    Both legacy servers passed their 32 controls.
+    18 of 32 HTTP observations differed per protocol (36 of 64 total).
+    /trailing/rex: legacy 200 with "rex"; schema 400.
+    /greedy-trailing/a/b/: legacy "a/b/"; schema "a/b" (both 200).
+    The added runtime unit regression also failed before the fix.
+  After: C01-20261014T060314.056967Z
+    32/32 comparisons passed for REST JSON; 32/32 passed for REST XML.
+    All legacy observations were byte-identical to the pre-fix legacy results.
+    All 25 schema request-binding unit tests passed.
+    Scoped Kotlin formatting, rustfmt, whitespace checks and six existing
+    Python audit-runner tests passed.
+
+Files changed for this item (repository-relative)
+  MODIFIED rust-runtime/aws-smithy-http-server/src/schema/request_bindings.rs
+    Template normalization and one runtime regression test.
+  ADDED codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/TrailingSlashLabelsCompatibilityTest.kt
+  ADDED tools/schema-serde-compat/models/trailing-slash-labels.smithy
+  ADDED tools/schema-serde-compat/run_c01.py
+  ADDED tools/schema-serde-compat/fixes/C01.txt
+  UPDATED tools/schema-serde-compat/ADDED_FILES.txt
+
+The existing audit's findings/evidence remain historical observations. This
+record documents C01's fix; it does not claim other audit items are resolved.
