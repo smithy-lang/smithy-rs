@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -371,7 +371,6 @@ dependencies = [
  "http-body 1.1.0",
  "http-body-util",
  "itoa",
- "num-integer",
  "pin-project-lite",
  "ryu",
  "serde",
