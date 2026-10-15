@@ -13,5 +13,11 @@ service MultiProtocolService {
         Ping
         Subscribe
         Publish
+        StructurePayload
+        UnionPayload
+        ResponseBindings
+        RichData
+        ModeledDefaults
+        NullableValues
     ]
 }
