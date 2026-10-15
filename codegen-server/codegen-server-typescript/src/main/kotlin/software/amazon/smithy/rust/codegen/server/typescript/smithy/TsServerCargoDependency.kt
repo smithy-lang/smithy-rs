@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * Object used *exclusively* in the runtime of the Typescript server, for separation concerns.
@@ -21,14 +22,15 @@ object TsServerCargoDependency {
     val NapiBuild: CargoDependency = CargoDependency("napi-build", CratesIo("2.0"), DependencyScope.Build)
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
+    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
     val Hyper: CargoDependency =
         CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
-    val Socket2: CargoDependency = CargoDependency("socket2", CratesIo("0.4"))
+    val Socket2: CargoDependency = CargoDependency("socket2", CratesIo("0.4"), features = setOf("all"))
 
-    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = ServerCargoDependency.smithyHttpServer(runtimeConfig)
 
     fun smithyHttpServerTs(runtimeConfig: RuntimeConfig) =
         runtimeConfig.smithyRuntimeCrate("smithy-http-server-typescript")
