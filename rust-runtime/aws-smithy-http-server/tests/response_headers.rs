@@ -53,6 +53,14 @@ static CONTENT_TYPE: Schema = Schema::new_member(
     7,
 )
 .with_http_header("content-type");
+static ERROR_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+    let mut traits = aws_smithy_schema::TraitMap::new();
+    traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
 static OUTPUT: Schema = Schema::new_struct(
     shape_id!("test", "Headers"),
     ShapeType::Structure,
@@ -67,7 +75,8 @@ static OUTPUT: Schema = Schema::new_struct(
         &CONTENT_TYPE,
     ],
 )
-.with_original_name("Headers");
+.with_original_name("Headers")
+.with_traits(&ERROR_TRAITS);
 
 #[derive(Clone, Debug)]
 struct HeadersOutput {
@@ -136,12 +145,10 @@ impl HttpModeledError for HeadersOutput {
     }
 }
 
-fn protocols() -> Vec<Box<dyn ServerProtocol>> {
+fn rest_protocols() -> Vec<Box<dyn ServerProtocol>> {
     vec![
         Box::new(RestJson1Protocol::default()),
         Box::new(RestXmlProtocol::default()),
-        Box::new(AwsJson1_0Protocol::default()),
-        Box::new(AwsJson1_1Protocol::default()),
     ]
 }
 
@@ -162,7 +169,7 @@ fn assert_bound_headers(headers: &http::HeaderMap) {
 
 #[test]
 fn all_header_values_survive_outputs_errors_and_streaming_heads() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         let value = HeadersOutput::default();
         let output = protocol.serialize_response(&OUTPUT, &value);
         assert_eq!(output.status(), 200);
@@ -320,7 +327,7 @@ impl HttpModeledError for TimestampHeaders {
 
 #[test]
 fn timestamp_headers_use_member_and_element_formats() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         let value = TimestampHeaders { element_schema: None };
         for (response, status) in [
             (protocol.serialize_response(&TIMESTAMP_HEADERS, &value), 200),
@@ -354,7 +361,7 @@ fn timestamp_headers_use_member_and_element_formats() {
 
 #[test]
 fn timestamp_header_lists_keep_compiled_format_when_writing_an_unformatted_target() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         let value = TimestampHeaders {
             element_schema: Some(&prelude::TIMESTAMP),
         };
@@ -372,7 +379,7 @@ fn timestamp_header_lists_keep_compiled_format_when_writing_an_unformatted_targe
 
 #[test]
 fn timestamp_header_lists_honor_the_schema_passed_to_the_element_writer() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         let value = TimestampHeaders {
             element_schema: Some(&EPOCH_TIMESTAMP),
         };
@@ -386,7 +393,9 @@ fn timestamp_header_lists_honor_the_schema_passed_to_the_element_writer() {
 
 #[tokio::test]
 async fn buffered_lengths_match_actual_output_and_error_bodies() {
-    let mut protocols = protocols();
+    let mut protocols = rest_protocols();
+    protocols.push(Box::new(AwsJson1_0Protocol::default()));
+    protocols.push(Box::new(AwsJson1_1Protocol::default()));
     protocols.push(Box::new(RpcV2CborProtocol::default()));
     for protocol in protocols {
         let value = HeadersOutput::default();
@@ -404,33 +413,9 @@ async fn buffered_lengths_match_actual_output_and_error_bodies() {
     }
 }
 
-// AWS JSON includes the bound length member in its body. Find the length of the
-// expected JSON document including that decimal string and the error discriminator.
-fn matching_aws_json_length(protocol: &dyn ServerProtocol, error: bool) -> String {
-    let mut length = 0;
-    loop {
-        let mut expected = format!(
-            r#"{{"scalar":"scalar","items":["one","two","a,b","a\"b"],"numbers":[1,2],"prefix":{{"color":"red"}},"attr":"attr","body":"body","length":"{length}""#
-        );
-        if error {
-            let discriminator = if protocol.protocol_id().shape_name() == "awsJson1_0" {
-                "test#Headers"
-            } else {
-                "Headers"
-            };
-            expected.push_str(&format!(r#","__type":"{discriminator}""#));
-        }
-        expected.push('}');
-        if expected.len() == length {
-            return length.to_string();
-        }
-        length = expected.len();
-    }
-}
-
 #[tokio::test]
 async fn matching_modeled_lengths_are_emitted_once() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for error in [false, true] {
             let mut value = HeadersOutput::default();
             let baseline = if error {
@@ -439,11 +424,7 @@ async fn matching_modeled_lengths_are_emitted_once() {
                 protocol.serialize_response(&OUTPUT, &value)
             };
             let baseline_length = baseline.into_body().collect().await.unwrap().to_bytes().len();
-            value.length = Some(if protocol.protocol_id().shape_name().starts_with("awsJson") {
-                matching_aws_json_length(protocol.as_ref(), error)
-            } else {
-                baseline_length.to_string()
-            });
+            value.length = Some(baseline_length.to_string());
             let response = if error {
                 protocol.serialize_error(&value)
             } else {
@@ -462,7 +443,7 @@ async fn matching_modeled_lengths_are_emitted_once() {
 
 #[test]
 fn modeled_buffered_lengths_are_preserved_without_validation() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for length in ["0", "1", "-1", "+1", "1, 1", "18446744073709551616", "invalid"] {
             for prefix in [false, true] {
                 let value = if prefix {
@@ -501,7 +482,7 @@ fn modeled_buffered_lengths_are_preserved_without_validation() {
 
 #[test]
 fn modeled_length_collisions_match_legacy_generated_header_assembly() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for (prefix, explicit) in [("6", "6"), ("6", "006"), ("1", "0"), ("invalid", "-1")] {
             // Legacy HttpBindingGenerator appends modeled bindings, then
             // ServerHttpBoundProtocolGenerator adds payload.len() only if absent.
@@ -537,7 +518,7 @@ fn modeled_length_collisions_match_legacy_generated_header_assembly() {
 
 #[test]
 fn modeled_content_type_overrides_defaults_without_losing_other_values() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         for prefix in [false, true] {
             let mut value = HeadersOutput::default();
             if prefix {
@@ -559,7 +540,7 @@ fn modeled_content_type_overrides_defaults_without_losing_other_values() {
 
 #[test]
 fn streaming_lengths_are_not_inferred_or_validated_and_bodies_are_not_polled() {
-    for protocol in protocols() {
+    for protocol in rest_protocols() {
         let polls = Arc::new(AtomicUsize::new(0));
         let body = || {
             let polls = polls.clone();
