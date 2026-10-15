@@ -76,6 +76,10 @@ class ServerProtocolTestGenerator(
     private val schemaSerde =
         (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
 
+    // The compatibility corpus must run the original assertions, including known failures.
+    // This affects generated tests only; it does not change the service implementation.
+    private val strictProtocolTests = System.getenv("SMITHY_RS_STRICT_PROTOCOL_TESTS") == "1"
+
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -261,13 +265,20 @@ class ServerProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.SERVER
     override val expectFail: Set<FailingTest>
-        get() = ExpectFail
+        get() = if (strictProtocolTests) emptySet() else ExpectFail
     override val brokenTests: Set<BrokenTest>
-        get() = BrokenTests
+        get() = if (strictProtocolTests) emptySet() else BrokenTests
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
-        get() = if (schemaSerde) DisabledTests + SchemaDisabledTests else DisabledTests
+        get() =
+            if (strictProtocolTests) {
+                emptySet()
+            } else if (schemaSerde) {
+                DisabledTests + SchemaDisabledTests
+            } else {
+                DisabledTests
+            }
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 
@@ -306,7 +317,7 @@ class ServerProtocolTestGenerator(
      * For HTTP 0.x: uses http-02x feature (default).
      * For HTTP 1.x: uses http-1x feature.
      */
-    private val protocolTestRuntimeType =
+    protected override val protocolTestHelpers =
         when (codegenContext.runtimeConfig.httpVersion) {
             HttpVersion.Http1x ->
                 CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig)
@@ -324,11 +335,11 @@ class ServerProtocolTestGenerator(
             "Bytes" to RuntimeType.Bytes,
             "Http" to RuntimeType.http(codegenContext.runtimeConfig),
             "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
-            "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
+            "MediaType" to protocolTestHelpers.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-            "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
+            "decode_body_data" to protocolTestHelpers.resolve("decode_body_data"),
         )
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
@@ -634,9 +645,14 @@ class ServerProtocolTestGenerator(
 
         checkRequestParams(inputShape, this)
 
-        // Construct a dummy response.
+        // Prefer a declared success fixture over invented defaults: required
+        // constrained output members may have no valid zero/empty value.
+        val responseParams =
+            responseTestCases().filterIsInstance<TestCase.ResponseTest>().firstOrNull {
+                it.targetShape.id == outputShape.id && it.protocol == codegenContext.protocol
+            }?.testCase?.params ?: Node.objectNode()
         withBlock("let output = ", ";") {
-            instantiator.render(this, outputShape, Node.objectNode())
+            instantiator.render(this, outputShape, responseParams)
         }
 
         if (operationShape.errors.isEmpty()) {
@@ -742,7 +758,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                protocolTestRuntimeType.resolve("FloatEquals")
+                                protocolTestHelpers.resolve("FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -884,7 +900,7 @@ class ServerProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body.
-                #{AssertEq}(&body, &bytes::Bytes::new());
+                #{AssertEq}(&body, &#{Bytes}::new());
                 """,
                 *codegenScope,
             )
@@ -894,8 +910,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    protocolTestRuntimeType.resolve("validate_body"),
-                    protocolTestRuntimeType.resolve("MediaType"),
+                    protocolTestHelpers.resolve("validate_body"),
+                    protocolTestHelpers.resolve("MediaType"),
                 )
             }
         }

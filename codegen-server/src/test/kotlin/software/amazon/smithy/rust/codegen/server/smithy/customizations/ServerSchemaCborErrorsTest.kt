@@ -46,6 +46,66 @@ internal class ServerSchemaCborErrorsTest {
             map FailureMap { key: String, value: Failure }
             union Choice { failure: Failure }
         """.asSmithyModel()
+        // Establish the legacy wire for this exact error-containing model before
+        // checking its schema encoding. Collection counts include error values.
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+                cargoCommand = "cargo test --quiet --lib --tests",
+            ),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("legacy_error_collection_lengths") {
+                    rustTemplate(
+                        """
+                        use #{BodyUtil}::BodyExt;
+                        let failure = || crate::error::Failure { message: #{Some}("failed".into()) };
+                        let output = crate::output::GetOutput {
+                            direct: #{Some}(failure()),
+                            list: #{Some}(vec![failure()]),
+                            map: #{Some}([("key".into(), failure())].into_iter().collect()),
+                            choice: #{Some}(crate::model::Choice::Failure(failure())),
+                        };
+                        let response = #{Server}::response::IntoResponse::<#{Marker}>::into_response(output);
+                        assert_eq!(response.status().as_u16(), 200);
+                        assert_eq!(response.headers()["content-type"], "application/cbor");
+                        assert_eq!(response.headers()["smithy-protocol"], "rpc-v2-cbor");
+                        let headers = format!("{:?}", response.headers());
+                        let body = response.into_body().collect().await.unwrap().to_bytes();
+                        let mut decoder = #{Cbor}::Decoder::new(&body);
+                        assert_eq!(decoder.map().unwrap(), #{None});
+                        for _ in 0..4 {
+                            match decoder.str().unwrap().as_ref() {
+                                "list" => {
+                                    assert_eq!(decoder.list().unwrap(), #{Some}(1));
+                                    decoder.skip().unwrap();
+                                }
+                                "map" => {
+                                    assert_eq!(decoder.map().unwrap(), #{Some}(1));
+                                    assert_eq!(decoder.str().unwrap(), "key");
+                                    decoder.skip().unwrap();
+                                }
+                                "direct" | "choice" => decoder.skip().unwrap(),
+                                name => panic!("unexpected field {name}"),
+                            }
+                        }
+                        assert_eq!(decoder.datatype().unwrap(), #{Cbor}::data::Type::Break);
+                        decoder.skip().unwrap();
+                        assert_eq!(decoder.position(), body.len());
+                        ::std::fs::write("/tmp/legacy-cbor-error-collections.bin", &body).unwrap();
+                        ::std::fs::write("/tmp/legacy-cbor-error-collections.headers", headers).unwrap();
+                        """,
+                        *preludeScope,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Marker" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("protocol::rpc_v2_cbor::RpcV2Cbor"),
+                        "Cbor" to CargoDependency.smithyCbor(context.runtimeConfig).toType(),
+                        "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    )
+                }
+            }
+        }
         val servers =
             serverIntegrationTest(
                 model,
@@ -91,13 +151,17 @@ internal class ServerSchemaCborErrorsTest {
                             match name.as_str() {
                                 "direct" => error(&mut decoder),
                                 "list" => {
-                                    decoder.list().unwrap();
+                                    assert_eq!(decoder.list().unwrap(), #{Some}(1));
                                     error(&mut decoder);
-                                    end(&mut decoder);
                                 }
-                                "map" | "choice" => {
-                                    decoder.map().unwrap();
-                                    assert_eq!(decoder.str().unwrap(), if name == "map" { "key" } else { "failure" });
+                                "map" => {
+                                    assert_eq!(decoder.map().unwrap(), #{Some}(1));
+                                    assert_eq!(decoder.str().unwrap(), "key");
+                                    error(&mut decoder);
+                                }
+                                "choice" => {
+                                    assert_eq!(decoder.map().unwrap(), #{None});
+                                    assert_eq!(decoder.str().unwrap(), "failure");
                                     error(&mut decoder);
                                     end(&mut decoder);
                                 }
