@@ -19,8 +19,8 @@ use std::sync::Arc;
 /// A Smithy node value: the JSON-like data model used by metadata and trait values.
 ///
 /// A node pairs a [`NodeValue`] with the [`SourceLocation`] it was loaded from. Nodes loaded
-/// from a model record the JSON Pointer of every nested value, so trait codecs and validators
-/// can report exactly which value is wrong. Nodes created in code have
+/// from a model record the line, column, and JSON Pointer of every nested value, so trait
+/// codecs and validators can report exactly which value is wrong. Nodes created in code have
 /// [`SourceLocation::none`] unless one is attached with
 /// [`with_source_location`](Self::with_source_location).
 ///
@@ -244,14 +244,12 @@ impl Node {
         serde_json::to_string_pretty(&NodeSer(self)).expect("nodes always serialize")
     }
 
-    /// Records the JSON Pointer of this node and every nested value, relative to `pointer`.
-    ///
-    /// All the pointers share one table, so this allocates a constant number of times
-    /// regardless of how many values the tree contains.
     /// Gives this node and every nested value a location in `source` at `pointer`.
     ///
     /// Each value keeps the line and column recorded while parsing; values without one use
-    /// the closest enclosing value's position, falling back to `inherited`.
+    /// the closest enclosing value's position, falling back to `inherited`. All the locations
+    /// share one table, so this allocates a constant number of times regardless of how many
+    /// values the tree contains.
     pub(crate) fn assign_locations(
         &mut self,
         source: &Arc<str>,
@@ -804,21 +802,27 @@ pub(crate) struct ParseContext<'i> {
     lines: Cell<LineCursor>,
 }
 
-/// The line containing the last position computed. Parsing moves forward, so counting
-/// newlines from here makes computing every position O(input) in total.
+/// The last position computed. Parsing moves forward, so scanning only the bytes since this
+/// position makes computing every position O(input) in total, even for single-line input.
 #[derive(Debug, Clone, Copy)]
 struct LineCursor {
     offset: usize,
     line: u32,
-    line_start: usize,
+    /// Characters between the start of the line and `offset`.
+    column: usize,
 }
 
 impl LineCursor {
     const START: Self = Self {
         offset: 0,
         line: 1,
-        line_start: 0,
+        column: 0,
     };
+}
+
+/// The number of characters in `bytes`: every byte that is not a UTF-8 continuation byte.
+fn chars(bytes: &[u8]) -> usize {
+    bytes.iter().filter(|&&b| b & 0xC0 != 0x80).count()
 }
 
 impl<'i> ParseContext<'i> {
@@ -850,28 +854,21 @@ impl<'i> ParseContext<'i> {
             cursor = LineCursor::START;
         }
         let skipped = &self.input[cursor.offset..offset];
-        let newlines = skipped.iter().filter(|&&b| b == b'\n').count();
-        if newlines > 0 {
-            cursor.line = cursor
-                .line
-                .saturating_add(u32::try_from(newlines).unwrap_or(u32::MAX));
-            let last = skipped
-                .iter()
-                .rposition(|&b| b == b'\n')
-                .expect("counted a newline");
-            cursor.line_start = cursor.offset + last + 1;
+        match skipped.iter().rposition(|&b| b == b'\n') {
+            Some(last) => {
+                let newlines = skipped.iter().filter(|&&b| b == b'\n').count();
+                cursor.line = cursor
+                    .line
+                    .saturating_add(u32::try_from(newlines).unwrap_or(u32::MAX));
+                cursor.column = chars(&skipped[last + 1..]);
+            }
+            None => cursor.column += chars(skipped),
         }
         cursor.offset = offset;
         self.lines.set(cursor);
-        // Columns count characters: every byte that is not a UTF-8 continuation byte.
-        let column = self.input[cursor.line_start..offset]
-            .iter()
-            .filter(|&&b| b & 0xC0 != 0x80)
-            .count()
-            + 1;
         Position {
             line: cursor.line,
-            column: u32::try_from(column).unwrap_or(u32::MAX),
+            column: u32::try_from(cursor.column + 1).unwrap_or(u32::MAX),
         }
     }
 

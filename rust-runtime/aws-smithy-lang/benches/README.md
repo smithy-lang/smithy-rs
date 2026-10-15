@@ -105,3 +105,22 @@ review:
 Building an ID from parts costs one allocation, about 20% more than parsing
 because the absolute string is assembled first. Looking a trait up by `ShapeId`
 or by `&str` costs the same: both hash the absolute ID.
+
+## Line and column positions
+
+Same machine and fixture commit. "Before" is the PR review baseline code above,
+re-measured immediately before adding line and column positions; "after" adds
+them. Measured with `--warm-up-time 2 --measurement-time 5`.
+
+| Model | `parse` before | `parse` after | Change | Allocations before → after | Retained before → after |
+| ----- | -------------: | ------------: | -----: | -------------------------: | ----------------------: |
+| SQS   |        2.64 ms |       2.71 ms |    +3% |            17,921 → 12,278 |       0.9 MiB → 1.0 MiB |
+| S3    |        25.2 ms |       26.1 ms |    +4% |          149,021 → 109,716 |     11.4 MiB → 11.8 MiB |
+| EC2   |       114.4 ms |      106.1 ms |    −7% |          716,455 → 459,097 |     24.9 MiB → 29.4 MiB |
+
+Every value in a shape, including its members, references, and trait values,
+now shares one location table per shape instead of one allocation per member
+and one table per trait. That removes about a third of EC2's allocations, which
+outweighs the cost of computing positions. The table also records structural
+values such as targets, so retained memory grows. `write`, `service_closure`,
+and `relationship_index_build` are unchanged.

@@ -83,9 +83,10 @@ pub enum DiagnosticCode {
 /// Pointer to the value. Values created in code use [`SourceLocation::none`].
 ///
 /// The line and column are those of the object key that introduces the value (for example
-/// `"MyShape": {`), or of the value itself for array elements. When a key contains escape
-/// sequences, or a value has no position of its own (such as a number in an array), the
-/// position of the closest enclosing value is used. Locations derived after loading, such as
+/// `"MyShape": {`), or of the value itself for strings and objects in arrays. When a key
+/// contains escape sequences, an object uses the position of its first key; other values
+/// without a position of their own (such as a number in an array) use the position of the
+/// closest enclosing value. Locations derived after loading, such as
 /// the location of a shape reference, use the line of the enclosing shape or member; their
 /// pointer still identifies the exact value.
 ///

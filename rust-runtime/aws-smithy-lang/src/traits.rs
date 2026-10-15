@@ -84,7 +84,7 @@ pub(crate) fn decode<T: TraitCodec>(value: Option<&Node>) -> Result<Option<T>, T
 /// A trait value could not be decoded by a [`TraitCodec`].
 ///
 /// The error records the trait ID and the [`SourceLocation`] of the offending value, so a
-/// malformed nested value in a loaded model can be found by its JSON Pointer.
+/// malformed nested value in a loaded model can be found by its line and JSON Pointer.
 #[derive(Debug)]
 pub struct TraitDecodeError {
     trait_id: Option<ShapeId>,

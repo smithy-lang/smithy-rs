@@ -423,9 +423,8 @@ impl Merge {
                 Diagnostic::error(
                     DiagnosticCode::ShapeConflict,
                     format!(
-                        "conflicting definitions of `{id}` in {} and {}",
-                        describe(location),
-                        describe(first)
+                        "conflicting definitions of `{id}`{}",
+                        built_in_code(location, first)
                     ),
                 )
                 .with_shape_id(id.clone())
@@ -436,10 +435,7 @@ impl Merge {
             self.diagnostics.push(
                 Diagnostic::note(
                     DiagnosticCode::DuplicateDefinition,
-                    format!(
-                        "ignoring duplicate but equivalent definition of `{id}` in {}",
-                        describe(location)
-                    ),
+                    format!("ignoring duplicate but equivalent definition of `{id}`"),
                 )
                 .with_shape_id(id.clone())
                 .with_source_location(location.clone())
@@ -457,9 +453,8 @@ impl Merge {
             Diagnostic::error(
                 DiagnosticCode::MetadataConflict,
                 format!(
-                    "conflicting values for metadata key `{key}` in {} and {}",
-                    describe(value.source_location()),
-                    describe(previous.source_location())
+                    "conflicting values for metadata key `{key}`{}",
+                    built_in_code(value.source_location(), previous.source_location())
                 ),
             )
             .with_source_location(value.source_location().clone())
@@ -527,9 +522,8 @@ impl Merge {
             Diagnostic::error(
                 DiagnosticCode::TraitConflict,
                 format!(
-                    "conflicting `{id}` trait values on `{target}` in {} and {}",
-                    describe(value.source_location()),
-                    describe(previous.source_location())
+                    "conflicting `{id}` trait values on `{target}`{}",
+                    built_in_code(value.source_location(), previous.source_location())
                 ),
             )
             .with_shape_id(target.clone())
@@ -593,11 +587,13 @@ fn merge_nodes(
     }
 }
 
-fn describe(location: &SourceLocation) -> String {
-    if location.is_none() {
-        "a shape built in code".to_owned()
-    } else {
-        format!("`{location}`")
+/// Notes which sides of a conflict were created in code, since only loaded values have a
+/// location for the diagnostic to show.
+fn built_in_code(location: &SourceLocation, other: &SourceLocation) -> &'static str {
+    match (location.is_none(), other.is_none()) {
+        (true, true) => " (both created in code)",
+        (true, false) | (false, true) => " (one created in code)",
+        (false, false) => "",
     }
 }
 

@@ -418,9 +418,17 @@ fn duplicate_shapes_merge_or_conflict() {
     assert_eq!(conflict.shape_id().unwrap(), "ex#A");
     assert_eq!(
         conflict.source_location().unwrap().to_string(),
-        "two.json#/shapes/ex#A"
+        "two.json:1:27 (/shapes/ex#A)"
     );
-    assert_eq!(conflict.related()[0].to_string(), "one.json#/shapes/ex#A");
+    assert_eq!(
+        conflict.related()[0].to_string(),
+        "one.json:1:27 (/shapes/ex#A)"
+    );
+    assert_eq!(
+        conflict.to_string(),
+        "two.json:1:27: error[ShapeConflict]: conflicting definitions of `ex#A` \
+         (at /shapes/ex#A; see also one.json:1:27)"
+    );
 }
 
 #[test]
@@ -451,11 +459,11 @@ fn metadata_merges_like_java_smithy() {
     let list = model.metadata_value("list").unwrap().as_array().unwrap();
     assert_eq!(
         list[0].source_location().to_string(),
-        "a.json#/metadata/list/0"
+        "a.json:1:29 (/metadata/list/0)"
     );
     assert_eq!(
         list[2].source_location().to_string(),
-        "b.json#/metadata/list/0"
+        "b.json:1:29 (/metadata/list/0)"
     );
     assert!(list[3].source_location().is_none());
 
@@ -470,9 +478,12 @@ fn metadata_merges_like_java_smithy() {
     let conflict = validated.diagnostics().iter().next().unwrap();
     assert_eq!(
         conflict.source_location().unwrap().to_string(),
-        "b.json#/metadata/k"
+        "b.json:1:29 (/metadata/k)"
     );
-    assert_eq!(conflict.related()[0].to_string(), "a.json#/metadata/k");
+    assert_eq!(
+        conflict.related()[0].to_string(),
+        "a.json:1:29 (/metadata/k)"
+    );
 }
 
 #[test]
@@ -604,7 +615,8 @@ fn custom_validators_report_with_their_name() {
     assert_eq!(warning.shape_id().unwrap(), "ex#Weather");
     assert_eq!(
         warning.to_string(),
-        "warning[Custom][Verbs]: operations should start with Get (at m.json#/shapes/ex#Weather)"
+        "m.json:1:27: warning[Custom][Verbs]: operations should start with Get \
+         (at /shapes/ex#Weather)"
     );
 
     // An error from a custom validator discards the model.
@@ -617,7 +629,7 @@ fn custom_validators_report_with_their_name() {
     assert!(validated.result().is_none());
     let err = validated.into_result().unwrap_err();
     assert!(err.is_invalid_model());
-    assert_eq!(err.to_string(), "invalid Smithy model (1 error): no");
+    assert_eq!(err.to_string(), "invalid Smithy model: no");
 }
 
 #[test]
@@ -689,7 +701,7 @@ fn trait_codec_validator_points_at_nested_values() {
         .unwrap_err();
     assert_eq!(
         err.source_location().to_string(),
-        "m.json#/shapes/ex#A/traits/ex#limits/max"
+        "m.json:1:82 (/shapes/ex#A/traits/ex#limits/max)"
     );
     let validated = Model::assembler()
         .add_json_str("m.json", json)
@@ -708,32 +720,52 @@ fn trait_codec_validator_points_at_nested_values() {
 
 #[test]
 fn every_loaded_value_has_a_source_location() {
-    let json = r#"{"smithy":"2.0","metadata":{"m":[{"k":true}]},"shapes":{
-        "ex#S":{"type":"structure","members":{"a/b":{"target":"smithy.api#String",
-               "traits":{"ex#t":{"x":[1,{"y":null}]}}}}}}}"#
-        .replace("a/b", "ab");
-    let model = Model::from_json_str("m.json", &json).unwrap();
+    let json = r#"{
+    "smithy": "2.0",
+    "metadata": { "m": [{ "k": true }] },
+    "shapes": {
+        "ex#S": {
+            "type": "structure",
+            "members": {
+                "ab": {
+                    "target": "smithy.api#String",
+                    "traits": { "ex#t": { "x": [1, { "y": null }] } }
+                }
+            }
+        }
+    }
+}"#;
+    let model = Model::from_json_str("m.json", json).unwrap();
     let shape = model.expect_shape("ex#S").unwrap();
-    assert_eq!(shape.source_location().to_string(), "m.json#/shapes/ex#S");
+    assert_eq!(
+        shape.source_location().to_string(),
+        "m.json:5:9 (/shapes/ex#S)"
+    );
     let member = model.expect_shape("ex#S$ab").unwrap();
     assert_eq!(
         member.source_location().to_string(),
-        "m.json#/shapes/ex#S/members/ab"
+        "m.json:8:17 (/shapes/ex#S/members/ab)"
     );
     let applied = member.traits().iter().next().unwrap();
     assert_eq!(
-        applied.source_location().pointer(),
-        Some("/shapes/ex#S/members/ab/traits/ex#t")
+        applied.source_location().to_string(),
+        "m.json:10:33 (/shapes/ex#S/members/ab/traits/ex#t)"
+    );
+    // A number in an array has no position of its own and uses its array's.
+    let number = applied.value().pointer("/x/0").unwrap();
+    assert_eq!(
+        number.source_location().to_string(),
+        "m.json:10:43 (/shapes/ex#S/members/ab/traits/ex#t/x/0)"
     );
     let nested = applied.value().pointer("/x/1/y").unwrap();
     assert_eq!(
-        nested.source_location().pointer(),
-        Some("/shapes/ex#S/members/ab/traits/ex#t/x/1/y")
+        nested.source_location().to_string(),
+        "m.json:10:54 (/shapes/ex#S/members/ab/traits/ex#t/x/1/y)"
     );
     let metadata = model.metadata_value("m").unwrap().pointer("/0/k").unwrap();
     assert_eq!(
         metadata.source_location().to_string(),
-        "m.json#/metadata/m/0/k"
+        "m.json:3:27 (/metadata/m/0/k)"
     );
     // Locations never affect equality or output.
     let built = StructureShape::builder("ex#S")

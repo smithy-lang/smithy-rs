@@ -9,7 +9,8 @@ existing models, and shapes built in code, merges them, injects the Smithy
 prelude, and validates the result with the built-in `StructuralV1` validators
 plus any custom `Validator`s. `AstWriter` writes JSON AST in insertion order or
 canonical order. Every loaded shape, member, trait, and node value records its
-source location. Inputs that use `apply` or mixins are rejected with an
+source location (file, line, column, and JSON Pointer), and errors and
+diagnostics report it. Inputs that use `apply` or mixins are rejected with an
 `UnsupportedFeature` diagnostic.
 
 <!-- anchor_start:footer -->

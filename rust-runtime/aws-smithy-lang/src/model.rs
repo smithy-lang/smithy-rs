@@ -458,7 +458,8 @@ mod tests {
         assert_eq!(err.actual(), Some(ShapeType::String));
         assert_eq!(
             err.to_string(),
-            "expected `ex#Name` to be a service, but it is a string"
+            "model.json:27:13: expected `ex#Name` to be a service, but it is a string \
+             (at /shapes/ex#Name)"
         );
         let err = model.expect_shape("ex#Nope").unwrap_err();
         assert!(err.is_not_found());
