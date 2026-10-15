@@ -577,10 +577,11 @@ fn build_frame(
         FrameKind::Event => ("event", ":event-type"),
         FrameKind::Exception => ("exception", ":exception-type"),
     };
-    let mut headers = vec![
-        Header::new(":message-type", HeaderValue::String(message_type.into())),
-        Header::new(type_header, HeaderValue::String(event_type.to_string().into())),
-    ];
+    // Most frames add a modeled header and content type to these two protocol
+    // headers. Match the generated marshaller's initial capacity to avoid growth.
+    let mut headers = Vec::with_capacity(4);
+    headers.push(Header::new(":message-type", HeaderValue::String(message_type.into())));
+    headers.push(Header::new(type_header, HeaderValue::String(event_type.to_string().into())));
     let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
     let has_header_members = schema.members().iter().any(|m| m.event_header());
 
