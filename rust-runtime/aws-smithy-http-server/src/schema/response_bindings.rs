@@ -18,7 +18,8 @@
 //! - everything else — forwarded to the codec body serializer.
 //!
 //! The response `Content-Type` is not decided here: it is the protocol's policy, derived from
-//! the schema alone. Non-REST protocols serialize body-only through the same entry point.
+//! the schema alone. RPC protocols serialize body-only through the same entry point, except
+//! legacy AWS JSON response bindings, which copy header-bound members into both locations.
 
 use std::cell::Cell;
 use std::collections::hash_map::Entry;
@@ -320,7 +321,10 @@ impl CompiledResponsePlan {
         bindings: ResponseBindings,
         value_kind: ResponseValueKind,
     ) -> Result<Self, SerdeError> {
-        let has_bindings = bindings == ResponseBindings::Rest && has_response_bound_members(schema);
+        let has_bindings = match bindings {
+            ResponseBindings::Rest => has_response_bound_members(schema),
+            ResponseBindings::BodyOnly => false,
+        };
         let writes_body = match value_kind {
             ResponseValueKind::ModeledError => true,
             ResponseValueKind::StreamingOutput => false,
@@ -386,7 +390,7 @@ fn compile_member_plan(
     if bindings == ResponseBindings::BodyOnly {
         return Ok(ResponseMemberPlan::Body);
     }
-    if schema.http_response_code().is_some() {
+    if bindings == ResponseBindings::Rest && schema.http_response_code().is_some() {
         return Ok(ResponseMemberPlan::Status);
     }
     if let Some(header) = schema.http_header() {
@@ -420,7 +424,7 @@ fn compile_member_plan(
                 || schema.member().is_some_and(|value| value.sensitive().is_some()),
         });
     }
-    if schema.http_payload().is_some() {
+    if bindings == ResponseBindings::Rest && schema.http_payload().is_some() {
         let raw = matches!(
             schema.shape_type(),
             aws_smithy_schema::ShapeType::String | aws_smithy_schema::ShapeType::Blob
@@ -442,7 +446,7 @@ pub(crate) fn has_response_bound_members(schema: &Schema<'_>) -> bool {
 }
 
 pub(crate) fn has_output_body_members(schema: &Schema<'_>, bindings: ResponseBindings) -> bool {
-    if bindings == ResponseBindings::BodyOnly {
+    if bindings != ResponseBindings::Rest {
         return !schema.members().is_empty();
     }
     schema
@@ -631,9 +635,7 @@ struct ResponseBindingSplitter<'a, C> {
     codec: &'a C,
     captured: &'a mut CapturedBindings,
     /// True when the shape has an `@httpPayload` member. In that mode any
-    /// structure/union/document write reaching the splitter IS the payload:
-    /// callers pass the payload member's TARGET schema, which carries the
-    /// framing but not the member's binding traits.
+    /// structure/union/document write reaching the splitter IS the payload.
     payload_mode: bool,
     capture_bindings: bool,
     plan: &'a CompiledResponsePlan,
@@ -703,10 +705,10 @@ impl<C: Codec> ShapeSerializer for ResponseBindingSplitter<'_, C> {
             return Ok(());
         }
         if self.payload_mode {
-            // Structure/union payload: the payload member's own framing IS
-            // the body — serialize it standalone through the codec.
+            // The payload is a standalone document. Its target schema supplies
+            // the XML root name and namespace without the member's field key.
             let mut serializer = self.codec.create_serializer();
-            serializer.write_struct(schema, value)?;
+            serializer.write_struct(value.schema(), value)?;
             self.capture_payload(serializer.finish());
             return Ok(());
         }
