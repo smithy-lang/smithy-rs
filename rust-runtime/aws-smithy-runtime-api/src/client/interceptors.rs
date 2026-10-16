@@ -682,6 +682,7 @@ pub use aws_smithy_runtime_api_macros::dyn_dispatch_hint;
 ///
 /// Kept in sync with the `Intercept` trait and the [`OverriddenHooks`] constants; see the comment on
 /// those constants. Intended for tests that must cover every hook.
+#[doc(hidden)]
 pub use aws_smithy_runtime_api_macros::known_hooks;
 
 /// Interceptor wrapper that may be shared
