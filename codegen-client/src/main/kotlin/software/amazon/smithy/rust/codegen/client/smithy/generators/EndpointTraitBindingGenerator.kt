@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.rustFormatString
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowUninlinedFormatArgs
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -73,15 +74,21 @@ class EndpointTraitBindings(
                             rust("let $field = &$input.$field;")
                         }
                         if (generateValidation) {
-                            val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
+                            // A `@hostLabel` member is interpolated directly into the request
+                            // authority, so it must be a single valid host label.
+                            val errorString =
+                                "`$field` forms part of the endpoint host and so must match " +
+                                    "`[a-zA-Z0-9-]{{1,63}}`, but was `{$field}`"
                             val contents =
                                 """
-                                if $field.is_empty() {
-                                    return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
+                                if !#{is_valid_host_label}($field, false, &mut #{DiagnosticCollector}::new()) {
+                                    return Err(#{InvalidEndpointError}::failed_to_construct_uri(format!("$errorString")).into());
                                 }
                                 """
                             rustTemplate(
                                 contents,
+                                "is_valid_host_label" to EndpointsLib.isValidHostLabel,
+                                "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
                                 "InvalidEndpointError" to
                                     RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                                         .resolve("client::endpoint::error::InvalidEndpointError"),
