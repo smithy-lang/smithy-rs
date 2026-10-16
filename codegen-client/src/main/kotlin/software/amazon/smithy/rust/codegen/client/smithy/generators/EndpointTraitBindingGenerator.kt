@@ -48,7 +48,6 @@ class EndpointTraitBindings(
     fun render(
         writer: RustWriter,
         input: String,
-        generateValidation: Boolean = true,
     ) {
         // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
         val formatLiteral = endpointTrait.prefixFormatString()
@@ -73,27 +72,25 @@ class EndpointTraitBindings(
                             // NOTE: this is dead code until we start respecting @required
                             rust("let $field = &$input.$field;")
                         }
-                        if (generateValidation) {
-                            // A `@hostLabel` member is interpolated directly into the request
-                            // authority, so it must be a single valid host label.
-                            val errorString =
-                                "`$field` forms part of the endpoint host and so must match " +
-                                    "`[a-zA-Z0-9-]{{1,63}}`, but was `{$field}`"
-                            val contents =
-                                """
-                                if !#{is_valid_host_label}($field, false, &mut #{DiagnosticCollector}::new()) {
-                                    return Err(#{InvalidEndpointError}::failed_to_construct_uri(format!("$errorString")).into());
-                                }
-                                """
-                            rustTemplate(
-                                contents,
-                                "is_valid_host_label" to EndpointsLib.isValidHostLabel,
-                                "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                                "InvalidEndpointError" to
-                                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                                        .resolve("client::endpoint::error::InvalidEndpointError"),
-                            )
-                        }
+                        // A `@hostLabel` member is interpolated directly into the request
+                        // authority, so it must be a single valid host label.
+                        val errorString =
+                            "`$field` forms part of the endpoint host and so must match " +
+                                "`[a-zA-Z0-9-]{{1,63}}`, but was `{$field}`"
+                        val contents =
+                            """
+                            if !#{is_valid_host_label}($field, false, &mut #{DiagnosticCollector}::new()) {
+                                return Err(#{InvalidEndpointError}::failed_to_construct_uri(format!("$errorString")).into());
+                            }
+                            """
+                        rustTemplate(
+                            contents,
+                            "is_valid_host_label" to EndpointsLib.isValidHostLabel,
+                            "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+                            "InvalidEndpointError" to
+                                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                                    .resolve("client::endpoint::error::InvalidEndpointError"),
+                        )
                         "${label.content} = $field"
                     }
                 // Suppress the suggestion that would change the following:
