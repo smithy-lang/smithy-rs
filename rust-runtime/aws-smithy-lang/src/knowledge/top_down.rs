@@ -8,6 +8,7 @@
 use super::Iter;
 use crate::relationships::RelationshipIndex;
 use crate::shape::{OperationView, ResourceView, ServiceView, ShapeType};
+use crate::shape_id::ShapeId;
 use std::collections::HashSet;
 use std::fmt;
 
@@ -38,25 +39,19 @@ impl<'m> TopDownIndex<'m> {
     /// Every operation contained in a service or resource, sorted by shape ID.
     ///
     /// Returns `None` if `entity` does not exist or is neither a service nor a resource.
-    pub fn get_contained_operations(
-        &self,
-        entity: impl AsRef<str>,
-    ) -> Option<Iter<OperationView<'m>>> {
-        Some(self.operations_of(self.entity(entity.as_ref())?))
+    pub fn get_contained_operations(&self, entity: &ShapeId) -> Option<Iter<OperationView<'m>>> {
+        Some(self.operations_of(self.entity(entity)?))
     }
 
     /// Every resource contained in a service or resource, sorted by shape ID.
     ///
     /// Returns `None` if `entity` does not exist or is neither a service nor a resource.
-    pub fn get_contained_resources(
-        &self,
-        entity: impl AsRef<str>,
-    ) -> Option<Iter<ResourceView<'m>>> {
-        Some(self.resources_of(self.entity(entity.as_ref())?))
+    pub fn get_contained_resources(&self, entity: &ShapeId) -> Option<Iter<ResourceView<'m>>> {
+        Some(self.resources_of(self.entity(entity)?))
     }
 
     /// The node of a service or resource.
-    fn entity(&self, id: &str) -> Option<u32> {
+    fn entity(&self, id: &ShapeId) -> Option<u32> {
         let (node, shape) = self.relationships.lookup(id)?;
         matches!(shape.shape_type(), ShapeType::Service | ShapeType::Resource).then_some(node)
     }

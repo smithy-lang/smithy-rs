@@ -94,10 +94,11 @@ fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("incoming_relationships");
     for (name, model) in &models {
         let relationships = model.knowledge().relationships();
+        let string = ShapeId::from_static("smithy.api#String");
         group.bench_function(BenchmarkId::from_parameter(name), |b| {
             b.iter(|| {
                 relationships
-                    .get_incoming(black_box("smithy.api#String"))
+                    .get_incoming(black_box(&string))
                     .unwrap()
                     .count()
             })
@@ -169,7 +170,7 @@ fn ids_and_traits(c: &mut Criterion) {
     });
     group.finish();
 
-    // Trait lookup on every root shape and member of S3, by ShapeId and by &str.
+    // Trait lookup on every root shape and member of S3, by a static and a parsed ShapeId.
     let model = Model::from_json_slice("s3", &read("s3")).unwrap();
     let mut group = c.benchmark_group("trait_lookup/s3");
     let count = |has: &dyn Fn(&aws_smithy_lang::ShapeRef<'_>) -> bool| {
@@ -185,8 +186,33 @@ fn ids_and_traits(c: &mut Criterion) {
     group.bench_function("shape_id", |b| {
         b.iter(|| count(&|s| s.has_trait(black_box(&traits::DOCUMENTATION))))
     });
-    group.bench_function("str", |b| {
-        b.iter(|| count(&|s| s.has_trait(black_box("smithy.api#documentation"))))
+    let parsed = ShapeId::new("smithy.api#documentation").unwrap();
+    group.bench_function("parsed_shape_id", |b| {
+        b.iter(|| count(&|s| s.has_trait(black_box(&parsed))))
+    });
+    group.finish();
+
+    // Every member of every S3 shape, looked up by name and by index.
+    let mut group = c.benchmark_group("member_lookup/s3");
+    let members: Vec<_> = model
+        .shapes()
+        .flat_map(|s| s.members().iter().map(move |m| (s, m.name(), m.index())))
+        .collect();
+    group.bench_function("name", |b| {
+        b.iter(|| {
+            members
+                .iter()
+                .filter(|(s, name, _)| s.member(black_box(name)).is_some())
+                .count()
+        })
+    });
+    group.bench_function("index", |b| {
+        b.iter(|| {
+            members
+                .iter()
+                .filter(|(s, _, index)| s.member_at(black_box(*index)).is_some())
+                .count()
+        })
     });
     group.finish();
 }

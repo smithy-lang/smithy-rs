@@ -21,7 +21,10 @@
 //! the model and by every thread; a model that never asks for knowledge pays nothing.
 //!
 //! ```
-//! use aws_smithy_lang::Model;
+//! use aws_smithy_lang::{Model, ShapeId};
+//!
+//! const SERVICE: ShapeId = ShapeId::from_static("ex#Service");
+//! const GET_THING: ShapeId = ShapeId::from_static("ex#GetThing");
 //!
 //! let model = Model::from_json_str("m", r#"{"smithy": "2.0", "shapes": {
 //!     "ex#Service": {"type": "service", "resources": [{"target": "ex#Thing"}],
@@ -36,23 +39,23 @@
 //! // The operation is reached only through a resource.
 //! let operations: Vec<_> = knowledge
 //!     .top_down()
-//!     .get_contained_operations("ex#Service")
+//!     .get_contained_operations(&SERVICE)
 //!     .unwrap()
 //!     .map(|op| op.id().to_string())
 //!     .collect();
 //! assert_eq!(operations, ["ex#GetThing"]);
 //!
 //! // Errors within the service: common service errors first.
-//! let operation = knowledge.operations().get("ex#GetThing").unwrap();
+//! let operation = knowledge.operations().get(&GET_THING).unwrap();
 //! let errors: Vec<_> = operation
-//!     .errors_in("ex#Service")
+//!     .errors_in(&SERVICE)
 //!     .unwrap()
 //!     .map(|e| e.id().to_string())
 //!     .collect();
 //! assert_eq!(errors, ["ex#Throttled", "ex#NotFound"]);
 //!
 //! // The operation's parent chain within the service.
-//! let chain = knowledge.bottom_up().parent_chain("ex#Service", "ex#GetThing")?.unwrap();
+//! let chain = knowledge.bottom_up().parent_chain(&SERVICE, &GET_THING)?.unwrap();
 //! let chain: Vec<_> = chain.iter().map(|e| e.id().to_string()).collect();
 //! assert_eq!(chain, ["ex#Thing", "ex#Service"]);
 //! # Ok::<_, Box<dyn std::error::Error>>(())

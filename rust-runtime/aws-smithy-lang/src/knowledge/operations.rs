@@ -29,8 +29,8 @@ impl<'m> OperationIndex<'m> {
 
     /// Knowledge about an operation. Returns `None` if `operation` does not exist or is not an
     /// operation.
-    pub fn get(&self, operation: impl AsRef<str>) -> Option<OperationKnowledge<'m>> {
-        let (node, shape) = self.relationships.lookup(operation.as_ref())?;
+    pub fn get(&self, operation: &ShapeId) -> Option<OperationKnowledge<'m>> {
+        let (node, shape) = self.relationships.lookup(operation)?;
         Some(OperationKnowledge {
             operation: shape.as_operation()?,
             node,
@@ -42,23 +42,23 @@ impl<'m> OperationIndex<'m> {
     /// input bind `smithy.api#Unit`.
     ///
     /// Returns `None` if `structure` does not exist or is not a structure.
-    pub fn input_bindings(&self, structure: impl AsRef<str>) -> Option<Iter<OperationView<'m>>> {
-        self.operation_bindings(structure.as_ref(), RelationshipType::Input)
+    pub fn input_bindings(&self, structure: &ShapeId) -> Option<Iter<OperationView<'m>>> {
+        self.operation_bindings(structure, RelationshipType::Input)
     }
 
     /// Operations whose output is `structure`, sorted by shape ID. Operations that omit their
     /// output bind `smithy.api#Unit`.
     ///
     /// Returns `None` if `structure` does not exist or is not a structure.
-    pub fn output_bindings(&self, structure: impl AsRef<str>) -> Option<Iter<OperationView<'m>>> {
-        self.operation_bindings(structure.as_ref(), RelationshipType::Output)
+    pub fn output_bindings(&self, structure: &ShapeId) -> Option<Iter<OperationView<'m>>> {
+        self.operation_bindings(structure, RelationshipType::Output)
     }
 
     /// Operations and services that list `error` in their `errors`, sorted by shape ID.
     ///
     /// Returns `None` if `error` does not exist or is not a structure.
-    pub fn error_bindings(&self, error: impl AsRef<str>) -> Option<Iter<ShapeRef<'m>>> {
-        let node = self.structure(error.as_ref())?;
+    pub fn error_bindings(&self, error: &ShapeId) -> Option<Iter<ShapeRef<'m>>> {
+        let node = self.structure(error)?;
         let bindings = self
             .bindings(node, RelationshipType::Error)
             .map(|source| self.relationships.shape(source))
@@ -68,17 +68,17 @@ impl<'m> OperationIndex<'m> {
 
     /// Returns `true` if `structure` is bound as an operation input or is marked with
     /// `@input`.
-    pub fn is_input_structure(&self, structure: impl AsRef<str>) -> bool {
-        self.is_io_structure(structure.as_ref(), RelationshipType::Input, traits::INPUT)
+    pub fn is_input_structure(&self, structure: &ShapeId) -> bool {
+        self.is_io_structure(structure, RelationshipType::Input, traits::INPUT)
     }
 
     /// Returns `true` if `structure` is bound as an operation output or is marked with
     /// `@output`.
-    pub fn is_output_structure(&self, structure: impl AsRef<str>) -> bool {
-        self.is_io_structure(structure.as_ref(), RelationshipType::Output, traits::OUTPUT)
+    pub fn is_output_structure(&self, structure: &ShapeId) -> bool {
+        self.is_io_structure(structure, RelationshipType::Output, traits::OUTPUT)
     }
 
-    fn is_io_structure(&self, id: &str, kind: RelationshipType, marker: ShapeId) -> bool {
+    fn is_io_structure(&self, id: &ShapeId, kind: RelationshipType, marker: ShapeId) -> bool {
         let Some(node) = self.structure(id) else {
             return false;
         };
@@ -86,7 +86,7 @@ impl<'m> OperationIndex<'m> {
             || self.bindings(node, kind).next().is_some()
     }
 
-    fn structure(&self, id: &str) -> Option<u32> {
+    fn structure(&self, id: &ShapeId) -> Option<u32> {
         let (node, shape) = self.relationships.lookup(id)?;
         (shape.shape_type() == ShapeType::Structure).then_some(node)
     }
@@ -102,7 +102,7 @@ impl<'m> OperationIndex<'m> {
 
     fn operation_bindings(
         &self,
-        id: &str,
+        id: &ShapeId,
         kind: RelationshipType,
     ) -> Option<Iter<OperationView<'m>>> {
         let node = self.structure(id)?;
@@ -188,8 +188,8 @@ impl<'m> OperationKnowledge<'m> {
     ///
     /// Returns `None` if `service` does not exist, is not a service, or does not contain this
     /// operation (directly or through any of its resources).
-    pub fn errors_in(&self, service: impl AsRef<str>) -> Option<Iter<StructureView<'m>>> {
-        let (service_node, service) = self.relationships.lookup(service.as_ref())?;
+    pub fn errors_in(&self, service: &ShapeId) -> Option<Iter<StructureView<'m>>> {
+        let (service_node, service) = self.relationships.lookup(service)?;
         let service = service.as_service()?;
         if !TopDownIndex::new(self.relationships).contains(service_node, self.node) {
             return None;
@@ -206,7 +206,7 @@ impl<'m> OperationKnowledge<'m> {
     fn error(&self, id: &ShapeId) -> StructureView<'m> {
         let (_, shape) = self
             .relationships
-            .lookup(id.as_str())
+            .lookup(id)
             .expect("validated models only contain resolved errors");
         structure(shape.as_structure())
     }

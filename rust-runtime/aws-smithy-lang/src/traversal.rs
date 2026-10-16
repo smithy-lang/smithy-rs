@@ -25,14 +25,14 @@ use std::marker::PhantomData;
 /// ```
 /// use aws_smithy_lang::relationships::RelationshipType;
 /// use aws_smithy_lang::traversal::Walker;
-/// use aws_smithy_lang::Model;
+/// use aws_smithy_lang::{Model, ShapeId};
 ///
 /// let model = Model::from_json_str("m", r#"{"smithy": "2.0", "shapes": {
 ///     "ex#Service": {"type": "service", "operations": [{"target": "ex#Ping"}]},
 ///     "ex#Ping": {"type": "operation", "input": {"target": "ex#PingInput"}},
 ///     "ex#PingInput": {"type": "structure", "members": {"s": {"target": "smithy.api#String"}}}
 /// }}"#)?;
-/// let service = model.expect_shape("ex#Service")?;
+/// let service = model.expect_shape(&ShapeId::from_static("ex#Service"))?;
 /// let closure: Vec<_> = Walker::new()
 ///     .filter(|rel| rel.kind() != RelationshipType::Output)
 ///     .walk(service)
@@ -159,7 +159,7 @@ mod tests {
 
     fn edges(model: &Model, id: &str) -> Vec<(RelationshipType, String)> {
         model
-            .expect_shape(id)
+            .expect_shape(&id.parse().unwrap())
             .unwrap()
             .relationships()
             .map(|r| (r.kind(), r.target_id().to_string()))
@@ -211,7 +211,7 @@ mod tests {
         );
         assert_eq!(edges(&model, "a#Unused"), []);
         let relationship = model
-            .expect_shape("a#Svc")
+            .expect_shape(&ShapeId::from_static("a#Svc"))
             .unwrap()
             .relationships()
             .next()
@@ -227,7 +227,7 @@ mod tests {
         start: &str,
     ) -> Vec<String> {
         walker
-            .walk(model.expect_shape(start).unwrap())
+            .walk(model.expect_shape(&start.parse().unwrap()).unwrap())
             .map(|s| s.id().to_string())
             .collect()
     }
@@ -295,7 +295,7 @@ mod tests {
         let json = format!(r#"{{"smithy":"2.0","shapes":{{{}}}}}"#, shapes.join(","));
         let model = Model::from_json_str("deep", &json).unwrap();
         let count = Walker::new()
-            .walk(model.expect_shape("a#S0").unwrap())
+            .walk(model.expect_shape(&ShapeId::from_static("a#S0")).unwrap())
             .count();
         assert_eq!(count, depth * 2);
     }
@@ -306,10 +306,10 @@ mod tests {
         let model = model();
         let walker = Walker::new();
         assert(&walker);
-        assert(&walker.walk(model.expect_shape("a#Svc").unwrap()));
+        assert(&walker.walk(model.expect_shape(&ShapeId::from_static("a#Svc")).unwrap()));
         assert(
             &model
-                .expect_shape("a#Svc")
+                .expect_shape(&ShapeId::from_static("a#Svc"))
                 .unwrap()
                 .relationships()
                 .next()

@@ -185,21 +185,6 @@ fn expect_object(value: &Node) -> Result<&NodeObject, TraitDecodeError> {
         .map_err(|e| TraitDecodeError::with_source(e.to_string(), e))
 }
 
-/// `smithy.api#` IDs are resolved for relative trait names such as `"required"`, matching Java
-/// Smithy's `Trait` lookups.
-pub(crate) fn find<'m>(
-    map: &'m crate::shape::TraitMap,
-    id: &str,
-) -> Option<(&'m ShapeId, &'m Node)> {
-    if id.contains('#') {
-        map.get_key_value(id)
-    } else {
-        // Relative names resolve against the prelude without allocating.
-        map.iter()
-            .find(|(key, _)| key.name() == id && key.namespace() == crate::prelude::NAMESPACE)
-    }
-}
-
 macro_rules! annotation_trait {
     ($(#[$doc:meta])* $name:ident, $id:expr) => {
         $(#[$doc])*
@@ -413,16 +398,6 @@ mod tests {
             Some("/shapes/a#B/traits/a#t/0")
         );
         assert_eq!(err.trait_id().unwrap(), "a#t");
-    }
-
-    #[test]
-    fn find_resolves_relative_prelude_names() {
-        let mut map = crate::shape::TraitMap::new();
-        map.insert(REQUIRED, Node::from(NodeObject::new()));
-        map.insert(ShapeId::new("a#required").unwrap(), Node::null());
-        assert_eq!(find(&map, "required").unwrap().0, &REQUIRED);
-        assert_eq!(find(&map, "a#required").unwrap().0, "a#required");
-        assert!(find(&map, "documentation").is_none());
     }
 
     #[test]

@@ -45,7 +45,11 @@ fn ex(names: &[&str]) -> Vec<String> {
 fn top_down_includes_every_binding_kind_once_sorted() {
     let model = model();
     let top_down = model.knowledge().top_down();
-    let operations = op_ids(top_down.get_contained_operations("ex#Service").unwrap());
+    let operations = op_ids(
+        top_down
+            .get_contained_operations(&ShapeId::from_static("ex#Service"))
+            .unwrap(),
+    );
     assert_eq!(
         operations,
         ex(&[
@@ -64,34 +68,56 @@ fn top_down_includes_every_binding_kind_once_sorted() {
         ])
     );
     let resources = ids(
-        top_down.get_contained_resources("ex#Service").unwrap(),
+        top_down
+            .get_contained_resources(&ShapeId::from_static("ex#Service"))
+            .unwrap(),
         |r| r.id(),
     );
     assert_eq!(resources, ex(&["Child", "Shared", "Thing"]));
 
     // Resources: the start is excluded, children are included.
-    let thing_ops = op_ids(top_down.get_contained_operations("ex#Thing").unwrap());
+    let thing_ops = op_ids(
+        top_down
+            .get_contained_operations(&ShapeId::from_static("ex#Thing"))
+            .unwrap(),
+    );
     assert!(!thing_ops.contains(&"ex#DirectOp".to_owned()));
     assert_eq!(thing_ops.len(), 11);
-    let thing_resources = ids(top_down.get_contained_resources("ex#Thing").unwrap(), |r| {
-        r.id()
-    });
+    let thing_resources = ids(
+        top_down
+            .get_contained_resources(&ShapeId::from_static("ex#Thing"))
+            .unwrap(),
+        |r| r.id(),
+    );
     assert_eq!(thing_resources, ex(&["Child", "Shared"]));
     assert_eq!(
-        op_ids(top_down.get_contained_operations("ex#Child").unwrap()),
+        op_ids(
+            top_down
+                .get_contained_operations(&ShapeId::from_static("ex#Child"))
+                .unwrap()
+        ),
         ex(&["ChildOp", "SharedRead"])
     );
     assert_eq!(
-        top_down.get_contained_resources("ex#Shared").unwrap().len(),
+        top_down
+            .get_contained_resources(&ShapeId::from_static("ex#Shared"))
+            .unwrap()
+            .len(),
         0
     );
 
     // Only services and resources have closures.
-    assert!(top_down.get_contained_operations("ex#GetThing").is_none());
-    assert!(top_down.get_contained_operations("ex#Missing").is_none());
-    assert!(top_down.get_contained_resources("ex#Plain").is_none());
     assert!(top_down
-        .get_contained_operations("ex#GetThingInput$alpha")
+        .get_contained_operations(&ShapeId::from_static("ex#GetThing"))
+        .is_none());
+    assert!(top_down
+        .get_contained_operations(&ShapeId::from_static("ex#Missing"))
+        .is_none());
+    assert!(top_down
+        .get_contained_resources(&ShapeId::from_static("ex#Plain"))
+        .is_none());
+    assert!(top_down
+        .get_contained_operations(&ShapeId::from_static("ex#GetThingInput$alpha"))
         .is_none());
 }
 
@@ -101,7 +127,7 @@ fn top_down_includes_every_binding_kind_once_sorted() {
 fn nested_resource_only_operation_is_found() {
     let model = model();
     let hidden = model
-        .expect_shape("ex#Hidden")
+        .expect_shape(&ShapeId::from_static("ex#Hidden"))
         .unwrap()
         .expect_service()
         .unwrap();
@@ -112,7 +138,7 @@ fn nested_resource_only_operation_is_found() {
         ex(&["Inner", "Outer"])
     );
     let outer = model
-        .expect_shape("ex#Outer")
+        .expect_shape(&ShapeId::from_static("ex#Outer"))
         .unwrap()
         .expect_resource()
         .unwrap();
@@ -152,7 +178,9 @@ fn operation_input_output_and_members() {
     let model = model();
     let operations = model.knowledge().operations();
 
-    let get = operations.get("ex#GetThing").unwrap();
+    let get = operations
+        .get(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
     assert_eq!(get.operation().id(), "ex#GetThing");
     assert_eq!(get.input_shape().id(), "ex#GetThingInput");
     assert_eq!(get.meaningful_input().unwrap().id(), "ex#GetThingInput");
@@ -163,46 +191,57 @@ fn operation_input_output_and_members() {
     );
     assert_eq!(get.output_members().names().collect::<Vec<_>>(), ["thing"]);
 
-    let direct = operations.get("ex#DirectOp").unwrap();
+    let direct = operations
+        .get(&ShapeId::from_static("ex#DirectOp"))
+        .unwrap();
     assert_eq!(direct.input_shape().id(), "smithy.api#Unit");
     assert_eq!(direct.output_shape().id(), "smithy.api#Unit");
     assert!(direct.meaningful_input().is_none());
     assert!(direct.meaningful_output().is_none());
     assert!(direct.input_members().is_empty());
 
-    assert!(operations.get("ex#Plain").is_none());
-    assert!(operations.get("ex#Missing").is_none());
+    assert!(operations.get(&ShapeId::from_static("ex#Plain")).is_none());
+    assert!(operations
+        .get(&ShapeId::from_static("ex#Missing"))
+        .is_none());
 }
 
 #[test]
 fn operation_errors() {
     let model = model();
     let operations = model.knowledge().operations();
-    let get = operations.get("ex#GetThing").unwrap();
+    let get = operations
+        .get(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
     assert_eq!(
         ids(get.direct_errors(), |e| e.id()),
         ex(&["NotFound", "Common"])
     );
     // Service errors first, then operation errors; `Common` keeps its first position.
     assert_eq!(
-        ids(get.errors_in("ex#Service").unwrap(), |e| e.id()),
+        ids(
+            get.errors_in(&ShapeId::from_static("ex#Service")).unwrap(),
+            |e| e.id()
+        ),
         ex(&["Throttled", "Common", "NotFound"])
     );
     // A service that does not contain the operation, or something that is not a service.
-    assert!(get.errors_in("ex#Hidden").is_none());
-    assert!(get.errors_in("ex#Other").is_none());
-    assert!(get.errors_in("ex#Thing").is_none());
-    assert!(get.errors_in("ex#Missing").is_none());
-    let unbound = operations.get("ex#Unbound").unwrap();
-    assert!(unbound.errors_in("ex#Service").is_none());
+    assert!(get.errors_in(&ShapeId::from_static("ex#Hidden")).is_none());
+    assert!(get.errors_in(&ShapeId::from_static("ex#Other")).is_none());
+    assert!(get.errors_in(&ShapeId::from_static("ex#Thing")).is_none());
+    assert!(get.errors_in(&ShapeId::from_static("ex#Missing")).is_none());
+    let unbound = operations.get(&ShapeId::from_static("ex#Unbound")).unwrap();
+    assert!(unbound
+        .errors_in(&ShapeId::from_static("ex#Service"))
+        .is_none());
     assert_eq!(ids(unbound.direct_errors(), |e| e.id()), ex(&["NotFound"]));
     // Deep and directly bound operations both inherit service errors.
     assert_eq!(
         ids(
             operations
-                .get("ex#SharedRead")
+                .get(&ShapeId::from_static("ex#SharedRead"))
                 .unwrap()
-                .errors_in("ex#Service")
+                .errors_in(&ShapeId::from_static("ex#Service"))
                 .unwrap(),
             |e| e.id()
         ),
@@ -210,9 +249,9 @@ fn operation_errors() {
     );
     assert_eq!(
         operations
-            .get("ex#DeepOp")
+            .get(&ShapeId::from_static("ex#DeepOp"))
             .unwrap()
-            .errors_in("ex#Hidden")
+            .errors_in(&ShapeId::from_static("ex#Hidden"))
             .unwrap()
             .len(),
         0
@@ -224,24 +263,44 @@ fn operation_reverse_bindings() {
     let model = model();
     let operations = model.knowledge().operations();
     assert_eq!(
-        op_ids(operations.input_bindings("ex#SharedInput").unwrap()),
+        op_ids(
+            operations
+                .input_bindings(&ShapeId::from_static("ex#SharedInput"))
+                .unwrap()
+        ),
         ex(&["CreateThing", "PutThing"])
     );
     assert_eq!(
-        op_ids(operations.output_bindings("ex#GetThingOutput").unwrap()),
+        op_ids(
+            operations
+                .output_bindings(&ShapeId::from_static("ex#GetThingOutput"))
+                .unwrap()
+        ),
         ex(&["GetThing"])
     );
-    assert_eq!(operations.input_bindings("ex#Plain").unwrap().len(), 0);
-    assert!(operations.input_bindings("ex#GetThing").is_none());
-    assert!(operations.output_bindings("ex#Missing").is_none());
-    // Omitted input normalizes to Unit, which is therefore bound.
-    assert!(
-        op_ids(operations.input_bindings("smithy.api#Unit").unwrap())
-            .contains(&"ex#DirectOp".to_owned())
+    assert_eq!(
+        operations
+            .input_bindings(&ShapeId::from_static("ex#Plain"))
+            .unwrap()
+            .len(),
+        0
     );
+    assert!(operations
+        .input_bindings(&ShapeId::from_static("ex#GetThing"))
+        .is_none());
+    assert!(operations
+        .output_bindings(&ShapeId::from_static("ex#Missing"))
+        .is_none());
+    // Omitted input normalizes to Unit, which is therefore bound.
+    assert!(op_ids(
+        operations
+            .input_bindings(&ShapeId::from_static("smithy.api#Unit"))
+            .unwrap()
+    )
+    .contains(&"ex#DirectOp".to_owned()));
 
     let not_found: Vec<_> = operations
-        .error_bindings("ex#NotFound")
+        .error_bindings(&ShapeId::from_static("ex#NotFound"))
         .unwrap()
         .map(|s| (s.id().to_string(), s.shape_type()))
         .collect();
@@ -253,18 +312,25 @@ fn operation_reverse_bindings() {
             ("ex#UpdateThing".to_owned(), crate::ShapeType::Operation),
         ]
     );
-    let common: Vec<_> = ids(operations.error_bindings("ex#Common").unwrap(), |s| s.id());
+    let common: Vec<_> = ids(
+        operations
+            .error_bindings(&ShapeId::from_static("ex#Common"))
+            .unwrap(),
+        |s| s.id(),
+    );
     assert_eq!(common, ex(&["GetThing", "Service"]));
-    assert!(operations.error_bindings("ex#GetThing").is_none());
+    assert!(operations
+        .error_bindings(&ShapeId::from_static("ex#GetThing"))
+        .is_none());
 
-    assert!(operations.is_input_structure("ex#SharedInput"));
-    assert!(operations.is_input_structure("ex#MarkedInput"));
-    assert!(!operations.is_input_structure("ex#MarkedOutput"));
-    assert!(!operations.is_input_structure("ex#Plain"));
-    assert!(!operations.is_input_structure("ex#Missing"));
-    assert!(operations.is_output_structure("ex#GetThingOutput"));
-    assert!(operations.is_output_structure("ex#MarkedOutput"));
-    assert!(!operations.is_output_structure("ex#GetThingInput"));
+    assert!(operations.is_input_structure(&ShapeId::from_static("ex#SharedInput")));
+    assert!(operations.is_input_structure(&ShapeId::from_static("ex#MarkedInput")));
+    assert!(!operations.is_input_structure(&ShapeId::from_static("ex#MarkedOutput")));
+    assert!(!operations.is_input_structure(&ShapeId::from_static("ex#Plain")));
+    assert!(!operations.is_input_structure(&ShapeId::from_static("ex#Missing")));
+    assert!(operations.is_output_structure(&ShapeId::from_static("ex#GetThingOutput")));
+    assert!(operations.is_output_structure(&ShapeId::from_static("ex#MarkedOutput")));
+    assert!(!operations.is_output_structure(&ShapeId::from_static("ex#GetThingInput")));
 }
 
 fn parent_ids(bindings: Iter<ParentBinding<'_>>) -> Vec<(String, RelationshipType)> {
@@ -284,31 +350,46 @@ fn bottom_up_unique_chains() {
     assert_eq!(
         parent_ids(
             bottom_up
-                .get_direct_bindings("ex#Service", "ex#GetThing")
+                .get_direct_bindings(
+                    &ShapeId::from_static("ex#Service"),
+                    &ShapeId::from_static("ex#GetThing")
+                )
                 .unwrap()
         ),
         [("ex#Thing".to_owned(), Read)]
     );
     let chain = bottom_up
-        .parent_chain("ex#Service", "ex#GetThing")
+        .parent_chain(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#GetThing"),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["Thing", "Service"]));
     assert_eq!(chain.parent().id(), "ex#Thing");
     assert_eq!(chain.service().id(), "ex#Service");
     let chain = bottom_up
-        .parent_chain("ex#Service", "ex#ChildOp")
+        .parent_chain(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#ChildOp"),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["Child", "Thing", "Service"]));
     let chain = bottom_up
-        .parent_chain("ex#Service", "ex#DirectOp")
+        .parent_chain(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#DirectOp"),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["Service"]));
     assert!(matches!(chain.parent(), EntityView::Service(_)));
     let chain = bottom_up
-        .parent_chain("ex#Hidden", "ex#DeepOp")
+        .parent_chain(
+            &ShapeId::from_static("ex#Hidden"),
+            &ShapeId::from_static("ex#DeepOp"),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["Inner", "Outer", "Hidden"]));
@@ -316,7 +397,10 @@ fn bottom_up_unique_chains() {
     assert_eq!(collected, ex(&["Inner", "Outer", "Hidden"]));
     assert_eq!(
         bottom_up
-            .unique_parent("ex#Service", "ex#BatchThing")
+            .unique_parent(
+                &ShapeId::from_static("ex#Service"),
+                &ShapeId::from_static("ex#BatchThing")
+            )
             .unwrap()
             .unwrap()
             .id(),
@@ -325,7 +409,10 @@ fn bottom_up_unique_chains() {
     assert_eq!(
         parent_ids(
             bottom_up
-                .get_direct_bindings("ex#Service", "ex#BatchThing")
+                .get_direct_bindings(
+                    &ShapeId::from_static("ex#Service"),
+                    &ShapeId::from_static("ex#BatchThing")
+                )
                 .unwrap()
         ),
         [("ex#Thing".to_owned(), CollectionOperation)]
@@ -341,7 +428,10 @@ fn bottom_up_reports_ambiguity() {
     assert_eq!(
         parent_ids(
             bottom_up
-                .get_direct_bindings("ex#Service", "ex#SharedOp")
+                .get_direct_bindings(
+                    &ShapeId::from_static("ex#Service"),
+                    &ShapeId::from_static("ex#SharedOp")
+                )
                 .unwrap()
         ),
         [
@@ -350,7 +440,10 @@ fn bottom_up_reports_ambiguity() {
         ]
     );
     let err = bottom_up
-        .unique_parent("ex#Service", "ex#SharedOp")
+        .unique_parent(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#SharedOp"),
+        )
         .unwrap_err();
     assert_eq!(err.service(), "ex#Service");
     assert_eq!(err.entity(), "ex#SharedOp");
@@ -362,20 +455,31 @@ fn bottom_up_reports_ambiguity() {
         err.to_string(),
         "`ex#SharedOp` has multiple parents in service `ex#Service`: `ex#Service`, `ex#Thing`"
     );
-    assert!(bottom_up.parent_chain("ex#Service", "ex#SharedOp").is_err());
+    assert!(bottom_up
+        .parent_chain(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#SharedOp")
+        )
+        .is_err());
 
     // A shared child resource: the operation has a unique parent, but the chain is ambiguous
     // one step up.
     assert_eq!(
         bottom_up
-            .unique_parent("ex#Service", "ex#SharedRead")
+            .unique_parent(
+                &ShapeId::from_static("ex#Service"),
+                &ShapeId::from_static("ex#SharedRead")
+            )
             .unwrap()
             .unwrap()
             .id(),
         "ex#Shared"
     );
     let err = bottom_up
-        .parent_chain("ex#Service", "ex#SharedRead")
+        .parent_chain(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#SharedRead"),
+        )
         .unwrap_err();
     assert_eq!(err.entity(), "ex#Shared");
     assert_eq!(
@@ -385,7 +489,10 @@ fn bottom_up_reports_ambiguity() {
     assert_eq!(
         ids(
             bottom_up
-                .get_ancestors("ex#Service", "ex#SharedRead")
+                .get_ancestors(
+                    &ShapeId::from_static("ex#Service"),
+                    &ShapeId::from_static("ex#SharedRead")
+                )
                 .unwrap(),
             |e| e.id()
         ),
@@ -401,20 +508,29 @@ fn bottom_up_is_service_scoped() {
     assert_eq!(
         parent_ids(
             bottom_up
-                .get_direct_bindings("ex#Other", "ex#Shared")
+                .get_direct_bindings(
+                    &ShapeId::from_static("ex#Other"),
+                    &ShapeId::from_static("ex#Shared")
+                )
                 .unwrap()
         ),
         [("ex#Other".to_owned(), Resource)]
     );
     let chain = bottom_up
-        .parent_chain("ex#Other", "ex#SharedRead")
+        .parent_chain(
+            &ShapeId::from_static("ex#Other"),
+            &ShapeId::from_static("ex#SharedRead"),
+        )
         .unwrap()
         .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["Shared", "Other"]));
     assert_eq!(
         ids(
             bottom_up
-                .get_ancestors("ex#Other", "ex#SharedRead")
+                .get_ancestors(
+                    &ShapeId::from_static("ex#Other"),
+                    &ShapeId::from_static("ex#SharedRead")
+                )
                 .unwrap(),
             |e| e.id()
         ),
@@ -423,30 +539,54 @@ fn bottom_up_is_service_scoped() {
 
     // Not contained, wrong kinds, or missing.
     assert!(bottom_up
-        .get_direct_bindings("ex#Other", "ex#GetThing")
+        .get_direct_bindings(
+            &ShapeId::from_static("ex#Other"),
+            &ShapeId::from_static("ex#GetThing")
+        )
         .is_none());
     assert!(bottom_up
-        .unique_parent("ex#Other", "ex#GetThing")
+        .unique_parent(
+            &ShapeId::from_static("ex#Other"),
+            &ShapeId::from_static("ex#GetThing")
+        )
         .unwrap()
         .is_none());
     assert!(bottom_up
-        .parent_chain("ex#Other", "ex#GetThing")
+        .parent_chain(
+            &ShapeId::from_static("ex#Other"),
+            &ShapeId::from_static("ex#GetThing")
+        )
         .unwrap()
         .is_none());
     assert!(bottom_up
-        .get_direct_bindings("ex#Service", "ex#Unbound")
+        .get_direct_bindings(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#Unbound")
+        )
         .is_none());
     assert!(bottom_up
-        .get_direct_bindings("ex#Service", "ex#Service")
+        .get_direct_bindings(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#Service")
+        )
         .is_none());
     assert!(bottom_up
-        .get_direct_bindings("ex#Thing", "ex#GetThing")
+        .get_direct_bindings(
+            &ShapeId::from_static("ex#Thing"),
+            &ShapeId::from_static("ex#GetThing")
+        )
         .is_none());
     assert!(bottom_up
-        .get_direct_bindings("ex#Service", "ex#Plain")
+        .get_direct_bindings(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#Plain")
+        )
         .is_none());
     assert!(bottom_up
-        .get_ancestors("ex#Missing", "ex#GetThing")
+        .get_ancestors(
+            &ShapeId::from_static("ex#Missing"),
+            &ShapeId::from_static("ex#GetThing")
+        )
         .is_none());
 }
 
@@ -464,10 +604,23 @@ fn one_parent_binding_twice_is_unique() {
     .unwrap();
     let bottom_up = model.knowledge().bottom_up();
     assert_eq!(
-        parent_ids(bottom_up.get_direct_bindings("ex#S", "ex#Op").unwrap()),
+        parent_ids(
+            bottom_up
+                .get_direct_bindings(
+                    &ShapeId::from_static("ex#S"),
+                    &ShapeId::from_static("ex#Op")
+                )
+                .unwrap()
+        ),
         [("ex#R".to_owned(), Operation), ("ex#R".to_owned(), Read)]
     );
-    let chain = bottom_up.parent_chain("ex#S", "ex#Op").unwrap().unwrap();
+    let chain = bottom_up
+        .parent_chain(
+            &ShapeId::from_static("ex#S"),
+            &ShapeId::from_static("ex#Op"),
+        )
+        .unwrap()
+        .unwrap();
     assert_eq!(chain_ids(&chain), ex(&["R", "S"]));
 }
 
@@ -476,7 +629,7 @@ fn relationship_index_outgoing_and_incoming() {
     let model = model();
     let relationships = model.knowledge().relationships();
     let outgoing: Vec<_> = relationships
-        .get_outgoing("ex#GetThing")
+        .get_outgoing(&ShapeId::from_static("ex#GetThing"))
         .unwrap()
         .map(|r| (r.kind(), r.target_id().to_string()))
         .collect();
@@ -490,7 +643,7 @@ fn relationship_index_outgoing_and_incoming() {
         ]
     );
     let incoming: Vec<_> = relationships
-        .get_incoming("ex#Common")
+        .get_incoming(&ShapeId::from_static("ex#Common"))
         .unwrap()
         .map(|r| {
             assert_eq!(r.target_id(), "ex#Common");
@@ -506,7 +659,7 @@ fn relationship_index_outgoing_and_incoming() {
     );
     // Sorted by source, then kind.
     let incoming: Vec<_> = relationships
-        .get_incoming("ex#SharedOp")
+        .get_incoming(&ShapeId::from_static("ex#SharedOp"))
         .unwrap()
         .map(|r| (r.source().id().to_string(), r.kind()))
         .collect();
@@ -518,28 +671,45 @@ fn relationship_index_outgoing_and_incoming() {
         ]
     );
     let member: Vec<_> = relationships
-        .get_incoming("ex#GetThingInput$alpha")
+        .get_incoming(&ShapeId::from_static("ex#GetThingInput$alpha"))
         .unwrap()
         .map(|r| (r.source().id().to_string(), r.kind()))
         .collect();
     assert_eq!(member, [("ex#GetThingInput".to_owned(), Member)]);
-    assert_eq!(relationships.get_incoming("ex#Plain").unwrap().len(), 0);
-    assert_eq!(relationships.get_outgoing("ex#Plain").unwrap().len(), 0);
-    assert!(relationships.get_outgoing("ex#Missing").is_none());
-    assert!(relationships.get_incoming("ex#Plain$nope").is_none());
+    assert_eq!(
+        relationships
+            .get_incoming(&ShapeId::from_static("ex#Plain"))
+            .unwrap()
+            .len(),
+        0
+    );
+    assert_eq!(
+        relationships
+            .get_outgoing(&ShapeId::from_static("ex#Plain"))
+            .unwrap()
+            .len(),
+        0
+    );
     assert!(relationships
-        .get_incoming("ex#GetThingInput$alpha$x")
+        .get_outgoing(&ShapeId::from_static("ex#Missing"))
         .is_none());
+    assert!(relationships
+        .get_incoming(&ShapeId::from_static("ex#Plain$nope"))
+        .is_none());
+    // Not a shape ID, so it cannot be passed to a lookup.
+    assert!(ShapeId::new("ex#GetThingInput$alpha$x").is_err());
     // Prelude shapes are indexed too.
     assert!(
         relationships
-            .get_incoming("smithy.api#String")
+            .get_incoming(&ShapeId::from_static("smithy.api#String"))
             .unwrap()
             .len()
             >= 4
     );
 
-    let view = model.expect_shape("ex#Common").unwrap();
+    let view = model
+        .expect_shape(&ShapeId::from_static("ex#Common"))
+        .unwrap();
     assert_eq!(view.incoming_relationships().len(), 2);
     assert_eq!(
         format!("{:?}", view.incoming_relationships()),
@@ -615,7 +785,11 @@ fn caches_are_shared_by_clones_and_threads() {
                 let model = fresh.clone();
                 scope.spawn(move || {
                     let top_down = model.knowledge().top_down();
-                    let ops = op_ids(top_down.get_contained_operations("ex#Service").unwrap());
+                    let ops = op_ids(
+                        top_down
+                            .get_contained_operations(&ShapeId::from_static("ex#Service"))
+                            .unwrap(),
+                    );
                     assert_eq!(ops.len(), 12);
                     model.knowledge().relationships().index as *const _ as usize
                 })
@@ -668,28 +842,47 @@ fn send_sync_and_debug() {
     assert(&knowledge.top_down());
     assert(&knowledge.operations());
     assert(&knowledge.bottom_up());
-    assert(&knowledge.operations().get("ex#GetThing").unwrap());
-    assert(&knowledge.relationships().get_incoming("ex#Common").unwrap());
+    assert(
+        &knowledge
+            .operations()
+            .get(&ShapeId::from_static("ex#GetThing"))
+            .unwrap(),
+    );
+    assert(
+        &knowledge
+            .relationships()
+            .get_incoming(&ShapeId::from_static("ex#Common"))
+            .unwrap(),
+    );
     assert(
         &knowledge
             .top_down()
-            .get_contained_operations("ex#Service")
+            .get_contained_operations(&ShapeId::from_static("ex#Service"))
             .unwrap(),
     );
     let bottom_up = knowledge.bottom_up();
     assert(
         &bottom_up
-            .get_direct_bindings("ex#Service", "ex#GetThing")
+            .get_direct_bindings(
+                &ShapeId::from_static("ex#Service"),
+                &ShapeId::from_static("ex#GetThing"),
+            )
             .unwrap(),
     );
     assert(
         &bottom_up
-            .parent_chain("ex#Service", "ex#GetThing")
+            .parent_chain(
+                &ShapeId::from_static("ex#Service"),
+                &ShapeId::from_static("ex#GetThing"),
+            )
             .unwrap()
             .unwrap(),
     );
     let err = bottom_up
-        .unique_parent("ex#Service", "ex#SharedOp")
+        .unique_parent(
+            &ShapeId::from_static("ex#Service"),
+            &ShapeId::from_static("ex#SharedOp"),
+        )
         .unwrap_err();
     assert(&err);
     fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
@@ -906,6 +1099,11 @@ impl Graph {
     }
 }
 
+/// Parses a generated shape ID.
+fn id(value: &str) -> ShapeId {
+    ShapeId::new(value).unwrap()
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
@@ -921,8 +1119,8 @@ proptest! {
 
         for start in (0..SERVICES).map(|s| format!("ex#S{s}")).chain((0..RESOURCES).map(|r| format!("ex#R{r}"))) {
             let expected = graph.closure(&start);
-            let ops = op_ids(knowledge.top_down().get_contained_operations(&start).unwrap());
-            let resources = ids(knowledge.top_down().get_contained_resources(&start).unwrap(), |r| r.id());
+            let ops = op_ids(knowledge.top_down().get_contained_operations(&id(&start)).unwrap());
+            let resources = ids(knowledge.top_down().get_contained_resources(&id(&start)).unwrap(), |r| r.id());
             let expected_ops: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#O")).cloned().collect();
             let expected_resources: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#R")).cloned().collect();
             prop_assert_eq!(ops, expected_ops);
@@ -935,18 +1133,18 @@ proptest! {
             for entity in &entities {
                 let bottom_up = knowledge.bottom_up();
                 if !closure.contains(entity) {
-                    prop_assert!(bottom_up.get_direct_bindings(&service, entity).is_none());
-                    prop_assert!(bottom_up.parent_chain(&service, entity).unwrap().is_none());
+                    prop_assert!(bottom_up.get_direct_bindings(&id(&service), &id(entity)).is_none());
+                    prop_assert!(bottom_up.parent_chain(&id(&service), &id(entity)).unwrap().is_none());
                     continue;
                 }
                 let parents = graph.parents(&service, entity);
                 let actual: BTreeSet<_> = bottom_up
-                    .get_direct_bindings(&service, entity)
+                    .get_direct_bindings(&id(&service), &id(entity))
                     .unwrap()
                     .map(|b| b.parent().id().to_string())
                     .collect();
                 prop_assert_eq!(&actual, &parents);
-                match bottom_up.unique_parent(&service, entity) {
+                match bottom_up.unique_parent(&id(&service), &id(entity)) {
                     Ok(parent) => {
                         prop_assert_eq!(parents.len(), 1);
                         prop_assert_eq!(parent.unwrap().id().as_str(), parents.iter().next().unwrap());
@@ -966,10 +1164,10 @@ proptest! {
                         }
                     }
                 }
-                let ancestors = ids(bottom_up.get_ancestors(&service, entity).unwrap(), |e| e.id());
+                let ancestors = ids(bottom_up.get_ancestors(&id(&service), &id(entity)).unwrap(), |e| e.id());
                 prop_assert_eq!(ancestors, expected_ancestors.iter().cloned().collect::<Vec<_>>());
                 // A chain exists exactly when every step is unique, and it is a valid path.
-                if let Ok(Some(chain)) = bottom_up.parent_chain(&service, entity) {
+                if let Ok(Some(chain)) = bottom_up.parent_chain(&id(&service), &id(entity)) {
                     let chain = chain_ids(&chain);
                     prop_assert_eq!(chain.last().unwrap(), &service);
                     let mut child = entity.clone();
@@ -982,7 +1180,7 @@ proptest! {
 
             for o in 0..OPS {
                 let op = format!("ex#O{o}");
-                let errors = knowledge.operations().get(&op).unwrap().errors_in(&service);
+                let errors = knowledge.operations().get(&id(&op)).unwrap().errors_in(&id(&service));
                 if !closure.contains(&op) {
                     prop_assert!(errors.is_none());
                     continue;

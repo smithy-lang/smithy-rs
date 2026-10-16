@@ -9,6 +9,7 @@ use crate::diagnostic::DiagnosticCode::{self, *};
 use crate::model::Model;
 use crate::prelude;
 use crate::ModelAssembler;
+use crate::ShapeId;
 
 fn check_with(assembler: ModelAssembler, shapes: &str) -> Vec<(DiagnosticCode, String)> {
     let json = format!(r#"{{"smithy":"2.0","shapes":{{{shapes}}}}}"#);
@@ -92,7 +93,9 @@ fn underscore_digit_identifiers_are_valid_everywhere() {
                   "properties":{"_7":{"target":"_1.a#_2"}}}
     }}"#;
     let model = Model::from_json_str("t.json", json).unwrap();
-    let shape = model.expect_shape("_1.a#_2$_3").unwrap();
+    let shape = model
+        .expect_shape(&ShapeId::from_static("_1.a#_2$_3"))
+        .unwrap();
     assert_eq!(shape.id().member(), Some("_3"));
 }
 

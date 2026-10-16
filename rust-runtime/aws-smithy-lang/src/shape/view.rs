@@ -66,9 +66,8 @@ macro_rules! all_refinements {
 
 /// The applied traits of a shape or member, in insertion order.
 ///
-/// Lookups take an absolute trait ID (a [`ShapeId`] or `&str`). A relative name without a
-/// namespace, such as `"required"`, resolves to the prelude (`smithy.api#required`), matching
-/// Java Smithy.
+/// Lookups take the trait's [`ShapeId`]. The [`traits`] module has constants
+/// for common prelude traits, such as [`traits::REQUIRED`].
 #[derive(Clone, Copy)]
 pub struct Traits<'a> {
     map: &'a TraitMap,
@@ -90,13 +89,13 @@ impl<'a> Traits<'a> {
     }
 
     /// The value of a trait.
-    pub fn get(&self, id: impl AsRef<str>) -> Option<&'a Node> {
-        traits::find(self.map, id.as_ref()).map(|(_, value)| value)
+    pub fn get(&self, id: &ShapeId) -> Option<&'a Node> {
+        self.map.get(id)
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn contains(&self, id: impl AsRef<str>) -> bool {
-        traits::find(self.map, id.as_ref()).is_some()
+    pub fn contains(&self, id: &ShapeId) -> bool {
+        self.map.contains_key(id)
     }
 
     /// Decodes a trait with a [`TraitCodec`]. Returns `Ok(None)` if the trait is not applied.
@@ -180,13 +179,13 @@ impl<'a> ShapeView<'a> {
         Traits::new(&self.shape.common().traits)
     }
 
-    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
-    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+    /// The value of a trait, by trait shape ID.
+    pub fn get_trait(&self, id: &ShapeId) -> Option<&'a Node> {
         self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+    pub fn has_trait(&self, id: &ShapeId) -> bool {
         self.traits().contains(id)
     }
 
@@ -224,6 +223,12 @@ impl<'a> ShapeView<'a> {
         self.members().get(name)
     }
 
+    /// The member at an index in [`members`](Self::members) order. See
+    /// [`MembersView::get_index`].
+    pub fn member_at(&self, index: usize) -> Option<MemberView<'a>> {
+        self.members().get_index(index)
+    }
+
     all_refinements!(shape_refinements);
 }
 
@@ -237,6 +242,11 @@ impl fmt::Debug for ShapeView<'_> {
 }
 
 /// A uniform view of a shape's members.
+///
+/// Members are looked up by name with [`get`](Self::get), or by index with
+/// [`get_index`](Self::get_index). Indexes follow [`iter`](Self::iter) order: `0` for a list's
+/// `member`, `0` and `1` for a map's `key` and `value`, and declaration order for named members.
+/// An index lookup is an array access; [`MemberView::index`] returns a member's index.
 #[derive(Clone, Copy)]
 pub struct MembersView<'a> {
     data: &'a ModelData,
@@ -258,6 +268,13 @@ impl<'a> MembersView<'a> {
     pub fn get(&self, name: &str) -> Option<MemberView<'a>> {
         let container = self.shape?;
         let member = container.member(name)?;
+        Some(MemberView::new(self.data, container, member))
+    }
+
+    /// The member at an index in [`iter`](Self::iter) order.
+    pub fn get_index(&self, index: usize) -> Option<MemberView<'a>> {
+        let container = self.shape?;
+        let member = container.member_at(index)?;
         Some(MemberView::new(self.data, container, member))
     }
 
@@ -338,6 +355,14 @@ impl<'a> MemberView<'a> {
         self.member.name()
     }
 
+    /// The member's index within its container, so that
+    /// `container.members().get_index(member.index())` returns this member.
+    pub fn index(&self) -> usize {
+        self.container
+            .member_index(self.member.name())
+            .expect("a member belongs to its container")
+    }
+
     /// The target shape ID.
     pub fn target(&self) -> &'a ShapeId {
         self.member.target()
@@ -347,7 +372,7 @@ impl<'a> MemberView<'a> {
     pub fn target_shape(&self) -> ShapeView<'a> {
         let shape = self
             .data
-            .root(self.member.target.as_str())
+            .root(&self.member.target)
             .expect("models only contain resolved member targets");
         ShapeView::new(self.data, shape)
     }
@@ -362,13 +387,13 @@ impl<'a> MemberView<'a> {
         Traits::new(&self.member.traits)
     }
 
-    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
-    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+    /// The value of a trait, by trait shape ID.
+    pub fn get_trait(&self, id: &ShapeId) -> Option<&'a Node> {
         self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+    pub fn has_trait(&self, id: &ShapeId) -> bool {
         self.traits().contains(id)
     }
 
@@ -491,13 +516,13 @@ impl<'a> ShapeRef<'a> {
         }
     }
 
-    /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
-    pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+    /// The value of a trait, by trait shape ID.
+    pub fn get_trait(&self, id: &ShapeId) -> Option<&'a Node> {
         self.traits().get(id)
     }
 
     /// Returns `true` if the trait is applied.
-    pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+    pub fn has_trait(&self, id: &ShapeId) -> bool {
         self.traits().contains(id)
     }
 
@@ -617,13 +642,13 @@ macro_rules! refined_view {
                     self.shape.traits()
                 }
 
-                /// The value of a trait, by absolute shape ID (a [`ShapeId`] or `&str`).
-                pub fn get_trait(&self, id: impl AsRef<str>) -> Option<&'a Node> {
+                /// The value of a trait, by trait shape ID.
+                pub fn get_trait(&self, id: &ShapeId) -> Option<&'a Node> {
                     self.shape.get_trait(id)
                 }
 
                 /// Returns `true` if the trait is applied.
-                pub fn has_trait(&self, id: impl AsRef<str>) -> bool {
+                pub fn has_trait(&self, id: &ShapeId) -> bool {
                     self.shape.has_trait(id)
                 }
 
@@ -693,6 +718,11 @@ macro_rules! named_member_lookup {
                 /// A member by name.
                 pub fn member(&self, name: &str) -> Option<MemberView<'a>> {
                     self.shape.member(name)
+                }
+
+                /// The member at an index in declaration order.
+                pub fn member_at(&self, index: usize) -> Option<MemberView<'a>> {
+                    self.shape.member_at(index)
                 }
             }
         )*
@@ -793,7 +823,7 @@ impl<'a> ServiceView<'a> {
     }
 
     /// The renamed name of `id` within this service, if any.
-    pub fn renamed(&self, id: &str) -> Option<&'a str> {
+    pub fn renamed(&self, id: &ShapeId) -> Option<&'a str> {
         self.decl().rename.get(id).map(String::as_str)
     }
 }
@@ -846,7 +876,7 @@ impl<'a> OperationView<'a> {
         let shape = self
             .shape
             .data
-            .root(id.as_str())
+            .root(id)
             .expect("models only contain resolved operation references");
         ShapeView::new(self.shape.data, shape)
     }
@@ -928,7 +958,7 @@ impl<'a> ResourceView<'a> {
 /// A shape was missing or was not of the expected type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShapeExpectationError {
-    id: String,
+    id: ShapeId,
     kind: ExpectationKind,
     location: SourceLocation,
 }
@@ -944,9 +974,9 @@ enum ExpectationKind {
 }
 
 impl ShapeExpectationError {
-    pub(crate) fn not_found(id: &str) -> Self {
+    pub(crate) fn not_found(id: &ShapeId) -> Self {
         Self {
-            id: id.to_owned(),
+            id: id.clone(),
             kind: ExpectationKind::NotFound,
             location: SourceLocation::none(),
         }
@@ -954,7 +984,7 @@ impl ShapeExpectationError {
 
     fn not_root(id: &ShapeId, location: &SourceLocation) -> Self {
         Self {
-            id: id.to_string(),
+            id: id.clone(),
             kind: ExpectationKind::NotRoot,
             location: location.clone(),
         }
@@ -967,7 +997,7 @@ impl ShapeExpectationError {
         location: &SourceLocation,
     ) -> Self {
         Self {
-            id: id.to_string(),
+            id: id.clone(),
             kind: ExpectationKind::WrongType { expected, actual },
             location: location.clone(),
         }
@@ -980,7 +1010,7 @@ impl ShapeExpectationError {
     }
 
     /// The shape ID that was looked up.
-    pub fn id(&self) -> &str {
+    pub fn id(&self) -> &ShapeId {
         &self.id
     }
 

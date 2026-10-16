@@ -5,9 +5,9 @@
 
 //! Loads, inspects, and round-trips every Smithy JSON AST model in `aws/sdk/aws-models`.
 
-use aws_smithy_lang::traits::{Documentation, DOCUMENTATION};
+use aws_smithy_lang::traits::{self, Documentation, DOCUMENTATION};
 use aws_smithy_lang::traversal::Walker;
-use aws_smithy_lang::{AstWriter, Model, ShapeType};
+use aws_smithy_lang::{AstWriter, Model, ShapeId, ShapeType};
 use std::path::PathBuf;
 
 /// Every JSON object in the corpus with top-level `smithy` and `shapes` properties.
@@ -136,10 +136,7 @@ fn corpus_inspection() {
                 assert!(operation.input_shape().is_structure(), "{name}");
                 assert!(operation.output_shape().is_structure(), "{name}");
                 for error in operation.direct_errors() {
-                    assert!(model
-                        .expect_shape(error)
-                        .unwrap()
-                        .has_trait("smithy.api#error"));
+                    assert!(model.expect_shape(error).unwrap().has_trait(&traits::ERROR));
                 }
             }
         }
@@ -167,7 +164,7 @@ fn corpus_inspection() {
             let documentation = shape.get_trait_as::<Documentation>().unwrap().unwrap();
             assert_eq!(
                 Some(documentation.0.as_str()),
-                shape.get_trait(DOCUMENTATION).unwrap().as_str()
+                shape.get_trait(&DOCUMENTATION).unwrap().as_str()
             );
         }
         assert!(
@@ -238,10 +235,7 @@ fn corpus_knowledge_invariants() {
             // Effective errors resolve to @error structures and include every direct error.
             let knowledge = operations.get(operation.id()).unwrap();
             let errors: Vec<_> = knowledge.errors_in(service.id()).unwrap().collect();
-            assert!(
-                errors.iter().all(|e| e.has_trait("smithy.api#error")),
-                "{name}"
-            );
+            assert!(errors.iter().all(|e| e.has_trait(&traits::ERROR)), "{name}");
             assert!(
                 errors.len() >= operation.direct_errors().len(),
                 "{name}: {}",
@@ -261,8 +255,9 @@ fn corpus_knowledge_invariants() {
 
         // Every contained entity has a service-scoped parent that is itself in the service.
         for id in contained_ids.iter().chain(&resource_ids) {
+            let shape_id: ShapeId = id.parse().unwrap();
             let bindings: Vec<_> = bottom_up
-                .get_direct_bindings(service.id(), id)
+                .get_direct_bindings(service.id(), &shape_id)
                 .unwrap()
                 .collect();
             assert!(!bindings.is_empty(), "{name}: {id}");
@@ -274,7 +269,7 @@ fn corpus_knowledge_invariants() {
                 );
                 assert!(binding.kind().is_containment(), "{name}");
             }
-            if let Ok(Some(chain)) = bottom_up.parent_chain(service.id(), id) {
+            if let Ok(Some(chain)) = bottom_up.parent_chain(service.id(), &shape_id) {
                 assert_eq!(chain.service().id(), service.id(), "{name}");
             }
         }

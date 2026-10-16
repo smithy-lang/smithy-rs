@@ -6,7 +6,7 @@
 //! Agreement with Java Smithy 1.74.0 on checked-in fixtures. See `fixtures/java/README.md`.
 
 use aws_smithy_lang::diagnostic::DiagnosticCode;
-use aws_smithy_lang::Model;
+use aws_smithy_lang::{Model, ShapeId};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -184,15 +184,16 @@ fn knowledge_matches_java() {
 
         for (entity, answer) in expected["topDown"].as_object().unwrap() {
             let top_down = knowledge.top_down();
+            let entity: ShapeId = entity.parse().unwrap();
             let actual = json!({
-                "operations": strings(top_down.get_contained_operations(entity).unwrap().map(|o| o.id().clone())),
-                "resources": strings(top_down.get_contained_resources(entity).unwrap().map(|r| r.id().clone())),
+                "operations": strings(top_down.get_contained_operations(&entity).unwrap().map(|o| o.id().clone())),
+                "resources": strings(top_down.get_contained_resources(&entity).unwrap().map(|r| r.id().clone())),
             });
             assert_eq!(&actual, answer, "{name}: top-down {entity}");
         }
 
         for (id, answer) in expected["operations"].as_object().unwrap() {
-            let operation = knowledge.operations().get(id).unwrap();
+            let operation = knowledge.operations().get(&id.parse().unwrap()).unwrap();
             let meaningful = |s: Option<aws_smithy_lang::shape::StructureView<'_>>| {
                 s.map_or(Value::Null, |s| Value::from(s.id().to_string()))
             };
@@ -218,8 +219,9 @@ fn knowledge_matches_java() {
             assert_eq!(&actual, answer, "{name}: operation {id}");
         }
 
-        for (id, answer) in expected["structures"].as_object().unwrap() {
+        for (key, answer) in expected["structures"].as_object().unwrap() {
             let operations = knowledge.operations();
+            let id: &ShapeId = &key.parse().unwrap();
             let actual = json!({
                 "inputBindings": strings(operations.input_bindings(id).unwrap().map(|o| o.id().clone())),
                 "outputBindings": strings(operations.output_bindings(id).unwrap().map(|o| o.id().clone())),
@@ -227,7 +229,7 @@ fn knowledge_matches_java() {
                 "isInput": operations.is_input_structure(id),
                 "isOutput": operations.is_output_structure(id),
             });
-            assert_eq!(&actual, answer, "{name}: structure {id}");
+            assert_eq!(&actual, answer, "{name}: structure {key}");
         }
 
         // Java stores one path per entity, overwriting others; compare only unique chains.
@@ -235,7 +237,10 @@ fn knowledge_matches_java() {
         let mut ambiguous = 0;
         for (service, entities) in expected["bottomUp"].as_object().unwrap() {
             for (entity, java_chain) in entities.as_object().unwrap() {
-                match knowledge.bottom_up().parent_chain(service, entity) {
+                match knowledge
+                    .bottom_up()
+                    .parent_chain(&service.parse().unwrap(), &entity.parse().unwrap())
+                {
                     Ok(chain) => {
                         let chain = chain.unwrap();
                         assert_eq!(

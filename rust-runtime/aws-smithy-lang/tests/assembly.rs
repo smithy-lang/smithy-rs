@@ -176,7 +176,7 @@ fn built_in_code() -> Model {
 fn every_shape_kind_can_be_built_in_code() {
     let model = built_in_code();
     let service = model
-        .expect_shape("ex#Weather")
+        .expect_shape(&ShapeId::from_static("ex#Weather"))
         .unwrap()
         .expect_service()
         .unwrap();
@@ -197,7 +197,9 @@ fn every_shape_kind_can_be_built_in_code() {
         service.get_trait_as::<Documentation>().unwrap(),
         Some(Documentation("The weather service.".into()))
     );
-    let output = model.expect_shape("ex#GetCityOutput").unwrap();
+    let output = model
+        .expect_shape(&ShapeId::from_static("ex#GetCityOutput"))
+        .unwrap();
     let names: Vec<_> = output.members().names().collect();
     assert_eq!(
         names,
@@ -211,8 +213,10 @@ fn every_shape_kind_can_be_built_in_code() {
             "photo"
         ]
     );
-    let member = model.expect_shape("ex#GetCityInput$cityId").unwrap();
-    assert!(member.has_trait("required"));
+    let member = model
+        .expect_shape(&ShapeId::from_static("ex#GetCityInput$cityId"))
+        .unwrap();
+    assert!(member.has_trait(&traits::REQUIRED));
     // Shapes built in code have no source location.
     assert!(member.source_location().is_none());
     assert!(output.source_location().is_none());
@@ -233,7 +237,7 @@ fn every_shape_kind_can_be_built_in_code() {
     assert_eq!(AstWriter::new().to_string(&reloaded).unwrap(), json);
     assert_eq!(
         reloaded
-            .expect_shape("ex#City")
+            .expect_shape(&ShapeId::from_static("ex#City"))
             .unwrap()
             .source_location()
             .pointer(),
@@ -245,7 +249,7 @@ fn every_shape_kind_can_be_built_in_code() {
 fn shapes_from_a_model_can_be_copied_and_modified() {
     let model = built_in_code();
     let structure = model
-        .expect_shape("ex#Coordinates")
+        .expect_shape(&ShapeId::from_static("ex#Coordinates"))
         .unwrap()
         .expect_structure()
         .unwrap();
@@ -268,7 +272,7 @@ fn shapes_from_a_model_can_be_copied_and_modified() {
     );
     assert_eq!(
         rebuilt
-            .expect_shape("ex#Coordinates")
+            .expect_shape(&ShapeId::from_static("ex#Coordinates"))
             .unwrap()
             .members()
             .len(),
@@ -309,7 +313,7 @@ fn inputs_combine_and_resolve_across_sources() {
     // `add_model` copies shapes, not the other model's prelude; this model uses the real one.
     assert!(model.has_prelude());
     assert_eq!(model.non_prelude_shapes().len(), 6);
-    assert!(model.contains_shape("smithy.api#String"));
+    assert!(model.contains_shape(&ShapeId::from_static("smithy.api#String")));
     let sources: Vec<_> = model
         .non_prelude_shapes()
         .map(|s| s.source_location().source().to_owned())
@@ -326,7 +330,7 @@ fn inputs_combine_and_resolve_across_sources() {
         ]
     );
     let service = model
-        .expect_shape("ex#Service")
+        .expect_shape(&ShapeId::from_static("ex#Service"))
         .unwrap()
         .expect_service()
         .unwrap();
@@ -356,7 +360,7 @@ fn prelude_shapes_cannot_be_redefined() {
             .assemble(),
     );
     let string = model
-        .expect_shape("smithy.api#String")
+        .expect_shape(&ShapeId::from_static("smithy.api#String"))
         .unwrap()
         .expect_shape()
         .unwrap();
@@ -500,15 +504,17 @@ fn applied_traits_merge_like_java_smithy() {
             .add_trait("ex#A$m", traits::REQUIRED, empty())
             .assemble(),
     );
-    let a = model.expect_shape("ex#A").unwrap();
+    let a = model.expect_shape(&ShapeId::from_static("ex#A")).unwrap();
     assert_eq!(
-        a.get_trait("ex#tags").unwrap().to_json_string(),
+        a.get_trait(&ShapeId::from_static("ex#tags"))
+            .unwrap()
+            .to_json_string(),
         r#"["a","b"]"#
     );
     assert!(model
-        .expect_shape("ex#A$m")
+        .expect_shape(&ShapeId::from_static("ex#A$m"))
         .unwrap()
-        .has_trait(traits::REQUIRED));
+        .has_trait(&traits::REQUIRED));
 
     let fails = |assembler: ModelAssembler| {
         let validated = assembler.assemble();
@@ -695,7 +701,7 @@ fn trait_codec_validator_points_at_nested_values() {
     );
     let model = Model::from_json_str("m.json", &json).unwrap();
     let err = model
-        .expect_shape("ex#A")
+        .expect_shape(&ShapeId::from_static("ex#A"))
         .unwrap()
         .get_trait_as::<Limits>()
         .unwrap_err();
@@ -736,12 +742,14 @@ fn every_loaded_value_has_a_source_location() {
     }
 }"#;
     let model = Model::from_json_str("m.json", json).unwrap();
-    let shape = model.expect_shape("ex#S").unwrap();
+    let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
     assert_eq!(
         shape.source_location().to_string(),
         "m.json:5:9 (/shapes/ex#S)"
     );
-    let member = model.expect_shape("ex#S$ab").unwrap();
+    let member = model
+        .expect_shape(&ShapeId::from_static("ex#S$ab"))
+        .unwrap();
     assert_eq!(
         member.source_location().to_string(),
         "m.json:8:17 (/shapes/ex#S/members/ab)"

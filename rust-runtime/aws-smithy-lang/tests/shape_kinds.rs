@@ -6,7 +6,7 @@
 //! Positive and malformed fixtures for every Smithy 2.0 shape kind.
 
 use aws_smithy_lang::diagnostic::DiagnosticCode;
-use aws_smithy_lang::{AstWriter, Model, ShapeType};
+use aws_smithy_lang::{AstWriter, Model, ShapeId, ShapeType};
 
 fn document(shapes: &str) -> String {
     format!(r#"{{"smithy":"2.0","shapes":{{{shapes}}}}}"#)
@@ -36,7 +36,10 @@ fn rejects(shapes: &str, code: DiagnosticCode, pointer: &str) {
 fn accepts(shapes: &str, id: &str, shape_type: ShapeType) -> Model {
     let model = load(shapes);
     assert_eq!(
-        model.expect_shape(id).unwrap().shape_type(),
+        model
+            .expect_shape(&id.parse().unwrap())
+            .unwrap()
+            .shape_type(),
         shape_type,
         "{shapes}"
     );
@@ -73,7 +76,11 @@ fn simple_shapes() {
             "a#S",
             shape_type,
         );
-        assert!(model.expect_shape("a#S").unwrap().members().is_empty());
+        assert!(model
+            .expect_shape(&ShapeId::from_static("a#S"))
+            .unwrap()
+            .members()
+            .is_empty());
         rejects(
             &format!(r#""a#S":{{"type":"{name}","member":{{"target":"smithy.api#String"}}}}"#),
             DiagnosticCode::UnknownProperty,
@@ -89,8 +96,14 @@ fn list() {
         "a#L",
         ShapeType::List,
     );
-    let list = model.expect_shape("a#L").unwrap().expect_list().unwrap();
-    assert!(list.member().has_trait("smithy.api#length"));
+    let list = model
+        .expect_shape(&ShapeId::from_static("a#L"))
+        .unwrap()
+        .expect_list()
+        .unwrap();
+    assert!(list
+        .member()
+        .has_trait(&ShapeId::from_static("smithy.api#length")));
     rejects(
         r#""a#L":{"type":"list"}"#,
         DiagnosticCode::MissingProperty,
@@ -115,7 +128,11 @@ fn map() {
         "a#M",
         ShapeType::Map,
     );
-    let map = model.expect_shape("a#M").unwrap().expect_map().unwrap();
+    let map = model
+        .expect_shape(&ShapeId::from_static("a#M"))
+        .unwrap()
+        .expect_map()
+        .unwrap();
     assert_eq!(map.value().target(), "smithy.api#Integer");
     rejects(
         r#""a#M":{"type":"map","key":{"target":"smithy.api#String"}}"#,
@@ -138,7 +155,7 @@ fn structure() {
         ShapeType::Structure,
     );
     let names: Vec<_> = model
-        .expect_shape("a#S")
+        .expect_shape(&ShapeId::from_static("a#S"))
         .unwrap()
         .members()
         .names()
@@ -183,7 +200,7 @@ fn enum_shapes() {
         ShapeType::Enum,
     );
     let member = model
-        .expect_shape("a#E$A")
+        .expect_shape(&ShapeId::from_static("a#E$A"))
         .unwrap()
         .expect_member()
         .unwrap();
@@ -225,7 +242,7 @@ fn service() {
         ShapeType::Service,
     );
     let service = model
-        .expect_shape("a#Svc")
+        .expect_shape(&ShapeId::from_static("a#Svc"))
         .unwrap()
         .expect_service()
         .unwrap();
@@ -254,7 +271,7 @@ fn operation() {
         ShapeType::Operation,
     );
     let operation = model
-        .expect_shape("a#Op")
+        .expect_shape(&ShapeId::from_static("a#Op"))
         .unwrap()
         .expect_operation()
         .unwrap();
@@ -284,7 +301,7 @@ fn resource() {
         ShapeType::Resource,
     );
     let resource = model
-        .expect_shape("a#R")
+        .expect_shape(&ShapeId::from_static("a#R"))
         .unwrap()
         .expect_resource()
         .unwrap();

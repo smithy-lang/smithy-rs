@@ -6,7 +6,7 @@
 //! Every error a caller can see names the line and column it came from.
 
 use aws_smithy_lang::shape::{Shape, StructureShape};
-use aws_smithy_lang::{Model, SourceLocation};
+use aws_smithy_lang::{Model, ShapeId, SourceLocation};
 use std::path::Path;
 
 const MODEL: &str = r#"{
@@ -104,7 +104,7 @@ fn escaped_keys_use_the_first_nested_key() {
     let json = "{\n  \"smithy\": \"2.0\",\n  \"shapes\": {\n    \"ex#\\u0041\": { \"type\": \"string\" }\n  }\n}";
     let model = Model::from_json_str("m.json", json).unwrap();
     let location = model
-        .expect_shape("ex#A")
+        .expect_shape(&ShapeId::from_static("ex#A"))
         .unwrap()
         .source_location()
         .clone();
@@ -168,7 +168,7 @@ fn multiple_errors_name_the_first() {
 fn view_and_node_errors_show_locations() {
     let model = Model::from_json_str("m.json", &valid()).unwrap();
     let err = model
-        .expect_shape("ex#Input")
+        .expect_shape(&ShapeId::from_static("ex#Input"))
         .unwrap()
         .expect_service()
         .unwrap_err();
@@ -179,13 +179,15 @@ fn view_and_node_errors_show_locations() {
     );
     assert_eq!(err.source_location().line(), Some(11));
 
-    let member = model.expect_shape("ex#Input$name").unwrap();
+    let member = model
+        .expect_shape(&ShapeId::from_static("ex#Input$name"))
+        .unwrap();
     let err = member.expect_shape().unwrap_err();
     assert!(err.to_string().starts_with("m.json:14:17: "), "{err}");
 
     // A builder made from a loaded shape reports the shape's location.
     let Shape::Structure(input) = model
-        .expect_shape("ex#Input")
+        .expect_shape(&ShapeId::from_static("ex#Input"))
         .unwrap()
         .expect_shape()
         .unwrap()

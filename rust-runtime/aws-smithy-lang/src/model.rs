@@ -42,11 +42,13 @@ impl ModelData {
     }
 
     /// The position of a root shape in [`declarations`](Self::declarations) order.
-    pub(crate) fn root_position(&self, id: &str) -> Option<usize> {
-        if let Some(position) = self.shapes.get_index_of(id) {
+    /// A member ID resolves to its container's position.
+    pub(crate) fn root_position(&self, id: &ShapeId) -> Option<usize> {
+        let root = id.root_str();
+        if let Some(position) = self.shapes.get_index_of(root) {
             return Some(position);
         }
-        Some(self.shapes.len() + self.prelude?.get_index_of(id)?)
+        Some(self.shapes.len() + self.prelude?.get_index_of(root)?)
     }
 
     /// The root shape at a position in [`declarations`](Self::declarations) order.
@@ -60,16 +62,17 @@ impl ModelData {
         }
     }
 
-    /// A root shape from the model or the prelude.
-    pub(crate) fn root(&self, id: &str) -> Option<&Shape> {
-        self.shapes.get(id).or_else(|| self.prelude?.get(id))
+    /// A root shape from the model or the prelude. A member ID resolves to its container.
+    pub(crate) fn root(&self, id: &ShapeId) -> Option<&Shape> {
+        let root = id.root_str();
+        self.shapes.get(root).or_else(|| self.prelude?.get(root))
     }
 
-    pub(crate) fn lookup(&self, id: &str) -> Option<ShapeRef<'_>> {
-        match id.split_once('$') {
-            None => Some(ShapeRef::Shape(ShapeView::new(self, self.root(id)?))),
-            Some((root, member)) => {
-                let container = self.root(root)?;
+    pub(crate) fn lookup(&self, id: &ShapeId) -> Option<ShapeRef<'_>> {
+        let container = self.root(id)?;
+        match id.member() {
+            None => Some(ShapeRef::Shape(ShapeView::new(self, container))),
+            Some(member) => {
                 let member = container.member(member)?;
                 Some(ShapeRef::Member(MemberView::new(self, container, member)))
             }
@@ -143,20 +146,22 @@ impl Model {
         &self.data
     }
 
-    /// Looks up a shape or member by absolute ID.
-    pub fn get_shape(&self, id: impl AsRef<str>) -> Option<ShapeRef<'_>> {
-        self.data.lookup(id.as_ref())
+    /// Looks up a shape, or a member by its member ID (`ns#Shape$member`).
+    ///
+    /// Shapes are always looked up by [`ShapeId`]. Use [`ShapeId::from_static`] for IDs known
+    /// at compile time, or parse one with [`ShapeId::new`].
+    pub fn get_shape(&self, id: &ShapeId) -> Option<ShapeRef<'_>> {
+        self.data.lookup(id)
     }
 
     /// Looks up a shape or member, returning an error if it does not exist.
-    pub fn expect_shape(&self, id: impl AsRef<str>) -> Result<ShapeRef<'_>, ShapeExpectationError> {
-        let id = id.as_ref();
+    pub fn expect_shape(&self, id: &ShapeId) -> Result<ShapeRef<'_>, ShapeExpectationError> {
         self.get_shape(id)
             .ok_or_else(|| ShapeExpectationError::not_found(id))
     }
 
     /// Returns `true` if a shape or member with this ID exists.
-    pub fn contains_shape(&self, id: impl AsRef<str>) -> bool {
+    pub fn contains_shape(&self, id: &ShapeId) -> bool {
         self.get_shape(id).is_some()
     }
 
@@ -222,12 +227,11 @@ impl Model {
         self.shapes().filter(move |s| s.shape_type() == shape_type)
     }
 
-    /// Root shapes and members that have `trait_id` (a [`ShapeId`] or `&str`) applied.
+    /// Root shapes and members that have `trait_id` applied.
     pub fn shapes_with_trait<'a>(
         &'a self,
-        trait_id: &'a (impl AsRef<str> + ?Sized),
+        trait_id: &'a ShapeId,
     ) -> impl Iterator<Item = ShapeRef<'a>> + 'a {
-        let trait_id: &'a str = trait_id.as_ref();
         self.shapes().flat_map(move |shape| {
             let root = shape.has_trait(trait_id).then_some(ShapeRef::Shape(shape));
             root.into_iter().chain(
@@ -364,12 +368,15 @@ mod tests {
     fn readme_style_inspection() {
         let model = model();
         let service = model
-            .expect_shape("ex#Service")
+            .expect_shape(&ShapeId::from_static("ex#Service"))
             .unwrap()
             .expect_service()
             .unwrap();
         assert_eq!(service.version(), Some("2024-01-01"));
-        assert_eq!(service.renamed("ex#Name"), Some("ThingName"));
+        assert_eq!(
+            service.renamed(&ShapeId::from_static("ex#Name")),
+            Some("ThingName")
+        );
         assert_eq!(
             service
                 .common_errors()
@@ -390,7 +397,7 @@ mod tests {
             ["ex#GetThing"]
         );
         let op = model
-            .expect_shape("ex#GetThing")
+            .expect_shape(&ShapeId::from_static("ex#GetThing"))
             .unwrap()
             .expect_operation()
             .unwrap();
@@ -398,7 +405,7 @@ mod tests {
         assert_eq!(op.input_shape().id(), "ex#GetThingInput");
         assert_eq!(op.output_shape().shape_type(), ShapeType::Structure);
         let resource = model
-            .expect_shape("ex#Thing")
+            .expect_shape(&ShapeId::from_static("ex#Thing"))
             .unwrap()
             .expect_resource()
             .unwrap();
@@ -409,18 +416,24 @@ mod tests {
     #[test]
     fn lookup_and_members() {
         let model = model();
-        let member = model.expect_shape("ex#GetThingInput$name").unwrap();
+        let member = model
+            .expect_shape(&ShapeId::from_static("ex#GetThingInput$name"))
+            .unwrap();
         assert!(member.is_member());
         assert_eq!(member.shape_type(), ShapeType::Member);
         let member = member.expect_member().unwrap();
         assert_eq!(member.name(), "name");
         assert_eq!(member.target_shape().id(), "ex#Name");
         assert_eq!(member.container().id(), "ex#GetThingInput");
-        assert!(model.get_shape("ex#GetThingInput$missing").is_none());
-        assert!(model.get_shape("ex#Name$x").is_none());
+        assert!(model
+            .get_shape(&ShapeId::from_static("ex#GetThingInput$missing"))
+            .is_none());
+        assert!(model
+            .get_shape(&ShapeId::from_static("ex#Name$x"))
+            .is_none());
 
         let input = model
-            .expect_shape("ex#GetThingInput")
+            .expect_shape(&ShapeId::from_static("ex#GetThingInput"))
             .unwrap()
             .expect_shape()
             .unwrap();
@@ -430,19 +443,43 @@ mod tests {
         );
         assert_eq!(input.members().len(), 2);
 
-        let map = model.expect_shape("ex#Tags").unwrap().expect_map().unwrap();
+        let map = model
+            .expect_shape(&ShapeId::from_static("ex#Tags"))
+            .unwrap()
+            .expect_map()
+            .unwrap();
         assert_eq!(map.key().id(), "ex#Tags$key");
         assert_eq!(map.value().target(), "ex#List");
         assert_eq!(map.members().names().collect::<Vec<_>>(), ["key", "value"]);
         let list = model
-            .expect_shape("ex#List")
+            .expect_shape(&ShapeId::from_static("ex#List"))
             .unwrap()
             .expect_list()
             .unwrap();
         assert_eq!(list.member().name(), "member");
         assert_eq!(list.members().len(), 1);
-        let name = model.expect_shape("ex#Name").unwrap();
+        let name = model
+            .expect_shape(&ShapeId::from_static("ex#Name"))
+            .unwrap();
         assert!(name.members().is_empty());
+        assert!(name.members().get_index(0).is_none());
+
+        // Index lookups follow `iter` order and round-trip with `MemberView::index`.
+        for shape in [input, map.as_shape(), list.as_shape()] {
+            for (index, member) in shape.members().iter().enumerate() {
+                assert_eq!(member.index(), index);
+                let by_index = shape.members().get_index(index).unwrap();
+                assert_eq!(by_index.id(), member.id());
+                assert_eq!(shape.member_at(index).unwrap().id(), member.id());
+                assert_eq!(shape.shape().member_index(member.name()), Some(index));
+                assert_eq!(shape.shape().member_at(index).unwrap().id(), member.id());
+            }
+            assert!(shape.members().get_index(shape.members().len()).is_none());
+        }
+        assert_eq!(input.member_at(1).unwrap().name(), "tags");
+        assert_eq!(input.shape().member_at(1).unwrap().name(), "tags");
+        assert_eq!(input.shape().member_index("tags"), Some(1));
+        assert_eq!(input.shape().member_index("missing"), None);
         assert!(member.container().members().get("tags").is_some());
     }
 
@@ -450,7 +487,7 @@ mod tests {
     fn refinement_errors() {
         let model = model();
         let err = model
-            .expect_shape("ex#Name")
+            .expect_shape(&ShapeId::from_static("ex#Name"))
             .unwrap()
             .expect_service()
             .unwrap_err();
@@ -461,20 +498,27 @@ mod tests {
             "model.json:27:13: expected `ex#Name` to be a service, but it is a string \
              (at /shapes/ex#Name)"
         );
-        let err = model.expect_shape("ex#Nope").unwrap_err();
+        let err = model
+            .expect_shape(&ShapeId::from_static("ex#Nope"))
+            .unwrap_err();
         assert!(err.is_not_found());
-        let member = model.expect_shape("ex#List$member").unwrap();
+        let member = model
+            .expect_shape(&ShapeId::from_static("ex#List$member"))
+            .unwrap();
         assert!(member.expect_list().is_err());
         assert!(member.expect_shape().is_err());
         assert!(member.as_list().is_none());
-        assert!(model.expect_shape("ex#List").unwrap().is_list());
+        assert!(model
+            .expect_shape(&ShapeId::from_static("ex#List"))
+            .unwrap()
+            .is_list());
     }
 
     #[test]
     fn enums() {
         let model = model();
         let color = model
-            .expect_shape("ex#Color")
+            .expect_shape(&ShapeId::from_static("ex#Color"))
             .unwrap()
             .expect_enum()
             .unwrap();
@@ -495,7 +539,7 @@ mod tests {
             .collect();
         assert_eq!(declared, [None, Some(EnumValue::String("green"))]);
         let level = model
-            .expect_shape("ex#Level")
+            .expect_shape(&ShapeId::from_static("ex#Level"))
             .unwrap()
             .expect_int_enum()
             .unwrap();
@@ -508,7 +552,7 @@ mod tests {
             Some(EnumValue::Int(1))
         );
         let list = model
-            .expect_shape("ex#List")
+            .expect_shape(&ShapeId::from_static("ex#List"))
             .unwrap()
             .expect_list()
             .unwrap();
@@ -519,7 +563,9 @@ mod tests {
     #[test]
     fn traits_and_filters() {
         let model = model();
-        let service = model.expect_shape("ex#Service").unwrap();
+        let service = model
+            .expect_shape(&ShapeId::from_static("ex#Service"))
+            .unwrap();
         assert_eq!(
             service.get_trait_as::<Documentation>().unwrap(),
             Some(Documentation("A service".into()))
@@ -530,19 +576,19 @@ mod tests {
             applied[0].source_location().pointer(),
             Some("/shapes/ex#Service/traits/smithy.api#documentation")
         );
-        let oops = model.expect_shape("ex#Oops").unwrap();
+        let oops = model
+            .expect_shape(&ShapeId::from_static("ex#Oops"))
+            .unwrap();
         assert_eq!(
             oops.get_trait_as::<traits::ErrorFault>().unwrap(),
             Some(traits::ErrorFault::Client)
         );
 
-        // Trait lookup accepts a `ShapeId` as well as a string, on every view.
-        let doc_id: ShapeId = traits::DOCUMENTATION;
-        // Relative names resolve to the prelude.
-        assert!(service.has_trait("documentation"));
-        assert!(!service.has_trait("required"));
+        // Trait lookup takes a `ShapeId` on every view; IDs compare by value.
+        let doc_id: ShapeId = "smithy.api#documentation".parse().unwrap();
+        assert!(!service.has_trait(&traits::REQUIRED));
         assert!(service.has_trait(&doc_id));
-        assert!(service.get_trait(doc_id.clone()).is_some());
+        assert!(service.get_trait(&doc_id).is_some());
         assert!(service.traits().contains(&doc_id));
         let service_view = service.expect_shape().unwrap().expect_service().unwrap();
         assert!(service_view.has_trait(&doc_id));
@@ -551,7 +597,7 @@ mod tests {
         assert_eq!(service_view.as_shape().id(), service.id());
         assert_eq!(
             model.shapes_with_trait(&doc_id).count(),
-            model.shapes_with_trait("smithy.api#documentation").count()
+            model.shapes_with_trait(&traits::DOCUMENTATION).count()
         );
 
         let required: Vec<_> = model
@@ -607,10 +653,10 @@ mod tests {
             "ex#A":{"type":"string","traits":{"ex#retries":3}},
             "ex#B":{"type":"string","traits":{"ex#retries":"x"}}}}"#;
         let model = Model::from_json_str("m", json).unwrap();
-        let a = model.expect_shape("ex#A").unwrap();
+        let a = model.expect_shape(&ShapeId::from_static("ex#A")).unwrap();
         assert_eq!(a.get_trait_as::<Retries>().unwrap().unwrap().0, 3);
         let err = model
-            .expect_shape("ex#B")
+            .expect_shape(&ShapeId::from_static("ex#B"))
             .unwrap()
             .get_trait_as::<Retries>()
             .err()
@@ -633,7 +679,7 @@ mod tests {
         assert!(model.prelude_shapes().all(|s| s.is_prelude()));
         assert!(model.non_prelude_shapes().all(|s| !s.is_prelude()));
         assert!(ids[10..].iter().all(|id| id.starts_with("smithy.api#")));
-        assert!(model.contains_shape("smithy.api#String"));
+        assert!(model.contains_shape(&ShapeId::from_static("smithy.api#String")));
 
         let bare = Model::assembler()
             .disable_prelude()
@@ -646,7 +692,7 @@ mod tests {
             .unwrap();
         assert!(!bare.has_prelude());
         assert_eq!(bare.len(), 1);
-        assert!(!bare.contains_shape("smithy.api#String"));
+        assert!(!bare.contains_shape(&ShapeId::from_static("smithy.api#String")));
     }
 
     #[test]
@@ -663,7 +709,7 @@ mod tests {
         fn assert_iter<I: Iterator + Send + Sync>(_: I) {}
         let model = model();
         assert_iter(model.shapes());
-        assert_iter(model.shapes_with_trait("x"));
+        assert_iter(model.shapes_with_trait(&traits::REQUIRED));
         assert_iter(model.applied_trait_ids());
     }
 }

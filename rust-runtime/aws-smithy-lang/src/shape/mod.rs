@@ -19,7 +19,7 @@
 //!
 //! ```
 //! use aws_smithy_lang::shape::{OperationShape, StructureShape};
-//! use aws_smithy_lang::{traits, Model, Node, NodeObject};
+//! use aws_smithy_lang::{traits, Model, Node, NodeObject, ShapeId};
 //!
 //! let input = StructureShape::builder("ex#GetThingInput")
 //!     .member("id", "smithy.api#String")
@@ -32,7 +32,7 @@
 //!     .add_shape(operation)
 //!     .assemble()
 //!     .into_result()?;
-//! let operation = model.expect_shape("ex#GetThing")?.expect_operation()?;
+//! let operation = model.expect_shape(&ShapeId::from_static("ex#GetThing"))?.expect_operation()?;
 //! assert_eq!(operation.input_shape().members().len(), 1);
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```

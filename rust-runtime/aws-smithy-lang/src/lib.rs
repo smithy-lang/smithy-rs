@@ -10,8 +10,10 @@
 //! shapes built in code. Assembly injects the Smithy prelude, merges the inputs, and
 //! [validates](validation) the result; every ordinary shape reference in a `Model` resolves.
 //!
+//! Shapes are looked up by [`ShapeId`]; members by name.
+//!
 //! ```
-//! use aws_smithy_lang::Model;
+//! use aws_smithy_lang::{Model, ShapeId};
 //!
 //! let json = r#"{
 //!     "smithy": "2.0",
@@ -22,7 +24,8 @@
 //!     }
 //! }"#;
 //! let model = Model::from_json_str("model.json", json)?;
-//! let service = model.expect_shape("ex#Service")?.expect_service()?;
+//! let service_id: ShapeId = "ex#Service".parse()?;
+//! let service = model.expect_shape(&service_id)?.expect_service()?;
 //! // Every operation in the service, including those bound through resources.
 //! for operation in service.contained_operations() {
 //!     println!("{} -> {}", operation.id(), operation.input());

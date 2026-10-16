@@ -15,13 +15,13 @@
 //!
 //! ```
 //! use aws_smithy_lang::relationships::RelationshipType;
-//! use aws_smithy_lang::Model;
+//! use aws_smithy_lang::{Model, ShapeId};
 //!
 //! let model = Model::from_json_str("m", r#"{"smithy": "2.0", "shapes": {
 //!     "ex#Ping": {"type": "operation", "input": {"target": "ex#PingInput"}},
 //!     "ex#PingInput": {"type": "structure"}
 //! }}"#)?;
-//! let input = model.expect_shape("ex#PingInput")?;
+//! let input = model.expect_shape(&ShapeId::from_static("ex#PingInput"))?;
 //! let users: Vec<_> = input
 //!     .incoming_relationships()
 //!     .filter(|r| r.kind() == RelationshipType::Input)
@@ -352,7 +352,7 @@ impl fmt::Debug for Relationship<'_> {
 
 fn root<'a>(data: &'a ModelData, id: &ShapeId) -> ShapeRef<'a> {
     let shape = data
-        .root(id.as_str())
+        .root(id)
         .expect("models only contain resolved references");
     ShapeRef::Shape(ShapeView::new(data, shape))
 }
@@ -499,7 +499,7 @@ impl RelationshipData {
                 edges.push(Edge {
                     source: node,
                     target: this
-                        .node_of(data, relationship.target_id().as_str())
+                        .node_of(data, relationship.target_id())
                         .expect("models only contain resolved references"),
                     kind: relationship.kind(),
                 });
@@ -540,12 +540,12 @@ impl RelationshipData {
     }
 
     /// The node of a root shape or member ID.
-    pub(crate) fn node_of(&self, data: &ModelData, id: &str) -> Option<Node> {
-        match id.split_once('$') {
-            None => Some(self.root_nodes[data.root_position(id)?]),
-            Some((root, member)) => {
-                let position = data.root_position(root)?;
-                let member = data.root_at(position).member_position(member)?;
+    pub(crate) fn node_of(&self, data: &ModelData, id: &ShapeId) -> Option<Node> {
+        let position = data.root_position(id)?;
+        match id.member() {
+            None => Some(self.root_nodes[position]),
+            Some(member) => {
+                let member = data.root_at(position).member_index(member)?;
                 Some(self.root_nodes[position] + 1 + index(member))
             }
         }
@@ -619,8 +619,8 @@ impl<'m> RelationshipIndex<'m> {
 
     /// Outgoing relationships of a shape or member, in the same order as
     /// [`ShapeRef::relationships`]. Returns `None` if no such shape or member exists.
-    pub fn get_outgoing(&self, shape: impl AsRef<str>) -> Option<Relationships<'m>> {
-        let node = self.index.node_of(self.data, shape.as_ref())?;
+    pub fn get_outgoing(&self, shape: &ShapeId) -> Option<Relationships<'m>> {
+        let node = self.index.node_of(self.data, shape)?;
         Some(self.outgoing_node(node))
     }
 
@@ -629,8 +629,8 @@ impl<'m> RelationshipIndex<'m> {
     /// the referring shape and [`Relationship::target`] is the queried shape.
     ///
     /// Returns `None` if no such shape or member exists.
-    pub fn get_incoming(&self, shape: impl AsRef<str>) -> Option<Relationships<'m>> {
-        let node = self.index.node_of(self.data, shape.as_ref())?;
+    pub fn get_incoming(&self, shape: &ShapeId) -> Option<Relationships<'m>> {
+        let node = self.index.node_of(self.data, shape)?;
         Some(self.incoming_node(node))
     }
 
@@ -645,11 +645,11 @@ impl<'m> RelationshipIndex<'m> {
     /// The node of a shape known to exist in this model.
     pub(crate) fn node(&self, id: &ShapeId) -> Node {
         self.index
-            .node_of(self.data, id.as_str())
+            .node_of(self.data, id)
             .expect("views always belong to their model")
     }
 
-    pub(crate) fn lookup(&self, id: &str) -> Option<(Node, ShapeRef<'m>)> {
+    pub(crate) fn lookup(&self, id: &ShapeId) -> Option<(Node, ShapeRef<'m>)> {
         let node = self.index.node_of(self.data, id)?;
         Some((node, self.shape(node)))
     }

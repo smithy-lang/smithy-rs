@@ -245,6 +245,14 @@ impl ShapeId {
         }
     }
 
+    /// The absolute root ID as a borrowed slice, for map lookups without allocating.
+    pub(crate) fn root_str(&self) -> &str {
+        match self.dollar_index {
+            NO_MEMBER => self.as_str(),
+            end => &self.as_str()[..end as usize],
+        }
+    }
+
     /// The root shape ID: this ID without its member component.
     pub fn root(&self) -> ShapeId {
         if self.dollar_index == NO_MEMBER {

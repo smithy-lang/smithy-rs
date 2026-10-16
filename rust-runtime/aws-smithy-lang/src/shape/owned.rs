@@ -254,8 +254,9 @@ impl Shape {
         }
     }
 
-    /// The position of a member in [`members`](Self::members) order.
-    pub(crate) fn member_position(&self, name: &str) -> Option<usize> {
+    /// The index of a member in [`members`](Self::members) order: `0` for a list's `member`,
+    /// `0` and `1` for a map's `key` and `value`, and declaration order for named members.
+    pub fn member_index(&self, name: &str) -> Option<usize> {
         match self {
             Shape::List(_) => (name == "member").then_some(0),
             Shape::Map(_) => match name {
@@ -267,8 +268,9 @@ impl Shape {
         }
     }
 
-    /// The member at a position in [`members`](Self::members) order.
-    pub(crate) fn member_at(&self, position: usize) -> Option<&MemberShape> {
+    /// The member at an index in [`members`](Self::members) order. This is an array lookup,
+    /// with no hashing.
+    pub fn member_at(&self, position: usize) -> Option<&MemberShape> {
         match self {
             Shape::List(s) => (position == 0).then_some(&s.member),
             Shape::Map(s) => [&s.key, &s.value].get(position).copied(),
@@ -450,7 +452,7 @@ impl BuilderCommon {
         }
     }
 
-    fn remove_trait(&mut self, id: &str) {
+    fn remove_trait(&mut self, id: &ShapeId) {
         self.traits.shift_remove(id);
     }
 
@@ -499,9 +501,9 @@ macro_rules! common_builder_methods {
             self
         }
 
-        /// Removes a trait by absolute shape ID.
-        pub fn remove_trait(mut self, id: impl AsRef<str>) -> Self {
-            self.common.remove_trait(id.as_ref());
+        /// Removes a trait by its shape ID.
+        pub fn remove_trait(mut self, id: &ShapeId) -> Self {
+            self.common.remove_trait(id);
             self
         }
 
@@ -552,7 +554,7 @@ macro_rules! common_accessors {
 ///     .add_trait(traits::REQUIRED, NodeObject::new())
 ///     .build()?;
 /// let input = StructureShape::builder("ex#Input").add_member(name).build()?;
-/// assert!(input.member("name").unwrap().traits().contains(traits::REQUIRED));
+/// assert!(input.member("name").unwrap().traits().contains(&traits::REQUIRED));
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 #[derive(Debug, Clone)]
@@ -666,9 +668,9 @@ impl MemberShapeBuilder {
         self
     }
 
-    /// Removes a trait by absolute shape ID.
-    pub fn remove_trait(mut self, id: impl AsRef<str>) -> Self {
-        self.traits.shift_remove(id.as_ref());
+    /// Removes a trait by its shape ID.
+    pub fn remove_trait(mut self, id: &ShapeId) -> Self {
+        self.traits.shift_remove(id);
         self
     }
 
@@ -1016,6 +1018,16 @@ macro_rules! named_member_shape {
             /// A member by name.
             pub fn member(&self, name: &str) -> Option<&MemberShape> {
                 self.members.get(name)
+            }
+
+            /// The member at an index in declaration order.
+            pub fn member_at(&self, index: usize) -> Option<&MemberShape> {
+                self.members.get_index(index).map(|(_, member)| member)
+            }
+
+            /// The index of a member in declaration order.
+            pub fn member_index(&self, name: &str) -> Option<usize> {
+                self.members.get_index_of(name)
             }
 
             /// A builder initialized with this shape.
@@ -1832,7 +1844,7 @@ mod tests {
             .into();
         assert_eq!(list.shape_type(), ShapeType::List);
         assert_eq!(list.id(), "a#L");
-        assert!(list.traits().contains("a#t"));
+        assert!(list.traits().contains(&ShapeId::from_static("a#t")));
         assert_eq!(
             list.members().map(MemberShape::name).collect::<Vec<_>>(),
             ["member"]
@@ -1844,7 +1856,7 @@ mod tests {
             .as_list()
             .unwrap()
             .to_builder()
-            .remove_trait("a#t")
+            .remove_trait(&ShapeId::from_static("a#t"))
             .build()
             .unwrap();
         assert!(rebuilt.traits().is_empty());

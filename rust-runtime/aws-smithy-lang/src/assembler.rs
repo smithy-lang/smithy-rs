@@ -545,7 +545,7 @@ fn trait_map<'a>(
     shapes: &'a mut IndexMap<ShapeId, Shape>,
     target: &ShapeId,
 ) -> Option<&'a mut TraitMap> {
-    let shape = shapes.get_mut(target.root().as_str())?;
+    let shape = shapes.get_mut(target.root_str())?;
     match target.member() {
         None => Some(&mut shape.common_mut().traits),
         Some(name) => shape
@@ -665,7 +665,7 @@ fn check_reference(
         ));
         return;
     }
-    let Some(target) = data.root(id.as_str()) else {
+    let Some(target) = data.root(id) else {
         diagnostics.push(fail(
             DiagnosticCode::UnresolvedReference,
             format!("`{id}` does not resolve to a shape"),
@@ -698,7 +698,7 @@ fn check_reference(
 /// Reports each resource-containment cycle using an iterative depth-first search.
 fn resource_cycles(data: &ModelData, diagnostics: &mut DiagnosticSet) {
     let shapes = &data.shapes;
-    let children = |id: &str| match shapes.get(id) {
+    let children = |id: &ShapeId| match shapes.get(id) {
         Some(Shape::Resource(r)) => Some(&r.resources[..]),
         _ => None,
     };
@@ -706,13 +706,13 @@ fn resource_cycles(data: &ModelData, diagnostics: &mut DiagnosticSet) {
     let mut done: HashMap<&ShapeId, bool> = HashMap::new();
     for shape in shapes.values() {
         let start = shape.id();
-        if children(start.as_str()).is_none() || done.contains_key(start) {
+        if children(start).is_none() || done.contains_key(start) {
             continue;
         }
         let mut stack: Vec<(&ShapeId, usize)> = vec![(start, 0)];
         done.insert(start, false);
         while let Some(&(id, index)) = stack.last() {
-            let Some(child) = children(id.as_str()).unwrap_or(&[]).get(index) else {
+            let Some(child) = children(id).unwrap_or(&[]).get(index) else {
                 done.insert(id, true);
                 stack.pop();
                 continue;
@@ -721,7 +721,7 @@ fn resource_cycles(data: &ModelData, diagnostics: &mut DiagnosticSet) {
                 top.1 += 1;
             }
             match done.get(child) {
-                None if children(child.as_str()).is_some() => {
+                None if children(child).is_some() => {
                     done.insert(child, false);
                     stack.push((child, 0));
                 }
@@ -732,7 +732,7 @@ fn resource_cycles(data: &ModelData, diagnostics: &mut DiagnosticSet) {
                         .map(|(s, _)| s.as_str())
                         .chain(std::iter::once(child.as_str()))
                         .collect();
-                    let location = shapes[id.as_str()]
+                    let location = shapes[id]
                         .source_location()
                         .child(&format!("/resources/{index}/target"));
                     diagnostics.push(

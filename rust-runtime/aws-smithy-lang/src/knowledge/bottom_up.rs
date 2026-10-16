@@ -223,10 +223,10 @@ impl<'m> BottomUpIndex<'m> {
     /// or resource, or the service does not contain it.
     pub fn get_direct_bindings(
         &self,
-        service: impl AsRef<str>,
-        operation_or_resource: impl AsRef<str>,
+        service: &ShapeId,
+        operation_or_resource: &ShapeId,
     ) -> Option<Iter<ParentBinding<'m>>> {
-        let scope = self.scope(service.as_ref(), operation_or_resource.as_ref())?;
+        let scope = self.scope(service, operation_or_resource)?;
         let bindings = self
             .parents(&scope, scope.entity)
             .map(|(parent, kind)| ParentBinding {
@@ -244,10 +244,10 @@ impl<'m> BottomUpIndex<'m> {
     /// [`get_direct_bindings`](Self::get_direct_bindings).
     pub fn get_ancestors(
         &self,
-        service: impl AsRef<str>,
-        operation_or_resource: impl AsRef<str>,
+        service: &ShapeId,
+        operation_or_resource: &ShapeId,
     ) -> Option<Iter<EntityView<'m>>> {
-        let scope = self.scope(service.as_ref(), operation_or_resource.as_ref())?;
+        let scope = self.scope(service, operation_or_resource)?;
         let mut visited = HashSet::new();
         let mut stack = vec![scope.entity];
         while let Some(node) = stack.pop() {
@@ -270,10 +270,10 @@ impl<'m> BottomUpIndex<'m> {
     /// example, as both `read` and an instance operation) is still a unique parent.
     pub fn unique_parent(
         &self,
-        service: impl AsRef<str>,
-        operation_or_resource: impl AsRef<str>,
+        service: &ShapeId,
+        operation_or_resource: &ShapeId,
     ) -> Result<Option<EntityView<'m>>, AmbiguousParentError> {
-        let Some(scope) = self.scope(service.as_ref(), operation_or_resource.as_ref()) else {
+        let Some(scope) = self.scope(service, operation_or_resource) else {
             return Ok(None);
         };
         self.unique_parent_of(&scope, scope.entity)
@@ -288,10 +288,10 @@ impl<'m> BottomUpIndex<'m> {
     /// more than one parent.
     pub fn parent_chain(
         &self,
-        service: impl AsRef<str>,
-        operation_or_resource: impl AsRef<str>,
+        service: &ShapeId,
+        operation_or_resource: &ShapeId,
     ) -> Result<Option<ParentChain<'m>>, AmbiguousParentError> {
-        let Some(scope) = self.scope(service.as_ref(), operation_or_resource.as_ref()) else {
+        let Some(scope) = self.scope(service, operation_or_resource) else {
             return Ok(None);
         };
         let mut entities = Vec::new();
@@ -306,7 +306,7 @@ impl<'m> BottomUpIndex<'m> {
         Ok(Some(ParentChain { entities }))
     }
 
-    fn scope(&self, service: &str, entity: &str) -> Option<Scope> {
+    fn scope(&self, service: &ShapeId, entity: &ShapeId) -> Option<Scope> {
         let (service, service_shape) = self.relationships.lookup(service)?;
         let (entity, entity_shape) = self.relationships.lookup(entity)?;
         if service_shape.shape_type() != ShapeType::Service

@@ -10,10 +10,10 @@
 //! prelude is the one shipped with Smithy Java [`SOURCE_VERSION`].
 //!
 //! ```
-//! use aws_smithy_lang::prelude;
+//! use aws_smithy_lang::{prelude, ShapeId};
 //!
-//! assert!(prelude::is_prelude_shape("smithy.api#String"));
-//! assert!(!prelude::is_prelude_shape("com.example#String"));
+//! assert!(prelude::is_prelude_shape(&ShapeId::from_static("smithy.api#String")));
+//! assert!(!prelude::is_prelude_shape(&ShapeId::from_static("com.example#String")));
 //! assert_eq!(prelude::unit_id(), "smithy.api#Unit");
 //! ```
 
@@ -40,22 +40,20 @@ pub fn unit_id() -> &'static ShapeId {
     &ID
 }
 
-/// Returns `true` if `id` (a [`ShapeId`] or `&str`) is in the prelude namespace.
+/// Returns `true` if `id` is in the prelude namespace.
 ///
 /// This checks only the namespace, like Java Smithy's `Prelude.isPreludeShape`. Use
 /// [`is_public_prelude_shape`] to check that the prelude actually defines a shape.
-pub fn is_prelude_shape(id: impl AsRef<str>) -> bool {
-    id.as_ref()
-        .split_once('#')
-        .is_some_and(|(namespace, _)| namespace == NAMESPACE)
+pub fn is_prelude_shape(id: &ShapeId) -> bool {
+    id.namespace() == NAMESPACE
 }
 
 /// Returns `true` if the embedded prelude defines `id` (a root shape ID) and it is not marked
 /// `@private`, so models outside the prelude may refer to it.
-pub fn is_public_prelude_shape(id: impl AsRef<str>) -> bool {
+pub fn is_public_prelude_shape(id: &ShapeId) -> bool {
     shapes()
-        .get(id.as_ref())
-        .is_some_and(|shape| !shape.traits().contains(traits::PRIVATE))
+        .get(id)
+        .is_some_and(|shape| !shape.traits().contains(&traits::PRIVATE))
 }
 
 const PRELUDE_JSON: &str = include_str!("prelude/prelude-1.74.0.json");
@@ -78,16 +76,23 @@ mod tests {
 
     #[test]
     fn helpers() {
-        assert!(is_prelude_shape(UNIT));
-        assert!(is_prelude_shape("smithy.api#Anything"));
-        assert!(!is_prelude_shape("smithy.apiX#String"));
-        assert!(!is_prelude_shape("not an id"));
-        assert!(is_public_prelude_shape("smithy.api#String"));
-        assert!(is_public_prelude_shape(traits::DOCUMENTATION));
-        assert!(!is_public_prelude_shape("smithy.api#Missing"));
+        assert!(is_prelude_shape(&UNIT));
+        assert!(is_prelude_shape(&ShapeId::from_static(
+            "smithy.api#Anything"
+        )));
+        assert!(!is_prelude_shape(&ShapeId::from_static(
+            "smithy.apiX#String"
+        )));
+        assert!(is_public_prelude_shape(&ShapeId::from_static(
+            "smithy.api#String"
+        )));
+        assert!(is_public_prelude_shape(&traits::DOCUMENTATION));
+        assert!(!is_public_prelude_shape(&ShapeId::from_static(
+            "smithy.api#Missing"
+        )));
         let private = shapes()
             .values()
-            .find(|s| s.traits().contains(traits::PRIVATE))
+            .find(|s| s.traits().contains(&traits::PRIVATE))
             .expect("the prelude has private shapes");
         assert!(is_prelude_shape(private.id()));
         assert!(!is_public_prelude_shape(private.id()));
