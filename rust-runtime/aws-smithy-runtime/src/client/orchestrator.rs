@@ -259,8 +259,6 @@ async fn try_op(
     cfg: &mut ConfigBag,
     runtime_components: &RuntimeComponents,
     stop_point: StopPoint,
-    // Set while an attempt is in flight, so that a cancellation from the operation timeout --
-    // which destroys this future -- can still be seen by the caller and settled there.
     attempt_in_flight: &mut bool,
 ) {
     // Before serialization
@@ -374,11 +372,6 @@ async fn try_op(
         let attempt_timeout_config =
             MaybeTimeoutConfig::new(runtime_components, cfg, TimeoutKind::OperationAttempt);
         trace!(attempt_timeout_config = ?attempt_timeout_config);
-        // Set *before* the cancellable scope rather than inside it. `read_before_attempt` is the
-        // first statement in `try_attempt` and runs synchronously, so there is no suspension point
-        // -- and therefore no timeout -- between this line and the attempt formally starting. That
-        // makes the marker over-claim rather than under-claim, which is the safe direction: an
-        // operation timeout can never observe an in-flight attempt that this missed.
         *attempt_in_flight = true;
         let maybe_timeout = async {
             debug!("beginning attempt #{i}");
@@ -401,9 +394,6 @@ async fn try_op(
         finally_attempt(ctx, cfg, runtime_components)
             .instrument(debug_span!("finally_attempt", "attempt" = i))
             .await;
-        // Unlike the `true` above, this position is not load-bearing: `finally_attempt` contains no
-        // `.await`, so clearing the marker on either side of it is equivalent. It only has to happen
-        // before the loop can reach its next suspension point, which is the retry backoff sleep.
         *attempt_in_flight = false;
 
         // If we got a retry strategy from the bag, ask it what to do.

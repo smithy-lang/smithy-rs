@@ -103,3 +103,45 @@ impl Intercept for NoMacro {
 fn without_macro_returns_all() {
     assert_eq!(NoMacro.overridden_hooks(), OverriddenHooks::all());
 }
+
+macro_rules! generate_hook {
+    ($name:ident) => {
+        fn $name(
+            &self,
+            _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+            _runtime_components: &RuntimeComponents,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            Ok(())
+        }
+    };
+}
+
+#[derive(Debug)]
+struct MacroGeneratedHook;
+
+#[dyn_dispatch_hint]
+impl Intercept for MacroGeneratedHook {
+    fn name(&self) -> &'static str {
+        "MacroGeneratedHook"
+    }
+    generate_hook!(modify_before_signing);
+}
+
+/// A hook defined by a declarative macro is *not* detected, so it is never dispatched.
+///
+/// `#[dyn_dispatch_hint]` parses the impl block before declarative macros expand, so the body above
+/// appears as an `ImplItem::Macro` rather than an `ImplItem::Fn`. The hook is implemented but gets
+/// no bit in the mask, and `Interceptors` then skips it -- silently, with no warning.
+///
+/// This test pins that limitation rather than endorsing it. If the macro is ever taught to expand
+/// declarative macros first, this assertion will fail; the fix is to expect
+/// `OverriddenHooks::MODIFY_BEFORE_SIGNING` here and to delete the warning in the attribute's docs.
+#[test]
+fn macro_generated_hook_is_not_detected() {
+    assert_eq!(
+        MacroGeneratedHook.overridden_hooks(),
+        OverriddenHooks::none(),
+        "a macro-generated hook is invisible to the attribute; write hooks longhand"
+    );
+}
