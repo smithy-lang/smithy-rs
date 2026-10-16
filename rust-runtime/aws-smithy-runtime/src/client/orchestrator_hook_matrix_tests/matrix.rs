@@ -4,10 +4,7 @@
  */
 //! The runner and the assertions.
 
-use super::fixtures::{
-    BaseRuntimePlugin, BoundedRetryStrategy, FailThenSucceedConnector, FailingConnector,
-    ScenarioPlugin,
-};
+use super::fixtures::{BaseRuntimePlugin, BoundedRetryStrategy, ScenarioPlugin, ScriptedConnector};
 use super::recorder::{HookLog, PlainRecorder};
 use super::scenarios::Expect::*;
 use super::scenarios::{scenarios, Connector, Scenario, HOOKS};
@@ -44,17 +41,22 @@ async fn run(scenario: &Scenario) -> HookLog {
 
     let mut components = RuntimeComponentsBuilder::new("matrix").with_interceptor(interceptor);
     components = match scenario.connector {
-        Connector::Ok => components,
-        Connector::Fail => {
-            components.with_http_client(Some(http_client_fn(|_, _| FailingConnector.into_shared())))
-        }
-        Connector::FailThenOk => {
+        Connector::Never => components.with_http_client(Some(NeverClient::new())),
+        other => {
+            let failures = match other {
+                Connector::Ok => 0,
+                Connector::FailThenOk => 1,
+                _ => usize::MAX,
+            };
             let calls = Arc::new(AtomicUsize::new(0));
             components.with_http_client(Some(http_client_fn(move |_, _| {
-                FailThenSucceedConnector(calls.clone()).into_shared()
+                ScriptedConnector {
+                    calls: calls.clone(),
+                    failures,
+                }
+                .into_shared()
             })))
         }
-        Connector::Never => components.with_http_client(Some(NeverClient::new())),
     };
     if let Some(retry) = &scenario.retry {
         components =

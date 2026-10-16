@@ -42,37 +42,27 @@ use std::time::Duration;
 // Fixtures
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Default)]
-pub(super) struct OkConnector;
-impl HttpConnector for OkConnector {
+/// Responds 200, except for the first `failures` calls which fail at the transport layer.
+///
+/// `failures: 0` always succeeds, `usize::MAX` always fails, and `1` makes `PerAttempt` and
+/// `PerResponse` diverge on a retry.
+#[derive(Debug)]
+pub(super) struct ScriptedConnector {
+    pub(super) calls: Arc<AtomicUsize>,
+    pub(super) failures: usize,
+}
+
+impl HttpConnector for ScriptedConnector {
     fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+        if self.calls.fetch_add(1, Ordering::SeqCst) < self.failures {
+            return HttpConnectorFuture::ready(Err(ConnectorError::io("connector failed".into())));
+        }
         HttpConnectorFuture::ready(Ok(http_1x::Response::builder()
             .status(200)
             .body(SdkBody::empty())
             .expect("valid response")
             .try_into()
             .unwrap()))
-    }
-}
-
-#[derive(Debug, Default)]
-pub(super) struct FailingConnector;
-impl HttpConnector for FailingConnector {
-    fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
-        HttpConnectorFuture::ready(Err(ConnectorError::io("connector failed".into())))
-    }
-}
-
-/// Fails the first attempt, succeeds afterwards, so that `PerAttempt` and `PerResponse` diverge.
-#[derive(Debug)]
-pub(super) struct FailThenSucceedConnector(pub(super) Arc<AtomicUsize>);
-impl HttpConnector for FailThenSucceedConnector {
-    fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
-        if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
-            HttpConnectorFuture::ready(Err(ConnectorError::io("first attempt failed".into())))
-        } else {
-            OkConnector.call(_request)
-        }
     }
 }
 
@@ -87,25 +77,6 @@ pub(super) struct BoundedRetryStrategy {
     pub(super) max_attempts: u32,
     pub(super) delay: Option<Duration>,
     pub(super) initial_delay: Option<Duration>,
-}
-
-impl BoundedRetryStrategy {
-    pub(super) fn new(max_attempts: u32, delay: Option<Duration>) -> Self {
-        Self {
-            max_attempts,
-            delay,
-            initial_delay: None,
-        }
-    }
-
-    /// Stalls the initial request long enough for an operation timeout to cancel it.
-    pub(super) fn stalling_before_first_attempt(delay: Duration) -> Self {
-        Self {
-            max_attempts: 1,
-            delay: None,
-            initial_delay: Some(delay),
-        }
-    }
 }
 
 impl RetryStrategy for BoundedRetryStrategy {
@@ -150,7 +121,13 @@ impl BaseRuntimePlugin {
             RuntimeComponentsBuilder::for_tests()
                 // Scenarios override these via `ScenarioPlugin` where they need something else.
                 .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
-                .with_http_client(Some(http_client_fn(|_, _| OkConnector.into_shared())))
+                .with_http_client(Some(http_client_fn(|_, _| {
+                    ScriptedConnector {
+                        calls: Arc::new(AtomicUsize::new(0)),
+                        failures: 0,
+                    }
+                    .into_shared()
+                })))
                 .with_endpoint_resolver(Some(SharedEndpointResolver::new(
                     StaticUriEndpointResolver::http_localhost(8080),
                 )))
