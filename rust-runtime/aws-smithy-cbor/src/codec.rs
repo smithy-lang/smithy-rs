@@ -11,7 +11,7 @@ mod deserializer;
 mod serializer;
 
 pub use deserializer::CborDeserializer;
-pub use serializer::CborSerializer;
+pub use serializer::{CborSerializer, StructPrefix};
 
 /// Configuration for CBOR codec behavior.
 #[derive(Debug, Clone)]
