@@ -42,7 +42,7 @@
 //! values cached on it are discarded with each copy. Declare schemas as `static`s.
 //!
 //! Nothing is allocated until a schema is first asked for an extension. That
-//! allocates room for four values, and each cached value is boxed. The cache is
+//! allocates room for eight values, and each cached value is boxed. The cache is
 //! freed when the schema is dropped, so a schema built from a model at runtime
 //! does not leak its cached values.
 //!
@@ -139,9 +139,16 @@ impl<T> fmt::Debug for SchemaExtensionKey<T> {
     }
 }
 
-/// Number of value cells per chunk. A process normally uses one or two codecs, each
-/// with one or two keys, so the first chunk is the only one most schemas allocate.
-const CHUNK_LEN: usize = 4;
+/// Number of value cells per chunk.
+///
+/// Slots are assigned per process in order of first use, so a key that lands past the
+/// first chunk costs every schema that reads it a second chunk and an extra dependent
+/// load on each lookup. The first chunk should therefore hold every key the runtime
+/// crates declare: today the `@httpHeader` name in this crate, the JSON member keys,
+/// the XML list and map names, and the awsQuery collection names, which a process
+/// using restXml, a JSON protocol and awsQuery clients together uses all at once.
+/// Raise this when adding keys; the cost is paid only by schemas that read an extension.
+const CHUNK_LEN: usize = 8;
 
 type ExtensionCell = OnceLock<Box<dyn Any + Send + Sync>>;
 
@@ -309,6 +316,14 @@ mod tests {
         assert_eq!(*S.extension(&KEY), 7);
         assert_eq!(*S.extension(&KEY), 7);
         assert_eq!(ATTEMPTS.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn chunk_size() {
+        // Eight 24-byte cells and the 16-byte link: the heap cost of the first extension
+        // a schema reads.
+        assert_eq!(std::mem::size_of::<super::Chunk>(), 208);
     }
 
     #[test]
