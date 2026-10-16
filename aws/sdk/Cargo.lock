@@ -1615,7 +1615,6 @@ dependencies = [
  "hyper 0.14.32",
  "itoa",
  "lazy_static",
- "num-integer",
  "pin-project-lite",
  "proptest",
  "rand 0.8.8",
