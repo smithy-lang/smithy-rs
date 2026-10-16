@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{Body, RequestBody};
+use super::super::{Body, RequestBody};
 use bytes::Bytes;
 use http_body::{Body as _, Frame, SizeHint};
 use http_body_util::{BodyExt, Full, StreamBody};
