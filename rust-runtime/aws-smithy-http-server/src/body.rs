@@ -9,13 +9,17 @@
 //! `http-body` and `http-body-util` crates.
 
 use crate::error::{BoxError, Error};
-use bytes::{Buf, BufMut, Bytes};
-use std::fmt;
-use std::num::NonZeroUsize;
+use bytes::Bytes;
 
-// Used in the codegen in trait bounds.
+/// Internal helpers used by generated server code.
+///
+/// Public so generated code can access them. No public API stability or semver guarantees.
 #[doc(hidden)]
-pub use http_body::Body as HttpBody;
+pub mod __private;
+
+// Compatibility aliases for previously generated crates; new code uses __private.
+#[doc(hidden)]
+pub use __private::{collect_body, CollectBodyError, CollectionConfig, HttpBody};
 
 // ============================================================================
 // BoxBody - Type-Erased Body
@@ -40,6 +44,9 @@ pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 /// `Buffered` state after collecting for a body-first protocol. Other compatible HTTP bodies
 /// enter through [`RequestBody::new`], which erases them into a boxed state.
 ///
+/// [`RequestBody::prefixed`] replays bytes already read ahead of the remaining body. This allows
+/// middleware to inspect a prefix, then forward the full request without collecting the rest.
+///
 /// The states are private so buffering and transport-specific optimizations can evolve.
 ///
 /// `RequestBody` is `Send` and `Sync`, so it can be handed to [`SdkBody::from_body_1_x`]
@@ -58,10 +65,12 @@ enum BodyInner {
     Hyper(hyper::body::Incoming),
     /// An erased body from a non-transport source. May have been partially polled.
     Boxed(BoxBodySync),
-    /// Content held in memory, replayed as a data frame then an optional trailers frame.
+    /// Buffered bytes, followed by an optional unread tail and any already-captured trailers.
     Buffered {
         bytes: Option<Bytes>,
         trailers: Option<http::HeaderMap>,
+        // None means complete collection. A tail remains until polling it returns Ready(None).
+        tail: Option<Box<RequestBody>>,
     },
 }
 
@@ -85,14 +94,35 @@ impl RequestBody {
         Self(BodyInner::Buffered {
             bytes: Some(bytes),
             trailers,
+            tail: None,
         })
     }
 
-    // Only unpolled buffered bodies qualify. Polling or wrapping consumes this representation.
+    /// Replays bytes already read from a request ahead of its remaining body.
+    ///
+    /// Include all consumed data in `prefix` so downstream readers receive the full request.
+    /// Construction does not poll or erase `tail`. An empty prefix with no captured trailers
+    /// returns `tail` unchanged.
+    ///
+    /// Pass `None` for `trailers` when only data has been read: unread trailers arrive from
+    /// `tail` normally. If trailer frames were already read, pass them here to replay them
+    /// after `tail` reaches end-of-stream.
+    pub fn prefixed(prefix: Bytes, trailers: Option<http::HeaderMap>, tail: Self) -> Self {
+        if prefix.is_empty() && trailers.is_none() {
+            return tail;
+        }
+        Self(BodyInner::Buffered {
+            bytes: Some(prefix).filter(|bytes| !bytes.is_empty()),
+            trailers,
+            tail: Some(Box::new(tail)),
+        })
+    }
+
+    // Only unpolled, completely buffered bodies qualify for complete-content reuse.
     pub(crate) fn buffered_content(&self) -> Option<&Bytes> {
         match &self.0 {
-            BodyInner::Buffered { bytes, .. } => bytes.as_ref(),
-            BodyInner::Hyper(_) | BodyInner::Boxed(_) => None,
+            BodyInner::Buffered { bytes, tail: None, .. } => bytes.as_ref(),
+            _ => None,
         }
     }
 
@@ -101,15 +131,13 @@ impl RequestBody {
         Self(BodyInner::Buffered {
             bytes: None,
             trailers: None,
+            tail: None,
         })
     }
 
     /// Creates a request body containing buffered bytes.
     pub fn from_bytes(bytes: Bytes) -> Self {
-        Self(BodyInner::Buffered {
-            bytes: Some(bytes),
-            trailers: None,
-        })
+        Self::buffered(bytes, None)
     }
 }
 
@@ -171,14 +199,18 @@ impl http_body::Body for RequestBody {
                 .poll_frame(cx)
                 .map(|frame| frame.map(|result| result.map_err(Error::new))),
             BodyInner::Boxed(body) => std::pin::Pin::new(body).poll_frame(cx),
-            BodyInner::Buffered { bytes, trailers } => std::task::Poll::Ready(
-                bytes
-                    .take()
-                    .filter(|bytes| !bytes.is_empty())
-                    .map(http_body::Frame::data)
-                    .or_else(|| trailers.take().map(http_body::Frame::trailers))
-                    .map(Ok),
-            ),
+            BodyInner::Buffered { bytes, trailers, tail } => {
+                if let Some(bytes) = bytes.take().filter(|bytes| !bytes.is_empty()) {
+                    return std::task::Poll::Ready(Some(Ok(http_body::Frame::data(bytes))));
+                }
+                if let Some(remaining) = tail {
+                    match std::pin::Pin::new(remaining.as_mut()).poll_frame(cx) {
+                        std::task::Poll::Ready(None) => *tail = None,
+                        other => return other,
+                    }
+                }
+                std::task::Poll::Ready(trailers.take().map(http_body::Frame::trailers).map(Ok))
+            }
         }
     }
 
@@ -186,8 +218,10 @@ impl http_body::Body for RequestBody {
         match &self.0 {
             BodyInner::Hyper(body) => body.is_end_stream(),
             BodyInner::Boxed(body) => body.is_end_stream(),
-            BodyInner::Buffered { bytes, trailers } => {
-                bytes.as_ref().is_none_or(|bytes| bytes.is_empty()) && trailers.is_none()
+            BodyInner::Buffered { bytes, trailers, tail } => {
+                bytes.as_ref().is_none_or(|bytes| bytes.is_empty())
+                    && tail.as_ref().is_none_or(|tail| tail.is_end_stream())
+                    && trailers.is_none()
             }
         }
     }
@@ -195,8 +229,17 @@ impl http_body::Body for RequestBody {
         match &self.0 {
             BodyInner::Hyper(body) => body.size_hint(),
             BodyInner::Boxed(body) => body.size_hint(),
-            BodyInner::Buffered { bytes, .. } => {
-                http_body::SizeHint::with_exact(bytes.as_ref().map_or(0, |bytes| bytes.len() as u64))
+            BodyInner::Buffered { bytes, tail, .. } => {
+                let prefix = bytes.as_ref().map_or(0, |bytes| bytes.len() as u64);
+                let remaining = tail
+                    .as_ref()
+                    .map_or_else(|| http_body::SizeHint::with_exact(0), |tail| tail.size_hint());
+                let mut hint = http_body::SizeHint::new();
+                hint.set_lower(prefix.saturating_add(remaining.lower()));
+                if let Some(upper) = remaining.upper().and_then(|upper| prefix.checked_add(upper)) {
+                    hint.set_upper(upper);
+                }
+                hint
             }
         }
     }
@@ -228,8 +271,23 @@ where
     body.map_err(Error::new).boxed()
 }
 
-#[doc(hidden)]
-pub(crate) fn try_downcast<T, K>(k: K) -> Result<T, K>
+/// Convert bytes or similar types into a [`BoxBody`].
+pub fn to_boxed<B>(body: B) -> BoxBody
+where
+    B: Into<Bytes>,
+{
+    boxed(http_body_util::Full::new(body.into()))
+}
+
+/// Convert bytes or similar types into a [`BoxBodySync`].
+pub fn to_boxed_sync<B>(body: B) -> BoxBodySync
+where
+    B: Into<Bytes>,
+{
+    boxed_sync(http_body_util::Full::new(body.into()))
+}
+
+fn try_downcast<T, K>(k: K) -> Result<T, K>
 where
     T: 'static,
     K: Send + 'static,
@@ -252,284 +310,9 @@ pub fn empty_sync() -> BoxBodySync {
     boxed_sync(http_body_util::Empty::<Bytes>::new())
 }
 
-/// Convert bytes or similar types into a [`BoxBody`].
-///
-/// This simplifies codegen a little bit.
-#[doc(hidden)]
-pub fn to_boxed<B>(body: B) -> BoxBody
-where
-    B: Into<Bytes>,
-{
-    boxed(http_body_util::Full::new(body.into()))
-}
-
-/// Convert bytes or similar types into a [`BoxBodySync`].
-///
-/// This simplifies codegen a little bit.
-#[doc(hidden)]
-pub fn to_boxed_sync<B>(body: B) -> BoxBodySync
-where
-    B: Into<Bytes>,
-{
-    boxed_sync(http_body_util::Full::new(body.into()))
-}
-
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
     boxed(http_body_util::Full::new(bytes))
-}
-
-// ============================================================================
-// Size-limited Body Collection
-// ============================================================================
-
-/// An error produced by [`collect_body_limited`] when the body exceeds the configured limit.
-///
-/// This is intentionally a simple struct so it can be downcast via
-/// `Box<dyn std::error::Error>` from code that processes the error chain.
-#[doc(hidden)]
-#[derive(Debug, Clone, Copy)]
-pub struct BodyLimitExceeded {
-    /// The configured maximum, in bytes.
-    pub limit: usize,
-}
-
-impl fmt::Display for BodyLimitExceeded {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "request body exceeded the configured maximum of {} bytes",
-            self.limit
-        )
-    }
-}
-
-impl std::error::Error for BodyLimitExceeded {}
-
-/// The error returned by [`collect_body_limited`].
-///
-/// Either the underlying body produced an error, or the configured size limit was
-/// exceeded. The generic over `E` lets the helper work with body error types that
-/// are `Send` but not `Sync` (the generated-server code carries only a `Send` bound),
-/// while still letting callers `?` the result into a `RequestRejection`.
-#[doc(hidden)]
-#[derive(Debug)]
-pub enum CollectBodyError<E> {
-    /// The underlying body produced an error while being read.
-    Body(E),
-    /// The body exceeded the configured maximum size.
-    TooLarge(BodyLimitExceeded),
-}
-
-impl<E: fmt::Display> fmt::Display for CollectBodyError<E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Body(e) => write!(f, "error reading request body: {e}"),
-            Self::TooLarge(e) => e.fmt(f),
-        }
-    }
-}
-
-impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Body(e) => Some(e),
-            Self::TooLarge(e) => Some(e),
-        }
-    }
-}
-
-/// Collect an HTTP body into a [`Bytes`] buffer, enforcing a maximum size.
-///
-/// If the body produces more than `limit` bytes (including via
-/// `Transfer-Encoding: chunked` or a mismatched `Content-Length`), the function
-/// returns an error *before* buffering additional data.
-///
-/// Passing `limit == 0` disables the check and collects the entire body (the
-/// historical behavior, *not* recommended — see the security notes on the
-/// `customizationConfig.protocols.common.requestBodyMaxBytes` setting).
-/// Collection yields after 32 ready frame polls, including empty frames and trailers.
-#[doc(hidden)]
-pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
-where
-    B: HttpBody,
-{
-    collect_body_limited_with_frame_budget(body, limit, DEFAULT_CHUNK_BUDGET).await
-}
-
-/// Default number of consecutive ready body polls before collection or streaming yields.
-pub(crate) const DEFAULT_CHUNK_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
-
-/// Collect a body with a byte limit and a positive budget of ready frame polls.
-///
-/// Empty data frames and trailers count toward the budget. A pending body poll resets
-/// the budget. When the budget is exhausted, collection yields and wakes itself to
-/// schedule another poll. Passing `limit == 0` disables the byte limit.
-#[doc(hidden)]
-pub async fn collect_body_limited_with_frame_budget<B>(
-    body: B,
-    limit: usize,
-    frame_budget: NonZeroUsize,
-) -> Result<Bytes, CollectBodyError<B::Error>>
-where
-    B: HttpBody,
-{
-    collect_body_limited_with_trailers(body, limit, frame_budget)
-        .await
-        .map(|(bytes, _)| bytes)
-}
-
-/// Collect a complete body, retaining trailers for callers that replay it.
-pub(crate) async fn collect_body_limited_with_trailers<B>(
-    body: B,
-    limit: usize,
-    frame_budget: NonZeroUsize,
-) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
-where
-    B: HttpBody,
-{
-    // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
-    // don't require `B::Error: Send + Sync + 'static`. The generated server
-    // deserializer only carries a `Send` bound on body errors.
-    let lower = body.size_hint().lower();
-    if limit != 0 && lower > limit as u64 {
-        tracing::trace!(limit, size_hint_lower = lower, "request body limit exceeded");
-        return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
-    }
-
-    let mut body = std::pin::pin!(body);
-    // A size hint may come from an untrusted Content-Length. Reserve at most 32 KiB
-    // upfront; larger buffers grow only as data arrives, subject to the total-body limit.
-    const MAX_INITIAL_CAPACITY: u64 = 32 * 1024;
-    let mut collected = bytes::BytesMut::with_capacity(lower.min(MAX_INITIAL_CAPACITY) as usize);
-    let mut trailers = None;
-    let max_ready_frames = frame_budget.get();
-    let mut frame_budget = max_ready_frames;
-    loop {
-        let next_frame = std::future::poll_fn(|cx| {
-            // Always-ready streams must yield so other tasks and read timeouts can run.
-            if frame_budget == 0 {
-                frame_budget = max_ready_frames;
-                cx.waker().wake_by_ref();
-                return std::task::Poll::Pending;
-            }
-
-            frame_budget -= 1;
-            let result = body.as_mut().poll_frame(cx);
-
-            // Frames are yielding, we can reset the budget.
-            if result.is_pending() {
-                frame_budget = max_ready_frames;
-            }
-            result
-        })
-        .await;
-
-        // None means the body has ended.
-        let Some(frame) = next_frame else {
-            break;
-        };
-
-        // Propagate an error from the underlying body.
-        let frame = frame.map_err(CollectBodyError::Body)?;
-
-        match frame.into_data() {
-            Ok(data) => {
-                let data_len = data.remaining();
-                if limit != 0 && collected.len().saturating_add(data_len) > limit {
-                    tracing::trace!(
-                        limit,
-                        buffered_bytes = collected.len(),
-                        frame_bytes = data_len,
-                        "request body limit exceeded"
-                    );
-                    return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
-                }
-                collected.put(data);
-            }
-            Err(frame) => {
-                if let Ok(headers) = frame.into_trailers() {
-                    trailers.get_or_insert_with(http::HeaderMap::new).extend(headers);
-                }
-            }
-        }
-    }
-
-    Ok((collected.freeze(), trailers))
-}
-
-// ============================================================================
-// Streaming Request Body Budget
-// ============================================================================
-
-/// Default number of consecutive ready body polls before a streaming request yields.
-#[doc(hidden)]
-pub const DEFAULT_STREAMING_CHUNK_BUDGET: NonZeroUsize = DEFAULT_CHUNK_BUDGET;
-
-pin_project_lite::pin_project! {
-    /// An HTTP body that yields after a bounded number of consecutive ready polls.
-    ///
-    /// Frames, errors, end-of-stream state, and size hints are forwarded from the inner body.
-    #[doc(hidden)]
-    #[derive(Debug)]
-    pub struct BudgetedBody<B> {
-        #[pin]
-        inner: B,
-        chunk_budget: NonZeroUsize,
-        remaining: usize,
-    }
-}
-
-/// Wraps a streaming request body with the default 32-poll budget.
-#[doc(hidden)]
-pub fn wrap_streaming_body<B: HttpBody>(body: B) -> BudgetedBody<B> {
-    wrap_streaming_body_with_chunk_budget(body, DEFAULT_STREAMING_CHUNK_BUDGET)
-}
-
-/// Wraps a streaming request body with a positive budget of consecutive ready polls.
-///
-/// Empty data frames and trailers count toward the budget. An underlying pending poll
-/// resets it. Exhausting the budget yields without polling the inner body and wakes the
-/// task to resume. This bounds work between yields, not the stream's total bytes or duration.
-#[doc(hidden)]
-pub fn wrap_streaming_body_with_chunk_budget<B: HttpBody>(body: B, chunk_budget: NonZeroUsize) -> BudgetedBody<B> {
-    BudgetedBody {
-        inner: body,
-        chunk_budget,
-        remaining: chunk_budget.get(),
-    }
-}
-
-impl<B: HttpBody> HttpBody for BudgetedBody<B> {
-    type Data = B::Data;
-    type Error = B::Error;
-
-    fn poll_frame(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
-        let this = self.project();
-        if *this.remaining == 0 {
-            *this.remaining = this.chunk_budget.get();
-            cx.waker().wake_by_ref();
-            return std::task::Poll::Pending;
-        }
-
-        *this.remaining -= 1;
-        let result = this.inner.poll_frame(cx);
-        if result.is_pending() {
-            *this.remaining = this.chunk_budget.get();
-        }
-        result
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
-    }
-
-    fn size_hint(&self) -> http_body::SizeHint {
-        self.inner.size_hint()
-    }
 }
 
 // ============================================================================
@@ -589,8 +372,16 @@ where
 }
 
 #[cfg(test)]
+mod downcast_tests;
+
+#[cfg(test)]
+mod partial_buffer_tests;
+
+#[cfg(test)]
 mod tests {
+    use super::__private::*;
     use super::*;
+    use std::num::NonZeroUsize;
 
     #[tokio::test]
     async fn request_body_preserves_buffered_bytes_and_trailers() {
@@ -648,6 +439,24 @@ mod tests {
     }
 
     #[test]
+    fn collection_errors_preserve_messages_and_sources() {
+        use std::error::Error as _;
+
+        let transport = CollectBodyError::Body(std::io::Error::other("transport failure"));
+        assert_eq!(transport.to_string(), "error reading request body: transport failure");
+        assert!(transport.source().unwrap().downcast_ref::<std::io::Error>().is_some());
+
+        let limit = NonZeroUsize::new(1024).unwrap();
+        let exceeded: CollectBodyError<std::io::Error> = CollectBodyError::BodyLimitExceeded(limit);
+        assert_eq!(
+            exceeded.to_string(),
+            "request body exceeded the configured maximum of 1024 bytes"
+        );
+        assert!(exceeded.source().is_none());
+        assert!(matches!(exceeded, CollectBodyError::BodyLimitExceeded(actual) if actual == limit));
+    }
+
+    #[test]
     fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
         use std::future::Future;
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -676,15 +485,21 @@ mod tests {
                 });
                 let body = http_body_util::StreamBody::new(frames);
                 let mut future = Box::pin(async move {
-                    match budget {
-                        Some(budget) => collect_body_limited_with_frame_budget(body, limit, budget).await,
-                        None => collect_body_limited(body, limit).await,
-                    }
+                    collect_body(
+                        body,
+                        Some(
+                            CollectionConfig::builder()
+                                .maybe_limit(NonZeroUsize::new(limit))
+                                .frame_budget(budget.unwrap_or(DEFAULT_FRAME_BUDGET))
+                                .build(),
+                        ),
+                    )
+                    .await
                 });
                 let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
                 let waker = Waker::from(wakes.clone());
                 let mut cx = Context::from_waker(&waker);
-                let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(DEFAULT_CHUNK_BUDGET.get());
+                let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(DEFAULT_FRAME_BUDGET.get());
                 let mut yields = 0;
                 loop {
                     match future.as_mut().poll(&mut cx) {
@@ -727,10 +542,13 @@ mod tests {
             }
         });
         let body = http_body_util::StreamBody::new(frames);
-        let mut future = Box::pin(collect_body_limited_with_frame_budget(
+        let mut future = Box::pin(collect_body(
             body,
-            0,
-            NonZeroUsize::new(3).unwrap(),
+            Some(
+                CollectionConfig::builder()
+                    .frame_budget(NonZeroUsize::new(3).unwrap())
+                    .build(),
+            ),
         ));
         let mut cx = Context::from_waker(std::task::Waker::noop());
         assert!(future.as_mut().poll(&mut cx).is_pending());
@@ -1158,9 +976,16 @@ mod tests {
                 Ok(http_body::Frame::trailers(trailers.clone())),
             ];
             let body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
-            let (bytes, actual_trailers) = collect_body_limited_with_trailers(body, limit, DEFAULT_CHUNK_BUDGET)
-                .await
-                .unwrap();
+            let (bytes, actual_trailers) = collect_body_with_trailers(
+                body,
+                Some(
+                    CollectionConfig::builder()
+                        .maybe_limit(NonZeroUsize::new(limit))
+                        .build(),
+                ),
+            )
+            .await
+            .unwrap();
             assert_eq!(bytes, "payload");
             assert_eq!(actual_trailers, Some(trailers));
         }
@@ -1199,7 +1024,15 @@ mod tests {
                 polled: &mut polled,
             };
             assert!(matches!(
-                collect_body_limited(body, limit).await,
+                collect_body(
+                    body,
+                    Some(
+                        CollectionConfig::builder()
+                            .maybe_limit(NonZeroUsize::new(limit))
+                            .build()
+                    )
+                )
+                .await,
                 Err(CollectBodyError::Body(_))
             ));
             assert!(polled);
@@ -1212,8 +1045,8 @@ mod tests {
             polled: &mut polled,
         };
         assert!(matches!(
-            collect_body_limited(body, 1024).await,
-            Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit: 1024 }))
+            collect_body(body, Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(1024)).build())).await,
+            Err(CollectBodyError::BodyLimitExceeded(limit)) if limit.get() == 1024
         ));
         assert!(!polled);
     }
@@ -1223,24 +1056,44 @@ mod tests {
         let bytes = Bytes::from(vec![b'x'; 16 * 1024]);
         for limit in [0, bytes.len()] {
             let body = http_body_util::Full::new(bytes.clone());
-            assert_eq!(collect_body_limited(body, limit).await.unwrap(), bytes);
+            assert_eq!(
+                collect_body(
+                    body,
+                    Some(
+                        CollectionConfig::builder()
+                            .maybe_limit(NonZeroUsize::new(limit))
+                            .build()
+                    )
+                )
+                .await
+                .unwrap(),
+                bytes
+            );
         }
     }
 
     #[tokio::test]
     async fn test_collect_body_limited_under_limit() {
         let body = from_bytes(Bytes::from("hello"));
-        let result = collect_body_limited(body, 1024).await;
+        let result = collect_body(
+            body,
+            Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(1024)).build()),
+        )
+        .await;
         assert_eq!(result.unwrap(), Bytes::from("hello"));
     }
 
     #[tokio::test]
     async fn test_collect_body_limited_over_limit() {
         let body = from_bytes(Bytes::from("this is way too long"));
-        let result = collect_body_limited(body, 5).await;
+        let result = collect_body(
+            body,
+            Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(5)).build()),
+        )
+        .await;
         assert!(matches!(
             result,
-            Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit: 5 }))
+            Err(CollectBodyError::BodyLimitExceeded(limit)) if limit.get() == 5
         ));
     }
 
@@ -1254,14 +1107,22 @@ mod tests {
             Ok(http_body::Frame::data(Bytes::from("bbbb"))),                      // +4 = 8, over limit of 6
         ];
         let body = http_body_util::StreamBody::new(stream::iter(chunks));
-        let result = collect_body_limited(body, 6).await;
-        assert!(matches!(result, Err(CollectBodyError::TooLarge(_))));
+        let result = collect_body(
+            body,
+            Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(6)).build()),
+        )
+        .await;
+        assert!(matches!(result, Err(CollectBodyError::BodyLimitExceeded(_))));
     }
 
     #[tokio::test]
     async fn test_collect_body_limited_empty_body() {
         let body = empty();
-        let result = collect_body_limited(body, 100).await;
+        let result = collect_body(
+            body,
+            Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(100)).build()),
+        )
+        .await;
         assert_eq!(result.unwrap(), Bytes::from(""));
     }
 }
