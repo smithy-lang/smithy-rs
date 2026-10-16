@@ -69,6 +69,10 @@ do
             cargo nextest run --no-tests=pass -p aws-smithy-runtime --lib \
                 --no-default-features \
                 --features client,connector-hyper-0-14-x,default-https-client
+
+            echo -e "## ${C_YELLOW}Running 'cargo nextest run' on aws-smithy-http-server-metrics in each server mode...${C_RESET}"
+            cargo nextest run --no-tests=pass -p aws-smithy-http-server-metrics
+            cargo nextest run --no-tests=pass -p aws-smithy-http-server-metrics --features aws-smithy-http-server-065
         fi
 
         echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
