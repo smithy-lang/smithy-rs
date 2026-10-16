@@ -17,6 +17,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.utils.SmithyBuilder
@@ -37,6 +38,11 @@ object ServerProtocolBasedTransformationFactory {
         settings: ServerRustSettings,
     ): Model {
         val service = settings.getService(model)
+        // The schema path serves every declared protocol from one model, so it keeps the HTTP binding
+        // traits REST protocols need; rpcv2Cbor ignores them at runtime.
+        if (settings.codegenConfig.schemaSerde && settings.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            return model
+        }
         if (!service.hasTrait<Rpcv2CborTrait>()) {
             return model
         }

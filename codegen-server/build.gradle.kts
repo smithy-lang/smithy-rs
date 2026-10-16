@@ -31,3 +31,23 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
 }
+
+val generateServerCodegenVersion by tasks.registering {
+    val codegenVersion = project.version.toString()
+    val versionFile = layout.buildDirectory.file("generated/resources/server-codegen-version.txt")
+    inputs.property("codegenVersion", codegenVersion)
+    outputs.file(versionFile)
+    doLast {
+        val file = versionFile.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(codegenVersion)
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(layout.buildDirectory.dir("generated/resources"))
+}
+
+tasks.processResources {
+    dependsOn(generateServerCodegenVersion)
+}

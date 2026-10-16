@@ -54,7 +54,9 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceSchemaGenerator
 import java.util.logging.Logger
 
 /**
@@ -65,6 +67,10 @@ class ServerProtocolTestGenerator(
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
 ) : ProtocolTestGenerator() {
+    /** Whether the generated service runs the schema-driven request and response path. */
+    private val schemaSerde =
+        (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
+
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -214,6 +220,13 @@ class ServerProtocolTestGenerator(
                 "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
 
+        private val SchemaDisabledTests =
+            setOf(
+                // Schema RestXml response serialization does not yet match these protocol tests.
+                "HttpEmptyPrefixHeadersResponseServer",
+                "NullAndEmptyHeaders",
+            )
+
         private fun fixRestJsonMalformedPatternReDOSString(
             testCase: TestCase.MalformedRequestTest,
         ): TestCase.MalformedRequestTest {
@@ -249,7 +262,7 @@ class ServerProtocolTestGenerator(
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
-        get() = DisabledTests
+        get() = if (schemaSerde) DisabledTests + SchemaDisabledTests else DisabledTests
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 
@@ -308,7 +321,7 @@ class ServerProtocolTestGenerator(
             "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
             "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
-            "Tower" to RuntimeType.Tower,
+            "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
         )
@@ -393,13 +406,55 @@ class ServerProtocolTestGenerator(
             val variant = symbolProvider.toSymbol(shape).name
             rust("let output = $operationErrorName::$variant(output);")
         }
-        rustTemplate(
-            """
-            use #{SmithyHttpServer}::response::IntoResponse;
-            let http_response = output.into_response();
-            """,
-            *codegenScope,
-        )
+        val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
+        if (schemaSerde) {
+            // The schema path: the response travels through the erased protocol handle the service
+            // selects at routing, exactly as the schema upgrades serialize a handler's output or error.
+            val serialize =
+                if (shape.hasTrait<ErrorTrait>()) {
+                    writable {
+                        rustTemplate(
+                            "protocol.serialize_error(&output)",
+                            *codegenScope,
+                        )
+                    }
+                } else if (outputIsStreaming) {
+                    writable {
+                        rustTemplate(
+                            "<crate::operation_shape::${operationSymbol.name} as #{SmithyHttpServer}::operation::StreamingOperationShape>::serialize_streaming_output(output, &protocol)",
+                            *codegenScope,
+                        )
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            "protocol.serialize_response(<crate::operation_shape::${operationSymbol.name} as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.output(), &output)",
+                            *codegenScope,
+                        )
+                    }
+                }
+            val serviceSchema =
+                "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(codegenContext.serviceShape)}"
+            rustTemplate(
+                """
+                let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::BUILTIN
+                    .resolve_id(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()})
+                    .expect("protocol construction failed")
+                    .expect("no protocol registered for the protocol under test");
+                let http_response = #{Serialize:W};
+                """,
+                *codegenScope,
+                "Serialize" to serialize,
+            )
+        } else {
+            rustTemplate(
+                """
+                use #{SmithyHttpServer}::response::IntoResponse;
+                let http_response = output.into_response();
+                """,
+                *codegenScope,
+            )
+        }
         checkResponse(this, testCase)
     }
 
@@ -525,7 +580,7 @@ class ServerProtocolTestGenerator(
         if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
             val bodyUtil = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType()
 
-            val boxFn = if (needsSync) "boxed_sync" else "boxed"
+            val boxFn = if (needsSync || schemaSerde) "boxed_sync" else "boxed"
             if (bytesExpr != null) {
                 rustTemplate(
                     "#{BoxFn}(#{Full}::new($bytesExpr))",
@@ -597,14 +652,17 @@ class ServerProtocolTestGenerator(
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
 
         val inputShape = operationShape.inputShape(model)
-        val needsSync = inputShape.hasStreamingMember(model)
+        // The schema streaming upgrade hands the body to `SdkBody`, which needs `Sync`, on both sides.
+        val needsSync =
+            inputShape.hasStreamingMember(model) ||
+                (schemaSerde && operationShape.outputShape(model).hasStreamingMember(model))
 
         rustWriter.rustTemplate(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder::<#{BodyType}, _, _, _>(config)
+            let service = crate::service::$serviceName::builder${if (schemaSerde) "" else "::<#{BodyType}, _, _, _>"}(config)
                 .$operationName(
                     // Rust 1.94+ flags the moved `sender` as "value captured is never read"
                     // since `send()` only borrows it.

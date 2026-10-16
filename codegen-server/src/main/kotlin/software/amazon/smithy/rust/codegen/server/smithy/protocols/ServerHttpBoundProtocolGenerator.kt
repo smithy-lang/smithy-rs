@@ -808,9 +808,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // `400 Bad Request` (plus the server drops the connection).
             //
             // Services that legitimately need to accept larger payloads can raise the limit via
-            // the `requestBodyMaxBytes` codegen setting. Setting it to `0` disables the check
-            // entirely (not recommended).
-            val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+            // `customizationConfig.protocols.global.requestBodyMaxBytes`. Setting it to `0`
+            // disables the check entirely (not recommended).
+            val requestBodyMaxBytes = codegenContext.settings.requestBodyMaxBytes()
             if (requestBodyMaxBytes > 0L) {
                 rustTemplate(
                     """
@@ -1072,7 +1072,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         // Generate body collection code. See the long comment in
                         // `serverRenderShapeParser` for why we wrap the body in a size-limited
                         // reader (same reasoning applies here).
-                        val payloadRequestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+                        val payloadRequestBodyMaxBytes = codegenContext.settings.requestBodyMaxBytes()
                         if (payloadRequestBodyMaxBytes > 0L) {
                             rustTemplate(
                                 """

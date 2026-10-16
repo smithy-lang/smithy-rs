@@ -6,10 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
-import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -17,6 +18,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class RequestBodyMaxBytesTest {
+    private fun requestBodyMaxBytes(maxBytes: Long): ObjectNode =
+        Node.parse(
+            """{"customizationConfig": {"protocols": {"global": {"requestBodyMaxBytes": $maxBytes}}}}""",
+        ).expectObjectNode()
+
     private val model =
         """
         ${'$'}version: "2.0"
@@ -73,10 +79,7 @@ internal class RequestBodyMaxBytesTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings =
-                    ServerAdditionalSettings.builder()
-                        .requestBodyMaxBytes(1024)
-                        .toObjectNode(),
+                additionalSettings = requestBodyMaxBytes(1024),
             ),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {
@@ -111,10 +114,7 @@ internal class RequestBodyMaxBytesTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings =
-                    ServerAdditionalSettings.builder()
-                        .requestBodyMaxBytes(16)
-                        .toObjectNode(),
+                additionalSettings = requestBodyMaxBytes(16),
             ),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {
@@ -149,10 +149,7 @@ internal class RequestBodyMaxBytesTest {
         serverIntegrationTest(
             httpPayloadModel,
             IntegrationTestParams(
-                additionalSettings =
-                    ServerAdditionalSettings.builder()
-                        .requestBodyMaxBytes(16)
-                        .toObjectNode(),
+                additionalSettings = requestBodyMaxBytes(16),
             ),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {

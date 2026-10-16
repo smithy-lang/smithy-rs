@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
@@ -26,7 +27,17 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
-    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    private val legacyTower = CargoDependency.Tower.withFeature("util")
+    private val schemaTower = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
+
+    /**
+     * Legacy HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
+     * Enable utilities explicitly: the HTTP 1.x runtime no longer enables Tower 0.4's utilities
+     * transitively, and generated protocol tests and service examples use them.
+     */
+    fun tower(codegenContext: CodegenContext): CargoDependency =
+        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) schemaTower else legacyTower
+
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
