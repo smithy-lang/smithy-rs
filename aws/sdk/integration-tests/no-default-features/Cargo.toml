@@ -14,8 +14,12 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
-aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false }
-aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
+# `rustcrypto` has to be named even here, where the point of the test is to drop the defaults: the
+# crypto backend is an optional dependency now, so a build naming no backend reports "requires a
+# crypto backend" instead of compiling. Naming it keeps this test exercising what it is for -- that
+# everything *else* works with default features off.
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = ["rustcrypto"] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false, features = ["rustcrypto"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }

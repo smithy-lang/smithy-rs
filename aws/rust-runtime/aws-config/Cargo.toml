@@ -15,7 +15,13 @@ rust-version = "1.94.1"
 [features]
 behavior-version-latest = []
 credentials-process = ["tokio/process"]
-default = ["default-https-client", "rt-tokio", "credentials-process", "sso"]
+default = ["default-https-client", "rt-tokio", "credentials-process", "sso", "rustcrypto"]
+# Forwards the RustCrypto signing backend through `aws-runtime` to `aws-sigv4`. Declared here, and in
+# `default`, because this crate declares `aws-runtime` with `default-features = false` -- without this
+# a consumer of this crate would get an `aws-sigv4` with no crypto backend. A FIPS consumer disables
+# the default features and names `aws-lc-fips` instead, which is what makes the FIPS arm substitute
+# for RustCrypto rather than stack on top of it.
+rustcrypto = ["aws-runtime/rustcrypto"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 # NOTE: `client-hyper` and `rustls` were proxies for enabling the default HTTP client plugin of `aws-smithy-runtime`
 # there is no direct usage otherwise on hyper or rustls in this crate. These are superceded by the more appropriately
@@ -39,6 +45,28 @@ credentials-login = [
     "p256?/pem",
     "dep:rand",
 ]
+# Route the SDK's cryptography through the FIPS 140-3 validated build of AWS-LC, in one place,
+# for applications that configure through this crate: TLS for the default HTTPS client, and
+# SigV4/SigV4a request signing. Request checksums are reached from the generated service crates
+# instead, since `aws-smithy-checksums` is not a dependency of this crate.
+#
+# Named for the module it selects rather than `fips`, to keep it distinct from `use_fips` /
+# `AWS_USE_FIPS_ENDPOINT`, which select a FIPS-compliant *endpoint* and say nothing about which
+# implementation performs the cryptography.
+#
+# The TLS half reaches the hyper 1.x client only. A `BehaviorVersion` older than v2026_01_12
+# selects the legacy client instead, whose TLS is rustls 0.21 on `ring`, leaving FIPS signing over
+# non-FIPS TLS; `aws-smithy-runtime` logs a warning for that combination. An HTTP client installed
+# explicitly is likewise untouched -- see `aws-smithy-runtime`'s `aws-lc-fips` feature.
+#
+# Two things this crate does itself are NOT covered either, because they use RustCrypto directly
+# and have no aws-lc-rs path yet (see smithy-rs#4681):
+# - `credentials-login` signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA in `login/dpop.rs`.
+#   That is a real signature in the credential-acquisition path, so a FIPS deployment that uses
+#   `credentials-login` is not fully covered by this feature.
+# - `sso` and `credentials-login` hash a start URL / session string with SHA-1 and SHA-256 to
+#   name a cache file (`sso/cache.rs`, `login/cache.rs`). Those are not security functions.
+aws-lc-fips = ["aws-runtime/aws-lc-fips", "aws-smithy-runtime/aws-lc-fips"]
 test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing
@@ -46,7 +74,11 @@ allow-compilation = []
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime" }
+# `default-features = false` so that the crypto backend is chosen from here rather than inherited.
+# `aws-runtime`'s only default is `rustcrypto`, which it forwards to `aws-sigv4`; leaving it on would
+# re-enable the RustCrypto backend even for a consumer who asked for `aws-lc-fips`. See this crate's
+# `rustcrypto` feature.
+aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime", default-features = false }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
@@ -70,7 +102,7 @@ fastrand = "2.3.0"
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }
 sha1 = { version = "0.10", optional = true }
 hex = { version = "0.4.3", optional = true }
-zeroize = { version = "1", optional = true }
+zeroize = { version = "1.8.1", optional = true }
 
 # implementation detail of SSO OIDC `CreateToken` for SSO token providers
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }

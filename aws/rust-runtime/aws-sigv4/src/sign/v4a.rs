@@ -3,13 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::crypto::{ecdsa_p256_sha256_sign_der, HmacSha256};
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
-use ecdsa::hazmat::sign_prehashed_rfc6979;
-use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
-use p256::{NistP256, NonZeroScalar};
-use sha2::{Digest as _, Sha256};
 use std::io::Write;
 use std::sync::LazyLock;
 use std::time::SystemTime;
@@ -20,7 +17,6 @@ const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
 const P256_PRIVATE_KEY_SIZE: usize = 32;
 /// Shortest input [`calculate_signature`] accepts, mirroring `elliptic_curve::SecretKey::MIN_SIZE`.
 const P256_PRIVATE_KEY_MIN_SIZE: usize = 24;
-
 static BIG_N_MINUS_2: LazyLock<U256> = LazyLock::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
@@ -48,38 +44,17 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
         signing_key.len()
     );
 
-    // Sign from the private scalar rather than from a `SigningKey`. Constructing one derives the
-    // verifying key, and that costs a P-256 scalar multiplication as expensive as the signature
-    // itself while signing never reads it. `NonZeroScalar::from_repr` range-checks the scalar
-    // exactly as `SecretKey` does on the `SigningKey` path -- both reject zero and anything at or
-    // above the group order. `from_repr` does differ in taking a fixed 32 bytes where
-    // `SecretKey::from_slice` takes 24 to 32 and left-pads anything short, so the copy below pads
-    // the same way rather than rejecting short input, which would have changed behaviour for a
-    // caller passing its own key. The length check above is what keeps the two accepted ranges
-    // identical.
+    // `SecretKey::from_slice`, which the `SigningKey` path went through, took 24 to 32 bytes and
+    // left-padded anything short, so that path signed a short key rather than rejecting it. Pad
+    // here rather than in a backend, so both backends accept the same range: AWS-LC takes a fixed
+    // 32 bytes and would otherwise refuse a key the RustCrypto arm accepts. The length check above
+    // is what keeps this range identical to `SecretKey`'s.
     //
-    // This is what `ecdsa`'s `PrehashSigner for SigningKey` does with that derivation left out,
-    // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
-    // data.
-    //
-    // Both copies this function owns, `repr` and `scalar`, are wiped on the way out; the
-    // `signing_key` slice is the caller's and is left alone. The old code got the wipe for free:
-    // `SigningKey` implements `ZeroizeOnDrop` and its `Drop` zeroizes the secret scalar, whereas
-    // `NonZeroScalar` implements `Zeroize` but has no `Drop`, so dropping one leaves the scalar
-    // in memory. `Zeroizing` supplies the `Drop` that type is missing. The `FieldBytes` that
-    // `from_repr` takes by value is still an unwiped stack copy; that one is not reachable
-    // through this API.
+    // `repr` is wiped on the way out. The `signing_key` slice is the caller's and is left alone.
     let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);
     repr[P256_PRIVATE_KEY_SIZE - signing_key.len()..].copy_from_slice(signing_key);
-    let scalar = Zeroizing::new(
-        Option::<NonZeroScalar>::from(NonZeroScalar::from_repr((*repr).into()))
-            .expect("signing key is a valid P-256 private scalar"),
-    );
 
-    let z = Sha256::digest(string_to_sign);
-    let (signature, _recovery_id) = sign_prehashed_rfc6979::<NistP256, Sha256>(&scalar, &z, &[]);
-
-    hex::encode(signature.to_der().as_bytes())
+    hex::encode(ecdsa_p256_sha256_sign_der(&repr[..], string_to_sign))
 }
 
 /// Generates a signing key for Sigv4a signing.
@@ -100,14 +75,13 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         fis.append(&mut kdf_context);
         fis.put_i32(256);
 
-        let mut mac =
-            Hmac::<Sha256>::new_from_slice(&input_key).expect("HMAC can take key of any size");
+        let mut mac = HmacSha256::new(&input_key);
 
         let mut buf = BytesMut::new();
         buf.put_i32(1);
         buf.put_slice(&fis);
         mac.update(&buf);
-        let k0 = U256::from_be_bytes(mac.finalize_fixed().into());
+        let k0 = U256::from_be_bytes(mac.finalize());
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.
@@ -268,7 +242,9 @@ mod tests {
     use super::{
         calculate_signature, generate_signing_key, P256_PRIVATE_KEY_MIN_SIZE, P256_PRIVATE_KEY_SIZE,
     };
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::signature::Verifier;
     use p256::ecdsa::{DerSignature, SigningKey};
     use p256::elliptic_curve::sec1::ToSec1Point;
 
@@ -302,6 +278,11 @@ mod tests {
     /// `SigningKey` path signed a short key rather than rejecting it. Signing from the scalar
     /// takes a fixed 32 bytes, so this function pads instead. Every accepted length has to still
     /// produce what the old path produced, since a caller may pass its own key.
+    ///
+    /// Byte-for-byte equality with that path only holds when RustCrypto is the backend, which is
+    /// why this is gated: AWS-LC draws a random `k` rather than RFC 6979's deterministic one, so
+    /// its signatures differ run to run and can only be checked by verifying them.
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     #[test]
     fn short_keys_match_the_signing_key_path() {
         let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
@@ -320,6 +301,37 @@ mod tests {
         }
     }
 
+    /// The padding itself is backend-independent -- it is in [`calculate_signature`], not in a
+    /// backend -- but `short_keys_match_the_signing_key_path` can only check it where signatures
+    /// are deterministic. Cover every accepted length on whichever backend is selected by
+    /// verifying the signature rather than comparing bytes, which is all AWS-LC's random `k`
+    /// allows. Weaker than that equality, and the only short-key coverage under AWS-LC.
+    #[test]
+    fn short_keys_verify_under_the_key_they_pad_to() {
+        let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
+        let string_to_sign = b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z";
+
+        for len in P256_PRIVATE_KEY_MIN_SIZE..=P256_PRIVATE_KEY_SIZE {
+            let short = &key.as_ref()[..len];
+            // `SecretKey::from_slice` left-pads, so this is the public key of the 32-byte scalar
+            // `calculate_signature` pads to. A signature verifying under it is what shows the two
+            // pad the same way.
+            let verifying_key = *SigningKey::from_slice(short)
+                .expect("a left-padded short key is a valid P-256 private key")
+                .verifying_key();
+            let signature = hex::decode(calculate_signature(short, string_to_sign))
+                .expect("calculate_signature returns hex");
+            verifying_key
+                .verify(
+                    string_to_sign,
+                    &DerSignature::try_from(signature.as_slice())
+                        .expect("signature must be DER encoded"),
+                )
+                .unwrap_or_else(|_| panic!("signature did not verify for a {len}-byte key"));
+        }
+    }
+
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     const CREDENTIALS: &[(&str, &str)] = &[
         (
             "AKIAIOSFODNN7EXAMPLE",
@@ -332,6 +344,7 @@ mod tests {
         ),
     ];
 
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     const STRINGS_TO_SIGN: &[&[u8]] = &[
         b"",
         b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z\n20260101/lambda/aws4_request\n\
@@ -348,6 +361,9 @@ mod tests {
     /// `generate_signing_key` output and a change there moves both;
     /// `derived_key_matches_the_published_test_vector` is what pins that. Nor does it cover short
     /// keys, which `short_keys_match_the_signing_key_path` does.
+    ///
+    /// Gated for the same reason as that test: only the RustCrypto backend signs deterministically.
+    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
     #[test]
     fn signature_matches_the_signing_key_path() {
         for (access_key, secret_key) in CREDENTIALS {

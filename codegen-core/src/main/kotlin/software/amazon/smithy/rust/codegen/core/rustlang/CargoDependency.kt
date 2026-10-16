@@ -384,7 +384,16 @@ data class CargoDependency(
 
         fun smithyCbor(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-cbor")
 
-        fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
+        /**
+         * `aws-smithy-checksums`, declared with `default-features = false`.
+         *
+         * Its only default feature is the RustCrypto digest backend. Leaving the defaults on would
+         * pin every generated crate to that backend, because Cargo gives a consumer no way to switch
+         * off a transitive crate's default features. The backend arrives instead via the generated
+         * crate's `rustcrypto` feature, which is on by default.
+         */
+        fun smithyChecksums(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-checksums").copy(defaultFeatures = false)
 
         fun smithyCompression(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-compression")
 
