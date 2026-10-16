@@ -199,6 +199,31 @@ macro_rules! recording_hook {
             Ok(())
         }
     };
+    // Finalizers additionally record what they observed in `output_or_error`.
+    (finalizer $name:ident, $ctx:ident) => {
+        fn $name(
+            &self,
+            ctx: &$ctx<'_>,
+            _components: &RuntimeComponents,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            self.0
+                .record_finalizer(stringify!($name), Observed::of(ctx.output_or_error()));
+            Ok(())
+        }
+    };
+    (finalizer mut $name:ident, $ctx:ident) => {
+        fn $name(
+            &self,
+            ctx: &mut $ctx<'_>,
+            _components: &RuntimeComponents,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            self.0
+                .record_finalizer(stringify!($name), Observed::of(ctx.output_or_error()));
+            Ok(())
+        }
+    };
 }
 
 /// Recorder exercising the unconditional dispatch path.
@@ -268,54 +293,10 @@ impl Intercept for PlainRecorder {
         AfterDeserializationInterceptorContextRef
     );
 
-    // The four finalizers additionally record what they observed.
-    fn modify_before_attempt_completion(
-        &self,
-        ctx: &mut FinalizerInterceptorContextMut<'_>,
-        _components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        self.0.record_finalizer(
-            "modify_before_attempt_completion",
-            Observed::of(ctx.output_or_error()),
-        );
-        Ok(())
-    }
-
-    fn read_after_attempt(
-        &self,
-        ctx: &FinalizerInterceptorContextRef<'_>,
-        _components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        self.0
-            .record_finalizer("read_after_attempt", Observed::of(ctx.output_or_error()));
-        Ok(())
-    }
-
-    fn modify_before_completion(
-        &self,
-        ctx: &mut FinalizerInterceptorContextMut<'_>,
-        _components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        self.0.record_finalizer(
-            "modify_before_completion",
-            Observed::of(ctx.output_or_error()),
-        );
-        Ok(())
-    }
-
-    fn read_after_execution(
-        &self,
-        ctx: &FinalizerInterceptorContextRef<'_>,
-        _components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        self.0
-            .record_finalizer("read_after_execution", Observed::of(ctx.output_or_error()));
-        Ok(())
-    }
+    recording_hook!(finalizer mut modify_before_attempt_completion, FinalizerInterceptorContextMut);
+    recording_hook!(finalizer read_after_attempt, FinalizerInterceptorContextRef);
+    recording_hook!(finalizer mut modify_before_completion, FinalizerInterceptorContextMut);
+    recording_hook!(finalizer read_after_execution, FinalizerInterceptorContextRef);
 }
 
 // ---------------------------------------------------------------------------
