@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{try_downcast, Body, BodyInner};
+use super::super::{try_downcast, Body, BodyInner};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use std::sync::atomic::{AtomicUsize, Ordering};

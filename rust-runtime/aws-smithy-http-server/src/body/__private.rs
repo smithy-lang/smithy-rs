@@ -16,9 +16,11 @@ use bytes::{Buf, BufMut, Bytes};
 use std::num::NonZeroUsize;
 
 #[cfg(test)]
+#[path = "tests/allocation_tests.rs"]
 mod allocation_tests;
 
 #[cfg(test)]
+#[path = "tests/streaming_tests.rs"]
 mod streaming_tests;
 
 // Used in generated trait bounds.
