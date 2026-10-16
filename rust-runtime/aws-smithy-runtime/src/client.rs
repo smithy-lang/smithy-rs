@@ -26,6 +26,10 @@ pub mod config_override;
 /// The client orchestrator implementation
 pub mod orchestrator;
 
+/// Table-driven regression net asserting when every interceptor hook fires.
+#[cfg(all(test, any(feature = "test-util", feature = "legacy-test-util")))]
+mod orchestrator_hook_matrix_tests;
+
 /// Smithy code related to retry handling and token buckets.
 ///
 /// This code defines when and how failed requests should be retried. It also defines the behavior
