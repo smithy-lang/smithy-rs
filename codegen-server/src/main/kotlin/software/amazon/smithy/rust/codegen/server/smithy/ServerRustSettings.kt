@@ -62,6 +62,8 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
+    internal val protocolResponseSettings = ServerProtocolResponseSettings.from(customizationConfig)
+
     /**
      * The per-protocol settings under `customizationConfig.protocols`, keyed by protocol shape ID,
      * with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.

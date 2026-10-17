@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -180,6 +181,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
+    private val legacyResponseBindings = codegenContext.settings.protocolResponseSettings.legacyResponseBindings(codegenContext.protocol)
     private val isAwsJson = codegenContext.protocol == AwsJson1_0Trait.ID || codegenContext.protocol == AwsJson1_1Trait.ID
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -524,9 +526,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                         }
                     }
-                    // AWS JSON derives error status from @error; @httpError is a REST binding.
+                    // AWS JSON defaults to @error status; compatibility mode preserves @httpError.
                     val status =
-                        if (isAwsJson) {
+                        if (isAwsJson && !legacyResponseBindings) {
                             errorTrait.defaultHttpStatusCode
                         } else {
                             variantShape.getTrait<HttpErrorTrait>()?.code ?: errorTrait.defaultHttpStatusCode
@@ -555,8 +557,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        // Use the protocol's success status.
-        val httpTraitStatusCode = httpBindingResolver.httpTrait(operationShape).code
+        // Preserve the modeled success status when historical AWS JSON bindings are enabled.
+        val httpTraitStatusCode =
+            if (legacyResponseBindings) {
+                operationShape.getTrait<HttpTrait>()?.code ?: 200
+            } else {
+                httpBindingResolver.httpTrait(operationShape).code
+            }
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let {
             serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
         }
@@ -668,7 +675,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         errorShape: StructureShape? = null,
     ) {
         // RPC header-bound members belong in the document, including on modeled errors.
-        if (!httpBindingResolver.isRpcProtocol()) {
+        if (!httpBindingResolver.isRpcProtocol() || legacyResponseBindings) {
             val bindingGenerator =
                 ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
             val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)

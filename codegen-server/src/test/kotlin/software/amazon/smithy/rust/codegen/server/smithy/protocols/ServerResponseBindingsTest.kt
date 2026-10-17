@@ -30,26 +30,42 @@ internal class ServerResponseBindingsTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
     fun `AWS JSON defaults to RPC response bindings`(protocol: String) {
-        checkResponses(protocol)
+        checkResponses(protocol, null)
     }
 
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "rpcv2Cbor"])
     fun `REST and CBOR retain their protocol response bindings`(protocol: String) {
-        checkResponses(protocol)
+        checkResponses(protocol, null)
     }
 
-    private fun checkResponses(protocol: String) {
+    @ParameterizedTest
+    @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
+    fun `AWS JSON explicitly disables legacy bindings independently`(protocol: String) {
+        checkResponses(protocol, false)
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
+    fun `AWS JSON preserves legacy success and error bindings when enabled`(protocol: String) {
+        checkResponses(protocol, true)
+    }
+
+    private fun checkResponses(
+        protocol: String,
+        legacy: Boolean?,
+    ) {
         for (schemaSerde in listOf(false, true)) {
             val versions = if (schemaSerde) listOf(HttpTestVersion.HTTP_1_X) else listOf(HttpTestVersion.HTTP_0_X, HttpTestVersion.HTTP_1_X)
             for (version in versions) {
-                checkResponses(protocol, schemaSerde, version)
+                checkResponses(protocol, legacy, schemaSerde, version)
             }
         }
     }
 
     private fun checkResponses(
         protocol: String,
+        legacy: Boolean?,
         schemaSerde: Boolean,
         httpVersion: HttpTestVersion,
     ) {
@@ -60,14 +76,22 @@ internal class ServerResponseBindingsTest {
         val settings =
             Node.objectNodeBuilder()
                 .withMember("codegen", Node.objectNodeBuilder().withMember("schemaSerde", schemaSerde).build())
+        if (legacy != null) {
+            val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
+            val key = if (protocol == "awsJson1_1") "aws.protocols#$protocol" else protocol
+            settings.withMember(
+                "customizationConfig",
+                Node.parse("""{"protocols":{"$key":{"legacyResponseBindings":$legacy},"$other":{"legacyResponseBindings":${!legacy}}}}"""),
+            )
+        }
         System.getenv("SCHEMA_COMPAT_RUNTIME")?.let {
             settings.withMember("runtimeConfig", Node.objectNodeBuilder().withMember("relativePath", it).build())
         }
         val isRest = protocol == "restJson1" || protocol == "restXml"
         val isRpc = !isRest
-        val emitHeaders = isRest
+        val emitHeaders = isRest || legacy == true
         val outputStatus = if (emitHeaders) 201 else 200
-        val honorErrorStatus = isRest || protocol == "rpcv2Cbor"
+        val honorErrorStatus = isRest || protocol == "rpcv2Cbor" || legacy == true
         val clientStatus = if (honorErrorStatus) 422 else 400
         val serverStatus = if (honorErrorStatus) 503 else 500
         val marker =
@@ -93,7 +117,7 @@ internal class ServerResponseBindingsTest {
                 cargoCommand = "cargo test --quiet --lib --tests",
                 overrideTestDir =
                     System.getenv("SCHEMA_COMPAT_RUN")?.let {
-                        Path.of(it).resolve("$protocol-${if (schemaSerde) "schema" else "legacy"}-$httpVersion").toFile()
+                        Path.of(it).resolve("$protocol-${if (schemaSerde) "schema" else "legacy"}-$httpVersion-bindings-$legacy").toFile()
                     },
             ),
             testCoverage = HttpTestType.Only(httpVersion),

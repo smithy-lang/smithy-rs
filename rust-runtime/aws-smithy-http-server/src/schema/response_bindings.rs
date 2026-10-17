@@ -66,6 +66,9 @@ pub enum ResponseBindings {
     Rest,
     /// Every member is serialized into the codec body (the RPC protocols).
     BodyOnly,
+    /// Preserve historical AWS JSON headers while keeping every member in the response body.
+    /// `@httpResponseCode` and `@httpPayload` remain ordinary response body members.
+    LegacyRpc,
 }
 
 /// Serializes `value` against `schema` through `codec` into HTTP response
@@ -116,15 +119,33 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     }
 
     // Without HTTP response bindings, the codec serializes the whole structure.
-    if matches!(plan.strategy, ResponseStrategy::CodecBody) {
+    if matches!(
+        plan.strategy,
+        ResponseStrategy::CodecBody | ResponseStrategy::CodecBodyWithHeaders
+    ) {
         // Since nothing needs to be set in the header / status, the complete body
         // can be serialized using the codec's serializer.
         let mut serializer = codec.create_serializer();
         serializer.write_struct(schema, value)?;
 
+        let mut captured = CapturedBindings::default();
+        if matches!(plan.strategy, ResponseStrategy::CodecBodyWithHeaders) {
+            // Legacy generated AWS JSON responses serialize the complete response body and
+            // independently collect modeled headers.
+            let mut sink = NoBodySerializer { discard: true };
+            let mut splitter = ResponseBindingSplitter {
+                body: &mut sink,
+                codec,
+                captured: &mut captured,
+                payload_mode: false,
+                capture_bindings: true,
+                plan,
+            };
+            value.serialize_members(&mut splitter)?;
+        }
         return Ok(ResponseParts {
             body: serializer.finish().into(),
-            headers: Vec::new(),
+            headers: captured.headers,
             status: None,
         });
     }
@@ -280,6 +301,7 @@ enum ResponseStrategy {
     Empty,
     BindingsOnly,
     CodecBody,
+    CodecBodyWithHeaders,
     SplitBody,
     Payload,
 }
@@ -324,6 +346,10 @@ impl CompiledResponsePlan {
         let has_bindings = match bindings {
             ResponseBindings::Rest => has_response_bound_members(schema),
             ResponseBindings::BodyOnly => false,
+            ResponseBindings::LegacyRpc => schema
+                .members()
+                .iter()
+                .any(|member| member.http_header().is_some() || member.http_prefix_headers().is_some()),
         };
         let writes_body = match value_kind {
             ResponseValueKind::ModeledError => true,
@@ -342,6 +368,8 @@ impl CompiledResponsePlan {
             }
         } else if !has_bindings {
             ResponseStrategy::CodecBody
+        } else if bindings == ResponseBindings::LegacyRpc {
+            ResponseStrategy::CodecBodyWithHeaders
         } else if schema.members().iter().any(|member| member.http_payload().is_some()) {
             ResponseStrategy::Payload
         } else {
@@ -349,7 +377,10 @@ impl CompiledResponsePlan {
         };
         let members = if matches!(
             strategy,
-            ResponseStrategy::BindingsOnly | ResponseStrategy::SplitBody | ResponseStrategy::Payload
+            ResponseStrategy::BindingsOnly
+                | ResponseStrategy::SplitBody
+                | ResponseStrategy::Payload
+                | ResponseStrategy::CodecBodyWithHeaders
         ) {
             let member_count = schema
                 .members()
