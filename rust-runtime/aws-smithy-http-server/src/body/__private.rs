@@ -126,6 +126,7 @@ impl CollectionConfigBuilder {
 }
 
 /// Collect a body with explicit limits on bytes, ready frame polls, and initial reservation.
+/// Trailer frames are consumed and discarded without accumulating a header map.
 ///
 /// `initial_capacity` caps the buffer reserved from the body's size hint before frames
 /// arrive. Passing `0` starts without a reservation. The buffer can grow beyond this cap as
@@ -138,27 +139,23 @@ pub async fn collect_body<B>(body: B, config: Option<CollectionConfig>) -> Resul
 where
     B: HttpBody,
 {
-    collect_body_with_trailers(body, config).await.map(|(bytes, _)| bytes)
-}
-
-fn new_collection_buffer(size_hint_lower: u64, max_initial_capacity: usize) -> bytes::BytesMut {
-    bytes::BytesMut::with_capacity(size_hint_lower.min(max_initial_capacity as u64) as usize)
-}
-
-fn enforce_body_limit<E>(current_size: u64, limit: NonZeroUsize) -> Result<(), CollectBodyError<E>> {
-    if current_size > limit.get() as u64 {
-        tracing::trace!(
-            limit = limit.get(),
-            size_hint_lower = current_size,
-            "request body limit exceeded"
-        );
-        return Err(CollectBodyError::BodyLimitExceeded(limit));
-    }
-    Ok(())
+    collect_body_inner::<B, false>(body, config)
+        .await
+        .map(|(bytes, _)| bytes)
 }
 
 /// Collect a complete body, retaining trailers for callers that replay it.
 pub async fn collect_body_with_trailers<B>(
+    body: B,
+    config: Option<CollectionConfig>,
+) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
+where
+    B: HttpBody,
+{
+    collect_body_inner::<B, true>(body, config).await
+}
+
+async fn collect_body_inner<B, const RETAIN_TRAILERS: bool>(
     body: B,
     config: Option<CollectionConfig>,
 ) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
@@ -200,15 +197,32 @@ where
                 }
                 collected.put(data);
             }
-            Err(frame) => {
+            Err(frame) if RETAIN_TRAILERS => {
                 if let Ok(headers) = frame.into_trailers() {
                     trailers.get_or_insert_with(http::HeaderMap::new).extend(headers);
                 }
             }
+            Err(_) => {}
         }
     }
 
     Ok((collected.freeze(), trailers))
+}
+
+fn new_collection_buffer(size_hint_lower: u64, max_initial_capacity: usize) -> bytes::BytesMut {
+    bytes::BytesMut::with_capacity(size_hint_lower.min(max_initial_capacity as u64) as usize)
+}
+
+fn enforce_body_limit<E>(current_size: u64, limit: NonZeroUsize) -> Result<(), CollectBodyError<E>> {
+    if current_size > limit.get() as u64 {
+        tracing::trace!(
+            limit = limit.get(),
+            size_hint_lower = current_size,
+            "request body limit exceeded"
+        );
+        return Err(CollectBodyError::BodyLimitExceeded(limit));
+    }
+    Ok(())
 }
 
 // ============================================================================
