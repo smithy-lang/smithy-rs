@@ -15,11 +15,14 @@ aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["test-ut
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["test-util", "behavior-version-latest"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
+aws-smithy-client-metrics = { path = "../../build/aws-sdk/sdk/aws-smithy-client-metrics" }
 aws-smithy-observability = { path = "../../build/aws-sdk/sdk/aws-smithy-observability" }
 aws-smithy-observability-otel = { path = "../../build/aws-sdk/sdk/aws-smithy-observability-otel" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"]}
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 http = "0.2.0"
+metrique = { version = "0.1.33", default-features = false, features = ["test-util"] }
+metrique-util = { version = "0.1.9", features = ["metrics-pool"] }
 opentelemetry = { version = "0.26.0", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.26.0", features = ["metrics", "testing"] }
 serial_test = "3.1.1"

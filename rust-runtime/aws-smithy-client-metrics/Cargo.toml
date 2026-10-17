@@ -1,0 +1,36 @@
+[package]
+name = "aws-smithy-client-metrics"
+version = "0.1.0"
+authors = [
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+]
+description = "Per-request client metrics for smithy-rs clients via metrique integration."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.94.1"
+
+[dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
+metrique = { version = "0.1.33", default-features = false, features = ["service-metrics"] }
+metrique-util = { version = "0.1.9", features = ["metrics-pool"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+aws-smithy-async = { path = "../aws-smithy-async", features = ["test-util"] }
+aws-smithy-http-client = { path = "../aws-smithy-http-client", features = ["test-util"] }
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
+http-1x = { package = "http", version = "1.3.1" }
+metrique = { version = "0.1.33", default-features = false, features = ["service-metrics", "test-util"] }
+tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

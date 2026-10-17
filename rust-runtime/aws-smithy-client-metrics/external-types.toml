@@ -1,0 +1,7 @@
+allowed_external_types = [
+    "aws_smithy_runtime_api::client::interceptors::Intercept",
+    "aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin",
+    "metrique_util::metrics_pool::MetricsPoolHandle",
+    "metrique_writer_core::entry::boxed::BoxEntry",
+    "metrique_writer_core::sink::EntrySink",
+]

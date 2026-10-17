@@ -69,5 +69,6 @@
   - [RFC-0044: Environment-defined service configuration](./rfcs/rfc0044_env_defined_service_config.md)
   - [RFC-0045: Configurable Serde](./rfcs/rfc0045_configurable_serde.md)
   - [RFC-0046: Server request metrics](./rfcs/rfc0046_server_request_metrics.md)
+  - [RFC-0048: Client request metrics](./rfcs/rfc0048_client_request_metrics.md)
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
