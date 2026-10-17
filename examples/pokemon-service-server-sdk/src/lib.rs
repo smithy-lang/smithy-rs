@@ -240,7 +240,7 @@
 /* ServerRootGenerator.kt:419 */ pub use crate::server::serve::serve;
 pub use crate::service::{
     BuildError, MissingOperationsError, PokemonService, PokemonServiceBuilder,
-    PokemonServiceConfig, PokemonServiceConfigBuilder, ServiceProtocols,
+    PokemonServiceConfig, PokemonServiceConfigBuilder,
 };
 
 /// /* ServerRustModule.kt:55 */Contains the types that are re-exported from the `aws-smithy-http-server` crate.

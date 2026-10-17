@@ -42,7 +42,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetServerS
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl GetServerStatisticsInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -70,7 +70,7 @@ impl GetServerStatisticsInput {
         Ok(builder.build())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl GetServerStatisticsInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -94,7 +94,7 @@ impl GetServerStatisticsInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for GetServerStatisticsInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -103,16 +103,16 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetServerStatisti
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl GetServerStatisticsInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::get_server_statistics_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::get_server_statistics_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetServerStatisticsInput {
@@ -163,7 +163,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::DoNothingI
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl DoNothingInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -189,7 +189,7 @@ impl DoNothingInput {
         Ok(builder.build())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl DoNothingInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -213,7 +213,7 @@ impl DoNothingInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for DoNothingInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -222,16 +222,16 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for DoNothingInput {
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl DoNothingInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`DoNothingInput`](crate::input::DoNothingInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`DoNothingInput`](crate::input::DoNothingInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::do_nothing_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::do_nothing_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::DoNothingInput {
@@ -365,7 +365,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::CapturePok
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl CapturePokemonInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -392,16 +392,16 @@ impl CapturePokemonInput {
         Ok(())
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl CapturePokemonInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`CapturePokemonInput`](crate::input::CapturePokemonInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`CapturePokemonInput`](crate::input::CapturePokemonInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::capture_pokemon_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::capture_pokemon_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::CapturePokemonInput {
@@ -449,7 +449,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::CheckHealt
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl CheckHealthInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -475,7 +475,7 @@ impl CheckHealthInput {
         Ok(builder.build())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl CheckHealthInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -499,7 +499,7 @@ impl CheckHealthInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for CheckHealthInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -508,16 +508,16 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for CheckHealthInput 
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl CheckHealthInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`CheckHealthInput`](crate::input::CheckHealthInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`CheckHealthInput`](crate::input::CheckHealthInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::check_health_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::check_health_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::CheckHealthInput {
@@ -566,7 +566,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::StreamPoke
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl StreamPokemonRadioInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -594,7 +594,7 @@ impl StreamPokemonRadioInput {
         Ok(builder.build())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl StreamPokemonRadioInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -618,7 +618,7 @@ impl StreamPokemonRadioInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for StreamPokemonRadioInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -627,16 +627,16 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for StreamPokemonRadi
         Ok(value)
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl StreamPokemonRadioInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::stream_pokemon_radio_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::stream_pokemon_radio_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::StreamPokemonRadioInput {
@@ -738,7 +738,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetPokemon
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl GetPokemonSpeciesInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -769,7 +769,7 @@ impl GetPokemonSpeciesInput {
         Ok(builder)
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl GetPokemonSpeciesInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -796,7 +796,7 @@ impl GetPokemonSpeciesInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for GetPokemonSpeciesInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -809,16 +809,16 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetPokemonSpecies
         })
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl GetPokemonSpeciesInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::get_pokemon_species_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::get_pokemon_species_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetPokemonSpeciesInput {
@@ -978,7 +978,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::input::GetStorage
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl GetStorageInput {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -1012,7 +1012,7 @@ impl GetStorageInput {
         Ok(builder)
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl GetStorageInput {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -1042,7 +1042,7 @@ impl GetStorageInput {
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:129 */
+/* ServerSchemaDeserializeGenerator.kt:128 */
 impl ::aws_smithy_http_server::schema::DeserializableShape for GetStorageInput {
     fn deserialize(
         deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
@@ -1055,122 +1055,122 @@ impl ::aws_smithy_http_server::schema::DeserializableShape for GetStorageInput {
         })
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl GetStorageInput {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`GetStorageInput`](crate::input::GetStorageInput).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`GetStorageInput`](crate::input::GetStorageInput).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::input::get_storage_input::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::input::get_storage_input::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::input::GetStorageInput {
     type Unconstrained = crate::input::get_storage_input::Builder;
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
 pub mod get_server_statistics_input {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::input::GetServerStatisticsInput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`GetServerStatisticsInput`](crate::input::GetServerStatisticsInput).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::input::GetServerStatisticsInput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::input::GetServerStatisticsInput {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::input::GetServerStatisticsInput {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`DoNothingInput`](crate::input::DoNothingInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`DoNothingInput`](crate::input::DoNothingInput).
 pub mod do_nothing_input {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::input::DoNothingInput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`DoNothingInput`](crate::input::DoNothingInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`DoNothingInput`](crate::input::DoNothingInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`DoNothingInput`](crate::input::DoNothingInput).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`DoNothingInput`](crate::input::DoNothingInput).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::input::DoNothingInput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::input::DoNothingInput {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::input::DoNothingInput {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`CapturePokemonInput`](crate::input::CapturePokemonInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`CapturePokemonInput`](crate::input::CapturePokemonInput).
 pub mod capture_pokemon_input {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`events` was not provided but it is required when building `CapturePokemonInput`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`events` was not provided but it is required when building `CapturePokemonInput`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingEvents,
-        /// /* ServerBuilderConstraintViolations.kt:141 */`region` was not provided but it is required when building `CapturePokemonInput`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`region` was not provided but it is required when building `CapturePokemonInput`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingRegion,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingEvents => write!(f, "`events` was not provided but it is required when building `CapturePokemonInput`"),
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingRegion => write!(f, "`region` was not provided but it is required when building `CapturePokemonInput`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingEvents => write!(f, "`events` was not provided but it is required when building `CapturePokemonInput`"),
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingRegion => write!(f, "`region` was not provided but it is required when building `CapturePokemonInput`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderConstraintViolations.kt:176 */
+    /* ServerBuilderConstraintViolations.kt:172 */
     impl ConstraintViolation {
         pub(crate) fn as_validation_exception_field(
             self,
@@ -1202,7 +1202,7 @@ pub mod capture_pokemon_input {
             }
         }
     }
-    /* ServerBuilderGenerator.kt:248 */
+    /* ServerBuilderGenerator.kt:246 */
     impl ::std::convert::From<Builder>
         for crate::constrained::MaybeConstrained<crate::input::CapturePokemonInput>
     {
@@ -1210,7 +1210,7 @@ pub mod capture_pokemon_input {
             Self::Unconstrained(builder)
         }
     }
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::input::CapturePokemonInput {
         type Error = ConstraintViolation;
 
@@ -1218,27 +1218,27 @@ pub mod capture_pokemon_input {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`CapturePokemonInput`](crate::input::CapturePokemonInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CapturePokemonInput`](crate::input::CapturePokemonInput).
     /* RustType.kt:534 */
     #[derive(::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) events: ::std::option::Option<
             ::aws_smithy_http::event_stream::Receiver<
                 crate::model::AttemptCapturingPokemonEvent,
                 crate::error::AttemptCapturingPokemonEventError,
             >,
         >,
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) region: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn events(
             mut self,
             input: ::aws_smithy_http::event_stream::Receiver<
@@ -1246,20 +1246,20 @@ pub mod capture_pokemon_input {
                 crate::error::AttemptCapturingPokemonEventError,
             >,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.events =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_events(
             mut self,
             input: impl ::std::convert::Into<
@@ -1269,172 +1269,172 @@ pub mod capture_pokemon_input {
                 >,
             >,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.events = Some(input.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn region(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.region =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_region(
             mut self,
             input: impl ::std::convert::Into<::std::string::String>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.region = Some(input.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`CapturePokemonInput`](crate::input::CapturePokemonInput).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`CapturePokemonInput`](crate::input::CapturePokemonInput).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`CapturePokemonInput`](crate::input::CapturePokemonInput) if a [`ConstraintViolation`] occurs.
         ///
-        /// /* ServerBuilderGenerator.kt:272 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:270 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::input::CapturePokemonInput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::input::CapturePokemonInput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::input::CapturePokemonInput {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     events: self
                         .events
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingEvents)?,
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     region: self
                         .region
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingRegion)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`CheckHealthInput`](crate::input::CheckHealthInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`CheckHealthInput`](crate::input::CheckHealthInput).
 pub mod check_health_input {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::input::CheckHealthInput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`CheckHealthInput`](crate::input::CheckHealthInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`CheckHealthInput`](crate::input::CheckHealthInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`CheckHealthInput`](crate::input::CheckHealthInput).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`CheckHealthInput`](crate::input::CheckHealthInput).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::input::CheckHealthInput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::input::CheckHealthInput {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::input::CheckHealthInput {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
 pub mod stream_pokemon_radio_input {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::input::StreamPokemonRadioInput {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`StreamPokemonRadioInput`](crate::input::StreamPokemonRadioInput).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::input::StreamPokemonRadioInput {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::input::StreamPokemonRadioInput {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::input::StreamPokemonRadioInput {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
 pub mod get_pokemon_species_input {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`name` was not provided but it is required when building `GetPokemonSpeciesInput`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`name` was not provided but it is required when building `GetPokemonSpeciesInput`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingName,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingName => write!(f, "`name` was not provided but it is required when building `GetPokemonSpeciesInput`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingName => write!(f, "`name` was not provided but it is required when building `GetPokemonSpeciesInput`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderConstraintViolations.kt:176 */
+    /* ServerBuilderConstraintViolations.kt:172 */
     impl ConstraintViolation {
         pub(crate) fn as_validation_exception_field(
             self,
@@ -1465,7 +1465,7 @@ pub mod get_pokemon_species_input {
             }
         }
     }
-    /* ServerBuilderGenerator.kt:248 */
+    /* ServerBuilderGenerator.kt:246 */
     impl ::std::convert::From<Builder>
         for crate::constrained::MaybeConstrained<crate::input::GetPokemonSpeciesInput>
     {
@@ -1473,7 +1473,7 @@ pub mod get_pokemon_species_input {
             Self::Unconstrained(builder)
         }
     }
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::input::GetPokemonSpeciesInput {
         type Error = ConstraintViolation;
 
@@ -1481,110 +1481,110 @@ pub mod get_pokemon_species_input {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) name: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn name(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.name =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_name(
             mut self,
             input: impl ::std::convert::Into<::std::string::String>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.name = Some(input.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`GetPokemonSpeciesInput`](crate::input::GetPokemonSpeciesInput) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:275 */
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::input::GetPokemonSpeciesInput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::input::GetPokemonSpeciesInput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::input::GetPokemonSpeciesInput {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     name: self
                         .name
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingName)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`GetStorageInput`](crate::input::GetStorageInput).
+/// /* ServerBuilderGenerator.kt:173 */See [`GetStorageInput`](crate::input::GetStorageInput).
 pub mod get_storage_input {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`user` was not provided but it is required when building `GetStorageInput`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`user` was not provided but it is required when building `GetStorageInput`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingUser,
-        /// /* ServerBuilderConstraintViolations.kt:141 */`passcode` was not provided but it is required when building `GetStorageInput`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`passcode` was not provided but it is required when building `GetStorageInput`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingPasscode,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingUser => write!(f, "`user` was not provided but it is required when building `GetStorageInput`"),
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingPasscode => write!(f, "`passcode` was not provided but it is required when building `GetStorageInput`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingUser => write!(f, "`user` was not provided but it is required when building `GetStorageInput`"),
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingPasscode => write!(f, "`passcode` was not provided but it is required when building `GetStorageInput`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderConstraintViolations.kt:176 */
+    /* ServerBuilderConstraintViolations.kt:172 */
     impl ConstraintViolation {
         pub(crate) fn as_validation_exception_field(
             self,
@@ -1616,7 +1616,7 @@ pub mod get_storage_input {
             }
         }
     }
-    /* ServerBuilderGenerator.kt:248 */
+    /* ServerBuilderGenerator.kt:246 */
     impl ::std::convert::From<Builder>
         for crate::constrained::MaybeConstrained<crate::input::GetStorageInput>
     {
@@ -1624,7 +1624,7 @@ pub mod get_storage_input {
             Self::Unconstrained(builder)
         }
     }
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::input::GetStorageInput {
         type Error = ConstraintViolation;
 
@@ -1632,122 +1632,122 @@ pub mod get_storage_input {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`GetStorageInput`](crate::input::GetStorageInput).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`GetStorageInput`](crate::input::GetStorageInput).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) user: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) passcode: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn user(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.user =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_user(
             mut self,
             input: impl ::std::convert::Into<::std::string::String>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.user = Some(input.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn passcode(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.passcode =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_passcode(
             mut self,
             input: impl ::std::convert::Into<::std::string::String>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.passcode = Some(input.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`GetStorageInput`](crate::input::GetStorageInput).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`GetStorageInput`](crate::input::GetStorageInput).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`GetStorageInput`](crate::input::GetStorageInput) if a [`ConstraintViolation`] occurs.
         ///
-        /// /* ServerBuilderGenerator.kt:272 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:270 */If the builder fails, it will return the _first_ encountered [`ConstraintViolation`].
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::input::GetStorageInput, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::input::GetStorageInput, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::input::GetStorageInput {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     user: self
                         .user
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingUser)?,
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     passcode: self
                         .passcode
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingPasscode)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
-    /* ServerBuilderGenerator.kt:483 */
+    /* ServerBuilderGenerator.kt:481 */
     impl ::std::fmt::Debug for Builder {
-        /* ServerBuilderGenerator.kt:484 */
+        /* ServerBuilderGenerator.kt:482 */
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-            /* ServerBuilderGenerator.kt:485 */
+            /* ServerBuilderGenerator.kt:483 */
             let mut formatter = f.debug_struct("Builder");
-            /* ServerBuilderGenerator.kt:490 */
+            /* ServerBuilderGenerator.kt:488 */
             formatter.field("user", &self.user);
-            /* ServerBuilderGenerator.kt:490 */
+            /* ServerBuilderGenerator.kt:488 */
             formatter.field("passcode", &self.passcode);
-            /* ServerBuilderGenerator.kt:494 */
+            /* ServerBuilderGenerator.kt:492 */
             formatter.finish()
-            /* ServerBuilderGenerator.kt:484 */
+            /* ServerBuilderGenerator.kt:482 */
         }
-        /* ServerBuilderGenerator.kt:483 */
+        /* ServerBuilderGenerator.kt:481 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */

@@ -47,14 +47,17 @@ internal class ServerServiceGeneratorTest {
                 rustTemplate(
                     """
                     ##[test]
-                    fn service_protocols_reuse_the_schema_protocol_list() {
-                        type Protocols = <crate::Example as #{Server}::service::ServiceShape>::Protocol;
-                        let _: Protocols = crate::ServiceProtocols;
+                    fn service_protocol_type_is_a_tuple_of_the_served_protocols() {
+                        // Several served protocols: the protocol type is a tuple of them, in served order.
+                        fn same<T: 'static>() -> ::std::any::TypeId { ::std::any::TypeId::of::<T>() }
+                        assert_eq!(
+                            same::<<crate::Example as #{Server}::service::ServiceShape>::Protocol>(),
+                            same::<(#{Server}::protocol::aws_json_10::AwsJson1_0, #{Server}::protocol::rest_json_1::RestJson1)>(),
+                        );
                         const SCHEMA: &'static #{Server}::schema::ServiceSchema<'static> =
                             <crate::Example as #{Server}::service::SchemaServiceShape>::SCHEMA;
-                        let protocols = Protocols::protocols();
+                        let protocols = SCHEMA.protocols();
                         assert!(::std::ptr::eq(SCHEMA, &crate::schema::service::EXAMPLE));
-                        assert!(::std::ptr::eq(protocols, SCHEMA.protocols()));
                         let id = <crate::Example as #{Server}::service::ServiceShape>::ID;
                         assert_eq!(id.absolute(), SCHEMA.shape_id().as_str());
                         assert_eq!(id.namespace(), SCHEMA.shape_id().namespace());
@@ -96,7 +99,6 @@ internal class ServerServiceGeneratorTest {
                         ));
                         assert_eq!(schema.shape_id().as_str(), "test##Example");
                         assert_eq!(schema.operations().len(), 2);
-                        assert!(::std::ptr::eq(sdk::ServiceProtocols::protocols(), schema.protocols()));
                         let service_id: #{Server}::ShapeId = <sdk::Example as #{Server}::service::ServiceShape>::ID;
                         assert_eq!(service_id.absolute(), schema.shape_id().as_str());
                         type Operations = <sdk::Example as #{Server}::service::ServiceShape>::Operations;

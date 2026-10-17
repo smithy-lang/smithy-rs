@@ -8,7 +8,7 @@
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+use aws_smithy_http_server::schema::protocol::{RestJson1, RestXml};
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_runtime_api::http::Request;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
@@ -101,10 +101,7 @@ fn sensitive_header_diagnostics_are_redacted_across_rest_protocols() {
             .with_map_members(&prelude::STRING, &prelude::STRING)
             .with_http_prefix_headers("x-secret-"),
     ];
-    let protocols: Vec<Box<dyn ServerProtocol>> = vec![
-        Box::new(RestJson1Protocol::default()),
-        Box::new(RestXmlProtocol::default()),
-    ];
+    let protocols: Vec<Box<dyn ServerProtocol>> = vec![Box::new(RestJson1::default()), Box::new(RestXml::default())];
     for protocol in protocols {
         for (binding, container_sensitive) in bindings
             .iter()
@@ -180,9 +177,8 @@ fn sensitive_prefix_header_keys_are_redacted() {
             .without_time()
             .with_writer(move || sink.clone())
             .finish();
-        let response = tracing::subscriber::with_default(subscriber, || {
-            RestJson1Protocol::default().serialize_response(&schema, &value)
-        });
+        let response =
+            tracing::subscriber::with_default(subscriber, || RestJson1::default().serialize_response(&schema, &value));
         assert_eq!(response.status(), 400);
         let log = String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
         assert!(log.contains("{redacted}"), "{log}");
@@ -232,8 +228,8 @@ fn malformed_modeled_header_instances_are_rejected() {
             .with_http_prefix_headers("X-Value"),
     ];
     for protocol in [
-        Box::new(RestJson1Protocol::default()) as Box<dyn ServerProtocol>,
-        Box::new(RestXmlProtocol::default()),
+        Box::new(RestJson1::default()) as Box<dyn ServerProtocol>,
+        Box::new(RestXml::default()),
     ] {
         for binding in &bindings {
             let valid: &[u8] = match binding.shape_type() {
@@ -270,7 +266,7 @@ fn valid_and_unmodeled_headers_keep_existing_behavior() {
     let binding = member(ShapeType::String).with_http_header("x-value");
     let members = [&binding];
     let schema = output_schema(&members);
-    let protocol = RestJson1Protocol::default();
+    let protocol = RestJson1::default();
     let mut request = request("x-unmodeled", &[b"\xff"]);
     request.headers_mut().insert("x-value", "  valid  ");
     let mut d = protocol.deserialize_request(&schema, &request).unwrap();

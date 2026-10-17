@@ -242,7 +242,7 @@ impl<C: Codec> RestProtocol<C> {
 #[cfg(test)]
 mod cache_tests {
     use super::*;
-    use crate::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+    use crate::schema::protocol::{RestJson1, RestXml};
     use crate::schema::{MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema};
     use aws_smithy_schema::serde::ShapeSerializer;
     use aws_smithy_schema::{shape_id, ShapeType};
@@ -287,16 +287,16 @@ mod cache_tests {
     #[test]
     fn factories_prepare_and_deduplicate_static_outputs() {
         let ctx = ProtocolBuildContext::new(&SERVICE);
-        let json = RestJson1Protocol::from_build_context(&ctx).unwrap();
-        let xml = RestXmlProtocol::from_build_context(&ctx).unwrap();
+        let json = RestJson1::from_build_context(&ctx).unwrap();
+        let xml = RestXml::from_build_context(&ctx).unwrap();
         for plans in [&json.inner.response_plans, &xml.inner.response_plans] {
             assert_eq!(plans.len(), 2);
             assert!(plans.contains(&OUTPUT));
             let same_id = Schema::new_struct(shape_id!("test", "Cached"), ShapeType::Structure, &MEMBERS);
             assert!(!plans.contains(&same_id));
         }
-        assert_eq!(RestJson1Protocol::default().inner.response_plans.len(), 0);
-        assert_eq!(RestXmlProtocol::default().inner.response_plans.len(), 0);
+        assert_eq!(RestJson1::default().inner.response_plans.len(), 0);
+        assert_eq!(RestXml::default().inner.response_plans.len(), 0);
     }
 
     async fn snapshot(response: Response) -> (http::StatusCode, http::HeaderMap, bytes::Bytes) {
@@ -352,11 +352,11 @@ mod cache_tests {
 
     #[tokio::test]
     async fn json_cached_responses_and_fallbacks_match_uncached() {
-        check_cached_and_fallback::<RestJson1Protocol>(br#"{"body":"body-value"}"#).await;
+        check_cached_and_fallback::<RestJson1>(br#"{"body":"body-value"}"#).await;
     }
 
     #[tokio::test]
     async fn xml_cached_responses_and_fallbacks_match_uncached() {
-        check_cached_and_fallback::<RestXmlProtocol>(b"<Cached><body>body-value</body></Cached>").await;
+        check_cached_and_fallback::<RestXml>(b"<Cached><body>body-value</body></Cached>").await;
     }
 }

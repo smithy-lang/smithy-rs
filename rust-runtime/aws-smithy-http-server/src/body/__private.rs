@@ -171,7 +171,9 @@ pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, Col
 where
     B: HttpBody,
 {
-    let config = CollectionConfig::builder().maybe_limit(NonZeroUsize::new(limit)).build();
+    let config = CollectionConfig::builder()
+        .maybe_limit(NonZeroUsize::new(limit))
+        .build();
     collect_body(body, Some(config)).await
 }
 

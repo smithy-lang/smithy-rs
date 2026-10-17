@@ -853,7 +853,7 @@ class SchemaRoutingGeneratorTest {
                             -> #{Result}<impl #{Server}::schema::routing::MetadataProtocolRouter + 'static + use<INDEX>, RouterBuildError> {
                             // `use<INDEX>` admits delegating through a temporary protocol.
                             #{Server}::schema::MetadataRoutedProtocol::build_router(
-                                &#{Server}::schema::protocol::RestJson1Protocol::default(), ctx)
+                                &#{Server}::schema::protocol::RestJson1::default(), ctx)
                         }
                     }
                     """

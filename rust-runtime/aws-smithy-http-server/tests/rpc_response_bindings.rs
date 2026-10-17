@@ -8,7 +8,7 @@
 //! smithy-rs awsJson servers have always sent.
 
 use aws_smithy_http_server::body::{empty, BoxBody};
-use aws_smithy_http_server::schema::protocol::{AwsJson1_0Protocol, AwsJson1_1Protocol, RpcV2CborProtocol};
+use aws_smithy_http_server::schema::protocol::{AwsJson1_0, AwsJson1_1, RpcV2Cbor};
 use aws_smithy_http_server::schema::{
     HttpModeledError, MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema,
 };
@@ -94,8 +94,8 @@ fn build_aws_json(settings: Option<&[u8]>) -> Vec<Box<dyn ServerProtocol>> {
     let settings = settings.map(aws_smithy_http_server::schema::settings::parse_settings_json);
     let context = ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(settings.as_ref());
     vec![
-        Box::new(AwsJson1_0Protocol::from_build_context(&context).unwrap()),
-        Box::new(AwsJson1_1Protocol::from_build_context(&context).unwrap()),
+        Box::new(AwsJson1_0::from_build_context(&context).unwrap()),
+        Box::new(AwsJson1_1::from_build_context(&context).unwrap()),
     ]
 }
 
@@ -199,8 +199,8 @@ fn aws_json_rejects_unknown_response_bindings_values() {
     let settings = aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"responseBindings":"legacy"}"#);
     let context = ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(Some(&settings));
     for error in [
-        AwsJson1_0Protocol::from_build_context(&context).err().unwrap(),
-        AwsJson1_1Protocol::from_build_context(&context).err().unwrap(),
+        AwsJson1_0::from_build_context(&context).err().unwrap(),
+        AwsJson1_1::from_build_context(&context).err().unwrap(),
     ] {
         assert!(error.to_string().contains("responseBindings"), "{error}");
     }
@@ -217,13 +217,13 @@ fn aws_json_build_does_not_validate_ignored_rest_header_names() {
         OperationSchema::new(shape_id!("test", "Op"), &OUT, &INVALID_OUT, &[&INVALID_OUT]);
     static SERVICE: ServiceSchema = ServiceSchema::new(shape_id!("test", "Service"), None, &[], &[&OPERATION]);
     let context = ProtocolBuildContext::new(&SERVICE);
-    AwsJson1_0Protocol::from_build_context(&context).expect("REST headers do not apply to awsJson1_0");
-    AwsJson1_1Protocol::from_build_context(&context).expect("REST headers do not apply to awsJson1_1");
+    AwsJson1_0::from_build_context(&context).expect("REST headers do not apply to awsJson1_0");
+    AwsJson1_1::from_build_context(&context).expect("REST headers do not apply to awsJson1_1");
 }
 
 #[test]
 fn rpc_v2_cbor_ignores_rest_status_and_headers() {
-    let response = RpcV2CborProtocol::default().serialize_response(&OUT, &Out { code: Some(299) });
+    let response = RpcV2Cbor::default().serialize_response(&OUT, &Out { code: Some(299) });
     assert_eq!(response.status(), 200);
     assert_no_rest_headers(response.headers());
 }

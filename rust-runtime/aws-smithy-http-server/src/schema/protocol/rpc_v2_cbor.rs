@@ -13,7 +13,6 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
 use crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError;
-use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -30,12 +29,12 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// `customizationConfig.protocols["smithy.protocols#rpcv2Cbor"].methodNotAllowedAsNotFound`
 /// to `true` to return the Java server's unknown-operation `404` instead.
 #[derive(Debug)]
-pub struct RpcV2CborProtocol {
+pub struct RpcV2Cbor {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<RpcV2CborSerde>,
     method_not_allowed_as_not_found: bool,
 }
 
-impl Default for RpcV2CborProtocol {
+impl Default for RpcV2Cbor {
     fn default() -> Self {
         Self {
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
@@ -102,7 +101,7 @@ fn with_protocol_header(mut response: Response) -> Response {
     response
 }
 
-impl MetadataRoutedProtocol for RpcV2CborProtocol {
+impl MetadataRoutedProtocol for RpcV2Cbor {
     fn from_build_context(
         ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
@@ -131,7 +130,7 @@ impl MetadataRoutedProtocol for RpcV2CborProtocol {
     }
 }
 
-impl ServerProtocol for RpcV2CborProtocol {
+impl ServerProtocol for RpcV2Cbor {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }

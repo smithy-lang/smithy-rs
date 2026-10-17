@@ -221,7 +221,11 @@ async fn ordinary_structure_payload_keeps_rpc_key_and_xml_member_override() {
         // awsJson keeps its historical bindings: `@http(code)` applies; only rpcv2Cbor pins 200.
         assert_eq!(
             response.status,
-            if matches!(protocol, Protocol::Cbor) { 200 } else { 201 },
+            if matches!(protocol, Protocol::Cbor) {
+                200
+            } else {
+                201
+            },
             "{protocol:?}: {:?}",
             response.body
         );
@@ -273,7 +277,11 @@ async fn ordinary_union_payload_preserves_both_variants() {
             // awsJson keeps its historical bindings: `@http(code)` applies; only rpcv2Cbor pins 200.
             assert_eq!(
                 response.status,
-                if matches!(protocol, Protocol::Cbor) { 200 } else { 201 },
+                if matches!(protocol, Protocol::Cbor) {
+                    200
+                } else {
+                    201
+                },
                 "{protocol:?}"
             );
             if matches!(protocol, Protocol::RestXml) {
@@ -385,7 +393,11 @@ async fn rich_success_and_error_populate_nested_values_and_error_bindings() {
         // awsJson keeps its historical bindings: `@http(code)` applies; only rpcv2Cbor pins 200.
         assert_eq!(
             response.status,
-            if matches!(protocol, Protocol::Cbor) { 200 } else { 201 },
+            if matches!(protocol, Protocol::Cbor) {
+                200
+            } else {
+                201
+            },
             "{protocol:?}"
         );
         if matches!(protocol, Protocol::RestXml) {
@@ -469,7 +481,11 @@ async fn modeled_defaults_use_the_generated_builder_and_allow_overrides() {
             .await;
             assert_eq!(
                 response.status,
-                if matches!(protocol, Protocol::Cbor) { 200 } else { 201 },
+                if matches!(protocol, Protocol::Cbor) {
+                    200
+                } else {
+                    201
+                },
                 "{protocol:?}: {:?}",
                 response.body
             );
@@ -508,7 +524,11 @@ async fn sparse_outputs_distinguish_absent_empty_and_null_entries() {
             .await;
             assert_eq!(
                 response.status,
-                if matches!(protocol, Protocol::Cbor) { 200 } else { 201 },
+                if matches!(protocol, Protocol::Cbor) {
+                    200
+                } else {
+                    201
+                },
                 "{protocol:?}"
             );
             assert_eq!(

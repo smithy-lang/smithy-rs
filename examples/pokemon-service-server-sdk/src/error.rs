@@ -541,22 +541,22 @@ impl ::std::fmt::Display for UnsupportedRegionError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for UnsupportedRegionError {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for UnsupportedRegionError {
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl UnsupportedRegionError {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::unsupported_region_error::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::unsupported_region_error::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -632,22 +632,22 @@ impl ::std::fmt::Display for ThrottlingError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ThrottlingError {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ThrottlingError {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl ThrottlingError {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`ThrottlingError`](crate::error::ThrottlingError).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`ThrottlingError`](crate::error::ThrottlingError).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::throttling_error::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::throttling_error::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /// /* StructureGenerator.kt:197 */A standard error for input validation failures. This should be thrown by services when a member of the input structure falls outside of the modeled or documented constraints.
@@ -821,22 +821,22 @@ impl ::std::fmt::Display for ValidationException {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ValidationException {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ValidationException {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl ValidationException {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`ValidationException`](crate::error::ValidationException).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`ValidationException`](crate::error::ValidationException).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::validation_exception::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::validation_exception::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /* StructureGenerator.kt:197 */
@@ -909,7 +909,7 @@ impl ::aws_smithy_schema::serde::SerializableStruct for crate::error::MasterBall
         Ok(())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:184 */
+/* ServerSchemaDeserializeGenerator.kt:183 */
 impl MasterBallUnsuccessful {
     /// Reads this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer) guided by [`Self::SCHEMA`].
     ///
@@ -944,7 +944,7 @@ impl MasterBallUnsuccessful {
         Ok(builder.build())
     }
 }
-/* ServerSchemaDeserializeGenerator.kt:251 */
+/* ServerSchemaDeserializeGenerator.kt:249 */
 impl MasterBallUnsuccessful {
     /// Reads the document members of this shape from a [`ShapeDeserializer`](::aws_smithy_schema::serde::ShapeDeserializer)
     /// guided by [`Self::SCHEMA`] into `builder`.
@@ -1014,22 +1014,22 @@ impl ::std::fmt::Display for MasterBallUnsuccessful {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for MasterBallUnsuccessful {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for MasterBallUnsuccessful {
     fn status_code(&self) -> u16 {
         500
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl MasterBallUnsuccessful {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::master_ball_unsuccessful::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::master_ball_unsuccessful::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 /* ServerStructureConstrainedTraitImpl.kt:21 */
 impl crate::constrained::Constrained for crate::error::MasterBallUnsuccessful {
@@ -1158,22 +1158,22 @@ impl ::std::fmt::Display for InvalidPokeballError {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for InvalidPokeballError {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for InvalidPokeballError {
     fn status_code(&self) -> u16 {
         400
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl InvalidPokeballError {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`InvalidPokeballError`](crate::error::InvalidPokeballError).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::invalid_pokeball_error::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::invalid_pokeball_error::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /* ServerOperationErrorGenerator.kt:68 */
@@ -1803,22 +1803,22 @@ impl ::std::fmt::Display for ResourceNotFoundException {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for ResourceNotFoundException {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for ResourceNotFoundException {
     fn status_code(&self) -> u16 {
         404
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl ResourceNotFoundException {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::resource_not_found_exception::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::resource_not_found_exception::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /// /* StructureGenerator.kt:197 */Not authorized to access Pokémon storage.
@@ -1897,22 +1897,22 @@ impl ::std::fmt::Display for StorageAccessNotAuthorized {
 }
 /* ErrorImplGenerator.kt:180 */
 impl ::std::error::Error for StorageAccessNotAuthorized {}
-/* ServerCodegenVisitor.kt:391 */
+/* ServerCodegenVisitor.kt:389 */
 impl ::aws_smithy_http_server::schema::HttpModeledError for StorageAccessNotAuthorized {
     fn status_code(&self) -> u16 {
         401
     }
 }
-/* ServerCodegenVisitor.kt:422 */
+/* ServerCodegenVisitor.kt:420 */
 impl StorageAccessNotAuthorized {
-    /// /* ServerBuilderGenerator.kt:298 */Creates a new builder-style object to manufacture [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
-    /* ServerBuilderGenerator.kt:299 */
+    /// /* ServerBuilderGenerator.kt:296 */Creates a new builder-style object to manufacture [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+    /* ServerBuilderGenerator.kt:297 */
     pub fn builder() -> crate::error::storage_access_not_authorized::Builder {
-        /* ServerBuilderGenerator.kt:300 */
+        /* ServerBuilderGenerator.kt:298 */
         crate::error::storage_access_not_authorized::Builder::default()
-        /* ServerBuilderGenerator.kt:299 */
+        /* ServerBuilderGenerator.kt:297 */
     }
-    /* ServerCodegenVisitor.kt:422 */
+    /* ServerCodegenVisitor.kt:420 */
 }
 
 /* ServerOperationErrorGenerator.kt:68 */
@@ -2146,37 +2146,37 @@ impl ::std::convert::From<crate::error::ThrottlingError>
     }
     /* ServerOperationErrorGenerator.kt:145 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+/// /* ServerBuilderGenerator.kt:173 */See [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
 pub mod unsupported_region_error {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`region` was not provided but it is required when building `UnsupportedRegionError`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`region` was not provided but it is required when building `UnsupportedRegionError`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingRegion,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingRegion => write!(f, "`region` was not provided but it is required when building `UnsupportedRegionError`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingRegion => write!(f, "`region` was not provided but it is required when building `UnsupportedRegionError`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::error::UnsupportedRegionError {
         type Error = ConstraintViolation;
 
@@ -2184,125 +2184,125 @@ pub mod unsupported_region_error {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) region: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn region(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.region =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`UnsupportedRegionError`](crate::error::UnsupportedRegionError) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:275 */
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::error::UnsupportedRegionError, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::UnsupportedRegionError, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::error::UnsupportedRegionError {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     region: self
                         .region
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingRegion)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`ThrottlingError`](crate::error::ThrottlingError).
+/// /* ServerBuilderGenerator.kt:173 */See [`ThrottlingError`](crate::error::ThrottlingError).
 pub mod throttling_error {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::error::ThrottlingError {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`ThrottlingError`](crate::error::ThrottlingError).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ThrottlingError`](crate::error::ThrottlingError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`ThrottlingError`](crate::error::ThrottlingError).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`ThrottlingError`](crate::error::ThrottlingError).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::error::ThrottlingError {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::error::ThrottlingError {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::error::ThrottlingError {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`ValidationException`](crate::error::ValidationException).
+/// /* ServerBuilderGenerator.kt:173 */See [`ValidationException`](crate::error::ValidationException).
 pub mod validation_exception {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`message` was not provided but it is required when building `ValidationException`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`message` was not provided but it is required when building `ValidationException`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingMessage,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingMessage => write!(f, "`message` was not provided but it is required when building `ValidationException`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingMessage => write!(f, "`message` was not provided but it is required when building `ValidationException`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::error::ValidationException {
         type Error = ConstraintViolation;
 
@@ -2310,174 +2310,174 @@ pub mod validation_exception {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`ValidationException`](crate::error::ValidationException).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ValidationException`](crate::error::ValidationException).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) field_list:
             ::std::option::Option<::std::vec::Vec<crate::model::ValidationExceptionField>>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:335 */A summary of the validation failure.
-        /* ServerBuilderGenerator.kt:347 */
+        /// /* ServerBuilderGenerator.kt:333 */A summary of the validation failure.
+        /* ServerBuilderGenerator.kt:345 */
         pub fn message(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.message =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /// /* ServerBuilderGenerator.kt:335 */A list of specific failures encountered while validating the input. A member can appear in this list more than once if it failed to satisfy multiple constraints.
-        /* ServerBuilderGenerator.kt:347 */
+        /// /* ServerBuilderGenerator.kt:333 */A list of specific failures encountered while validating the input. A member can appear in this list more than once if it failed to satisfy multiple constraints.
+        /* ServerBuilderGenerator.kt:345 */
         pub fn field_list(
             mut self,
             input: ::std::option::Option<::std::vec::Vec<crate::model::ValidationExceptionField>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.field_list =
-                /* ServerBuilderGenerator.kt:380 */input
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:378 */input
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`ValidationException`](crate::error::ValidationException).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`ValidationException`](crate::error::ValidationException).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`ValidationException`](crate::error::ValidationException) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:275 */
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::error::ValidationException, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::ValidationException, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::error::ValidationException {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     message: self
                         .message
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingMessage)?,
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     field_list: self.field_list,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+/// /* ServerBuilderGenerator.kt:173 */See [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
 pub mod master_ball_unsuccessful {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::error::MasterBallUnsuccessful {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn message(mut self, input: ::std::option::Option<::std::string::String>) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.message =
-                /* ServerBuilderGenerator.kt:380 */input
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:378 */input
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /* ServerBuilderGenerator.kt:430 */
+        /* ServerBuilderGenerator.kt:428 */
         #[allow(missing_docs)] // documentation missing in model
         /* RustType.kt:534 */
         #[allow(dead_code)]
-        /* ServerBuilderGenerator.kt:437 */
+        /* ServerBuilderGenerator.kt:435 */
         pub(crate) fn set_message(
             mut self,
             input: Option<impl ::std::convert::Into<::std::string::String>>,
         ) -> Self {
-            /* ServerBuilderGenerator.kt:438 */
+            /* ServerBuilderGenerator.kt:436 */
             self.message = input.map(|v| v.into());
             self
-            /* ServerBuilderGenerator.kt:437 */
+            /* ServerBuilderGenerator.kt:435 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`MasterBallUnsuccessful`](crate::error::MasterBallUnsuccessful).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::error::MasterBallUnsuccessful {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::error::MasterBallUnsuccessful {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::error::MasterBallUnsuccessful {
-                /* ServerBuilderGenerator.kt:559 */
+                /* ServerBuilderGenerator.kt:557 */
                 message: self.message,
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
             }
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+/// /* ServerBuilderGenerator.kt:173 */See [`InvalidPokeballError`](crate::error::InvalidPokeballError).
 pub mod invalid_pokeball_error {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`pokeball` was not provided but it is required when building `InvalidPokeballError`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`pokeball` was not provided but it is required when building `InvalidPokeballError`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingPokeball,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingPokeball => write!(f, "`pokeball` was not provided but it is required when building `InvalidPokeballError`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingPokeball => write!(f, "`pokeball` was not provided but it is required when building `InvalidPokeballError`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::error::InvalidPokeballError {
         type Error = ConstraintViolation;
 
@@ -2485,92 +2485,92 @@ pub mod invalid_pokeball_error {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`InvalidPokeballError`](crate::error::InvalidPokeballError).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) pokeball: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn pokeball(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.pokeball =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`InvalidPokeballError`](crate::error::InvalidPokeballError).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`InvalidPokeballError`](crate::error::InvalidPokeballError).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`InvalidPokeballError`](crate::error::InvalidPokeballError) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:275 */
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::error::InvalidPokeballError, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::InvalidPokeballError, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::error::InvalidPokeballError {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     pokeball: self
                         .pokeball
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingPokeball)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+/// /* ServerBuilderGenerator.kt:173 */See [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
 pub mod resource_not_found_exception {
 
     /* RustType.kt:534 */
     #[derive(::std::cmp::PartialEq, ::std::fmt::Debug)]
-    /// /* ServerBuilderConstraintViolations.kt:73 */Holds one variant for each of the ways the builder can fail.
+    /// /* ServerBuilderConstraintViolations.kt:72 */Holds one variant for each of the ways the builder can fail.
     /* RustType.kt:534 */
     #[non_exhaustive]
-    /* ServerBuilderConstraintViolations.kt:76 */
+    /* ServerBuilderConstraintViolations.kt:75 */
     #[allow(clippy::enum_variant_names)]
     pub enum ConstraintViolation {
-        /// /* ServerBuilderConstraintViolations.kt:141 */`message` was not provided but it is required when building `ResourceNotFoundException`.
-        /* ServerBuilderConstraintViolations.kt:148 */
+        /// /* ServerBuilderConstraintViolations.kt:137 */`message` was not provided but it is required when building `ResourceNotFoundException`.
+        /* ServerBuilderConstraintViolations.kt:144 */
         MissingMessage,
-        /* ServerBuilderConstraintViolations.kt:76 */
+        /* ServerBuilderConstraintViolations.kt:75 */
     }
-    /* ServerBuilderConstraintViolations.kt:120 */
+    /* ServerBuilderConstraintViolations.kt:116 */
     impl ::std::fmt::Display for ConstraintViolation {
-        /* ServerBuilderConstraintViolations.kt:121 */
+        /* ServerBuilderConstraintViolations.kt:117 */
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            /* ServerBuilderConstraintViolations.kt:122 */
+            /* ServerBuilderConstraintViolations.kt:118 */
             match self {
-                /* ServerBuilderConstraintViolations.kt:130 */ConstraintViolation::MissingMessage => write!(f, "`message` was not provided but it is required when building `ResourceNotFoundException`"),
-            /* ServerBuilderConstraintViolations.kt:122 */}
-            /* ServerBuilderConstraintViolations.kt:121 */
+                /* ServerBuilderConstraintViolations.kt:126 */ConstraintViolation::MissingMessage => write!(f, "`message` was not provided but it is required when building `ResourceNotFoundException`"),
+            /* ServerBuilderConstraintViolations.kt:118 */}
+            /* ServerBuilderConstraintViolations.kt:117 */
         }
-        /* ServerBuilderConstraintViolations.kt:120 */
+        /* ServerBuilderConstraintViolations.kt:116 */
     }
-    /* ServerBuilderConstraintViolations.kt:84 */
+    /* ServerBuilderConstraintViolations.kt:83 */
     impl ::std::error::Error for ConstraintViolation {}
-    /* ServerBuilderGenerator.kt:455 */
+    /* ServerBuilderGenerator.kt:453 */
     impl ::std::convert::TryFrom<Builder> for crate::error::ResourceNotFoundException {
         type Error = ConstraintViolation;
 
@@ -2578,90 +2578,90 @@ pub mod resource_not_found_exception {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
+    /* ServerBuilderGenerator.kt:213 */
     pub struct Builder {
-        /* ServerBuilderGenerator.kt:312 */
+        /* ServerBuilderGenerator.kt:310 */
         pub(crate) message: ::std::option::Option<::std::string::String>,
-        /* ServerBuilderGenerator.kt:215 */
+        /* ServerBuilderGenerator.kt:213 */
     }
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /* ServerBuilderGenerator.kt:335 */
+        /* ServerBuilderGenerator.kt:333 */
         #[allow(missing_docs)] // documentation missing in model
-                               /* ServerBuilderGenerator.kt:347 */
+                               /* ServerBuilderGenerator.kt:345 */
         pub fn message(mut self, input: ::std::string::String) -> Self {
-            /* ServerBuilderGenerator.kt:348 */
+            /* ServerBuilderGenerator.kt:346 */
             self.message =
-                /* ServerBuilderGenerator.kt:349 */Some(
-                    /* ServerBuilderGenerator.kt:380 */input
-                /* ServerBuilderGenerator.kt:349 */)
-            /* ServerBuilderGenerator.kt:348 */;
+                /* ServerBuilderGenerator.kt:347 */Some(
+                    /* ServerBuilderGenerator.kt:378 */input
+                /* ServerBuilderGenerator.kt:347 */)
+            /* ServerBuilderGenerator.kt:346 */;
             self
-            /* ServerBuilderGenerator.kt:347 */
+            /* ServerBuilderGenerator.kt:345 */
         }
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
-        /// /* ServerBuilderGenerator.kt:264 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException).
+        /// /* ServerBuilderGenerator.kt:262 */
         /// The builder fails to construct a [`ResourceNotFoundException`](crate::error::ResourceNotFoundException) if a [`ConstraintViolation`] occurs.
         ///
-        /* ServerBuilderGenerator.kt:275 */
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> Result<crate::error::ResourceNotFoundException, ConstraintViolation> {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(
             self,
         ) -> Result<crate::error::ResourceNotFoundException, ConstraintViolation> {
-            /* ServerBuilderGenerator.kt:291 */
+            /* ServerBuilderGenerator.kt:289 */
             Ok(
-                /* ServerBuilderGenerator.kt:555 */
+                /* ServerBuilderGenerator.kt:553 */
                 crate::error::ResourceNotFoundException {
-                    /* ServerBuilderGenerator.kt:559 */
+                    /* ServerBuilderGenerator.kt:557 */
                     message: self
                         .message
-                        /* ServerBuilderGenerator.kt:585 */
+                        /* ServerBuilderGenerator.kt:583 */
                         .ok_or(ConstraintViolation::MissingMessage)?,
-                    /* ServerBuilderGenerator.kt:555 */
-                }, /* ServerBuilderGenerator.kt:291 */
+                    /* ServerBuilderGenerator.kt:553 */
+                }, /* ServerBuilderGenerator.kt:289 */
             )
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */
 }
-/// /* ServerBuilderGenerator.kt:175 */See [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+/// /* ServerBuilderGenerator.kt:173 */See [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
 pub mod storage_access_not_authorized {
 
-    /* ServerBuilderGenerator.kt:470 */
+    /* ServerBuilderGenerator.kt:468 */
     impl ::std::convert::From<Builder> for crate::error::StorageAccessNotAuthorized {
         fn from(builder: Builder) -> Self {
             builder.build()
         }
     }
-    /// /* ServerBuilderGenerator.kt:205 */A builder for [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+    /// /* ServerBuilderGenerator.kt:203 */A builder for [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
     /* RustType.kt:534 */
     #[derive(::std::clone::Clone, ::std::default::Default, ::std::fmt::Debug)]
-    /* ServerBuilderGenerator.kt:215 */
-    pub struct Builder {/* ServerBuilderGenerator.kt:215 */}
-    /* ServerBuilderGenerator.kt:219 */
+    /* ServerBuilderGenerator.kt:213 */
+    pub struct Builder {/* ServerBuilderGenerator.kt:213 */}
+    /* ServerBuilderGenerator.kt:217 */
     impl Builder {
-        /// /* ServerBuilderGenerator.kt:262 */Consumes the builder and constructs a [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
-        /* ServerBuilderGenerator.kt:275 */
+        /// /* ServerBuilderGenerator.kt:260 */Consumes the builder and constructs a [`StorageAccessNotAuthorized`](crate::error::StorageAccessNotAuthorized).
+        /* ServerBuilderGenerator.kt:273 */
         pub fn build(self) -> crate::error::StorageAccessNotAuthorized {
             self.build_enforcing_all_constraints()
         }
-        /* ServerBuilderGenerator.kt:287 */
+        /* ServerBuilderGenerator.kt:285 */
         fn build_enforcing_all_constraints(self) -> crate::error::StorageAccessNotAuthorized {
-            /* ServerBuilderGenerator.kt:555 */
+            /* ServerBuilderGenerator.kt:553 */
             crate::error::StorageAccessNotAuthorized {
-            /* ServerBuilderGenerator.kt:555 */}
-            /* ServerBuilderGenerator.kt:287 */
+            /* ServerBuilderGenerator.kt:553 */}
+            /* ServerBuilderGenerator.kt:285 */
         }
-        /* ServerBuilderGenerator.kt:219 */
+        /* ServerBuilderGenerator.kt:217 */
     }
 
     /* RustCrateInlineModuleComposingWriter.kt:299 */

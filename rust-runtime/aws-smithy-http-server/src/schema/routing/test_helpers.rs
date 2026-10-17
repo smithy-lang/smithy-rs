@@ -71,7 +71,7 @@ pub(super) static RPC: ServiceSchema<'static> = ServiceSchema::new(
 /// The first line of this test protocol's request body names the operation.
 #[derive(Debug, Default)]
 pub(super) struct BodyProtocol {
-    inner: crate::schema::protocol::RestJson1Protocol,
+    inner: crate::schema::protocol::RestJson1,
     factory_body_config: Option<RequestBodyCollectionConfig>,
 }
 #[derive(Debug)]
@@ -198,7 +198,7 @@ impl crate::schema::BodyRoutedProtocol for BodyProtocol {
 /// A metadata-only fixture that reuses REST routing and serialization.
 #[derive(Debug, Default)]
 pub(super) struct MetadataProtocol {
-    inner: crate::schema::protocol::RestJson1Protocol,
+    inner: crate::schema::protocol::RestJson1,
 }
 
 impl crate::schema::MetadataRoutedProtocol for MetadataProtocol {
@@ -237,7 +237,8 @@ impl ServerProtocol for MetadataProtocol {
         streaming_member: &Schema<'_>,
         body: Option<BoxBody>,
     ) -> Response<BoxBody> {
-        self.inner.serialize_streaming_response(output, value, streaming_member, body)
+        self.inner
+            .serialize_streaming_response(output, value, streaming_member, body)
     }
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response<BoxBody> {
         self.inner.serialize_error(error)
@@ -268,7 +269,8 @@ impl ServerProtocol for BodyProtocol {
         streaming_member: &Schema<'_>,
         body: Option<BoxBody>,
     ) -> Response<BoxBody> {
-        self.inner.serialize_streaming_response(output, value, streaming_member, body)
+        self.inner
+            .serialize_streaming_response(output, value, streaming_member, body)
     }
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response<BoxBody> {
         self.inner.serialize_error(error)

@@ -46,8 +46,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -302,7 +300,7 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
         require(model.expectShape(selector.target) is StringShape) { "scenario selector must be a String" }
         val fallback = cases.find { it.name == "populated" && !it.error } ?: cases.first { !it.error }
         val instantiator =
-            Instantiator(
+            object : Instantiator(
                 symbolProvider, model, context.fuzzSettings.runtimeConfig,
                 object : Instantiator.BuilderKindBehavior {
                     override fun hasFallibleBuilder(shape: StructureShape) =
@@ -313,35 +311,29 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
                     override fun doesSetterTakeInOption(memberShape: MemberShape) =
                         symbolProvider.toSymbol(memberShape).isOptional()
                 },
-                customizations =
-                    listOf(
-                        object : InstantiatorCustomization() {
-                            override fun section(section: InstantiatorSection): Writable =
-                                writable {
-                                    val shape =
-                                        when (section) {
-                                            is InstantiatorSection.BeforeInstantiatingValue -> section.shape
-                                            is InstantiatorSection.AfterInstantiatingValue -> section.shape
-                                        }
-                                    val convert =
-                                        shape !is EnumShape && shape !is IntEnumShape &&
-                                            !shape.hasTrait(EnumTrait::class.java) &&
-                                            !shape.hasTrait(StreamingTrait::class.java) &&
-                                            shape !is StructureShape &&
-                                            shape.isDirectlyConstrained(symbolProvider)
-                                    if (convert) {
-                                        when (section) {
-                                            is InstantiatorSection.BeforeInstantiatingValue -> if (shape is NumberShape) rust("(")
-                                            is InstantiatorSection.AfterInstantiatingValue -> {
-                                                if (shape is NumberShape) rust(")")
-                                                rust(""".try_into().expect("declared fuzz response satisfies model constraints")""")
-                                            }
-                                        }
-                                    }
-                                }
-                        },
-                    ),
-            )
+            ) {
+                override fun render(
+                    writer: RustWriter,
+                    shape: Shape,
+                    data: Node,
+                    headers: Map<String, String>,
+                    ctx: Ctx,
+                ) {
+                    val convert =
+                        shape !is EnumShape && shape !is IntEnumShape &&
+                            !shape.hasTrait(EnumTrait::class.java) &&
+                            !shape.hasTrait(StreamingTrait::class.java) &&
+                            shape !is StructureShape &&
+                            shape.isDirectlyConstrained(symbolProvider)
+                    // Parenthesize negative literals so conversion applies to the signed value.
+                    if (convert && shape is NumberShape) writer.rust("(")
+                    super.render(writer, shape, data, headers, ctx)
+                    if (convert) {
+                        if (shape is NumberShape) writer.rust(")")
+                        writer.rust(""".try_into().expect("declared fuzz response satisfies model constraints")""")
+                    }
+                }
+            }
 
         fun result(case: FuzzResponseScenario) =
             writable {

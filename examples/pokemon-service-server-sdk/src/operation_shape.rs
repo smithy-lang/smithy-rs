@@ -36,12 +36,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetServerStatistics {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_SERVER_STATISTICS;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 
 /// /* ServerOperationGenerator.kt:51 */DoNothing operation, used to stress test the framework.
 /* ServerOperationGenerator.kt:80 */
@@ -79,12 +79,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for DoN
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for DoNothing {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::DO_NOTHING;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 
 /// /* ServerOperationGenerator.kt:51 */Capture Pokémons via event streams.
 /* ServerOperationGenerator.kt:80 */
@@ -122,12 +122,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Cap
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for CapturePokemon {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::CAPTURE_POKEMON;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 /* ServerStreamingOperationGenerator.kt:126 */
 impl ::aws_smithy_http_server::operation::StreamingOperationShape for CapturePokemon {
     fn deserialize_streaming_input(
@@ -272,12 +272,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Che
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for CheckHealth {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::CHECK_HEALTH;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 
 /// /* ServerOperationGenerator.kt:51 */Fetch a radio song from the database and stream it back as a playable audio.
 /* ServerOperationGenerator.kt:80 */
@@ -315,12 +315,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Str
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for StreamPokemonRadio {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::STREAM_POKEMON_RADIO;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 /* ServerStreamingOperationGenerator.kt:126 */
 impl ::aws_smithy_http_server::operation::StreamingOperationShape for StreamPokemonRadio {
     fn deserialize_streaming_input(
@@ -405,12 +405,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetPokemonSpecies {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_POKEMON_SPECIES;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */
 
 /// /* ServerOperationGenerator.kt:51 */Retrieve information about your Pokédex.
 /* ServerOperationGenerator.kt:80 */
@@ -470,9 +470,9 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:123 */
+/* ServerOperationGenerator.kt:118 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetStorage {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_STORAGE;
 }
-/* ServerOperationGenerator.kt:133 */
+/* ServerOperationGenerator.kt:128 */

@@ -409,7 +409,7 @@ open class ServerRootGenerator(
                 $configErrorReExport
                 ${serviceName}Builder,
                 MissingOperationsError,
-                ${if (codegenContext.usesSchemaHttpSerde) "BuildError, ServiceProtocols," else ""}
+                ${if (codegenContext.usesSchemaHttpSerde) "BuildError," else ""}
             };
             """,
         )

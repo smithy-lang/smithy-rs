@@ -89,13 +89,13 @@ pub fn rest_router(
             requires_body: input.members().iter().any(|member| requires_body_member(member)),
         })
     })?;
+    // Validate at build what rejections will parse lazily at serialization.
+    parse_mime(codec_content_type).map_err(|err| RouterBuildError::Configuration(err.to_string()))?;
     Ok(RestProtocolRouter {
         service_schema: ctx.service,
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         codec_content_type,
         operations,
-        default_content_type: parse_mime(codec_content_type)
-            .map_err(|err| RouterBuildError::Configuration(err.to_string()))?,
     })
 }
 /// Routes restJson1 and restXml on each operation's `@http` method and URI.
@@ -121,7 +121,6 @@ struct RestProtocolRouter {
     router: crate::protocol::rest::router::RestRouter<OperationTarget>,
     codec_content_type: &'static str,
     operations: RoutingTable<RestOperationMetadata>,
-    default_content_type: mime::Mime,
 }
 
 #[derive(Debug)]
@@ -183,7 +182,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
                     .expect("matched target belongs to this router")
                     .requires_body
                 {
-                    RouteClaim::DeferredRejection(RoutingError::missing_content_type(self.default_content_type.clone()))
+                    RouteClaim::DeferredRejection(RoutingError::missing_content_type(self.codec_content_type))
                 } else {
                     RouteClaim::DeferredClaim(target)
                 }

@@ -4,7 +4,8 @@
  */
 
 pub mod router;
-
-/// [AWS JSON 1.0](https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html) protocol.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct AwsJson1_0;
+/// The `awsJson1_0` protocol.
+///
+/// The same type is used as the protocol type parameter of legacy generated servers and, with
+/// `codegen.schemaSerde`, as the schema-driven protocol implementation.
+pub use crate::schema::protocol::AwsJson1_0;

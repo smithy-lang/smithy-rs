@@ -277,8 +277,8 @@ internal class ServerSchemaStreamingTest {
         use #{SmithyHttpServer}::schema::SharedServerProtocol;
         // The very same generated types must follow either selected runtime codec.
         for (protocol, content_type, empty) in [
-            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1Protocol::default()), "application/json", br##"{"value":"bad"}"##.as_slice()),
-            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2CborProtocol::default()), "application/cbor", b"\xa1\x65value\x63bad".as_slice()),
+            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1::default()), "application/json", br##"{"value":"bad"}"##.as_slice()),
+            (SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2Cbor::default()), "application/cbor", b"\xa1\x65value\x63bad".as_slice()),
         ] {
             let marshaller = ChatEventsMarshaller::new(protocol.clone());
             let unmarshaller = ChatEventsUnmarshaller::new(protocol.clone());
@@ -412,9 +412,9 @@ internal class ServerSchemaStreamingTest {
         return """
         use #{SmithyHttpServer}::schema::SharedServerProtocol;
         let protocol = if $rpc {
-            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2CborProtocol::default())
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2Cbor::default())
         } else {
-            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1Protocol::default())
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1::default())
         };
         let config = crate::service::ChatServiceConfig::builder().build();
         let service = crate::service::ChatService::builder(config)
@@ -469,7 +469,7 @@ internal class ServerSchemaStreamingTest {
     private val swapProtocolTest =
         """
         let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(
-            #{SmithyHttpServer}::schema::protocol::AwsJson1_1Protocol::default());
+            #{SmithyHttpServer}::schema::protocol::AwsJson1_1::default());
         let selected = protocol.clone();
         let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
             let swapped = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedOperation>().unwrap().with_protocol(selected.clone());
@@ -516,7 +516,7 @@ internal class ServerSchemaStreamingTest {
         """
         use #{SmithyHttpServer}::operation::StreamingOperationShape;
         let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(
-            #{SmithyHttpServer}::schema::protocol::RpcV2CborProtocol::default());
+            #{SmithyHttpServer}::schema::protocol::RpcV2Cbor::default());
         $requestFrames
         // Missing initial metadata fails required-field validation, without dropping the first event.
         // Exercise receiver buffering independently, then the generated malformed/empty input paths.
@@ -589,7 +589,7 @@ internal class ServerSchemaStreamingTest {
                             *scope(codegenContext),
                             "Protocol" to
                                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-                                    .resolve("schema::protocol::RestJson1Protocol"),
+                                    .resolve("schema::protocol::RestJson1"),
                         )
                     }
                 }
@@ -702,7 +702,7 @@ internal class ServerSchemaStreamingTest {
                             "Cbor" to CargoDependency.smithyCbor(codegenContext.runtimeConfig).toType(),
                             "Protocol" to
                                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-                                    .resolve("schema::protocol::RpcV2CborProtocol"),
+                                    .resolve("schema::protocol::RpcV2Cbor"),
                         )
                     }
                 }

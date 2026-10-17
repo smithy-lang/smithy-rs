@@ -57,7 +57,7 @@ internal class CborCollectionLengthCompatibilityTest {
                     if (schemaSerde) {
                         """
                         use #{Server}::schema::ServerProtocol;
-                        let protocol = #{Server}::schema::protocol::RpcV2CborProtocol::default();
+                        let protocol = #{Server}::schema::protocol::RpcV2Cbor::default();
                         let response = protocol.serialize_response(crate::output::GetOutput::SCHEMA, &output);
                         """
                     } else {

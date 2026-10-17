@@ -202,7 +202,7 @@ impl Body for StreamingBody {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{RpcV2CborProtocol, ServerProtocol};
+    use super::super::{RpcV2Cbor, ServerProtocol};
     use super::*;
     use aws_smithy_schema::{prelude, shape_id, ShapeType};
     use http_body_util::BodyExt;
@@ -224,7 +224,7 @@ mod tests {
         }
     }
     fn response(source: BoxBody) -> crate::response::Response {
-        RpcV2CborProtocol::default().serialize_streaming_response(&OUTPUT, &Empty, &DATA, Some(source))
+        RpcV2Cbor::default().serialize_streaming_response(&OUTPUT, &Empty, &DATA, Some(source))
     }
     fn chunks(values: Vec<Result<Bytes, std::io::Error>>) -> BoxBody {
         crate::body::wrap_stream(futures_util::stream::iter(values))
@@ -261,7 +261,7 @@ mod tests {
 
     #[tokio::test]
     async fn absent_and_present_empty_are_distinct() {
-        let protocol = RpcV2CborProtocol::default();
+        let protocol = RpcV2Cbor::default();
         let absent = protocol
             .serialize_streaming_response(&OUTPUT, &Empty, &DATA, None)
             .into_body()
@@ -374,7 +374,7 @@ mod tests {
                 Err(SerdeError::custom("ordinary member failed"))
             }
         }
-        let protocol = RpcV2CborProtocol::default();
+        let protocol = RpcV2Cbor::default();
         assert_eq!(
             protocol
                 .serialize_streaming_response(&OUTPUT, &Fail, &DATA, Some(crate::body::empty()))

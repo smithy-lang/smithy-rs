@@ -1858,7 +1858,10 @@ mod multi_protocol {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert_eq!(response.headers().get(http::header::CONTENT_TYPE).unwrap(), "application/cbor");
+        assert_eq!(
+            response.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "application/cbor"
+        );
         assert!(!response.headers().contains_key(http::header::CONNECTION));
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(
@@ -3041,7 +3044,7 @@ async fn headerless_rest_claims_depend_on_required_body_members_and_non_null_def
                 panic!("required body input must defer a rejection");
             };
             assert_eq!(error.kind(), RoutingErrorKind::MissingContentType);
-            assert_eq!(error.expected_content_type().unwrap().essence_str(), codec);
+            assert_eq!(error.expected_content_type().unwrap(), codec);
         }
         for (method, uri) in [("POST", "/defaulted"), ("GET", "/bound/123")] {
             let request = Request::builder().method(method).uri(uri).body(()).unwrap();

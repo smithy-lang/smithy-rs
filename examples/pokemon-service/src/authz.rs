@@ -238,19 +238,18 @@ mod tests {
     use super::*;
     use http_body_util::BodyExt;
     use pokemon_service_server_sdk::server::schema::protocol::{
-        AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol,
-        RpcV2CborProtocol,
+        AwsJson1_0, AwsJson1_1, RestJson1, RestXml, RpcV2Cbor,
     };
     use pokemon_service_server_sdk::server::schema::ServerProtocol;
 
     #[tokio::test]
     async fn authorization_error_uses_the_selected_protocol_wire_format() {
         let protocols: [Box<dyn ServerProtocol>; 5] = [
-            Box::new(RestJson1Protocol::default()),
-            Box::new(AwsJson1_0Protocol::default()),
-            Box::new(AwsJson1_1Protocol::default()),
-            Box::new(RestXmlProtocol::default()),
-            Box::new(RpcV2CborProtocol::default()),
+            Box::new(RestJson1::default()),
+            Box::new(AwsJson1_0::default()),
+            Box::new(AwsJson1_1::default()),
+            Box::new(RestXml::default()),
+            Box::new(RpcV2Cbor::default()),
         ];
         for protocol in protocols {
             let error =
@@ -306,7 +305,7 @@ mod tests {
             message: "inner \"message\"".into(),
         };
         let error = AuthorizeServiceError::InnerServiceError(inner);
-        let response = RestJson1Protocol::default().serialize_error(&error);
+        let response = RestJson1::default().serialize_error(&error);
         assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(bytes, r#"{"message":"inner \"message\""}"#);

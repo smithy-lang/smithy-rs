@@ -12,9 +12,7 @@ use std::time::Duration;
 
 use aws_smithy_http_server::body::empty;
 use aws_smithy_http_server::routing::IntoMakeService;
-use aws_smithy_http_server::schema::protocol::{
-    AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol, RpcV2CborProtocol,
-};
+use aws_smithy_http_server::schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1, RestXml, RpcV2Cbor};
 use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
@@ -146,10 +144,7 @@ impl HttpModeledError for HeadersOutput {
 }
 
 fn rest_protocols() -> Vec<Box<dyn ServerProtocol>> {
-    vec![
-        Box::new(RestJson1Protocol::default()),
-        Box::new(RestXmlProtocol::default()),
-    ]
+    vec![Box::new(RestJson1::default()), Box::new(RestXml::default())]
 }
 
 fn values<'a>(headers: &'a http::HeaderMap, name: &str) -> Vec<&'a str> {
@@ -394,9 +389,9 @@ fn timestamp_header_lists_honor_the_schema_passed_to_the_element_writer() {
 #[tokio::test]
 async fn buffered_lengths_match_actual_output_and_error_bodies() {
     let mut protocols = rest_protocols();
-    protocols.push(Box::new(AwsJson1_0Protocol::default()));
-    protocols.push(Box::new(AwsJson1_1Protocol::default()));
-    protocols.push(Box::new(RpcV2CborProtocol::default()));
+    protocols.push(Box::new(AwsJson1_0::default()));
+    protocols.push(Box::new(AwsJson1_1::default()));
+    protocols.push(Box::new(RpcV2Cbor::default()));
     for protocol in protocols {
         let value = HeadersOutput::default();
         for response in [
@@ -584,8 +579,8 @@ async fn empty_buffered_responses_emit_one_zero_length() {
         }
     }
     for protocol in [
-        Box::new(RestJson1Protocol::default()) as Box<dyn ServerProtocol>,
-        Box::new(RestXmlProtocol::default()),
+        Box::new(RestJson1::default()) as Box<dyn ServerProtocol>,
+        Box::new(RestXml::default()),
     ] {
         let response = protocol.serialize_response(&EMPTY, &EmptyOutput);
         assert_eq!(response.status(), 200);
@@ -597,7 +592,7 @@ async fn empty_buffered_responses_emit_one_zero_length() {
 #[tokio::test]
 async fn hyper_preserves_lists_and_uses_one_consistent_content_length() {
     let mut value = HeadersOutput::default();
-    let baseline = RestXmlProtocol::default().serialize_response(&OUTPUT, &value);
+    let baseline = RestXml::default().serialize_response(&OUTPUT, &value);
     let expected_body = baseline.into_body().collect().await.unwrap().to_bytes();
     value.length = Some(expected_body.len().to_string());
     let value = Arc::new(value);
@@ -609,7 +604,7 @@ async fn hyper_preserves_lists_and_uses_one_consistent_content_length() {
         if request.uri().path() == "/computed" {
             value.length = None;
         }
-        let response = RestXmlProtocol::default().serialize_response(&OUTPUT, &value);
+        let response = RestXml::default().serialize_response(&OUTPUT, &value);
         async move { Ok::<_, Infallible>(response) }
     });
     let server = tokio::spawn(async move {

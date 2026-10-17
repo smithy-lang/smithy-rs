@@ -53,7 +53,7 @@ internal class CborLiveBlobTest {
                         use #{BodyUtil}::BodyExt;
                         use #{Server}::operation::StreamingOperationShape;
                         let protocol = #{Server}::schema::SharedServerProtocol::metadata_routed(
-                            #{Server}::schema::protocol::RpcV2CborProtocol::default());
+                            #{Server}::schema::protocol::RpcV2Cbor::default());
                         let released = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
                         let source_released = released.clone();
                         let mut sent = false;

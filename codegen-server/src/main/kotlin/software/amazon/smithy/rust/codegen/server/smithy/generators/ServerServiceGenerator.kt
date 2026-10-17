@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
@@ -1096,21 +1097,10 @@ class ServerServiceGenerator(
                 val schema = "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(service)}"
                 rustTemplate(
                     """
-                    /// Represents the protocols described by this service's schema.
-                    pub struct ServiceProtocols;
-
-                    impl ServiceProtocols {
-                        /// Returns the protocol shape IDs from the service schema.
-                        pub fn protocols() -> &'static [#{SchemaShapeId}<'static>] {
-                            <$serviceName as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA.protocols()
-                        }
-                    }
-
                     impl<S> #{SmithyHttpServer}::service::SchemaServiceShape for $serviceName<S> {
                         const SCHEMA: &'static #{SmithyHttpServer}::schema::ServiceSchema<'static> = &$schema;
                     }
                     """,
-                    "SchemaShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
                     *codegenScope,
                 )
             }
@@ -1152,16 +1142,36 @@ class ServerServiceGenerator(
 
                     const VERSION: Option<&'static str> = #{ServiceVersion};
 
-                    type Protocol = ${if (schemaSerde) "ServiceProtocols" else "#{Protocol}"};
+                    type Protocol = #{ServiceProtocol};
 
                     type Operations = Operation;
                 }
                 """,
                 "ServiceId" to id,
                 "ServiceVersion" to versionValue,
-                "Protocol" to protocol.markerStruct(),
+                "ServiceProtocol" to serviceProtocolType(),
                 *codegenScope,
             )
+        }
+
+    /**
+     * The service's protocol type: the protocol itself when the service serves one, or a tuple of
+     * every served protocol (in `servedProtocols` order) when it serves several, so that extractors
+     * and plugins written for a single protocol do not silently apply to a multi-protocol service.
+     */
+    private fun serviceProtocolType(): Writable =
+        writable {
+            val served = codegenContext.servedProtocols
+            if (!schemaSerde) {
+                // The legacy path serves exactly the generator's protocol, which may come from a decorator.
+                rustTemplate("#{P}", "P" to protocol.markerStruct())
+            } else if (served.size == 1) {
+                rustTemplate("#{P}", "P" to ServerRuntimeType.protocolType(served.single(), runtimeConfig))
+            } else {
+                rust("(")
+                served.forEach { rustTemplate("#{P}, ", "P" to ServerRuntimeType.protocolType(it, runtimeConfig)) }
+                rust(")")
+            }
         }
 
     private fun operationEnum(): Writable =

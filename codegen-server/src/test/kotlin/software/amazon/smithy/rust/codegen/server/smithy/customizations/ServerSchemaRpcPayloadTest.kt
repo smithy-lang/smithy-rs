@@ -35,11 +35,11 @@ internal class ServerSchemaRpcPayloadTest {
             }
         val runtimeProtocol =
             when (protocol) {
-                "awsJson1_0" -> "AwsJson1_0Protocol"
-                "awsJson1_1" -> "AwsJson1_1Protocol"
-                "restJson1" -> "RestJson1Protocol"
-                "restXml" -> "RestXmlProtocol"
-                else -> "RpcV2CborProtocol"
+                "awsJson1_0" -> "AwsJson1_0"
+                "awsJson1_1" -> "AwsJson1_1"
+                "restJson1" -> "RestJson1"
+                "restXml" -> "RestXml"
+                else -> "RpcV2Cbor"
             }
         val model =
             """
