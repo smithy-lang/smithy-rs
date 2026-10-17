@@ -77,10 +77,6 @@ impl<C> RpcProtocol<C> {
         self.codec.as_ref()
     }
 
-    pub(crate) fn shared_codec(&self) -> std::sync::Arc<C> {
-        self.codec.clone()
-    }
-
     /// The legacy RPC deserializers never touch the body of a memberless input.
     pub fn reads_request_body(&self, input: &Schema<'_>) -> bool {
         !input.members().is_empty()
@@ -158,6 +154,16 @@ impl<C: Codec> RpcProtocol<C> {
         value: &dyn SerializableStruct,
         body: BoxBody,
     ) -> Result<Response, SerdeError> {
+        if matches!(self.streaming, RpcStreaming::EventStreamContentType)
+            && output
+                .members()
+                .iter()
+                .any(|member| member.streaming() && member.shape_type() == ShapeType::Blob)
+        {
+            return Err(SerdeError::custom(
+                "rpcv2Cbor blob responses must be serialized as codec documents",
+            ));
+        }
         let parts = serialize_response_parts(
             self.codec.as_ref(),
             output,

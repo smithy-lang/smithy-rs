@@ -138,16 +138,6 @@ impl ServerProtocol for RestXmlProtocol {
         self.inner.deserialize_request(input, request)
     }
 
-    fn deserialize_data_stream(
-        &self,
-        _input: &'static Schema<'static>,
-        streaming_member: &'static Schema<'static>,
-        request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
-    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
-        let _ = streaming_member;
-        crate::schema::StreamingRequestDecoder::rest(request, self.inner.shared_codec())
-    }
-
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
         self.inner
             .serialize_response_with_codec(&ResponseXmlCodec::new(self.inner.codec(), output), output, value)

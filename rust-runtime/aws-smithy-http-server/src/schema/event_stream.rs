@@ -82,7 +82,8 @@ where
 
 /// Whether to emit an initial response before output events.
 ///
-/// This policy is exhaustive: callers choose whether to send or omit the initial response.
+/// Additional policies may be introduced in the future.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitialResponsePolicy {
     /// Emit an initial response only if the selected protocol supports initial-message framing.

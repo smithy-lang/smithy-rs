@@ -65,6 +65,12 @@ impl ServerProtocol for HttpOnly {
         panic!("unexpected error")
     }
     fn serialize_rejection(&self, err: DeserializeError) -> http::Response<BoxBody> {
+        // Invariant violations are framed by the protocol as internal failures.
+        if let DeserializeError::InternalFailure(_) = err {
+            let mut response = http::Response::new(crate::body::empty());
+            *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+            return response;
+        }
         panic!("unexpected rejection: {err}")
     }
 }
@@ -95,9 +101,12 @@ macro_rules! operation {
         }
         impl StreamingOperationShape for $name {
             fn deserialize_streaming_input(
-                _: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+                request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
                 _: SharedServerProtocol,
             ) -> crate::operation::StreamingInputFuture<()> {
+                if let Some(decoded) = request.extension::<Arc<AtomicBool>>() {
+                    decoded.store(true, Ordering::SeqCst);
+                }
                 Box::pin(async { Ok(()) })
             }
             fn serialize_streaming_output(_: (), _: &SharedServerProtocol) -> http::Response<BoxBody> {
@@ -110,22 +119,31 @@ operation!(InputOnly, EVENTS, EMPTY);
 operation!(OutputOnly, EMPTY, EVENTS);
 operation!(Duplex, EVENTS, EVENTS);
 operation!(StreamingBlob, BLOBS, BLOBS);
+operation!(BlobInputOnly, BLOBS, EMPTY);
+operation!(BlobOutputOnly, EMPTY, BLOBS);
 operation!(Ordinary, EMPTY, EMPTY);
 
 async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: http::StatusCode) {
+    check_protocol::<Op>(expected, SharedServerProtocol::serde_only(HttpOnly::default())).await;
+}
+
+async fn check_protocol<Op: StreamingOperationShape<Input = (), Output = ()>>(
+    expected: http::StatusCode,
+    protocol: SharedServerProtocol,
+) {
     let polled = Arc::new(AtomicBool::new(false));
     let called = Arc::new(AtomicBool::new(false));
+    let decoded = Arc::new(AtomicBool::new(false));
     let body_polled = polled.clone();
     let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(move |_| {
         body_polled.store(true, Ordering::SeqCst);
         Poll::Ready(Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::new()))))
     }));
     let mut request = http::Request::new(body);
-    request.extensions_mut().insert(SelectedOperation::new(
-        SharedServerProtocol::serde_only(HttpOnly::default()),
-        Op::SCHEMA,
-        Default::default(),
-    ));
+    request
+        .extensions_mut()
+        .insert(SelectedOperation::new(protocol, Op::SCHEMA, Default::default()));
+    request.extensions_mut().insert(decoded.clone());
     let handler_called = called.clone();
     let upgrade = DynStreamingUpgrade::<Op, (), _> {
         inner: tower::service_fn(move |_: ((), ())| {
@@ -137,22 +155,49 @@ async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: h
     };
     let response = upgrade.oneshot(request).await.unwrap();
     assert_eq!(response.status(), expected);
+    if expected == http::StatusCode::INTERNAL_SERVER_ERROR || expected == http::StatusCode::NOT_IMPLEMENTED {
+        assert!(response.headers().is_empty());
+    }
     assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
     assert!(!polled.load(Ordering::SeqCst), "body must remain live and unpolled");
     assert_eq!(called.load(Ordering::SeqCst), expected == http::StatusCode::OK);
+    assert_eq!(decoded.load(Ordering::SeqCst), expected == http::StatusCode::OK);
 }
 
 #[tokio::test]
 async fn unsupported_event_directions_reject_before_polling_or_calling_handler() {
-    check::<InputOnly>(http::StatusCode::INTERNAL_SERVER_ERROR).await;
-    check::<OutputOnly>(http::StatusCode::INTERNAL_SERVER_ERROR).await;
-    check::<Duplex>(http::StatusCode::INTERNAL_SERVER_ERROR).await;
+    check::<InputOnly>(http::StatusCode::NOT_IMPLEMENTED).await;
+    check::<OutputOnly>(http::StatusCode::NOT_IMPLEMENTED).await;
+    check::<Duplex>(http::StatusCode::NOT_IMPLEMENTED).await;
 }
 
 #[tokio::test]
 async fn http_and_streaming_blobs_need_no_event_capability() {
     check::<Ordinary>(http::StatusCode::OK).await;
     check::<StreamingBlob>(http::StatusCode::OK).await;
+}
+
+#[tokio::test]
+async fn cbor_outputs_events_and_ordinary_inputs_remain_supported() {
+    use crate::schema::protocol::RpcV2CborProtocol;
+    let protocol = SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default());
+    check_protocol::<BlobOutputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<Ordinary>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<InputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<OutputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<Duplex>(http::StatusCode::OK, protocol).await;
+}
+
+#[tokio::test]
+async fn rest_streaming_blob_inputs_remain_supported() {
+    use crate::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+    for protocol in [
+        SharedServerProtocol::metadata_routed(RestJson1Protocol::default()),
+        SharedServerProtocol::metadata_routed(RestXmlProtocol::default()),
+    ] {
+        check_protocol::<BlobInputOnly>(http::StatusCode::OK, protocol.clone()).await;
+        check_protocol::<StreamingBlob>(http::StatusCode::OK, protocol).await;
+    }
 }
 
 #[test]

@@ -116,10 +116,6 @@ impl<C> RestProtocol<C> {
         &self.policy
     }
 
-    pub(crate) fn shared_codec(&self) -> std::sync::Arc<C> {
-        self.codec.clone()
-    }
-
     /// The `Content-Type` a response for `output` carries, if any: the runtime mirror of the
     /// legacy `HttpBindingResolver.responseContentType`. It depends on the schema alone, never on
     /// which members are set.
