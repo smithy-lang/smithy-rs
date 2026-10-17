@@ -224,20 +224,14 @@ impl ProtocolRegistry {
     /// protocol and its response format for ambiguous requests. Such changes require a wire
     /// compatibility review.
     pub const BUILTIN: ProtocolRegistry = ProtocolRegistry::new(&[
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RpcV2CborProtocol>(
-            "smithy.protocols#rpcv2Cbor",
-        ),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_0Protocol>(
-            "aws.protocols#awsJson1_0",
-        )
-        .with_order(&[ProtocolOrder::After("smithy.protocols#rpcv2Cbor")]),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_1Protocol>(
-            "aws.protocols#awsJson1_1",
-        )
-        .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestJson1Protocol>("aws.protocols#restJson1")
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RpcV2Cbor>("smithy.protocols#rpcv2Cbor"),
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_0>("aws.protocols#awsJson1_0")
+            .with_order(&[ProtocolOrder::After("smithy.protocols#rpcv2Cbor")]),
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::AwsJson1_1>("aws.protocols#awsJson1_1")
+            .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_0")]),
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestJson1>("aws.protocols#restJson1")
             .with_order(&[ProtocolOrder::After("aws.protocols#awsJson1_1")]),
-        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXmlProtocol>("aws.protocols#restXml")
+        ProtocolRegistration::metadata_routed::<crate::schema::protocol::RestXml>("aws.protocols#restXml")
             .with_order(&[ProtocolOrder::After("aws.protocols#restJson1")]),
     ]);
 
@@ -340,7 +334,7 @@ mod tests {
     #[test]
     fn a_mismatched_protocol_id_is_an_error() {
         static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[ProtocolRegistration::metadata_routed::<
-            crate::schema::protocol::RestXmlProtocol,
+            crate::schema::protocol::RestXml,
         >("aws.protocols#restJson1")]);
         let err = REGISTRY
             .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restJson1")

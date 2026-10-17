@@ -41,9 +41,6 @@ pub struct UpgradePlugin<Extractors> {
     _extractors: PhantomData<Extractors>,
 }
 
-/// Protocol-neutral marker for request-part extractors used by [`DynUpgrade`].
-pub struct DynProtocol;
-
 /// Schema-driven, protocol-neutral HTTP upgrade plugin for operations without streaming members.
 #[derive(Debug, Clone)]
 pub struct DynUpgradePlugin<Extractors> {
@@ -69,9 +66,10 @@ where
     Ser: ServiceShape,
     Op: SchemaOperationShape,
 {
-    type Output = DynUpgrade<Op, Extractors, T>;
+    type Output = DynUpgrade<Ser::Protocol, Op, Extractors, T>;
     fn apply(&self, inner: T) -> Self::Output {
         DynUpgrade {
+            _protocol: PhantomData,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -85,15 +83,18 @@ where
 /// [`RequestBodyCollectionConfig`](crate::schema::RequestBodyCollectionConfig), carried by
 /// [`SelectedOperation`], when the selected protocol asks for it, the input is read through the erased protocol handle from the request
 /// extensions, and the output or error is serialized through the same handle.
-pub struct DynUpgrade<Op, Extractors, S> {
+pub struct DynUpgrade<P, Op, Extractors, S> {
+    /// The service's [`ServiceShape::Protocol`]; request-part extractors resolve against it.
+    _protocol: PhantomData<fn() -> P>,
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
 }
 
-impl<Op, Extractors, S: Clone> Clone for DynUpgrade<Op, Extractors, S> {
+impl<P, Op, Extractors, S: Clone> Clone for DynUpgrade<P, Op, Extractors, S> {
     fn clone(&self) -> Self {
         Self {
+            _protocol: PhantomData,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: self.inner.clone(),
@@ -123,13 +124,13 @@ pub(crate) fn convert_request<B>(
         .map_err(|err| DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(err.to_string())))
 }
 
-impl<Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<Op, Extractors, S>
+impl<P, Op, Extractors, B, S> Service<http::Request<B>> for DynUpgrade<P, Op, Extractors, S>
 where
     Op: SchemaOperationShape,
     Op::Input: DeserializableShape + Send + 'static,
     Op::Output: SerializableStruct + Send + 'static,
-    Extractors: FromParts<DynProtocol> + Send + 'static,
-    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    Extractors: FromParts<P> + Send + 'static,
+    <Extractors as FromParts<P>>::Rejection: std::fmt::Display,
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: std::error::Error + Send + Sync + 'static,
@@ -234,9 +235,10 @@ where
     Ser: ServiceShape,
     Op: StreamingOperationShape,
 {
-    type Output = DynStreamingUpgrade<Op, Extractors, T>;
+    type Output = DynStreamingUpgrade<Ser::Protocol, Op, Extractors, T>;
     fn apply(&self, inner: T) -> Self::Output {
         DynStreamingUpgrade {
+            _protocol: PhantomData,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner,
@@ -250,15 +252,18 @@ where
 /// reads URI and header bindings only; the live body goes to
 /// [`StreamingOperationShape::deserialize_streaming_input`]. A non-streaming input on such an
 /// operation is collected exactly as [`DynUpgrade`] collects it.
-pub struct DynStreamingUpgrade<Op, Extractors, S> {
+pub struct DynStreamingUpgrade<P, Op, Extractors, S> {
+    /// The service's [`ServiceShape::Protocol`]; request-part extractors resolve against it.
+    _protocol: PhantomData<fn() -> P>,
     _operation: PhantomData<Op>,
     _extractors: PhantomData<Extractors>,
     inner: S,
 }
 
-impl<Op, Extractors, S: Clone> Clone for DynStreamingUpgrade<Op, Extractors, S> {
+impl<P, Op, Extractors, S: Clone> Clone for DynStreamingUpgrade<P, Op, Extractors, S> {
     fn clone(&self) -> Self {
         Self {
+            _protocol: PhantomData,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: self.inner.clone(),
@@ -266,13 +271,13 @@ impl<Op, Extractors, S: Clone> Clone for DynStreamingUpgrade<Op, Extractors, S> 
     }
 }
 
-impl<Op, Extractors, B, S> Service<http::Request<B>> for DynStreamingUpgrade<Op, Extractors, S>
+impl<P, Op, Extractors, B, S> Service<http::Request<B>> for DynStreamingUpgrade<P, Op, Extractors, S>
 where
     Op: StreamingOperationShape,
     Op::Input: Send + 'static,
     Op::Output: Send + 'static,
-    Extractors: FromParts<DynProtocol> + Send + 'static,
-    <Extractors as FromParts<DynProtocol>>::Rejection: std::fmt::Display,
+    Extractors: FromParts<P> + Send + 'static,
+    <Extractors as FromParts<P>>::Rejection: std::fmt::Display,
     B: HttpBody<Data = bytes::Bytes> + Send + Sync + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     S: Service<(Op::Input, Extractors), Response = Op::Output> + Clone + Send + 'static,

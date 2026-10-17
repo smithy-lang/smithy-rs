@@ -13,8 +13,6 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::aws_json::rejection::RequestRejection;
 use crate::protocol::aws_json::runtime_error::RuntimeError;
-use crate::protocol::aws_json_10::AwsJson1_0;
-use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::{IntoResponse, Response};
 use crate::schema::response_bindings::{serialize_response_parts, ResponseValueKind};
 use crate::schema::{DeserializeError, HttpModeledError};
@@ -37,18 +35,18 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// as response headers (each also stays in the document). Set it to `"protocol"` in this
 /// protocol's settings for the AWS JSON specification instead: always 200 (errors use the
 /// `@error` class status) with every member in the document and no REST headers.
-pub struct AwsJson1_0Protocol {
+pub struct AwsJson1_0 {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
     historical_response_bindings: bool,
 }
 
-impl Default for AwsJson1_0Protocol {
+impl Default for AwsJson1_0 {
     fn default() -> Self {
         Self::new(false, true)
     }
 }
 
-impl AwsJson1_0Protocol {
+impl AwsJson1_0 {
     fn new(validate_skipped_values: bool, historical_response_bindings: bool) -> Self {
         Self {
             historical_response_bindings,
@@ -74,18 +72,18 @@ impl AwsJson1_0Protocol {
 /// as response headers (each also stays in the document). Set it to `"protocol"` in this
 /// protocol's settings for the AWS JSON specification instead: always 200 (errors use the
 /// `@error` class status) with every member in the document and no REST headers.
-pub struct AwsJson1_1Protocol {
+pub struct AwsJson1_1 {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
     historical_response_bindings: bool,
 }
 
-impl Default for AwsJson1_1Protocol {
+impl Default for AwsJson1_1 {
     fn default() -> Self {
         Self::new(false, true)
     }
 }
 
-impl AwsJson1_1Protocol {
+impl AwsJson1_1 {
     fn new(validate_skipped_values: bool, historical_response_bindings: bool) -> Self {
         Self {
             historical_response_bindings,
@@ -343,14 +341,14 @@ macro_rules! aws_json_protocol {
 }
 
 aws_json_protocol!(
-    AwsJson1_0Protocol,
+    AwsJson1_0,
     AwsJson1_0,
     shape_id!("aws.protocols", "awsJson1_0"),
     "application/x-amz-json-1.0",
     TypeValue::FullShapeId
 );
 aws_json_protocol!(
-    AwsJson1_1Protocol,
+    AwsJson1_1,
     AwsJson1_1,
     shape_id!("aws.protocols", "awsJson1_1"),
     "application/x-amz-json-1.1",

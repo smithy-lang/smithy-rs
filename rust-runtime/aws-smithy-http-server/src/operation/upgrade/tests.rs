@@ -145,11 +145,12 @@ async fn check_protocol<Op: StreamingOperationShape<Input = (), Output = ()>>(
         .insert(SelectedOperation::new(protocol, Op::SCHEMA, Default::default()));
     request.extensions_mut().insert(decoded.clone());
     let handler_called = called.clone();
-    let upgrade = DynStreamingUpgrade::<Op, (), _> {
+    let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Op, (), _> {
         inner: tower::service_fn(move |_: ((), ())| {
             handler_called.store(true, Ordering::SeqCst);
             async { Ok::<_, Infallible>(()) }
         }),
+        _protocol: PhantomData,
         _operation: PhantomData,
         _extractors: PhantomData,
     };
@@ -179,8 +180,8 @@ async fn http_and_streaming_blobs_need_no_event_capability() {
 
 #[tokio::test]
 async fn cbor_outputs_events_and_ordinary_inputs_remain_supported() {
-    use crate::schema::protocol::RpcV2CborProtocol;
-    let protocol = SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default());
+    use crate::schema::protocol::RpcV2Cbor;
+    let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
     check_protocol::<BlobOutputOnly>(http::StatusCode::OK, protocol.clone()).await;
     check_protocol::<Ordinary>(http::StatusCode::OK, protocol.clone()).await;
     check_protocol::<InputOnly>(http::StatusCode::OK, protocol.clone()).await;
@@ -190,10 +191,10 @@ async fn cbor_outputs_events_and_ordinary_inputs_remain_supported() {
 
 #[tokio::test]
 async fn rest_streaming_blob_inputs_remain_supported() {
-    use crate::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+    use crate::schema::protocol::{RestJson1, RestXml};
     for protocol in [
-        SharedServerProtocol::metadata_routed(RestJson1Protocol::default()),
-        SharedServerProtocol::metadata_routed(RestXmlProtocol::default()),
+        SharedServerProtocol::metadata_routed(RestJson1::default()),
+        SharedServerProtocol::metadata_routed(RestXml::default()),
     ] {
         check_protocol::<BlobInputOnly>(http::StatusCode::OK, protocol.clone()).await;
         check_protocol::<StreamingBlob>(http::StatusCode::OK, protocol).await;
@@ -246,11 +247,12 @@ fn streaming_upgrade_budgets_body_reads_by_the_handler() {
         StreamingInput::SCHEMA,
         Default::default(),
     ));
-    let upgrade = DynStreamingUpgrade::<StreamingInput, (), _> {
+    let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, StreamingInput, (), _> {
         inner: tower::service_fn(|(body, _): (SdkBody, ())| async move {
             assert_eq!(body.collect().await.unwrap().to_bytes(), "payload");
             Ok::<_, Infallible>(())
         }),
+        _protocol: PhantomData,
         _operation: PhantomData,
         _extractors: PhantomData,
     };
@@ -318,7 +320,8 @@ async fn sole_rest_health_checks_distinguish_absent_and_modeled_empty_inputs() {
     where
         Op: SchemaOperationShape<Input = EmptyShape, Output = EmptyShape, Error = Infallible> + Send + Sync + 'static,
     {
-        let upgrade = DynUpgrade::<Op, (), _> {
+        let upgrade = DynUpgrade::<crate::protocol::rest_json_1::RestJson1, Op, (), _> {
+            _protocol: PhantomData,
             _operation: PhantomData,
             _extractors: PhantomData,
             inner: tower::service_fn(move |_: (EmptyShape, ())| {
@@ -454,8 +457,9 @@ async fn schema_upgrades_preserve_request_metadata() {
         let response = if streaming_upgrade {
             let service = tower::service_fn(|_: ((), ())| async { Ok::<_, Infallible>(()) });
             if streaming_input {
-                DynStreamingUpgrade::<StreamingBlob, (), _> {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, StreamingBlob, (), _> {
                     inner: service,
+                    _protocol: PhantomData,
                     _operation: PhantomData,
                     _extractors: PhantomData,
                 }
@@ -463,8 +467,9 @@ async fn schema_upgrades_preserve_request_metadata() {
                 .await
                 .unwrap()
             } else {
-                DynStreamingUpgrade::<Ordinary, (), _> {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
                     inner: service,
+                    _protocol: PhantomData,
                     _operation: PhantomData,
                     _extractors: PhantomData,
                 }
@@ -473,8 +478,9 @@ async fn schema_upgrades_preserve_request_metadata() {
                 .unwrap()
             }
         } else {
-            DynUpgrade::<NonStreaming, (), _> {
+            DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
                 inner: tower::service_fn(|_: (EmptyShape, ())| async { Ok::<_, Infallible>(EmptyShape) }),
+                _protocol: PhantomData,
                 _operation: PhantomData,
                 _extractors: PhantomData,
             }

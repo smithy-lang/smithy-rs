@@ -56,10 +56,10 @@ use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
 
-pub use aws_json::{AwsJson1_0Protocol, AwsJson1_1Protocol};
-pub use rest_json_1::RestJson1Protocol;
-pub use rest_xml::RestXmlProtocol;
-pub use rpc_v2_cbor::RpcV2CborProtocol;
+pub use aws_json::{AwsJson1_0, AwsJson1_1};
+pub use rest_json_1::RestJson1;
+pub use rest_xml::RestXml;
+pub use rpc_v2_cbor::RpcV2Cbor;
 
 pub use registry::{ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration, ProtocolRegistry};
 

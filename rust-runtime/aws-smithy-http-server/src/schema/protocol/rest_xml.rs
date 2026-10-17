@@ -11,7 +11,6 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rest_xml::rejection::RequestRejection;
 use crate::protocol::rest_xml::runtime_error::RuntimeError;
-use crate::protocol::rest_xml::RestXml;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -26,11 +25,11 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// `application/xml`, and parsing checks the modeled root while retaining the legacy
 /// parser's recovery from malformed XML.
 #[derive(Debug)]
-pub struct RestXmlProtocol {
+pub struct RestXml {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
 }
 
-impl RestXmlProtocol {
+impl RestXml {
     fn new(strict_collection_element_names: bool, validate_document: bool, accept_text_xml: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
@@ -55,7 +54,7 @@ impl RestXmlProtocol {
     }
 }
 
-impl Default for RestXmlProtocol {
+impl Default for RestXml {
     fn default() -> Self {
         Self::new(true, false, false)
     }
@@ -78,7 +77,7 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
     empty_document: false,
 };
 
-impl MetadataRoutedProtocol for RestXmlProtocol {
+impl MetadataRoutedProtocol for RestXml {
     fn from_build_context(
         ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
@@ -109,7 +108,7 @@ impl MetadataRoutedProtocol for RestXmlProtocol {
     }
 }
 
-impl ServerProtocol for RestXmlProtocol {
+impl ServerProtocol for RestXml {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
@@ -182,7 +181,7 @@ impl ServerProtocol for RestXmlProtocol {
         if err.kind() == RoutingErrorKind::MissingContentType {
             return self.serialize_rejection(
                 crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
-                    expected_mime: err.expected_content_type().cloned(),
+                    expected_mime: err.expected_content_type().and_then(|expected| expected.parse().ok()),
                     found_mime: None,
                 }
                 .into(),

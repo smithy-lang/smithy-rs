@@ -4,8 +4,8 @@
  */
 
 use aws_smithy_http_server::response::Response;
-use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
-use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
+use aws_smithy_http_server::schema::protocol::RestJson1;
+use aws_smithy_http_server::schema::protocol::RestXml;
 use aws_smithy_http_server::schema::{
     MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema,
 };
@@ -337,16 +337,8 @@ fn response_bindings(criterion: &mut Criterion) {
         LazyLock::new(|| ServiceSchema::new(shape_id!("bench", "Service"), None, &[], OPERATIONS.as_slice()));
     // Build through the same factory as a generated service so response plans are prepared.
     let ctx = ProtocolBuildContext::new(&SERVICE);
-    bench_protocol(
-        criterion,
-        "rest_json_1",
-        RestJson1Protocol::from_build_context(&ctx).unwrap(),
-    );
-    bench_protocol(
-        criterion,
-        "rest_xml",
-        RestXmlProtocol::from_build_context(&ctx).unwrap(),
-    );
+    bench_protocol(criterion, "rest_json_1", RestJson1::from_build_context(&ctx).unwrap());
+    bench_protocol(criterion, "rest_xml", RestXml::from_build_context(&ctx).unwrap());
 }
 
 criterion_group!(benches, response_bindings);

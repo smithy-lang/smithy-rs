@@ -15,21 +15,21 @@ use std::time::Duration;
 
 use crate::protocol::test_helpers::get_body_as_string;
 use crate::response::Response;
-use crate::schema::protocol::AwsJson1_0Protocol;
-use crate::schema::protocol::AwsJson1_1Protocol;
-use crate::schema::protocol::RestJson1Protocol;
-use crate::schema::protocol::RestXmlProtocol;
-use crate::schema::protocol::RpcV2CborProtocol;
+use crate::schema::protocol::AwsJson1_0;
+use crate::schema::protocol::AwsJson1_1;
+use crate::schema::protocol::RestJson1;
+use crate::schema::protocol::RestXml;
+use crate::schema::protocol::RpcV2Cbor;
 use crate::schema::{
     collect_request_body, DeserializableShape, DeserializeError, HttpModeledError, RequestBodyCollectionConfig,
     ServerProtocol,
 };
 
-static REST_JSON: LazyLock<RestJson1Protocol> = LazyLock::new(RestJson1Protocol::default);
-static REST_XML: LazyLock<RestXmlProtocol> = LazyLock::new(RestXmlProtocol::default);
-static AWS_JSON_10: LazyLock<AwsJson1_0Protocol> = LazyLock::new(AwsJson1_0Protocol::default);
-static AWS_JSON_11: LazyLock<AwsJson1_1Protocol> = LazyLock::new(AwsJson1_1Protocol::default);
-static RPC_V2_CBOR: LazyLock<RpcV2CborProtocol> = LazyLock::new(RpcV2CborProtocol::default);
+static REST_JSON: LazyLock<RestJson1> = LazyLock::new(RestJson1::default);
+static REST_XML: LazyLock<RestXml> = LazyLock::new(RestXml::default);
+static AWS_JSON_10: LazyLock<AwsJson1_0> = LazyLock::new(AwsJson1_0::default);
+static AWS_JSON_11: LazyLock<AwsJson1_1> = LazyLock::new(AwsJson1_1::default);
+static RPC_V2_CBOR: LazyLock<RpcV2Cbor> = LazyLock::new(RpcV2Cbor::default);
 
 #[test]
 fn json_protocols_accept_verified_legacy_number_spellings() {
@@ -539,7 +539,7 @@ async fn rpcv2_cbor_blob_outputs_use_a_document_instead_of_a_raw_streaming_respo
             Ok(())
         }
     }
-    let protocol = crate::schema::SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default());
+    let protocol = crate::schema::SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
     let response =
         protocol.serialize_streaming_response(&OUTPUT, &Output, &DATA, Some(crate::body::to_boxed("raw blob")));
     assert_eq!(response.status(), http::StatusCode::OK);
@@ -590,7 +590,7 @@ async fn streaming_responses_carry_the_head_only() {
     // awsJson stamps its own content type on event stream responses; rpcv2Cbor the event stream
     // type plus its protocol header. With `responseBindings: "protocol"` (and always on rpcv2Cbor)
     // neither writes REST headers.
-    let spec = spec_bindings::<AwsJson1_0Protocol>();
+    let spec = spec_bindings::<AwsJson1_0>();
     let response = spec.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
     assert_eq!(response.status(), http::StatusCode::OK);
     assert_eq!(
@@ -1193,27 +1193,27 @@ async fn rest_xml_constraint_violations_reproduce_the_legacy_empty_body() {
 fn every_protocol_erases_to_a_dyn_server_protocol() {
     let protocols: Vec<(SharedServerProtocol, &str, bool)> = vec![
         (
-            SharedServerProtocol::metadata_routed(RestJson1Protocol::default()),
+            SharedServerProtocol::metadata_routed(RestJson1::default()),
             "aws.protocols#restJson1",
             false,
         ),
         (
-            SharedServerProtocol::metadata_routed(RestXmlProtocol::default()),
+            SharedServerProtocol::metadata_routed(RestXml::default()),
             "aws.protocols#restXml",
             false,
         ),
         (
-            SharedServerProtocol::metadata_routed(AwsJson1_0Protocol::default()),
+            SharedServerProtocol::metadata_routed(AwsJson1_0::default()),
             "aws.protocols#awsJson1_0",
             true,
         ),
         (
-            SharedServerProtocol::metadata_routed(AwsJson1_1Protocol::default()),
+            SharedServerProtocol::metadata_routed(AwsJson1_1::default()),
             "aws.protocols#awsJson1_1",
             true,
         ),
         (
-            SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default()),
+            SharedServerProtocol::metadata_routed(RpcV2Cbor::default()),
             "smithy.protocols#rpcv2Cbor",
             true,
         ),
@@ -1228,7 +1228,7 @@ fn every_protocol_erases_to_a_dyn_server_protocol() {
         assert!(!protocol.event_stream_framing().unwrap().media_type.is_empty(), "{id}");
     }
 
-    let erased: SharedServerProtocol = SharedServerProtocol::metadata_routed(RestJson1Protocol::default());
+    let erased: SharedServerProtocol = SharedServerProtocol::metadata_routed(RestJson1::default());
     let req = request(
         "/pets/rex?age=7",
         &[("content-type", "application/json")],
@@ -1277,11 +1277,11 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
     }
 
     let protocols: Vec<SharedServerProtocol> = vec![
-        SharedServerProtocol::metadata_routed(RestJson1Protocol::default()),
-        SharedServerProtocol::metadata_routed(RestXmlProtocol::default()),
-        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_0Protocol>()),
-        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_1Protocol>()),
-        SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default()),
+        SharedServerProtocol::metadata_routed(RestJson1::default()),
+        SharedServerProtocol::metadata_routed(RestXml::default()),
+        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_0>()),
+        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_1>()),
+        SharedServerProtocol::metadata_routed(RpcV2Cbor::default()),
     ];
     for protocol in protocols {
         let id = protocol.protocol_id().as_str();
@@ -1360,10 +1360,10 @@ impl DeserializableShape for Collections {
     }
 }
 
-fn rest_xml_with_settings(settings: Option<&str>) -> Result<RestXmlProtocol, crate::schema::routing::RouterBuildError> {
+fn rest_xml_with_settings(settings: Option<&str>) -> Result<RestXml, crate::schema::routing::RouterBuildError> {
     use crate::schema::protocol::MetadataRoutedProtocol;
     let settings = settings.map(|json| crate::schema::settings::parse_settings_json(json.as_bytes()));
-    RestXmlProtocol::from_build_context(
+    RestXml::from_build_context(
         &crate::schema::ProtocolBuildContext::new(&COLLECTIONS_SERVICE).with_settings(settings.as_ref()),
     )
 }
@@ -1455,15 +1455,15 @@ fn json_skipped_value_setting_must_be_a_boolean() {
         let settings = crate::schema::settings::parse_settings_json(json.as_bytes());
         let context = crate::schema::ProtocolBuildContext::new(&COLLECTIONS_SERVICE).with_settings(Some(&settings));
         assert!(matches!(
-            AwsJson1_0Protocol::from_build_context(&context),
+            AwsJson1_0::from_build_context(&context),
             Err(crate::schema::routing::RouterBuildError::Configuration(_))
         ));
         assert!(matches!(
-            AwsJson1_1Protocol::from_build_context(&context),
+            AwsJson1_1::from_build_context(&context),
             Err(crate::schema::routing::RouterBuildError::Configuration(_))
         ));
         assert!(matches!(
-            RestJson1Protocol::from_build_context(&context),
+            RestJson1::from_build_context(&context),
             Err(crate::schema::routing::RouterBuildError::Configuration(_))
         ));
     }
@@ -1599,11 +1599,11 @@ fn registered_schemas_with_invalid_rest_metadata_fail_only_rest_protocol_builds(
         ServiceSchema::new(shape_id!("test", "BadService"), None, &[], &BAD_MIME_OPS);
     for service in [&BAD_ERROR_SERVICE, &BAD_MIME_SERVICE] {
         let ctx = ProtocolBuildContext::new(service);
-        assert!(RestJson1Protocol::from_build_context(&ctx).is_err());
-        assert!(RestXmlProtocol::from_build_context(&ctx).is_err());
+        assert!(RestJson1::from_build_context(&ctx).is_err());
+        assert!(RestXml::from_build_context(&ctx).is_err());
         // AWS JSON ignores the REST header names and media types.
-        assert!(AwsJson1_0Protocol::from_build_context(&ctx).is_ok());
-        assert!(AwsJson1_1Protocol::from_build_context(&ctx).is_ok());
+        assert!(AwsJson1_0::from_build_context(&ctx).is_ok());
+        assert!(AwsJson1_1::from_build_context(&ctx).is_ok());
     }
 }
 

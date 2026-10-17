@@ -10,7 +10,6 @@ use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use crate::body::BoxBody;
 use crate::protocol::rest_json_1::rejection::RequestRejection;
 use crate::protocol::rest_json_1::runtime_error::RuntimeError;
-use crate::protocol::rest_json_1::RestJson1;
 use crate::response::{IntoResponse, Response};
 use crate::schema::{DeserializeError, HttpModeledError};
 
@@ -23,17 +22,17 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// Defaults to validating escape syntax in skipped strings without decoding Unicode.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
 /// to skip escape validation, matching legacy smithy-rs servers.
-pub struct RestJson1Protocol {
+pub struct RestJson1 {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_json::codec::JsonCodec>,
 }
 
-impl Default for RestJson1Protocol {
+impl Default for RestJson1 {
     fn default() -> Self {
         Self::new(false)
     }
 }
 
-impl RestJson1Protocol {
+impl RestJson1 {
     fn new(validate_skipped_values: bool) -> Self {
         Self {
             inner: crate::schema::protocol::rest::RestProtocol::new(
@@ -71,7 +70,7 @@ pub(crate) const POLICY: RestPolicy = RestPolicy {
     empty_document: true,
 };
 
-impl MetadataRoutedProtocol for RestJson1Protocol {
+impl MetadataRoutedProtocol for RestJson1 {
     fn from_build_context(
         ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
@@ -99,7 +98,7 @@ impl MetadataRoutedProtocol for RestJson1Protocol {
     }
 }
 
-impl ServerProtocol for RestJson1Protocol {
+impl ServerProtocol for RestJson1 {
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOL_ID
     }
@@ -177,7 +176,7 @@ impl ServerProtocol for RestJson1Protocol {
         if err.kind() == RoutingErrorKind::MissingContentType {
             return self.serialize_rejection(
                 crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
-                    expected_mime: err.expected_content_type().cloned(),
+                    expected_mime: err.expected_content_type().and_then(|expected| expected.parse().ok()),
                     found_mime: None,
                 }
                 .into(),

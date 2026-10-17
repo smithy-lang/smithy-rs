@@ -5,7 +5,7 @@
 
 //! Sensitive values must not reach logs on codec serialization failures.
 
-use aws_smithy_http_server::schema::protocol::{AwsJson1_0Protocol, AwsJson1_1Protocol, RestJson1Protocol};
+use aws_smithy_http_server::schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1};
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
@@ -49,11 +49,7 @@ impl SerializableStruct for Secret {
 
 #[test]
 fn sensitive_body_values_are_not_logged_on_serialization_failure() {
-    let protocols: [&dyn ServerProtocol; 3] = [
-        &RestJson1Protocol::default(),
-        &AwsJson1_0Protocol::default(),
-        &AwsJson1_1Protocol::default(),
-    ];
+    let protocols: [&dyn ServerProtocol; 3] = [&RestJson1::default(), &AwsJson1_0::default(), &AwsJson1_1::default()];
     for protocol in protocols {
         let writer = LogWriter::default();
         let sink = writer.clone();

@@ -9,7 +9,7 @@
 //! deliberately loose sanity bounds; the printed numbers are the measurement, compared
 //! before and after the response-plan caching change.
 
-use aws_smithy_http_server::schema::protocol::{AwsJson1_1Protocol, RestJson1Protocol};
+use aws_smithy_http_server::schema::protocol::{AwsJson1_1, RestJson1};
 use aws_smithy_http_server::schema::{
     HttpModeledError, MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema,
 };
@@ -176,8 +176,8 @@ static SERVICE: ServiceSchema<'static> = ServiceSchema::new(shape_id!("bench", "
 #[test]
 fn serialization_allocation_counts() {
     let ctx = ProtocolBuildContext::new(&SERVICE);
-    let rest_json = RestJson1Protocol::from_build_context(&ctx).unwrap();
-    let aws_json = AwsJson1_1Protocol::from_build_context(&ctx).unwrap();
+    let rest_json = RestJson1::from_build_context(&ctx).unwrap();
+    let aws_json = AwsJson1_1::from_build_context(&ctx).unwrap();
 
     let calls = 1000;
     let cases: [(&str, (u64, u64)); 4] = [
@@ -208,8 +208,8 @@ fn serialization_allocation_counts() {
     ];
     // Default-constructed REST protocols compile binding plans per response. AWS JSON
     // always serializes a document and does not prepare REST binding plans.
-    let rest_json_uncached = RestJson1Protocol::default();
-    let aws_json_uncached = AwsJson1_1Protocol::default();
+    let rest_json_uncached = RestJson1::default();
+    let aws_json_uncached = AwsJson1_1::default();
     let uncached: [(&str, (u64, u64)); 4] = [
         (
             "rest_json_1 serialize_error (uncached plan)",

@@ -6,7 +6,7 @@
 //! Media-typed list headers retain legacy base64 encoding and round-trip through request bindings.
 
 use aws_smithy_http_server::body::empty;
-use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+use aws_smithy_http_server::schema::protocol::{RestJson1, RestXml};
 use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
@@ -106,10 +106,7 @@ fn header_values<'a>(headers: &'a http::HeaderMap, name: &str) -> Vec<&'a str> {
 }
 
 fn rest_protocols() -> Vec<Box<dyn ServerProtocol>> {
-    vec![
-        Box::new(RestJson1Protocol::default()),
-        Box::new(RestXmlProtocol::default()),
-    ]
+    vec![Box::new(RestJson1::default()), Box::new(RestXml::default())]
 }
 
 #[test]
@@ -170,8 +167,8 @@ fn empty_media_list_elements_are_omitted_like_legacy() {
 #[test]
 fn media_list_response_headers_round_trip_as_repeated_or_combined_request_headers() {
     for protocol in [
-        Box::new(RestJson1Protocol::default()) as Box<dyn ServerProtocol>,
-        Box::new(RestXmlProtocol::default()),
+        Box::new(RestJson1::default()) as Box<dyn ServerProtocol>,
+        Box::new(RestXml::default()),
     ] {
         let raw = ["{}", "[1,2]", "a,b", "a\"b", "line\nbreak", "snowman ☃"];
         let response = protocol.serialize_response(&OUTPUT, &MediaOutput::new(&raw));

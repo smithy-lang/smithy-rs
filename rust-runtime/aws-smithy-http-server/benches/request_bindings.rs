@@ -22,8 +22,8 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use aws_smithy_http_server::schema::protocol::RestJson1Protocol;
-use aws_smithy_http_server::schema::protocol::RestXmlProtocol;
+use aws_smithy_http_server::schema::protocol::RestJson1;
+use aws_smithy_http_server::schema::protocol::RestXml;
 use aws_smithy_http_server::schema::ServerProtocol;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::traits::HttpTrait;
@@ -455,7 +455,7 @@ fn bench_scenarios(criterion: &mut Criterion, group_name: &str, protocol: &dyn S
 }
 
 fn request_bindings(criterion: &mut Criterion) {
-    let json = RestJson1Protocol::default();
+    let json = RestJson1::default();
     let json_scenarios = scenarios(
         "application/json",
         br#"{"note":"hello","count":42,"enabled":true}"#,
@@ -466,7 +466,7 @@ fn request_bindings(criterion: &mut Criterion) {
 
     // The label/query/header paths never touch the codec, so restXml only
     // runs the codec-delegation baseline.
-    let xml = RestXmlProtocol::default();
+    let xml = RestXml::default();
     let xml_scenarios = scenarios(
         "application/xml",
         b"<BodyInput><note>hello</note><count>42</count><enabled>true</enabled></BodyInput>",

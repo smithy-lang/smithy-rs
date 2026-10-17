@@ -76,7 +76,10 @@ pub enum RoutingErrorKind {
 pub struct RoutingError {
     kind: RoutingErrorKind,
     source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    expected_content_type: Option<mime::Mime>,
+    // The codegen'd static string, not a parsed `mime::Mime`: deferred rejections ride the
+    // routing future, and an inline `Mime` would widen it by ~80 bytes for a value that is
+    // only parsed when a rejection actually serializes.
+    expected_content_type: Option<&'static str>,
 }
 
 impl RoutingError {
@@ -118,12 +121,12 @@ impl RoutingError {
     }
 
     /// A missing Content-Type for an input that requires body data.
-    pub fn missing_content_type(expected: mime::Mime) -> Self {
+    pub fn missing_content_type(expected: &'static str) -> Self {
         Self {
             kind: RoutingErrorKind::MissingContentType,
             source: Some(Box::new(
                 crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
-                    expected_mime: Some(expected.clone()),
+                    expected_mime: expected.parse().ok(),
                     found_mime: None,
                 },
             )),
@@ -132,8 +135,8 @@ impl RoutingError {
     }
 
     /// The expected media type for a missing-content-type rejection.
-    pub fn expected_content_type(&self) -> Option<&mime::Mime> {
-        self.expected_content_type.as_ref()
+    pub fn expected_content_type(&self) -> Option<&'static str> {
+        self.expected_content_type
     }
 
     /// Attaches a diagnostic source.

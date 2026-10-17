@@ -1083,17 +1083,17 @@ impl ShapeDeserializer for RawPayloadDeserializer<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::protocol::RestJson1Protocol;
-    use crate::schema::protocol::RpcV2CborProtocol;
+    use crate::schema::protocol::RestJson1;
+    use crate::schema::protocol::RpcV2Cbor;
     use aws_smithy_http::event_stream::Receiver;
     use aws_smithy_schema::ShapeId;
 
     fn json_protocol() -> SharedServerProtocol {
-        SharedServerProtocol::metadata_routed(RestJson1Protocol::default())
+        SharedServerProtocol::metadata_routed(RestJson1::default())
     }
 
     fn cbor_protocol() -> SharedServerProtocol {
-        SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default())
+        SharedServerProtocol::metadata_routed(RpcV2Cbor::default())
     }
 
     fn header<'a>(message: &'a Message, name: &str) -> Option<&'a HeaderValue> {
@@ -1741,7 +1741,7 @@ mod tests {
                 b"\xbf\x64data\x62hi\xff".as_slice(),
             ),
             (
-                SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXmlProtocol::default()),
+                SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
                 "application/xml",
                 br#"<WireEvent xmlns="urn:test"><WireData>hi</WireData></WireEvent>"#.as_slice(),
             ),
@@ -2089,14 +2089,14 @@ mod tests {
 
     #[test]
     fn aws_json_exception_frames_include_the_protocol_discriminator() {
-        use crate::schema::protocol::{AwsJson1_0Protocol, AwsJson1_1Protocol};
+        use crate::schema::protocol::{AwsJson1_0, AwsJson1_1};
         for (protocol, expected) in [
             (
-                SharedServerProtocol::metadata_routed(AwsJson1_0Protocol::default()),
+                SharedServerProtocol::metadata_routed(AwsJson1_0::default()),
                 "test#BoomError",
             ),
             (
-                SharedServerProtocol::metadata_routed(AwsJson1_1Protocol::default()),
+                SharedServerProtocol::metadata_routed(AwsJson1_1::default()),
                 "BoomError",
             ),
         ] {

@@ -10,9 +10,7 @@
 //! per-response cost so the plan-caching change can be judged against a baseline.
 
 use aws_smithy_http_server::response::Response;
-use aws_smithy_http_server::schema::protocol::{
-    AwsJson1_1Protocol, RestJson1Protocol, RestXmlProtocol, RpcV2CborProtocol,
-};
+use aws_smithy_http_server::schema::protocol::{AwsJson1_1, RestJson1, RestXml, RpcV2Cbor};
 use aws_smithy_http_server::schema::{
     HttpModeledError, MetadataRoutedProtocol, OperationSchema, ProtocolBuildContext, ServerProtocol, ServiceSchema,
 };
@@ -210,30 +208,18 @@ fn error_bindings(criterion: &mut Criterion) {
     bench_protocol(
         criterion,
         "rest_json_1_errors",
-        RestJson1Protocol::from_build_context(&ctx).unwrap(),
+        RestJson1::from_build_context(&ctx).unwrap(),
     );
-    bench_protocol(
-        criterion,
-        "rest_xml_errors",
-        RestXmlProtocol::from_build_context(&ctx).unwrap(),
-    );
-    bench_protocol(
-        criterion,
-        "aws_json_1_1",
-        AwsJson1_1Protocol::from_build_context(&ctx).unwrap(),
-    );
-    bench_protocol(
-        criterion,
-        "rpc_v2_cbor",
-        RpcV2CborProtocol::from_build_context(&ctx).unwrap(),
-    );
+    bench_protocol(criterion, "rest_xml_errors", RestXml::from_build_context(&ctx).unwrap());
+    bench_protocol(criterion, "aws_json_1_1", AwsJson1_1::from_build_context(&ctx).unwrap());
+    bench_protocol(criterion, "rpc_v2_cbor", RpcV2Cbor::from_build_context(&ctx).unwrap());
     // Default-constructed protocols have no prepared plans: every schema misses the cache and
     // compiles its plan per response. The gap to the groups above is the cost of plan
     // compilation, i.e. what the build-time preparation saves.
-    bench_protocol(criterion, "rest_json_1_errors_uncached", RestJson1Protocol::default());
-    bench_protocol(criterion, "rest_xml_errors_uncached", RestXmlProtocol::default());
-    bench_protocol(criterion, "aws_json_1_1_uncached", AwsJson1_1Protocol::default());
-    bench_protocol(criterion, "rpc_v2_cbor_uncached", RpcV2CborProtocol::default());
+    bench_protocol(criterion, "rest_json_1_errors_uncached", RestJson1::default());
+    bench_protocol(criterion, "rest_xml_errors_uncached", RestXml::default());
+    bench_protocol(criterion, "aws_json_1_1_uncached", AwsJson1_1::default());
+    bench_protocol(criterion, "rpc_v2_cbor_uncached", RpcV2Cbor::default());
 }
 
 criterion_group!(benches, error_bindings);

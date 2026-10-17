@@ -5,7 +5,7 @@
 
 //! XML payload roots follow legacy member/target naming precedence without losing target metadata.
 
-use aws_smithy_http_server::schema::protocol::{RestJson1Protocol, RestXmlProtocol};
+use aws_smithy_http_server::schema::protocol::{RestJson1, RestXml};
 use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
@@ -71,7 +71,7 @@ async fn structured_payload_root_precedence_preserves_namespace_and_children() {
                     }
                     let output_members = [&payload];
                     let output = Schema::new_struct(shape_id!("test", "Output"), ShapeType::Structure, &output_members);
-                    let response = RestXmlProtocol::default().serialize_response(
+                    let response = RestXml::default().serialize_response(
                         &output,
                         &Output {
                             schema: &output,
@@ -117,13 +117,13 @@ async fn shared_payload_target_can_have_distinct_roots_without_changing_json() {
             schema: &output,
             target: &target,
         };
-        let xml = RestXmlProtocol::default().serialize_response(&output, &value);
+        let xml = RestXml::default().serialize_response(&output, &value);
         let body = xml.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(
             body.as_ref(),
             format!("<{name} xmlns=\"urn:target\" attr=\"a\"><Child>value</Child></{name}>").as_bytes()
         );
-        let json = RestJson1Protocol::default().serialize_response(&output, &value);
+        let json = RestJson1::default().serialize_response(&output, &value);
         let body = json.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(body.as_ref(), br#"{"child":"value","attr":"a"}"#);
     }
@@ -164,7 +164,7 @@ async fn modeled_error_payloads_use_the_xml_protocol_root_override() {
             422
         }
     }
-    let response = RestXmlProtocol::default().serialize_error(&PayloadError);
+    let response = RestXml::default().serialize_error(&PayloadError);
     assert_eq!(response.status(), 422);
     let body = response.into_body().collect().await.unwrap().to_bytes();
     assert_eq!(
