@@ -9,6 +9,8 @@
 //! cargo +nightly miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::
 //! ```
 //!
+//! CI runs this, with `-Zmiri-strict-provenance`, from the crate's `additional-ci` script.
+//!
 //! Models used under Miri disable the prelude, because parsing it is slow there; tests that
 //! need it are ignored under Miri.
 

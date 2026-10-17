@@ -276,6 +276,7 @@ impl Storage {
 pub(super) mod tests {
     //! Ownership tests. These are the Miri suite: run with
     //! `cargo +nightly miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::`.
+    //! CI runs these tests in this crate's `additional-ci` script.
 
     use super::*;
     use aws_smithy_schema::extension::SchemaExtensionKey;
