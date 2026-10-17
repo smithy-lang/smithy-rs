@@ -92,127 +92,7 @@ pub(crate) fn serialize_response_parts_compiled<C: Codec>(
     value: &dyn SerializableStruct,
     plan: &CompiledResponsePlan,
 ) -> Result<ResponseParts, SerdeError> {
-    // BindingsOnly captures HTTP headers and status without a document body; streaming bodies are supplied elsewhere.
-    if matches!(plan.strategy, ResponseStrategy::Empty | ResponseStrategy::BindingsOnly) {
-        let mut captured = CapturedBindings::default();
-        if matches!(plan.strategy, ResponseStrategy::BindingsOnly) {
-            // No body needs to be serialized.
-            let mut sink = NoBodySerializer { discard: true };
-            // Values should be split between header / status values and body.
-            let mut splitter = ResponseBindingSplitter {
-                body: &mut sink,
-                codec,
-                captured: &mut captured,
-                payload_mode: false,
-                capture_bindings: true,
-                plan,
-            };
-            value.serialize_members(&mut splitter)?;
-        }
-
-        // Build a response from the captured header / status code and empty body.
-        return Ok(ResponseParts {
-            body: bytes::Bytes::new(),
-            headers: captured.headers,
-            status: captured.status,
-        });
-    }
-
-    // Without HTTP response bindings, the codec serializes the whole structure.
-    if matches!(
-        plan.strategy,
-        ResponseStrategy::CodecBody | ResponseStrategy::CodecBodyWithHeaders
-    ) {
-        // Since nothing needs to be set in the header / status, the complete body
-        // can be serialized using the codec's serializer.
-        let mut serializer = codec.create_serializer();
-        serializer.write_struct(schema, value)?;
-
-        let mut captured = CapturedBindings::default();
-        if matches!(plan.strategy, ResponseStrategy::CodecBodyWithHeaders) {
-            // Legacy generated AWS JSON responses serialize the complete response body and
-            // independently collect modeled headers.
-            let mut sink = NoBodySerializer { discard: true };
-            let mut splitter = ResponseBindingSplitter {
-                body: &mut sink,
-                codec,
-                captured: &mut captured,
-                payload_mode: false,
-                capture_bindings: true,
-                plan,
-            };
-            value.serialize_members(&mut splitter)?;
-        }
-        return Ok(ResponseParts {
-            body: serializer.finish().into(),
-            headers: captured.headers,
-            status: None,
-        });
-    }
-
-    let has_payload_member = matches!(plan.strategy, ResponseStrategy::Payload);
-    let mut captured = CapturedBindings::default();
-
-    let body = if has_payload_member {
-        // An `@httpPayload` member supplies the body without an outer operation structure.
-        // The payload and header / status would be captured. The NoBodySerializer ensures
-        // that nothing other than the payload is going to be serialized.
-        let mut sink = NoBodySerializer { discard: false };
-        let mut splitter = ResponseBindingSplitter {
-            body: &mut sink,
-            codec,
-            captured: &mut captured,
-            payload_mode: true,
-            capture_bindings: true,
-            plan,
-        };
-        value.serialize_members(&mut splitter)?;
-        // The captured payload supplies the body below.
-        bytes::Bytes::new()
-    } else {
-        // Serialize body members through the codec while capturing HTTP-bound members separately.
-        let mut body_serializer = codec.create_serializer();
-        {
-            // Both body and header / status need to be captured. The value that needs to be serialized
-            // is wrapped so that when it writes a member schema, the SplitBinding can decide whether
-            // to set the header / status or forward it to the codec's serializer to put in the body.
-            let wrapper = SplitBindings {
-                inner: value,
-                codec,
-                captured: Cell::new(Some(&mut captured)),
-                plan,
-                capture_bindings: Cell::new(true),
-            };
-            body_serializer.write_struct(schema, &wrapper)?;
-        }
-        body_serializer.finish().into()
-    };
-
-    // Use captured payload bytes, or apply the protocol's policy for an unset payload.
-    let body = if has_payload_member {
-        match captured.payload {
-            Some(payload) => payload.bytes,
-            // Some protocols require an empty document for an unset structure payload.
-            None if plan.unset_structure_payload_is_document
-                && schema.members().iter().any(|m| {
-                    m.http_payload().is_some() && m.shape_type() == aws_smithy_schema::ShapeType::Structure
-                }) =>
-            {
-                let mut serializer = codec.create_serializer();
-                serializer.write_struct(schema, &EmptyDocument(schema))?;
-                serializer.finish().into()
-            }
-            None => bytes::Bytes::new(),
-        }
-    } else {
-        body
-    };
-
-    Ok(ResponseParts {
-        body,
-        headers: captured.headers,
-        status: captured.status,
-    })
+    plan.serialize(codec, schema, value)
 }
 
 /// Address-based identity borrowing a schema instance for the lifetime of the key.
@@ -405,6 +285,138 @@ impl CompiledResponsePlan {
         })
     }
 
+    fn serialize<C: Codec>(
+        &self,
+        codec: &C,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<ResponseParts, SerdeError> {
+        match self.strategy {
+            ResponseStrategy::Empty => Ok(ResponseParts {
+                body: bytes::Bytes::new(),
+                headers: Vec::new(),
+                status: None,
+            }),
+            ResponseStrategy::BindingsOnly => {
+                let captured = self.capture_bindings(codec, value)?;
+                Ok(ResponseParts {
+                    body: bytes::Bytes::new(),
+                    headers: captured.headers,
+                    status: captured.status,
+                })
+            }
+            ResponseStrategy::CodecBody => {
+                let mut serializer = codec.create_serializer();
+                serializer.write_struct(schema, value)?;
+                Ok(ResponseParts {
+                    body: serializer.finish().into(),
+                    headers: Vec::new(),
+                    status: None,
+                })
+            }
+            ResponseStrategy::CodecBodyWithHeaders => {
+                // Legacy AWS JSON responses serialize the complete response body and
+                // independently collect modeled headers.
+                let mut serializer = codec.create_serializer();
+                serializer.write_struct(schema, value)?;
+                let captured = self.capture_bindings(codec, value)?;
+                Ok(ResponseParts {
+                    body: serializer.finish().into(),
+                    headers: captured.headers,
+                    status: None,
+                })
+            }
+            ResponseStrategy::SplitBody => self.serialize_split_body(codec, schema, value),
+            ResponseStrategy::Payload => self.serialize_payload(codec, schema, value),
+        }
+    }
+
+    fn capture_bindings<C: Codec>(
+        &self,
+        codec: &C,
+        value: &dyn SerializableStruct,
+    ) -> Result<CapturedBindings, SerdeError> {
+        let mut captured = CapturedBindings::default();
+        let mut sink = NoBodySerializer { discard: true };
+        let mut splitter = ResponseBindingSplitter {
+            body: &mut sink,
+            codec,
+            captured: &mut captured,
+            payload_mode: false,
+            capture_bindings: true,
+            plan: self,
+        };
+        value.serialize_members(&mut splitter)?;
+        Ok(captured)
+    }
+
+    fn serialize_split_body<C: Codec>(
+        &self,
+        codec: &C,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<ResponseParts, SerdeError> {
+        let mut captured = CapturedBindings::default();
+        let mut serializer = codec.create_serializer();
+        {
+            // Forward body members to the codec while capturing headers and status.
+            let wrapper = SplitBindings {
+                inner: value,
+                codec,
+                captured: Cell::new(Some(&mut captured)),
+                plan: self,
+                capture_bindings: Cell::new(true),
+            };
+            serializer.write_struct(schema, &wrapper)?;
+        }
+        Ok(ResponseParts {
+            body: serializer.finish().into(),
+            headers: captured.headers,
+            status: captured.status,
+        })
+    }
+
+    fn serialize_payload<C: Codec>(
+        &self,
+        codec: &C,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<ResponseParts, SerdeError> {
+        let mut captured = CapturedBindings::default();
+        // The payload supplies the body; reject any ordinary body members.
+        let mut sink = NoBodySerializer { discard: false };
+        let mut splitter = ResponseBindingSplitter {
+            body: &mut sink,
+            codec,
+            captured: &mut captured,
+            payload_mode: true,
+            capture_bindings: true,
+            plan: self,
+        };
+        value.serialize_members(&mut splitter)?;
+        let body = match captured.payload {
+            Some(payload) => payload.bytes,
+            // Some protocols require an empty serialized structure for an unset payload.
+            None if self.unset_structure_payload_is_document
+                && schema.members().iter().any(|m| {
+                    m.http_payload().is_some() && m.shape_type() == aws_smithy_schema::ShapeType::Structure
+                }) =>
+            {
+                let mut serializer = codec.create_serializer();
+                serializer.write_struct(schema, &EmptyDocument(schema))?;
+                serializer.finish().into()
+            }
+            None => bytes::Bytes::new(),
+        };
+        Ok(ResponseParts {
+            body,
+            headers: captured.headers,
+            status: captured.status,
+        })
+    }
+
+    /// Looks up the precomputed binding by member index, avoiding repeated HTTP trait checks.
+    /// A missing or out-of-range index defaults to serialization into the response body.
     fn member(&self, schema: &Schema<'_>) -> &ResponseMemberPlan {
         schema
             .member_index()
