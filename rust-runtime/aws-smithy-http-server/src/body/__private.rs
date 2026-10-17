@@ -162,6 +162,21 @@ where
         .map(|(bytes, _)| bytes)
 }
 
+/// Collects a complete body, failing with [`CollectBodyError::BodyLimitExceeded`] once it exceeds
+/// `limit` bytes.
+///
+/// Generated legacy (non-schema) servers call this when the `requestBodyMaxBytes` setting is
+/// positive; a `limit` of zero disables the check.
+pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
+where
+    B: HttpBody,
+{
+    let config = CollectionConfig::builder()
+        .maybe_limit(NonZeroUsize::new(limit))
+        .build();
+    collect_body(body, Some(config)).await
+}
+
 /// Collect a complete body, retaining trailers for callers that replay it.
 pub async fn collect_body_with_trailers<B>(
     body: B,
