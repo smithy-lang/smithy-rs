@@ -16,12 +16,13 @@ use crate::protocol::aws_json::runtime_error::RuntimeError;
 use crate::protocol::aws_json_10::AwsJson1_0;
 use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::{IntoResponse, Response};
+use crate::schema::response_bindings::{serialize_response_parts, ResponseValueKind};
 use crate::schema::{DeserializeError, HttpModeledError};
 
 use super::discriminator::{BodyDiscriminator, TypeValue};
 use super::response::{
-    log_serialize_failure, serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension,
-    ResponseBindings,
+    assemble_response, assemble_streaming_response, log_serialize_failure, resolve_status,
+    serialize_modeled_error_response, stamp_error_extension, stamp_validation_extension, ResponseBindings,
 };
 use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerProtocol};
 
@@ -30,19 +31,24 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// Defaults to validating escape syntax in skipped strings without decoding Unicode.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
 /// to skip escape validation, matching legacy smithy-rs servers.
+///
+/// `legacyResponseBindings` defaults to `false`. Set it to `true` in this protocol's
+/// settings to preserve historical modeled success/error statuses and response headers.
 pub struct AwsJson1_0Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+    legacy_response_bindings: bool,
 }
 
 impl Default for AwsJson1_0Protocol {
     fn default() -> Self {
-        Self::new(false)
+        Self::new(false, false)
     }
 }
 
 impl AwsJson1_0Protocol {
-    fn new(validate_skipped_values: bool) -> Self {
+    fn new(validate_skipped_values: bool, legacy_response_bindings: bool) -> Self {
         Self {
+            legacy_response_bindings,
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
                 schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.0",
@@ -59,19 +65,24 @@ impl AwsJson1_0Protocol {
 /// Defaults to validating escape syntax in skipped strings without decoding Unicode.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
 /// to skip escape validation, matching legacy smithy-rs servers.
+///
+/// `legacyResponseBindings` defaults to `false`. Set it to `true` in this protocol's
+/// settings to preserve historical modeled success/error statuses and response headers.
 pub struct AwsJson1_1Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
+    legacy_response_bindings: bool,
 }
 
 impl Default for AwsJson1_1Protocol {
     fn default() -> Self {
-        Self::new(false)
+        Self::new(false, false)
     }
 }
 
 impl AwsJson1_1Protocol {
-    fn new(validate_skipped_values: bool) -> Self {
+    fn new(validate_skipped_values: bool, legacy_response_bindings: bool) -> Self {
         Self {
+            legacy_response_bindings,
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
                 schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.1",
@@ -118,17 +129,27 @@ fn serialize_error<P>(
     error: &dyn HttpModeledError,
     content_type: &'static str,
     discriminator: BodyDiscriminator,
+    legacy_response_bindings: bool,
 ) -> Response
 where
     RuntimeError: IntoResponse<P>,
 {
     let schema = error.schema();
-    let status = match classification_status(schema) {
-        Ok(status) => status,
-        Err(error) => return serialization_failure::<P>(error),
+    let status = if legacy_response_bindings {
+        error.status_code()
+    } else {
+        match classification_status(schema) {
+            Ok(status) => status,
+            Err(error) => return serialization_failure::<P>(error),
+        }
     };
     let framed = discriminator.frame(schema, error);
-    serialize_modeled_error_response(codec, schema, &framed, status, ResponseBindings::BodyOnly, content_type)
+    let bindings = if legacy_response_bindings {
+        ResponseBindings::LegacyRpc
+    } else {
+        ResponseBindings::BodyOnly
+    };
+    serialize_modeled_error_response(codec, schema, &framed, status, bindings, content_type)
         .map(|response| stamp_error_extension(response, schema.shape_id().shape_name()))
         .unwrap_or_else(serialization_failure::<P>)
 }
@@ -149,6 +170,7 @@ macro_rules! aws_json_protocol {
             ) -> Result<Self, crate::schema::routing::RouterBuildError> {
                 Ok(Self::new(
                     crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false),
+                    crate::schema::settings::get::<bool>(ctx.settings, "legacyResponseBindings")?.unwrap_or(false),
                 ))
             }
 
@@ -202,6 +224,19 @@ macro_rules! aws_json_protocol {
             }
 
             fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
+                if self.legacy_response_bindings {
+                    return serialize_response_parts(
+                        self.inner.codec(),
+                        output,
+                        value,
+                        ResponseBindings::LegacyRpc,
+                        ResponseValueKind::OperationOutput { empty_document: true },
+                    )
+                    .and_then(|parts| {
+                        assemble_response(parts, resolve_status(None, output.http()), Some($content_type))
+                    })
+                    .unwrap_or_else(serialization_failure::<$marker>);
+                }
                 self.inner
                     .serialize_response(output, value)
                     .unwrap_or_else(serialization_failure::<$marker>)
@@ -214,6 +249,24 @@ macro_rules! aws_json_protocol {
                 _streaming_member: &Schema<'_>,
                 body: Option<BoxBody>,
             ) -> Response {
+                if self.legacy_response_bindings {
+                    return serialize_response_parts(
+                        self.inner.codec(),
+                        output,
+                        value,
+                        ResponseBindings::LegacyRpc,
+                        ResponseValueKind::StreamingOutput,
+                    )
+                    .and_then(|parts| {
+                        assemble_streaming_response(
+                            parts,
+                            resolve_status(None, output.http()),
+                            Some($content_type),
+                            body.unwrap_or_else(crate::body::empty),
+                        )
+                    })
+                    .unwrap_or_else(serialization_failure::<$marker>);
+                }
                 self.inner
                     .serialize_streaming_response(output, value, body.unwrap_or_else(crate::body::empty))
                     .unwrap_or_else(serialization_failure::<$marker>)
@@ -225,6 +278,7 @@ macro_rules! aws_json_protocol {
                     error,
                     $content_type,
                     BodyDiscriminator { value: $type_value },
+                    self.legacy_response_bindings,
                 )
             }
 

@@ -145,6 +145,48 @@ async fn aws_json_errors_use_default_error_status_and_ignore_rest_headers() {
     }
 }
 
+#[tokio::test]
+async fn aws_json_legacy_bindings_keep_headers_in_both_the_head_and_document() {
+    static SERVICE: ServiceSchema = ServiceSchema::new(shape_id!("test", "Service"), None, &[], &[]);
+    let settings = aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"legacyResponseBindings":true}"#);
+    let context = ProtocolBuildContext::new(&SERVICE).with_settings(Some(&settings));
+    let protocols: [Box<dyn ServerProtocol>; 2] = [
+        Box::new(AwsJson1_0Protocol::from_build_context(&context).unwrap()),
+        Box::new(AwsJson1_1Protocol::from_build_context(&context).unwrap()),
+    ];
+    for protocol in protocols {
+        for code in [None, Some(299), Some(-1)] {
+            let response = protocol.serialize_response(&OUT, &Out { code });
+            assert_eq!(response.status(), 201);
+            assert_eq!(response.headers()["etag"], "\"abc\"");
+            assert_eq!(response.headers()["x-meta-color"], "red");
+            let body = body_text(response.into_body()).await;
+            assert!(body.contains("\"etag\":\"\\\"abc\\\"\""), "{body}");
+            assert!(body.contains("\"metadata\":{\"color\":\"red\"}"), "{body}");
+            if let Some(code) = code {
+                assert!(body.contains(&format!("\"code\":{code}")), "{body}");
+            }
+        }
+        let response = protocol.serialize_error(&Out { code: Some(299) });
+        assert_eq!(response.status(), 422);
+        assert_eq!(response.headers()["etag"], "\"abc\"");
+        let body = body_text(response.into_body()).await;
+        assert!(body.contains("\"__type\":"), "{body}");
+        assert!(body.contains("\"etag\":\"\\\"abc\\\"\""), "{body}");
+        let response = protocol.serialize_streaming_response(
+            &OUT,
+            &Out { code: Some(-1) },
+            &STREAMING_MEMBER,
+            Some(aws_smithy_http_server::body::to_boxed("stream frames")),
+        );
+        assert_eq!(response.status(), 201);
+        assert_eq!(response.headers()["etag"], "\"abc\"");
+        assert_eq!(response.headers()["x-meta-color"], "red");
+        assert!(!response.headers().contains_key("content-length"));
+        assert_eq!(body_text(response.into_body()).await, "stream frames");
+    }
+}
+
 #[test]
 fn aws_json_build_does_not_validate_ignored_rest_header_names() {
     static INVALID_HEADER: Schema =
