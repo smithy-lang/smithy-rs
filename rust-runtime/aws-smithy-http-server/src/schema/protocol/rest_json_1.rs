@@ -197,6 +197,9 @@ impl ServerProtocol for RestJson1Protocol {
             DeserializeError::Serde(err) => {
                 IntoResponse::<RestJson1>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }
+            DeserializeError::BodyCollection(err) => {
+                IntoResponse::<RestJson1>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
+            }
             DeserializeError::UnsupportedMediaType(reason) => IntoResponse::<RestJson1>::into_response(
                 RuntimeError::from(RequestRejection::MissingContentType(*reason)),
             ),

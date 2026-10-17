@@ -245,6 +245,9 @@ impl ServerProtocol for RpcV2CborProtocol {
             DeserializeError::Serde(err) => {
                 IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }
+            DeserializeError::BodyCollection(err) => {
+                IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
+            }
             DeserializeError::UnsupportedMediaType(reason) => IntoResponse::<RpcV2Cbor>::into_response(
                 RuntimeError::from(RequestRejection::MissingContentType(*reason)),
             ),

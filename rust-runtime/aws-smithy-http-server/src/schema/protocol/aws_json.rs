@@ -301,6 +301,9 @@ macro_rules! aws_json_protocol {
                     DeserializeError::Serde(err) => {
                         IntoResponse::<$marker>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
                     }
+                    DeserializeError::BodyCollection(err) => {
+                        IntoResponse::<$marker>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
+                    }
                     DeserializeError::UnsupportedMediaType(reason) => IntoResponse::<$marker>::into_response(
                         RuntimeError::from(RequestRejection::MissingContentType(*reason)),
                     ),

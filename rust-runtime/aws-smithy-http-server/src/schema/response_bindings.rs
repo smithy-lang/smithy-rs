@@ -178,11 +178,17 @@ impl ResponsePlanCache {
 /// The response serialization strategy, derived from the schema for each response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResponseStrategy {
+    /// Produce an empty body without serializing any members.
     Empty,
+    /// Capture bound headers and status, leaving the body empty for separate streaming or no body.
     BindingsOnly,
+    /// Serialize every member into the response body through the codec.
     CodecBody,
+    /// Serialize every member into the response body and also capture bound headers for legacy AWS JSON.
     CodecBodyWithHeaders,
+    /// Serialize unbound members into the response body while capturing bound headers and status.
     SplitBody,
+    /// Use the `@httpPayload` member as the response body while capturing bound headers and status.
     Payload,
 }
 
