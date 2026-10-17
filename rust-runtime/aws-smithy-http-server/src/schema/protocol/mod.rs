@@ -5,6 +5,9 @@
 
 //! Schema-driven [`ServerProtocol`] implementations and protocol registration.
 //!
+//! [`ProtocolRegistry::BUILTIN`] documents the built-in claim priority order, how custom
+//! protocols fit into it, and its effect on ambiguous requests.
+//!
 //! Each protocol frames modeled errors with its discriminator:
 //!
 //! | Protocol   | Discriminator                                            |

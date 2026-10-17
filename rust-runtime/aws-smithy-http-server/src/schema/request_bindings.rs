@@ -2490,6 +2490,7 @@ mod tests {
             ("/data/a/b", "a/b"),
             ("/data/a/b/", "a/b/"),
             ("/data/a//b", "a//b"),
+            ("/data//a//b/", "/a//b/"),
             ("/data//a/", "/a/"),
             ("/data/", ""),
         ] {
@@ -2498,6 +2499,16 @@ mod tests {
                 [("key", expected.to_owned())]
             );
         }
+        assert!(extract_labels("/data/{key+}/", "/data").is_err());
+        assert_eq!(
+            extract_labels("/files/{key+}/meta/", "/files/a/b/meta").unwrap(),
+            [("key", "a/b".to_owned())]
+        );
+        assert_eq!(
+            extract_labels("/files/{key+}/meta/", "/files//meta").unwrap(),
+            [("key", "".to_owned())]
+        );
+        assert!(extract_labels("/files/{key+}/meta/", "/files/a/b/meta/").is_err());
         assert_eq!(
             extract_labels("/data/{key+}/meta/", "/data/a//meta").unwrap(),
             [("key", "a/".to_owned())]
