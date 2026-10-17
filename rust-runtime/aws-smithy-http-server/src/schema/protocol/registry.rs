@@ -181,14 +181,48 @@ impl std::fmt::Debug for ProtocolRegistration {
 ///
 /// Each protocol may be registered exactly once across every registry a service consults;
 /// a duplicate fails the build. Order within a registry carries no meaning.
+///
+/// [`MultiProtocolRoutingService`](crate::schema::routing::MultiProtocolRoutingService)
+/// always includes [`Self::BUILTIN`]. Claim priority comes only from [`ProtocolOrder`]
+/// constraints, resolved transitively over all registrations, including protocols the service
+/// does not serve. Reordering registries or the service's protocol declarations does not change
+/// priority. Constraints must order every pair of served protocols; unordered pairs and cycles
+/// fail the build.
 #[derive(Clone, Copy, Debug)]
 pub struct ProtocolRegistry {
     registrations: &'static [ProtocolRegistration],
 }
 
 impl ProtocolRegistry {
-    /// The built-in protocols: rpcv2Cbor, awsJson1.0, awsJson1.1, restJson1 and restXml,
-    /// chained into a fixed relative claim order by explicit constraints.
+    /// The built-in protocols, constrained to the following claim order (first to last):
+    ///
+    /// 1. `smithy.protocols#rpcv2Cbor`
+    /// 2. `aws.protocols#awsJson1_0`
+    /// 3. `aws.protocols#awsJson1_1`
+    /// 4. `aws.protocols#restJson1`
+    /// 5. `aws.protocols#restXml`
+    ///
+    /// This follows Smithy's [AWS service protocol precision order] for the supported protocols.
+    /// See also [server protocol selection] for protocol identification and claiming.
+    ///
+    /// [AWS service protocol precision order]: https://smithy.io/2.0/guides/wire-protocol-selection.html#aws-service-protocol-precision
+    /// [server protocol selection]: https://smithy.io/2.0/guides/wire-protocol-selection.html#server-protocol-selection
+    ///
+    /// Only protocols declared by the service participate in request routing. Their relative
+    /// order remains the same when the service declares a subset of the built-ins.
+    /// Additional registrations can position custom protocols using [`ProtocolOrder`], but
+    /// there is no per-service override of the built-in relative order. Registering a built-in
+    /// again fails the build.
+    ///
+    /// This order affects wire behavior when requests match multiple protocols: the first
+    /// definite claim wins; if none exists, the first deferred claim wins, followed by the
+    /// first deferred rejection. See the [routing documentation](crate::schema::routing).
+    /// For example, an eligible request without `Content-Type` receives deferred claims from
+    /// both restJson1 and restXml; restJson1 wins if no protocol claims definitively.
+    ///
+    /// Adding a built-in protocol or changing ordering constraints can change the selected
+    /// protocol and its response format for ambiguous requests. Such changes require a wire
+    /// compatibility review.
     pub const BUILTIN: ProtocolRegistry = ProtocolRegistry::new(&[
         ProtocolRegistration::metadata_routed::<crate::schema::protocol::RpcV2CborProtocol>(
             "smithy.protocols#rpcv2Cbor",

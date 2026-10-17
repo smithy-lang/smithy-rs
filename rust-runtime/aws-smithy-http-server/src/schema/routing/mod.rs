@@ -10,7 +10,11 @@
 //! complete body. Body routers receive only operations with no streaming input or output.
 //!
 //! Every service, including a single-protocol service, checks protocol claims. Routers
-//! are asked in protocol precision order. The first definite claim
+//! are asked in the claim order resolved from
+//! [`ProtocolOrder`](crate::schema::protocol::ProtocolOrder) constraints. The built-in priority
+//! order and its wire compatibility implications are documented on
+//! [`ProtocolRegistry::BUILTIN`](crate::schema::protocol::ProtocolRegistry::BUILTIN).
+//! The first definite claim
 //! owns the request: it either identifies the operation or proceeds to routing, whose
 //! errors are terminal and serialized by that protocol.
 //! A [`RouteClaim::DeferredClaim`] offers an operation while later protocols try to
@@ -43,9 +47,9 @@
 
 mod builder;
 mod protocol_router;
-mod routing_table;
 pub mod route_errors;
 mod routers;
+mod routing_table;
 mod service;
 #[cfg(test)]
 mod test_helpers;
