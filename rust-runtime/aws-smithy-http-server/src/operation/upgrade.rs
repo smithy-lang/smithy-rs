@@ -369,9 +369,9 @@ where
                     "selected operation missing while preparing collected input",
                 )))
             })?;
-            let bytes = collect_request_body(body, &config).await.map_err(|error| {
-                DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(error.to_string()))
-            })?;
+            let bytes = collect_request_body(body, &config)
+                .await
+                .map_err(DeserializeError::from)?;
             (bytes, SdkBody::empty())
         } else {
             (bytes::Bytes::new(), SdkBody::empty())

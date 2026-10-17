@@ -489,9 +489,7 @@ pub(crate) fn body_collection_rejection(
     protocol: &dyn ServerProtocol,
     error: RequestBodyCollectionError<crate::Error>,
 ) -> Response {
-    protocol.serialize_rejection(DeserializeError::Serde(aws_smithy_schema::serde::SerdeError::custom(
-        error.to_string(),
-    )))
+    protocol.serialize_rejection(error.into())
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -591,7 +589,14 @@ impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
     }
 }
 
-impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollectionError<E> {}
+impl<E: std::error::Error + 'static> std::error::Error for RequestBodyCollectionError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Body(error) => Some(error),
+            Self::BodyLimitExceeded(_) | Self::Timeout { .. } => None,
+        }
+    }
+}
 
 pub async fn collect_request_body<B>(
     body: B,

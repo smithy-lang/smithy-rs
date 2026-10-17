@@ -45,6 +45,9 @@ pub enum CollectBodyError<E> {
     BodyLimitExceeded(NonZeroUsize),
 }
 
+/// Default maximum body bytes; `None` disables the byte limit.
+pub(crate) const DEFAULT_LIMIT_SIZE: Option<NonZeroUsize> = None;
+
 /// Default number of ready frame polls before body collection yields.
 pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(64).unwrap();
 
@@ -58,8 +61,8 @@ pub struct CollectionConfig {
     limit: Option<NonZeroUsize>,
     /// Number of ready frame polls before yielding.
     frame_budget: NonZeroUsize,
-    /// Cap on the initial buffer reservation; zero starts without a reservation.
-    initial_capacity: usize,
+    /// Cap on the initial buffer reservation; `None` starts without a reservation.
+    initial_capacity: Option<NonZeroUsize>,
 }
 
 impl CollectionConfig {
@@ -67,14 +70,29 @@ impl CollectionConfig {
     pub fn builder() -> CollectionConfigBuilder {
         CollectionConfigBuilder::default()
     }
+
+    /// Returns the maximum body bytes; `None` means no byte limit.
+    pub fn limit(&self) -> Option<NonZeroUsize> {
+        self.limit
+    }
+
+    /// Returns the number of ready frame polls before yielding.
+    pub fn frame_budget(&self) -> NonZeroUsize {
+        self.frame_budget
+    }
+
+    /// Returns the initial reservation cap; `None` means no initial reservation.
+    pub fn initial_capacity(&self) -> Option<NonZeroUsize> {
+        self.initial_capacity
+    }
 }
 
 impl Default for CollectionConfig {
     fn default() -> Self {
         Self {
-            limit: None,
+            limit: DEFAULT_LIMIT_SIZE,
             frame_budget: DEFAULT_FRAME_BUDGET,
-            initial_capacity: DEFAULT_MAX_INITIAL_CAPACITY.get(),
+            initial_capacity: Some(DEFAULT_MAX_INITIAL_CAPACITY),
         }
     }
 }
@@ -108,15 +126,15 @@ impl CollectionConfigBuilder {
         self.frame_budget(frame_budget.unwrap_or(DEFAULT_FRAME_BUDGET))
     }
 
-    /// Sets the initial buffer reservation cap; zero disables the reservation.
-    pub fn initial_capacity(mut self, initial_capacity: usize) -> Self {
-        self.config.initial_capacity = initial_capacity;
-        self
+    /// Sets the initial buffer reservation cap.
+    pub fn initial_capacity(self, initial_capacity: NonZeroUsize) -> Self {
+        self.maybe_initial_capacity(Some(initial_capacity))
     }
 
-    /// Sets the reservation cap, or uses the default with `None`.
-    pub fn maybe_initial_capacity(self, initial_capacity: Option<usize>) -> Self {
-        self.initial_capacity(initial_capacity.unwrap_or(DEFAULT_MAX_INITIAL_CAPACITY.get()))
+    /// Sets the reservation cap, or disables the initial reservation with `None`.
+    pub fn maybe_initial_capacity(mut self, initial_capacity: Option<NonZeroUsize>) -> Self {
+        self.config.initial_capacity = initial_capacity;
+        self
     }
 
     /// Builds the body collection options.
@@ -129,7 +147,7 @@ impl CollectionConfigBuilder {
 /// Trailer frames are consumed and discarded without accumulating a header map.
 ///
 /// `initial_capacity` caps the buffer reserved from the body's size hint before frames
-/// arrive. Passing `0` starts without a reservation. The buffer can grow beyond this cap as
+/// arrive. Setting it to `None` starts without a reservation. The buffer can grow beyond this cap as
 /// data arrives, subject to `limit`; it is not a total-body limit.
 ///
 /// `frame_budget` counts ready frame polls, including empty frames and trailers.
@@ -209,8 +227,11 @@ where
     Ok((collected.freeze(), trailers))
 }
 
-fn new_collection_buffer(size_hint_lower: u64, max_initial_capacity: usize) -> bytes::BytesMut {
-    bytes::BytesMut::with_capacity(size_hint_lower.min(max_initial_capacity as u64) as usize)
+fn new_collection_buffer(size_hint_lower: u64, max_initial_capacity: Option<NonZeroUsize>) -> bytes::BytesMut {
+    match max_initial_capacity {
+        Some(maximum) => bytes::BytesMut::with_capacity(size_hint_lower.min(maximum.get() as u64) as usize),
+        None => bytes::BytesMut::new(),
+    }
 }
 
 fn enforce_body_limit<E>(current_size: u64, limit: NonZeroUsize) -> Result<(), CollectBodyError<E>> {

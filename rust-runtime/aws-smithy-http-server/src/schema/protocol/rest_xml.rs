@@ -205,6 +205,9 @@ impl ServerProtocol for RestXmlProtocol {
             DeserializeError::Serde(err) => {
                 IntoResponse::<RestXml>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }
+            DeserializeError::BodyCollection(err) => {
+                IntoResponse::<RestXml>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
+            }
             DeserializeError::UnsupportedMediaType(reason) => IntoResponse::<RestXml>::into_response(
                 RuntimeError::from(RequestRejection::MissingContentType(*reason)),
             ),

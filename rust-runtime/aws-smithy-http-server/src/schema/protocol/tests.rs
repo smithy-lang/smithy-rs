@@ -985,6 +985,56 @@ fn serde_failure() -> DeserializeError {
     DeserializeError::Serde(SerdeError::custom("bad"))
 }
 
+#[test]
+fn body_collection_rejections_preserve_the_transport_error_source() {
+    use super::RequestBodyCollectionError;
+    use std::error::Error as _;
+
+    let error: DeserializeError =
+        RequestBodyCollectionError::Body(crate::Error::new(std::io::Error::other("transport failure"))).into();
+    assert!(matches!(
+        &error,
+        DeserializeError::BodyCollection(RequestBodyCollectionError::Body(_))
+    ));
+    let collection = error
+        .source()
+        .unwrap()
+        .downcast_ref::<RequestBodyCollectionError<crate::Error>>()
+        .unwrap();
+    let transport = collection.source().unwrap().downcast_ref::<crate::Error>().unwrap();
+    let original = transport.source().unwrap().downcast_ref::<std::io::Error>().unwrap();
+    assert_eq!(original.to_string(), "transport failure");
+}
+
+#[tokio::test]
+async fn typed_body_collection_rejections_preserve_existing_wire_responses() {
+    use super::RequestBodyCollectionError;
+
+    for protocol in [
+        &*REST_JSON as &dyn ServerProtocol,
+        &*REST_XML,
+        &*AWS_JSON_10,
+        &*AWS_JSON_11,
+        &*RPC_V2_CBOR,
+    ] {
+        for error in [
+            RequestBodyCollectionError::Body(crate::Error::new(std::io::Error::other("transport failure"))),
+            RequestBodyCollectionError::BodyLimitExceeded(NonZeroUsize::new(1024).unwrap()),
+            RequestBodyCollectionError::Timeout {
+                timeout: Duration::from_secs(1),
+            },
+        ] {
+            // Compare with the conversion used before collection failures became typed rejections.
+            let previous = protocol.serialize_rejection(DeserializeError::Serde(SerdeError::custom(error.to_string())));
+            let current = super::body_collection_rejection(protocol, error);
+            assert_eq!(current.status(), http::StatusCode::BAD_REQUEST);
+            assert_eq!(current.status(), previous.status());
+            assert_eq!(current.headers(), previous.headers());
+            assert_eq!(body_bytes(current).await, body_bytes(previous).await);
+        }
+    }
+}
+
 #[tokio::test]
 async fn rest_json_1_rejections_keep_the_distinct_statuses() {
     let response = REST_JSON.serialize_rejection(serde_failure());

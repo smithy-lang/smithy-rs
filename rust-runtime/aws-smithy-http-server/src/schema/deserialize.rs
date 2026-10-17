@@ -5,7 +5,7 @@
 
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 
-use super::HttpModeledError;
+use super::{HttpModeledError, RequestBodyCollectionError};
 use crate::rejection::MissingContentTypeReason;
 
 /// Why a request failed without reaching its operation handler.
@@ -16,8 +16,8 @@ use crate::rejection::MissingContentTypeReason;
 /// turns the whole enum into its wire response through
 /// [`ServerProtocol::serialize_rejection`](super::ServerProtocol::serialize_rejection).
 ///
-/// There is one variant per distinct rejection response, which is why the `Content-Type` and
-/// `Accept` failures are not folded into [`Serde`](Self::Serde): protocols answer them
+/// Variants preserve the failure category even when their rejection responses are identical.
+/// The `Content-Type` and `Accept` failures are not folded into [`Serde`](Self::Serde): protocols answer them
 /// differently (restJson1 keeps 415 and 406 distinct from the 400 that `Serde` produces), and
 /// the renderer matches on the variant to pick the response. They also originate in different
 /// layers: [`SerdeError`] belongs to the codec in `aws-smithy-schema` and describes failures
@@ -28,9 +28,12 @@ use crate::rejection::MissingContentTypeReason;
 #[non_exhaustive]
 pub enum DeserializeError {
     /// The request could not be read as the input shape: a malformed document, a type mismatch,
-    /// an unparseable header, label or query value, a body that could not be collected, or a
-    /// request that could not be converted into its canonical form.
+    /// an unparseable header, label or query value, or a request that could not be converted
+    /// into its canonical form.
     Serde(SerdeError),
+    /// Reading the request body failed, exceeded its size limit, or timed out.
+    /// Preserves the typed failure while rendering the protocol's ordinary deserialization rejection.
+    BodyCollection(RequestBodyCollectionError<crate::Error>),
     /// The request was well-formed but violates a modeled constraint.
     ConstraintViolation(Box<dyn HttpModeledError>),
     /// The request's `Content-Type` header does not match what the operation expects.
@@ -56,6 +59,7 @@ impl std::fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Serde(err) => write!(f, "failed to deserialize request: {err}"),
+            Self::BodyCollection(err) => write!(f, "failed to collect request body: {err}"),
             Self::ConstraintViolation(err) => {
                 write!(f, "request does not adhere to modeled constraints: {err}")
             }
@@ -72,6 +76,7 @@ impl std::error::Error for DeserializeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Serde(err) => Some(err),
+            Self::BodyCollection(err) => Some(err),
             Self::ConstraintViolation(err) => Some(&**err),
             Self::UnsupportedMediaType(reason) => Some(&**reason),
             Self::NotAcceptable => None,
@@ -83,6 +88,12 @@ impl std::error::Error for DeserializeError {
 impl From<SerdeError> for DeserializeError {
     fn from(err: SerdeError) -> Self {
         Self::Serde(err)
+    }
+}
+
+impl From<RequestBodyCollectionError<crate::Error>> for DeserializeError {
+    fn from(err: RequestBodyCollectionError<crate::Error>) -> Self {
+        Self::BodyCollection(err)
     }
 }
 
