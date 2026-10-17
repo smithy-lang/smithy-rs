@@ -33,7 +33,7 @@ pub(crate) enum ErrorType {
     /// The service responded with a throttling error.
     Throttling,
     /// The service responded with an error other than throttling (4xx or 5xx).
-    ServiceError,
+    ServerError,
     /// A configured client timeout fired: operation, attempt, connect or read.
     ConfiguredTimeout,
     /// An I/O error, such as a refused or reset connection.
@@ -46,7 +46,7 @@ impl ErrorType {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             ErrorType::Throttling => "Throttling",
-            ErrorType::ServiceError => "ServiceError",
+            ErrorType::ServerError => "ServerError",
             ErrorType::ConfiguredTimeout => "ConfiguredTimeout",
             ErrorType::Io => "IO",
             ErrorType::Other => "Other",

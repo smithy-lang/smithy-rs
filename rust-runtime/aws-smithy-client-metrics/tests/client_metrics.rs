@@ -181,7 +181,7 @@ async fn pooled_call_adds_fields_to_the_request_entry() {
     let entry = test_metric(req);
     assert_eq!(entry.values["Route"], "/test");
     assert_eq!(entry.values["SdkS3GetObjectHttpStatusCode"], "200");
-    assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 1);
+    assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 1);
     assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 1);
     assert_eq!(entry.metrics["SdkS3GetObjectRetryCount"].as_u64(), 0);
     assert_eq!(entry.metrics["SdkS3GetObjectThrottles"].as_u64(), 0);
@@ -202,20 +202,20 @@ async fn pooled_key_names_are_stable() {
     assert_eq!(
         sdk_keys(&test_metric(req)),
         [
+            "SdkS3GetObjectApiCallDuration",
+            "SdkS3GetObjectApiCallSuccessful",
             "SdkS3GetObjectAttemptTimeouts",
             "SdkS3GetObjectAttempts",
+            "SdkS3GetObjectBackoffDelayDuration",
             "SdkS3GetObjectCancelled",
             "SdkS3GetObjectClientError",
-            "SdkS3GetObjectConnectionAcquireDuration",
+            "SdkS3GetObjectConcurrencyAcquireDuration",
             "SdkS3GetObjectConnectionReused",
-            "SdkS3GetObjectConnectorCallDuration",
             "SdkS3GetObjectHttpStatusCode",
-            "SdkS3GetObjectInvocationDuration",
             "SdkS3GetObjectOperationTimeout",
             "SdkS3GetObjectRetryCount",
-            "SdkS3GetObjectRetryDelay",
             "SdkS3GetObjectServerError",
-            "SdkS3GetObjectSuccess",
+            "SdkS3GetObjectServiceCallDuration",
             "SdkS3GetObjectThrottles",
         ]
     );
@@ -235,22 +235,22 @@ async fn standalone_key_names_are_stable() {
     assert_eq!(
         keys(&entries[0]),
         [
+            "ApiCallDuration",
+            "ApiCallSuccessful",
             "AttemptTimeouts",
             "Attempts",
+            "BackoffDelayDuration",
             "Cancelled",
             "ClientError",
-            "ConnectionAcquireDuration",
+            "ConcurrencyAcquireDuration",
             "ConnectionReused",
-            "ConnectorCallDuration",
             "HttpStatusCode",
-            "InvocationDuration",
-            "Operation",
+            "OperationName",
             "OperationTimeout",
             "RetryCount",
-            "RetryDelay",
-            "SdkService",
             "ServerError",
-            "Success",
+            "ServiceCallDuration",
+            "ServiceId",
             "Throttles",
         ]
     );
@@ -268,23 +268,23 @@ async fn fallback_key_names_are_stable() {
     assert_eq!(
         keys(&entries[0]),
         [
+            "ApiCallDuration",
+            "ApiCallSuccessful",
             "AttemptTimeouts",
             "Attempts",
+            "BackoffDelayDuration",
             "Cancelled",
             "ClientError",
-            "ConnectionAcquireDuration",
+            "ConcurrencyAcquireDuration",
             "ConnectionReused",
-            "ConnectorCallDuration",
             "HttpStatusCode",
-            "InvocationDuration",
             "MetricsPoolFallback",
-            "Operation",
+            "OperationName",
             "OperationTimeout",
             "RetryCount",
-            "RetryDelay",
-            "SdkService",
             "ServerError",
-            "Success",
+            "ServiceCallDuration",
+            "ServiceId",
             "Throttles",
         ]
     );
@@ -302,7 +302,7 @@ async fn retries_and_throttles_are_counted_across_attempts() {
     assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 3);
     assert_eq!(entry.metrics["SdkS3GetObjectRetryCount"].as_u64(), 2);
     assert_eq!(entry.metrics["SdkS3GetObjectThrottles"].as_u64(), 1);
-    assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 1);
+    assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 1);
     // The final attempt reused the connection opened by the first.
     assert_eq!(entry.metrics["SdkS3GetObjectConnectionReused"].as_u64(), 1);
 }
@@ -317,7 +317,7 @@ async fn failures_report_the_final_status() {
 
     let entry = test_metric(req);
     assert_eq!(entry.values["SdkS3GetObjectHttpStatusCode"], "404");
-    assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 0);
+    assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 0);
     assert_eq!(entry.metrics["SdkS3GetObjectClientError"].as_u64(), 1);
     assert_eq!(entry.metrics["SdkS3GetObjectServerError"].as_u64(), 0);
     assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 1);
@@ -381,7 +381,7 @@ async fn service_names_are_normalized() {
         .unwrap();
     let entry = test_metric(req);
     assert_eq!(
-        entry.metrics["SdkCloudWatchLogsPutLogEventsSuccess"].as_u64(),
+        entry.metrics["SdkCloudWatchLogsPutLogEventsApiCallSuccessful"].as_u64(),
         1
     );
 }
@@ -394,7 +394,10 @@ async fn qualifier_is_part_of_the_prefix() {
         .await
         .unwrap();
     let entry = test_metric(req);
-    assert_eq!(entry.metrics["SdkS3AuditGetObjectSuccess"].as_u64(), 1);
+    assert_eq!(
+        entry.metrics["SdkS3AuditGetObjectApiCallSuccessful"].as_u64(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -411,7 +414,10 @@ async fn prefix_replaces_everything_before_the_operation() {
         .await
         .unwrap();
     let entry = test_metric(req);
-    assert_eq!(entry.metrics["AuditLogGetObjectSuccess"].as_u64(), 1);
+    assert_eq!(
+        entry.metrics["AuditLogGetObjectApiCallSuccessful"].as_u64(),
+        1
+    );
     assert!(
         sdk_keys(&entry).is_empty(),
         "no Sdk-prefixed keys expected: {:?}",
@@ -435,7 +441,7 @@ async fn prefix_does_not_affect_standalone_entries() {
     let entries = sink.inspector.entries();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].values["Qualifier"], "Audit");
-    assert_eq!(entries[0].metrics["Success"].as_u64(), 1);
+    assert_eq!(entries[0].metrics["ApiCallSuccessful"].as_u64(), 1);
     assert!(!keys(&entries[0]).iter().any(|k| k.starts_with("AuditLog")));
 }
 
@@ -451,10 +457,10 @@ async fn missing_pool_falls_back_to_a_flagged_standalone_entry() {
     let entries = sink.inspector.entries();
     assert_eq!(entries.len(), 1);
     let entry = &entries[0];
-    assert_eq!(entry.values["SdkService"], "S3");
-    assert_eq!(entry.values["Operation"], "GetObject");
+    assert_eq!(entry.values["ServiceId"], "S3");
+    assert_eq!(entry.values["OperationName"], "GetObject");
     assert_eq!(entry.metrics["MetricsPoolFallback"].as_u64(), 1);
-    assert_eq!(entry.metrics["Success"].as_u64(), 1);
+    assert_eq!(entry.metrics["ApiCallSuccessful"].as_u64(), 1);
     assert!(entry.timestamp.is_some());
 }
 
@@ -494,7 +500,7 @@ async fn require_current_pool_emits_when_a_pool_is_in_scope() {
         .unwrap();
 
     assert_eq!(
-        test_metric(req).metrics["SdkS3GetObjectSuccess"].as_u64(),
+        test_metric(req).metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(),
         1
     );
 }
@@ -549,7 +555,7 @@ async fn explicit_pool_needs_no_scope() {
         .build();
     s3_get(&[200], metrics).invoke(()).await.unwrap();
     let entry = test_metric(req);
-    assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 1);
+    assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 1);
 }
 
 #[tokio::test]
@@ -679,7 +685,7 @@ async fn durations_use_the_client_time_source() {
     let entry = test_metric(req);
     // Two attempts of 10ms each. Backoff sleeps don't advance the manual clock.
     assert_eq!(
-        entry.metrics["SdkS3GetObjectInvocationDuration"].as_f64(),
+        entry.metrics["SdkS3GetObjectApiCallDuration"].as_f64(),
         20.0
     );
     assert_eq!(entry.metrics["SdkS3GetObjectRetryCount"].as_u64(), 1);
@@ -696,9 +702,12 @@ async fn successful_calls_have_no_error_type() {
     .unwrap();
     let entry = test_metric(req);
     assert!(!entry.values.contains_key("SdkS3GetObjectErrorType"));
-    assert_eq!(entry.metrics["SdkS3GetObjectRetryDelay"].as_f64(), 0.0);
     assert_eq!(
-        entry.metrics["SdkS3GetObjectConnectionAcquireDuration"].as_f64(),
+        entry.metrics["SdkS3GetObjectBackoffDelayDuration"].as_f64(),
+        0.0
+    );
+    assert_eq!(
+        entry.metrics["SdkS3GetObjectConcurrencyAcquireDuration"].as_f64(),
         1.0
     );
 }
@@ -720,9 +729,9 @@ async fn throttling_error_type() {
 }
 
 #[tokio::test]
-async fn service_error_type_for_4xx_and_5xx() {
-    assert_eq!(error_type_for(&[404]).await, "ServiceError");
-    assert_eq!(error_type_for(&[500]).await, "ServiceError");
+async fn server_error_type_for_4xx_and_5xx() {
+    assert_eq!(error_type_for(&[404]).await, "ServerError");
+    assert_eq!(error_type_for(&[500]).await, "ServerError");
 }
 
 #[tokio::test]
@@ -763,11 +772,13 @@ async fn failure_before_any_attempt_is_other_with_zero_attempts() {
     let entry = test_metric(req);
     assert_eq!(entry.values["SdkS3GetObjectErrorType"], "Other");
     assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 0);
-    assert!(!entry.metrics.contains_key("SdkS3GetObjectRetryDelay"));
+    assert!(!entry
+        .metrics
+        .contains_key("SdkS3GetObjectBackoffDelayDuration"));
 }
 
 #[tokio::test]
-async fn retry_delay_matches_time_slept_between_attempts() {
+async fn backoff_delay_duration_matches_time_slept_between_attempts() {
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use std::time::UNIX_EPOCH;
 
@@ -796,12 +807,12 @@ async fn retry_delay_matches_time_slept_between_attempts() {
 
     let entry = test_metric(req);
     let expected_ms = sleep.total_duration().as_secs_f64() * 1000.0;
-    let actual_ms = entry.metrics["SdkS3GetObjectRetryDelay"].as_f64();
+    let actual_ms = entry.metrics["SdkS3GetObjectBackoffDelayDuration"].as_f64();
     assert_eq!(sleep.logs().len(), 2, "one backoff per retry");
     assert!(expected_ms > 0.0);
     assert!(
         (actual_ms - expected_ms).abs() < 1e-6,
-        "RetryDelay {actual_ms}ms != slept {expected_ms}ms"
+        "BackoffDelayDuration {actual_ms}ms != slept {expected_ms}ms"
     );
 }
 
@@ -969,7 +980,7 @@ mod timeouts {
         let entry = test_metric(req);
         assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 2);
         assert_eq!(entry.metrics["SdkS3GetObjectAttemptTimeouts"].as_u64(), 1);
-        assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 1);
+        assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 1);
         assert_eq!(entry.metrics["SdkS3GetObjectOperationTimeout"].as_u64(), 0);
     }
 
@@ -991,7 +1002,7 @@ mod timeouts {
         let entry = test_metric(req);
         assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 1);
         assert_eq!(entry.metrics["SdkS3GetObjectAttemptTimeouts"].as_u64(), 1);
-        assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 0);
+        assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 0);
         assert!(!entry.values.contains_key("SdkS3GetObjectHttpStatusCode"));
         assert_eq!(entry.values["SdkS3GetObjectErrorType"], "ConfiguredTimeout");
     }
@@ -1013,10 +1024,10 @@ mod timeouts {
         assert_eq!(entry.metrics["SdkS3GetObjectOperationTimeout"].as_u64(), 1);
         assert_eq!(entry.metrics["SdkS3GetObjectCancelled"].as_u64(), 0);
         assert_eq!(entry.values["SdkS3GetObjectErrorType"], "ConfiguredTimeout");
-        assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 0);
+        assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 0);
         assert_eq!(entry.metrics["SdkS3GetObjectAttempts"].as_u64(), 1);
         assert!(
-            entry.metrics["SdkS3GetObjectInvocationDuration"].as_f64() >= SHORT.as_millis() as f64
+            entry.metrics["SdkS3GetObjectApiCallDuration"].as_f64() >= SHORT.as_millis() as f64
         );
     }
 
@@ -1061,7 +1072,7 @@ mod timeouts {
         assert_eq!(entries[0].metrics["Cancelled"].as_u64(), 1);
         assert!(!entries[0].values.contains_key("ErrorType"));
         assert_eq!(entries[0].metrics["OperationTimeout"].as_u64(), 0);
-        assert_eq!(entries[0].metrics["Success"].as_u64(), 0);
+        assert_eq!(entries[0].metrics["ApiCallSuccessful"].as_u64(), 0);
     }
 
     #[tokio::test]

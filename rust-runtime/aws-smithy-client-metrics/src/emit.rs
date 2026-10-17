@@ -21,18 +21,19 @@ use crate::record::{CallEnd, RequestRecord};
 /// The pool supplies the entry timestamp, so this type has none.
 #[metrics(subfield_owned)]
 pub(crate) struct InvocationMetrics {
-    invocation_duration: Option<Duration>,
+    api_call_duration: Option<Duration>,
     attempts: u32,
     retry_count: u32,
     http_status_code: Option<String>,
-    success: bool,
+    api_call_successful: bool,
     client_error: bool,
     server_error: bool,
     throttles: u32,
     /// The cause of the failure. Present only on failed calls that weren't cancelled.
     error_type: Option<&'static str>,
-    /// Time spent between attempts: retry backoff and rate-limiter waits.
-    retry_delay: Option<Duration>,
+    /// Approximate elapsed time between attempts, including backoff,
+    /// rate-limiter waits and any intervening overhead.
+    backoff_delay_duration: Option<Duration>,
     /// Attempts cut short by the attempt timeout.
     attempt_timeouts: u32,
     /// The operation timeout fired before the call completed.
@@ -40,8 +41,8 @@ pub(crate) struct InvocationMetrics {
     /// The caller dropped the call before it completed.
     cancelled: bool,
     connection_reused: Option<bool>,
-    connection_acquire_duration: Option<Duration>,
-    connector_call_duration: Option<Duration>,
+    concurrency_acquire_duration: Option<Duration>,
+    service_call_duration: Option<Duration>,
 }
 
 impl InvocationMetrics {
@@ -49,22 +50,22 @@ impl InvocationMetrics {
         let last = record.final_attempt();
         let status = last.and_then(|a| a.status);
         Self {
-            invocation_duration: record.duration,
+            api_call_duration: record.duration,
             attempts: record.attempts.len() as u32,
             retry_count: record.retry_count(),
             http_status_code: status.map(|s| s.to_string()),
-            success: last.is_some_and(|a| a.success),
+            api_call_successful: last.is_some_and(|a| a.success),
             client_error: status.is_some_and(|s| (400..500).contains(&s)),
             server_error: status.is_some_and(|s| (500..600).contains(&s)),
             throttles: record.throttles(),
             error_type: record.error_type().map(|e| e.as_str()),
-            retry_delay: record.retry_delay(),
+            backoff_delay_duration: record.retry_delay(),
             attempt_timeouts: record.timed_out_attempts(),
             operation_timeout: record.end == CallEnd::OperationTimeout,
             cancelled: record.end == CallEnd::Cancelled,
             connection_reused: last.and_then(|a| a.connection_reused),
-            connection_acquire_duration: last.and_then(|a| a.connection_acquire_duration),
-            connector_call_duration: last.and_then(|a| a.connector_call_duration),
+            concurrency_acquire_duration: last.and_then(|a| a.connection_acquire_duration),
+            service_call_duration: last.and_then(|a| a.connector_call_duration),
         }
     }
 }
@@ -74,9 +75,9 @@ impl InvocationMetrics {
 struct StandaloneInvocationMetrics {
     #[metrics(timestamp)]
     timestamp: SystemTime,
-    sdk_service: &'static str,
+    service_id: &'static str,
     qualifier: Option<&'static str>,
-    operation: &'static str,
+    operation_name: &'static str,
     /// `true` when a pool was expected but none was in scope. Omitted when no
     /// pool was expected (`standalone` mode), so it is only ever present as `1`.
     metrics_pool_fallback: Option<bool>,
@@ -127,9 +128,9 @@ pub(crate) fn emit(
             };
             let entry = StandaloneInvocationMetrics {
                 timestamp: now,
-                sdk_service: record.service,
+                service_id: record.service,
                 qualifier,
-                operation: record.operation,
+                operation_name: record.operation,
                 metrics_pool_fallback: fallback.then_some(true),
                 invocation,
             };

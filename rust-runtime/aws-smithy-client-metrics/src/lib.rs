@@ -57,7 +57,7 @@
 //!     s3.get_object().bucket("b").key("k").send().await
 //! })
 //! .await?;
-//! // `request` emits `Route` plus `SdkS3GetObjectRetryCount`, `SdkS3GetObjectSuccess`, ...
+//! // `request` emits `Route` plus `SdkS3GetObjectRetryCount`, `SdkS3GetObjectApiCallSuccessful`, ...
 //! ```
 //!
 //! Pooled fields are prefixed with `Sdk`, the service, the optional
@@ -75,7 +75,7 @@
 //! writes a standalone entry with `MetricsPoolFallback = 1`.
 //!
 //! Standalone entries contain the same fields without a prefix, plus
-//! `SdkService`, `Qualifier` and `Operation`. They go to the
+//! `ServiceId`, `Qualifier` and `OperationName`. They go to the
 //! [standalone sink](ClientMetricsBuilder::standalone_sink), or to the global
 //! [`ServiceMetrics`] sink when none is set. If neither exists, the entry is
 //! dropped with a warning.
@@ -93,22 +93,28 @@
 //!
 //! # Fields
 //!
+//! Names follow the [AWS SDK for Java 2.x metrics] where this crate records an
+//! equivalent concept. Java attempt-level names (`HttpStatusCode`, `ErrorType`,
+//! `ConcurrencyAcquireDuration` and `ServiceCallDuration`) describe the final
+//! attempt here. `BackoffDelayDuration` is the call's approximate total between
+//! attempts. Fields without a Java equivalent are extensions from this crate.
+//!
 //! | Field | Meaning |
 //! |---|---|
-//! | `InvocationDuration` | Time from immediately before request serialization until execution completes, across all attempts. Excludes earlier interceptor work and reading a streaming response body. Omitted if timing never starts or the time source moves backwards. |
+//! | `ApiCallDuration` | Time from immediately before request serialization until execution completes, across all attempts. Excludes earlier interceptor work and reading a streaming response body. Omitted if timing never starts or the time source moves backwards. |
 //! | `Attempts` / `RetryCount` | Number of attempts, and attempts minus one |
 //! | `HttpStatusCode` | HTTP status of the final attempt, when a response was received |
-//! | `Success` | The final attempt produced a successful output |
+//! | `ApiCallSuccessful` | The final attempt produced a successful output |
 //! | `ClientError` / `ServerError` | The final status was 4xx / 5xx |
 //! | `Throttles` | Attempts that the client's retry classifiers marked as throttling. This interceptor reruns the classifiers after each attempt. |
-//! | `ErrorType` | Why a failed call failed: `Throttling`, `ServiceError` (any non-throttling error response), `ConfiguredTimeout`, `IO` or `Other`. Omitted on success and on cancellation. |
-//! | `RetryDelay` | Elapsed time between attempts. Approximates retry backoff and rate-limiter waits, and can include interceptor or orchestrator overhead. |
+//! | `ErrorType` | Why a failed call failed: `Throttling`, `ServerError` (any non-throttling error response), `ConfiguredTimeout`, `IO` or `Other`. Omitted on success and on cancellation. |
+//! | `BackoffDelayDuration` | Elapsed time between attempts. Approximates retry backoff and rate-limiter waits, and can include interceptor or orchestrator overhead. |
 //! | `AttemptTimeouts` | Attempts cut short by the attempt timeout |
 //! | `OperationTimeout` | The operation timeout fired before the call completed |
 //! | `Cancelled` | The caller dropped the `send()` future before the call completed |
-//! | `ConnectionAcquireDuration` | The final attempt's time to get a connection from the HTTP client (when reported) |
+//! | `ConcurrencyAcquireDuration` | The final attempt's time to get a connection from the HTTP client (when reported) |
 //! | `ConnectionReused` | The final attempt used a previously used connection (when the HTTP client reports it) |
-//! | `ConnectorCallDuration` | The final attempt's HTTP connector time, up to the response head (when reported) |
+//! | `ServiceCallDuration` | The final attempt's HTTP connector time, up to the response head (when reported) |
 //!
 //! # Timeouts and cancellation
 //!
@@ -120,9 +126,9 @@
 //! - When the operation timeout fires, or the caller drops the `send()` future,
 //!   the orchestrator's final hooks don't run. The record is completed and
 //!   routed when the call's state is dropped, with `OperationTimeout` or
-//!   `Cancelled` set and `Success = 0`. A call is reported as an operation
-//!   timeout when the configured operation timeout had elapsed; otherwise as
-//!   cancelled.
+//!   `Cancelled` set and `ApiCallSuccessful = 0`. A call is reported as an
+//!   operation timeout when the configured operation timeout had elapsed;
+//!   otherwise as cancelled.
 //!
 //! [metrique]: https://docs.rs/metrique
 //! [`Intercept`]: aws_smithy_runtime_api::client::interceptors::Intercept
@@ -130,6 +136,7 @@
 //! [`MetricsPool`]: metrique_util::MetricsPool
 //! [`with_metrics_pool`]: metrique_util::with_metrics_pool
 //! [`ServiceMetrics`]: metrique::ServiceMetrics
+//! [AWS SDK for Java 2.x metrics]: https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/metrics-list.html
 
 mod collect;
 mod emit;

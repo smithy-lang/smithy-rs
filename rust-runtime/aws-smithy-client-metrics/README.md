@@ -2,7 +2,7 @@
 
 Per-request client metrics for [smithy-rs](https://github.com/smithy-lang/smithy-rs) clients, including the AWS SDK for Rust, emitted through [metrique](https://github.com/awslabs/metrique).
 
-Install `ClientMetrics` once on a client. By default, SDK call fields are added to the current request's metrique entry; repeated calls with the same service, qualifier and operation keep the last call. If no request entry is in scope, the crate logs a rate-limited warning and writes a standalone entry instead.
+Install `ClientMetrics` once on a client. By default, SDK call fields are added to the current request's metrique entry; repeated calls with the same service, qualifier and operation keep the last call. If no request entry is in scope, the crate logs a rate-limited warning and writes a standalone entry instead. Field names follow the [AWS SDK for Java 2.x metrics](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/metrics-list.html) where the same concept is recorded.
 
 ```rust,ignore
 use aws_smithy_client_metrics::ClientMetrics;

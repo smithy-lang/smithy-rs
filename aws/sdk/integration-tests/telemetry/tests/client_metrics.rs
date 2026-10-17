@@ -53,5 +53,5 @@ async fn client_metrics_installs_on_a_generated_sdk_client() {
 
     let entry = test_metric(request);
     assert_eq!(entry.values["SdkS3GetObjectHttpStatusCode"], "200");
-    assert_eq!(entry.metrics["SdkS3GetObjectSuccess"].as_u64(), 1);
+    assert_eq!(entry.metrics["SdkS3GetObjectApiCallSuccessful"].as_u64(), 1);
 }

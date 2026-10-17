@@ -446,7 +446,7 @@ impl Intercept for ClientMetrics {
 /// Classifies why an attempt (or a call that never sent one) failed.
 ///
 /// An error response is checked first, so a modeled service error is a
-/// `ServiceError` whatever the deserializer reported.
+/// `ServerError` whatever the deserializer reported.
 fn classify(ctx: &InterceptorContext, throttled: bool) -> ErrorType {
     if throttled {
         return ErrorType::Throttling;
@@ -455,7 +455,7 @@ fn classify(ctx: &InterceptorContext, throttled: bool) -> ErrorType {
         .response()
         .is_some_and(|r| r.status().is_client_error() || r.status().is_server_error())
     {
-        return ErrorType::ServiceError;
+        return ErrorType::ServerError;
     }
     let Some(Err(err)) = ctx.output_or_error() else {
         return ErrorType::Other;
