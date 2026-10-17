@@ -9,7 +9,7 @@
 # Without FRESH=1 the existing afl-output (saved crashes) is kept, so after a fix you can rebuild
 # and replay old crashes against the new targets with replay.sh. Targets are always rebuilt:
 # they depend on both checkouts' runtimes by path.
-set -u
+set -uo pipefail
 source "$(dirname "$0")/env.sh"
 
 init_one() {
@@ -25,15 +25,21 @@ init_one() {
       --release --force-rebuild > initialize.log 2>&1; then
     echo "$S/$C: initialize FAILED, see $W/initialize.log"; return 1
   fi
-  python3 "$AB_FUZZ_DIR/abfuzz.py" seed "$S" "$C" > /dev/null
-  python3 "$AB_FUZZ_DIR/abfuzz.py" corpus-diff "$S" "$C" > corpus-diff.log 2>&1
+  python3 "$AB_FUZZ_DIR/abfuzz.py" seed "$S" "$C" > /dev/null || return 1
+  local result=0
+  python3 "$AB_FUZZ_DIR/abfuzz.py" corpus-diff "$S" "$C" > corpus-diff.log 2>&1 || result=$?
   tail -1 corpus-diff.log
+  return "$result"
 }
 
+status=0
+pids=()
 for S in $SUITES; do
   for C in $CASES; do
-    while [ "$(jobs -rp | wc -l)" -ge "${JOBS:-3}" ]; do wait -n; done
+    while [ "$(jobs -rp | wc -l)" -ge "${JOBS:-3}" ]; do wait -n || status=1; done
     init_one "$S" "$C" &
+    pids+=("$!")
   done
 done
-wait
+for pid in "${pids[@]}"; do wait "$pid" || status=1; done
+exit "$status"

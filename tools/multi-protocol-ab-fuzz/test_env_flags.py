@@ -29,7 +29,7 @@ class EnvironmentFlagsTest(unittest.TestCase):
         directory = Path(__file__).resolve().parent
         code = (
             "import json, os, abfuzz; "
-            "print(json.dumps([abfuzz.SEMANTIC, abfuzz.IGNORE_UNROUTED, "
+            "print(json.dumps([abfuzz.SEMANTIC, "
             "os.environ.get('SMITHY_FUZZ_SEMANTIC_COMPARE'), "
             "os.environ.get('SMITHY_FUZZ_IGNORE_UNROUTED')]))"
         )
@@ -40,7 +40,7 @@ class EnvironmentFlagsTest(unittest.TestCase):
                 if value is not None:
                     env.update({flag: value for flag in FLAGS})
                 enabled = value is not None and value.strip().lower() not in ("", "0", "false", "no", "off")
-                expected = [True, False, "1", None] if value is None else [enabled, enabled, "1" if enabled else None, "1" if enabled else None]
+                expected = [True, "1", None] if value is None else [enabled, "1" if enabled else None, None]
                 result = subprocess.run(
                     ["bash", "-c", 'source "$1"; "$2" -c "$3"', "flags-test",
                      str(directory / "env.sh"), sys.executable, code],
@@ -51,11 +51,11 @@ class EnvironmentFlagsTest(unittest.TestCase):
     def test_direct_python_unset_flags_are_disabled(self):
         env = {k: v for k, v in os.environ.items() if k not in FLAGS}
         result = subprocess.run(
-            [sys.executable, "-c", "import abfuzz; print(abfuzz.SEMANTIC, abfuzz.IGNORE_UNROUTED)"],
+            [sys.executable, "-c", "import abfuzz; print(abfuzz.SEMANTIC)"],
             cwd=Path(__file__).resolve().parent, env=env,
             capture_output=True, text=True, check=True,
         )
-        self.assertEqual(result.stdout.strip(), "False False")
+        self.assertEqual(result.stdout.strip(), "False")
 
 
 if __name__ == "__main__":

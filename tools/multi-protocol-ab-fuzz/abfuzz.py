@@ -6,6 +6,7 @@ $FUZZ_ROOT/work-isolated-v1/<suite>/<case> (FUZZ_ROOT defaults to ./artifacts ne
 
   seed <suite> <case>             Write the seed corpus (seeds.py) into the case's afl-input/corpus.
   corpus-diff <suite> <case>      Send every seed to both targets and report the ones that differ.
+  compatibility-diff <suite> <case> Replay seeds unchanged; valid baseline requests must still work.
   replay <suite> <case>           Send every saved crash and hang to both targets, write replay.jsonl,
                                   and group the divergences. Hangs are usually divergences too: on a
                                   mismatch the driver re-runs both targets 10 times, which under load
@@ -18,11 +19,8 @@ $FUZZ_ROOT/work-isolated-v1/<suite>/<case> (FUZZ_ROOT defaults to ./artifacts ne
 Every command compares the two targets the way the driver does. With SMITHY_FUZZ_SEMANTIC_COMPARE set
 (the default in env.sh) that is: the deserialized input, the status, the headers except
 `content-length`, and the body as a JSON or CBOR value or as XML with differently-named siblings in any
-order. Otherwise: the response, byte for byte. With SMITHY_FUZZ_IGNORE_UNROUTED explicitly set (disabled by default),
-the targets also agree when the single-protocol target did not route the request to an operation (404
-or 405, no handler invoked), whatever the multi-protocol target answers, and when the single-protocol
-target rejected the request with a 4xx before invoking a handler and the multi-protocol target did
-not route it.
+order. Otherwise: the response, byte for byte. Recognized regressions and routing
+differences remain failures; diagnostic classifications never suppress comparisons.
 """
 import collections
 import glob
@@ -45,7 +43,6 @@ def env_flag(name):
 
 
 SEMANTIC = env_flag("SMITHY_FUZZ_SEMANTIC_COMPARE")
-IGNORE_UNROUTED = env_flag("SMITHY_FUZZ_IGNORE_UNROUTED")
 SINGLE, MULTI = "single", "multi"
 
 # ---------------------------------------------------------------------------------------------
@@ -209,18 +206,23 @@ class Case:
         for target in self.config["targets"]:
             self.libraries[os.path.basename(target["source"].rstrip("/"))] = target["shared_library"]
 
-    def invoke_file(self, path):
+    def invoke_file(self, path, *, pin_identity=True):
         """{side: result}, where result is None for a panic or hang, else a dict with the exact bytes."""
-        if self.config.get("protocol") != self.name:
+        if self.config.get("protocol") != protocol_of(self.name):
             raise ValueError("campaign protocol is missing or mismatched; rerun init.sh")
         out = {}
+        invocation_env = dict(os.environ)
+        if pin_identity:
+            invocation_env["SMITHY_FUZZ_PROTOCOL"] = protocol_of(self.name)
+        else:
+            invocation_env.pop("SMITHY_FUZZ_PROTOCOL", None)
         for side, library in self.libraries.items():
             res = None
             try:
                 res = subprocess.run(
                     ["aws-smithy-fuzz", "invoke-test-case", "--shared-library-path", library, "--test-case", path],
                     cwd=self.dir, capture_output=True, timeout=30,
-                    env={**os.environ, "SMITHY_FUZZ_PROTOCOL": self.name},
+                    env=invocation_env,
                 )
                 r = json.loads(res.stdout)
                 out[side] = {
@@ -240,11 +242,11 @@ class Case:
                 out[side] = {"failure": "panic: " + (panic[0] if panic else stderr[-300:])}
         return out[SINGLE], out[MULTI]
 
-    def invoke(self, uri, method, headers, body):
+    def invoke(self, uri, method, headers, body, *, pin_identity=True):
         with tempfile.NamedTemporaryFile(dir=self.dir, suffix=".probe", delete=False) as f:
             f.write(encode_request(uri, method, headers, body))
         try:
-            return self.invoke_file(f.name)
+            return self.invoke_file(f.name, pin_identity=pin_identity)
         finally:
             os.unlink(f.name)
 
@@ -371,27 +373,11 @@ def pin_protocol(request, protocol):
 
 
 def known_divergence(request, s, m):
-    """Recognize only the documented F1, F3 and live-verified X1 signatures."""
+    """Recognize only the documented F1 and F3 signatures."""
     if not SEMANTIC or request is None or "failure" in s or "failure" in m:
         return None
     uri, method, raw_headers, body = request
     path = uri.split("?", 1)[0]
-    species = path.removeprefix("/pokemon-species/")
-    if (method == "GET" and path.startswith("/pokemon-species/") and species
-            and "/" not in species and not body
-            and not any(key.lower() == "content-type" for key in raw_headers)
-            and isinstance(s.get("input"), str)
-            and s["input"].startswith("GetPokemonSpeciesInput {")
-            and s["status"] in (200, 404)
-            and _valid_content_length(s) and _valid_content_length(m)
-            and _headers(s).get("content-type") == "application/xml"
-            and m["input"] is None and m["status"] == 404
-            and m["body"] == b"<UnknownOperationException/>\n" and not _headers(m)):
-        try:
-            if xml_canonical(s["body"]) is not None:
-                return "X1: restXml Pokemon lookup without Content-Type; strict claiming declines the legacy request"
-        except (ValueError, UnicodeError, ET.ParseError):
-            pass
     headers = {k.lower(): [v.decode("utf-8", "replace") if isinstance(v, bytes) else v for v in vs]
                for k, vs in raw_headers.items()}
     if (method == "POST" and (path == "/capture-pokemon-event" or
@@ -417,7 +403,7 @@ def known_divergence(request, s, m):
                 if (isinstance(a, list) and isinstance(b, list) and len(a) >= 2
                         and len(a) == len(b) and a[0] == "capture_pokemon"
                         and a[:-1] == b[:-1] and a[-1] == left and b[-1] == right):
-                    return "F3: restXml modeled event-error framing; preserve schema shape-root encoding and decoding"
+                    return "F3: restXml modeled event-error framing differs from legacy"
         except (ValueError, TypeError, IndexError, struct.error):
             pass
     if (method != "POST" or not body or s["input"] is not None or m["input"] is not None
@@ -459,12 +445,6 @@ def describe(s, m, request=None):
     """None if the driver would treat the results as agreeing, else what differs."""
     if "failure" in s or "failure" in m:
         return f"single {s.get('failure', 'responded')} / multi {m.get('failure', 'responded')}"
-    if known_divergence(request, s, m):
-        return None
-    if IGNORE_UNROUTED and s["input"] is None:
-        unrouted = lambda r: r["input"] is None and r["status"] in (404, 405)
-        if unrouted(s) or (unrouted(m) and 400 <= s["status"] < 500):
-            return None
     if s["status"] != m["status"]:
         return f"status {s['status']} -> {m['status']}"
     if SEMANTIC and (not _valid_content_length(s) or not _valid_content_length(m)):
@@ -496,7 +476,10 @@ def _print_request(uri, method, headers, body):
 
 
 def protocol_of(case):
-    return "rest-xml" if case.startswith("rest-xml") else case
+    """The wire protocol of a case: `rest-json1@bunch-json` and `rest-xml-nojson@full-xml`
+    name the after-side variant after `@`; the pinned protocol is always the before side's."""
+    base = case.split("@")[0]
+    return "rest-xml" if base.startswith("rest-xml") else base
 
 
 def cmd_seed(suite, case):
@@ -506,7 +489,7 @@ def cmd_seed(suite, case):
     config_path = os.path.join(campaign.dir, "smithy-fuzz-config.json")
     with open(config_path) as source:
         config = json.load(source)
-    config["protocol"] = case
+    config["protocol"] = protocol_of(case)
     with open(config_path, "w") as destination:
         json.dump(config, destination, indent=2)
     corpus = os.path.join(campaign.dir, "afl-input", "corpus")
@@ -543,6 +526,32 @@ def cmd_corpus_diff(suite, case):
     return differ
 
 
+def cmd_compatibility_diff(suite, case):
+    """The original request and successful handler dispatch are the compatibility contract."""
+    sys.path.insert(0, HERE)
+    from seeds import seeds
+    campaign = Case(suite, case)
+    checked, differ = 0, 0
+    for label, uri, method, headers, body in seeds(suite, protocol_of(case)):
+        baseline, candidate = campaign.invoke(uri, method, headers, body, pin_identity=False)
+        if "failure" in baseline:
+            differ += 1
+            print(f"  DIFF {label}: baseline invocation failed: {baseline['failure']}")
+            continue
+        checked += 1
+        request = (uri, method, headers, body)
+        what = describe(baseline, candidate, request)
+        if what:
+            differ += 1
+            print(f"  DIFF {label}: {what}")
+            _print_request(*request)
+            print(f"    single: {_short(baseline)}\n    multi: {_short(candidate)}")
+    print(f"{suite}/{case}: {checked} requests replayed unchanged, {differ} differ")
+    if not checked:
+        sys.exit("compatibility comparison did not exercise a baseline request")
+    return differ
+
+
 def _route(uri, headers):
     target = next((v[0].decode("utf-8", "replace") for k, v in headers.items() if k.lower() == "x-amz-target" and v), None)
     path = uri.split("?")[0]
@@ -569,13 +578,14 @@ def cmd_replay(suite, case):
                                      {**m, "body": bytes(m.get("body", []))})
             out.write(json.dumps({"path": os.path.relpath(path, c.dir), "single": s, "multi": m,
                                   "known_divergence": known}) + "\n")
-    cmd_cluster(suite, case, 0)
+    return cmd_cluster(suite, case, 0)
 
 
 def cmd_cluster(suite, case, samples):
     c = Case(suite, case)
     groups = collections.defaultdict(list)
     total = 0
+    differing = 0
     for line in open(os.path.join(c.dir, "replay.jsonl")):
         o = json.loads(line)
         total += 1
@@ -586,14 +596,15 @@ def cmd_cluster(suite, case, samples):
         request = decode_request(open(os.path.join(c.dir, o["path"]), "rb").read())
         effective_request = pin_protocol(request, protocol_of(c.name))
         known = known_divergence(effective_request, s, m)
-        if known:
-            groups[f"KNOWN {known}"].append((o["path"], request, s, m))
-            continue
         what = describe(s, m, effective_request)
         if what is None:
             groups["does not diverge on replay"].append((o["path"], None, s, m))
             continue
-        groups[f"{request[1][:8]} {_route(request[0], request[2])}: {what}"].append((o["path"], request, s, m))
+        differing += 1
+        label = f"{request[1][:8]} {_route(request[0], request[2])}: {what}"
+        if known:
+            label += f" [recognized regression: {known}]"
+        groups[label].append((o["path"], request, s, m))
     print(f"## {suite}/{case}: {total} saved crashes and hangs")
     for name, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         print(f"  {len(items):5d}  {name}")
@@ -604,17 +615,23 @@ def cmd_cluster(suite, case, samples):
             print(f"\n    {path}")
             _print_request(*request)
             print(f"    single: {_short(s)}\n    multi:  {_short(m)}\n")
+    return differing
 
 
 def cmd_probe(suite, case, cases_file):
     c = Case(suite, case)
     ns = {}
     exec(open(cases_file).read(), ns)
+    differing = 0
     for name, uri, method, headers, body in ns["CASES"]:
         s, m = c.invoke(uri, method, headers, body)
         request = pin_protocol((uri, method, headers, body), protocol_of(c.name))
         known = known_divergence(request, s, m)
-        print(f"{name}\n    single: {_short(s)}\n    multi:  {_short(m)}\n    -> {'KNOWN: ' + known if known else describe(s, m, request) or 'SAME'}")
+        what = describe(s, m, request)
+        differing += bool(what)
+        diagnostic = f" [recognized regression: {known}]" if known else ""
+        print(f"{name}\n    single: {_short(s)}\n    multi:  {_short(m)}\n    -> {what or 'SAME'}{diagnostic}")
+    return differing
 
 
 def cmd_dump(path):
@@ -634,13 +651,15 @@ def main(argv):
     if cmd == "seed":
         cmd_seed(args[0], args[1])
     elif cmd == "corpus-diff":
-        cmd_corpus_diff(args[0], args[1])
+        sys.exit(1 if cmd_corpus_diff(args[0], args[1]) else 0)
+    elif cmd == "compatibility-diff":
+        sys.exit(1 if cmd_compatibility_diff(args[0], args[1]) else 0)
     elif cmd == "replay":
-        cmd_replay(args[0], args[1])
+        sys.exit(1 if cmd_replay(args[0], args[1]) else 0)
     elif cmd == "cluster":
-        cmd_cluster(args[0], args[1], int(args[args.index("-v") + 1]) if "-v" in args else 0)
+        sys.exit(1 if cmd_cluster(args[0], args[1], int(args[args.index("-v") + 1]) if "-v" in args else 0) else 0)
     elif cmd == "probe":
-        cmd_probe(args[0], args[1], args[2])
+        sys.exit(1 if cmd_probe(args[0], args[1], args[2]) else 0)
     elif cmd == "dump":
         cmd_dump(args[0])
     else:

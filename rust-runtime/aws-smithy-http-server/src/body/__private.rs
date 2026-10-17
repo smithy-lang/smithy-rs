@@ -157,7 +157,7 @@ pub async fn collect_body<B>(body: B, config: Option<CollectionConfig>) -> Resul
 where
     B: HttpBody,
 {
-    collect_body_inner::<B, false>(body, config)
+    CollectBodyFuture::<B, false>::new(body, config)
         .await
         .map(|(bytes, _)| bytes)
 }
@@ -170,61 +170,119 @@ pub async fn collect_body_with_trailers<B>(
 where
     B: HttpBody,
 {
-    collect_body_inner::<B, true>(body, config).await
+    CollectBodyFuture::<B, true>::new(body, config).await
 }
 
-async fn collect_body_inner<B, const RETAIN_TRAILERS: bool>(
-    body: B,
-    config: Option<CollectionConfig>,
-) -> Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>
-where
-    B: HttpBody,
-{
-    let config = config.unwrap_or_default();
-
-    // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
-    // don't require `B::Error: Send + Sync + 'static`. The generated server
-    // deserializer only carries a `Send` bound on body errors.
-    let lower = body.size_hint().lower();
-    if let Some(limit) = config.limit {
-        enforce_body_limit(lower, limit)?;
+pin_project_lite::pin_project! {
+    /// Complete-body collection with lazy reservation and pinned body ownership.
+    pub(crate) struct BodyCollectionFuture<B, R> {
+        #[pin]
+        body: Option<BudgetedBody<B>>,
+        config: CollectionConfig,
+        collected: Option<bytes::BytesMut>,
+        trailers: Option<http::HeaderMap>,
+        done: bool,
+        retention: std::marker::PhantomData<R>,
     }
+}
 
-    let mut body = std::pin::pin!(wrap_body_with_frame_budget(body, config.frame_budget));
+// pin-project-lite projects type parameters; the marker carries the trailer policy.
+pub(crate) struct TrailerRetention<const RETAIN_TRAILERS: bool>;
+pub(crate) type CollectBodyFuture<B, const RETAIN_TRAILERS: bool> =
+    BodyCollectionFuture<B, TrailerRetention<RETAIN_TRAILERS>>;
 
-    // A size hint may come from an untrusted Content-Length. Cap the initial reservation;
-    // larger buffers grow only as data arrives, subject to the total-body limit.
-    let mut collected = new_collection_buffer(lower, config.initial_capacity);
-    let mut trailers = None;
-    loop {
-        let next_frame = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx)).await;
-
-        // None means the body has ended.
-        let Some(frame) = next_frame else {
-            break;
-        };
-
-        // Propagate an error from the underlying body.
-        let frame = frame.map_err(CollectBodyError::Body)?;
-
-        match frame.into_data() {
-            Ok(data) => {
-                let data_len = data.remaining();
-                if let Some(limit) = config.limit {
-                    enforce_body_limit(collected.len().saturating_add(data_len) as u64, limit)?;
-                }
-                collected.put(data);
-            }
-            Err(frame) if RETAIN_TRAILERS => {
-                if let Ok(headers) = frame.into_trailers() {
-                    trailers.get_or_insert_with(http::HeaderMap::new).extend(headers);
-                }
-            }
-            Err(_) => {}
+impl<B: HttpBody, const RETAIN_TRAILERS: bool> CollectBodyFuture<B, RETAIN_TRAILERS> {
+    pub(crate) fn new(body: B, config: Option<CollectionConfig>) -> Self {
+        let config = config.unwrap_or_default();
+        Self {
+            body: Some(wrap_body_with_frame_budget(body, config.frame_budget)),
+            config,
+            collected: None,
+            trailers: None,
+            done: false,
+            retention: std::marker::PhantomData,
         }
     }
+}
 
-    Ok((collected.freeze(), trailers))
+impl<B: HttpBody, const RETAIN_TRAILERS: bool> std::future::Future for CollectBodyFuture<B, RETAIN_TRAILERS> {
+    type Output = Result<(Bytes, Option<http::HeaderMap>), CollectBodyError<B::Error>>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        use std::task::Poll;
+        let mut this = self.project();
+        assert!(!*this.done, "polled after completion");
+        if this.collected.is_none() {
+            let lower = this
+                .body
+                .as_ref()
+                .get_ref()
+                .as_ref()
+                .expect("body remains until completion")
+                .size_hint()
+                .lower();
+            if let Some(limit) = this.config.limit {
+                if let Err(error) = enforce_body_limit(lower, limit) {
+                    *this.done = true;
+                    this.body.set(None);
+                    return Poll::Ready(Err(error));
+                }
+            }
+            // Reserve only on first poll. Size hints may reflect untrusted Content-Length.
+            *this.collected = Some(new_collection_buffer(lower, this.config.initial_capacity));
+        }
+        loop {
+            // BudgetedBody preserves the existing ready-frame count and pending reset.
+            let frame = match this
+                .body
+                .as_mut()
+                .as_pin_mut()
+                .expect("body remains until completion")
+                .poll_frame(cx)
+            {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(None) => {
+                    *this.done = true;
+                    this.body.set(None);
+                    return Poll::Ready(Ok((
+                        this.collected.take().expect("initialized above").freeze(),
+                        this.trailers.take(),
+                    )));
+                }
+                Poll::Ready(Some(Err(error))) => {
+                    *this.done = true;
+                    this.body.set(None);
+                    *this.collected = None;
+                    *this.trailers = None;
+                    return Poll::Ready(Err(CollectBodyError::Body(error)));
+                }
+                Poll::Ready(Some(Ok(frame))) => frame,
+            };
+            match frame.into_data() {
+                Ok(data) => {
+                    let collected = this.collected.as_mut().expect("initialized above");
+                    if let Some(limit) = this.config.limit {
+                        if let Err(error) =
+                            enforce_body_limit(collected.len().saturating_add(data.remaining()) as u64, limit)
+                        {
+                            *this.done = true;
+                            this.body.set(None);
+                            *this.collected = None;
+                            *this.trailers = None;
+                            return Poll::Ready(Err(error));
+                        }
+                    }
+                    collected.put(data);
+                }
+                Err(frame) if RETAIN_TRAILERS => {
+                    if let Ok(headers) = frame.into_trailers() {
+                        this.trailers.get_or_insert_with(http::HeaderMap::new).extend(headers);
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    }
 }
 
 fn new_collection_buffer(size_hint_lower: u64, max_initial_capacity: Option<NonZeroUsize>) -> bytes::BytesMut {

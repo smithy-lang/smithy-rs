@@ -5,11 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -74,6 +73,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
@@ -181,9 +181,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
-    private val legacyResponseBindings = codegenContext.settings.protocolResponseSettings.legacyResponseBindings(codegenContext.protocol)
-    private val isAwsJson = codegenContext.protocol == AwsJson1_0Trait.ID || codegenContext.protocol == AwsJson1_1Trait.ID
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val bodyLimitExceededVariant =
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) "BodyLimitExceeded" else "TooLarge"
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
@@ -197,6 +197,19 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         arrayOf(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
             "Bytes" to RuntimeType.Bytes,
+            "CodegenBody" to ServerRuntimeType.codegenBody(runtimeConfig),
+            "BodyLimitError" to
+                writable {
+                    if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                        rustTemplate(
+                            "#{CodegenBody}::CollectBodyError::<#{Infallible}>::BodyLimitExceeded(limit)",
+                            "CodegenBody" to ServerRuntimeType.codegenBody(runtimeConfig),
+                            "Infallible" to RuntimeType.stdConvert.resolve("Infallible"),
+                        )
+                    } else {
+                        rust("limit")
+                    }
+                },
             "Cow" to RuntimeType.Cow,
             "DateTime" to RuntimeType.dateTime(runtimeConfig),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
@@ -301,11 +314,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
             impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
             where
-                B: #{SmithyHttpServer}::body::HttpBody + Send,
+                B: #{CodegenBody}::HttpBody + Send,
                 B: 'static,
                 ${streamingBodyTraitBounds(operationShape)}
                 B::Data: Send,
-                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                #{RequestRejection} : From<<B as #{CodegenBody}::HttpBody>::Error>
             {
                 type Rejection = #{RuntimeError};
                 type Future = $inputFuture;
@@ -421,9 +434,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     #{RequestRejection}
                 >
                 where
-                    B: #{SmithyHttpServer}::body::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
+                    B: #{CodegenBody}::HttpBody + Send, ${streamingBodyTraitBounds(operationShape)}
                     B::Data: Send,
-                    #{RequestRejection}: From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                    #{RequestRejection}: From<<B as #{CodegenBody}::HttpBody>::Error>
                 """.trimIndent(),
                 *codegenScope,
                 "I" to inputSymbol,
@@ -526,13 +539,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             }
                         }
                     }
-                    // AWS JSON defaults to @error status; compatibility mode preserves @httpError.
                     val status =
-                        if (isAwsJson && !legacyResponseBindings) {
-                            errorTrait.defaultHttpStatusCode
-                        } else {
-                            variantShape.getTrait<HttpErrorTrait>()?.code ?: errorTrait.defaultHttpStatusCode
-                        }
+                        variantShape.getTrait<HttpErrorTrait>()?.code
+                            ?: errorTrait.defaultHttpStatusCode
 
                     serverRenderContentLengthHeader()
 
@@ -557,13 +566,16 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedMut.render(this)
         rustTemplate("let mut builder = #{http}::Response::builder();", *codegenScope)
         serverRenderResponseHeaders(operationShape)
-        // Preserve the modeled success status when historical AWS JSON bindings are enabled.
+        // Fallback to the default code of `@http`, which should be 200.
+        val httpTraitDefaultStatusCode =
+            HttpTrait.builder()
+                .method("GET")
+                .uri(UriPattern.parse("/")) // Required to build
+                .build()
+                .code
+        check(httpTraitDefaultStatusCode == 200)
         val httpTraitStatusCode =
-            if (legacyResponseBindings) {
-                operationShape.getTrait<HttpTrait>()?.code ?: 200
-            } else {
-                httpBindingResolver.httpTrait(operationShape).code
-            }
+            operationShape.getTrait<HttpTrait>()?.code ?: httpTraitDefaultStatusCode
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let {
             serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
         }
@@ -674,20 +686,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         errorShape: StructureShape? = null,
     ) {
-        // RPC header-bound members belong in the document, including on modeled errors.
-        if (!httpBindingResolver.isRpcProtocol() || legacyResponseBindings) {
-            val bindingGenerator =
-                ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-            val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
-            if (addHeadersFn != null) {
-                val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"
-                rust(
-                    """
-                    builder = #{T}($outputOwnedOrBorrowed, builder)?;
-                    """,
-                    addHeadersFn,
-                )
-            }
+        val bindingGenerator =
+            ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
+        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        if (addHeadersFn != null) {
+            // Notice that we need to borrow the output only for output shapes but not for error shapes.
+            val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"
+            rust(
+                """
+                builder = #{T}($outputOwnedOrBorrowed, builder)?;
+                """,
+                addHeadersFn,
+            )
         }
 
         // Set the `Content-Type` header *after* the response bindings headers have been set,
@@ -809,7 +819,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // amount of data a single request can buffer in memory — this prevents denial-of-service
             // attacks in which a client streams an unbounded `Transfer-Encoding: chunked` body.
             //
-            // If the limit is exceeded the helper returns a `BodyLimitExceeded` error that bubbles
+            // If the limit is exceeded the helper returns a body-limit error that bubbles
             // up as `RequestRejection::BufferHttpBodyBytes` and surfaces to the client as
             // `400 Bad Request` (plus the server drops the connection).
             //
@@ -820,11 +830,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (requestBodyMaxBytes > 0L) {
                 rustTemplate(
                     """
-                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
+                    let bytes = match #{CodegenBody}::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
                         #{Ok}(bytes) => bytes,
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
-                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                        #{Err}(#{CodegenBody}::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                        #{Err}(#{CodegenBody}::CollectBodyError::$bodyLimitExceededVariant(limit)) => {
+                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(#{BodyLimitError})));
                         }
                     };
                     """,
@@ -1083,11 +1093,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 {
-                                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
+                                    let bytes = match #{CodegenBody}::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
                                         #{Ok}(bytes) => bytes,
-                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
-                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                                        #{Err}(#{CodegenBody}::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                                        #{Err}(#{CodegenBody}::CollectBodyError::$bodyLimitExceededVariant(limit)) => {
+                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(#{BodyLimitError})));
                                         }
                                     };
                                     #{VerifyRequestContentTypeHeader:W}

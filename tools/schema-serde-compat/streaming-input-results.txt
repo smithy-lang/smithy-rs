@@ -1,3 +1,14 @@
+Current design (October 17, 2026)
+- REST blob handlers take their ordinary operation input, containing a ByteStream.
+- HTTP-bound metadata is deserialized and validated before invoking the handler;
+  the live body is passed through without collection.
+- The deferred StreamingInput API, StreamingRequestDecoder, and streaming_input
+  runtime module have been removed.
+- RPC v2 CBOR streaming blob inputs are temporarily rejected with empty HTTP 501
+  before body polling or handler dispatch. CBOR blob outputs remain supported.
+- Unsupported event streams also return empty HTTP 501.
+- The notes below describe the superseded implementation and its historical tests.
+
 Streaming blob inputs: implementation and verification
 
 Implemented

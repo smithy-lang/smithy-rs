@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["eventstreams-legacy", "eventstreams"]
+members = ["eventstreams-legacy", "eventstreams", "multi-protocol"]
 
 [workspace.dependencies]
 # http@1 versions

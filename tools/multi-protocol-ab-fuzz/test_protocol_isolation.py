@@ -11,6 +11,24 @@ import abfuzz
 
 
 class ProtocolIsolationTest(unittest.TestCase):
+    def test_compatibility_replay_removes_protocol_pinning_for_both_targets(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(abfuzz, "FUZZ_ROOT", root):
+            directory = Path(root) / "work-isolated-v1" / "suite" / "rest-json1"
+            directory.mkdir(parents=True)
+            (directory / "smithy-fuzz-config.json").write_text(json.dumps({
+                "protocol": "rest-json1",
+                "targets": [{"source": f"/generated/{side}", "shared_library": f"/{side}.so"}
+                            for side in ("single", "multi")],
+            }))
+            response = SimpleNamespace(stdout=json.dumps({"response": {
+                "status": 200, "headers": {}, "body": []}, "input": "same"}), stderr=b"")
+            with patch.dict(os.environ, {"SMITHY_FUZZ_PROTOCOL": "rest-json1"}), \
+                    patch.object(abfuzz.subprocess, "run", return_value=response) as run:
+                abfuzz.Case("suite", "rest-json1").invoke_file("case.bin", pin_identity=False)
+                self.assertEqual(run.call_count, 2)
+                for call in run.call_args_list:
+                    self.assertNotIn("SMITHY_FUZZ_PROTOCOL", call.kwargs["env"])
+
     def test_replay_overrides_inherited_protocol_for_both_targets(self):
         with tempfile.TemporaryDirectory() as root, patch.object(abfuzz, "FUZZ_ROOT", root):
             for protocol in ("aws-json-10", "aws-json-11", "rest-json1", "rest-xml", "rpcv2-cbor"):

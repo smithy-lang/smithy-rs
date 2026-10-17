@@ -554,7 +554,7 @@ internal class ServerSchemaStreamingTest {
                             """
                         let config = crate::service::ChatServiceConfig::builder().build();
                         let service = crate::service::ChatService::builder(config)
-                            .blob_echo(|input: #{SmithyHttpServer}::schema::StreamingInput<crate::input::BlobEchoInput>| async move {
+                            .blob_echo(|input: crate::input::BlobEchoInput| async move {
                                 #{Ok}::<_, crate::error::BlobEchoError>(crate::output::BlobEchoOutput { data: input.data })
                             }).build_unchecked();
                         let request = #{Http}::Request::builder().method("POST").uri("/blob")

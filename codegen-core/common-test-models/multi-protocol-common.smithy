@@ -67,6 +67,11 @@ operation Ping {
     output := {}
 }
 
+/// No modeled input or output: both default to smithy.api#Unit.
+@readonly
+@http(method: "GET", uri: "/no-input-output")
+operation NoInputOutput {}
+
 /// A streaming blob upload. Only the REST protocols stream blobs.
 @idempotent
 @http(method: "PUT", uri: "/upload")

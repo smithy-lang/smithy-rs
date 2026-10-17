@@ -110,7 +110,7 @@ internal class ServerSchemaXmlPayloadNamesTest {
                                 assert_eq!(response.status(), 200, "{path}");
                                 let length = response.headers().get("content-length").unwrap().to_str().unwrap()
                                     .parse::<usize>().unwrap();
-                                let bytes = #{Server}::body::collect_body_limited(response.into_body(), 1024 * 1024)
+                                let bytes = #{Server}::body::__private::collect_body_limited(response.into_body(), 1024 * 1024)
                                     .await.unwrap();
                                 assert_eq!(length, bytes.len());
                                 assert_eq!(bytes.as_ref(), expected.as_bytes(), "{path}");

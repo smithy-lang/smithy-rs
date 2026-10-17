@@ -43,6 +43,7 @@ data class ClientTest(
     val dependsOn: List<String> = emptyList(),
     val addMessageToErrors: Boolean = true,
     val renameErrors: Boolean = true,
+    val modelDirectory: String = "../codegen-core/common-test-models",
 ) {
     fun toCodegenTest(): CodegenTest = CodegenTest(
         serviceShapeName,
@@ -57,10 +58,10 @@ data class ClientTest(
         append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
     }.toString()
 
-    private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
+    private fun imports(): List<String> = dependsOn.map { "$modelDirectory/$it" }
 }
 
-val allCodegenTests = (listOf(
+val allCodegenTests = listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
     ClientTest("com.amazonaws.bignumbers#BigNumberService", "big_numbers", dependsOn = listOf("big-numbers.smithy")),
     ClientTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
@@ -125,14 +126,21 @@ val allCodegenTests = (listOf(
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
-) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
-    // One client per protocol of the multi-protocol service; see `examples/multi-protocol`.
+    // One client selects all five protocols at runtime; REST JSON is its default.
+    ClientTest(
+        "com.example.multiprotocol#MultiProtocolService",
+        "multi-protocol-client",
+        dependsOn = listOf("multi-protocol-restjson.smithy", "multi-protocol-common.smithy"),
+    ),
+).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
+    // Preserve the runtime-selecting client above and restore clients for the server integration suite.
     ClientTest(
         "com.example.multiprotocol#MultiProtocolService",
         "multi-protocol-client-$protocol",
         dependsOn = listOf("multi-protocol-$protocol.smithy", "multi-protocol-common.smithy"),
-    )
-}).map(ClientTest::toCodegenTest)
+        modelDirectory = "../codegen-server-test/integration-tests/multi-protocol/models",
+    ).toCodegenTest()
+}
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

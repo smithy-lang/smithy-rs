@@ -17,33 +17,33 @@ internal class ServerProtocolResponseSettingsTest {
     private val json11 = ShapeId.from("aws.protocols#awsJson1_1")
 
     @Test
-    fun `legacy bindings default to false`() {
+    fun `response bindings default to historical`() {
         for (node in listOf(null, "{}", """{"protocols":{}}""", """{"protocols":{"awsJson1_0":{}}}""")) {
             val settings = settings(node)
-            check(!settings.legacyResponseBindings(json10))
-            check(!settings.legacyResponseBindings(json11))
+            check(settings.responseBindings(json10) == AwsJsonResponseBindings.HISTORICAL)
+            check(settings.responseBindings(json11) == AwsJsonResponseBindings.HISTORICAL)
         }
     }
 
     @Test
     fun `protocol flags are independent and unrelated protocol settings are preserved`() {
-        for (enabled in listOf("awsJson1_0", "awsJson1_1")) {
-            val disabled = if (enabled == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
+        for (spec in listOf("awsJson1_0", "awsJson1_1")) {
+            val other = if (spec == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
             val settings =
                 settings(
-                    """{"protocols":{"$enabled":{"legacyResponseBindings":true},"$disabled":{"legacyResponseBindings":false},"common":{"otherSetting":1},"restJson1":{"legacyResponseBindings":true}}}""",
+                    """{"protocols":{"$spec":{"responseBindings":"protocol"},"$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"restJson1":{"responseBindings":"protocol"}}}""",
                 )
-            check(settings.legacyResponseBindings(ShapeId.from("aws.protocols#$enabled")))
-            check(!settings.legacyResponseBindings(ShapeId.from("aws.protocols#$disabled")))
-            check(!settings.legacyResponseBindings(ShapeId.from("aws.protocols#restJson1")))
-            check(!settings.legacyResponseBindings(ShapeId.from("smithy.protocols#rpcv2Cbor")))
+            check(settings.responseBindings(ShapeId.from("aws.protocols#$spec")) == AwsJsonResponseBindings.PROTOCOL)
+            check(settings.responseBindings(ShapeId.from("aws.protocols#$other")) == AwsJsonResponseBindings.HISTORICAL)
+            check(settings.responseBindings(ShapeId.from("aws.protocols#restJson1")) == AwsJsonResponseBindings.HISTORICAL)
+            check(settings.responseBindings(ShapeId.from("smithy.protocols#rpcv2Cbor")) == AwsJsonResponseBindings.HISTORICAL)
         }
     }
 
     @Test
     fun `full protocol IDs use the same settings and cannot duplicate short names`() {
-        val settings = settings("""{"protocols":{"aws.protocols#awsJson1_0":{"legacyResponseBindings":true}}}""")
-        check(settings.legacyResponseBindings(json10))
+        val settings = settings("""{"protocols":{"aws.protocols#awsJson1_0":{"responseBindings":"protocol"}}}""")
+        check(settings.responseBindings(json10) == AwsJsonResponseBindings.PROTOCOL)
         expectInvalid(
             """{"protocols":{"awsJson1_0":{},"aws.protocols#awsJson1_0":{}}}""",
             "customizationConfig.protocols.awsJson1_0",
@@ -61,12 +61,12 @@ internal class ServerProtocolResponseSettingsTest {
     }
 
     @Test
-    fun `legacy response binding flags require booleans`() {
+    fun `response bindings must be a known string`() {
         for (protocol in listOf("awsJson1_0", "awsJson1_1")) {
-            for (value in listOf("null", "1", "0", "\"true\"", "{}", "[]")) {
+            for (value in listOf("null", "1", "true", "\"legacy\"", "\"Protocol\"", "{}", "[]")) {
                 expectInvalid(
-                    """{"protocols":{"$protocol":{"legacyResponseBindings":$value}}}""",
-                    "customizationConfig.protocols.$protocol.legacyResponseBindings",
+                    """{"protocols":{"$protocol":{"responseBindings":$value}}}""",
+                    "customizationConfig.protocols.$protocol.responseBindings",
                 )
             }
         }

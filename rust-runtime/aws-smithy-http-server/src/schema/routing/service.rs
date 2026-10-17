@@ -137,18 +137,32 @@ impl MultiProtocolRoutingService {
     }
 
     fn route_request(&self, request: Request<crate::body::RequestBody>) -> MultiProtocolRoutingFuture {
-        let state = match &self.state.protocols[..] {
+        match &self.state.protocols[..] {
             // A single metadata router can check its claim synchronously.
             [ProtocolAndRouter {
                 router: SharedProtocolRouter::Metadata(router),
                 ..
-            }] => self.route(router.as_ref(), request),
-            _ => State::Routing {
-                // TODO: Investigate avoiding this Arc clone when routing needs no body I/O.
-                future: Box::pin(self.clone().route_protocols(request)),
+            }] => MultiProtocolRoutingFuture {
+                inner: self.route(router.as_ref(), request),
+                routing: None,
             },
-        };
-        MultiProtocolRoutingFuture { inner: state }
+            _ => {
+                let (parts, body) = request.into_parts();
+                MultiProtocolRoutingFuture {
+                    inner: State::Routing,
+                    routing: Some(ProtocolRouting {
+                        service: self.clone(),
+                        probe: Request::from_parts(parts, ()),
+                        body: Some(body),
+                        collected: None,
+                        index: 0,
+                        streaming: None,
+                        deferred: None,
+                        deferred_claim: None,
+                    }),
+                }
+            }
+        }
     }
 
     /// Checks the service's only metadata protocol without allocating a routing future.
@@ -180,141 +194,165 @@ impl MultiProtocolRoutingService {
         }
     }
 
-    /// Tries protocols in canonical order, retaining the collected body if a router declines.
-    async fn route_protocols(
-        self,
-        request: Request<crate::body::RequestBody>,
-    ) -> Result<Response<BoxBody>, Infallible> {
-        let (parts, mut body) = request.into_parts();
-        let mut probe = Request::from_parts(parts, ());
-        let mut collected: Option<Bytes> = None;
-        let mut streaming = None;
-        let mut deferred = None;
-        let mut deferred_claim = None;
-
-        for (index, protocol) in self.state.protocols.iter().enumerate() {
-            let selected = match &protocol.router {
-                SharedProtocolRouter::Metadata(router) => match router.claim(&probe) {
-                    RouteClaim::ClaimedWithRoute(selected) => Ok(selected),
-                    RouteClaim::DeferredClaim(selected) => {
-                        deferred_claim.get_or_insert((index, selected));
-                        continue;
-                    }
-                    RouteClaim::Claimed => router.route(&probe),
-                    RouteClaim::DeferredRejection(error) => {
-                        deferred.get_or_insert((index, error));
-                        continue;
-                    }
-                    RouteClaim::NoClaim => continue,
-                },
-                SharedProtocolRouter::Body(router) => {
-                    let claim = router.claim(&probe);
-                    match claim {
-                        BodyRouteClaim::ClaimedWithRoute(selected) => Ok(selected),
-                        BodyRouteClaim::DeferredClaim(selected) => {
-                            deferred_claim.get_or_insert((index, selected));
-                            continue;
-                        }
-                        BodyRouteClaim::NoClaim => continue,
-                        BodyRouteClaim::DeferredRejection(error) => {
-                            deferred.get_or_insert((index, error));
-                            continue;
-                        }
-                        BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
-                            // Skip body-dependent claims for recognized streaming inputs.
-                            // An ownership claim already made from the head retains priority.
-                            if matches!(claim, BodyRouteClaim::NeedsBodyToClaim)
-                                && *streaming.get_or_insert_with(|| {
-                                    self.state.metadata_routers.as_ref().is_some_and(|indices| {
-                                        indices.iter().any(|index| {
-                                            let SharedProtocolRouter::Metadata(router) =
-                                                &self.state.protocols[*index].router
-                                            else {
-                                                unreachable!("recognizers are metadata routers");
-                                            };
-                                            router.recognizes_streaming_input(&probe)
-                                        })
-                                    })
-                                })
-                            {
-                                tracing::trace!(
-                                    protocol = %protocol.protocol.protocol_id(),
-                                    "skipping protocol that needs body bytes to claim a request recognized as streaming"
-                                );
-                                continue;
-                            }
-                            if collected.is_none() {
-                                let (bytes, trailers) =
-                                    match crate::schema::protocol::collect_request_body_with_trailers(
-                                        body,
-                                        &self.state.body_collection_config,
-                                    )
-                                    .await
-                                    {
-                                        Ok(collected) => collected,
-                                        Err(error) => {
-                                            return Ok(crate::schema::body_collection_rejection(
-                                                &*self.state.protocols[index].protocol,
-                                                error,
-                                            ))
-                                        }
-                                    };
-                                body = crate::body::RequestBody::buffered(bytes.clone(), trailers);
-                                collected = Some(bytes);
-                            }
-                            let request = probe.map(|()| CollectedBody {
-                                bytes: collected.as_ref().expect("body was collected").clone(),
-                            });
-                            let claim = match claim {
-                                BodyRouteClaim::NeedsBodyToClaim => router.claim_with_body(&request),
-                                BodyRouteClaim::Claimed => RouteClaim::Claimed,
-                                _ => unreachable!("handled head-only claims above"),
-                            };
-                            let selected = match claim {
-                                RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
-                                RouteClaim::DeferredClaim(selected) => {
-                                    deferred_claim.get_or_insert((index, selected));
-                                    None
-                                }
-                                RouteClaim::Claimed => Some(router.route_with_body(&request)),
-                                RouteClaim::NoClaim => None,
-                                RouteClaim::DeferredRejection(error) => {
-                                    deferred.get_or_insert((index, error));
-                                    None
-                                }
-                            };
-                            probe = request.map(|_| ());
-                            let Some(selected) = selected else { continue };
-                            selected
-                        }
-                    }
-                }
-            };
-            return match selected {
-                Ok(selected) => self.handle(selected, index, probe.map(|()| body)).await,
-                Err(error) => Ok(self.reject(index, error)),
-            };
-        }
-        if let Some((index, selected)) = deferred_claim {
-            return self.handle(selected, index, probe.map(|()| body)).await;
-        }
-        Ok(match deferred {
-            Some((index, error)) => self.reject(index, error),
-            None => unclaimed(),
-        })
-    }
-
     /// Frames a routing error with the rejecting protocol's serialization.
     fn reject(&self, protocol: usize, error: RoutingError) -> Response<BoxBody> {
         self.state.protocols[protocol].protocol.serialize_routing_error(&error)
     }
 }
 
+/// The claim walk remains owned until the response completes, including handler readiness.
+struct ProtocolRouting {
+    service: MultiProtocolRoutingService,
+    probe: Request<()>,
+    body: Option<crate::body::RequestBody>,
+    collected: Option<Bytes>,
+    index: usize,
+    streaming: Option<bool>,
+    deferred: Option<(usize, RoutingError)>,
+    deferred_claim: Option<(usize, OperationTarget)>,
+}
+
+impl ProtocolRouting {
+    /// Continues synchronously until body I/O or handler readiness must be polled.
+    fn advance(&mut self) -> State {
+        while self.index < self.service.state.protocols.len() {
+            let index = self.index;
+            let protocol = &self.service.state.protocols[index];
+            let selected = match &protocol.router {
+                SharedProtocolRouter::Metadata(router) => match router.claim(&self.probe) {
+                    RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
+                    RouteClaim::DeferredClaim(selected) => {
+                        self.deferred_claim.get_or_insert((index, selected));
+                        None
+                    }
+                    RouteClaim::Claimed => Some(router.route(&self.probe)),
+                    RouteClaim::DeferredRejection(error) => {
+                        self.deferred.get_or_insert((index, error));
+                        None
+                    }
+                    RouteClaim::NoClaim => None,
+                },
+                SharedProtocolRouter::Body(router) => {
+                    let claim = router.claim(&self.probe);
+                    match claim {
+                        BodyRouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
+                        BodyRouteClaim::DeferredClaim(selected) => {
+                            self.deferred_claim.get_or_insert((index, selected));
+                            None
+                        }
+                        BodyRouteClaim::NoClaim => None,
+                        BodyRouteClaim::DeferredRejection(error) => {
+                            self.deferred.get_or_insert((index, error));
+                            None
+                        }
+                        BodyRouteClaim::NeedsBodyToClaim | BodyRouteClaim::Claimed => {
+                            let needs_body_to_claim = matches!(claim, BodyRouteClaim::NeedsBodyToClaim);
+                            if needs_body_to_claim
+                                && *self.streaming.get_or_insert_with(|| {
+                                    self.service.state.metadata_routers.as_ref().is_some_and(|indices| {
+                                        indices.iter().any(|index| {
+                                            let SharedProtocolRouter::Metadata(router) =
+                                                &self.service.state.protocols[*index].router
+                                            else {
+                                                unreachable!("recognizers are metadata routers");
+                                            };
+                                            router.recognizes_streaming_input(&self.probe)
+                                        })
+                                    })
+                                })
+                            {
+                                tracing::trace!(protocol = %protocol.protocol.protocol_id(), "skipping protocol that needs body bytes to claim a request recognized as streaming");
+                                None
+                            } else if self.collected.is_none() {
+                                return State::Collecting {
+                                    future: crate::schema::protocol::collect_request_body_with_trailers(
+                                        self.body.take().expect("body is collected once"),
+                                        &self.service.state.body_collection_config,
+                                    ),
+                                    needs_body_to_claim,
+                                };
+                            } else {
+                                self.select_body(needs_body_to_claim)
+                            }
+                        }
+                    }
+                }
+            };
+            if let Some(selected) = selected {
+                return self.dispatch(selected);
+            }
+            self.index += 1;
+        }
+        if let Some((index, selected)) = self.deferred_claim.take() {
+            self.index = index;
+            return self.dispatch(Ok(selected));
+        }
+        State::Rejected {
+            response: Some(match self.deferred.take() {
+                Some((index, error)) => self.service.reject(index, error),
+                None => unclaimed(),
+            }),
+        }
+    }
+
+    /// Resumes the same body claim after collection, without probing the head again.
+    fn select_body(&mut self, needs_body_to_claim: bool) -> Option<Result<OperationTarget, RoutingError>> {
+        let SharedProtocolRouter::Body(router) = &self.service.state.protocols[self.index].router else {
+            unreachable!("only body routers collect for routing");
+        };
+        let probe = std::mem::replace(&mut self.probe, Request::new(()));
+        let request = probe.map(|()| CollectedBody {
+            bytes: self.collected.as_ref().expect("body was collected").clone(),
+        });
+        let claim = if needs_body_to_claim {
+            router.claim_with_body(&request)
+        } else {
+            RouteClaim::Claimed
+        };
+        let selected = match claim {
+            RouteClaim::ClaimedWithRoute(selected) => Some(Ok(selected)),
+            RouteClaim::DeferredClaim(selected) => {
+                self.deferred_claim.get_or_insert((self.index, selected));
+                None
+            }
+            RouteClaim::Claimed => Some(router.route_with_body(&request)),
+            RouteClaim::NoClaim => None,
+            RouteClaim::DeferredRejection(error) => {
+                self.deferred.get_or_insert((self.index, error));
+                None
+            }
+        };
+        self.probe = request.map(|_| ());
+        selected
+    }
+
+    fn dispatch(&mut self, selected: Result<OperationTarget, RoutingError>) -> State {
+        match selected {
+            Ok(selected) => {
+                let probe = std::mem::replace(&mut self.probe, Request::new(()));
+                State::Handling {
+                    future: self.service.handle(
+                        selected,
+                        self.index,
+                        probe.map(|()| self.body.take().expect("body remains until dispatch")),
+                    ),
+                }
+            }
+            Err(error) => State::Rejected {
+                response: Some(self.service.reject(self.index, error)),
+            },
+        }
+    }
+}
+
 pin_project_lite::pin_project! {
     #[project = StateProj]
     enum State {
-        Routing {
-            future: Pin<Box<dyn Future<Output = Result<Response<BoxBody>, Infallible>> + Send>>,
+        Routing,
+        Collecting {
+            #[pin]
+            future: crate::schema::protocol::RequestBodyCollectionFuture<crate::body::RequestBody>,
+            needs_body_to_claim: bool,
         },
         Handling {
             #[pin]
@@ -323,6 +361,7 @@ pin_project_lite::pin_project! {
         Rejected {
             response: Option<Response<BoxBody>>,
         },
+        Done,
     }
 }
 
@@ -331,15 +370,56 @@ pin_project_lite::pin_project! {
     pub struct MultiProtocolRoutingFuture {
         #[pin]
         inner: State,
+        routing: Option<ProtocolRouting>,
     }
 }
 impl Future for MultiProtocolRoutingFuture {
     type Output = Result<Response<BoxBody>, Infallible>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.project().inner.project() {
-            StateProj::Routing { future } => future.as_mut().poll(cx),
-            StateProj::Handling { future } => future.poll(cx),
-            StateProj::Rejected { response } => Poll::Ready(Ok(response.take().expect("polled after completion"))),
+        let mut this = self.project();
+        loop {
+            let next = match this.inner.as_mut().project() {
+                StateProj::Routing => this.routing.as_mut().expect("claim walk exists").advance(),
+                StateProj::Collecting {
+                    future,
+                    needs_body_to_claim,
+                } => {
+                    let routing = this.routing.as_mut().expect("claim walk exists");
+                    match std::task::ready!(future.poll(cx)) {
+                        Ok((bytes, trailers)) => {
+                            routing.body = Some(crate::body::RequestBody::buffered(bytes.clone(), trailers));
+                            routing.collected = Some(bytes);
+                            match routing.select_body(*needs_body_to_claim) {
+                                Some(selected) => routing.dispatch(selected),
+                                None => {
+                                    routing.index += 1;
+                                    State::Routing
+                                }
+                            }
+                        }
+                        Err(error) => State::Rejected {
+                            response: Some(crate::schema::body_collection_rejection(
+                                &*routing.service.state.protocols[routing.index].protocol,
+                                error,
+                            )),
+                        },
+                    }
+                }
+                StateProj::Handling { future } => {
+                    let response = std::task::ready!(future.poll(cx));
+                    this.inner.set(State::Done);
+                    *this.routing = None;
+                    return Poll::Ready(response);
+                }
+                StateProj::Rejected { response } => {
+                    let response = response.take().expect("polled after completion");
+                    this.inner.set(State::Done);
+                    *this.routing = None;
+                    return Poll::Ready(Ok(response));
+                }
+                StateProj::Done => panic!("polled after completion"),
+            };
+            this.inner.set(next);
         }
     }
 }

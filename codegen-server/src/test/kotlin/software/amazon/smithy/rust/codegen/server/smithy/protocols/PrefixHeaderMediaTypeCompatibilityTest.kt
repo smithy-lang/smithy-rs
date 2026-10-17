@@ -47,7 +47,7 @@ internal class PrefixHeaderMediaTypeCompatibilityTest {
                         command = { path ->
                             val log = run.resolve("$service-$mode-cargo.log")
                             val process =
-                                ProcessBuilder("cargo", "test", "--verbose", "--lib", "prefix_header_media_type")
+                                ProcessBuilder("cargo", "test", "--quiet", "--lib", "prefix_header_media_type")
                                     .directory(path.toFile()).redirectErrorStream(true)
                             process.environment()["RUSTFLAGS"] = "-D warnings"
                             val running = process.start()

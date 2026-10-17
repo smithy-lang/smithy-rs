@@ -23,7 +23,7 @@ import java.nio.file.Path
 
 internal class RpcV2CborStreamingBlobCompatibilityTest {
     @Test
-    fun `streaming blob content type and Accept gate match generated legacy servers`() {
+    fun `CBOR outputs match legacy while streaming blob inputs are temporarily rejected`() {
         val modelText =
             """
             ${'$'}version: "2"
@@ -79,13 +79,7 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                 val uploaded =
                     if (schemaSerde) {
                         """
-                        match input.into_input_and_blob().await {
-                            #{Ok}((_, blob)) => #{Bytes}::Bytes::from(blob.unwrap().into_inner()),
-                            #{Err}(error) => {
-                                *handler_error.lock().unwrap() = #{Some}(error);
-                                #{Bytes}::Bytes::new()
-                            }
-                        }
+                        { let _ = input; #{Bytes}::Bytes::new() }
                         """.trimIndent()
                     } else {
                         "#{Bytes}::Bytes::copy_from_slice(input.data.as_ref())"
@@ -95,7 +89,6 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                         rustTemplate(
                             """
                             use #{Tower}::ServiceExt;
-                            #{errorSetup:W}
                             let service = crate::Downloads::builder(crate::DownloadsConfig::builder().build())
                                 .download(|input: crate::input::DownloadInput| async move {
                                     let bytes = match input.kind.as_deref() {
@@ -108,8 +101,8 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     }
                                 })
                                 .upload(move |input: #{UploadInput}| {
-                                    #{cloneError:W}
                                     async move {
+                                    assert!(!$schemaSerde, "CBOR streaming blob inputs must be rejected before the handler");
                                     let bytes = $uploaded;
                                     #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {
                                         data: #{Some}(#{Types}::Blob::new(bytes)),
@@ -154,16 +147,23 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     let response = service.clone().oneshot(
                                         builder.body(#{BodyUtil}::Full::new(#{Bytes}::Bytes::from(request_body.clone()))).unwrap()
                                     ).await.unwrap();
-                                    #{lateRejection:W}
                                     let status = response.status().as_u16();
                                     let mut headers = response.headers().iter().map(|(name, value)|
                                         (name.as_str().to_owned(), value.to_str().unwrap().to_owned())
                                     ).collect::<#{Vec}<_>>();
                                     headers.sort();
-                                    let body = #{Server}::body::collect_body_limited(response.into_body(), 4096)
+                                    let body = #{Server}::body::__private::collect_body(
+                                        response.into_body(), #{Some}(#{Server}::body::__private::CollectionConfig::builder()
+                                            .limit(::std::num::NonZeroUsize::new(4096).unwrap()).build()),
+                                    )
                                         .await.unwrap();
                                     if let #{Some}((_, length)) = headers.iter().find(|(name, _)| name == "content-length") {
                                         assert_eq!(length.parse::<usize>().unwrap(), body.len());
+                                    }
+                                    if $schemaSerde && operation == "Upload" {
+                                        assert_eq!(status, 501);
+                                        assert!(headers.is_empty());
+                                        assert!(body.is_empty());
                                     }
                                     if operation != "Events" && status == 200 {
                                         if operation == "Download" && $schemaSerde {
@@ -177,7 +177,9 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     }
                                     wire_records.push_str(&format!("{operation}\t{case}\t{accept:?}\t{status}\t{headers:?}\t{:02x?}\n", body.as_ref()));
                                     // Compare CBOR values, preserving byte strings; map framing can differ.
-                                    let document = if operation == "Events" && status == 200 {
+                                    let document = if $schemaSerde && operation == "Upload" && status == 501 {
+                                        "UnsupportedStreamingBlobInput".to_owned()
+                                    } else if operation == "Events" && status == 200 {
                                         body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>()
                                     } else {
                                         let mut cursor = ::std::io::Cursor::new(&body);
@@ -194,41 +196,7 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                             """,
                             "UploadInput" to
                                 software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                                    if (schemaSerde) {
-                                        rustTemplate("#{Server}::schema::StreamingInput<crate::input::UploadInput>", "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType())
-                                    } else {
-                                        rustTemplate("crate::input::UploadInput")
-                                    }
-                                },
-                            "errorSetup" to
-                                software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                                    if (schemaSerde) rustTemplate("let late_error = ::std::sync::Arc::new(::std::sync::Mutex::new(#{None})); let handler_error = late_error.clone();", *RuntimeType.preludeScope)
-                                },
-                            "cloneError" to
-                                software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                                    if (schemaSerde) rustTemplate("let handler_error = handler_error.clone();")
-                                },
-                            "lateRejection" to
-                                software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                                    if (schemaSerde) {
-                                        rustTemplate(
-                                            """
-                                    // finish errors belong to handler policy now. Compare the same
-                                    // protocol rejection renderer explicitly, after handler completion.
-                                    let response = if let #{Some}(error) = late_error.lock().unwrap().take() {
-                                        use #{Server}::schema::ServerProtocol;
-                                        let error = match error {
-                                            #{Server}::schema::StreamingInputError::Deserialize(error) => error,
-                                            error => #{Server}::schema::DeserializeError::Serde(#{Schema}::serde::SerdeError::custom(error.to_string())),
-                                        };
-                                        #{Server}::schema::protocol::RpcV2CborProtocol::default().serialize_rejection(error)
-                                    } else { response };
-                                    """,
-                                            "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
-                                            "Schema" to RuntimeType.smithySchema(context.runtimeConfig),
-                                            *RuntimeType.preludeScope,
-                                        )
-                                    }
+                                    rustTemplate("crate::input::UploadInput")
                                 },
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Types" to RuntimeType.smithyTypes(context.runtimeConfig),
@@ -249,15 +217,14 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
         val legacy = Files.readAllLines(snapshots.resolve("false.txt"))
         for (mode in listOf("true", "shared")) {
             val schema = Files.readAllLines(snapshots.resolve("$mode.txt"))
-            schema.filterNot { "\tduplicate\t" in it } shouldBe legacy.filterNot { "\tduplicate\t" in it }
-            for ((old, new) in legacy.zip(schema).filter { "\tduplicate\t" in it.first }) {
-                if ("\t200\t" in old) {
-                    check("Bytes([2])" in old) // Fresh legacy baseline: the last blob wins.
-                    check("\t400\t" in new && new.endsWith("Map([])")) // Approved streaming exception.
-                } else {
-                    new shouldBe old
-                }
-            }
+            // Retain the complete legacy observations. Only streaming blob input dispatch
+            // intentionally changes; outputs and event streams still match the baseline.
+            schema.filterNot { it.startsWith("Upload\t") } shouldBe legacy.filterNot { it.startsWith("Upload\t") }
+            val oldUploads = legacy.filter { it.startsWith("Upload\t") }
+            val newUploads = schema.filter { it.startsWith("Upload\t") }
+            newUploads.size shouldBe oldUploads.size
+            // Like the unsupported-event guard, this rejection precedes Accept validation.
+            newUploads.forEach { check("\t501\t[]\tUnsupportedStreamingBlobInput" in it) }
         }
     }
 
@@ -309,8 +276,8 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     };
                                     crate::output::DownloadOutput { data: #{Types}::byte_stream::ByteStream::from(bytes) }
                                 })
-                                .upload(|input: ${if (schemaSerde) "#{Server}::schema::StreamingInput<crate::input::UploadInput>" else "crate::input::UploadInput"}| async move {
-                                    let bytes = ${if (schemaSerde) "input.into_blob().await.unwrap().unwrap().into_inner()" else "input.data.collect().await.unwrap().into_bytes().to_vec()"};
+                                .upload(|input: crate::input::UploadInput| async move {
+                                    let bytes = input.data.collect().await.unwrap().into_bytes().to_vec();
                                     #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {
                                         data: #{Some}(#{Types}::Blob::new(bytes)),
                                     })
@@ -332,7 +299,10 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                         (name.as_str().to_owned(), value.to_str().unwrap().to_owned())
                                     ).collect::<#{Vec}<_>>();
                                     headers.sort();
-                                    let body = #{Server}::body::collect_body_limited(response.into_body(), 4096)
+                                    let body = #{Server}::body::__private::collect_body(
+                                        response.into_body(), #{Some}(#{Server}::body::__private::CollectionConfig::builder()
+                                            .limit(::std::num::NonZeroUsize::new(4096).unwrap()).build()),
+                                    )
                                         .await.unwrap();
                                     if operation == "download" { assert_eq!(body.as_ref(), bytes); }
                                     let hex = body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>();

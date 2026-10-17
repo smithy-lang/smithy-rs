@@ -148,14 +148,12 @@ class ServerBuilderGenerator(
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
     private val members: List<MemberShape> =
-        shape.allMembers.values.filter {
-            it != streamingBlobInputMember(codegenContext, shape)
-        }
+        shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
-    private val isBuilderFallible = if (streamingBlobInputMember(codegenContext, shape) != null) serverBuilderConstraintViolations.all.isNotEmpty() else hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
+    private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
     private val codegenScope =

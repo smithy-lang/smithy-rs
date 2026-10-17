@@ -17,10 +17,90 @@ import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class ServerJsonDocumentPayloadTest {
+    @Test
+    fun `legacy document payload null is a value`() = checkDocumentRequest(schemaSerde = false)
+
+    @Test
+    fun `schema document payload null matches legacy`() = checkDocumentRequest(schemaSerde = true)
+
+    private fun checkDocumentRequest(schemaSerde: Boolean) {
+        val model =
+            """
+            ${'$'}version: "2"
+            namespace test.documentrequest
+            use aws.protocols#restJson1
+            @restJson1
+            service Documents { version: "1", operations: [PostDocument] }
+            @http(method: "POST", uri: "/document")
+            operation PostDocument {
+                input := { @httpPayload body: Document }
+                output := { @httpPayload result: String }
+            }
+            """.asSmithyModel()
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings =
+                    Node.objectNode().withMember(
+                        "codegen",
+                        Node.objectNode().withMember("schemaSerde", schemaSerde),
+                    ),
+                cargoCommand = "cargo test --quiet --lib -- --nocapture",
+            ),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("document_request_null_is_present") {
+                    rustTemplate(
+                        """
+                        for (request_body, expected) in [
+                            ("null", #{Some}(#{Document}::Null)),
+                            (" \n null \t", #{Some}(#{Document}::Null)),
+                            ("", #{None}),
+                            ("true", #{Some}(#{Document}::Bool(true))),
+                            ("\"value\"", #{Some}(#{Document}::String("value".to_owned()))),
+                            ("[null,false]", #{Some}(#{Document}::Array(vec![#{Document}::Null, #{Document}::Bool(false)]))),
+                        ] {
+                            let expected_text = format!("{expected:?}");
+                            let config = crate::service::DocumentsConfig::builder().build();
+                            let app = crate::service::Documents::builder(config)
+                                .post_document(move |input: crate::input::PostDocumentInput| {
+                                    assert_eq!(input.body, expected);
+                                    let text = format!("{:?}", input.body);
+                                    async move { crate::output::PostDocumentOutput::builder().result(#{Some}(text)).build() }
+                                })
+                                .build_unchecked();
+                            let request = #{Http}::Request::builder().method("POST").uri("/document")
+                                .header("content-type", "application/json")
+                                .body(#{Server}::body::to_boxed_sync(request_body)).unwrap();
+                            let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
+                            let status = response.status().as_u16();
+                            let headers = response.headers().clone();
+                            #{BodyToBytes:W}
+                            println!("schemaSerde=$schemaSerde {request_body:?}: {status} {headers:?} {body:?}");
+                            assert_eq!(status, 200);
+                            assert_eq!(headers["content-type"], "text/plain");
+                            assert_eq!(headers["content-length"], expected_text.len().to_string());
+                            assert_eq!(body.as_ref(), expected_text.as_bytes());
+                        }
+                        """,
+                        *preludeScope,
+                        "Document" to RuntimeType.document(context.runtimeConfig),
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to ServerCargoDependency.tower(context).toType(),
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "BodyToBytes" to ServerHttpTestHelpers.httpBodyToBytes(context.runtimeConfig, "body", "response"),
+                    )
+                }
+            }
+        }
+    }
+
     @Test
     fun `legacy document helper stays infallible and all document variants serialize through both server paths`() {
         val model =

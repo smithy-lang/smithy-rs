@@ -29,7 +29,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -68,8 +67,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
  * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
- * builder ([INTO_FUNCTION_NAME]) that skips the streaming member. Event-stream glue attaches the
- * event receiver before building; StreamingInput retains the ordinary-field builder until finish().
+ * builder ([INTO_FUNCTION_NAME]) that skips the streaming member. Streaming glue attaches the
+ * streaming body or event receiver before building and validating the input.
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
  * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
@@ -219,9 +218,8 @@ class ServerSchemaDeserializeGenerator(
                             } else {
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
-                        // A Document payload's JSON null is a value; an empty body is handled by the request deserializer.
-                        val documentPayload = member.hasTrait<HttpPayloadTrait>() && model.expectShape(member.target) is DocumentShape
-                        if (symbolProvider.toSymbol(member).isOptional() && !documentPayload) {
+                        // Explicit document null is a value; absence is handled by the request deserializer.
+                        if (symbolProvider.toSymbol(member).isOptional() && model.expectShape(member.target) !is DocumentShape) {
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
@@ -289,9 +287,8 @@ class ServerSchemaDeserializeGenerator(
                             } else {
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
-                        // A Document payload's JSON null is a value; an empty body is handled by the request deserializer.
-                        val documentPayload = member.hasTrait<HttpPayloadTrait>() && model.expectShape(member.target) is DocumentShape
-                        if (symbolProvider.toSymbol(member).isOptional() && !documentPayload) {
+                        // Explicit document null is a value; absence is handled by the request deserializer.
+                        if (symbolProvider.toSymbol(member).isOptional() && model.expectShape(member.target) !is DocumentShape) {
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")

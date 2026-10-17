@@ -212,11 +212,15 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
-            // One service serving every built-in protocol; `examples/multi-protocol` drives a client per protocol against it.
+            // One service serving every built-in protocol; integration-tests/multi-protocol drives a client per protocol.
             CodegenTest(
                 "com.example.multiprotocol#MultiProtocolService",
                 "multi-protocol-server-sdk",
-                imports = listOf("$commonModels/multi-protocol.smithy", "$commonModels/multi-protocol-common.smithy"),
+                imports = listOf(
+                    "integration-tests/multi-protocol/models/multi-protocol-common.smithy",
+                    "integration-tests/multi-protocol/models/multi-protocol-server.smithy",
+                    "integration-tests/multi-protocol/models/multi-protocol-server-extras.smithy",
+                ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
         )
@@ -232,7 +236,36 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests
+// Server-only Criterion comparisons use the same model and HTTP types on both serde paths.
+val eventStreamBenchmarkTests =
+    listOf("rest-json", "rpc-v2-cbor").flatMap { protocol ->
+        listOf(false, true).map { schemaSerde ->
+            CodegenTest(
+                "benchmark.eventstream#BenchmarkService",
+                "event-stream-bench-$protocol-${if (schemaSerde) "schema" else "legacy"}",
+                imports =
+                    listOf(
+                        "../examples/event-stream-benchmark/model/common.smithy",
+                        "../examples/event-stream-benchmark/model/$protocol.smithy",
+                    ),
+                extraCodegenConfig =
+                    """"http-1x": true, "schemaSerde": $schemaSerde, "alwaysSendEventStreamInitialResponse": ${protocol == "rpc-v2-cbor"}""",
+            )
+        }
+    } +
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-schema",
+            imports =
+                listOf(
+                    "../examples/event-stream-benchmark/model/common.smithy",
+                    "../examples/event-stream-benchmark/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": true""",
+        )
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests
+
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
@@ -245,14 +278,14 @@ project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, useNextest = true)
 
 tasks.register<Exec>("cargoTestIntegration") {
-    dependsOn("assemble")
+    dependsOn("assemble", ":codegen-client-test:assemble")
     workingDir(projectDir.resolve("integration-tests"))
     commandLine("cargo", "nextest", "run", "--no-tests=pass")
 }
 
 // `cargo nextest run` does not run doctests, so run them separately to preserve coverage.
 tasks.register<Exec>("cargoTestIntegrationDoctests") {
-    dependsOn("assemble")
+    dependsOn("assemble", ":codegen-client-test:assemble")
     workingDir(projectDir.resolve("integration-tests"))
     commandLine("cargo", "test", "--doc")
 }

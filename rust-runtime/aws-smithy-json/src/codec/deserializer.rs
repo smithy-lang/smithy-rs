@@ -7,7 +7,7 @@
 
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
     Number,
@@ -234,11 +234,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
 
-            // Process the value — skip nulls (they represent absent optional members)
+            // Document null is a value. Other null members represent absence.
+            let member_schema = self.resolve_member(schema, &key_str);
             let rem = self.remaining();
-            if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
+            if rem.starts_with(b"null")
+                && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric())
+                && !member_schema.is_some_and(|member| member.shape_type() == ShapeType::Document)
+            {
                 self.advance_by(4);
-            } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
+            } else if let Some(member_schema) = member_schema {
                 consumer(member_schema, self)?;
             } else if &*key_str == "__type" {
                 // Protocol discriminator, never a member.
@@ -1401,6 +1405,46 @@ fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn document_member_null_is_dispatched_as_a_value() {
+        use aws_smithy_schema::shape_id;
+
+        let document = Schema::new_member(
+            shape_id!("test", "Input", "document"),
+            ShapeType::Document,
+            "document",
+            0,
+        );
+        let string = Schema::new_member(
+            shape_id!("test", "Input", "string"),
+            ShapeType::String,
+            "string",
+            1,
+        );
+        let members = [&document, &string];
+        let schema = Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &members);
+        for (body, expected) in [
+            (
+                r#"{"document":null,"string":null,"unknown":null}"#,
+                Some(Document::Null),
+            ),
+            (r#"{"string":null,"unknown":null}"#, None),
+            (r#"{"document":true}"#, Some(Document::Bool(true))),
+        ] {
+            let mut actual = None;
+            let mut deserializer =
+                JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
+            deserializer
+                .read_struct(&schema, &mut |member, value| {
+                    assert_eq!(member.member_index(), Some(0), "{body}");
+                    actual = Some(value.read_document(member)?);
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(actual, expected, "{body}");
+        }
+    }
 
     #[test]
     fn number_allowances_preserve_other_strict_checks() {

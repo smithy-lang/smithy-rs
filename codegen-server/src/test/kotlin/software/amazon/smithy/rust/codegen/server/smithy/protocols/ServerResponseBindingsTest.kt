@@ -29,7 +29,7 @@ import java.nio.file.Path
 internal class ServerResponseBindingsTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
-    fun `AWS JSON defaults to RPC response bindings`(protocol: String) {
+    fun `AWS JSON defaults to historical response bindings`(protocol: String) {
         checkResponses(protocol, null)
     }
 
@@ -41,31 +41,31 @@ internal class ServerResponseBindingsTest {
 
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
-    fun `AWS JSON explicitly disables legacy bindings independently`(protocol: String) {
-        checkResponses(protocol, false)
+    fun `AWS JSON follows the specification when response bindings are set to protocol`(protocol: String) {
+        checkResponses(protocol, "protocol")
     }
 
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
-    fun `AWS JSON preserves legacy success and error bindings when enabled`(protocol: String) {
-        checkResponses(protocol, true)
+    fun `AWS JSON keeps historical success and error bindings when set explicitly`(protocol: String) {
+        checkResponses(protocol, "historical")
     }
 
     private fun checkResponses(
         protocol: String,
-        legacy: Boolean?,
+        bindings: String?,
     ) {
         for (schemaSerde in listOf(false, true)) {
             val versions = if (schemaSerde) listOf(HttpTestVersion.HTTP_1_X) else listOf(HttpTestVersion.HTTP_0_X, HttpTestVersion.HTTP_1_X)
             for (version in versions) {
-                checkResponses(protocol, legacy, schemaSerde, version)
+                checkResponses(protocol, bindings, schemaSerde, version)
             }
         }
     }
 
     private fun checkResponses(
         protocol: String,
-        legacy: Boolean?,
+        bindings: String?,
         schemaSerde: Boolean,
         httpVersion: HttpTestVersion,
     ) {
@@ -76,12 +76,13 @@ internal class ServerResponseBindingsTest {
         val settings =
             Node.objectNodeBuilder()
                 .withMember("codegen", Node.objectNodeBuilder().withMember("schemaSerde", schemaSerde).build())
-        if (legacy != null) {
+        if (bindings != null) {
             val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
+            val otherBindings = if (bindings == "protocol") "historical" else "protocol"
             val key = if (protocol == "awsJson1_1") "aws.protocols#$protocol" else protocol
             settings.withMember(
                 "customizationConfig",
-                Node.parse("""{"protocols":{"$key":{"legacyResponseBindings":$legacy},"$other":{"legacyResponseBindings":${!legacy}}}}"""),
+                Node.parse("""{"protocols":{"$key":{"responseBindings":"$bindings"},"$other":{"responseBindings":"$otherBindings"}}}"""),
             )
         }
         System.getenv("SCHEMA_COMPAT_RUNTIME")?.let {
@@ -89,9 +90,11 @@ internal class ServerResponseBindingsTest {
         }
         val isRest = protocol == "restJson1" || protocol == "restXml"
         val isRpc = !isRest
-        val emitHeaders = isRest || legacy == true
+        // The legacy generator (schemaSerde = false) ignores the setting and always behaves as mainline.
+        val historicalAwsJson = protocol.startsWith("awsJson") && (!schemaSerde || bindings != "protocol")
+        val emitHeaders = isRest || historicalAwsJson
         val outputStatus = if (emitHeaders) 201 else 200
-        val honorErrorStatus = isRest || protocol == "rpcv2Cbor" || legacy == true
+        val honorErrorStatus = isRest || protocol == "rpcv2Cbor" || historicalAwsJson
         val clientStatus = if (honorErrorStatus) 422 else 400
         val serverStatus = if (honorErrorStatus) 503 else 500
         val marker =
@@ -117,7 +120,7 @@ internal class ServerResponseBindingsTest {
                 cargoCommand = "cargo test --quiet --lib --tests",
                 overrideTestDir =
                     System.getenv("SCHEMA_COMPAT_RUN")?.let {
-                        Path.of(it).resolve("$protocol-${if (schemaSerde) "schema" else "legacy"}-$httpVersion-bindings-$legacy").toFile()
+                        Path.of(it).resolve("$protocol-${if (schemaSerde) "schema" else "legacy"}-$httpVersion-bindings-$bindings").toFile()
                     },
             ),
             testCoverage = HttpTestType.Only(httpVersion),

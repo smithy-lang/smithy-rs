@@ -357,13 +357,11 @@ open class ServerCodegenVisitor(
     override fun structureShape(shape: StructureShape) {
         logger.info("[rust-server-codegen] Generating a structure $shape")
         rustCrate.useShapeWriter(shape) {
-            val streamingBlob = software.amazon.smithy.rust.codegen.server.smithy.generators.streamingBlobInputMember(codegenContext, shape)
-            val fieldsShape = if (streamingBlob == null) shape else shape.toBuilder().removeMember(streamingBlob.memberName).build()
             StructureGenerator(
                 model,
                 codegenContext.symbolProvider,
                 this,
-                fieldsShape,
+                shape,
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                 structSettings = codegenContext.structSettings(),
             ).render()

@@ -31,10 +31,10 @@ fn is_ascii_digits(s: &str) -> bool {
 /// released versions.
 ///
 /// Several of those valid arbitrary-precision representations are not valid
-/// RFC 8259 JSON numbers. The raw-number path emits the stored text verbatim,
-/// so this wire-format boundary must reject a leading `+`, an omitted integer
-/// or fractional digit run, and leading zeros rather than producing JSON that
-/// this codec cannot read back.
+/// RFC 8259 JSON numbers. The raw-number path therefore rejects a leading `+`,
+/// an omitted integer or fractional digit run, and leading zeros rather than
+/// producing JSON that this codec cannot read back, or, with
+/// `normalize_arbitrary_precision`, rewrites them into the equivalent JSON number.
 ///
 /// This remains a complete grammar check, rather than assuming every value was
 /// constructed through `FromStr`, so malformed internal values cannot reach the
@@ -72,6 +72,43 @@ fn is_json_number(text: &str) -> bool {
     };
 
     int_ok && frac_ok && exponent_ok
+}
+
+/// Rewrites arbitrary-precision text that is a valid decimal but not a valid RFC 8259 JSON number
+/// (a leading `+`, leading zeros, an omitted integer or fraction digit run) into the equivalent
+/// JSON number, e.g. `+000987654321` becomes `987654321` and `.5` becomes `0.5`.
+///
+/// The value is unchanged; only its spelling is. Returns `None` if `text` is not a decimal at all.
+fn to_json_number(text: &str) -> Option<String> {
+    let (coefficient, exponent) = match text.split_once(['e', 'E']) {
+        Some((coefficient, exponent)) => (coefficient, Some(exponent)),
+        None => (text, None),
+    };
+    let (negative, unsigned) = match coefficient.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, coefficient.strip_prefix('+').unwrap_or(coefficient)),
+    };
+    let (integer, fraction) = unsigned.split_once('.').unwrap_or((unsigned, ""));
+    if (integer.is_empty() && fraction.is_empty())
+        || !integer.bytes().chain(fraction.bytes()).all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let integer = integer.trim_start_matches('0');
+    let mut out = String::with_capacity(text.len());
+    if negative {
+        out.push('-');
+    }
+    out.push_str(if integer.is_empty() { "0" } else { integer });
+    if !fraction.is_empty() {
+        out.push('.');
+        out.push_str(fraction);
+    }
+    if let Some(exponent) = exponent {
+        out.push('e');
+        out.push_str(exponent);
+    }
+    is_json_number(&out).then_some(out)
 }
 
 /// JSON serializer that implements the ShapeSerializer trait.
@@ -179,9 +216,11 @@ impl JsonSerializer {
     /// [`aws_smithy_types::BigInteger`] / [`aws_smithy_types::BigDecimal`]
     /// do not guarantee: their `FromStr` is structurally strict but
     /// deliberately accepts leading zeros (`"00123"`), which RFC 8259
-    /// forbids (see [`is_json_number`]). The raw path therefore validates
-    /// the grammar and reports a violation as
-    /// [`SerdeError::InvalidInput`] rather than emitting malformed JSON.
+    /// forbids (see [`is_json_number`]). The raw path therefore reports such
+    /// text as [`SerdeError::InvalidInput`] rather than emitting malformed
+    /// JSON, unless [`JsonCodecSettings::normalize_arbitrary_precision`] is
+    /// set, in which case it is rewritten to the equivalent JSON number
+    /// (`+007` becomes `7`; see [`to_json_number`]).
     ///
     /// When [`JsonCodecSettings::use_string_for_arbitrary_precision`] is
     /// set, the value is emitted as a JSON string instead — for interop
@@ -207,14 +246,25 @@ impl JsonSerializer {
             crate::serialize::JsonValueWriter::new(&mut self.output).string(text);
             return Ok(());
         }
-        if !is_json_number(text) {
-            return Err(SerdeError::invalid_input(format!(
-                "arbitrary-precision value {text:?} is not a JSON number, so it cannot be \
-                 emitted as a raw JSON number; enable \
-                 `JsonCodecSettings::use_string_for_arbitrary_precision` to send it as a \
-                 JSON string instead"
-            )));
-        }
+        let normalized;
+        let text = if is_json_number(text) {
+            text
+        } else {
+            normalized = self
+                .settings
+                .normalize_arbitrary_precision()
+                .then(|| to_json_number(text))
+                .flatten()
+                .ok_or_else(|| {
+                    SerdeError::invalid_input(format!(
+                        "arbitrary-precision value {text:?} is not a JSON number, so it cannot be \
+                         emitted as a raw JSON number; enable \
+                         `JsonCodecSettings::use_string_for_arbitrary_precision` to send it as a \
+                         JSON string, or `normalize_arbitrary_precision` to rewrite it"
+                    ))
+                })?;
+            &normalized
+        };
         self.prefix(schema);
         self.output.push_str(text);
         Ok(())
@@ -1421,7 +1471,7 @@ mod tests {
     // strict, but deliberately accept leading zeros for backward
     // compatibility. RFC 8259 does not, so these values are all publicly
     // constructible today *and* invalid as raw JSON. Emitting them verbatim
-    // would produce JSON no parser accepts, so the raw path must reject
+    // would produce JSON no parser accepts, so the raw path rewrites
     // them.
 
     /// Text accepted by `BigInteger::from_str` that is not an RFC 8259
@@ -1438,47 +1488,77 @@ mod tests {
         "00123", "007", "-01", "00.1", "-01.5", "007e2", "0000", "00.0", "01e-3",
     ];
 
+    fn normalizing_settings() -> Arc<JsonCodecSettings> {
+        Arc::new(JsonCodecSettings::builder().normalize_arbitrary_precision(true).build())
+    }
+
     #[test]
-    fn write_big_integer_rejects_non_json_numbers_on_the_raw_path() {
+    fn non_json_numbers_are_rejected_on_the_raw_path_by_default() {
         use std::str::FromStr;
-        for text in NON_JSON_BIG_INTEGERS {
-            // Precondition: the (structurally strict) parser still accepts
-            // it, so this is a value a caller can actually hand to the
-            // serializer.
-            let bi = BigInteger::from_str(text)
-                .unwrap_or_else(|e| panic!("BigInteger::from_str({text:?}) should succeed: {e}"));
+        for text in ["00123", "-01", "00.1", "+1.5", ".5", "1."] {
+            let bd = BigDecimal::from_str(text).unwrap();
             let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
             let err = ser
-                .write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
-                .expect_err(&format!(
-                    "expected {text:?} to be rejected as a raw JSON number"
-                ));
-            assert!(
-                matches!(err, SerdeError::InvalidInput { .. }),
-                "expected InvalidInput for {text:?}, got {err:?}"
-            );
+                .write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
+                .expect_err(&format!("expected {text:?} to be rejected by default"));
+            assert!(matches!(err, SerdeError::InvalidInput { .. }), "{text:?}: {err:?}");
             // Nothing partial was written before the rejection.
             assert_eq!(String::from_utf8(ser.finish()).unwrap(), "", "for {text:?}");
         }
     }
 
     #[test]
-    fn write_big_decimal_rejects_non_json_numbers_on_the_raw_path() {
+    fn write_big_integer_normalizes_non_json_numbers_on_the_raw_path() {
         use std::str::FromStr;
-        for text in NON_JSON_BIG_DECIMALS {
+        for (text, expected) in [
+            ("00123", "123"),
+            ("007", "7"),
+            ("-01", "-1"),
+            ("0000", "0"),
+            ("-0000", "-0"),
+        ] {
+            // The (structurally strict) parser still accepts the input, so this is a value a
+            // caller can actually hand to the serializer.
+            let bi = BigInteger::from_str(text)
+                .unwrap_or_else(|e| panic!("BigInteger::from_str({text:?}) should succeed: {e}"));
+            let mut ser = JsonSerializer::new(normalizing_settings());
+            ser.write_big_integer(&aws_smithy_schema::prelude::BIG_INTEGER, &bi)
+                .unwrap_or_else(|e| panic!("{text:?} should be normalized: {e:?}"));
+            assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected, "for {text:?}");
+        }
+    }
+
+    #[test]
+    fn write_big_decimal_normalizes_non_json_numbers_on_the_raw_path() {
+        use std::str::FromStr;
+        for (text, expected) in [
+            ("00123", "123"),
+            ("007", "7"),
+            ("-01", "-1"),
+            ("00.1", "0.1"),
+            ("-01.5", "-1.5"),
+            ("007e2", "7e2"),
+            ("0000", "0"),
+            ("00.0", "0.0"),
+            ("01e-3", "1e-3"),
+            ("+000987654321", "987654321"),
+            ("+1.5", "1.5"),
+            (".5", "0.5"),
+            ("1.", "1"),
+        ] {
             let bd = BigDecimal::from_str(text)
                 .unwrap_or_else(|e| panic!("BigDecimal::from_str({text:?}) should succeed: {e}"));
-            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-            let err = ser
-                .write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
-                .expect_err(&format!(
-                    "expected {text:?} to be rejected as a raw JSON number"
-                ));
-            assert!(
-                matches!(err, SerdeError::InvalidInput { .. }),
-                "expected InvalidInput for {text:?}, got {err:?}"
-            );
-            assert_eq!(String::from_utf8(ser.finish()).unwrap(), "", "for {text:?}");
+            let mut ser = JsonSerializer::new(normalizing_settings());
+            ser.write_big_decimal(&aws_smithy_schema::prelude::BIG_DECIMAL, &bd)
+                .unwrap_or_else(|e| panic!("{text:?} should be normalized: {e:?}"));
+            assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected, "for {text:?}");
+        }
+    }
+
+    #[test]
+    fn to_json_number_rejects_text_that_is_not_a_number() {
+        for text in ["", "-", "+", ".", "abc", "1.2.3", "0x1f", "1e", "e1", "1 2", "NaN", "--1"] {
+            assert_eq!(to_json_number(text), None, "for {text:?}");
         }
     }
 

@@ -11,6 +11,7 @@ service MultiProtocolService {
     operations: [
         Greet
         Ping
+        NoInputOutput
         Subscribe
         Publish
         StructurePayload

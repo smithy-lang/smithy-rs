@@ -23,14 +23,9 @@ export RUSTUP_TOOLCHAIN="$(sed -n 's/channel = "\(.*\)"/\1/p' "$CURRENT_REPO/rus
 # (`content-length`, JSON member order, CBOR encoding choices, XML member order). Set to the empty
 # string, 0, false, no, or off for a byte-for-byte comparison of responses only.
 : "${SMITHY_FUZZ_SEMANTIC_COMPARE=1}"
-# Accept the differences that follow from serving several protocols: any answer to a request the
-# single-protocol server does not route to an operation (the multi-protocol server may route it
-# through another protocol), and the multi-protocol server's protocol-neutral 404 for a request no
-# protocol claims when the single-protocol server rejects that request too, with any 4xx, before a
-# handler runs. A request whose handler the single-protocol server invokes must still reach the
-# same handler. Set to the empty string, 0, false, no, or off to compare all of those as well.
-: "${SMITHY_FUZZ_IGNORE_UNROUTED=}"
-for v in SMITHY_FUZZ_SEMANTIC_COMPARE SMITHY_FUZZ_IGNORE_UNROUTED; do
+# Retired suppression flags cannot turn a failing seed or routing difference into agreement.
+unset SMITHY_FUZZ_IGNORE_UNROUTED AFL_IGNORE_SEED_PROBLEMS
+for v in SMITHY_FUZZ_SEMANTIC_COMPARE; do
   ab_fuzz_flag_value="${!v}"
   ab_fuzz_flag_value="${ab_fuzz_flag_value#"${ab_fuzz_flag_value%%[![:space:]]*}"}"
   ab_fuzz_flag_value="${ab_fuzz_flag_value%"${ab_fuzz_flag_value##*[![:space:]]}"}"
@@ -48,13 +43,17 @@ export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
 export AFL_NO_UI=1
 export AFL_FORKSRV_INIT_TMOUT=120000
 export AFL_AUTORESUME=1
-# Many fuzzers starting at once push some seeds past AFL's dry-run limit, which aborts the main
-# fuzzer. Skip those seeds instead.
-export AFL_IGNORE_SEED_PROBLEMS=1
 
 # The protocol directory and harness directory of a case, relative to $FUZZ_ROOT/gen/<suite>.
 case_harness() {
   case "$1" in
+    *@*)
+      # `<protocol>@<variant>` compares the single-protocol before server against the
+      # `<variant>` after server (bunch-json, bunch-xml, full, full-xml), generated with
+      # MP_FUZZ_VARIANTS under the protocol's directory as `ab-harness-<variant>`.
+      local proto="${1%%@*}"
+      case "$proto" in rest-xml*) proto=rest-xml ;; esac
+      echo "$proto/ab-harness-${1##*@}" ;;
     rest-xml-nojson) echo "rest-xml/ab-harness-xml" ;;
     *) echo "$1/ab-harness" ;;
   esac

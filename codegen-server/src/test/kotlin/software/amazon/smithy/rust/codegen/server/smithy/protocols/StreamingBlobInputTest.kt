@@ -22,7 +22,7 @@ import java.nio.file.Path
 
 internal class StreamingBlobInputTest {
     @Test
-    fun `live input preserves ordinary fields and defers validation with public and private builders`() {
+    fun `REST inputs remain live and CBOR blob inputs reject with public and private builders`() {
         val captures = Files.createTempDirectory(Files.createDirectories(Path.of("../tools/schema-serde-compat/.runs")), "streaming-blob-input-").toAbsolutePath()
         for ((schema, publicTypes) in listOf(false to true, true to true, true to false)) {
             val model =
@@ -70,29 +70,28 @@ internal class StreamingBlobInputTest {
                         rustTemplate(
                             """
                             use #{Tokio}::io::{AsyncReadExt, AsyncWriteExt};
-                            for mode in 0..${if (schema) 3 else 2} {
+                            for mode in ${if (schema) "[2]" else "0..2"} {
                                 let entered = ::std::sync::Arc::new(#{Tokio}::sync::Notify::new());
                                 let handler_entered = entered.clone();
                                 let completed = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
                                 let handler_completed = completed.clone();
                                 let service = crate::Uploads::builder(crate::UploadsConfig::builder().build())
-                                    .upload(move |${if (schema) "mut pending: #{Server}::schema::StreamingInput<crate::input::UploadInput>" else "input: crate::input::UploadInput"}| {
+                                    .upload(move |input: crate::input::UploadInput| {
                                         let entered = handler_entered.clone();
                                         let completed = handler_completed.clone();
                                         async move {
                                             entered.notify_one();
                                             ${if (schema) {
                                 """
-                                            assert!(pending.is_present());
-                                            assert!(matches!(pending.finish().await, #{Err}(#{Server}::schema::StreamingInputError::StreamNotFinished)));
+                                            assert_eq!(input.title.as_str(), "hello");
+                                            let mut stream = input.fahad;
                                             let mut count = 0;
-                                            while let #{Some}(chunk) = pending.data.next().await {
+                                            while let #{Some}(chunk) = stream.next().await {
                                                 let chunk = chunk.unwrap();
                                                 assert!(chunk.iter().all(|byte| *byte == b'x'));
                                                 count += chunk.len();
                                             }
                                             assert_eq!(count, 1024 * 1024);
-                                            let input = pending.finish().await.unwrap();
                                             """
                             } else {
                                 """
@@ -159,46 +158,56 @@ internal class StreamingBlobInputTest {
                         )
                     }
                     if (schema) {
-                        tokioTest("optional_blob_and_late_constraints") {
+                        tokioTest("cbor_blob_inputs_reject_without_reading_or_calling_handlers") {
                             rustTemplate(
                                 """
                                 use #{Tower}::ServiceExt;
-                                for (wire, present, valid) in [
-                                    (b"\xa1\x65title\x65hello".as_slice(), false, true),
-                                    (b"\xa2\x65fahad\x40\x65title\x65hello".as_slice(), true, true),
-                                    (b"\xa2\x65fahad\x41x\x65title\x61a".as_slice(), true, false),
-                                    (b"\xa1\x65fahad\x41x".as_slice(), true, false),
+                                use #{Futures}::StreamExt;
+                                use #{BodyUtil}::BodyExt;
+                                for wire in [
+                                    b"\xa2\x65title\x65hello\x65fahad\x41x".as_slice(),
+                                    b"\xa2\x65fahad\x41x\x65title\x65hello".as_slice(),
+                                    b"\xa2\x65fahad\x41x\x65title\x61a".as_slice(),
+                                    b"\xa1\x65fahad\x41x".as_slice(),
+                                    b"\xa3\x65fahad\x41x\x65title\x65hello\x65fahad\x41y".as_slice(),
+                                    b"\xa2\x65fahad\x41x\x65title\x65hello\x00".as_slice(),
+                                    b"\xa0".as_slice(),
+                                    b"".as_slice(),
                                 ] {
-                                    let called = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
-                                    let observed = called.clone();
-                                    let service = crate::Uploads::builder(crate::UploadsConfig::builder().build())
-                                        .upload(move |pending: #{Server}::schema::StreamingInput<crate::input::UploadInput>| {
-                                            let observed = observed.clone();
-                                            async move {
-                                                assert_eq!(pending.is_present(), present);
-                                                let result = pending.into_input_and_blob().await;
-                                                if valid {
-                                                    let (input, blob) = result.unwrap();
-                                                    assert_eq!(input.title.as_str(), "hello");
-                                                    assert_eq!(blob.is_some(), present);
-                                                } else {
-                                                    assert!(matches!(result, #{Err}(#{Server}::schema::StreamingInputError::Deserialize(
-                                                        #{Server}::schema::DeserializeError::ConstraintViolation(_)
-                                                    ))));
-                                                }
-                                                observed.store(true, ::std::sync::atomic::Ordering::SeqCst);
-                                                #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {})
-                                            }
-                                        }).build_unchecked();
-                                    let response = service.oneshot(#{Http}::Request::builder().method("POST")
-                                        .uri("/service/Uploads/operation/Upload")
-                                        .header("content-type", "application/cbor").header("smithy-protocol", "rpc-v2-cbor")
-                                        .body(#{BodyUtil}::Full::new(#{Bytes}::Bytes::copy_from_slice(wire))).unwrap()).await.unwrap();
-                                    assert_eq!(response.status(), 200);
-                                    assert!(called.load(::std::sync::atomic::Ordering::SeqCst));
+                                    for operation in ["Upload", "OptionalOnly"] {
+                                        let called = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
+                                        let upload_called = called.clone();
+                                        let optional_called = called.clone();
+                                        let service = crate::Uploads::builder(crate::UploadsConfig::builder().build())
+                                            .upload(move |_: crate::input::UploadInput| {
+                                                upload_called.store(true, ::std::sync::atomic::Ordering::SeqCst);
+                                                async { #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {}) }
+                                            })
+                                            .optional_only(move |_: crate::input::OptionalOnlyInput| {
+                                                optional_called.store(true, ::std::sync::atomic::Ordering::SeqCst);
+                                                async { crate::output::OptionalOnlyOutput {} }
+                                            }).build_unchecked();
+                                        let polled = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
+                                        let body_polled = polled.clone();
+                                        let frames = #{Futures}::stream::iter([#{Ok}::<_, ::std::io::Error>(
+                                            #{HttpBody}::Frame::data(#{Bytes}::Bytes::copy_from_slice(wire))
+                                        )]).inspect(move |_| { body_polled.store(true, ::std::sync::atomic::Ordering::SeqCst); });
+                                        let response = service.oneshot(#{Http}::Request::builder().method("POST")
+                                            .uri(format!("/service/Uploads/operation/{operation}"))
+                                            .header("content-type", "application/cbor")
+                                            .header("smithy-protocol", "rpc-v2-cbor")
+                                            .body(#{BodyUtil}::StreamBody::new(frames)).unwrap()).await.unwrap();
+                                        assert_eq!(response.status(), 501);
+                                        assert!(response.headers().is_empty());
+                                        assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+                                        assert!(!called.load(::std::sync::atomic::Ordering::SeqCst));
+                                        assert!(!polled.load(::std::sync::atomic::Ordering::SeqCst));
+                                    }
                                 }
                                 """,
                                 *scope,
+                                "Futures" to CargoDependency.FuturesUtil.toType(),
+                                "HttpBody" to CargoDependency.HttpBody1x.toType(),
                             )
                         }
                     }

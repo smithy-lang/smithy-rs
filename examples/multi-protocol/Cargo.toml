@@ -1,4 +1,4 @@
-# Runs a Rust client per protocol against one server serving every built-in protocol.
+# Runs one Rust client with runtime protocol selection against one server serving every built-in protocol.
 #
 # `make codegen` generates the crates this depends on; see the Makefile.
 [workspace]
@@ -9,18 +9,25 @@ name = "multi-protocol"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "A multi-protocol smithy-rs server exercised by a generated Rust client for each of its protocols."
+description = "A multi-protocol smithy-rs server exercised by one generated Rust client selecting protocols at runtime."
 
 [dependencies]
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 futures-util = "0.3"
+aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
 multi-protocol-server-sdk = { path = "../../codegen-server-test/build/smithyprojections/codegen-server-test/multi-protocol-server-sdk/rust-server-codegen" }
 
 [dev-dependencies]
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
 futures-util = "0.3"
-aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
-multi-protocol-client-rpcv2cbor = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-awsjson10 = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-awsjson11 = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-restjson = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-restxml = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
+bytes = "1"
+http = "1"
+http-body-util = "0.1"
+minicbor = { version = "2.2.1", features = ["alloc", "half"] }
+serde_json = "1"
+tower = { version = "0.5", features = ["util"] }
+multi-protocol-client = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }

@@ -36,12 +36,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetServerStatistics {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_SERVER_STATISTICS;
 }
-/* ServerOperationGenerator.kt:124 */
+/* ServerOperationGenerator.kt:133 */
 
 /// /* ServerOperationGenerator.kt:51 */DoNothing operation, used to stress test the framework.
 /* ServerOperationGenerator.kt:80 */
@@ -79,12 +79,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for DoN
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for DoNothing {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::DO_NOTHING;
 }
-/* ServerOperationGenerator.kt:124 */
+/* ServerOperationGenerator.kt:133 */
 
 /// /* ServerOperationGenerator.kt:51 */Capture Pokémons via event streams.
 /* ServerOperationGenerator.kt:80 */
@@ -122,53 +122,69 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Cap
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for CapturePokemon {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::CAPTURE_POKEMON;
 }
-/* ServerOperationGenerator.kt:124 */
-/* ServerStreamingOperationGenerator.kt:116 */
+/* ServerOperationGenerator.kt:133 */
+/* ServerStreamingOperationGenerator.kt:126 */
 impl ::aws_smithy_http_server::operation::StreamingOperationShape for CapturePokemon {
     fn deserialize_streaming_input(
-        deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
-        body: ::aws_smithy_types::body::SdkBody,
+        request: ::aws_smithy_runtime_api::http::Request<
+            ::aws_smithy_http_server::body::RequestBody,
+        >,
         protocol: ::aws_smithy_http_server::schema::SharedServerProtocol,
     ) -> ::aws_smithy_http_server::operation::StreamingInputFuture<Self::Input> {
-        let mut builder = crate::input::capture_pokemon_input::Builder::default();
-        if let ::std::result::Result::Err(err) =
-            crate::input::CapturePokemonInput::deserialize_schema_into(&mut builder, deserializer)
-        {
-            return ::std::boxed::Box::pin(::std::future::ready(::std::result::Result::Err(
-                ::aws_smithy_http_server::schema::DeserializeError::from(err),
-            )));
-        }
-        ::std::boxed::Box::pin(async move {
-            let unmarshaller =
-                crate::event_stream_serde::AttemptCapturingPokemonEventUnmarshaller::new(
-                    protocol.clone(),
-                );
-            let mut streaming = <::aws_smithy_http::event_stream::Receiver<
-                crate::model::AttemptCapturingPokemonEvent,
-                crate::error::AttemptCapturingPokemonEventError,
-            >>::new(unmarshaller, body);
-            ::aws_smithy_http_server::schema::event_stream::apply_initial_request(
-                |message_type| streaming.try_recv_initial(message_type),
-                &protocol,
-                |deser| {
-                    crate::input::CapturePokemonInput::deserialize_schema_into(&mut builder, deser)
-                },
-            )
-            .await?;
-            builder.events = ::std::option::Option::Some(streaming);
-            builder.build().map_err(|constraint_violation| {
-                ::aws_smithy_http_server::schema::DeserializeError::ConstraintViolation(
-                    ::std::boxed::Box::new(crate::error::ValidationException::from(
-                        constraint_violation,
-                    )),
-                )
-            })
-        })
+        ::aws_smithy_http_server::operation::deserialize_streaming_request(
+            <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA,
+            request,
+            protocol,
+            |deserializer, body, protocol| {
+                let mut builder = crate::input::capture_pokemon_input::Builder::default();
+                if let ::std::result::Result::Err(err) =
+                    crate::input::CapturePokemonInput::deserialize_schema_into(
+                        &mut builder,
+                        deserializer,
+                    )
+                {
+                    return ::std::boxed::Box::pin(::std::future::ready(
+                        ::std::result::Result::Err(
+                            ::aws_smithy_http_server::schema::DeserializeError::from(err),
+                        ),
+                    ));
+                }
+                ::std::boxed::Box::pin(async move {
+                    let unmarshaller =
+                        crate::event_stream_serde::AttemptCapturingPokemonEventUnmarshaller::new(
+                            protocol.clone(),
+                        );
+                    let mut streaming = <::aws_smithy_http::event_stream::Receiver<
+                        crate::model::AttemptCapturingPokemonEvent,
+                        crate::error::AttemptCapturingPokemonEventError,
+                    >>::new(unmarshaller, body);
+                    ::aws_smithy_http_server::schema::event_stream::apply_initial_request(
+                        |message_type| streaming.try_recv_initial(message_type),
+                        &protocol,
+                        |deser| {
+                            crate::input::CapturePokemonInput::deserialize_schema_into(
+                                &mut builder,
+                                deser,
+                            )
+                        },
+                    )
+                    .await?;
+                    builder.events = ::std::option::Option::Some(streaming);
+                    builder.build().map_err(|constraint_violation| {
+                        ::aws_smithy_http_server::schema::DeserializeError::ConstraintViolation(
+                            ::std::boxed::Box::new(crate::error::ValidationException::from(
+                                constraint_violation,
+                            )),
+                        )
+                    })
+                })
+            },
+        )
     }
 
     fn serialize_streaming_output(
@@ -182,7 +198,7 @@ impl ::aws_smithy_http_server::operation::StreamingOperationShape for CapturePok
                 ::futures_util::stream::empty(),
             ),
         )) {
-            ::std::option::Option::Some(streaming) => {
+            ::std::option::Option::Some(streaming) => ::std::option::Option::Some({
                 let marshaller = crate::event_stream_serde::CapturePokemonEventsMarshaller::new(
                     protocol.clone(),
                 );
@@ -206,12 +222,15 @@ impl ::aws_smithy_http_server::operation::StreamingOperationShape for CapturePok
                         return ::aws_smithy_http_server::operation::empty_internal_server_error();
                     }
                 }
-            }
-            ::std::option::Option::None => ::aws_smithy_http_server::body::empty(),
+            }),
+            ::std::option::Option::None => ::std::option::Option::None,
         };
         protocol.serialize_streaming_response(
             <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.output(),
             &output,
+            <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA
+                .output()
+                .members()[0],
             body,
         )
     }
@@ -253,12 +272,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Che
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for CheckHealth {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::CHECK_HEALTH;
 }
-/* ServerOperationGenerator.kt:124 */
+/* ServerOperationGenerator.kt:133 */
 
 /// /* ServerOperationGenerator.kt:51 */Fetch a radio song from the database and stream it back as a playable audio.
 /* ServerOperationGenerator.kt:80 */
@@ -296,25 +315,29 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Str
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for StreamPokemonRadio {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::STREAM_POKEMON_RADIO;
 }
-/* ServerOperationGenerator.kt:124 */
-/* ServerStreamingOperationGenerator.kt:116 */
+/* ServerOperationGenerator.kt:133 */
+/* ServerStreamingOperationGenerator.kt:126 */
 impl ::aws_smithy_http_server::operation::StreamingOperationShape for StreamPokemonRadio {
     fn deserialize_streaming_input(
-        deserializer: &mut dyn ::aws_smithy_schema::serde::ShapeDeserializer,
-        body: ::aws_smithy_types::body::SdkBody,
+        request: ::aws_smithy_runtime_api::http::Request<
+            ::aws_smithy_http_server::body::RequestBody,
+        >,
         protocol: ::aws_smithy_http_server::schema::SharedServerProtocol,
     ) -> ::aws_smithy_http_server::operation::StreamingInputFuture<Self::Input> {
-        let _ = (body, protocol);
-        ::std::boxed::Box::pin(::std::future::ready(
-            <Self::Input as ::aws_smithy_http_server::schema::DeserializableShape>::deserialize(
-                deserializer,
-            ),
-        ))
+        ::aws_smithy_http_server::operation::deserialize_streaming_request(
+            <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA,
+            request,
+            protocol,
+            |deserializer, body, protocol| {
+                let _ = (body, protocol);
+                ::std::boxed::Box::pin(::std::future::ready(<Self::Input as ::aws_smithy_http_server::schema::DeserializableShape>::deserialize(deserializer)))
+            },
+        )
     }
 
     fn serialize_streaming_output(
@@ -329,17 +352,18 @@ impl ::aws_smithy_http_server::operation::StreamingOperationShape for StreamPoke
             ),
         )) {
             ::std::option::Option::Some(streaming) => {
-                ::aws_smithy_http_server::body::boxed(::aws_smithy_http_server::body::wrap_stream(
-                    ::aws_smithy_http::futures_stream_adapter::FuturesStreamCompatByteStream::new(
-                        streaming,
-                    ),
-                ))
+                ::std::option::Option::Some({
+                    ::aws_smithy_http_server::body::boxed(::aws_smithy_http_server::body::wrap_stream(::aws_smithy_http::futures_stream_adapter::FuturesStreamCompatByteStream::new(streaming)))
+                })
             }
-            ::std::option::Option::None => ::aws_smithy_http_server::body::empty(),
+            ::std::option::Option::None => ::std::option::Option::None,
         };
         protocol.serialize_streaming_response(
             <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA.output(),
             &output,
+            <Self as ::aws_smithy_http_server::operation::SchemaOperationShape>::SCHEMA
+                .output()
+                .members()[0],
             body,
         )
     }
@@ -381,12 +405,12 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetPokemonSpecies {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_POKEMON_SPECIES;
 }
-/* ServerOperationGenerator.kt:124 */
+/* ServerOperationGenerator.kt:133 */
 
 /// /* ServerOperationGenerator.kt:51 */Retrieve information about your Pokédex.
 /* ServerOperationGenerator.kt:80 */
@@ -446,9 +470,9 @@ impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for Get
         ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt::new()
     }
 }
-/* ServerOperationGenerator.kt:114 */
+/* ServerOperationGenerator.kt:123 */
 impl ::aws_smithy_http_server::operation::SchemaOperationShape for GetStorage {
     const SCHEMA: &'static ::aws_smithy_http_server::schema::OperationSchema<'static> =
         &crate::schema::operations::GET_STORAGE;
 }
-/* ServerOperationGenerator.kt:124 */
+/* ServerOperationGenerator.kt:133 */

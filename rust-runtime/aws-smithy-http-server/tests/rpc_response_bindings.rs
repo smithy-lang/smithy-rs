@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! REST bindings on a shared schema must not change RPC responses.
+//! REST bindings on a shared schema must not change RPC responses when AWS JSON is set to
+//! `responseBindings: "protocol"`. The default, `"historical"`, keeps the status codes and headers
+//! smithy-rs awsJson servers have always sent.
 
 use aws_smithy_http_server::body::{empty, BoxBody};
 use aws_smithy_http_server::schema::protocol::{AwsJson1_0Protocol, AwsJson1_1Protocol, RpcV2CborProtocol};
@@ -86,11 +88,20 @@ impl HttpModeledError for Out {
     }
 }
 
-fn aws_json_protocols() -> Vec<Box<dyn ServerProtocol>> {
+static EMPTY_SERVICE: ServiceSchema = ServiceSchema::new(shape_id!("test", "Service"), None, &[], &[]);
+
+fn build_aws_json(settings: Option<&[u8]>) -> Vec<Box<dyn ServerProtocol>> {
+    let settings = settings.map(aws_smithy_http_server::schema::settings::parse_settings_json);
+    let context = ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(settings.as_ref());
     vec![
-        Box::new(AwsJson1_0Protocol::default()),
-        Box::new(AwsJson1_1Protocol::default()),
+        Box::new(AwsJson1_0Protocol::from_build_context(&context).unwrap()),
+        Box::new(AwsJson1_1Protocol::from_build_context(&context).unwrap()),
     ]
+}
+
+/// AWS JSON protocols set to the specification's behavior.
+fn aws_json_protocols() -> Vec<Box<dyn ServerProtocol>> {
+    build_aws_json(Some(br#"{"responseBindings":"protocol"}"#))
 }
 
 async fn body_text(body: BoxBody) -> String {
@@ -146,14 +157,10 @@ async fn aws_json_errors_use_default_error_status_and_ignore_rest_headers() {
 }
 
 #[tokio::test]
-async fn aws_json_legacy_bindings_keep_headers_in_both_the_head_and_document() {
-    static SERVICE: ServiceSchema = ServiceSchema::new(shape_id!("test", "Service"), None, &[], &[]);
-    let settings = aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"legacyResponseBindings":true}"#);
-    let context = ProtocolBuildContext::new(&SERVICE).with_settings(Some(&settings));
-    let protocols: [Box<dyn ServerProtocol>; 2] = [
-        Box::new(AwsJson1_0Protocol::from_build_context(&context).unwrap()),
-        Box::new(AwsJson1_1Protocol::from_build_context(&context).unwrap()),
-    ];
+async fn aws_json_historical_bindings_keep_headers_in_both_the_head_and_document() {
+    // Historical is the default; naming it explicitly is the same.
+    let mut protocols = build_aws_json(None);
+    protocols.extend(build_aws_json(Some(br#"{"responseBindings":"historical"}"#)));
     for protocol in protocols {
         for code in [None, Some(299), Some(-1)] {
             let response = protocol.serialize_response(&OUT, &Out { code });
@@ -184,6 +191,18 @@ async fn aws_json_legacy_bindings_keep_headers_in_both_the_head_and_document() {
         assert_eq!(response.headers()["x-meta-color"], "red");
         assert!(!response.headers().contains_key("content-length"));
         assert_eq!(body_text(response.into_body()).await, "stream frames");
+    }
+}
+
+#[test]
+fn aws_json_rejects_unknown_response_bindings_values() {
+    let settings = aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"responseBindings":"legacy"}"#);
+    let context = ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(Some(&settings));
+    for error in [
+        AwsJson1_0Protocol::from_build_context(&context).err().unwrap(),
+        AwsJson1_1Protocol::from_build_context(&context).err().unwrap(),
+    ] {
+        assert!(error.to_string().contains("responseBindings"), "{error}");
     }
 }
 

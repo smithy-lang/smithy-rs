@@ -39,7 +39,6 @@ class ServerBuilderConstraintViolations(
     private val builderTakesInUnconstrainedTypes: Boolean,
     private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
-    private val streamingBlob = streamingBlobInputMember(codegenContext, shape)
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val constraintViolationSymbolProvider =
@@ -103,9 +102,6 @@ class ServerBuilderConstraintViolations(
      */
     fun forMember(member: MemberShape): ConstraintViolation? {
         check(members.contains(member))
-        // StreamingInput carries presence separately; ByteStream's legacy non-optional
-        // symbol must not turn an optional blob into a required ordinary field.
-        if (member == streamingBlob && !member.hasTrait<software.amazon.smithy.model.traits.RequiredTrait>()) return null
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
         return if (symbolProvider.toSymbol(member).isOptional() || member.hasNonNullDefault()) {
             null

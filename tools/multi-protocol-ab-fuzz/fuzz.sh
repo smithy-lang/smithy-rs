@@ -7,15 +7,23 @@
 #
 # Keep (fuzzers-per-case x cases) at or below your core count minus two: oversubscribing makes
 # AFL file ordinary inputs as hangs. Each case writes fuzz.log and summary.log to its work directory.
-set -u
+set -uo pipefail
 source "$(dirname "$0")/env.sh"
 SECONDS_TO_RUN=${1:?seconds}; N=${2:?fuzzers per case}
 
 run_one() {
-  local S=$1 C=$2
-  export SMITHY_FUZZ_PROTOCOL="$C"
-  cd "$FUZZ_ROOT/work-isolated-v1/$S/$C" || { echo "$S/$C: not initialized"; return; }
-  timeout -s INT "$SECONDS_TO_RUN" aws-smithy-fuzz fuzz --num-fuzzers "$N" > fuzz.log 2>&1
+  local S=$1 C=$2 P
+  # The pinned identity is the before side's wire protocol; `@variant` names the after server.
+  P="${C%%@*}"
+  case "$P" in rest-xml*) P=rest-xml ;; esac
+  export SMITHY_FUZZ_PROTOCOL="$P"
+  cd "$FUZZ_ROOT/work-isolated-v1/$S/$C" || { echo "$S/$C: not initialized"; return 1; }
+  local result=0
+  timeout -s INT "$SECONDS_TO_RUN" aws-smithy-fuzz fuzz --num-fuzzers "$N" > fuzz.log 2>&1 || result=$?
+  case "$result" in
+    0|124|130) ;;
+    *) echo "$S/$C: fuzzer failed, see $PWD/fuzz.log"; return "$result" ;;
+  esac
   sleep 5
   {
     echo "$S/$C: crashes=$(find afl-output -path '*/crashes/id:*' -type f 2>/dev/null | wc -l) hangs=$(find afl-output -path '*/hangs/id:*' -type f 2>/dev/null | wc -l)"
@@ -27,5 +35,8 @@ run_one() {
   cat summary.log
 }
 
-for S in $SUITES; do for C in $CASES; do run_one "$S" "$C" & done; done
-wait
+pids=()
+for S in $SUITES; do for C in $CASES; do run_one "$S" "$C" & pids+=("$!"); done; done
+status=0
+for pid in "${pids[@]}"; do wait "$pid" || status=1; done
+exit "$status"

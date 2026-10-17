@@ -32,23 +32,26 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
 /// to skip escape validation, matching legacy smithy-rs servers.
 ///
-/// `legacyResponseBindings` defaults to `false`. Set it to `true` in this protocol's
-/// settings to preserve historical modeled success/error statuses and response headers.
+/// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
+/// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members
+/// as response headers (each also stays in the document). Set it to `"protocol"` in this
+/// protocol's settings for the AWS JSON specification instead: always 200 (errors use the
+/// `@error` class status) with every member in the document and no REST headers.
 pub struct AwsJson1_0Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
-    legacy_response_bindings: bool,
+    historical_response_bindings: bool,
 }
 
 impl Default for AwsJson1_0Protocol {
     fn default() -> Self {
-        Self::new(false, false)
+        Self::new(false, true)
     }
 }
 
 impl AwsJson1_0Protocol {
-    fn new(validate_skipped_values: bool, legacy_response_bindings: bool) -> Self {
+    fn new(validate_skipped_values: bool, historical_response_bindings: bool) -> Self {
         Self {
-            legacy_response_bindings,
+            historical_response_bindings,
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
                 schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.0",
@@ -66,23 +69,26 @@ impl AwsJson1_0Protocol {
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
 /// to skip escape validation, matching legacy smithy-rs servers.
 ///
-/// `legacyResponseBindings` defaults to `false`. Set it to `true` in this protocol's
-/// settings to preserve historical modeled success/error statuses and response headers.
+/// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
+/// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members
+/// as response headers (each also stays in the document). Set it to `"protocol"` in this
+/// protocol's settings for the AWS JSON specification instead: always 200 (errors use the
+/// `@error` class status) with every member in the document and no REST headers.
 pub struct AwsJson1_1Protocol {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<aws_smithy_json::codec::JsonCodec>,
-    legacy_response_bindings: bool,
+    historical_response_bindings: bool,
 }
 
 impl Default for AwsJson1_1Protocol {
     fn default() -> Self {
-        Self::new(false, false)
+        Self::new(false, true)
     }
 }
 
 impl AwsJson1_1Protocol {
-    fn new(validate_skipped_values: bool, legacy_response_bindings: bool) -> Self {
+    fn new(validate_skipped_values: bool, historical_response_bindings: bool) -> Self {
         Self {
-            legacy_response_bindings,
+            historical_response_bindings,
             inner: crate::schema::protocol::rpc::RpcProtocol::new(
                 schema_codec(validate_skipped_values),
                 "application/x-amz-json-1.1",
@@ -94,6 +100,19 @@ impl AwsJson1_1Protocol {
     }
 }
 
+/// Reads the `responseBindings` setting: `"historical"` (the default) or `"protocol"`.
+fn historical_response_bindings(
+    settings: Option<&aws_smithy_types::Document>,
+) -> Result<bool, crate::schema::routing::RouterBuildError> {
+    match crate::schema::settings::get::<&str>(settings, "responseBindings")? {
+        None | Some("historical") => Ok(true),
+        Some("protocol") => Ok(false),
+        Some(other) => Err(crate::schema::routing::RouterBuildError::Configuration(format!(
+            "setting `responseBindings` must be \"historical\" or \"protocol\", got {other:?}"
+        ))),
+    }
+}
+
 fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCodec {
     aws_smithy_json::codec::JsonCodec::new(
         aws_smithy_json::codec::JsonCodecSettings::builder()
@@ -102,6 +121,7 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
             .enforce_strictness(true)
             .allow_leading_zeros(true)
             .allow_trailing_decimal_point(true)
+            .normalize_arbitrary_precision(true)
             .validate_skipped_values(validate_skipped_values)
             .validate_skipped_string_encoding(true)
             .allow_integral_float_numbers(true)
@@ -129,13 +149,13 @@ fn serialize_error<P>(
     error: &dyn HttpModeledError,
     content_type: &'static str,
     discriminator: BodyDiscriminator,
-    legacy_response_bindings: bool,
+    historical_response_bindings: bool,
 ) -> Response
 where
     RuntimeError: IntoResponse<P>,
 {
     let schema = error.schema();
-    let status = if legacy_response_bindings {
+    let status = if historical_response_bindings {
         error.status_code()
     } else {
         match classification_status(schema) {
@@ -144,7 +164,7 @@ where
         }
     };
     let framed = discriminator.frame(schema, error);
-    let bindings = if legacy_response_bindings {
+    let bindings = if historical_response_bindings {
         ResponseBindings::LegacyRpc
     } else {
         ResponseBindings::BodyOnly
@@ -170,7 +190,7 @@ macro_rules! aws_json_protocol {
             ) -> Result<Self, crate::schema::routing::RouterBuildError> {
                 Ok(Self::new(
                     crate::schema::settings::get::<bool>(ctx.settings, "validateSkippedValues")?.unwrap_or(false),
-                    crate::schema::settings::get::<bool>(ctx.settings, "legacyResponseBindings")?.unwrap_or(false),
+                    historical_response_bindings(ctx.settings)?,
                 ))
             }
 
@@ -224,7 +244,7 @@ macro_rules! aws_json_protocol {
             }
 
             fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
-                if self.legacy_response_bindings {
+                if self.historical_response_bindings {
                     return serialize_response_parts(
                         self.inner.codec(),
                         output,
@@ -249,7 +269,7 @@ macro_rules! aws_json_protocol {
                 _streaming_member: &Schema<'_>,
                 body: Option<BoxBody>,
             ) -> Response {
-                if self.legacy_response_bindings {
+                if self.historical_response_bindings {
                     return serialize_response_parts(
                         self.inner.codec(),
                         output,
@@ -278,7 +298,7 @@ macro_rules! aws_json_protocol {
                     error,
                     $content_type,
                     BodyDiscriminator { value: $type_value },
-                    self.legacy_response_bindings,
+                    self.historical_response_bindings,
                 )
             }
 

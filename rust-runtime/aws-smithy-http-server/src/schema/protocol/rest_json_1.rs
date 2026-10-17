@@ -44,6 +44,7 @@ impl RestJson1Protocol {
                         .enforce_strictness(true)
                         .allow_leading_zeros(true)
                         .allow_trailing_decimal_point(true)
+                        .normalize_arbitrary_precision(true)
                         .validate_skipped_values(validate_skipped_values)
                         .validate_skipped_string_encoding(true)
                         .allow_integral_float_numbers(true)
