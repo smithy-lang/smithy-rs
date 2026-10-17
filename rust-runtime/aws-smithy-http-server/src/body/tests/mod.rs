@@ -596,25 +596,49 @@ fn test_boxed_sync_is_sync() {
 #[tokio::test]
 async fn collection_preserves_trailers_with_and_without_a_limit() {
     for limit in [0, 1024] {
-        let mut trailers = http::HeaderMap::new();
-        trailers.insert("checksum", http::HeaderValue::from_static("abc"));
-        let frames = vec![
-            Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::from_static(b"payload"))),
-            Ok(http_body::Frame::trailers(trailers.clone())),
-        ];
-        let body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
-        let (bytes, actual_trailers) = collect_body_with_trailers(
-            body,
+        let mut first_trailers = http::HeaderMap::new();
+        first_trailers.insert("checksum", http::HeaderValue::from_static("abc"));
+        let mut second_trailers = http::HeaderMap::new();
+        second_trailers.insert("x-status", http::HeaderValue::from_static("complete"));
+        let body = || {
+            http_body_util::StreamBody::new(futures_util::stream::iter([
+                Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::from_static(b"payload"))),
+                Ok(http_body::Frame::trailers(first_trailers.clone())),
+                Ok(http_body::Frame::trailers(second_trailers.clone())),
+            ]))
+        };
+        let config = || {
             Some(
                 CollectionConfig::builder()
                     .maybe_limit(NonZeroUsize::new(limit))
                     .build(),
-            ),
-        )
-        .await
-        .unwrap();
+            )
+        };
+        let bytes = collect_body(body(), config()).await.unwrap();
         assert_eq!(bytes, "payload");
-        assert_eq!(actual_trailers, Some(trailers));
+        let (bytes_with_trailers, actual_trailers) = collect_body_with_trailers(body(), config()).await.unwrap();
+        assert_eq!(bytes_with_trailers, bytes);
+        first_trailers.extend(second_trailers);
+        assert_eq!(actual_trailers, Some(first_trailers));
+    }
+}
+
+#[tokio::test]
+async fn collection_modes_propagate_errors_after_trailers() {
+    for retain_trailers in [false, true] {
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("checksum", http::HeaderValue::from_static("abc"));
+        let body = http_body_util::StreamBody::new(futures_util::stream::iter([
+            Ok(http_body::Frame::data(Bytes::from_static(b"payload"))),
+            Ok(http_body::Frame::trailers(trailers)),
+            Err(std::io::Error::other("failed after trailers")),
+        ]));
+        let result = if retain_trailers {
+            collect_body_with_trailers(body, None).await.map(|(bytes, _)| bytes)
+        } else {
+            collect_body(body, None).await
+        };
+        assert!(matches!(result, Err(CollectBodyError::Body(error)) if error.to_string() == "failed after trailers"));
     }
 }
 
