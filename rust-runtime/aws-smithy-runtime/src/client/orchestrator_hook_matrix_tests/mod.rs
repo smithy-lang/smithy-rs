@@ -28,7 +28,5 @@
 //! effectively a no-op here; [`one_overridden_hook_still_dispatches`] covers the gate with a sparse
 //! bitmask instead, which is the only way to tell that each hook consults the right flag.
 
-mod fixtures;
 mod matrix;
-mod recorder;
-mod scenarios;
+mod support;

@@ -2,12 +2,12 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-//! The runner and the assertions.
+//! The scenario table, the runner, and the assertions.
 
-use super::fixtures::{BaseRuntimePlugin, BoundedRetryStrategy, ScenarioPlugin, ScriptedConnector};
-use super::recorder::{HookLog, PlainRecorder};
-use super::scenarios::Expect::*;
-use super::scenarios::{scenarios, Connector, Scenario, HOOKS};
+use super::support::{
+    BaseRuntimePlugin, BoundedRetryStrategy, HookLog, Observed, PlainRecorder, ScenarioPlugin,
+    ScriptedConnector,
+};
 use crate::client::auth::no_auth::NoAuthRuntimePluginV2;
 use crate::client::defaults::{default_sleep_impl_plugin, default_time_source_plugin};
 use crate::client::orchestrator::{invoke_with_stop_point, StopPoint};
@@ -27,13 +27,293 @@ use aws_smithy_runtime_api::client::runtime_components::{
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::ConfigBag;
-use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::time::Duration;
+
+/// The hooks this matrix covers, in lifecycle order.
+///
+/// Asserted against `known_hooks!()` below, so adding a hook to the runtime forces a matrix update
+/// rather than silently leaving the new hook uncovered. Spelled out rather than taken from
+/// `known_hooks!()` directly so that a *reordering* is caught too, not only an addition.
+const HOOKS: &[&str] = &[
+    "read_before_execution",
+    "modify_before_serialization",
+    "read_before_serialization",
+    "read_after_serialization",
+    "modify_before_retry_loop",
+    "read_before_attempt",
+    "modify_before_signing",
+    "read_before_signing",
+    "read_after_signing",
+    "modify_before_transmit",
+    "read_before_transmit",
+    "read_after_transmit",
+    "modify_before_deserialization",
+    "read_before_deserialization",
+    "read_after_deserialization",
+    "modify_before_attempt_completion",
+    "read_after_attempt",
+    "modify_before_completion",
+    "read_after_execution",
+];
+
+/// Expected invocation count for a hook in a given scenario.
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Expect {
+    /// Never invoked.
+    Never,
+    /// Exactly once per execution.
+    Once,
+    /// Once per attempt actually started, measured by the `read_before_attempt` count.
+    ///
+    /// A literal would not do: a consumer detects a missing invocation with an equality against the
+    /// attempt count, so a fix with the wrong cardinality would silently corrupt its metrics.
+    PerAttempt,
+    /// Once per attempt that received a response, else zero.
+    PerResponse,
+}
+use Expect::*;
+
+// ---------------------------------------------------------------------------
+// Scenarios
+// ---------------------------------------------------------------------------
+
+#[derive(Copy, Clone)]
+enum Connector {
+    Ok,
+    Fail,
+    FailThenOk,
+    /// Never responds, so a timeout is the only way the attempt ends.
+    Never,
+}
+
+struct Scenario {
+    name: &'static str,
+    connector: Connector,
+    timeout: Option<TimeoutConfig>,
+    retry: Option<BoundedRetryStrategy>,
+    /// Abandon the future instead of letting the operation finish, to pin caller-initiated
+    /// cancellation behaviour.
+    caller_abandons: bool,
+    /// Attempts expected to start, i.e. the `read_before_attempt` count.
+    attempts: usize,
+    /// Attempts expected to receive a response.
+    responses: usize,
+    /// Expected count for each hook in [`HOOKS`] order.
+    expected: [Expect; 19],
+    /// Expected `Observed` for every finalizer invocation, in invocation order.
+    expected_observations: Vec<(&'static str, Observed)>,
+}
+
+/// Builds an expectation row from the per-stage groups, so the scenarios read as a table.
+fn row(
+    prologue: Expect,
+    attempt: Expect,
+    deserialization: Expect,
+    attempt_finalizers: Expect,
+    execution_finalizers: Expect,
+) -> [Expect; 19] {
+    [
+        // prologue: read_before_execution .. modify_before_retry_loop
+        prologue,
+        prologue,
+        prologue,
+        prologue,
+        prologue,
+        // attempt: read_before_attempt .. read_before_transmit
+        attempt,
+        attempt,
+        attempt,
+        attempt,
+        attempt,
+        attempt,
+        // deserialization: read_after_transmit .. read_after_deserialization
+        deserialization,
+        deserialization,
+        deserialization,
+        deserialization,
+        // finalizers
+        attempt_finalizers,
+        attempt_finalizers,
+        execution_finalizers,
+        execution_finalizers,
+    ]
+}
+
+fn attempt_timeout(millis: u64) -> Option<TimeoutConfig> {
+    Some(
+        TimeoutConfig::builder()
+            .operation_attempt_timeout(Duration::from_millis(millis))
+            .build(),
+    )
+}
+
+fn operation_timeout(millis: u64) -> Option<TimeoutConfig> {
+    Some(
+        TimeoutConfig::builder()
+            .operation_timeout(Duration::from_millis(millis))
+            .build(),
+    )
+}
+
+/// Every finalizer in one attempt plus the execution, all observing the same thing.
+fn observations(attempt: Observed, execution: Observed) -> Vec<(&'static str, Observed)> {
+    vec![
+        ("modify_before_attempt_completion", attempt),
+        ("read_after_attempt", attempt),
+        ("modify_before_completion", execution),
+        ("read_after_execution", execution),
+    ]
+}
+
+fn scenarios() -> Vec<Scenario> {
+    vec![
+        Scenario {
+            name: "success",
+            connector: Connector::Ok,
+            timeout: None,
+            retry: None,
+            caller_abandons: false,
+            attempts: 1,
+            responses: 1,
+            expected: row(Once, PerAttempt, PerResponse, PerAttempt, Once),
+            expected_observations: observations(Observed::Success, Observed::Success),
+        },
+        Scenario {
+            name: "retry then success",
+            connector: Connector::FailThenOk,
+            timeout: None,
+            retry: Some(BoundedRetryStrategy {
+                max_attempts: 2,
+                delay: None,
+                initial_delay: None,
+            }),
+            caller_abandons: false,
+            attempts: 2,
+            responses: 1,
+            expected: row(Once, PerAttempt, PerResponse, PerAttempt, Once),
+            // The first attempt genuinely failed; the second succeeded.
+            expected_observations: vec![
+                (
+                    "modify_before_attempt_completion",
+                    Observed::ConnectorFailure,
+                ),
+                ("read_after_attempt", Observed::ConnectorFailure),
+                ("modify_before_attempt_completion", Observed::Success),
+                ("read_after_attempt", Observed::Success),
+                ("modify_before_completion", Observed::Success),
+                ("read_after_execution", Observed::Success),
+            ],
+        },
+        Scenario {
+            name: "transport error",
+            connector: Connector::Fail,
+            timeout: None,
+            retry: None,
+            caller_abandons: false,
+            attempts: 1,
+            responses: 0,
+            expected: row(Once, PerAttempt, Never, PerAttempt, Once),
+            expected_observations: observations(
+                Observed::ConnectorFailure,
+                Observed::ConnectorFailure,
+            ),
+        },
+        Scenario {
+            name: "attempt timeout",
+            connector: Connector::Never,
+            timeout: attempt_timeout(200),
+            retry: None,
+            caller_abandons: false,
+            attempts: 1,
+            responses: 0,
+            expected: row(Once, PerAttempt, Never, PerAttempt, Once),
+            expected_observations: observations(Observed::Timeout, Observed::Timeout),
+        },
+        Scenario {
+            name: "operation timeout mid-attempt",
+            connector: Connector::Never,
+            timeout: operation_timeout(200),
+            retry: None,
+            caller_abandons: false,
+            attempts: 1,
+            responses: 0,
+            expected: row(Once, PerAttempt, Never, PerAttempt, Once),
+            expected_observations: observations(Observed::Timeout, Observed::Timeout),
+        },
+        Scenario {
+            name: "operation timeout during retry backoff",
+            connector: Connector::Fail,
+            timeout: operation_timeout(300),
+            retry: Some(BoundedRetryStrategy {
+                max_attempts: 10,
+                delay: Some(Duration::from_secs(2)),
+                initial_delay: None,
+            }),
+            caller_abandons: false,
+            attempts: 1,
+            responses: 0,
+            expected: row(Once, PerAttempt, Never, PerAttempt, Once),
+            // The attempt itself failed on the connector before the operation budget expired, so
+            // the attempt pair sees the real error and only the execution pair sees the timeout.
+            expected_observations: observations(Observed::ConnectorFailure, Observed::Timeout),
+        },
+        Scenario {
+            // The negative control for the in-flight marker: the operation budget expires while
+            // the initial request is still stalled, so no attempt ever starts. The attempt-level
+            // finalizers must NOT fire -- `read_after_attempt` is owed only once
+            // `read_before_attempt` has run -- while the execution-level pair still must. A fix
+            // that settled the orphaned attempt unconditionally instead of consulting the marker
+            // would fire them here and be caught.
+            name: "operation timeout before any attempt starts",
+            connector: Connector::Never,
+            timeout: operation_timeout(200),
+            retry: Some(BoundedRetryStrategy {
+                max_attempts: 1,
+                delay: None,
+                initial_delay: Some(Duration::from_secs(2)),
+            }),
+            caller_abandons: false,
+            attempts: 0,
+            responses: 0,
+            expected: row(Once, Never, Never, Never, Once),
+            expected_observations: vec![
+                ("modify_before_completion", Observed::Timeout),
+                ("read_after_execution", Observed::Timeout),
+            ],
+        },
+        Scenario {
+            // A dropped future cannot run anything: `finally_attempt` and `finally_op` live inside
+            // the `async move` block the caller just dropped, and Rust has no async drop. These
+            // zeros are structural rather than a gap left to fix later -- the only way to change
+            // them is to run the finalizers from `Drop`, which this design rejected. If this row
+            // fails, that architectural choice changed.
+            name: "caller abandons the future",
+            connector: Connector::Never,
+            timeout: None,
+            retry: None,
+            caller_abandons: true,
+            attempts: 1,
+            responses: 0,
+            expected: row(Once, PerAttempt, Never, Never, Never),
+            expected_observations: vec![],
+        },
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
+
+/// Installs one connector for the whole run; cloning shares its call counter.
+fn with_connector(
+    components: RuntimeComponentsBuilder,
+    connector: ScriptedConnector,
+) -> RuntimeComponentsBuilder {
+    components.with_http_client(Some(http_client_fn(move |_, _| {
+        connector.clone().into_shared()
+    })))
+}
 
 async fn run(scenario: &Scenario) -> HookLog {
     let log = HookLog::default();
@@ -42,21 +322,9 @@ async fn run(scenario: &Scenario) -> HookLog {
     let mut components = RuntimeComponentsBuilder::new("matrix").with_interceptor(interceptor);
     components = match scenario.connector {
         Connector::Never => components.with_http_client(Some(NeverClient::new())),
-        other => {
-            let failures = match other {
-                Connector::Ok => 0,
-                Connector::FailThenOk => 1,
-                _ => usize::MAX,
-            };
-            let calls = Arc::new(AtomicUsize::new(0));
-            components.with_http_client(Some(http_client_fn(move |_, _| {
-                ScriptedConnector {
-                    calls: calls.clone(),
-                    failures,
-                }
-                .into_shared()
-            })))
-        }
+        Connector::Ok => with_connector(components, ScriptedConnector::always_ok()),
+        Connector::Fail => with_connector(components, ScriptedConnector::always_failing()),
+        Connector::FailThenOk => with_connector(components, ScriptedConnector::failing_first(1)),
     };
     if let Some(retry) = &scenario.retry {
         components =
