@@ -38,7 +38,7 @@ futures-util = { version = "0.3.29", default-features = false }
 async-stream = "0.3"
 futures-util = { version = "0.3.29", default-features = false }
 hyper = { version = "0.14.26", features = ["stream"] }
-proptest = "1"
+proptest = "1.11.0"
 tokio = { version = "1.49.0", features = [
     "macros",
     "rt",
