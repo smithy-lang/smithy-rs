@@ -997,11 +997,39 @@ class ServerServiceGenerator(
                         self
                     }
                 }
-                impl $serviceName {
-                    /// Routes are already erased on the schema path.
-                    pub fn boxed(self) -> Self { self }
-                }
                 impl<S> $serviceName<S> {
+                    /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
+                    ///
+                    /// On the schema path the routed handlers form a single service, so the layer
+                    /// wraps it once and runs before protocol routing.
+                    ##[deprecated(
+                        note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                    )]
+                    pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
+                    where
+                        L: #{Tower}::Layer<S>,
+                    {
+                        $serviceName { svc: layer.layer(self.svc) }
+                    }
+
+                    /// Applies [`SyncRoute::new`](#{SmithyHttpServer}::routing::SyncRoute::new) to the routed service.
+                    ///
+                    /// This has the effect of erasing all types accumulated via layers.
+                    pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::SyncRoute<B>>
+                    where
+                        S: #{Tower}::Service<
+                            #{Http}::Request<B>,
+                            Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
+                            Error = ::std::convert::Infallible,
+                        >,
+                        S: #{Clone} + #{Send} + Sync + 'static,
+                        S::Future: #{Send} + 'static,
+                        B: 'static,
+                    {
+                        ##[allow(deprecated)]
+                        self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::SyncRoute::new))
+                    }
+
                     pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
                         #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                     }

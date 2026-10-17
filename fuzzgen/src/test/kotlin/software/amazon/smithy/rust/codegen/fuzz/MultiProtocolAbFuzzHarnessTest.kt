@@ -85,6 +85,12 @@ class MultiProtocolAbFuzzHarnessTest {
     private val side = System.getenv("MP_FUZZ_SIDE") ?: error("MP_FUZZ_SIDE must be `single` or `multi`")
     private val output = File(System.getenv("MP_FUZZ_OUTPUT") ?: error("MP_FUZZ_OUTPUT is required"))
     private val models = File(System.getenv("MP_FUZZ_MODELS") ?: error("MP_FUZZ_MODELS is required"))
+    private val multiProtocolModels =
+        File(System.getenv("MP_FUZZ_MULTI_PROTOCOL_MODELS") ?: error("MP_FUZZ_MULTI_PROTOCOL_MODELS is required"))
+
+    /** Resolves a fixture: multi-protocol models live with the server integration suite, the rest in [models]. */
+    private fun modelFile(name: String): File =
+        if (name.startsWith("multi-protocol")) multiProtocolModels.resolve(name) else models.resolve(name)
     private val suites = (System.getenv("MP_FUZZ_SUITES") ?: "pokemon,multiprotocol").split(",")
     private val singleRuntime = System.getenv("MP_FUZZ_SINGLE_RUNTIME")?.let { File(it) }
     private val selected =
@@ -236,7 +242,7 @@ class MultiProtocolAbFuzzHarnessTest {
                 }
         val sourceHashes =
             sources.map { (name, text) ->
-                Node.objectNodeBuilder().withMember("path", models.resolve(name).absolutePath)
+                Node.objectNodeBuilder().withMember("path", modelFile(name).absolutePath)
                     .withMember("sha256", sha256(text)).build()
             }
         val comparisonModel =
@@ -306,7 +312,7 @@ class MultiProtocolAbFuzzHarnessTest {
     }
 
     private fun pokemon(with: List<Protocol>): Model {
-        val sources = listOf("pokemon.smithy", "pokemon-common.smithy").map { it to models.resolve(it).readText() }
+        val sources = listOf("pokemon.smithy", "pokemon-common.smithy").map { it to modelFile(it).readText() }
         return project("pokemon", assemble(*sources.toTypedArray()), with, sources)
     }
 
@@ -318,7 +324,7 @@ class MultiProtocolAbFuzzHarnessTest {
         // Hash the exact text used for assembly, even if another task edits fixtures concurrently.
         val sources =
             listOf("multi-protocol.smithy", "multi-protocol-common.smithy", file).distinct()
-                .map { it to models.resolve(it).readText() }
+                .map { it to modelFile(it).readText() }
         val canonicalSources = sources.filter { it.first in listOf("multi-protocol.smithy", "multi-protocol-common.smithy") }
         return project("multiprotocol", assemble(*canonicalSources.toTypedArray()), served, sources)
     }
@@ -511,8 +517,8 @@ class MultiProtocolAbFuzzHarnessTest {
     ): Model {
         val canonical =
             assemble(
-                protocol.multiProtocolFile to models.resolve(protocol.multiProtocolFile).readText(),
-                "multi-protocol-common.smithy" to models.resolve("multi-protocol-common.smithy").readText(),
+                protocol.multiProtocolFile to modelFile(protocol.multiProtocolFile).readText(),
+                "multi-protocol-common.smithy" to modelFile("multi-protocol-common.smithy").readText(),
             )
         val serviceId = ShapeId.from(serviceOf("multiprotocol"))
         return ModelTransformer.create().mapShapes(canonical) { shape ->

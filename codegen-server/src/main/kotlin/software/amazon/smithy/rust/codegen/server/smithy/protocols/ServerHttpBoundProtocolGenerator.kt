@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.pattern.UriPattern
@@ -686,9 +687,14 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         errorShape: StructureShape? = null,
     ) {
+        // rpcv2Cbor carries no HTTP response bindings; its model transform strips them from
+        // operation shapes but not from error shapes, and the emitted error header serializer
+        // does not compile (its `?` cannot convert into the CBOR `ResponseRejection`). Skip it.
+        val skipErrorHeaders = errorShape != null && codegenContext.protocol == Rpcv2CborTrait.ID
         val bindingGenerator =
             ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        val addHeadersFn =
+            if (skipErrorHeaders) null else bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
         if (addHeadersFn != null) {
             // Notice that we need to borrow the output only for output shapes but not for error shapes.
             val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"

@@ -219,7 +219,6 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 imports = listOf(
                     "integration-tests/multi-protocol/models/multi-protocol-common.smithy",
                     "integration-tests/multi-protocol/models/multi-protocol-server.smithy",
-                    "integration-tests/multi-protocol/models/multi-protocol-server-extras.smithy",
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
