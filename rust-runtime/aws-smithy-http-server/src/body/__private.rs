@@ -11,7 +11,6 @@
 //! Public items support generated trait bounds, body collection, and its error handling.
 //! Streaming wrappers used only inside the runtime have narrower visibility.
 
-use bon::Builder;
 use bytes::{Buf, BufMut, Bytes};
 use std::num::NonZeroUsize;
 
@@ -53,21 +52,76 @@ pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(64).unwr
 pub(crate) const DEFAULT_MAX_INITIAL_CAPACITY: NonZeroUsize = NonZeroUsize::new(32 * 1024).unwrap();
 
 /// Options for complete HTTP body collection.
-#[derive(Debug, Builder)]
+#[derive(Debug)]
 pub struct CollectionConfig {
     /// Maximum body bytes; `None` disables the byte limit.
     limit: Option<NonZeroUsize>,
     /// Number of ready frame polls before yielding.
-    #[builder(default = DEFAULT_FRAME_BUDGET)]
     frame_budget: NonZeroUsize,
     /// Cap on the initial buffer reservation; zero starts without a reservation.
-    #[builder(default = DEFAULT_MAX_INITIAL_CAPACITY.get())]
     initial_capacity: usize,
+}
+
+impl CollectionConfig {
+    /// Creates a builder with the default body collection options.
+    pub fn builder() -> CollectionConfigBuilder {
+        CollectionConfigBuilder::default()
+    }
 }
 
 impl Default for CollectionConfig {
     fn default() -> Self {
-        Self::builder().build()
+        Self {
+            limit: None,
+            frame_budget: DEFAULT_FRAME_BUDGET,
+            initial_capacity: DEFAULT_MAX_INITIAL_CAPACITY.get(),
+        }
+    }
+}
+
+/// Builder for complete HTTP body collection options.
+#[derive(Debug, Default)]
+pub struct CollectionConfigBuilder {
+    config: CollectionConfig,
+}
+
+impl CollectionConfigBuilder {
+    /// Sets the maximum number of body bytes.
+    pub fn limit(self, limit: NonZeroUsize) -> Self {
+        self.maybe_limit(Some(limit))
+    }
+
+    /// Sets the byte limit, or disables it with `None`.
+    pub fn maybe_limit(mut self, limit: Option<NonZeroUsize>) -> Self {
+        self.config.limit = limit;
+        self
+    }
+
+    /// Sets the number of ready frame polls before yielding.
+    pub fn frame_budget(mut self, frame_budget: NonZeroUsize) -> Self {
+        self.config.frame_budget = frame_budget;
+        self
+    }
+
+    /// Sets the frame poll budget, or uses the default with `None`.
+    pub fn maybe_frame_budget(self, frame_budget: Option<NonZeroUsize>) -> Self {
+        self.frame_budget(frame_budget.unwrap_or(DEFAULT_FRAME_BUDGET))
+    }
+
+    /// Sets the initial buffer reservation cap; zero disables the reservation.
+    pub fn initial_capacity(mut self, initial_capacity: usize) -> Self {
+        self.config.initial_capacity = initial_capacity;
+        self
+    }
+
+    /// Sets the reservation cap, or uses the default with `None`.
+    pub fn maybe_initial_capacity(self, initial_capacity: Option<usize>) -> Self {
+        self.initial_capacity(initial_capacity.unwrap_or(DEFAULT_MAX_INITIAL_CAPACITY.get()))
+    }
+
+    /// Builds the body collection options.
+    pub fn build(self) -> CollectionConfig {
+        self.config
     }
 }
 
