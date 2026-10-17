@@ -107,5 +107,11 @@ pub fn stamp_validation_extension(mut response: Response) -> Response {
 }
 
 pub fn log_serialize_failure(err: &SerdeError) {
-    tracing::error!(error = %err, "failed to serialize response");
+    // Codec errors can quote the rejected value (e.g. a non-JSON `BigDecimal`),
+    // which may come from an `@sensitive` member. Redact the message like other
+    // instrumentation output; `unredacted-logging` restores the full error.
+    tracing::error!(
+        error = %crate::instrumentation::sensitivity::Sensitive(err),
+        "failed to serialize response"
+    );
 }
