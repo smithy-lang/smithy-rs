@@ -103,16 +103,16 @@ with_metrics_pool(request.sdk.handle(), async {
 When `request` drops, one entry is emitted for the application request:
 
 ```
-Route                                /thumbnail
-SdkDynamoDBGetItemInvocationDuration 4.1 ms
-SdkDynamoDBGetItemRetryCount         0
-SdkDynamoDBGetItemSuccess            1
-SdkS3GetObjectInvocationDuration     38.7 ms
-SdkS3GetObjectAttempts               2
-SdkS3GetObjectRetryCount             1
-SdkS3GetObjectThrottles              1
-SdkS3GetObjectConnectionReused       0
-SdkS3GetObjectHttpStatusCode         200
+Route                                      /thumbnail
+SdkDynamoDBGetItemApiCallDuration          4.1 ms
+SdkDynamoDBGetItemRetryCount               0
+SdkDynamoDBGetItemApiCallSuccessful        1
+SdkS3GetObjectApiCallDuration              38.7 ms
+SdkS3GetObjectAttempts                     2
+SdkS3GetObjectRetryCount                   1
+SdkS3GetObjectThrottles                    1
+SdkS3GetObjectConnectionReused             0
+SdkS3GetObjectHttpStatusCode               200
 ...
 ```
 
@@ -130,35 +130,37 @@ Use `.prefix("AuditLog")` to replace `Sdk{Service}{Qualifier}` in pooled field n
 
 ##### Recorded fields
 
+Names follow the [AWS SDK for Java 2.x metrics] where this crate records the same concept. Java attempt-level names (`HttpStatusCode`, `ErrorType`, `ConcurrencyAcquireDuration` and `ServiceCallDuration`) describe the final attempt in this call-level record. `BackoffDelayDuration` is the approximate total elapsed between attempts rather than one value per attempt. The remaining fields are extensions without direct Java equivalents.
+
 | Field | Meaning |
 |---|---|
-| `InvocationDuration` | Time from immediately before request serialization until execution completes, across all attempts. Excludes earlier interceptor work and reading a streaming response body. Omitted if timing never starts or the time source moves backwards. |
+| `ApiCallDuration` | Time from immediately before request serialization until execution completes, across all attempts. Excludes earlier interceptor work and reading a streaming response body. Omitted if timing never starts or the time source moves backwards. |
 | `Attempts` / `RetryCount` | Number of attempts, and attempts minus one |
 | `HttpStatusCode` | HTTP status of the final attempt, when a response was received |
-| `Success` | The final attempt produced a successful output |
+| `ApiCallSuccessful` | The final attempt produced a successful output |
 | `ClientError` / `ServerError` | The final status was 4xx / 5xx |
 | `Throttles` | Attempts that the client's retry classifiers marked as throttling. This interceptor reruns the classifiers after each attempt. |
-| `ErrorType` | Why a failed call failed: `Throttling`, `ServiceError` (any non-throttling error response), `ConfiguredTimeout` (operation, attempt, connect or read timeout), `IO` or `Other`. Omitted on success and on cancellation. |
-| `RetryDelay` | Elapsed time between attempts. Approximates retry backoff and rate-limiter waits, and can include interceptor or orchestrator overhead. |
+| `ErrorType` | Why a failed call failed: `Throttling`, `ServerError` (any non-throttling error response), `ConfiguredTimeout` (operation, attempt, connect or read timeout), `IO` or `Other`. Omitted on success and on cancellation. |
+| `BackoffDelayDuration` | Elapsed time between attempts. Approximates retry backoff and rate-limiter waits, and can include interceptor or orchestrator overhead. |
 | `AttemptTimeouts` | Attempts cut short by the attempt timeout |
 | `OperationTimeout` | The operation timeout fired before the call completed |
 | `Cancelled` | The caller dropped the `send()` future before the call completed |
-| `ConnectionAcquireDuration` | The final attempt's time to get a connection from the HTTP client, when it reports it |
+| `ConcurrencyAcquireDuration` | The final attempt's time to get a connection from the HTTP client, when it reports it |
 | `ConnectionReused` | The final attempt used an already-used connection, when the HTTP client reports it |
-| `ConnectorCallDuration` | The final attempt's connector time up to the response head, when the HTTP client reports it |
+| `ServiceCallDuration` | The final attempt's connector time up to the response head, when the HTTP client reports it |
 
-Standalone entries carry the same fields without a prefix, plus `SdkService`, `Qualifier`, `Operation` and a timestamp. Standalone entries written because an expected pool was missing also carry `MetricsPoolFallback = 1`.
+Standalone entries carry the same fields without a prefix, plus `ServiceId`, `Qualifier`, `OperationName` and a timestamp. Standalone entries written because an expected pool was missing also carry `MetricsPoolFallback = 1`.
 
 #### Timeouts and cancellation
 
-Timeouts and cancellation do not bypass the configured routing policy. Each call produces one completed record, including calls that time out. When present, `InvocationDuration` covers the interval from immediately before serialization until the call completes, times out or is dropped.
+Timeouts and cancellation do not bypass the configured routing policy. Each call produces one completed record, including calls that time out. When present, `ApiCallDuration` covers the interval from immediately before serialization until the call completes, times out or is dropped.
 
 | How the call ends | What is recorded |
 |---|---|
-| An attempt times out and a retry succeeds | `AttemptTimeouts = 1`, `Success = 1`, plus the retried attempt as usual |
-| The last attempt times out | `AttemptTimeouts` counts it, `Success = 0` |
-| The operation timeout fires | `OperationTimeout = 1`, `Success = 0` |
-| The caller drops the `send()` future | `Cancelled = 1`, `Success = 0` |
+| An attempt times out and a retry succeeds | `AttemptTimeouts = 1`, `ApiCallSuccessful = 1`, plus the retried attempt as usual |
+| The last attempt times out | `AttemptTimeouts` counts it, `ApiCallSuccessful = 0` |
+| The operation timeout fires | `OperationTimeout = 1`, `ApiCallSuccessful = 0` |
+| The caller drops the `send()` future | `Cancelled = 1`, `ApiCallSuccessful = 0` |
 
 #### Destinations
 
@@ -340,10 +342,7 @@ Existing `ClientMetrics` customers should not need to change SDK call sites. The
 1. Should repeated calls to the same operation in one application request be distinguishable, for example with a call index or summed counters, instead of the last call winning?
 2. Should per-attempt standalone entries be offered as an opt-in?
 3. Is the global `ServiceMetrics` sink the right default for standalone entries, or should an unconfigured client write no standalone entries at all?
-4. What should the emitted field names be, and should they follow an existing convention? The names are the crate's public contract, so this should be settled before the first release. Current names follow `aws-smithy-http-server-metrics` where the two overlap (`HttpStatusCode`, `ClientError`, `ServerError`) and are otherwise new (`InvocationDuration`, `Attempts`, `Throttles`). Conventions to consider:
-   - **The AWS SDK for Java 2.x metrics** (for example `ApiCallDuration`, `ApiCallSuccessful`, `RetryCount`, `ServiceId`, `OperationName`), which would make dashboards consistent across SDK languages.
-   - **The SDK's existing OpenTelemetry metrics** (for example `smithy.client.call.duration` and `smithy.client.call.attempt.duration`), so the per-request and aggregate views use the same vocabulary.
-5. Is `Sdk{Service}{Qualifier}{Operation}{Field}` the right default naming (for example `SdkS3AuditGetObjectRetryCount`) for field names SDK calls add to the application request's entry? It ensures no collisions and the `prefix` builder method allows for override.
+4. Is `Sdk{Service}{Qualifier}{Operation}{Field}` the right default naming (for example `SdkS3AuditGetObjectRetryCount`) for field names SDK calls add to the application request's entry? It ensures no collisions and the `prefix` builder method allows for override.
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist
@@ -356,7 +355,7 @@ Changes checklist
 - [x] Complete and route records for calls that end in an attempt timeout, an operation timeout or cancellation
 - [x] Register the crate in `rust-runtime/Cargo.toml`, `CrateSet.kt` and the sdk-lints README allowlist
 - [x] Add `external-types.toml`, the README and a changelog entry
-- [ ] Resolve repeated-call semantics, field names and the standalone sink default before the first release
+- [ ] Resolve repeated-call semantics and the standalone sink default before the first release
 - [x] Regenerate `aws/sdk/Cargo.lock` to include the crate's dependencies
 - [x] Add a generated AWS SDK integration test for the crate-doc installation path
 
@@ -407,4 +406,5 @@ impl Intercept for SdkMetricsInterceptor {
 ```
 
 [metrique]: https://crates.io/crates/metrique
+[AWS SDK for Java 2.x metrics]: https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/metrics-list.html
 [smithy-rs#4318]: https://github.com/smithy-lang/smithy-rs/issues/4318
