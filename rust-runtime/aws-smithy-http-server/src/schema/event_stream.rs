@@ -82,7 +82,8 @@ where
 
 /// Whether to emit an initial response before output events.
 ///
-/// This policy is exhaustive: callers choose whether to send or omit the initial response.
+/// Additional policies may be introduced in the future.
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitialResponsePolicy {
     /// Emit an initial response only if the selected protocol supports initial-message framing.
@@ -581,7 +582,10 @@ fn build_frame(
     // headers. Match the generated marshaller's initial capacity to avoid growth.
     let mut headers = Vec::with_capacity(4);
     headers.push(Header::new(":message-type", HeaderValue::String(message_type.into())));
-    headers.push(Header::new(type_header, HeaderValue::String(event_type.to_string().into())));
+    headers.push(Header::new(
+        type_header,
+        HeaderValue::String(event_type.to_string().into()),
+    ));
     let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
     let has_header_members = schema.members().iter().any(|m| m.event_header());
 

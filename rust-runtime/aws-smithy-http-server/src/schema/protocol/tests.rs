@@ -679,7 +679,7 @@ async fn collection_enforces_limits_timeouts_and_body_errors() {
     let body = http_body_util::Full::new(bytes::Bytes::from_static(b"four"));
     assert!(matches!(
         collect_request_body(body, &limited).await,
-        Err(super::RequestBodyCollectionError::TooLarge(_))
+        Err(super::RequestBodyCollectionError::BodyLimitExceeded(_))
     ));
 
     let timed = RequestBodyCollectionConfig {

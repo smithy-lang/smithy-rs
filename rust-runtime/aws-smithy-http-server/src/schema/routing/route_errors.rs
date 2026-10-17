@@ -63,6 +63,8 @@ pub enum RoutingErrorKind {
     /// The request claims the protocol but violates its framing rules — forbidden headers,
     /// a malformed rpcv2 path, an invalid header value.
     MalformedRequest,
+    /// A known operation uses a feature unsupported by the selected protocol.
+    UnsupportedOperation,
     /// A matched REST input has a required body member without a default, but the
     /// request omits Content-Type. REST protocols frame this as unsupported media type.
     MissingContentType,
@@ -106,6 +108,15 @@ impl RoutingError {
         }
     }
 
+    /// A rejection for a known operation whose features the protocol does not support.
+    pub fn unsupported_operation() -> Self {
+        Self {
+            kind: RoutingErrorKind::UnsupportedOperation,
+            source: None,
+            expected_content_type: None,
+        }
+    }
+
     /// A missing Content-Type for an input that requires body data.
     pub fn missing_content_type(expected: mime::Mime) -> Self {
         Self {
@@ -144,6 +155,7 @@ impl std::fmt::Display for RoutingError {
             RoutingErrorKind::MethodNotAllowed => f.write_str("method not allowed"),
             RoutingErrorKind::MalformedRequest => f.write_str("malformed request"),
             RoutingErrorKind::MissingContentType => f.write_str("missing content type"),
+            RoutingErrorKind::UnsupportedOperation => f.write_str("unsupported operation"),
         }
     }
 }

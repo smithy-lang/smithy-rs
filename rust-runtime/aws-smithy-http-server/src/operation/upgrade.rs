@@ -14,10 +14,10 @@ use std::{
 use futures_util::ready;
 use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Service, ServiceExt};
-use tracing::error;
+use tracing::{error, trace};
 
 use crate::{
-    body::{BoxBody, HttpBody},
+    body::{BoxBody, __private::HttpBody},
     plugin::Plugin,
     request::{FromParts, FromRequest},
     response::IntoResponse,
@@ -151,6 +151,7 @@ where
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
+                error!(operation = %Op::ID.absolute(), "request reached DynUpgrade without a selected operation");
                 return Ok(empty_internal_server_error());
             };
             let protocol = selected.protocol();
@@ -205,8 +206,8 @@ where
 /// Schema-driven, protocol-neutral HTTP upgrade plugin for operations with a streaming member.
 ///
 /// A streaming payload is handed to the generated [`StreamingOperationShape`] glue as an
-/// [`SdkBody`]. A protocol that treats a streaming blob as a document member instead collects
-/// and decodes the request body. The live-body conversion needs the body to be
+/// [`SdkBody`]. HTTP-bound fields are decoded before the handler receives the live stream.
+/// The live-body conversion needs the body to be
 /// `Sync`, so services with streaming operations run on a `Sync` body such as
 /// [`BoxBodySync`](crate::body::BoxBodySync) or hyper's incoming body.
 #[derive(Debug, Clone)]
@@ -292,6 +293,7 @@ where
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
+                error!(operation = %Op::ID.absolute(), "request reached the streaming upgrade without a selected operation");
                 return Ok(empty_internal_server_error());
             };
             let protocol = selected.protocol();
@@ -303,9 +305,9 @@ where
                     .any(|member| member.streaming() && member.shape_type() == aws_smithy_schema::ShapeType::Union)
             });
             if has_event_stream && protocol.event_stream_framing().is_none() {
-                error!(operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                trace!(operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
                     "selected protocol does not support event streams");
-                return Ok(empty_internal_server_error());
+                return Ok(empty_not_implemented());
             }
 
             let extractors = match Extractors::from_parts(&mut parts) {
@@ -329,7 +331,7 @@ where
     }
 }
 
-/// Prepares the existing collected/event-stream input path from an owned request.
+/// Prepares collected or streaming inputs from an owned request.
 ///
 /// The synchronous callback consumes the borrowed HTTP deserializer before its returned future
 /// is awaited. The live stream and decoded bindings can therefore outlive request preparation.
@@ -359,7 +361,7 @@ where
         let body = request.body_mut().take().expect("request body is present");
         let input_streams = operation.input().members().iter().any(|member| member.streaming());
         let (bytes, body) = if input_streams {
-            let body = crate::body::wrap_streaming_body(body);
+            let body = crate::body::__private::wrap_streaming_body(body);
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if protocol.request_body_requirement(operation) == BodyDirective::Collect {
             let config = config.ok_or_else(|| {
@@ -381,6 +383,13 @@ where
         };
         future.await
     })
+}
+
+/// An empty 501 response for functionality unsupported by the selected protocol.
+pub(crate) fn empty_not_implemented() -> http::Response<BoxBody> {
+    let mut response = http::Response::new(crate::body::empty());
+    *response.status_mut() = http::StatusCode::NOT_IMPLEMENTED;
+    response
 }
 
 /// An empty `500 Internal Server Error`: the answer when generated glue cannot even build a

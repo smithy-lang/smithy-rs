@@ -19,8 +19,8 @@ use crate::schema::routing::{
 /// Claims only a `POST` carrying `Smithy-Protocol: rpc-v2-cbor` whose path names this
 /// service and a bound operation, as required by Smithy's identification rules.
 /// The header alone can offer a deferred rejection but cannot claim a request.
-/// Routing after a claim rejects forbidden headers. Modeled streaming blobs are
-/// ordinary document members on this protocol, matching the legacy server.
+/// Routing after a claim rejects forbidden headers and temporarily rejects streaming
+/// blob inputs. Streaming blob outputs and event streams remain supported.
 /// Route identity retains the legacy acceptance of URI prefixes and service namespaces;
 /// configured capitalized operation aliases also participate in the known-route check.
 /// As the sole protocol, claims perform native routing and defer its errors, including
@@ -33,7 +33,11 @@ struct RpcV2CborProtocolRouter {
 impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
     fn recognizes_streaming_input(&self, request: &Request<()>) -> bool {
         if self.service_schema.protocols().len() == 1 {
-            return self.route(request).is_ok_and(OperationTarget::has_event_stream_input);
+            use crate::routing::Router;
+            return self
+                .router
+                .match_route(request)
+                .is_ok_and(OperationTarget::has_streaming_input);
         }
         use crate::routing::Router;
         request.method() == http::Method::POST
@@ -44,12 +48,17 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             && self
                 .router
                 .match_route(request)
-                .is_ok_and(OperationTarget::has_event_stream_input)
+                .is_ok_and(OperationTarget::has_streaming_input)
     }
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
         match self.router.match_route(request) {
+            Ok(target) if target.has_streaming_blob_input() => {
+                tracing::error!(operation = %target.operation().shape_id(),
+                    "RPC v2 CBOR streaming blob inputs are temporarily unsupported");
+                Err(RoutingError::unsupported_operation())
+            }
             Ok(target) => Ok(target),
             Err(error) => Err(error.into()),
         }

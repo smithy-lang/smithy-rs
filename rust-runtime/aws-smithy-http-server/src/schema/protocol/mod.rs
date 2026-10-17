@@ -47,7 +47,8 @@ use aws_smithy_schema::serde::{SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
-use crate::body::{collect_body_limited_with_trailers, BoxBody, CollectBodyError, HttpBody};
+use crate::body::BoxBody;
+use crate::body::__private::{collect_body_with_trailers, CollectBodyError, CollectionConfig, HttpBody};
 use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
@@ -325,17 +326,6 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The protocol trait's shape ID, such as `aws.protocols#restJson1`.
     fn protocol_id(&self) -> &'static ShapeId<'static>;
 
-    /// Creates an owned streaming-blob decoding session. Generated glue retains the
-    /// ordinary-field builder until the handler finishes reading the blob and calls finish.
-    fn deserialize_data_stream(
-        &self,
-        _input: &'static Schema<'static>,
-        _streaming_member: &'static Schema<'static>,
-        _request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
-    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
-        Err(aws_smithy_schema::serde::SerdeError::unsupported("streaming blob input").into())
-    }
-
     /// Validates request headers for the selected operation before upgrade body collection
     /// and [`Self::deserialize_request`]. Header failures therefore take precedence over
     /// deserialization failures. The built-in protocols check `Accept` against the response
@@ -351,8 +341,7 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// Specifies whether deserialization needs the request body. The default collects it.
     ///
     /// Returning [`BodyDirective::Skip`] leaves the deserialization request's body empty.
-    /// Event-stream inputs bypass collection. Streaming blob inputs instead own their request
-    /// through [`Self::deserialize_data_stream`], including any surrounding document framing.
+    /// Streaming inputs bypass collection and receive the live body separately.
     fn request_body_requirement(&self, _operation: &OperationSchema<'_>) -> BodyDirective {
         BodyDirective::Collect
     }
@@ -572,7 +561,7 @@ impl ServiceRequestBodyConfig {
 #[non_exhaustive]
 pub enum RequestBodyCollectionError<E> {
     Body(E),
-    TooLarge(crate::body::BodyLimitExceeded),
+    BodyLimitExceeded(NonZeroUsize),
     Timeout { timeout: Duration },
 }
 
@@ -581,7 +570,7 @@ impl<E> RequestBodyCollectionError<E> {
     pub fn map_body_error<F>(self, map: impl FnOnce(E) -> F) -> RequestBodyCollectionError<F> {
         match self {
             Self::Body(error) => RequestBodyCollectionError::Body(map(error)),
-            Self::TooLarge(error) => RequestBodyCollectionError::TooLarge(error),
+            Self::BodyLimitExceeded(limit) => RequestBodyCollectionError::BodyLimitExceeded(limit),
             Self::Timeout { timeout } => RequestBodyCollectionError::Timeout { timeout },
         }
     }
@@ -591,7 +580,9 @@ impl<E: std::fmt::Display> std::fmt::Display for RequestBodyCollectionError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Body(err) => write!(f, "error reading request body: {err}"),
-            Self::TooLarge(err) => err.fmt(f),
+            Self::BodyLimitExceeded(limit) => {
+                write!(f, "request body exceeded the configured maximum of {limit} bytes")
+            }
             Self::Timeout { timeout } => write!(f, "request body read timed out after {timeout:?}"),
         }
     }
@@ -611,9 +602,7 @@ where
         .and_then(crate::body::Body::buffered_content)
     {
         if let Some(limit) = config.max_bytes.filter(|limit| bytes.len() > limit.get()) {
-            return Err(RequestBodyCollectionError::TooLarge(crate::body::BodyLimitExceeded {
-                limit: limit.get(),
-            }));
+            return Err(RequestBodyCollectionError::BodyLimitExceeded(limit));
         }
         return Ok(bytes.clone());
     }
@@ -630,13 +619,13 @@ pub(crate) async fn collect_request_body_with_trailers<B>(
 where
     B: HttpBody,
 {
-    let limit = config.max_bytes.map(NonZeroUsize::get).unwrap_or(0);
+    let collection_config = CollectionConfig::builder().maybe_limit(config.max_bytes).build();
     let collect = async move {
-        collect_body_limited_with_trailers(body, limit, crate::body::DEFAULT_FRAME_BUDGET)
+        collect_body_with_trailers(body, Some(collection_config))
             .await
             .map_err(|err| match err {
                 CollectBodyError::Body(err) => RequestBodyCollectionError::Body(err),
-                CollectBodyError::TooLarge(err) => RequestBodyCollectionError::TooLarge(err),
+                CollectBodyError::BodyLimitExceeded(limit) => RequestBodyCollectionError::BodyLimitExceeded(limit),
             })
     };
     match config.read_timeout {

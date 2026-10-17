@@ -160,16 +160,6 @@ impl ServerProtocol for RpcV2CborProtocol {
         self.inner.deserialize_request(input, request)
     }
 
-    fn deserialize_data_stream(
-        &self,
-        _input: &'static Schema<'static>,
-        streaming_member: &'static Schema<'static>,
-        request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
-    ) -> Result<crate::schema::StreamingRequestDecoder, DeserializeError> {
-        let _ = streaming_member;
-        crate::schema::StreamingRequestDecoder::cbor(streaming_member, request, self.inner.shared_codec())
-    }
-
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response {
         self.inner
             .serialize_response(output, value)
@@ -226,10 +216,12 @@ impl ServerProtocol for RpcV2CborProtocol {
     /// A framing violation —
     /// forbidden `x-amz-target`/`x-amzn-target` headers, a malformed rpcv2 path — is `400`
     /// with no `Content-Type`, the bare body `<MalformedHttpRequestException/>` and
-    /// `Connection: close` (Coral tears the connection down on these). Every other kind is
-    /// Coral's unknown-operation response, `404` with the CBOR `__type` body.
+    /// `Connection: close` (Coral tears the connection down on these). Unsupported operations
+    /// return an empty `501`. Other kinds use Coral's unknown-operation response, `404`
+    /// with the CBOR `__type` body.
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         match err.kind() {
+            crate::schema::routing::RoutingErrorKind::UnsupportedOperation => crate::operation::empty_not_implemented(),
             crate::schema::routing::RoutingErrorKind::MethodNotAllowed if !self.method_not_allowed_as_not_found => {
                 crate::routing::method_disallowed()
             }
