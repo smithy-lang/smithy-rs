@@ -211,25 +211,16 @@ impl ServerProtocol for RpcV2CborProtocol {
     }
 
     /// Method mismatches return the legacy server's bare `405` by default. The
-    /// `methodNotAllowedAsNotFound` setting selects the Java server's unknown-operation
-    /// `404` instead. Other routing rejections answer the way Coral's rpcv2 handler does.
-    /// A framing violation —
-    /// forbidden `x-amz-target`/`x-amzn-target` headers, a malformed rpcv2 path — is `400`
-    /// with no `Content-Type`, the bare body `<MalformedHttpRequestException/>` and
-    /// `Connection: close` (Coral tears the connection down on these). Unsupported operations
-    /// return an empty `501`. Other kinds use Coral's unknown-operation response, `404`
-    /// with the CBOR `__type` body.
+    /// `methodNotAllowedAsNotFound` setting selects the unknown-operation `404` instead.
+    /// Unsupported operations return an empty `501`. Every other routing rejection, including
+    /// framing violations such as a forbidden `x-amz-target`/`x-amzn-target` header or an invalid
+    /// `smithy-protocol` value, is the unknown-operation response: `404` with the CBOR `__type` body.
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         match err.kind() {
             crate::schema::routing::RoutingErrorKind::UnsupportedOperation => crate::operation::empty_not_implemented(),
             crate::schema::routing::RoutingErrorKind::MethodNotAllowed if !self.method_not_allowed_as_not_found => {
                 crate::routing::method_disallowed()
             }
-            crate::schema::routing::RoutingErrorKind::MalformedRequest => http::Response::builder()
-                .status(http::StatusCode::BAD_REQUEST)
-                .header(http::header::CONNECTION, "close")
-                .body(crate::body::to_boxed("<MalformedHttpRequestException/>\n"))
-                .expect("a status and static body response is valid"),
             _ => self.serialize_error(&crate::schema::routing::RoutingError::unknown_operation()),
         }
     }

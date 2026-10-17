@@ -204,25 +204,16 @@ async fn sole_cbor_claims_serialize_native_header_rejections() {
         };
         let native: RoutingError = legacy.match_route(&request).unwrap_err().into();
         assert_eq!(error.kind(), native.kind());
-        // The schema protocol already frames these errors using Coral-compatible responses,
-        // rather than the legacy Rust router's generic empty 404. Preserve that policy.
-        let expected = if native.kind() == RoutingErrorKind::MalformedRequest {
-            Response::builder()
-                .status(StatusCode::BAD_REQUEST)
-                .header("connection", "close")
-                .body(crate::body::to_boxed("<MalformedHttpRequestException/>\n"))
-                .unwrap()
-        } else {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .header("content-type", "application/cbor")
-                .header("smithy-protocol", "rpc-v2-cbor")
-                .header("content-length", "53")
-                .body(crate::body::to_boxed(
-                    b"\xbf\x66__type\x78\x2asmithy.framework#UnknownOperationException\xff".as_slice(),
-                ))
-                .unwrap()
-        };
+        // Every rejection, forbidden headers included, gets the unknown-operation response.
+        let expected = Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("content-type", "application/cbor")
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .header("content-length", "53")
+            .body(crate::body::to_boxed(
+                b"\xbf\x66__type\x78\x2asmithy.framework#UnknownOperationException\xff".as_slice(),
+            ))
+            .unwrap();
         let (parts, ()) = request.into_parts();
         let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
             |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("CBOR rejection read its body") },
@@ -1111,6 +1102,97 @@ async fn inconsistent_operation_identity_is_detected_before_handler_dispatch() {
     let _ = app.oneshot(request("first\n")).await;
 }
 
+#[test]
+fn routing_response_future_preserves_send_and_unpin() {
+    fn assert_unpin<T: Unpin>() {}
+    assert_unpin::<MultiProtocolRoutingFuture>();
+    crate::test_helpers::assert_send::<MultiProtocolRoutingFuture>();
+}
+
+#[tokio::test]
+async fn cancelling_pending_handler_readiness_releases_shared_routing_and_handler() {
+    #[derive(Clone)]
+    struct PendingHandler(Arc<()>);
+    impl Service<Request<Body>> for PendingHandler {
+        type Response = Response<BoxBody>;
+        type Error = Infallible;
+        type Future = std::future::Ready<Result<Self::Response, Infallible>>;
+
+        fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<Result<(), Infallible>> {
+            // Keep the selected handler alive while readiness remains pending.
+            let _ = &self.0;
+            Poll::Pending
+        }
+
+        fn call(&mut self, _: Request<Body>) -> Self::Future {
+            panic!("handler called before readiness");
+        }
+    }
+
+    let handler = Arc::new(());
+    let handler_lifetime = Arc::downgrade(&handler);
+    let mut app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+        &SERVICE,
+        [registry()],
+        OPERATIONS
+            .iter()
+            .map(|operation| (*operation, SyncRoute::new(PendingHandler(handler.clone())))),
+    )
+    .build()
+    .unwrap();
+    drop(handler);
+    let routing_lifetime = Arc::downgrade(&app.state);
+    let request = Request::builder()
+        .method("POST")
+        .uri("/first")
+        .header("content-type", "application/json")
+        .body(Body::from_bytes(Bytes::from_static(b"first\n")))
+        .unwrap();
+    let mut future = Box::pin(app.call(request));
+    let waker = futures_util::task::noop_waker();
+    assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
+
+    // The boxed async implementation retains its service clone across handler readiness.
+    drop(app);
+    assert!(routing_lifetime.upgrade().is_some());
+    assert!(handler_lifetime.upgrade().is_some());
+    drop(future);
+    assert!(routing_lifetime.upgrade().is_none());
+    assert!(handler_lifetime.upgrade().is_none());
+}
+
+#[tokio::test]
+async fn completed_routing_releases_shared_state_and_handler_before_future_drop() {
+    let handler = Arc::new(());
+    let handler_lifetime = Arc::downgrade(&handler);
+    let mut app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+        &SERVICE,
+        [registry()],
+        OPERATIONS.iter().map(|operation| {
+            let handler = handler.clone();
+            let route = SyncRoute::new(tower::service_fn(move |_: Request<Body>| {
+                let _ = &handler;
+                std::future::ready(Ok::<_, Infallible>(Response::new(crate::body::empty())))
+            }));
+            (*operation, route)
+        }),
+    )
+    .build()
+    .unwrap();
+    drop(handler);
+    let routing_lifetime = Arc::downgrade(&app.state);
+    let mut future = Box::pin(app.call(request("first\n")));
+    drop(app);
+    assert!(routing_lifetime.upgrade().is_some());
+    let waker = futures_util::task::noop_waker();
+    assert!(matches!(
+        future.as_mut().poll(&mut Context::from_waker(&waker)),
+        Poll::Ready(Ok(_))
+    ));
+    assert!(routing_lifetime.upgrade().is_none());
+    assert!(handler_lifetime.upgrade().is_none());
+}
+
 #[tokio::test]
 async fn shared_handlers_preserve_readiness_and_clone_only_the_selected_route() {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -1761,9 +1843,8 @@ mod multi_protocol {
     #[tokio::test]
     async fn rpc_v2_cbor_rejects_a_claimed_request_it_cannot_serve() {
         let app = app(&BUILTINS, []);
-        // `x-amz-target` is forbidden on rpcv2Cbor, which claimed the request first. The
-        // response byte-matches Coral's: `400`, no `Content-Type`, `Connection: close`, and
-        // the bare 33-byte body.
+        // `x-amz-target` is forbidden on rpcv2Cbor, which claimed the request first. It is
+        // answered like any other unroutable request: the CBOR unknown-operation `404`.
         let response = app
             .clone()
             .oneshot(
@@ -1776,14 +1857,17 @@ mod multi_protocol {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert!(!response.headers().contains_key(http::header::CONTENT_TYPE));
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(
-            response.headers().get(http::header::CONNECTION).map(|v| v.as_bytes()),
-            Some(b"close".as_slice())
+            response.headers().get(http::header::CONTENT_TYPE).unwrap(),
+            "application/cbor"
         );
+        assert!(!response.headers().contains_key(http::header::CONNECTION));
         let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(body, "<MalformedHttpRequestException/>\n");
+        assert_eq!(
+            body.as_ref(),
+            b"\xbf\x66__type\x78\x2asmithy.framework#UnknownOperationException\xff".as_slice()
+        );
     }
 
     #[tokio::test]
@@ -2462,6 +2546,48 @@ mod multi_protocol {
         routes.push(second_body);
         state.protocols = routes.into();
         (app, checks, claims, calls)
+    }
+
+    #[tokio::test]
+    async fn multi_protocol_claims_stay_lazy_and_unpolled_cancellation_releases_request() {
+        struct DropMarker(Arc<std::sync::atomic::AtomicBool>);
+        impl Drop for DropMarker {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+
+        let (mut app, checks, claims, calls) = advisory_app(false, true);
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let marker = DropMarker(dropped.clone());
+        let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+            move |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> {
+                let _ = &marker;
+                panic!("unpolled routing future read its request body");
+            },
+        )));
+        let future = app.call(post("/").body(body).unwrap());
+
+        // Creating the old boxed async future did not execute its claim walk.
+        assert!(calls.lock().unwrap().is_empty());
+        assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert!(!dropped.load(std::sync::atomic::Ordering::SeqCst));
+        drop(future);
+        assert!(dropped.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(calls.lock().unwrap().is_empty());
+
+        let mut future = Box::pin(app.call(post("/").body(untouchable_body()).unwrap()));
+        assert!(calls.lock().unwrap().is_empty());
+        let waker = futures_util::task::noop_waker();
+        let response = match future.as_mut().poll(&mut Context::from_waker(&waker)) {
+            Poll::Ready(Ok(response)) => response,
+            _ => panic!("streaming-aware routing should reject synchronously on first poll"),
+        };
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(*calls.lock().unwrap(), vec![0, 2]);
+        assert_eq!(checks.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(claims.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[tokio::test]

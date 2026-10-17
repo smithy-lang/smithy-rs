@@ -558,6 +558,16 @@ async fn rpcv2_cbor_blob_outputs_use_a_document_instead_of_a_raw_streaming_respo
     assert_eq!(decoder.position(), body.len());
 }
 
+/// An AWS JSON protocol configured with `responseBindings: "protocol"`: the specification's
+/// behavior, ignoring REST status and header bindings. (The default is `"historical"`.)
+fn spec_bindings<P: crate::schema::MetadataRoutedProtocol>() -> P {
+    static EMPTY_SERVICE: crate::schema::ServiceSchema<'static> =
+        crate::schema::ServiceSchema::new(aws_smithy_schema::shape_id!("test", "Service"), None, &[], &[]);
+    let settings = crate::schema::settings::parse_settings_json(br#"{"responseBindings":"protocol"}"#);
+    let context = crate::schema::ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(Some(&settings));
+    P::from_build_context(&context).expect("valid settings")
+}
+
 #[tokio::test]
 async fn streaming_responses_carry_the_head_only() {
     let body = || crate::body::to_boxed("frames");
@@ -572,9 +582,16 @@ async fn streaming_responses_carry_the_head_only() {
     assert!(response.headers().get("content-length").is_none());
     assert_eq!(body_bytes(response).await.as_ref(), b"frames");
 
-    // awsJson stamps its own content type on event stream responses; rpcv2Cbor the event stream
-    // type plus its protocol header. Neither writes REST headers.
+    // By default awsJson keeps the historical REST status and headers on the head.
     let response = AWS_JSON_10.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
+    assert_eq!(response.status(), http::StatusCode::ACCEPTED);
+    assert_eq!(response.headers().get("x-tag").unwrap(), "tagged");
+
+    // awsJson stamps its own content type on event stream responses; rpcv2Cbor the event stream
+    // type plus its protocol header. With `responseBindings: "protocol"` (and always on rpcv2Cbor)
+    // neither writes REST headers.
+    let spec = spec_bindings::<AwsJson1_0Protocol>();
+    let response = spec.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
     assert_eq!(response.status(), http::StatusCode::OK);
     assert_eq!(
         response.headers().get("content-type").unwrap(),
@@ -1262,8 +1279,8 @@ async fn middleware_structs_are_framed_like_operation_outputs() {
     let protocols: Vec<SharedServerProtocol> = vec![
         SharedServerProtocol::metadata_routed(RestJson1Protocol::default()),
         SharedServerProtocol::metadata_routed(RestXmlProtocol::default()),
-        SharedServerProtocol::metadata_routed(AwsJson1_0Protocol::default()),
-        SharedServerProtocol::metadata_routed(AwsJson1_1Protocol::default()),
+        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_0Protocol>()),
+        SharedServerProtocol::metadata_routed(spec_bindings::<AwsJson1_1Protocol>()),
         SharedServerProtocol::metadata_routed(RpcV2CborProtocol::default()),
     ];
     for protocol in protocols {
@@ -1587,5 +1604,254 @@ fn registered_schemas_with_invalid_rest_metadata_fail_only_rest_protocol_builds(
         // AWS JSON ignores the REST header names and media types.
         assert!(AwsJson1_0Protocol::from_build_context(&ctx).is_ok());
         assert!(AwsJson1_1Protocol::from_build_context(&ctx).is_ok());
+    }
+}
+
+mod collection_future_tests {
+    use super::*;
+    use bytes::Bytes;
+    use std::pin::Pin;
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    };
+    use std::task::{Context, Poll};
+
+    #[derive(Default)]
+    struct Observed {
+        hints: AtomicUsize,
+        polls: AtomicUsize,
+        dropped: AtomicBool,
+    }
+
+    // A named collection future must continue accepting bodies that cannot be moved once pinned.
+    struct PinnedBody {
+        observed: Arc<Observed>,
+        lower: u64,
+        _pin: std::marker::PhantomPinned,
+    }
+
+    impl http_body::Body for PinnedBody {
+        type Data = bytes::Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+        ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+            self.observed.polls.fetch_add(1, Ordering::SeqCst);
+            Poll::Ready(None)
+        }
+        fn size_hint(&self) -> http_body::SizeHint {
+            self.observed.hints.fetch_add(1, Ordering::SeqCst);
+            http_body::SizeHint::with_exact(self.lower)
+        }
+    }
+    impl Drop for PinnedBody {
+        fn drop(&mut self) {
+            self.observed.dropped.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn collection_is_lazy_even_with_a_timeout_outside_a_runtime() {
+        let observed = Arc::new(Observed::default());
+        let body = PinnedBody {
+            observed: observed.clone(),
+            lower: 0,
+            _pin: std::marker::PhantomPinned,
+        };
+        let config = RequestBodyCollectionConfig::default().with_read_timeout(Some(Duration::from_secs(1)));
+        let future = super::super::collect_request_body_with_trailers(body, &config);
+        assert_eq!(observed.hints.load(Ordering::SeqCst), 0);
+        assert_eq!(observed.polls.load(Ordering::SeqCst), 0);
+        drop(future);
+        assert!(observed.dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn pinned_bodies_are_released_when_collection_completes() {
+        for lower in [0, 4] {
+            let observed = Arc::new(Observed::default());
+            let body = PinnedBody {
+                observed: observed.clone(),
+                lower,
+                _pin: std::marker::PhantomPinned,
+            };
+            let config = RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(3));
+            let future = super::super::collect_request_body_with_trailers(body, &config);
+            let mut future = std::pin::pin!(future);
+            let waker = futures_util::task::noop_waker();
+            let result = std::future::Future::poll(future.as_mut(), &mut Context::from_waker(&waker));
+            if lower == 0 {
+                assert!(matches!(result, Poll::Ready(Ok((bytes, None))) if bytes.is_empty()));
+                assert_eq!(observed.polls.load(Ordering::SeqCst), 1);
+            } else {
+                assert!(matches!(
+                    result,
+                    Poll::Ready(Err(super::super::RequestBodyCollectionError::BodyLimitExceeded(limit))) if limit.get() == 3
+                ));
+                assert_eq!(observed.polls.load(Ordering::SeqCst), 0);
+            }
+            assert_eq!(observed.hints.load(Ordering::SeqCst), 1);
+            assert!(
+                observed.dropped.load(Ordering::SeqCst),
+                "body must be released before the completed future is dropped"
+            );
+        }
+    }
+
+    struct PinnedFrames {
+        dropped: Arc<AtomicBool>,
+        address: std::cell::Cell<usize>,
+        step: std::cell::Cell<usize>,
+        fail: bool,
+        _pin: std::marker::PhantomPinned,
+    }
+
+    impl http_body::Body for PinnedFrames {
+        type Data = Bytes;
+        type Error = std::io::Error;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<http_body::Frame<Bytes>, Self::Error>>> {
+            let address = self.as_ref().get_ref() as *const Self as usize;
+            let previous = self.address.replace(address);
+            assert!(
+                previous == 0 || previous == address,
+                "pinned body moved between frame polls"
+            );
+            let step = self.step.get();
+            self.step.set(step + 1);
+            Poll::Ready(match step {
+                0 => Some(Ok(http_body::Frame::data(Bytes::from_static(b"abc")))),
+                1 => {
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                }
+                2 => {
+                    let mut trailers = http::HeaderMap::new();
+                    trailers.insert("x-trailer", http::HeaderValue::from_static("retained"));
+                    Some(Ok(http_body::Frame::trailers(trailers)))
+                }
+                3 if self.fail => Some(Err(std::io::Error::other("frame failure"))),
+                3 => Some(Ok(http_body::Frame::data(Bytes::from_static(b"def")))),
+                _ => None,
+            })
+        }
+    }
+
+    impl Drop for PinnedFrames {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
+    }
+
+    fn pinned_frames(fail: bool) -> (PinnedFrames, Arc<AtomicBool>) {
+        let dropped = Arc::new(AtomicBool::new(false));
+        (
+            PinnedFrames {
+                dropped: dropped.clone(),
+                address: std::cell::Cell::new(0),
+                step: std::cell::Cell::new(0),
+                fail,
+                _pin: std::marker::PhantomPinned,
+            },
+            dropped,
+        )
+    }
+
+    #[tokio::test]
+    async fn pinned_collection_preserves_frames_and_trailer_policy() {
+        use crate::body::__private::{collect_body, collect_body_with_trailers, CollectionConfig};
+        let (body, dropped) = pinned_frames(false);
+        let config = CollectionConfig::builder()
+            .frame_budget(NonZeroUsize::new(1).unwrap())
+            .maybe_initial_capacity(None)
+            .build();
+        assert_eq!(collect_body(body, Some(config)).await.unwrap(), "abcdef");
+        assert!(dropped.load(Ordering::SeqCst));
+
+        for timeout in [None, Some(Duration::from_secs(1))] {
+            let (body, dropped) = pinned_frames(false);
+            let config = RequestBodyCollectionConfig::default().with_read_timeout(timeout);
+            let (bytes, trailers) = super::super::collect_request_body_with_trailers(body, &config)
+                .await
+                .unwrap();
+            assert_eq!(bytes, "abcdef");
+            assert_eq!(trailers.unwrap()["x-trailer"], "retained");
+            assert!(dropped.load(Ordering::SeqCst));
+        }
+        let (body, dropped) = pinned_frames(false);
+        let (_, trailers) = collect_body_with_trailers(body, None).await.unwrap();
+        assert_eq!(trailers.unwrap()["x-trailer"], "retained");
+        assert!(dropped.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn pinned_collection_releases_body_on_frame_error_and_limit() {
+        use crate::body::__private::{collect_body, CollectBodyError, CollectionConfig};
+        use std::future::Future;
+        for fail in [false, true] {
+            let (body, dropped) = pinned_frames(fail);
+            let config = CollectionConfig::builder().limit(NonZeroUsize::new(5).unwrap()).build();
+            let mut future = Box::pin(collect_body(body, Some(config)));
+            let waker = futures_util::task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+            assert!(future.as_mut().poll(&mut cx).is_pending());
+            assert!(!dropped.load(Ordering::SeqCst));
+            let result = future.as_mut().poll(&mut cx);
+            if fail {
+                assert!(
+                    matches!(result, Poll::Ready(Err(CollectBodyError::Body(error))) if error.to_string() == "frame failure")
+                );
+            } else {
+                assert!(
+                    matches!(result, Poll::Ready(Err(CollectBodyError::BodyLimitExceeded(limit))) if limit.get() == 5)
+                );
+            }
+            assert!(dropped.load(Ordering::SeqCst));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pinned_collection_cancellation_releases_timed_and_untimed_bodies() {
+        use std::future::Future;
+        for timeout in [None, Some(Duration::from_secs(1))] {
+            let (body, dropped) = pinned_frames(false);
+            let config = RequestBodyCollectionConfig::default().with_read_timeout(timeout);
+            let mut future = Box::pin(super::super::collect_request_body_with_trailers(body, &config));
+            let waker = futures_util::task::noop_waker();
+            assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
+            assert!(!dropped.load(Ordering::SeqCst));
+            drop(future);
+            assert!(dropped.load(Ordering::SeqCst));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn zero_timeout_preserves_immediate_collection_result() {
+        for lower in [0, 4] {
+            let observed = Arc::new(Observed::default());
+            let body = PinnedBody {
+                observed: observed.clone(),
+                lower,
+                _pin: std::marker::PhantomPinned,
+            };
+            let config = RequestBodyCollectionConfig::default()
+                .with_max_bytes(NonZeroUsize::new(3))
+                .with_read_timeout(Some(Duration::ZERO));
+            let result = super::super::collect_request_body_with_trailers(body, &config).await;
+            if lower == 0 {
+                assert!(matches!(result, Ok((bytes, None)) if bytes.is_empty()));
+            } else {
+                assert!(
+                    matches!(result, Err(super::super::RequestBodyCollectionError::BodyLimitExceeded(limit)) if limit.get() == 3)
+                );
+            }
+            assert!(observed.dropped.load(Ordering::SeqCst));
+        }
     }
 }

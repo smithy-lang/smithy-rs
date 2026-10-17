@@ -51,7 +51,7 @@ use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
 use crate::body::BoxBody;
-use crate::body::__private::{collect_body_with_trailers, CollectBodyError, CollectionConfig, HttpBody};
+use crate::body::__private::{CollectBodyError, CollectBodyFuture, CollectionConfig, HttpBody};
 use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
@@ -620,26 +620,90 @@ where
 }
 
 /// Shared complete-body collection for routing and operation deserialization.
-pub(crate) async fn collect_request_body_with_trailers<B>(
+pub(crate) fn collect_request_body_with_trailers<B>(
     body: B,
     config: &RequestBodyCollectionConfig,
-) -> Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<B::Error>>
+) -> RequestBodyCollectionFuture<B>
 where
     B: HttpBody,
 {
-    let collection_config = CollectionConfig::builder().maybe_limit(config.max_bytes).build();
-    let collect = async move {
-        collect_body_with_trailers(body, Some(collection_config))
-            .await
-            .map_err(|err| match err {
+    RequestBodyCollectionFuture {
+        inner: CollectionState::Start {
+            body: Some(body),
+            config: *config,
+        },
+    }
+}
+
+pin_project_lite::pin_project! {
+    #[project = CollectionStateProj]
+    enum CollectionState<B> {
+        Start {
+            body: Option<B>,
+            config: RequestBodyCollectionConfig,
+        },
+        Collect {
+            #[pin]
+            future: CollectBodyFuture<B, true>,
+        },
+        Timed {
+            #[pin]
+            // Tokio's timer cannot move once pinned. Keep the timed branch boxed so the
+            // public routing future retains its existing Unpin implementation.
+            future: std::pin::Pin<Box<tokio::time::Timeout<CollectBodyFuture<B, true>>>>,
+            timeout: Duration,
+        },
+        Done,
+    }
+}
+
+pin_project_lite::pin_project! {
+    /// A named collection future so routing can store body I/O without a box.
+    pub(crate) struct RequestBodyCollectionFuture<B> {
+        #[pin]
+        inner: CollectionState<B>,
+    }
+}
+
+impl<B: HttpBody> std::future::Future for RequestBodyCollectionFuture<B> {
+    type Output = Result<(Bytes, Option<http::HeaderMap>), RequestBodyCollectionError<B::Error>>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        use std::task::Poll;
+        let mut this = self.project();
+        loop {
+            let result = match this.inner.as_mut().project() {
+                CollectionStateProj::Start { body, config } => {
+                    let future = CollectBodyFuture::<B, true>::new(
+                        body.take().expect("collection starts once"),
+                        Some(CollectionConfig::builder().maybe_limit(config.max_bytes).build()),
+                    );
+                    let state = match config.read_timeout {
+                        Some(timeout) => CollectionState::Timed {
+                            future: Box::pin(tokio::time::timeout(timeout, future)),
+                            timeout,
+                        },
+                        None => CollectionState::Collect { future },
+                    };
+                    this.inner.set(state);
+                    continue;
+                }
+                CollectionStateProj::Collect { future } => std::task::ready!(future.poll(cx)),
+                CollectionStateProj::Timed { future, timeout } => match std::task::ready!(future.poll(cx)) {
+                    Ok(result) => result,
+                    Err(_) => {
+                        let timeout = *timeout;
+                        this.inner.set(CollectionState::Done);
+                        return Poll::Ready(Err(RequestBodyCollectionError::Timeout { timeout }));
+                    }
+                },
+                CollectionStateProj::Done => panic!("polled after completion"),
+            };
+            this.inner.set(CollectionState::Done);
+            return Poll::Ready(result.map_err(|err| match err {
                 CollectBodyError::Body(err) => RequestBodyCollectionError::Body(err),
                 CollectBodyError::BodyLimitExceeded(limit) => RequestBodyCollectionError::BodyLimitExceeded(limit),
-            })
-    };
-    match config.read_timeout {
-        Some(timeout) => tokio::time::timeout(timeout, collect)
-            .await
-            .map_err(|_| RequestBodyCollectionError::Timeout { timeout })?,
-        None => collect.await,
+            }));
+        }
     }
 }
