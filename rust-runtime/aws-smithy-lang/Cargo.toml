@@ -12,6 +12,9 @@ rust-version = "1.94.1"
 indexmap = "2.14.2"
 serde = "1.0.229"
 serde_json = { version = "1.0.146", features = ["float_roundtrip"] }
+# Private implementation detail of the Smithy IDL parser. Pinned exactly because parser
+# error behavior is part of this crate's tested output; no winnow type is public.
+winnow = "=1.0.4"
 
 [dev-dependencies]
 # Only used to check that errors compose with `SdkError::construction_failure` and

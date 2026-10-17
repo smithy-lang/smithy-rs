@@ -81,7 +81,12 @@ pub mod traversal;
 pub mod validation;
 
 mod assembler;
+mod ast_converter;
 mod ast_writer;
+// This checkpoint intentionally compiles the private syntax layer before assembler lowering
+// calls it. Remove this allowance when IDL inputs are wired into ModelAssembler.
+#[allow(dead_code)]
+mod idl_loader;
 mod json_loader;
 mod model;
 mod shape_id;
