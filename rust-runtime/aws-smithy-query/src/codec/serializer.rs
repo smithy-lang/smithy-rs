@@ -4,26 +4,25 @@
  */
 
 use aws_smithy_schema::codec::FinishSerializer;
+use aws_smithy_schema::extension::SchemaExtensionKey;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 use std::fmt::Write;
+use std::ops::Deref;
+use std::sync::Arc;
 use urlencoding::encode;
 
 /// A collection path segment.
 /// - `Index(i)` — a list element: renders as `i`.
 /// - `Entry(i, name)` — a map key/value: renders as `i.name`.
-///
-/// Holds the map key/value name as an owned `String` because names are resolved
-/// from `&Schema<'_>` borrows (not `'static`) and are stashed across serializer
-/// calls; see [`CollectionContext`].
-#[derive(Clone)]
-enum Segment {
+#[derive(Clone, Copy)]
+enum Segment<'a> {
     Index(usize),
-    Entry(usize, String),
+    Entry(usize, &'a str),
 }
 
-impl std::fmt::Display for Segment {
+impl std::fmt::Display for Segment<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Segment::Index(i) => write!(f, "{i}"),
@@ -32,31 +31,159 @@ impl std::fmt::Display for Segment {
     }
 }
 
+/// A wire name held on the collection stack across serializer calls: a default, or
+/// a name shared with the [`CollectionNames`] cached on a schema.
+///
+/// Cloning never allocates.
+#[derive(Clone, Debug)]
+enum Name {
+    Static(&'static str),
+    Shared(Arc<str>),
+}
+
+impl Deref for Name {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        match self {
+            Name::Static(name) => name,
+            Name::Shared(name) => name,
+        }
+    }
+}
+
+/// The name of a collection's element (a list member or map value) or map key.
+#[derive(Debug)]
+enum ElementName {
+    /// The collection has no element schema, as for the member-less placeholder
+    /// codegen passes for a nested aggregate. Use the name inherited from the
+    /// enclosing collection.
+    Inherit,
+    /// The element schema has neither `@xmlName` nor a member name.
+    Default,
+    Named(Name),
+}
+
+impl ElementName {
+    fn of(element: Option<&Schema<'_>>) -> Self {
+        match element {
+            None => ElementName::Inherit,
+            Some(element) => match wire_name(element) {
+                Some(name) => ElementName::Named(name),
+                None => ElementName::Default,
+            },
+        }
+    }
+
+    fn resolve(&self, inherited: Option<Name>, default: &'static str) -> Name {
+        match self {
+            ElementName::Named(name) => name.clone(),
+            ElementName::Default => Name::Static(default),
+            ElementName::Inherit => inherited.unwrap_or(Name::Static(default)),
+        }
+    }
+}
+
+/// `@xmlName`, then the member name, of an element schema.
+fn wire_name(schema: &Schema<'_>) -> Option<Name> {
+    schema
+        .xml_name()
+        .map(|name| name.value())
+        .or(schema.member_name())
+        .map(|name| Name::Shared(name.into()))
+}
+
+/// The wire names a list or map schema contributes to its elements' parameter
+/// names, cached on the schema so that serializing a collection copies no names.
+#[derive(Debug)]
+struct CollectionNames {
+    /// The list member or map value name.
+    element: ElementName,
+    /// The map key name.
+    key: ElementName,
+    /// Names for a nested aggregate element that arrives with a member-less
+    /// placeholder schema (codegen passes `prelude::DOCUMENT` for nested
+    /// aggregates): its own element (or value) and key names. They are recovered
+    /// from this collection's element schema, mirroring the one-level recovery the
+    /// XML serializer performs.
+    nested_element: Option<Name>,
+    nested_key: Option<Name>,
+}
+
+static COLLECTION_NAMES: SchemaExtensionKey<CollectionNames> = SchemaExtensionKey::new(|schema| {
+    let element = schema.member();
+    CollectionNames {
+        element: ElementName::of(element),
+        key: ElementName::of(schema.key()),
+        nested_element: element.and_then(|e| e.member()).and_then(wire_name),
+        nested_key: element.and_then(|e| e.key()).and_then(wire_name),
+    }
+});
+
 enum CollectionContext {
     List {
         index: usize,
-        /// Wire name to use for a nested aggregate element that arrives with a
-        /// member-less placeholder schema (codegen passes `prelude::DOCUMENT`
-        /// for nested aggregates). Resolved eagerly from this list's element
-        /// schema while the schema borrow is live and stored owned, mirroring
-        /// the XML serializer's `list_item_name`. `None` when the element is a
-        /// scalar or carries its own member info.
-        inherited_member_name: Option<String>,
-        /// As `inherited_member_name`, but the key name for a nested map value.
-        inherited_key_name: Option<String>,
+        /// See [`CollectionNames::nested_element`].
+        inherited_member_name: Option<Name>,
+        /// See [`CollectionNames::nested_key`].
+        inherited_key_name: Option<Name>,
     },
     Map {
         index: usize,
         expecting_key: bool,
-        key_name: String,
-        value_name: String,
-        /// Wire name for a nested aggregate map value's element/value that
-        /// arrives member-less; see `List::inherited_member_name`.
-        inherited_member_name: Option<String>,
-        /// Wire name for a nested aggregate map value's key that arrives
-        /// member-less; see `List::inherited_key_name`.
-        inherited_key_name: Option<String>,
+        key_name: Name,
+        value_name: Name,
+        /// See [`CollectionNames::nested_element`].
+        inherited_member_name: Option<Name>,
+        /// See [`CollectionNames::nested_key`].
+        inherited_key_name: Option<Name>,
     },
+}
+
+/// Returns the path segment for the current collection element and advances the
+/// cursor: a 1-based index for lists, `<index>.<key|value_name>` for maps. Returns
+/// `None` when not inside a collection.
+///
+/// Takes the stack rather than the serializer so the segment, which borrows its
+/// name from the stack, can be written into the serializer's other fields.
+fn next_collection_segment(context_stack: &mut [CollectionContext]) -> Option<Segment<'_>> {
+    let ctx = context_stack.last_mut()?;
+    Some(match ctx {
+        CollectionContext::List { index, .. } => {
+            let seg = Segment::Index(*index);
+            *index += 1;
+            seg
+        }
+        CollectionContext::Map {
+            index,
+            expecting_key,
+            key_name,
+            value_name,
+            ..
+        } => {
+            if *expecting_key {
+                *expecting_key = false;
+                Segment::Entry(*index, key_name)
+            } else {
+                let seg = Segment::Entry(*index, value_name);
+                *expecting_key = true;
+                *index += 1;
+                seg
+            }
+        }
+    })
+}
+
+/// Formats a [`Segment`] onto `prefix`, recording the previous length so it can be
+/// popped, without an intermediate `String`.
+fn push_prefix_segment(prefix: &mut String, prefix_lengths: &mut Vec<usize>, segment: Segment<'_>) {
+    let prev_len = prefix.len();
+    if !prefix.is_empty() {
+        prefix.push('.');
+    }
+    // Writing to a String is infallible.
+    let _ = write!(prefix, "{segment}");
+    prefix_lengths.push(prev_len);
 }
 
 /// Serializes a request shape to the awsQuery `application/x-www-form-urlencoded` body.
@@ -97,26 +224,6 @@ impl QueryShapeSerializer {
             .unwrap_or("")
     }
 
-    /// The resolved wire name of an (optional) member schema: `@xmlName`, then
-    /// the member's Smithy name. `None` if the schema is absent or carries
-    /// neither. Returned owned because it is stashed across serializer calls.
-    fn member_wire_name(member: Option<&Schema<'_>>) -> Option<String> {
-        member.and_then(|m| {
-            m.xml_name()
-                .map(|n| n.value().to_string())
-                .or_else(|| m.member_name().map(|s| s.to_string()))
-        })
-    }
-
-    /// Resolves the wire element name for a collection member schema, mirroring
-    /// the AWS REST XML serializer's resolution order: `@xmlName` on the member,
-    /// then the member's Smithy name, then `default` (e.g.
-    /// `"member"`/`"key"`/`"value"`). The member-name info lives in the nested
-    /// member schemas emitted by codegen's `emitAggregateMemberChain`.
-    fn collection_member_name(member: Option<&Schema<'_>>, default: &str) -> String {
-        Self::member_wire_name(member).unwrap_or_else(|| default.to_string())
-    }
-
     /// Names to hand a nested aggregate element/value that arrives with a
     /// member-less placeholder schema (codegen passes `prelude::DOCUMENT` for
     /// nested aggregates). The immediate parent collection resolves these from
@@ -128,7 +235,7 @@ impl QueryShapeSerializer {
     /// Returns `(inherited_member_name, inherited_key_name)` from the current
     /// top-of-stack collection, but only at a map's value position
     /// (`expecting_key == false`); map keys are always scalars.
-    fn inherited_child_names(&self) -> (Option<String>, Option<String>) {
+    fn inherited_child_names(&self) -> (Option<Name>, Option<Name>) {
         match self.context_stack.last() {
             Some(CollectionContext::List {
                 inherited_member_name,
@@ -154,56 +261,9 @@ impl QueryShapeSerializer {
         self.prefix_lengths.push(prev_len);
     }
 
-    /// Like [`Self::push_prefix`] but formats a [`Segment`] directly onto the
-    /// prefix, avoiding an intermediate `String`.
-    fn push_prefix_segment(&mut self, segment: Segment) {
-        let prev_len = self.prefix.len();
-        if !self.prefix.is_empty() {
-            self.prefix.push('.');
-        }
-        // Writing to a String is infallible.
-        let _ = write!(self.prefix, "{segment}");
-        self.prefix_lengths.push(prev_len);
-    }
-
     fn pop_prefix(&mut self) {
         let prev_len = self.prefix_lengths.pop().expect("prefix stack underflow");
         self.prefix.truncate(prev_len);
-    }
-
-    /// Returns the path segment for the current collection element and advances the
-    /// cursor: a 1-based index for lists, `<index>.<key|value_name>` for maps. Returns
-    /// `None` when not inside a collection.
-    ///
-    /// Returns a `Copy` [`Segment`] rather than an owned `String` so callers can
-    /// format it directly into `output`/`prefix` without a per-element allocation.
-    fn next_collection_segment(&mut self) -> Option<Segment> {
-        let ctx = self.context_stack.last_mut()?;
-        Some(match ctx {
-            CollectionContext::List { index, .. } => {
-                let seg = Segment::Index(*index);
-                *index += 1;
-                seg
-            }
-            CollectionContext::Map {
-                index,
-                expecting_key,
-                key_name,
-                value_name,
-                ..
-            } => {
-                if *expecting_key {
-                    let seg = Segment::Entry(*index, key_name.clone());
-                    *expecting_key = false;
-                    seg
-                } else {
-                    let seg = Segment::Entry(*index, value_name.clone());
-                    *expecting_key = true;
-                    *index += 1;
-                    seg
-                }
-            }
-        })
     }
 
     /// Appends `&<param>=<value>` to the output, where `<param>` is `prefix` joined
@@ -211,7 +271,7 @@ impl QueryShapeSerializer {
     /// own wire name.
     fn write_scalar(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         let segment = if schema.member_name().is_none() {
-            self.next_collection_segment()
+            next_collection_segment(&mut self.context_stack)
         } else {
             None
         };
@@ -261,8 +321,8 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(seg) = self.next_collection_segment() {
-            self.push_prefix_segment(seg);
+        } else if let Some(seg) = next_collection_segment(&mut self.context_stack) {
+            push_prefix_segment(&mut self.prefix, &mut self.prefix_lengths, seg);
             true
         } else {
             false
@@ -289,28 +349,24 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(seg) = self.next_collection_segment() {
-            self.push_prefix_segment(seg);
+        } else if let Some(seg) = next_collection_segment(&mut self.context_stack) {
+            push_prefix_segment(&mut self.prefix, &mut self.prefix_lengths, seg);
             true
         } else {
             false
         };
+        let names = schema.extension(&COLLECTION_NAMES);
         if !flat {
             // This list's element name: its own member info, else the name
             // inherited from the parent (member-less placeholder), else `member`.
-            let member_name = if schema.member().is_some() {
-                Self::collection_member_name(schema.member(), "member")
-            } else {
-                inherited_member.unwrap_or_else(|| "member".to_string())
-            };
+            let member_name = names.element.resolve(inherited_member, "member");
             self.push_prefix(&member_name);
         }
         // Names to stash for a nested aggregate element (recovered one level down).
-        let elem = schema.member();
         self.context_stack.push(CollectionContext::List {
             index: 1,
-            inherited_member_name: Self::member_wire_name(elem.and_then(|e| e.member())),
-            inherited_key_name: Self::member_wire_name(elem.and_then(|e| e.key())),
+            inherited_member_name: names.nested_element.clone(),
+            inherited_key_name: names.nested_key.clone(),
         });
         let output_len_before = self.output.len();
         write_elements(self)?;
@@ -344,8 +400,8 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(seg) = self.next_collection_segment() {
-            self.push_prefix_segment(seg);
+        } else if let Some(seg) = next_collection_segment(&mut self.context_stack) {
+            push_prefix_segment(&mut self.prefix, &mut self.prefix_lengths, seg);
             true
         } else {
             false
@@ -355,25 +411,15 @@ impl ShapeSerializer for QueryShapeSerializer {
         }
         // Key/value names: own member info, else inherited (member-less
         // placeholder), else the `key`/`value` defaults.
-        let key_name = if schema.key().is_some() {
-            Self::collection_member_name(schema.key(), "key")
-        } else {
-            inherited_key.unwrap_or_else(|| "key".to_string())
-        };
-        let value_name = if schema.member().is_some() {
-            Self::collection_member_name(schema.member(), "value")
-        } else {
-            inherited_member.unwrap_or_else(|| "value".to_string())
-        };
+        let names = schema.extension(&COLLECTION_NAMES);
         // Names to stash for a nested aggregate map value (recovered one level down).
-        let elem = schema.member();
         self.context_stack.push(CollectionContext::Map {
             index: 1,
             expecting_key: true,
-            key_name,
-            value_name,
-            inherited_member_name: Self::member_wire_name(elem.and_then(|e| e.member())),
-            inherited_key_name: Self::member_wire_name(elem.and_then(|e| e.key())),
+            key_name: names.key.resolve(inherited_key, "key"),
+            value_name: names.element.resolve(inherited_member, "value"),
+            inherited_member_name: names.nested_element.clone(),
+            inherited_key_name: names.nested_key.clone(),
         });
         write_entries(self)?;
         self.context_stack.pop();
