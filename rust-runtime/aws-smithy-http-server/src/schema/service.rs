@@ -85,6 +85,9 @@ pub struct ServiceSchema<'a> {
     version: Option<&'a str>,
     protocols: &'a [ShapeId<'a>],
     operations: &'a [&'a OperationSchema<'a>],
+    /// Traits applied to the service shape that runtime behavior can depend on, such as the
+    /// protocol traits with their members (see [`crate::schema::traits`]).
+    traits: Option<&'a std::sync::LazyLock<aws_smithy_schema::TraitMap>>,
 }
 
 impl<'a> ServiceSchema<'a> {
@@ -104,7 +107,19 @@ impl<'a> ServiceSchema<'a> {
             version,
             protocols,
             operations,
+            traits: None,
         }
+    }
+
+    /// Attaches the traits applied to the service shape. Mirrors [`Schema::with_traits`].
+    pub const fn with_traits(mut self, traits: &'a std::sync::LazyLock<aws_smithy_schema::TraitMap>) -> Self {
+        self.traits = Some(traits);
+        self
+    }
+
+    /// Returns the traits recorded for the service shape, initializing them on first access.
+    pub fn traits(&self) -> Option<&aws_smithy_schema::TraitMap> {
+        self.traits.map(|traits| &**traits)
     }
 
     /// Returns the service shape ID.
