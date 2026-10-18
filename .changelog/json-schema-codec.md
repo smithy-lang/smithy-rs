@@ -14,3 +14,7 @@ points in read and skipped numbers. Container syntax, truncation, and depth chec
 remain enforced when discarded-string validation is disabled. Use the shared
 number encoder for floating-point serialization while preserving negative zero
 and quoted non-finite values.
+
+Add opt-in normalization of arbitrary-precision decimal text to valid JSON numbers
+while retaining rejection by default. Preserve explicit null document members and
+expose the schema JSON deserializer byte position.

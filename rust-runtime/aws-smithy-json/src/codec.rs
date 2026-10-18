@@ -146,6 +146,12 @@ pub struct JsonCodecSettings {
     /// this setting, so a sender configured for one form interoperates
     /// with a receiver configured for the other.
     use_string_for_arbitrary_precision: bool,
+    /// When `true`, a `bigInteger` or `bigDecimal` whose text is a valid decimal but not an
+    /// RFC 8259 JSON number (a leading `+`, leading zeros, `.5`, `1.`) is rewritten to the
+    /// equivalent JSON number on the raw-number path. When `false` (default) it is rejected with
+    /// [`SerdeError::InvalidInput`](aws_smithy_schema::serde::SerdeError). Has no effect when
+    /// `use_string_for_arbitrary_precision` is set.
+    normalize_arbitrary_precision: bool,
     /// Default Smithy namespace used to resolve relative shape IDs in
     /// JSON `__type` discriminator fields produced by services that
     /// emit relative names (e.g., awsJson1_0/1_1 senders).
@@ -194,6 +200,12 @@ impl JsonCodecSettings {
         self.use_string_for_arbitrary_precision
     }
 
+    /// Whether non-JSON-number arbitrary-precision text is rewritten to the equivalent JSON
+    /// number (`true`) or rejected (`false`, the default). See the field documentation.
+    pub fn normalize_arbitrary_precision(&self) -> bool {
+        self.normalize_arbitrary_precision
+    }
+
     /// Default Smithy namespace used to resolve relative shape IDs in
     /// JSON `__type` discriminator fields. `None` if unset.
     ///
@@ -229,6 +241,7 @@ impl JsonCodecSettings {
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            normalize_arbitrary_precision: self.normalize_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
         }
     }
@@ -263,6 +276,7 @@ impl Default for JsonCodecSettings {
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
+            normalize_arbitrary_precision: false,
             default_namespace: None,
         }
     }
@@ -307,6 +321,7 @@ pub struct JsonCodecSettingsBuilder {
     allow_trailing_decimal_point: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
+    normalize_arbitrary_precision: bool,
     default_namespace: Option<String>,
 }
 
@@ -325,6 +340,7 @@ impl Default for JsonCodecSettingsBuilder {
             strict_timestamp_formats: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
+            normalize_arbitrary_precision: false,
             default_namespace: None,
         }
     }
@@ -432,6 +448,16 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Rewrites arbitrary-precision text that is a decimal but not a JSON number (`+007`, `.5`,
+    /// `1.`) to the equivalent JSON number instead of rejecting it. Defaults to `false`, so
+    /// existing callers keep rejecting it; AWS servers set it to `true`, matching their lenient
+    /// handling of such numbers on the read path (`allow_leading_zeros`,
+    /// `allow_trailing_decimal_point`).
+    pub fn normalize_arbitrary_precision(mut self, value: bool) -> Self {
+        self.normalize_arbitrary_precision = value;
+        self
+    }
+
     /// Sets the default Smithy namespace used to resolve relative shape
     /// IDs in JSON `__type` discriminator fields. When set, a relative
     /// `__type: "Capacity"` is lifted to `<namespace>#Capacity` on the
@@ -464,6 +490,7 @@ impl JsonCodecSettingsBuilder {
             strict_timestamp_formats: self.strict_timestamp_formats,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            normalize_arbitrary_precision: self.normalize_arbitrary_precision,
             default_namespace: self.default_namespace,
         }
     }
