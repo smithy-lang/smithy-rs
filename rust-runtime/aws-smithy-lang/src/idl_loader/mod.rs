@@ -186,6 +186,9 @@ impl<'a> Parser<'a> {
                 }
                 break;
             }
+            if annotations.traits.is_empty() && annotations.documentation.is_none() {
+                self.misplaced_section(namespace.is_some())?;
+            }
             if namespace.is_none() {
                 return Err(self
                     .cursor
@@ -210,6 +213,27 @@ impl<'a> Parser<'a> {
             uses,
             statements,
         })
+    }
+
+    /// Reports a section header found where only shape statements may appear. IDL sections
+    /// must appear in the order control, metadata, namespace, then shapes.
+    fn misplaced_section(&mut self, has_namespace: bool) -> Result<(), IdlParseError> {
+        let message = if self.cursor.starts_with("$") {
+            "control statements must come before metadata, `namespace`, and shapes"
+        } else if self.peek_keyword("metadata") {
+            "metadata statements must come after control statements and before `namespace`"
+        } else if self.peek_keyword("namespace") {
+            if has_namespace {
+                "a model file can contain only one `namespace` statement"
+            } else {
+                "`namespace` must come after control and metadata statements"
+            }
+        } else if self.peek_keyword("use") {
+            "`use` statements must come after `namespace` and before shapes"
+        } else {
+            return Ok(());
+        };
+        Err(self.cursor.error(message))
     }
 
     fn section_trivia(&mut self) {
@@ -239,7 +263,7 @@ impl<'a> Parser<'a> {
         }
         self.cursor.ws0();
         self.cursor.expect(":", "`:` after a control name")?;
-        let value = self.cursor.node(0)?;
+        let value = self.same_line_value()?;
         Ok((key, value))
     }
 
@@ -253,7 +277,7 @@ impl<'a> Parser<'a> {
         }
         self.cursor.ws0();
         self.cursor.expect("=", "`=` after a metadata key")?;
-        let value = self.cursor.node(0)?;
+        let value = self.same_line_value()?;
         Ok(MetadataSyntax {
             key,
             value,
@@ -356,10 +380,11 @@ impl<'a> Parser<'a> {
         self.cursor.sp1()?;
         let name = self.cursor.identifier()?;
         if self.imports.contains(&name.value) {
-            return Err(IdlParseError::duplicate(
-                name.span.start,
-                &format!("{} conflicts with an imported name", name.value),
-            ));
+            return Err(IdlParseError {
+                offset: name.span.start,
+                kind: syntax::ParseErrorKind::DuplicateKey,
+                message: format!("`{}` conflicts with an imported shape name", name.value),
+            });
         }
         if !self.declarations.insert(name.value.clone()) {
             return Err(IdlParseError::duplicate(name.span.start, &name.value));
@@ -367,6 +392,7 @@ impl<'a> Parser<'a> {
         self.count_shape(name.span.start)?;
 
         self.cursor.sp0();
+        let for_start = self.cursor.pos;
         let resource = if self.cursor.keyword("for") {
             // ABNF `AggregateShape` permits `ForResource` on list, map, union, and structure.
             if !matches!(
@@ -377,9 +403,10 @@ impl<'a> Parser<'a> {
                     | ShapeKindSyntax::Structure
                     | ShapeKindSyntax::Set
             ) {
-                return Err(self
-                    .cursor
-                    .error("`for` is only valid on list, map, union, and structure shapes"));
+                return Err(IdlParseError::syntax(
+                    for_start,
+                    "`for` is only valid on list, map, union, and structure shapes",
+                ));
             }
             self.cursor.sp1()?;
             let id = self.cursor.shape_id()?;
@@ -418,6 +445,33 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parses an optional `= value`, which must end its line: ABNF `ValueAssignment` is
+    /// `[SP] "=" [SP] NodeValue [SP] [Comma] BR`.
+    fn value_assignment(&mut self) -> Result<Option<syntax::NodeSyntax>, IdlParseError> {
+        if !self.cursor.consume("=") {
+            return Ok(None);
+        }
+        let value = self.same_line_value()?;
+        self.cursor.sp0();
+        self.cursor.consume(",");
+        self.cursor.declaration_break()?;
+        Ok(Some(value))
+    }
+
+    /// A node value after `:` or `=` in a control, metadata, or value assignment statement.
+    /// The grammar allows only spaces before it (`[SP] NodeValue`), not a line break.
+    fn same_line_value(&mut self) -> Result<syntax::NodeSyntax, IdlParseError> {
+        self.cursor.sp0();
+        if self.cursor.eof()
+            || self.cursor.starts_with("\n")
+            || self.cursor.starts_with("\r")
+            || self.cursor.starts_with("//")
+        {
+            return Err(self.cursor.error("expected a value on the same line"));
+        }
+        self.cursor.node(0)
+    }
+
     fn mixins(&mut self) -> Result<Vec<syntax::ShapeIdSyntax>, IdlParseError> {
         if !self.cursor.keyword("with") {
             return Ok(Vec::new());
@@ -425,7 +479,7 @@ impl<'a> Parser<'a> {
         self.cursor.ws0();
         self.cursor.expect("[", "`[` after `with`")?;
         self.cursor.ws0();
-        if self.cursor.consume("]") {
+        if self.cursor.starts_with("]") {
             return Err(self
                 .cursor
                 .error("a `with` clause requires at least one mixin"));
@@ -463,17 +517,21 @@ impl<'a> Parser<'a> {
         let mut names = HashSet::new();
         loop {
             let annotations = self.annotations()?;
-            if self.cursor.consume("}") {
-                if annotations.documentation.is_some() || !annotations.traits.is_empty() {
+            if self.cursor.starts_with("}") {
+                let is_enum = matches!(kind, ShapeKindSyntax::Enum | ShapeKindSyntax::IntEnum);
+                // A trailing documentation comment is ignored, as in Smithy Java, except in
+                // enums, where Java expects a member after it. A trait always needs a member.
+                if !annotations.traits.is_empty()
+                    || (is_enum && annotations.documentation.is_some())
+                {
                     return Err(self
                         .cursor
                         .error("annotations must precede a member declaration"));
                 }
-                if matches!(kind, ShapeKindSyntax::Enum | ShapeKindSyntax::IntEnum)
-                    && members.is_empty()
-                {
+                if is_enum && members.is_empty() {
                     return Err(self.cursor.error("an enum requires at least one member"));
                 }
+                self.cursor.consume("}");
                 break;
             }
             if self.cursor.eof() {
@@ -503,22 +561,14 @@ impl<'a> Parser<'a> {
                 if matches!(kind, ShapeKindSyntax::Enum | ShapeKindSyntax::IntEnum)
                     || matches!(name, MemberNameSyntax::Elided(_))
                 {
-                    let value = if self.cursor.consume("=") {
-                        Some(self.cursor.node(0)?)
-                    } else {
-                        None
-                    };
+                    let value = self.value_assignment()?;
                     (None, value)
                 } else {
                     self.cursor.expect(":", "`:` after a member name")?;
                     self.cursor.sp0();
                     let target = self.cursor.shape_id()?;
                     self.cursor.sp0();
-                    let value = if self.cursor.consume("=") {
-                        Some(self.cursor.node(0)?)
-                    } else {
-                        None
-                    };
+                    let value = self.value_assignment()?;
                     (Some(target), value)
                 };
             members.push(MemberSyntax {
@@ -557,7 +607,10 @@ impl<'a> Parser<'a> {
             self.cursor.ws0();
             let assign = self.cursor.pos;
             let value = if kind == ShapeKindSyntax::Operation && self.cursor.consume(":=") {
-                self.count_shape(name.span.start)?;
+                // Only `input` and `output` generate a shape; lowering rejects any other.
+                if matches!(name.value.as_str(), "input" | "output") {
+                    self.count_shape(name.span.start)?;
+                }
                 self.cursor.ws0();
                 let annotations = self.annotations()?;
                 let resource = if self.cursor.keyword("for") {
@@ -647,8 +700,10 @@ structure Struct for Resource { /// docs
     $id
 }
 union Union { value: String }
-enum Enum { A, B = "bee" }
-intEnum IntEnum { A = 1 }
+enum Enum { A, B = "bee"
+}
+intEnum IntEnum { A = 1
+}
 service Service { version: "1", operations: [Operation] }
 resource Resource { identifiers: {id: String}, read: Operation }
 operation Operation { input := { id: String }, output: Struct, errors: [] }

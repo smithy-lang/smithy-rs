@@ -139,7 +139,6 @@ impl<'a> Cursor<'a> {
 
     /// Checks a declaration boundary without consuming a following documentation block.
     pub(super) fn declaration_break(&mut self) -> Result<(), IdlParseError> {
-        let start = self.pos;
         let mut had_break = false;
         loop {
             match self.peek() {
@@ -159,9 +158,9 @@ impl<'a> Cursor<'a> {
                     self.bump();
                     self.consume("\n");
                 }
-                // A documentation comment is a `Comment`, so it is a break by itself; it is left
+                // A documentation comment starts its own line, so a break precedes it; it is left
                 // for the next declaration to consume.
-                Some('/') if self.starts_with("///") => return Ok(()),
+                Some('/') if self.starts_with("///") && self.at_line_start() => return Ok(()),
                 Some('/') if self.starts_with("//") => {
                     had_break = true;
                     self.consume_line_comment();
@@ -172,10 +171,8 @@ impl<'a> Cursor<'a> {
         if self.eof() || had_break {
             Ok(())
         } else {
-            Err(IdlParseError::syntax(
-                start,
-                "expected a line break between statements",
-            ))
+            // Point at the token that should have started a new line.
+            Err(self.error("expected a line break between statements"))
         }
     }
 
@@ -192,67 +189,47 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    /// Consumes leading trivia and returns the last adjacent `///` block.
+    /// Whether the cursor is at the first non-whitespace character of its line. Only then does
+    /// `///` start a documentation comment; after other tokens it is an ordinary comment.
+    fn at_line_start(&self) -> bool {
+        // Only whitespace and commas are skipped, so this scans just the leading trivia.
+        self.input.as_bytes()[..self.pos]
+            .iter()
+            .rev()
+            .find(|b| !matches!(b, b' ' | b'\t' | b','))
+            .is_none_or(|b| matches!(b, b'\n' | b'\r'))
+    }
+
+    /// Consumes leading trivia and returns its documentation comments.
+    ///
+    /// Like Smithy Java, every documentation line since the previous token is kept, joined by
+    /// `\n`, even when blank lines or ordinary comments separate them.
     pub(super) fn documentation(&mut self) -> Option<Spanned<String>> {
         let mut lines = Vec::new();
         let mut first = None;
         let mut end = self.pos;
-        let mut newlines_after_doc = 0usize;
         loop {
             match self.peek() {
-                Some(' ' | '\t' | ',') => {
+                Some(' ' | '\t' | ',' | '\n') => {
                     self.bump();
-                }
-                Some('\n') => {
-                    self.bump();
-                    if !lines.is_empty() {
-                        newlines_after_doc += 1;
-                        if newlines_after_doc > 1 {
-                            lines.clear();
-                            first = None;
-                        }
-                    }
                 }
                 Some('\r') => {
                     self.bump();
                     self.consume("\n");
-                    if !lines.is_empty() {
-                        newlines_after_doc += 1;
-                        if newlines_after_doc > 1 {
-                            lines.clear();
-                            first = None;
-                        }
-                    }
                 }
-                Some('/') if self.starts_with("///") => {
+                Some('/') if self.starts_with("///") && self.at_line_start() => {
                     let start = self.pos;
                     self.consume("///");
                     let text_start = self.pos;
                     while !self.eof() && !matches!(self.peek(), Some('\r' | '\n')) {
                         self.bump();
                     }
-                    let mut text = &self.input[text_start..self.pos];
-                    if let Some(stripped) = text.strip_prefix(' ') {
-                        text = stripped;
-                    }
-                    if lines.is_empty() || newlines_after_doc <= 1 {
-                        first.get_or_insert(start);
-                        lines.push(text.to_owned());
-                        end = self.pos;
-                    } else {
-                        lines.clear();
-                        lines.push(text.to_owned());
-                        first = Some(start);
-                        end = self.pos;
-                    }
-                    newlines_after_doc = 0;
+                    let text = &self.input[text_start..self.pos];
+                    lines.push(text.strip_prefix(' ').unwrap_or(text).to_owned());
+                    first.get_or_insert(start);
+                    end = self.pos;
                 }
-                Some('/') if self.starts_with("//") => {
-                    lines.clear();
-                    first = None;
-                    newlines_after_doc = 0;
-                    self.consume_line_comment();
-                }
+                Some('/') if self.starts_with("//") => self.consume_line_comment(),
                 _ => break,
             }
         }
@@ -546,10 +523,24 @@ mod tests {
     }
 
     #[test]
-    fn documentation_keeps_only_an_adjacent_block() {
-        let mut cursor = Cursor::new("// old\n\n/// first\n/// second\nshape", 10, 10);
+    fn documentation_joins_every_line_since_the_previous_token() {
+        let mut cursor = Cursor::new(
+            "// old\n/// first\n\n// plain\n/// second\n///third\nshape",
+            10,
+            10,
+        );
         let docs = cursor.documentation().unwrap();
-        assert_eq!(docs.value, "first\nsecond");
+        assert_eq!(docs.value, "first\nsecond\nthird");
+        assert_eq!(docs.span.start, 7);
+        assert!(cursor.keyword("shape"));
+    }
+
+    #[test]
+    fn trailing_triple_slash_is_an_ordinary_comment() {
+        let mut cursor = Cursor::new("x /// not docs\nshape", 10, 10);
+        assert!(cursor.keyword("x"));
+        assert!(cursor.declaration_break().is_ok());
+        assert!(cursor.documentation().is_none());
         assert!(cursor.keyword("shape"));
     }
 }

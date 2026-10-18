@@ -18,7 +18,8 @@ use crate::prelude;
 use crate::shape::{Shape, ShapeType};
 use crate::traits;
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock;
 
 /// Shape names and kinds declared by every input of one assembly, plus resource identifiers
 /// for target elision.
@@ -277,8 +278,12 @@ pub(crate) fn resolve_metadata(id: &ShapeIdSyntax) -> String {
 /// Whether the prelude publicly defines `name`. Used even when the prelude is disabled for
 /// the assembled model, so resolution never depends on assembly options.
 fn is_public_prelude_name(name: &str) -> bool {
-    let id = format!("{}#{name}", prelude::NAMESPACE);
-    prelude::shapes()
-        .get(id.as_str())
-        .is_some_and(|shape| !shape.traits().contains(&traits::PRIVATE))
+    static PUBLIC: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+        prelude::shapes()
+            .values()
+            .filter(|shape| !shape.traits().contains(&traits::PRIVATE))
+            .map(|shape| shape.id().name())
+            .collect()
+    });
+    PUBLIC.contains(name)
 }

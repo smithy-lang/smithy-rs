@@ -1,0 +1,63 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#E": {
+            "type": "enum",
+            "members": {
+                "A": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "A"
+                    }
+                },
+                "C": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "C"
+                    }
+                },
+                "B": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "b"
+                    }
+                }
+            }
+        },
+        "ex#L": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            }
+        },
+        "ex#M": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String"
+            },
+            "value": {
+                "target": "smithy.api#String"
+            }
+        },
+        "ex#S": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String"
+                },
+                "b": {
+                    "target": "smithy.api#Integer"
+                }
+            }
+        },
+        "ex#T": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 2
+                }
+            }
+        }
+    }
+}

@@ -318,7 +318,17 @@ fn versions_and_controls() {
     assert!(err.is_idl_syntax());
     let err = idl_err("$version: \"1.0\"\nnamespace ex\nstructure S { a: Missing }\n");
     assert_eq!(codes(&err), [DiagnosticCode::UnsupportedVersion]);
-    let err = idl_err("$version: \"two\"\n");
+    // Malformed versions are unsupported versions too, and suppress follow-on errors.
+    for version in ["two", "2.", "2.0.0", ""] {
+        let input =
+            format!("$version: \"{version}\"\nnamespace ex\nstructure S {{ a: Missing }}\n");
+        assert_eq!(
+            codes(&idl_err(&input)),
+            [DiagnosticCode::UnsupportedVersion],
+            "{version}"
+        );
+    }
+    let err = idl_err("$version: 2\n");
     assert_eq!(codes(&err), [DiagnosticCode::InvalidProperty]);
     let validated = Model::assembler()
         .add_idl_str("a.smithy", "$custom: true\n")
@@ -329,6 +339,133 @@ fn versions_and_controls() {
         Severity::Warning
     );
     assert!(validated.into_result().is_ok());
+}
+
+#[test]
+fn dangling_annotations_before_a_closing_brace() {
+    // Documentation that attaches to nothing is ignored, as in Smithy Java.
+    for body in ["structure", "union"] {
+        idl(&format!(
+            "namespace ex\n{body} S {{\n    a: String\n    /// x\n}}\n"
+        ));
+    }
+    idl("namespace ex\noperation O {\n    input := {\n        /// x\n    }\n}\n");
+    // A trait needs a member, and so does documentation in an enum. Both are reported at
+    // the closing brace, like Java.
+    for input in [
+        "namespace ex\nstructure S {\n    a: String\n    @required\n}\n",
+        "namespace ex\nenum E {\n    A\n    /// x\n}\n",
+    ] {
+        let err = idl_err(input);
+        assert_eq!(codes(&err), [DiagnosticCode::IdlSyntax]);
+        let location = err
+            .diagnostics()
+            .iter()
+            .next()
+            .unwrap()
+            .source_location()
+            .unwrap();
+        assert_eq!(
+            (location.line(), location.column()),
+            (Some(5), Some(1)),
+            "{input}"
+        );
+    }
+}
+
+#[test]
+fn statement_values_start_on_the_same_line() {
+    // Positions match Smithy Java's.
+    for (input, line, column) in [
+        ("$version:\n\"2\"\n", 1, 10),
+        ("metadata x =\n1\n", 1, 13),
+        (
+            "namespace ex\nstructure S {\n    a: String =\n        \"x\"\n}\n",
+            3,
+            16,
+        ),
+    ] {
+        let err = idl_err(input);
+        assert!(err.is_idl_syntax(), "{input}");
+        let location = err
+            .diagnostics()
+            .iter()
+            .next()
+            .unwrap()
+            .source_location()
+            .unwrap();
+        assert_eq!(
+            (location.line(), location.column()),
+            (Some(line), Some(column)),
+            "{input}"
+        );
+    }
+    // A comment cannot stand in for the value either.
+    let err = idl_err("namespace ex\nstructure S {\n    a: String = // comment\n\"x\"\n}\n");
+    assert!(err.is_idl_syntax());
+    // Multi-line values may continue on later lines.
+    idl("metadata x = [\n    1\n]\nnamespace ex\nstructure S {\n    a: String = \"\"\"\n        x\n        \"\"\"\n}\n");
+}
+
+#[test]
+fn negative_zero_matches_the_json_ast() {
+    // serde_json reads `-0` as the float `0.0`; IDL does the same so the formats agree.
+    let idl_model = idl("metadata m = [-0, -0.0, 0]\n");
+    let json_model = Model::from_json_str(
+        "model.json",
+        r#"{"smithy": "2.0", "metadata": {"m": [-0, -0.0, 0]}}"#,
+    )
+    .unwrap();
+    assert!(idl_model.equivalent(&json_model));
+    let values = idl_model.metadata_value("m").unwrap().as_array().unwrap();
+    assert!(values[0].as_number().unwrap().is_float());
+    assert!(values[2].as_number().unwrap().is_integer());
+}
+
+#[test]
+fn misplaced_sections_are_named() {
+    let message = |input: &str| {
+        let err = idl_err(input);
+        assert!(err.is_idl_syntax(), "{err}");
+        err.diagnostics()
+            .iter()
+            .next()
+            .unwrap()
+            .message()
+            .to_owned()
+    };
+    assert!(message("metadata a = 1\n$version: \"2\"\n").starts_with("control statements"));
+    assert!(message("namespace ex\n$version: \"2\"\n").starts_with("control statements"));
+    assert!(message("namespace ex\nmetadata a = 1\n").starts_with("metadata statements"));
+    assert!(message("namespace ex\nnamespace other\n").contains("only one `namespace`"));
+    assert!(message("namespace ex\nstring S\nuse other#T\n").starts_with("`use` statements"));
+    // A shape whose name is a section keyword is still a shape.
+    idl("namespace ex\nstring metadata\nstring use\n");
+}
+
+#[test]
+fn only_input_and_output_count_as_inline_shapes() {
+    let err = Model::assembler()
+        .max_shapes(1)
+        .add_idl_str("model.smithy", "namespace ex\noperation O { foo := {} }\n")
+        .assemble()
+        .into_result()
+        .unwrap_err();
+    assert_eq!(codes(&err), [DiagnosticCode::InvalidProperty]);
+
+    // `input :=` and `output :=` each generate a counted shape.
+    let limited = |max| {
+        Model::assembler()
+            .max_shapes(max)
+            .add_idl_str(
+                "model.smithy",
+                "namespace ex\noperation O { input := {}, output := {} }\n",
+            )
+            .assemble()
+            .into_result()
+    };
+    assert!(limited(2).unwrap_err().is_resource_limit());
+    limited(3).unwrap();
 }
 
 #[test]

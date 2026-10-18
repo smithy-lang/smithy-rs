@@ -22,7 +22,7 @@ use super::syntax::{
     PropertySyntax, PropertyValueSyntax, ShapeBodySyntax, ShapeIdSyntax, ShapeKindSyntax,
     ShapeSyntax, Span, StatementSyntax, TraitValueSyntax,
 };
-use crate::assembler::merge_nodes;
+use crate::assembler::{merge_nodes, LoadedDocument};
 use crate::ast_converter::AstConverter;
 use crate::diagnostic::{
     escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, Position,
@@ -38,15 +38,6 @@ use crate::traits;
 use indexmap::IndexMap;
 
 const DEFAULT: &str = "smithy.api#default";
-
-/// A successfully lowered IDL document and the side data assembly still needs.
-pub(crate) struct LoweredDocument {
-    pub(crate) document: Document,
-    /// Non-error diagnostics, such as ignored control statements.
-    pub(crate) diagnostics: DiagnosticSet,
-    /// Syntactic shape IDs to check once every input is assembled.
-    pub(crate) syntactic_ids: Vec<PendingSyntacticId>,
-}
 
 /// An unquoted node value that was resolved to an absolute shape ID string.
 pub(crate) struct PendingSyntacticId {
@@ -84,7 +75,7 @@ pub(crate) fn lower(
     document: &IdlDocument,
     index: &DeclarationIndex,
     max_diagnostics: usize,
-) -> Result<LoweredDocument, LoadError> {
+) -> Result<LoadedDocument, LoadError> {
     let mut lowerer = Lowerer {
         document,
         index,
@@ -107,7 +98,7 @@ pub(crate) fn lower(
     if diagnostics.has_errors() {
         return Err(LoadError::invalid_model(diagnostics));
     }
-    Ok(LoweredDocument {
+    Ok(LoadedDocument {
         document: output,
         diagnostics,
         syntactic_ids,
@@ -155,27 +146,29 @@ impl<'a> Lowerer<'a> {
                 "version" => match value {
                     NodeSyntax::String(version)
                         if matches!(version.value.as_str(), "2" | "2.0") => {}
-                    NodeSyntax::String(version) if is_version(&version.value) => {
+                    NodeSyntax::String(version) => {
+                        let location = self.located(version.span);
+                        let message = if is_version(&version.value) {
+                            format!(
+                                "unsupported Smithy version `{}`; only `2` and `2.0` are supported",
+                                version.value
+                            )
+                        } else {
+                            format!(
+                                "`$version` value `{}` is not a version number; only `2` and \
+                                 `2.0` are supported",
+                                version.value
+                            )
+                        };
                         // Other diagnostics may be artifacts of a different grammar.
                         let mut only = DiagnosticSet::default();
                         only.push(Diagnostic::error_at(
                             DiagnosticCode::UnsupportedVersion,
-                            format!(
-                                "unsupported Smithy version `{}`; only `2` and `2.0` are supported",
-                                version.value
-                            ),
+                            message,
                             Some(location),
                         ));
                         return Err(LoadError::invalid_model(only));
                     }
-                    NodeSyntax::String(version) => self.converter.error(
-                        DiagnosticCode::InvalidProperty,
-                        format!(
-                            "`$version` value `{}` is not a version number",
-                            version.value
-                        ),
-                        location,
-                    ),
                     other => self.converter.error(
                         DiagnosticCode::InvalidProperty,
                         format!("`$version` must be a string, found {}", type_name(other)),
@@ -292,7 +285,7 @@ impl<'a> Lowerer<'a> {
         scope: &Scope<'_>,
         annotations: &Annotations,
         sugar: Vec<(String, Node)>,
-        pointer: &str,
+        pointer: &dyn Fn() -> String,
     ) -> Option<Node> {
         let mut first = None;
         let mut object = NodeObject::new();
@@ -325,13 +318,19 @@ impl<'a> Lowerer<'a> {
     }
 
     /// Adds a trait, merging a repeated application with the assembler's trait rules.
-    fn apply_trait(&mut self, traits: &mut NodeObject, id: String, value: Node, pointer: &str) {
+    fn apply_trait(
+        &mut self,
+        traits: &mut NodeObject,
+        id: String,
+        value: Node,
+        pointer: &dyn Fn() -> String,
+    ) {
         let Some(previous) = traits.get(&id) else {
             traits.insert(id, value);
             return;
         };
         let location = self.converter.at(
-            format!("{pointer}/traits/{}", escape_pointer_token(&id)),
+            format!("{}/traits/{}", pointer(), escape_pointer_token(&id)),
             value.position(),
         );
         let merged = merge_nodes(previous, value, |_, _| {
@@ -395,7 +394,9 @@ impl<'a> Lowerer<'a> {
             "type",
             Node::from(shape.kind.as_str()).with_position(self.position(shape.span)),
         );
-        if let Some(traits) = self.traits(scope, &shape.annotations, Vec::new(), &pointer) {
+        if let Some(traits) =
+            self.traits(scope, &shape.annotations, Vec::new(), &|| pointer.clone())
+        {
             object.insert("traits", traits);
         }
         if let Some(mixins) = self.mixins(scope, &shape.mixins) {
@@ -513,10 +514,13 @@ impl<'a> Lowerer<'a> {
         for member in members {
             let name = member.name.value();
             let name_span = member.name.span();
-            let member_pointer = if top_level {
-                format!("{pointer}/{}", escape_pointer_token(name))
-            } else {
-                format!("{pointer}/members/{}", escape_pointer_token(name))
+            // Pointers are only needed for diagnostics, so they are built on demand.
+            let member_pointer = || {
+                if top_level {
+                    format!("{pointer}/{}", escape_pointer_token(name))
+                } else {
+                    format!("{pointer}/members/{}", escape_pointer_token(name))
+                }
             };
             let target = match (&member.target, &member.name) {
                 (Some(target), _) => Some(
@@ -526,14 +530,14 @@ impl<'a> Lowerer<'a> {
                     Some(Node::from(prelude::UNIT.as_str()).with_position(self.position(name_span)))
                 }
                 (None, MemberNameSyntax::Elided(_)) => {
-                    self.elided(binding, name, has_mixins, member_pointer.clone(), name_span)
+                    self.elided(binding, name, has_mixins, member_pointer(), name_span)
                 }
                 (None, MemberNameSyntax::Named(_)) => {
                     // The parser requires a target for every other named member.
                     self.converter.error(
                         DiagnosticCode::MissingProperty,
                         format!("member `{name}` is missing a target"),
-                        self.at(member_pointer.clone(), name_span),
+                        self.at(member_pointer(), name_span),
                     );
                     None
                 }
@@ -737,7 +741,7 @@ impl<'a> Lowerer<'a> {
             marker,
             Node::from(NodeObject::new()).with_position(position),
         )];
-        if let Some(traits) = self.traits(scope, annotations, sugar, &pointer) {
+        if let Some(traits) = self.traits(scope, annotations, sugar, &|| pointer.clone()) {
             object.insert("traits", traits);
         }
         if let Some(mixins) = self.mixins(scope, mixins) {

@@ -1,0 +1,41 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Baz": {
+            "type": "integer"
+        },
+        "smithy.example#Foo": {
+            "type": "string"
+        },
+        "smithy.example#anotherTrait": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.example#test": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.hello#MyMap": {
+            "type": "map",
+            "key": {
+                "target": "smithy.example#Foo"
+            },
+            "value": {
+                "target": "smithy.example#Baz"
+            }
+        },
+        "smithy.hello#MyString": {
+            "type": "string",
+            "traits": {
+                "smithy.example#anotherTrait": {},
+                "smithy.example#test": {}
+            }
+        }
+    }
+}

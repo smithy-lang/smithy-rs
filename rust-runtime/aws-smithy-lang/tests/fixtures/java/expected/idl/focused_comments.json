@@ -1,0 +1,38 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "m": [
+            1,
+            2
+        ]
+    },
+    "shapes": {
+        "ex#A": {
+            "type": "string",
+            "traits": {
+                "smithy.api#deprecated": {},
+                "smithy.api#documentation": "Documentation applies."
+            }
+        },
+        "ex#B": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "A documentation comment still applies across a blank line."
+            }
+        },
+        "ex#C": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Member docs\nSecond line without a space"
+                    }
+                },
+                "b": {
+                    "target": "smithy.api#String"
+                }
+            }
+        }
+    }
+}

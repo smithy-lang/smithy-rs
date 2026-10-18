@@ -33,30 +33,49 @@ impl<T> Spanned<T> {
 }
 
 /// Maps UTF-8 byte offsets to Smithy's one-based character columns.
+///
+/// Columns on ASCII lines are byte differences. On other lines, the last computed position is
+/// cached so the mostly increasing lookups made while lowering scan each line once, rather than
+/// once per value on it (which is quadratic for long single-line trait values).
 #[derive(Debug, Clone)]
 pub(crate) struct LineIndex {
     starts: Vec<usize>,
+    /// Whether each line contains only ASCII, so byte and character columns agree.
+    ascii: Vec<bool>,
+    /// The last non-ASCII lookup: `(line, byte offset, column)`.
+    last: std::cell::Cell<(usize, usize, usize)>,
 }
 
 impl LineIndex {
     pub(crate) fn new(input: &str) -> Self {
         let mut starts = vec![0];
+        let mut ascii = Vec::new();
+        let mut line_ascii = true;
         let bytes = input.as_bytes();
         let mut offset = 0;
         while offset < bytes.len() {
             match bytes[offset] {
-                b'\n' => starts.push(offset + 1),
+                b'\n' => {
+                    starts.push(offset + 1);
+                    ascii.push(std::mem::replace(&mut line_ascii, true));
+                }
                 b'\r' => {
                     if bytes.get(offset + 1) == Some(&b'\n') {
                         offset += 1;
                     }
                     starts.push(offset + 1);
+                    ascii.push(std::mem::replace(&mut line_ascii, true));
                 }
-                _ => {}
+                byte => line_ascii &= byte.is_ascii(),
             }
             offset += 1;
         }
-        Self { starts }
+        ascii.push(line_ascii);
+        Self {
+            starts,
+            ascii,
+            last: std::cell::Cell::new((usize::MAX, 0, 0)),
+        }
     }
 
     pub(crate) fn position(&self, input: &str, offset: usize) -> Position {
@@ -66,7 +85,20 @@ impl LineIndex {
         }
         let line = self.starts.partition_point(|&start| start <= offset) - 1;
         let line_start = self.starts[line];
-        let column = input[line_start..offset].chars().count() + 1;
+        let column = if self.ascii[line] {
+            offset - line_start + 1
+        } else {
+            // Resume from the cached position when it precedes `offset` on this line.
+            let (cached_line, cached_offset, cached_column) = self.last.get();
+            let (from, base) = if cached_line == line && cached_offset <= offset {
+                (cached_offset, cached_column)
+            } else {
+                (line_start, 1)
+            };
+            let column = base + input[from..offset].chars().count();
+            self.last.set((line, offset, column));
+            column
+        };
         Position {
             line: u32::try_from(line + 1).unwrap_or(u32::MAX),
             column: u32::try_from(column).unwrap_or(u32::MAX),
@@ -354,5 +386,32 @@ pub(crate) struct IdlDocument {
 impl IdlDocument {
     pub(crate) fn position(&self, span: Span) -> Position {
         self.lines.position(&self.text, span.start)
+    }
+}
+
+#[cfg(test)]
+mod line_index_tests {
+    use super::LineIndex;
+
+    #[test]
+    fn columns_count_characters_in_any_lookup_order() {
+        let input = "ab\r\néé x é\ny";
+        let index = LineIndex::new(input);
+        let at = |offset| {
+            let p = index.position(input, offset);
+            (p.line, p.column)
+        };
+        assert_eq!(at(1), (1, 2));
+        // Line 2 starts at byte 4: `é` is two bytes.
+        assert_eq!(at(8), (2, 3));
+        assert_eq!(at(9), (2, 4));
+        // Backwards on the same line, then forwards again.
+        assert_eq!(at(6), (2, 2));
+        assert_eq!(at(4), (2, 1));
+        assert_eq!(at(11), (2, 6));
+        // Inside a multi-byte character rounds down to its start.
+        assert_eq!(at(5), (2, 1));
+        assert_eq!(at(input.len() - 1), (3, 1));
+        assert_eq!(at(input.len() + 10), (3, 2));
     }
 }

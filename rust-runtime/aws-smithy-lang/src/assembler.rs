@@ -10,7 +10,7 @@ use crate::diagnostic::{
     Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, LoadErrorKind, SourceLocation,
 };
 use crate::idl_loader;
-use crate::idl_loader::lower::{self, LoweredDocument, PendingSyntacticId};
+use crate::idl_loader::lower::{self, PendingSyntacticId};
 use crate::idl_loader::resolve::DeclarationIndex;
 use crate::idl_loader::syntax::IdlDocument;
 use crate::json_loader::{Document, JsonLoader, MAX_SUPPORTED_DEPTH};
@@ -114,7 +114,7 @@ pub(crate) enum Format {
 /// relative shape IDs can resolve against declarations from any input.
 enum Parsed {
     /// A JSON document, or an input that failed to read or parse.
-    Document(Result<Document, LoadError>),
+    Document(Result<LoadedDocument, LoadError>),
     Idl(IdlDocument),
     Model(Model),
     Shape(Box<Shape>),
@@ -415,7 +415,9 @@ impl ModelAssembler {
                     bytes,
                 } => parse_bytes(&loader, format, &source, &bytes),
                 Input::File { format, path } => match format {
-                    Format::Json => Parsed::Document(loader.parse_file(&path)),
+                    Format::Json => {
+                        Parsed::Document(loader.parse_file(&path).map(LoadedDocument::from))
+                    }
                     Format::Idl => idl_loader::load_file(&loader, &path)
                         .map_or_else(|err| Parsed::Document(Err(err)), Parsed::Idl),
                 },
@@ -447,10 +449,7 @@ impl ModelAssembler {
                 Parsed::Document(document) => merge.document(document),
                 Parsed::Idl(document) => {
                     let index = index.as_ref().expect("built when an IDL input is present");
-                    match lower::lower(&document, index, loader.max_diagnostics) {
-                        Ok(lowered) => merge.lowered(lowered),
-                        Err(err) => merge.failed(err),
-                    }
+                    merge.document(lower::lower(&document, index, loader.max_diagnostics));
                 }
                 Parsed::Model(model) => {
                     let data = model.data();
@@ -510,7 +509,9 @@ impl ModelAssembler {
 /// Parses one in-memory input.
 fn parse_bytes(loader: &JsonLoader, format: Format, source: &str, bytes: &[u8]) -> Parsed {
     match format {
-        Format::Json => Parsed::Document(loader.parse_slice(source, bytes)),
+        Format::Json => {
+            Parsed::Document(loader.parse_slice(source, bytes).map(LoadedDocument::from))
+        }
         Format::Idl => idl_loader::load_slice(loader, source, bytes)
             .map_or_else(|err| Parsed::Document(Err(err)), Parsed::Idl),
     }
@@ -525,9 +526,11 @@ fn declaration_index(parsed: &[Parsed]) -> Option<DeclarationIndex> {
     let mut index = DeclarationIndex::default();
     for input in parsed {
         match input {
-            Parsed::Document(Ok(document)) => {
-                document.shapes.values().for_each(|s| index.add_shape(s))
-            }
+            Parsed::Document(Ok(loaded)) => loaded
+                .document
+                .shapes
+                .values()
+                .for_each(|s| index.add_shape(s)),
             Parsed::Idl(document) => index.add_idl_names(document),
             Parsed::Model(model) => model
                 .data()
@@ -545,6 +548,26 @@ fn declaration_index(parsed: &[Parsed]) -> Option<DeclarationIndex> {
         }
     }
     Some(index)
+}
+
+/// A successfully loaded document of either representation, plus the side data assembly
+/// needs after every input is known.
+#[derive(Default)]
+pub(crate) struct LoadedDocument {
+    pub(crate) document: Document,
+    /// Non-error diagnostics, such as ignored IDL control statements.
+    pub(crate) diagnostics: DiagnosticSet,
+    /// IDL syntactic shape IDs to check once every input is assembled. Always empty for JSON.
+    pub(crate) syntactic_ids: Vec<PendingSyntacticId>,
+}
+
+impl From<Document> for LoadedDocument {
+    fn from(document: Document) -> Self {
+        Self {
+            document,
+            ..Self::default()
+        }
+    }
 }
 
 /// Merge state while combining inputs.
@@ -568,20 +591,15 @@ impl Merge {
         self.diagnostics.extend(diagnostics);
     }
 
-    fn lowered(&mut self, lowered: LoweredDocument) {
-        let LoweredDocument {
-            document,
-            diagnostics,
-            syntactic_ids,
-        } = lowered;
-        self.diagnostics.extend(diagnostics);
-        self.syntactic_ids.extend(syntactic_ids);
-        self.document(Ok(document));
-    }
-
-    fn document(&mut self, document: Result<Document, LoadError>) {
+    fn document(&mut self, document: Result<LoadedDocument, LoadError>) {
         match document {
-            Ok(Document { metadata, shapes }) => {
+            Ok(LoadedDocument {
+                document: Document { metadata, shapes },
+                diagnostics,
+                syntactic_ids,
+            }) => {
+                self.diagnostics.extend(diagnostics);
+                self.syntactic_ids.extend(syntactic_ids);
                 for (key, value) in metadata.into_entries() {
                     self.metadata(key, value);
                 }
