@@ -8,7 +8,11 @@ mod partial_buffer_tests;
 
 use super::__private::*;
 use super::*;
+// `super::*` also exports the released `CollectBodyError`; these tests target the `__private` one.
+use super::__private::CollectBodyError;
 use std::num::NonZeroUsize;
+
+mod released_body_limit_tests;
 
 #[tokio::test]
 async fn request_body_preserves_buffered_bytes_and_trailers() {
