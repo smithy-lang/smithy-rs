@@ -11,11 +11,11 @@ use metrique_writer::GlobalEntrySink;
 use thiserror::Error;
 use tower::Layer;
 
-use crate::default::DefaultMetrics;
 use crate::default::DefaultMetricsServiceCounters;
 use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
+use crate::default::SmithyMetrics;
 use crate::layer::builder::DefaultMetricsBuildExt;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
@@ -87,7 +87,7 @@ pub enum DefaultMetricsLayerError {
 /// ```
 #[derive(Debug)]
 pub struct MetricsLayer<
-    Entry = DefaultMetrics,
+    Entry = SmithyMetrics,
     Sink = DefaultSink,
     Init = DefaultInit<Entry, Sink>,
     Res = DefaultRs<Entry>,
@@ -114,10 +114,10 @@ pub struct MetricsLayer<
 
 impl MetricsLayer {
     pub fn new(
-    ) -> MetricsLayer<DefaultMetrics, DefaultSink, impl InitMetrics<DefaultMetrics, DefaultSink>>
+    ) -> MetricsLayer<SmithyMetrics, DefaultSink, impl InitMetrics<SmithyMetrics, DefaultSink>>
     {
         Self::builder()
-            .init_metrics(|_req| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink()))
+            .init_metrics(|_req| SmithyMetrics::default().append_on_drop(ServiceMetrics::sink()))
             .build()
     }
 }
@@ -155,9 +155,9 @@ where
     }
 }
 
-impl<Sink> MetricsLayer<DefaultMetrics, Sink>
+impl<Sink> MetricsLayer<SmithyMetrics, Sink>
 where
-    Sink: ThreadSafeEntrySink<DefaultMetrics> + Clone,
+    Sink: ThreadSafeEntrySink<SmithyMetrics> + Clone,
 {
     /// Creates a new metrics layer with the provided sink and default metrics. For default
     /// metrics to be set automatically, [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin)
@@ -175,9 +175,9 @@ where
     /// ```
     pub fn new_with_sink(
         sink: Sink,
-    ) -> MetricsLayer<DefaultMetrics, Sink, impl InitMetrics<DefaultMetrics, Sink>> {
+    ) -> MetricsLayer<SmithyMetrics, Sink, impl InitMetrics<SmithyMetrics, Sink>> {
         Self::builder()
-            .init_metrics(move |_req| DefaultMetrics::default().append_on_drop(sink.clone()))
+            .init_metrics(move |_req| SmithyMetrics::default().append_on_drop(sink.clone()))
             .build()
     }
 }
