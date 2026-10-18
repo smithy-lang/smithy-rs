@@ -4,7 +4,7 @@ name = "protocol-compat"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Review-finding regression tests run against schemaSerde-generated servers."
+description = "Cross-protocol behavior tests: schemaSerde and legacy servers, plus one server serving every protocol driven by generated clients."
 
 [dependencies]
 bytes = "1"
@@ -13,6 +13,9 @@ aws-smithy-http-server = { path = "../../../rust-runtime/aws-smithy-http-server"
 http = "1"
 tower = { version = "0.5", features = ["util"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+futures-util = "0.3"
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+multi-protocol-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-server-sdk/rust-server-codegen" }
 compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
 compat-rest-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-cbor-server-sdk/rust-server-codegen" }
 compat-rest-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-awsjson-server-sdk/rust-server-codegen" }
@@ -37,7 +40,13 @@ http-body-util = "0.1"
 minicbor = { version = "2.2.1", features = ["alloc", "half"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+futures-util = "0.3"
+multi-protocol-client-rpcv2cbor = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson10 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson11 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restjson = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restxml = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

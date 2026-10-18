@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["eventstreams-legacy", "eventstreams", "multi-protocol", "protocol-compat"]
+members = ["eventstreams-legacy", "eventstreams", "protocol-compat"]
 exclude = ["review-findings-mainline"]
 
 [workspace.dependencies]

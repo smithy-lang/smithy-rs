@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The same handlers mounted on every generated review service, one module per protocol set.
+//! The same handlers mounted on every generated review service, one module per protocol set,
+//! plus [`multi`], the server serving every built-in protocol that the generated clients and
+//! wire tests drive.
 
 #[macro_use]
 mod handlers;
+
+pub mod multi;
 
 /// Request-body construction shared with the mainline recorder, whose body type differs.
 pub mod kit {

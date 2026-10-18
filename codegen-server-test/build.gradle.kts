@@ -212,13 +212,13 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
-            // One service serving every built-in protocol; integration-tests/multi-protocol drives a client per protocol.
+            // One service serving every built-in protocol; integration-tests/protocol-compat drives a client per protocol.
             CodegenTest(
                 "com.example.multiprotocol#MultiProtocolService",
                 "multi-protocol-server-sdk",
                 imports = listOf(
-                    "integration-tests/multi-protocol/models/multi-protocol-common.smithy",
-                    "integration-tests/multi-protocol/models/multi-protocol-server.smithy",
+                    "integration-tests/protocol-compat/models/multi-protocol-common.smithy",
+                    "integration-tests/protocol-compat/models/multi-protocol-server.smithy",
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),

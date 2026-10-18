@@ -15,7 +15,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import java.io.File
 
 internal class MultiProtocolServerModelTest {
-    private val models = File("../codegen-server-test/integration-tests/multi-protocol/models")
+    private val models = File("../codegen-server-test/integration-tests/protocol-compat/models")
     private val serviceId = ShapeId.from("com.example.multiprotocol#MultiProtocolService")
 
     @Test

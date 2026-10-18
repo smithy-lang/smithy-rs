@@ -202,7 +202,7 @@ async fn call(
     let request = builder
         .body(Body::new(http_body_util::Full::new(Bytes::from(body))))
         .unwrap();
-    let response = multi_protocol::service().oneshot(request).await.unwrap();
+    let response = protocol_compat::multi::service().oneshot(request).await.unwrap();
     let (parts, body) = response.into_parts();
     Snapshot {
         status: parts.status.as_u16(),

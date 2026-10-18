@@ -131,7 +131,7 @@ val allCodegenTests = listOf(
         "com.example.multiprotocol#MultiProtocolService",
         "multi-protocol-client",
         dependsOn = listOf("multi-protocol-restjson.smithy", "multi-protocol-common.smithy"),
-        modelDirectory = "../codegen-server-test/integration-tests/multi-protocol/models",
+        modelDirectory = "../codegen-server-test/integration-tests/protocol-compat/models",
     ),
 ).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
     // Preserve the runtime-selecting client above and restore clients for the server integration suite.
@@ -139,7 +139,7 @@ val allCodegenTests = listOf(
         "com.example.multiprotocol#MultiProtocolService",
         "multi-protocol-client-$protocol",
         dependsOn = listOf("multi-protocol-$protocol.smithy", "multi-protocol-common.smithy"),
-        modelDirectory = "../codegen-server-test/integration-tests/multi-protocol/models",
+        modelDirectory = "../codegen-server-test/integration-tests/protocol-compat/models",
     ).toCodegenTest()
 }
 

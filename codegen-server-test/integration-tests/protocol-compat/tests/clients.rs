@@ -27,7 +27,7 @@ macro_rules! core_suite {
             use $sdk::{Client, Config};
 
             async fn client() -> Client {
-                let address = multi_protocol::start_server().await;
+                let address = protocol_compat::multi::start_server().await;
                 Client::from_conf(
                     Config::builder()
                         .endpoint_url(format!("http://{address}"))
@@ -71,7 +71,7 @@ macro_rules! error_and_stream_suite {
             use $sdk::{Client, Config};
 
             async fn client() -> Client {
-                let address = multi_protocol::start_server().await;
+                let address = protocol_compat::multi::start_server().await;
                 Client::from_conf(
                     Config::builder()
                         .endpoint_url(format!("http://{address}"))
@@ -178,7 +178,7 @@ mod rest_json_1 {
     async fn upload_streams_the_blob() {
         use multi_protocol_client_restjson::primitives::ByteStream;
         use multi_protocol_client_restjson::{Client, Config};
-        let address = multi_protocol::start_server().await;
+        let address = protocol_compat::multi::start_server().await;
         let client = Client::from_conf(
             Config::builder()
                 .endpoint_url(format!("http://{address}"))
