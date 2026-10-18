@@ -5,8 +5,6 @@
 
 use super::syntax::{IdlParseError, ShapeIdSyntax, Span, Spanned};
 use std::collections::HashSet;
-use winnow::prelude::*;
-use winnow::token::take_while;
 
 fn is_identifier_start(c: char) -> bool {
     c == '_' || c.is_ascii_alphabetic()
@@ -14,12 +12,6 @@ fn is_identifier_start(c: char) -> bool {
 
 fn is_identifier_continue(c: char) -> bool {
     is_identifier_start(c) || c.is_ascii_digit()
-}
-
-/// Winnow owns token repetition and committed parser mechanics. The crate cursor owns
-/// Smithy's context-sensitive whitespace and source spans.
-fn identifier_token<'i>(input: &mut &'i str) -> ModalResult<&'i str> {
-    take_while(1.., is_identifier_continue).parse_next(input)
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -244,11 +236,17 @@ impl<'a> Cursor<'a> {
         if !is_identifier_start(first) {
             return Err(self.error("expected an identifier"));
         }
-        let mut rest = self.rest();
-        let token =
-            identifier_token(&mut rest).map_err(|_| self.error("expected an identifier"))?;
-        self.pos += token.len();
-        Ok(Spanned::new(token.to_owned(), Span::new(start, self.pos)))
+        // Identifier characters are ASCII, so the byte count ends on a character boundary.
+        let len = self
+            .rest()
+            .bytes()
+            .take_while(|&byte| is_identifier_continue(char::from(byte)))
+            .count();
+        self.pos += len;
+        Ok(Spanned::new(
+            self.input[start..self.pos].to_owned(),
+            Span::new(start, self.pos),
+        ))
     }
 
     pub(super) fn keyword(&mut self, value: &str) -> bool {
@@ -491,7 +489,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn identifiers_use_winnow_and_require_full_tokens() {
+    fn identifiers_require_full_tokens() {
         let mut cursor = Cursor::new("_a9 rest", 10, 10);
         assert_eq!(cursor.identifier().unwrap().value, "_a9");
         assert!(!cursor.keyword("rest"));
