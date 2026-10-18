@@ -129,8 +129,20 @@ async fn shared_payload_target_can_have_distinct_roots_without_changing_json() {
     }
 }
 
+static ERROR_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+    let mut traits = aws_smithy_schema::TraitMap::new();
+    traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
+
+/// Legacy restXml servers write a modeled error as `<Error>` with its unbound members and drop an
+/// `@httpPayload` member (mainline's generated `ser_*_error` never touches it), so neither the
+/// payload nor its `@xmlName` reaches the wire.
 #[tokio::test]
-async fn modeled_error_payloads_use_the_xml_protocol_root_override() {
+async fn modeled_error_payloads_are_dropped_like_legacy() {
     static TARGET: Schema = Schema::new_struct(shape_id!("test", "Target"), ShapeType::Structure, &STRUCT_MEMBERS)
         .with_xml_name("RenamedTarget")
         .with_xml_namespace("urn:target", None);
@@ -142,7 +154,8 @@ async fn modeled_error_payloads_use_the_xml_protocol_root_override() {
     )
     .with_http_payload()
     .with_xml_name("WireError");
-    static ERROR: Schema = Schema::new_struct(shape_id!("test", "PayloadError"), ShapeType::Structure, &[&PAYLOAD]);
+    static ERROR: Schema = Schema::new_struct(shape_id!("test", "PayloadError"), ShapeType::Structure, &[&PAYLOAD])
+        .with_traits(&ERROR_TRAITS);
     #[derive(Debug)]
     struct PayloadError;
     impl SerializableStruct for PayloadError {
@@ -167,8 +180,5 @@ async fn modeled_error_payloads_use_the_xml_protocol_root_override() {
     let response = RestXml::default().serialize_error(&PayloadError);
     assert_eq!(response.status(), 422);
     let body = response.into_body().collect().await.unwrap().to_bytes();
-    assert_eq!(
-        body.as_ref(),
-        b"<WireError xmlns=\"urn:target\" attr=\"a\"><Child>value</Child></WireError>"
-    );
+    assert_eq!(body.as_ref(), b"<Error></Error>");
 }

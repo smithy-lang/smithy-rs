@@ -165,7 +165,7 @@ impl ServerProtocol for RestXml {
         };
         self.inner
             .serialize_modeled_error(
-                &ResponseXmlCodec::new(self.inner.codec(), schema),
+                &ResponseXmlCodec::for_error(self.inner.codec()),
                 schema,
                 error,
                 error.status_code(),
@@ -240,6 +240,15 @@ impl<'a> ResponseXmlCodec<'a> {
         Self {
             inner,
             payload_member: payload_member(output),
+        }
+    }
+
+    /// Modeled errors are documents rooted at `Error`: like legacy servers, they drop an
+    /// `@httpPayload` member, so its `@xmlName` never names the root.
+    fn for_error(inner: &'a aws_smithy_xml::codec::XmlCodec) -> Self {
+        Self {
+            inner,
+            payload_member: None,
         }
     }
 }
