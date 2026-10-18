@@ -221,6 +221,10 @@ pub(crate) struct CompiledResponsePlan {
     members: Box<[ResponseMemberPlan]>,
     /// An unset structure `@httpPayload` is written as the codec's empty document.
     unset_structure_payload_is_document: bool,
+    /// A REST modeled error with an `@httpPayload` member: legacy servers drop the payload and
+    /// write the error as a document of its unbound members, which a payload shape has none of
+    /// (`{}` on restJson1, `<Error></Error>` on restXml), whether or not the payload is set.
+    payload_dropped_for_error_document: bool,
 }
 
 impl CompiledResponsePlan {
@@ -246,6 +250,9 @@ impl CompiledResponsePlan {
         };
         let unset_structure_payload_is_document =
             matches!(value_kind, ResponseValueKind::OperationOutput { empty_document: true });
+        let payload_dropped_for_error_document = bindings == ResponseBindings::Rest
+            && matches!(value_kind, ResponseValueKind::ModeledError)
+            && schema.members().iter().any(|member| member.http_payload().is_some());
         let strategy = if !writes_body {
             if has_bindings {
                 ResponseStrategy::BindingsOnly
@@ -288,6 +295,7 @@ impl CompiledResponsePlan {
             strategy,
             members,
             unset_structure_payload_is_document,
+            payload_dropped_for_error_document,
         })
     }
 
@@ -400,6 +408,15 @@ impl CompiledResponsePlan {
             plan: self,
         };
         value.serialize_members(&mut splitter)?;
+        if self.payload_dropped_for_error_document {
+            let mut serializer = codec.create_serializer();
+            serializer.write_struct(schema, &EmptyDocument(schema))?;
+            return Ok(ResponseParts {
+                body: serializer.finish().into(),
+                headers: captured.headers,
+                status: captured.status,
+            });
+        }
         let body = match captured.payload {
             Some(payload) => payload.bytes,
             // Some protocols require an empty serialized structure for an unset payload.
@@ -1720,7 +1737,7 @@ mod tests {
             &BLOB_OUT_SCHEMA,
             &SharedBlobOut(aws_smithy_types::Blob::from_maybe_shared(payload.clone())),
             ResponseBindings::Rest,
-            ResponseValueKind::ModeledError,
+            ResponseValueKind::OperationOutput { empty_document: false },
         )
         .unwrap();
         assert_eq!(split.body, payload);
@@ -1736,7 +1753,7 @@ mod tests {
             &BLOB_OUT_SCHEMA,
             &BlobOut(Some(vec![1, 2, 3])),
             ResponseBindings::Rest,
-            ResponseValueKind::ModeledError,
+            ResponseValueKind::OperationOutput { empty_document: false },
         )
         .unwrap();
         assert_eq!(split.body, vec![1, 2, 3]);
@@ -1747,7 +1764,7 @@ mod tests {
             &BLOB_OUT_SCHEMA,
             &BlobOut(None),
             ResponseBindings::Rest,
-            ResponseValueKind::ModeledError,
+            ResponseValueKind::OperationOutput { empty_document: false },
         )
         .unwrap();
         assert!(split.body.is_empty());
@@ -1784,10 +1801,32 @@ mod tests {
             &STRUCT_OUT_SCHEMA,
             &StructOut,
             ResponseBindings::Rest,
-            ResponseValueKind::ModeledError,
+            ResponseValueKind::OperationOutput { empty_document: false },
         )
         .unwrap();
         assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), r#"{"f":"v"}"#);
+    }
+
+    /// Legacy servers serialize a REST modeled error as the document of its unbound members and
+    /// drop an `@httpPayload` member, set or not: restJson1 writes `{}`.
+    #[test]
+    fn modeled_errors_omit_payload_members_like_legacy() {
+        let codec = json_codec();
+        for (value, label) in [
+            (&BlobOut(Some(vec![1, 2, 3])) as &dyn SerializableStruct, "set blob"),
+            (&BlobOut(None), "unset blob"),
+            (&StructOut, "set structure"),
+        ] {
+            let split = serialize_response_parts(
+                &codec,
+                value.schema(),
+                value,
+                ResponseBindings::Rest,
+                ResponseValueKind::ModeledError,
+            )
+            .unwrap();
+            assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), "{}", "{label}");
+        }
     }
 
     static STRUCT_PAYLOAD_TARGET: Schema<'static> = Schema::new(
