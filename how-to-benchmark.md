@@ -1,5 +1,15 @@
 # How to benchmark server routing
 
+For Rust Criterion comparisons of generated legacy/schema event streams through
+an in-process service, see [the server-only benchmark](examples/event-stream-benchmark/README.md).
+It uses Make/Gradle for SDK generation and measures complete requests, including
+response-body draining, without a client or network transport.
+
+For generated clients and servers exchanging real event streams over HTTP/2,
+see the [event-stream benchmark](tools/server-event-stream-benchmark/README.md).
+It compares legacy and schema serialization with separate CPU, memory, and
+profiling passes.
+
 Compare CPU and memory costs of the generated servers in `~/smithy-rs-latest` with the schema-based multi-protocol server in this checkout. Run the commands below from this repository's root.
 
 ## What is compared
