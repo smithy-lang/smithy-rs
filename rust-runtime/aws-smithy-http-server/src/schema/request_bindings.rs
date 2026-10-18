@@ -1806,7 +1806,7 @@ mod tests {
     }
 
     #[test]
-    fn media_type_prefix_headers_decode_and_validate_values() {
+    fn prefix_header_media_type_values_are_base64_decoded() {
         let prefix = Schema::new_member(
             ShapeId::from_parts("test#MediaPrefix$meta", "test", "MediaPrefix"),
             ShapeType::Map,
@@ -1858,7 +1858,7 @@ mod tests {
     }
 
     #[test]
-    fn prefix_header_strings_trim_whitespace_without_changing_query_maps() {
+    fn prefix_header_values_are_trimmed_like_legacy() {
         let prefix = Schema::new_member(
             ShapeId::from_parts("test#Prefix$meta", "test", "Prefix"),
             ShapeType::Map,
@@ -2478,7 +2478,7 @@ mod tests {
     }
 
     #[test]
-    fn trailing_template_slashes_do_not_change_label_captures() {
+    fn label_extraction_ignores_trailing_slash_in_uri_pattern() {
         for template in ["/pets/{name}/", "/pets/{name}/?enabled"] {
             assert_eq!(
                 extract_labels(template, "/pets/rex").unwrap(),
