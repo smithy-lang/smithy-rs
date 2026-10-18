@@ -386,6 +386,16 @@ impl EventFrameDeserializer<'_> {
             .map(|value| value.as_str())
     }
 
+    fn is_exception(&self) -> bool {
+        self.message.headers().iter().any(|header| {
+            header.name().as_str() == ":message-type"
+                && header
+                    .value()
+                    .as_string()
+                    .is_ok_and(|value| value.as_str() == "exception")
+        })
+    }
+
     fn check_content_type(&self, expected: &str) -> Result<(), SerdeError> {
         let content_type = self.content_type().unwrap_or_default();
         if content_type != expected {
@@ -395,6 +405,36 @@ impl EventFrameDeserializer<'_> {
         }
         Ok(())
     }
+}
+
+/// Returns the `<Error>` element of a REST XML error envelope, with the rules of the legacy
+/// `rest_xml_wrapped_errors::error_scope`: the root must be `<ErrorResponse>`, and its first
+/// `<Error>` child holds the error members.
+fn wrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
+    let mut document =
+        aws_smithy_xml::decode::Document::try_from(payload).map_err(|err| SerdeError::custom(err.to_string()))?;
+    let root = document
+        .next_start_element()
+        .ok_or_else(|| SerdeError::custom("no root found searching for an Error"))?;
+    if !root.matches("ErrorResponse") {
+        return Err(SerdeError::custom("expected ErrorResponse as root"));
+    }
+    aws_smithy_xml::codec::find_depth2_element_slice_by(payload, |name| name == "Error")
+        .ok_or_else(|| SerdeError::custom("no error found inside of ErrorResponse"))
+}
+
+/// Checks a `@restXml(noErrorWrapping: true)` error, with the rules of the legacy
+/// `rest_xml_unwrapped_errors::error_scope`: the root must be `<Error>`.
+fn unwrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
+    let mut document =
+        aws_smithy_xml::decode::Document::try_from(payload).map_err(|err| SerdeError::custom(err.to_string()))?;
+    let root = document
+        .root_element()
+        .map_err(|err| SerdeError::custom(err.to_string()))?;
+    if !root.start_el().matches("Error") {
+        return Err(SerdeError::custom("expected error as root"));
+    }
+    Ok(payload)
 }
 
 macro_rules! frames_deserialize_structs {
@@ -419,6 +459,20 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
         // not be understood.
         if members.is_empty() {
             return Ok(());
+        }
+        if let Some(codec) = self.capability.xml_exception_codec.filter(|_| self.is_exception()) {
+            // Like legacy restXml servers: an empty payload is an error with no members set, and
+            // anything else must be the configured error envelope.
+            let payload = &self.message.payload()[..];
+            if payload.is_empty() {
+                return Ok(());
+            }
+            let error = if self.capability.xml_exceptions_wrapped {
+                wrapped_xml_error_element(payload)?
+            } else {
+                unwrapped_xml_error_element(payload)?
+            };
+            return codec.create_deserializer(error).read_struct(schema, state);
         }
         let payload_member = members.iter().copied().find(|m| m.event_payload());
         let has_header_members = members.iter().any(|m| m.event_header());
@@ -1996,6 +2050,109 @@ mod tests {
             }
             other => panic!("unexpected result: {other:?}"),
         }
+    }
+
+    /// Legacy restXml servers read a received exception frame through
+    /// `rest_xml_wrapped_errors::error_scope`: the error members sit in the `<Error>` child of an
+    /// `<ErrorResponse>` root, and an empty payload is an error with no members set.
+    #[test]
+    fn rest_xml_exception_frames_read_the_legacy_error_envelope() {
+        let protocol = SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default());
+        let decoded = |payload: &'static [u8]| {
+            let message = Message::new_from_parts(
+                vec![
+                    Header::new(":message-type", HeaderValue::String("exception".into())),
+                    Header::new(":exception-type", HeaderValue::String("boom".into())),
+                    Header::new(":content-type", HeaderValue::String("application/xml".into())),
+                ],
+                Bytes::from_static(payload),
+            );
+            match unmarshall(&protocol, &message) {
+                Ok(UnmarshalledMessage::Error(TestEventsError::Boom(error))) => Ok(error),
+                Ok(_) => panic!("an exception frame decodes as an error"),
+                Err(err) => Err(err.to_string()),
+            }
+        };
+        let failed = BoomError {
+            message: Some("failed".to_owned()),
+        };
+        assert_eq!(
+            decoded(b"<ErrorResponse><Error><message>failed</message></Error></ErrorResponse>"),
+            Ok(failed)
+        );
+        assert_eq!(
+            decoded(b"<ErrorResponse><RequestId>r</RequestId><Error><message>m</message></Error></ErrorResponse>"),
+            Ok(BoomError {
+                message: Some("m".to_owned())
+            })
+        );
+        assert_eq!(decoded(b""), Ok(BoomError::default()));
+        for bare in [
+            &b"<BoomError><message>failed</message></BoomError>"[..],
+            b"<Error><message>failed</message></Error>",
+        ] {
+            let bare: &'static [u8] = bare;
+            assert!(decoded(bare).unwrap_err().contains("expected ErrorResponse as root"));
+        }
+        assert!(decoded(b"<ErrorResponse><Other/></ErrorResponse>")
+            .unwrap_err()
+            .contains("no error found inside of ErrorResponse"));
+    }
+
+    /// With `@restXml(noErrorWrapping: true)`, legacy servers read a received exception frame
+    /// through `rest_xml_unwrapped_errors::error_scope`: the error members sit in an `<Error>`
+    /// root. The setting comes from the protocol trait codegen records on the service schema.
+    #[test]
+    fn rest_xml_no_error_wrapping_exception_frames_are_rooted_at_error() {
+        use crate::schema::protocol::RestXml;
+        use crate::schema::traits::RestXmlTrait;
+        use crate::schema::{MetadataRoutedProtocol, ProtocolBuildContext, ServiceSchema};
+
+        static TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+            let mut traits = aws_smithy_schema::TraitMap::new();
+            traits.insert(Box::new(RestXmlTrait::new().with_no_error_wrapping(true)));
+            traits
+        });
+        static SERVICE: ServiceSchema<'static> = ServiceSchema::new(
+            aws_smithy_schema::shape_id!("test", "Service"),
+            None,
+            &[RestXmlTrait::TRAIT_ID],
+            &[],
+        )
+        .with_traits(&TRAITS);
+        let protocol = SharedServerProtocol::metadata_routed(
+            RestXml::from_build_context(&ProtocolBuildContext::new(&SERVICE)).unwrap(),
+        );
+        let decoded = |payload: &'static [u8]| {
+            let message = Message::new_from_parts(
+                vec![
+                    Header::new(":message-type", HeaderValue::String("exception".into())),
+                    Header::new(":exception-type", HeaderValue::String("boom".into())),
+                    Header::new(":content-type", HeaderValue::String("application/xml".into())),
+                ],
+                Bytes::from_static(payload),
+            );
+            match unmarshall(&protocol, &message) {
+                Ok(UnmarshalledMessage::Error(TestEventsError::Boom(error))) => Ok(error),
+                Ok(_) => panic!("an exception frame decodes as an error"),
+                Err(err) => Err(err.to_string()),
+            }
+        };
+        assert_eq!(
+            decoded(b"<Error><message>failed</message></Error>"),
+            Ok(BoomError {
+                message: Some("failed".to_owned())
+            })
+        );
+        assert_eq!(decoded(b""), Ok(BoomError::default()));
+        assert!(
+            decoded(b"<ErrorResponse><Error><message>failed</message></Error></ErrorResponse>")
+                .unwrap_err()
+                .contains("expected error as root")
+        );
+        assert!(decoded(b"<BoomError><message>failed</message></BoomError>")
+            .unwrap_err()
+            .contains("expected error as root"));
     }
 
     #[test]

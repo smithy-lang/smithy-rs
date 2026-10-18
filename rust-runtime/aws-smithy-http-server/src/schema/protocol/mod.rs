@@ -241,6 +241,13 @@ pub struct EventStreamFraming<'a> {
     pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
     /// Whether HTTP-bound exception members are excluded from the frame payload.
     pub exception_http_bindings: bool,
+    /// Codec for received exception frames that carry a REST XML error envelope, as legacy
+    /// restXml servers expect. The codec reads the `<Error>` element without validating its
+    /// root name.
+    pub xml_exception_codec: Option<&'a dyn DynCodec>,
+    /// With [`xml_exception_codec`](Self::xml_exception_codec): whether the `<Error>` element is
+    /// wrapped in `<ErrorResponse>` (the default) or is the root (`@restXml(noErrorWrapping: true)`).
+    pub xml_exceptions_wrapped: bool,
 }
 
 impl<'a> EventStreamFraming<'a> {
@@ -254,7 +261,18 @@ impl<'a> EventStreamFraming<'a> {
             initial_messages_in_frames: false,
             exception_discriminator: None,
             exception_http_bindings: false,
+            xml_exception_codec: None,
+            xml_exceptions_wrapped: true,
         }
+    }
+
+    /// Reads received exception frames from a REST XML error envelope with `codec`, which must
+    /// not validate the root element name: `<ErrorResponse><Error>..</Error></ErrorResponse>`
+    /// when `wrapped`, otherwise `<Error>..</Error>`.
+    pub fn xml_exceptions(mut self, codec: &'a dyn DynCodec, wrapped: bool) -> Self {
+        self.xml_exception_codec = Some(codec);
+        self.xml_exceptions_wrapped = wrapped;
+        self
     }
 
     /// Sets the body discriminator used for modeled exception payloads.
