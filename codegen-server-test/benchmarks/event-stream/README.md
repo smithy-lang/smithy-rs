@@ -11,7 +11,7 @@ Cargo workspace. No Python, generated client, listening socket, or network
 transport is involved in running the benchmark.
 
 ```sh
-cd examples/event-stream-benchmark
+cd codegen-server-test/benchmarks/event-stream
 make test
 make bench                       # small: legacy versus schema
 make bench PRESET=medium         # add the multiprotocol server
@@ -129,7 +129,7 @@ same wire expectations before timing. A preflight failure stops the run.
 
 Criterion retains machine-readable estimates, sample data and reports under the
 Cargo target directory's `criterion/`. The repository's `.cargo/config.toml`
-shares `<repository>/target/criterion/` across examples; `CARGO_TARGET_DIR` can
+shares `<repository>/target/criterion/` across Cargo workspaces; `CARGO_TARGET_DIR` can
 override it. Record host load, CPU affinity, compiler and source revision when
 interpreting a run. Criterion intervals describe that run's samples; use repeated
 runs with alternating implementation filters to assess host and order effects.

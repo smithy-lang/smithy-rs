@@ -13,7 +13,7 @@ fn generated_sdk_paths_match_the_benchmark_labels() {
         ($projection:literal, $schema:literal) => {
             let serde = include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../../codegen-server-test/build/smithyprojections/codegen-server-test/",
+                "/../../build/smithyprojections/codegen-server-test/",
                 $projection,
                 "/rust-server-codegen/src/event_stream_serde.rs"
             ));
@@ -29,7 +29,7 @@ fn generated_sdk_paths_match_the_benchmark_labels() {
             );
             let manifest = include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../../codegen-server-test/build/smithyprojections/codegen-server-test/",
+                "/../../build/smithyprojections/codegen-server-test/",
                 $projection,
                 "/rust-server-codegen/Cargo.toml"
             ));

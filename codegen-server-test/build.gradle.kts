@@ -425,8 +425,8 @@ val eventStreamBenchmarkTests =
                 "event-stream-bench-$protocol-${if (schemaSerde) "schema" else "legacy"}",
                 imports =
                     listOf(
-                        "../examples/event-stream-benchmark/model/common.smithy",
-                        "../examples/event-stream-benchmark/model/$protocol.smithy",
+                        "benchmarks/event-stream/model/common.smithy",
+                        "benchmarks/event-stream/model/$protocol.smithy",
                     ),
                 extraCodegenConfig =
                     """"http-1x": true, "schemaSerde": $schemaSerde, "alwaysSendEventStreamInitialResponse": ${protocol == "rpc-v2-cbor"}""",
@@ -438,8 +438,8 @@ val eventStreamBenchmarkTests =
             "event-stream-bench-multi-schema",
             imports =
                 listOf(
-                    "../examples/event-stream-benchmark/model/common.smithy",
-                    "../examples/event-stream-benchmark/model/multi.smithy",
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
                 ),
             extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": true""",
         )

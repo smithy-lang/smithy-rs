@@ -1,7 +1,7 @@
 # How to benchmark server routing
 
 For Rust Criterion comparisons of generated legacy/schema event streams through
-an in-process service, see [the server-only benchmark](examples/event-stream-benchmark/README.md).
+an in-process service, see [the server-only benchmark](codegen-server-test/benchmarks/event-stream/README.md).
 It uses Make/Gradle for SDK generation and measures complete requests, including
 response-body draining, without a client or network transport.
 
