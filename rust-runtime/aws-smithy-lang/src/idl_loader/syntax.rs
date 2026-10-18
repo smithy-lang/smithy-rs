@@ -4,6 +4,7 @@
  */
 
 use crate::diagnostic::Position;
+use crate::node::Number;
 use std::sync::Arc;
 
 /// A half-open UTF-8 byte range in an IDL input.
@@ -135,7 +136,7 @@ impl ShapeIdSyntax {
 pub(crate) enum NodeSyntax {
     Null(Span),
     Bool(bool, Span),
-    Number(Spanned<String>),
+    Number(Spanned<Number>),
     String(Spanned<String>),
     SyntacticShapeId(ShapeIdSyntax),
     Array(Vec<NodeSyntax>, Span),
@@ -149,7 +150,8 @@ impl NodeSyntax {
             | Self::Bool(_, span)
             | Self::Array(_, span)
             | Self::Object(_, span) => *span,
-            Self::Number(value) | Self::String(value) => value.span,
+            Self::Number(value) => value.span,
+            Self::String(value) => value.span,
             Self::SyntacticShapeId(value) => value.span,
         }
     }
@@ -172,15 +174,6 @@ pub(crate) struct TraitSyntax {
 pub(crate) struct Annotations {
     pub(crate) documentation: Option<Spanned<String>>,
     pub(crate) traits: Vec<TraitSyntax>,
-}
-
-impl Annotations {
-    pub(crate) fn empty() -> Self {
-        Self {
-            documentation: None,
-            traits: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

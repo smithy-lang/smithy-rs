@@ -3,24 +3,100 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Private Smithy 2.0 IDL syntax parser.
+//! Private Smithy 2.0 IDL loader.
 //!
-//! Parsing deliberately stops before shape-ID resolution and semantic shape construction.
-//! The owned syntax tree is short-lived and discarded after assembly lowers it through the
-//! same [`AstConverter`](crate::ast_converter::AstConverter) used by the JSON AST loader.
+//! Loading has three steps, because a relative shape ID can refer to a declaration in any
+//! other input of the same assembly:
+//!
+//! 1. [`load_slice`] validates and parses one input into an owned, unresolved syntax tree
+//!    ([`syntax`]), stopping at the first syntax error like the JSON loader.
+//! 2. The assembler indexes the declarations of every input in a
+//!    [`DeclarationIndex`](resolve::DeclarationIndex).
+//! 3. [`lower`](lower::lower) resolves shape IDs and IDL sugar and converts each shape through
+//!    the same [`AstConverter`](crate::ast_converter::AstConverter) used by the JSON AST
+//!    loader. The syntax tree is then dropped.
 
 mod lexer;
+pub(crate) mod lower;
 mod node;
+pub(crate) mod resolve;
 pub(crate) mod syntax;
 
+use crate::diagnostic::{
+    Diagnostic, DiagnosticCode, DiagnosticSet, IdlSyntaxError, LoadError, SourceLocation,
+};
+use crate::json_loader::JsonLoader;
 use lexer::Cursor;
 use std::collections::HashSet;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
 use syntax::{
-    Annotations, ApplySyntax, IdlDocument, IdlParseError, MemberNameSyntax, MemberSyntax,
-    MetadataSyntax, PropertySyntax, PropertyValueSyntax, ShapeBodySyntax, ShapeKindSyntax,
-    ShapeSyntax, Span, Spanned, StatementSyntax, TraitSyntax, TraitValueSyntax,
+    Annotations, ApplySyntax, IdlDocument, IdlParseError, LineIndex, MemberNameSyntax,
+    MemberSyntax, MetadataSyntax, ParseErrorKind, PropertySyntax, PropertyValueSyntax,
+    ShapeBodySyntax, ShapeKindSyntax, ShapeSyntax, Span, Spanned, StatementSyntax, TraitSyntax,
+    TraitValueSyntax,
 };
+
+/// Parses one IDL input under `limits`.
+pub(crate) fn load_slice(
+    limits: &JsonLoader,
+    source: &str,
+    input: &[u8],
+) -> Result<IdlDocument, LoadError> {
+    let source: Arc<str> = Arc::from(source);
+    if input.len() as u64 > limits.max_input_bytes {
+        return Err(limits.input_too_large(&source));
+    }
+    let text = match std::str::from_utf8(input) {
+        Ok(text) => text,
+        Err(err) => {
+            let valid = std::str::from_utf8(&input[..err.valid_up_to()])
+                .expect("the prefix before the first invalid byte is valid UTF-8");
+            let error = IdlParseError::syntax(valid.len(), "input is not valid UTF-8");
+            return Err(syntax_error(&source, valid, error));
+        }
+    };
+    parse(
+        source.clone(),
+        Arc::from(text),
+        limits.max_depth,
+        limits.max_shapes,
+    )
+    .map_err(|error| syntax_error(&source, text, error))
+}
+
+/// Reads and parses an IDL file, buffering at most one byte beyond the input limit.
+pub(crate) fn load_file(limits: &JsonLoader, path: &Path) -> Result<IdlDocument, LoadError> {
+    let source = path.display().to_string();
+    let file = std::fs::File::open(path).map_err(|err| JsonLoader::open_error(&source, err))?;
+    let mut bytes = Vec::new();
+    file.take(limits.max_input_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|err| JsonLoader::read_error(&source, err))?;
+    load_slice(limits, &source, &bytes)
+}
+
+/// Translates a syntax failure into the one diagnostic and error kind for the input.
+fn syntax_error(source: &Arc<str>, text: &str, error: IdlParseError) -> LoadError {
+    let position = LineIndex::new(text).position(text, error.offset);
+    let location = SourceLocation::at_position(source.clone(), position);
+    let code = match error.kind {
+        ParseErrorKind::Syntax => DiagnosticCode::IdlSyntax,
+        ParseErrorKind::DuplicateKey => DiagnosticCode::DuplicateKey,
+        ParseErrorKind::ResourceLimit => DiagnosticCode::ResourceLimit,
+    };
+    let mut diagnostics = DiagnosticSet::default();
+    diagnostics.push_unbounded(Diagnostic::error_at(
+        code,
+        error.message.clone(),
+        Some(location),
+    ));
+    match error.kind {
+        ParseErrorKind::ResourceLimit => LoadError::resource_limit(diagnostics),
+        _ => LoadError::idl(IdlSyntaxError::new(error.message), diagnostics),
+    }
+}
 
 pub(crate) fn parse(
     source: Arc<str>,
@@ -205,13 +281,15 @@ impl<'a> Parser<'a> {
             let start = self.cursor.pos - 1;
             let id = self.cursor.shape_id()?;
             self.cursor.sp0();
+            let at = Span::new(start, start + 1);
             let value = if self.cursor.starts_with("(") {
                 let open = self.cursor.expect("(", "`(`")?;
-                self.cursor.trait_value(open, 0)?
-            } else {
-                TraitValueSyntax::Omitted {
-                    at: Span::new(start, start + 1),
+                match self.cursor.trait_value(open, 0)? {
+                    TraitValueSyntax::Omitted { .. } => TraitValueSyntax::Omitted { at },
+                    explicit => explicit,
                 }
+            } else {
+                TraitValueSyntax::Omitted { at }
             };
             traits.push(TraitSyntax {
                 id,
@@ -290,8 +368,18 @@ impl<'a> Parser<'a> {
 
         self.cursor.sp0();
         let resource = if self.cursor.keyword("for") {
-            if kind != ShapeKindSyntax::Structure {
-                return Err(self.cursor.error("`for` is only valid on structure shapes"));
+            // ABNF `AggregateShape` permits `ForResource` on list, map, union, and structure.
+            if !matches!(
+                kind,
+                ShapeKindSyntax::List
+                    | ShapeKindSyntax::Map
+                    | ShapeKindSyntax::Union
+                    | ShapeKindSyntax::Structure
+                    | ShapeKindSyntax::Set
+            ) {
+                return Err(self
+                    .cursor
+                    .error("`for` is only valid on list, map, union, and structure shapes"));
             }
             self.cursor.sp1()?;
             let id = self.cursor.shape_id()?;
@@ -467,6 +555,7 @@ impl<'a> Parser<'a> {
                 return Err(IdlParseError::duplicate(name.span.start, &name.value));
             }
             self.cursor.ws0();
+            let assign = self.cursor.pos;
             let value = if kind == ShapeKindSyntax::Operation && self.cursor.consume(":=") {
                 self.count_shape(name.span.start)?;
                 self.cursor.ws0();
@@ -486,7 +575,7 @@ impl<'a> Parser<'a> {
                     members,
                     resource,
                     mixins,
-                    span: Span::new(start, self.cursor.pos),
+                    span: Span::new(assign, self.cursor.pos),
                 }
             } else {
                 self.cursor.expect(":", "`:` after a property name")?;

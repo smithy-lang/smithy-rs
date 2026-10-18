@@ -5,6 +5,7 @@
 
 use super::lexer::Cursor;
 use super::syntax::{IdlParseError, NodeSyntax, Span, TraitValueSyntax};
+use crate::node::{number_from_text, Number};
 use std::collections::HashSet;
 
 impl Cursor<'_> {
@@ -173,9 +174,17 @@ impl Cursor<'_> {
         }) {
             return Err(self.error("invalid character after a number"));
         }
-        let text = self.input()[start..self.pos].to_owned();
+        let text = &self.input()[start..self.pos];
+        // serde_json reads an integer `-0` as the float `-0.0` (normalized to `0.0`); match it
+        // so equal IDL and JSON values stay equal.
+        let number = if text == "-0" {
+            Number::from_f64(0.0)
+        } else {
+            number_from_text(text)
+        }
+        .ok_or_else(|| IdlParseError::syntax(start, "number out of range"))?;
         Ok(NodeSyntax::Number(super::syntax::Spanned::new(
-            text,
+            number,
             Span::new(start, self.pos),
         )))
     }

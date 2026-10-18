@@ -137,25 +137,17 @@ impl<'a> Cursor<'a> {
         trivia
     }
 
-    /// Smithy BR: at least one line ending or line comment, with surrounding WS.
-    pub(super) fn br1(&mut self) -> Result<(), IdlParseError> {
-        let start = self.pos;
-        let trivia = self.ws0();
-        if trivia.had_break {
-            Ok(())
-        } else {
-            self.pos = start;
-            Err(self.error("expected a line break or comment"))
-        }
-    }
-
     /// Checks a declaration boundary without consuming a following documentation block.
     pub(super) fn declaration_break(&mut self) -> Result<(), IdlParseError> {
         let start = self.pos;
         let mut had_break = false;
         loop {
             match self.peek() {
-                Some(' ' | '\t' | ',') => {
+                Some(' ' | '\t') => {
+                    self.bump();
+                }
+                // Commas are whitespace only in BR's trailing `[WS]`, after the break.
+                Some(',') if had_break => {
                     self.bump();
                 }
                 Some('\n') => {
@@ -167,13 +159,9 @@ impl<'a> Cursor<'a> {
                     self.bump();
                     self.consume("\n");
                 }
-                Some('/') if self.starts_with("///") => {
-                    return if had_break || self.pos > 0 {
-                        Ok(())
-                    } else {
-                        Err(self.error("expected a declaration boundary"))
-                    };
-                }
+                // A documentation comment is a `Comment`, so it is a break by itself; it is left
+                // for the next declaration to consume.
+                Some('/') if self.starts_with("///") => return Ok(()),
                 Some('/') if self.starts_with("//") => {
                     had_break = true;
                     self.consume_line_comment();

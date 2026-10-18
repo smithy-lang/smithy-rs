@@ -135,19 +135,22 @@ impl JsonLoader {
         let source = path.display().to_string();
         match std::fs::File::open(path) {
             Ok(file) => self.parse_reader(&source, file),
-            Err(err) => {
-                let mut diagnostics = DiagnosticSet::default();
-                diagnostics.push(Diagnostic::error_at(
-                    DiagnosticCode::Io,
-                    format!("failed to open model: {err}"),
-                    Some(SourceLocation::new(Arc::from(source))),
-                ));
-                Err(LoadError::io(err, diagnostics))
-            }
+            Err(err) => Err(Self::open_error(&source, err)),
         }
     }
 
-    fn input_too_large(&self, source: &Arc<str>) -> LoadError {
+    /// The error for a file that could not be opened.
+    pub(crate) fn open_error(source: &str, err: std::io::Error) -> LoadError {
+        let mut diagnostics = DiagnosticSet::default();
+        diagnostics.push(Diagnostic::error_at(
+            DiagnosticCode::Io,
+            format!("failed to open model: {err}"),
+            Some(SourceLocation::new(Arc::from(source))),
+        ));
+        LoadError::io(err, diagnostics)
+    }
+
+    pub(crate) fn input_too_large(&self, source: &Arc<str>) -> LoadError {
         let mut diagnostics = DiagnosticSet::default();
         diagnostics.push(Diagnostic::error_at(
             DiagnosticCode::ResourceLimit,

@@ -10,8 +10,8 @@
 //! shapes: a shape is an object with `type`, `traits`, and kind-specific properties, members
 //! are `{"target": ..., "traits": ...}`, and entity references are `{"target": ...}`
 //! wrappers. [`JsonLoader`](crate::json_loader::JsonLoader) streams one such [`Node`] per
-//! shape straight from its tokenizer; a future Smithy IDL loader lowers its syntax tree into
-//! the same layout. Both then call [`AstConverter::convert_shape`], so unknown properties,
+//! shape straight from its tokenizer, and the [IDL loader](crate::idl_loader) lowers its
+//! resolved syntax tree into the same layout. Both then call [`AstConverter::convert_shape`], so unknown properties,
 //! malformed shape bodies, duplicate references, trait nodes, declaration order, and
 //! source-located semantic diagnostics stay identical across representations.
 //!
@@ -81,6 +81,11 @@ impl AstConverter {
         self.diagnostics
             .borrow_mut()
             .push(Diagnostic::error_at(code, message, Some(location)));
+    }
+
+    /// Records a diagnostic of any severity.
+    pub(crate) fn push(&self, diagnostic: Diagnostic) {
+        self.diagnostics.borrow_mut().push(diagnostic);
     }
 
     /// Parses and interns an absolute shape ID so repeated targets share one allocation.

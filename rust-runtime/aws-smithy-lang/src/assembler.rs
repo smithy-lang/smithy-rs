@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! [`ModelAssembler`]: combines JSON AST documents, existing models, shapes, metadata, and
-//! traits into a validated [`Model`].
+//! [`ModelAssembler`]: combines Smithy IDL and JSON AST documents, existing models, shapes,
+//! metadata, and traits into a validated [`Model`].
 
 use crate::diagnostic::{
     Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, LoadErrorKind, SourceLocation,
 };
+use crate::idl_loader;
+use crate::idl_loader::lower::{self, LoweredDocument, PendingSyntacticId};
+use crate::idl_loader::resolve::DeclarationIndex;
+use crate::idl_loader::syntax::IdlDocument;
 use crate::json_loader::{Document, JsonLoader, MAX_SUPPORTED_DEPTH};
 use crate::knowledge::KnowledgeCache;
 use crate::model::{Model, ModelData};
@@ -26,8 +30,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Assembles a [`Model`] from any combination of Smithy JSON AST documents, existing models,
-/// shapes built in code, metadata, and traits, then validates it.
+/// Assembles a [`Model`] from any combination of Smithy IDL and JSON AST documents, existing
+/// models, shapes built in code, metadata, and traits, then validates it.
 ///
 /// Inputs are combined in the order they were added, following Smithy's merge rules:
 ///
@@ -44,7 +48,9 @@ use std::sync::Arc;
 ///
 /// The prelude is then attached and the result validated (see the
 /// [`validation`](crate::validation) module). Shapes may refer to shapes from any input, so
-/// references only need to resolve once everything is assembled.
+/// references only need to resolve once everything is assembled. Likewise, a relative shape ID
+/// in an IDL document resolves to a shape of that name in its namespace declared by *any*
+/// input before falling back to the prelude.
 ///
 /// ```
 /// use aws_smithy_lang::shape::StructureShape;
@@ -77,11 +83,15 @@ pub struct ModelAssembler {
 }
 
 enum Input {
-    Json {
+    Bytes {
+        format: Format,
         source: String,
         bytes: Vec<u8>,
     },
-    File(PathBuf),
+    File {
+        format: Format,
+        path: PathBuf,
+    },
     /// A reader that failed while being consumed.
     Failed(LoadError),
     Model(Model),
@@ -91,6 +101,27 @@ enum Input {
         value: Node,
     },
     Trait(PendingTrait),
+}
+
+/// The representation of a serialized model input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Format {
+    Json,
+    Idl,
+}
+
+/// One input after parsing, before it is merged. Every input is parsed first so that IDL
+/// relative shape IDs can resolve against declarations from any input.
+enum Parsed {
+    /// A JSON document, or an input that failed to read or parse.
+    Document(Result<Document, LoadError>),
+    Idl(IdlDocument),
+    Model(Model),
+    Shape(Box<Shape>),
+    Metadata {
+        key: String,
+        value: Node,
+    },
 }
 
 struct PendingTrait {
@@ -143,33 +174,101 @@ impl ModelAssembler {
     }
 
     /// Adds a JSON AST document from bytes.
-    pub fn add_json_slice(mut self, source: impl Into<String>, input: impl Into<Vec<u8>>) -> Self {
-        self.inputs.push(Input::Json {
-            source: source.into(),
-            bytes: input.into(),
-        });
-        self
+    pub fn add_json_slice(self, source: impl Into<String>, input: impl Into<Vec<u8>>) -> Self {
+        self.add_bytes(Format::Json, source.into(), input.into())
     }
 
     /// Adds a JSON AST document from a reader, which is consumed immediately (up to
     /// [`max_input_bytes`](Self::max_input_bytes) plus one byte) and not retained. Set
     /// `max_input_bytes` before adding readers.
-    pub fn add_json_reader(mut self, source: impl Into<String>, reader: impl Read) -> Self {
-        let source = source.into();
-        let mut bytes = Vec::new();
-        let limit = self.loader.max_input_bytes.saturating_add(1);
-        match reader.take(limit).read_to_end(&mut bytes) {
-            Ok(_) => self.inputs.push(Input::Json { source, bytes }),
-            Err(err) => self
-                .inputs
-                .push(Input::Failed(JsonLoader::read_error(&source, err))),
-        }
-        self
+    pub fn add_json_reader(self, source: impl Into<String>, reader: impl Read) -> Self {
+        self.add_reader(Format::Json, source.into(), reader)
     }
 
     /// Adds a JSON AST document from a file, which is read when the model is assembled.
     pub fn add_json_file(mut self, path: impl AsRef<Path>) -> Self {
-        self.inputs.push(Input::File(path.as_ref().to_owned()));
+        self.inputs.push(Input::File {
+            format: Format::Json,
+            path: path.as_ref().to_owned(),
+        });
+        self
+    }
+
+    /// Adds a Smithy IDL (`.smithy`) document. `source` labels its diagnostics and source
+    /// locations, for example with a file name.
+    ///
+    /// Relative shape IDs resolve against the declarations of every input, so an IDL document
+    /// may refer to shapes defined in other IDL or JSON documents, existing models, or code.
+    ///
+    /// ```
+    /// use aws_smithy_lang::{Model, ShapeId};
+    ///
+    /// let common = r#"{"smithy": "2.0", "shapes": {"ex#Name": {"type": "string"}}}"#;
+    /// let idl = r#"
+    /// $version: "2"
+    /// namespace ex
+    ///
+    /// structure Person {
+    ///     @required
+    ///     name: Name
+    /// }
+    /// "#;
+    /// let model = Model::assembler()
+    ///     .add_json_str("common.json", common)
+    ///     .add_idl_str("person.smithy", idl)
+    ///     .assemble()
+    ///     .into_result()?;
+    /// assert!(model.contains_shape(&ShapeId::new("ex#Person")?));
+    /// assert_eq!(model.non_prelude_shapes().len(), 2);
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn add_idl_str(self, source: impl Into<String>, input: impl Into<String>) -> Self {
+        self.add_idl_slice(source, input.into().into_bytes())
+    }
+
+    /// Adds a Smithy IDL document from bytes, which must be UTF-8.
+    pub fn add_idl_slice(self, source: impl Into<String>, input: impl Into<Vec<u8>>) -> Self {
+        self.add_bytes(Format::Idl, source.into(), input.into())
+    }
+
+    /// Adds a Smithy IDL document from a reader, which is consumed immediately (up to
+    /// [`max_input_bytes`](Self::max_input_bytes) plus one byte) and not retained. Set
+    /// `max_input_bytes` before adding readers.
+    pub fn add_idl_reader(self, source: impl Into<String>, reader: impl Read) -> Self {
+        self.add_reader(Format::Idl, source.into(), reader)
+    }
+
+    /// Adds a Smithy IDL document from a file, which is read when the model is assembled.
+    pub fn add_idl_file(mut self, path: impl AsRef<Path>) -> Self {
+        self.inputs.push(Input::File {
+            format: Format::Idl,
+            path: path.as_ref().to_owned(),
+        });
+        self
+    }
+
+    fn add_bytes(mut self, format: Format, source: String, bytes: Vec<u8>) -> Self {
+        self.inputs.push(Input::Bytes {
+            format,
+            source,
+            bytes,
+        });
+        self
+    }
+
+    fn add_reader(mut self, format: Format, source: String, reader: impl Read) -> Self {
+        let mut bytes = Vec::new();
+        let limit = self.loader.max_input_bytes.saturating_add(1);
+        match reader.take(limit).read_to_end(&mut bytes) {
+            Ok(_) => self.inputs.push(Input::Bytes {
+                format,
+                source,
+                bytes,
+            }),
+            Err(err) => self
+                .inputs
+                .push(Input::Failed(JsonLoader::read_error(&source, err))),
+        }
         self
     }
 
@@ -241,23 +340,25 @@ impl ModelAssembler {
         self
     }
 
-    /// The maximum number of bytes in each JSON input.
+    /// The maximum number of bytes in each IDL or JSON input.
     pub fn max_input_bytes(mut self, max: u64) -> Self {
         self.loader.max_input_bytes = max;
         self
     }
 
-    /// The maximum number of top-level shapes in each JSON document.
+    /// The maximum number of shapes in each IDL or JSON document. For IDL, shapes generated
+    /// for inline operation input and output count too.
     pub fn max_shapes(mut self, max: usize) -> Self {
         self.loader.max_shapes = max;
         self
     }
 
-    /// The maximum JSON nesting depth of each document, counting every object and array from
-    /// the root.
+    /// The maximum nesting depth of each document. For JSON this counts every object and
+    /// array from the root; for IDL it counts the nested arrays and objects (including
+    /// structured trait bodies) of each metadata, trait, or property value.
     ///
-    /// Values above the supported maximum of 100 are clamped to it, because deeper input would
-    /// otherwise be rejected by serde_json's recursion guard (128) as a JSON syntax error
+    /// Values above the supported maximum of 100 are clamped to it, because deeper JSON input
+    /// would otherwise be rejected by serde_json's recursion guard (128) as a JSON syntax error
     /// instead of a [`ResourceLimit`](DiagnosticCode::ResourceLimit).
     pub fn max_depth(mut self, max: usize) -> Self {
         self.loader.max_depth = max.min(MAX_SUPPORTED_DEPTH);
@@ -282,13 +383,18 @@ impl ModelAssembler {
         self.assemble_inner(None)
     }
 
-    /// Assembles with one more borrowed JSON input, avoiding a copy for the `Model::from_json_*`
+    /// Assembles with one more borrowed input, avoiding a copy for the `Model::from_*_slice`
     /// convenience functions.
-    pub(crate) fn assemble_with_borrowed(self, source: &str, input: &[u8]) -> Validated<Model> {
-        self.assemble_inner(Some((source, input)))
+    pub(crate) fn assemble_with_borrowed(
+        self,
+        format: Format,
+        source: &str,
+        input: &[u8],
+    ) -> Validated<Model> {
+        self.assemble_inner(Some((format, source, input)))
     }
 
-    fn assemble_inner(self, borrowed: Option<(&str, &[u8])>) -> Validated<Model> {
+    fn assemble_inner(self, borrowed: Option<(Format, &str, &[u8])>) -> Validated<Model> {
         let Self {
             prelude: with_prelude,
             require_trait_definitions,
@@ -296,22 +402,57 @@ impl ModelAssembler {
             inputs,
             validators,
         } = self;
+
+        // Parse every input first; diagnostics are kept with each input and replayed in input
+        // order below, so ordering and `max_diagnostics` truncation match a single pass.
+        let mut parsed = Vec::with_capacity(inputs.len() + 1);
+        let mut pending_traits = Vec::new();
+        for input in inputs {
+            parsed.push(match input {
+                Input::Bytes {
+                    format,
+                    source,
+                    bytes,
+                } => parse_bytes(&loader, format, &source, &bytes),
+                Input::File { format, path } => match format {
+                    Format::Json => Parsed::Document(loader.parse_file(&path)),
+                    Format::Idl => idl_loader::load_file(&loader, &path)
+                        .map_or_else(|err| Parsed::Document(Err(err)), Parsed::Idl),
+                },
+                Input::Failed(err) => Parsed::Document(Err(err)),
+                Input::Model(model) => Parsed::Model(model),
+                Input::Shape(shape) => Parsed::Shape(shape),
+                Input::Metadata { key, value } => Parsed::Metadata { key, value },
+                Input::Trait(pending) => {
+                    pending_traits.push(pending);
+                    continue;
+                }
+            });
+        }
+        if let Some((format, source, input)) = borrowed {
+            parsed.push(parse_bytes(&loader, format, source, input));
+        }
+        let index = declaration_index(&parsed);
+
         let mut merge = Merge {
             prelude: with_prelude,
             shapes: IndexMap::new(),
             metadata: NodeObject::new(),
             diagnostics: DiagnosticSet::with_limit(loader.max_diagnostics),
             failure: None,
+            syntactic_ids: Vec::new(),
         };
-        let mut pending_traits = Vec::new();
-        for input in inputs {
+        for input in parsed {
             match input {
-                Input::Json { source, bytes } => {
-                    merge.document(loader.parse_slice(&source, &bytes))
+                Parsed::Document(document) => merge.document(document),
+                Parsed::Idl(document) => {
+                    let index = index.as_ref().expect("built when an IDL input is present");
+                    match lower::lower(&document, index, loader.max_diagnostics) {
+                        Ok(lowered) => merge.lowered(lowered),
+                        Err(err) => merge.failed(err),
+                    }
                 }
-                Input::File(path) => merge.document(loader.parse_file(&path)),
-                Input::Failed(err) => merge.failed(err),
-                Input::Model(model) => {
+                Parsed::Model(model) => {
                     let data = model.data();
                     for shape in data.shapes.values() {
                         merge.shape(shape.clone());
@@ -320,13 +461,9 @@ impl ModelAssembler {
                         merge.metadata(key.to_owned(), value.clone());
                     }
                 }
-                Input::Shape(shape) => merge.shape(*shape),
-                Input::Metadata { key, value } => merge.metadata(key, value),
-                Input::Trait(pending) => pending_traits.push(pending),
+                Parsed::Shape(shape) => merge.shape(*shape),
+                Parsed::Metadata { key, value } => merge.metadata(key, value),
             }
-        }
-        if let Some((source, input)) = borrowed {
-            merge.document(loader.parse_slice(source, input));
         }
         for pending in pending_traits {
             merge.apply_trait(pending);
@@ -337,6 +474,7 @@ impl ModelAssembler {
             metadata,
             mut diagnostics,
             failure,
+            syntactic_ids,
             ..
         } = merge;
         if diagnostics.has_errors() {
@@ -349,6 +487,11 @@ impl ModelAssembler {
             prelude: with_prelude.then(prelude::shapes),
             knowledge: KnowledgeCache::default(),
         };
+        for pending in syntactic_ids {
+            if let Some(warning) = pending.check(&data) {
+                diagnostics.push(warning);
+            }
+        }
         critical_checks(&data, &mut diagnostics);
         if diagnostics.has_errors() {
             return Validated::new(None, diagnostics, None);
@@ -364,14 +507,56 @@ impl ModelAssembler {
     }
 }
 
+/// Parses one in-memory input.
+fn parse_bytes(loader: &JsonLoader, format: Format, source: &str, bytes: &[u8]) -> Parsed {
+    match format {
+        Format::Json => Parsed::Document(loader.parse_slice(source, bytes)),
+        Format::Idl => idl_loader::load_slice(loader, source, bytes)
+            .map_or_else(|err| Parsed::Document(Err(err)), Parsed::Idl),
+    }
+}
+
+/// Indexes every input's declarations for IDL shape-ID resolution, or returns `None` when no
+/// input needs one.
+fn declaration_index(parsed: &[Parsed]) -> Option<DeclarationIndex> {
+    if !parsed.iter().any(|input| matches!(input, Parsed::Idl(_))) {
+        return None;
+    }
+    let mut index = DeclarationIndex::default();
+    for input in parsed {
+        match input {
+            Parsed::Document(Ok(document)) => {
+                document.shapes.values().for_each(|s| index.add_shape(s))
+            }
+            Parsed::Idl(document) => index.add_idl_names(document),
+            Parsed::Model(model) => model
+                .data()
+                .shapes
+                .values()
+                .for_each(|s| index.add_shape(s)),
+            Parsed::Shape(shape) => index.add_shape(shape),
+            Parsed::Document(Err(_)) | Parsed::Metadata { .. } => {}
+        }
+    }
+    // Identifier targets are relative IDs, so they resolve only once every name is known.
+    for input in parsed {
+        if let Parsed::Idl(document) = input {
+            index.add_idl_resources(document);
+        }
+    }
+    Some(index)
+}
+
 /// Merge state while combining inputs.
 struct Merge {
     prelude: bool,
     shapes: IndexMap<ShapeId, Shape>,
     metadata: NodeObject,
     diagnostics: DiagnosticSet,
-    /// The first input-level failure (I/O, JSON syntax, or resource limit).
+    /// The first input-level failure (I/O, syntax, or resource limit).
     failure: Option<LoadErrorKind>,
+    /// IDL syntactic shape IDs, checked once every shape is known.
+    syntactic_ids: Vec<PendingSyntacticId>,
 }
 
 impl Merge {
@@ -381,6 +566,17 @@ impl Merge {
             self.failure = Some(kind);
         }
         self.diagnostics.extend(diagnostics);
+    }
+
+    fn lowered(&mut self, lowered: LoweredDocument) {
+        let LoweredDocument {
+            document,
+            diagnostics,
+            syntactic_ids,
+        } = lowered;
+        self.diagnostics.extend(diagnostics);
+        self.syntactic_ids.extend(syntactic_ids);
+        self.document(Ok(document));
     }
 
     fn document(&mut self, document: Result<Document, LoadError>) {
@@ -564,7 +760,7 @@ fn trait_map<'a>(
 /// - anything else is a conflict.
 ///
 /// Returns `Ok(None)` when `previous` is kept unchanged.
-fn merge_nodes(
+pub(crate) fn merge_nodes(
     previous: &Node,
     value: Node,
     conflict: impl FnOnce(&Node, &Node) -> Diagnostic,
