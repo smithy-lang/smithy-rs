@@ -302,6 +302,10 @@ impl RuntimeSchemaSetBuilder<'_> {
 }
 
 /// The schemas of one operation in a [`RuntimeSchemaSet`].
+// TODO(schema): Consider moving this type into `aws-smithy-schema`. There is already
+// Some work on this from the server team https://github.com/smithy-lang/smithy-rs/pull/4839
+// It depends only on `Schema` apart from its `ShapeId`, so generated and runtime clients
+// could share one operation descriptor.
 #[derive(Clone, Copy)]
 pub struct OperationSchemas<'a> {
     id: &'a ShapeId,
