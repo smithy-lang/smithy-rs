@@ -11,37 +11,35 @@ Server-side Smithy code generator
   Common commands:
   * `./gradlew :codegen-server-test:test` Generate code and run tests against it
 
-## AWS JSON response compatibility
+## AWS JSON response bindings
 
-AWS JSON 1.0 and 1.1 server responses ignore REST response bindings by default:
-successful responses use HTTP 200, modeled client/server errors use HTTP 400/500,
-and members annotated with `@httpHeader`, `@httpPrefixHeaders`, or
-`@httpResponseCode` remain ordinary body members.
+AWS JSON 1.0 and 1.1 servers have always answered with the operation's `@http(code)`
+success status, the modeled error's `@httpError` status (if present), and
+`@httpHeader`/`@httpPrefixHeaders` members as response headers (each member also stays
+in the document). `@httpResponseCode` members remain body data. This is the default,
+with or without `codegen.schemaSerde`.
 
-To preserve historical server responses, enable `legacyResponseBindings`
+With `codegen.schemaSerde: true` you can instead follow the AWS JSON specification,
 independently for each protocol in the `rust-server-codegen` plugin settings:
 
 ```json
 {
+  "codegen": { "schemaSerde": true },
   "customizationConfig": {
     "protocols": {
-      "awsJson1_0": { "legacyResponseBindings": true },
-      "awsJson1_1": { "legacyResponseBindings": true }
+      "awsJson1_0": { "responseBindings": "protocol" },
+      "awsJson1_1": { "responseBindings": "historical" }
     }
   }
 }
 ```
 
-The flag defaults to `false`. When `true`, generated AWS JSON servers use the
-operation's `@http` success status and the modeled error's `@httpError` status
-(if present), and emit modeled response headers in addition to those members
-in the body. `@httpResponseCode` members remain body data in either mode.
+* `"historical"` (default): as described above.
+* `"protocol"`: status 200 for success, the `@error` class status (400/500) for errors, and
+  every member in the document with no REST headers.
 
-REST JSON/XML continue to apply REST response bindings. RPC v2 CBOR continues
-to use HTTP 200 for success and honors `@httpError`, while retaining modeled
-header members in the body only. These settings affect server generation only.
-
-The settings apply to both the legacy serializers and `codegen.schemaSerde: true`.
-In schema mode, the short AWS JSON keys above are normalized to their full protocol
-shape IDs; `aws.protocols#awsJson1_0` and `aws.protocols#awsJson1_1` are also accepted.
+Servers generated without `schemaSerde` always behave as `"historical"`; the setting is
+validated but has no effect there. REST JSON/XML apply REST response bindings and RPC v2 CBOR
+ignores them, whatever this setting says. The short AWS JSON keys above are normalized to their
+full protocol shape IDs; `aws.protocols#awsJson1_0` and `aws.protocols#awsJson1_1` are also accepted.
 Specify each protocol once.
