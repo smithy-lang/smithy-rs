@@ -14,7 +14,7 @@ use multi_protocol_server_sdk::error::{
     UnionPayloadError, Unwelcome, UploadError,
 };
 use multi_protocol_server_sdk::input::{
-    GreetInput, ModeledDefaultsInput, NullableValuesInput, PingInput, PublishInput,
+    GreetInput, ModeledDefaultsInput, NoInputOutputInput, NullableValuesInput, PingInput, PublishInput,
     ResponseBindingsInput, RichDataInput, StructurePayloadInput, SubscribeInput, UnionPayloadInput,
     UploadInput,
 };
@@ -22,7 +22,7 @@ use multi_protocol_server_sdk::model::{
     DefaultColor, Events, NestedRecord, Note, PayloadChoice, PayloadRecord, RichRecord,
 };
 use multi_protocol_server_sdk::output::{
-    GreetOutput, ModeledDefaultsOutput, NullableValuesOutput, PingOutput, PublishOutput,
+    GreetOutput, ModeledDefaultsOutput, NoInputOutputOutput, NullableValuesOutput, PingOutput, PublishOutput,
     ResponseBindingsOutput, RichDataOutput, StructurePayloadOutput, SubscribeOutput,
     UnionPayloadOutput, UploadOutput,
 };
@@ -44,6 +44,10 @@ pub async fn greet(input: GreetInput) -> Result<GreetOutput, GreetError> {
         greeted: Some(name),
         tags: input.tags,
     })
+}
+
+pub async fn no_input_output(_: NoInputOutputInput) -> NoInputOutputOutput {
+    NoInputOutputOutput {}
 }
 
 pub async fn ping(_: PingInput) -> PingOutput {
@@ -226,6 +230,7 @@ pub fn service() -> MultiProtocolService {
     MultiProtocolService::builder(MultiProtocolServiceConfig::builder().build())
         .greet(greet)
         .ping(ping)
+        .no_input_output(no_input_output)
         .upload(upload)
         .subscribe(subscribe)
         .publish(publish)

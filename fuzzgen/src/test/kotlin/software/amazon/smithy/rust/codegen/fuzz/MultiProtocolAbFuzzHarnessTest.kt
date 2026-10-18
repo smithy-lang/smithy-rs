@@ -335,9 +335,9 @@ class MultiProtocolAbFuzzHarnessTest {
         // Canonical server service includes Upload even when RPC client declarations omit it.
         // Hash the exact text used for assembly, even if another task edits fixtures concurrently.
         val sources =
-            listOf("multi-protocol.smithy", "multi-protocol-common.smithy", file).distinct()
+            listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy", file).distinct()
                 .map { it to modelFile(it).readText() }
-        val canonicalSources = sources.filter { it.first in listOf("multi-protocol.smithy", "multi-protocol-common.smithy") }
+        val canonicalSources = sources.filter { it.first in listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy") }
         return project("multiprotocol", assemble(*canonicalSources.toTypedArray()), served, sources)
     }
 
@@ -361,7 +361,7 @@ class MultiProtocolAbFuzzHarnessTest {
         if (suite == "pokemon") {
             pokemon(served)
         } else {
-            multiProtocol("multi-protocol.smithy", served)
+            multiProtocol("multi-protocol-server.smithy", served)
         }
 
     /** Generates an HTTP 1.x server for [model] and copies the crate to [dest]. */

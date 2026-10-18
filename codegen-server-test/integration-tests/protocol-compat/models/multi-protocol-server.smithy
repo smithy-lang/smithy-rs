@@ -19,6 +19,7 @@ service MultiProtocolService {
     operations: [
         Greet
         Ping
+        NoInputOutput
         Upload
         Subscribe
         Publish

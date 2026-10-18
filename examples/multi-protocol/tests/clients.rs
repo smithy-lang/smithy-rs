@@ -167,10 +167,10 @@ macro_rules! error_and_stream_suite {
 }
 
 mod rpcv2_cbor {
-    core_suite!(core, aws_smithy_cbor::protocol::RpcV2Cbor::new());
+    core_suite!(core, aws_smithy_cbor::protocol::RpcV2CborProtocol::new());
     error_and_stream_suite!(
         errors_and_streams,
-        aws_smithy_cbor::protocol::RpcV2Cbor::new()
+        aws_smithy_cbor::protocol::RpcV2CborProtocol::new()
     );
 }
 
@@ -242,7 +242,7 @@ async fn one_sdk_selects_all_protocols_against_one_server() {
     use multi_protocol_client::{Client, Config};
     let address = multi_protocol::start_server().await;
     let protocols = [
-        SharedClientProtocol::new(aws_smithy_cbor::protocol::RpcV2Cbor::new()),
+        SharedClientProtocol::new(aws_smithy_cbor::protocol::RpcV2CborProtocol::new()),
         SharedClientProtocol::new(
             aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(),
         ),
