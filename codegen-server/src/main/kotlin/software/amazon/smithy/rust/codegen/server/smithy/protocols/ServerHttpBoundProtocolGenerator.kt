@@ -183,8 +183,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
-    private val bodyLimitExceededVariant =
-        if (runtimeConfig.httpVersion == HttpVersion.Http1x) "BodyLimitExceeded" else "TooLarge"
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
@@ -199,18 +197,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
             "Bytes" to RuntimeType.Bytes,
             "CodegenBody" to ServerRuntimeType.codegenBody(runtimeConfig),
-            "BodyLimitError" to
-                writable {
-                    if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
-                        rustTemplate(
-                            "#{CodegenBody}::CollectBodyError::<#{Infallible}>::BodyLimitExceeded(limit)",
-                            "CodegenBody" to ServerRuntimeType.codegenBody(runtimeConfig),
-                            "Infallible" to RuntimeType.stdConvert.resolve("Infallible"),
-                        )
-                    } else {
-                        rust("limit")
-                    }
-                },
             "Cow" to RuntimeType.Cow,
             "DateTime" to RuntimeType.dateTime(runtimeConfig),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
@@ -825,7 +811,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // amount of data a single request can buffer in memory — this prevents denial-of-service
             // attacks in which a client streams an unbounded `Transfer-Encoding: chunked` body.
             //
-            // If the limit is exceeded the helper returns a body-limit error that bubbles
+            // If the limit is exceeded the helper returns a `BodyLimitExceeded` error that bubbles
             // up as `RequestRejection::BufferHttpBodyBytes` and surfaces to the client as
             // `400 Bad Request` (plus the server drops the connection).
             //
@@ -836,11 +822,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (requestBodyMaxBytes > 0L) {
                 rustTemplate(
                     """
-                    let bytes = match #{CodegenBody}::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
+                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
                         #{Ok}(bytes) => bytes,
-                        #{Err}(#{CodegenBody}::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                        #{Err}(#{CodegenBody}::CollectBodyError::$bodyLimitExceededVariant(limit)) => {
-                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(#{BodyLimitError})));
+                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
                         }
                     };
                     """,
@@ -1099,11 +1085,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 {
-                                    let bytes = match #{CodegenBody}::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
+                                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
                                         #{Ok}(bytes) => bytes,
-                                        #{Err}(#{CodegenBody}::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                                        #{Err}(#{CodegenBody}::CollectBodyError::$bodyLimitExceededVariant(limit)) => {
-                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(#{BodyLimitError})));
+                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
                                         }
                                     };
                                     #{VerifyRequestContentTypeHeader:W}
