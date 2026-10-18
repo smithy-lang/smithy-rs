@@ -874,6 +874,7 @@ class SchemaRoutingGeneratorTest {
                 ##[derive(Debug)]
                 struct TestProtocol<const INDEX: usize>;
                 impl<const INDEX: usize> ServerProtocol for TestProtocol<INDEX> {
+                    fn serialize_runtime_error(&self, _: #{Server}::runtime_error::RuntimeError) -> Response<BoxBody> { unreachable!() }
                     fn protocol_id(&self) -> &'static ShapeId<'static> {
                         static IDS: [ShapeId<'static>; ${protocolIds.size}] = [$shapeIds];
                         &IDS[INDEX]

@@ -23,3 +23,43 @@ The `scenario` input selects populated, absent, empty, default, override or erro
 Native protocol tests assert the declared wire contract. A/B tests compare independently generated legacy and schema servers using the same model and inputs. The generic fuzz model has explicit reductions: see `tools/multi-protocol-ab-fuzz/README.md` and the generated model-projection manifests. A passing reduced-model comparison does not establish coverage for excluded operations or members.
 
 Earlier investigation records are in `validation/multi-protocol-enrichment/` and `validation/multi-protocol-example/report.md`. Those records predate the subsequent document-null and XML union-list fixes.
+
+## Selected-protocol extractor rejection tests
+
+`extractor_rejections_legacy` runs generated services with `schemaSerde: false` and compares
+schema services using the same model, protocol, configuration, and requests. It records all five
+runtime rejection variants for all five built-in protocols, plus streaming restJson1
+rejections. The comparison includes the full header map, exact body bytes, and
+`RuntimeErrorExtension`. Additional cases preserve service-owned custom responses and response
+extensions, verify handler dispatch, and distinguish required and optional request extensions.
+
+The constants in `tests/support/extractor_rejections.rs` were established by running the generated
+legacy fixtures. For example, a restJson1 validation rejection has status 400, JSON content type,
+`x-amzn-errortype: ValidationException`, and the raw validation message as its body. The CBOR
+runtime-validation fixture also returns the raw supplied bytes with its CBOR content type; the
+tests deliberately preserve that observation.
+
+`extractor_rejections_selected_protocol` verifies the shared `RuntimeError`,
+`IntoResponse::into_response_with_protocol`, and `ServerProtocol::serialize_runtime_error` APIs
+through generated services. Both this target and the legacy comparison target pass with the
+runtime implementation.
+
+The new target compares shared errors against generated legacy services, alternates protocols on
+one service, tests every rejection-wrapper arity from two through eight and every failure position,
+checks a service-owned context-aware override, and exercises both shared and custom streaming
+rejections without polling their request bodies. It also checks the selected external protocol
+serializer through the public middleware protocol-replacement seam, tuple-order independence,
+all five built-in protocol-local conversions, and the shared error's context-free fallback.
+A separate case registers an external protocol, routes a request with its router into a generated
+operation's upgrade, and checks that its runtime-error serializer handles the rejection. Another
+case sends each wire protocol to one service serving all five protocols.
+
+Generate the existing fixtures with `make codegen`, then run either target from this directory:
+
+```sh
+cargo test --quiet -p protocol-compat --test extractor_rejections_legacy
+cargo test --quiet -p protocol-compat --test extractor_rejections_selected_protocol
+```
+
+The Pokemon example is deferred. Existing protocol-specific error responses are compared against
+the recorded legacy expectations; the new shared error's context-free fallback is tested separately.

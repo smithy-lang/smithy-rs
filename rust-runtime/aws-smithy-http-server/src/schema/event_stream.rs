@@ -2137,6 +2137,10 @@ mod tests {
         #[derive(Debug)]
         struct HttpOnly;
         impl crate::schema::ServerProtocol for HttpOnly {
+            fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> crate::response::Response {
+                panic!("unexpected extractor runtime error: {error}")
+            }
+
             fn protocol_id(&self) -> &'static ShapeId<'static> {
                 static ID: ShapeId<'static> = aws_smithy_schema::shape_id!("test", "HttpOnly");
                 &ID

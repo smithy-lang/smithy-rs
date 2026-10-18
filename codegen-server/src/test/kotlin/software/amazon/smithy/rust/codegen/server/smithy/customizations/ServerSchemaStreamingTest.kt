@@ -358,6 +358,7 @@ internal class ServerSchemaStreamingTest {
         ##[derive(Debug)]
         struct HttpOnly;
         impl #{SmithyHttpServer}::schema::ServerProtocol for HttpOnly {
+            fn serialize_runtime_error(&self, _: #{SmithyHttpServer}::runtime_error::RuntimeError) -> #{SmithyHttpServer}::response::Response { unreachable!() }
             fn protocol_id(&self) -> &'static #{Schema}::ShapeId<'static> {
                 static ID: #{Schema}::ShapeId<'static> = #{Schema}::shape_id!("test", "HttpOnly");
                 &ID

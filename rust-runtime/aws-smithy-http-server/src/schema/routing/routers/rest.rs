@@ -214,10 +214,10 @@ fn requires_body_member(member: &Schema<'_>) -> bool {
         return false;
     };
     traits.contains_fqn("smithy.api#required")
-        && !traits
+        && traits
             .get_fqn("smithy.api#default")
             .and_then(|value| value.as_any().downcast_ref::<DocumentTrait>())
-            .is_some_and(|value| !matches!(value.value(), Document::Null))
+            .is_none_or(|value| matches!(value.value(), Document::Null))
 }
 
 /// Derives the operation's content type for protocol identification, independently of body

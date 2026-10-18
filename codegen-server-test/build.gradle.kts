@@ -330,6 +330,42 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 extraConfig = """, "customizationConfig": {"protocols": {"awsJson1_0": {"responseBindings": "protocol"}}}""",
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson11",
+                "compat-awsjson11-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson11",
+                "compat-awsjson11-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewXml",
+                "compat-xml-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewXml",
+                "compat-xml-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
             // Legacy (schemaSerde=false) twins on HTTP 1.x, for wire comparison with the schema services above.
             CodegenTest(
                 "com.example.review#ReviewRest",

@@ -216,6 +216,10 @@ impl crate::schema::MetadataRoutedProtocol for MetadataProtocol {
 }
 
 impl ServerProtocol for MetadataProtocol {
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response<BoxBody> {
+        self.inner.serialize_runtime_error(error)
+    }
+
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         static ID: ShapeId<'static> = shape_id!("test", "metadataRouting");
         &ID
@@ -249,6 +253,10 @@ impl ServerProtocol for MetadataProtocol {
 }
 
 impl ServerProtocol for BodyProtocol {
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response<BoxBody> {
+        self.inner.serialize_runtime_error(error)
+    }
+
     fn protocol_id(&self) -> &'static ShapeId<'static> {
         &PROTOCOLS[0]
     }

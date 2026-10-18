@@ -401,6 +401,14 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// Serializes a modeled error with the protocol's discriminator framing.
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response;
 
+    /// Frames a shared extractor runtime error using this protocol's runtime-error contract.
+    ///
+    /// Schema upgrades supply the protocol selected for the request. This is distinct from
+    /// modeled constraint validation and must preserve the protocol's existing runtime error
+    /// status, headers, body, and response extensions. External protocols implement this
+    /// method alongside [`Self::serialize_rejection`] to define their own framing.
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response;
+
     /// Converts a routing rejection into this protocol's response.
     ///
     /// The routing service classifies why routing failed

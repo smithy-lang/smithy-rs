@@ -31,6 +31,11 @@ compat-document-legacy-server-sdk = { path = "../../build/smithyprojections/code
 compat-document-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-document-server-sdk/rust-server-codegen" }
 
 [dev-dependencies]
+compat-awsjson11-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson11-server-sdk/rust-server-codegen" }
+compat-awsjson11-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson11-legacy-server-sdk/rust-server-codegen" }
+compat-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-xml-server-sdk/rust-server-codegen" }
+compat-xml-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-xml-legacy-server-sdk/rust-server-codegen" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
 compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
 bytes = "1"

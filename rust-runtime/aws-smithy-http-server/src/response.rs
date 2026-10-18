@@ -40,6 +40,19 @@ pub type Response<T = BoxBody> = http::Response<T>;
 pub trait IntoResponse<Protocol> {
     /// Performs a conversion into a [`http::Response`].
     fn into_response(self) -> http::Response<BoxBody>;
+
+    /// Converts an extractor rejection using the protocol selected for this request.
+    ///
+    /// The default preserves an existing implementation's complete HTTP response. Override
+    /// this method to frame a rejection through the selected protocol, as
+    /// [`crate::runtime_error::RuntimeError`] does. Schema upgrades call this method; direct
+    /// calls and legacy upgrades continue to use [`Self::into_response`].
+    fn into_response_with_protocol(self, _protocol: &dyn crate::schema::ServerProtocol) -> http::Response<BoxBody>
+    where
+        Self: Sized,
+    {
+        self.into_response()
+    }
 }
 
 impl<P> IntoResponse<P> for std::convert::Infallible {
