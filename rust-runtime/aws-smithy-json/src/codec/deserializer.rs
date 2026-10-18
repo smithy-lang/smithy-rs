@@ -2371,6 +2371,64 @@ mod tests {
         assert_eq!(bar, None); // "Baz" not recognized without jsonName
     }
 
+    /// A member's own name can collide with another member's `@jsonName`. Every
+    /// occurrence of the shared field resolves to the first matching member, wherever it
+    /// appears in the object and however often it repeats.
+    #[test]
+    fn colliding_wire_names_resolve_to_the_first_member() {
+        use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+        static STATUS: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "status"),
+            ShapeType::String,
+            "status",
+            0,
+        );
+        static STATUS_TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "statusText"),
+            ShapeType::String,
+            "statusText",
+            1,
+        )
+        .with_json_name("status");
+        static OTHER: Schema<'static> =
+            Schema::new_member(shape_id!("ns", "S", "other"), ShapeType::String, "other", 2);
+        static S: Schema<'static> = Schema::new_struct(
+            shape_id!("ns", "S"),
+            ShapeType::Structure,
+            &[&STATUS, &STATUS_TEXT, &OTHER],
+        );
+
+        fn read(json: &[u8]) -> Vec<(usize, String)> {
+            let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+            let mut seen = Vec::new();
+            deser
+                .read_struct(&S, &mut |member, d| {
+                    seen.push((member.member_index().unwrap(), d.read_string(member)?));
+                    Ok(())
+                })
+                .unwrap();
+            seen
+        }
+
+        assert_eq!(
+            read(br#"{"status":"a","status":"b"}"#),
+            [(0, "a".to_owned()), (0, "b".to_owned())]
+        );
+        assert_eq!(
+            read(br#"{"other":"x","status":"a"}"#),
+            [(2, "x".to_owned()), (0, "a".to_owned())]
+        );
+        assert_eq!(
+            read(br#"{"status":"a","other":"x","status":"b"}"#),
+            [
+                (0, "a".to_owned()),
+                (2, "x".to_owned()),
+                (0, "b".to_owned())
+            ]
+        );
+    }
+
     fn timestamp_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::TIMESTAMP
     }

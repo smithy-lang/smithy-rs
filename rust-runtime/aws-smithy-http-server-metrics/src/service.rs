@@ -17,6 +17,8 @@ use crate::default::DefaultMetricsServiceCounters;
 use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
+use crate::default::HasSmithyMetrics;
+use crate::pool::SmithyMetricsPool;
 use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
@@ -124,7 +126,7 @@ impl<Ser, Entry, Sink, Init, Res> Service<HttpRequest>
 where
     Ser: Service<HttpRequest, Response = HttpResponse> + Clone,
     Ser::Future: Send + 'static,
-    Entry: ThreadSafeCloseEntry,
+    Entry: ThreadSafeCloseEntry + HasSmithyMetrics,
     Sink: ThreadSafeEntrySink<Entry>,
     Init: InitMetrics<Entry, Sink>,
     Res: ResponseMetrics<Entry>,
@@ -139,6 +141,14 @@ where
 
     fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut metrics = (self.init_metrics)(&mut req);
+
+        // Obtain a producer handle for this request's metrics pool and store it
+        // in the request extensions as a `SmithyMetricsPool`. Independently-owned
+        // middleware and libraries that hold the request can pull it out and
+        // contribute child metrics that flatten into this request's entry.
+        let pool_handle = metrics.smithy_metrics().metrics_pool.handle();
+        req.extensions_mut()
+            .insert(SmithyMetricsPool::new(pool_handle));
 
         // We increment the outstanding requests and get the count at this layer
         // (typically outer middleware) so we can get this as close to the time

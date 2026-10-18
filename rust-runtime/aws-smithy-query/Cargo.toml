@@ -19,6 +19,10 @@ urlencoding = "2.1"
 criterion = "0.5.1"
 
 [[bench]]
+name = "collections"
+harness = false
+
+[[bench]]
 name = "serde"
 harness = false
 
