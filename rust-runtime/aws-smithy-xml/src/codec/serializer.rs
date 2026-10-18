@@ -521,12 +521,10 @@ impl ShapeSerializer for XmlSerializer {
             };
             let name = if let Some(override_name) = root_override {
                 override_name
-            } else if schema.xml_name().is_none() {
+            } else {
                 self.list_item_name
                     .clone()
                     .unwrap_or_else(|| Self::element_name(schema).to_string())
-            } else {
-                Self::element_name(schema).to_string()
             };
             let saved_list_item = self.list_item_name.take();
             self.open_element(&name);
@@ -1103,6 +1101,79 @@ mod tests {
         let p = Person { name: "Iago" };
         let out = serialize(|ser| ser.write_struct(&PERSON_SCHEMA, &p));
         assert_eq!(out, "<Person><name>Iago</name></Person>");
+    }
+
+    #[test]
+    fn list_item_names_override_union_target_xml_name() {
+        static TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Choice", "text"),
+            ShapeType::String,
+            "text",
+            0,
+        );
+        static CHOICE: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Choice"), ShapeType::Union, &[&TEXT])
+                .with_xml_name("ChoiceTargetRoot");
+        struct Choice;
+        impl SerializableStruct for Choice {
+            fn schema(&self) -> &Schema<'_> {
+                &CHOICE
+            }
+
+            fn serialize_members(
+                &self,
+                serializer: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                serializer.write_string(&TEXT, "hello")
+            }
+        }
+        let member = Schema::new_member(
+            shape_id!("test", "Choices", "member"),
+            ShapeType::Union,
+            "member",
+            0,
+        );
+        let renamed = Schema::new_member(
+            shape_id!("test", "Choices", "member"),
+            ShapeType::Union,
+            "member",
+            0,
+        )
+        .with_xml_name("item");
+        for (item_schema, flattened, expected) in [
+            (
+                &member,
+                false,
+                "<choices><member><text>hello</text></member></choices>",
+            ),
+            (
+                &renamed,
+                false,
+                "<choices><item><text>hello</text></item></choices>",
+            ),
+            (&member, true, "<choices><text>hello</text></choices>"),
+        ] {
+            let mut list = Schema::new_member(
+                shape_id!("test", "Output", "choices"),
+                ShapeType::List,
+                "choices",
+                0,
+            )
+            .with_list_member(item_schema);
+            if flattened {
+                list = list.with_xml_flattened();
+            }
+            let output = serialize(|serializer| {
+                serializer.write_list(&list, &|serializer| {
+                    serializer.write_struct(&CHOICE, &Choice)
+                })
+            });
+            assert_eq!(output, expected);
+        }
+        assert_eq!(
+            serialize(|serializer| serializer.write_struct(&CHOICE, &Choice)),
+            "<ChoiceTargetRoot><text>hello</text></ChoiceTargetRoot>",
+        );
     }
 
     #[test]

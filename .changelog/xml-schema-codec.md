@@ -13,3 +13,6 @@ instructions, and quoted attributes. Flattened collections now retain the config
 recursion-depth limit. Add independent document and root-name validation settings,
 opt-in filtering of wrapped collection element names, and a modeled-error root-name
 override. Default XML recovery behavior is preserved.
+
+Preserve list-item XML names for union targets, including renamed and flattened
+items, while retaining the target XML name for standalone union serialization.
