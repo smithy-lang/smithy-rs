@@ -104,6 +104,10 @@ harness = false
 name = "error_bindings"
 harness = false
 
+[[bench]]
+name = "event_streams"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
