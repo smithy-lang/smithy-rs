@@ -27,20 +27,35 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 #[derive(Debug)]
 pub struct RestXml {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_xml::codec::XmlCodec>,
+    /// Reads the `<Error>` element of received event-stream exception frames, whose root name is
+    /// not the error structure's.
+    exception_codec: aws_smithy_xml::codec::XmlCodec,
+    /// `@restXml(noErrorWrapping: true)`: exception frames are rooted at `<Error>`.
+    no_error_wrapping: bool,
 }
 
 impl RestXml {
-    fn new(strict_collection_element_names: bool, validate_document: bool, accept_text_xml: bool) -> Self {
+    fn new(
+        strict_collection_element_names: bool,
+        validate_document: bool,
+        accept_text_xml: bool,
+        no_error_wrapping: bool,
+    ) -> Self {
+        let codec = |validate_root_name: bool| {
+            aws_smithy_xml::codec::XmlCodec::new(
+                aws_smithy_xml::codec::XmlCodecSettings::builder()
+                    .error_root_name("Error")
+                    .validate_root_name(validate_root_name)
+                    .validate_document(validate_document)
+                    .strict_collection_element_names(strict_collection_element_names)
+                    .build(),
+            )
+        };
         Self {
+            exception_codec: codec(false),
+            no_error_wrapping,
             inner: crate::schema::protocol::rest::RestProtocol::new(
-                aws_smithy_xml::codec::XmlCodec::new(
-                    aws_smithy_xml::codec::XmlCodecSettings::builder()
-                        .error_root_name("Error")
-                        .validate_root_name(true)
-                        .validate_document(validate_document)
-                        .strict_collection_element_names(strict_collection_element_names)
-                        .build(),
-                ),
+                codec(true),
                 RestPolicy {
                     request_content_type_aliases: if accept_text_xml {
                         REQUEST_CONTENT_TYPE_ALIASES
@@ -56,7 +71,7 @@ impl RestXml {
 
 impl Default for RestXml {
     fn default() -> Self {
-        Self::new(true, false, false)
+        Self::new(true, false, false, false)
     }
 }
 
@@ -85,6 +100,9 @@ impl MetadataRoutedProtocol for RestXml {
             crate::schema::settings::get::<bool>(ctx.settings, "strictCollectionElementNames")?.unwrap_or(true),
             crate::schema::settings::get::<bool>(ctx.settings, "validateDocument")?.unwrap_or(false),
             crate::schema::settings::get::<bool>(ctx.settings, "acceptTextXml")?.unwrap_or(false),
+            // A model fact, recorded by codegen on the service schema.
+            crate::schema::traits::RestXmlTrait::from_service(ctx.service)
+                .is_some_and(crate::schema::traits::RestXmlTrait::no_error_wrapping),
         );
         protocol
             .inner
@@ -104,7 +122,11 @@ impl MetadataRoutedProtocol for RestXml {
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE).exception_http_bindings(true))
+        Some(
+            EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE)
+                .exception_http_bindings(true)
+                .xml_exceptions(&self.exception_codec, !self.no_error_wrapping),
+        )
     }
 }
 
