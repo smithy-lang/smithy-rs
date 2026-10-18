@@ -598,6 +598,121 @@ internal class ServerSchemaStreamingTest {
         servers.forEach { check(!it.path.resolve("src/protocol_serde").toFile().exists()) }
     }
 
+    @Test
+    fun `event stream extractor rejections use the selected protocol before polling input`() {
+        val multiProtocolModel = model(rpc = false).replace("@restJson1\n", "@restJson1\n            @rpcv2Cbor\n")
+        serverIntegrationTest(
+            multiProtocolModel.asSmithyModel(),
+            params(rpc = false),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("event_stream_extractor_rejections") {
+                    rustTemplate(
+                        """
+                        use #{SmithyHttpServer}::{request::FromParts, response::IntoResponse, runtime_error::RuntimeError};
+                        use #{HttpBodyUtil}::BodyExt;
+                        struct Caller;
+                        impl<P> FromParts<P> for Caller {
+                            type Rejection = RuntimeError;
+                            fn from_parts(_: &mut #{Http}::request::Parts) -> #{Result}<Self, Self::Rejection> {
+                                #{Err}(RuntimeError::Validation("Caller identity could not be resolved".to_owned()))
+                            }
+                        }
+                        struct CustomCaller;
+                        struct CustomRejection;
+                        impl std::fmt::Display for CustomRejection {
+                            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                                f.write_str("custom caller rejection")
+                            }
+                        }
+                        impl<P> FromParts<P> for CustomCaller {
+                            type Rejection = CustomRejection;
+                            fn from_parts(_: &mut #{Http}::request::Parts) -> #{Result}<Self, Self::Rejection> {
+                                #{Err}(CustomRejection)
+                            }
+                        }
+                        impl<P> IntoResponse<P> for CustomRejection {
+                            fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                                #{Http}::Response::builder().status(429).header("x-caller-error", "missing")
+                                    .body(#{SmithyHttpServer}::body::to_boxed(#{Bytes}::from_static(b"custom caller rejection"))).unwrap()
+                            }
+                        }
+                        async fn chat(
+                            _: crate::input::ChatInput,
+                            _: #{Option}<#{SmithyHttpServer}::Extension<#{String}>>,
+                            _: Caller,
+                        ) -> #{Result}<crate::output::ChatOutput, crate::error::ChatError> {
+                            panic!("duplex rejection reached the handler")
+                        }
+                        async fn upload(_: crate::input::UploadInput, _: CustomCaller)
+                            -> #{Result}<crate::output::UploadOutput, crate::error::UploadError> {
+                            panic!("input event stream rejection reached the handler")
+                        }
+                        async fn download(_: crate::input::DownloadInput, _: Caller)
+                            -> #{Result}<crate::output::DownloadOutput, crate::error::DownloadError> {
+                            panic!("output event stream rejection reached the handler")
+                        }
+                        let service = crate::service::ChatService::builder(crate::service::ChatServiceConfig::builder().build())
+                            .chat(chat).upload(upload).download(download).build_unchecked();
+                        // Alternate selection on the same generated service, including the tuple rejection in Chat.
+                        for rpc in [false, true, false, true] {
+                            for (operation, rest_uri, custom) in [
+                                ("Chat", "/chat/lobby", false),
+                                ("Upload", "/upload", true),
+                                ("Download", "/download", false),
+                            ] {
+                                let polls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+                                let body_polls = polls.clone();
+                                let body = #{HttpBodyUtil}::StreamBody::new(#{FuturesUtil}::stream::poll_fn(move |_| {
+                                    body_polls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                    panic!("extractor rejection polled the event stream request body");
+                                    ##[allow(unreachable_code)]
+                                    std::task::Poll::Ready(#{None}::<#{Result}<#{HttpBody}::Frame<#{Bytes}>, std::convert::Infallible>>)
+                                }));
+                                let uri = if rpc { format!("/service/ChatService/operation/{operation}") } else { rest_uri.to_owned() };
+                                let content_type = if operation == "Download" {
+                                    if rpc { "application/cbor" } else { "application/json" }
+                                } else { "application/vnd.amazon.eventstream" };
+                                let mut request = #{Http}::Request::builder().method("POST").uri(uri)
+                                    .header("content-type", content_type);
+                                if rpc { request = request.header("smithy-protocol", "rpc-v2-cbor"); }
+                                let request = request.body(#{SmithyHttpServer}::body::boxed_sync(body)).unwrap();
+                                let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
+                                let (parts, body) = response.into_parts();
+                                let bytes = body.collect().await.unwrap().to_bytes();
+                                assert_eq!(polls.load(std::sync::atomic::Ordering::SeqCst), 0);
+                                let mut headers = #{Http}::HeaderMap::new();
+                                if custom {
+                                    assert_eq!(parts.status, #{Http}::StatusCode::TOO_MANY_REQUESTS);
+                                    headers.insert("x-caller-error", #{Http}::HeaderValue::from_static("missing"));
+                                    assert_eq!(bytes, b"custom caller rejection".as_slice());
+                                    assert!(parts.extensions.get::<#{SmithyHttpServer}::extension::RuntimeErrorExtension>().is_none());
+                                } else {
+                                    // Preserve the legacy runtime validation contract: these are raw reason bytes,
+                                    // even with the CBOR media type, and an HTTP rejection rather than an event frame.
+                                    assert_eq!(parts.status, #{Http}::StatusCode::BAD_REQUEST, "{operation}, rpc={rpc}");
+                                    headers.insert("content-type", #{Http}::HeaderValue::from_static(
+                                        if rpc { "application/cbor" } else { "application/json" }
+                                    ));
+                                    if !rpc {
+                                        headers.insert("x-amzn-errortype", #{Http}::HeaderValue::from_static("ValidationException"));
+                                    }
+                                    assert_eq!(bytes, b"Caller identity could not be resolved".as_slice());
+                                    assert_eq!(parts.extensions.get::<#{SmithyHttpServer}::extension::RuntimeErrorExtension>()
+                                        .expect("runtime error metadata").to_string(), "ValidationException");
+                                }
+                                assert_eq!(parts.headers, headers);
+                            }
+                        }
+                        """,
+                        *scope(codegenContext),
+                    )
+                }
+            }
+        }
+    }
+
     // / A `@sigv4` service wraps its event stream receivers in the generated `SigV4Receiver`;
     // / the streaming glue must accept that wrapper wherever it accepts the plain `Receiver`
     // / (`apply_initial_request` takes the initial-frame receive as a closure for this reason).
