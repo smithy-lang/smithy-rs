@@ -278,12 +278,13 @@ fn resolve_protocols(
     // B -> C
     // A -> C
     for via in 0..count {
-        for from in 0..count {
-            if reaches[from][via] {
-                for to in 0..count {
-                    if reaches[via][to] {
-                        reaches[from][to] = true;
-                    }
+        let (before, via_and_after) = reaches.split_at_mut(via);
+        let (via_row, after) = via_and_after.split_first_mut().expect("via is a valid row index");
+        // Combining the via row with itself leaves it unchanged.
+        for row in before.iter_mut().chain(after.iter_mut()) {
+            if row[via] {
+                for (reachable, via_reachable) in row.iter_mut().zip(via_row.iter()) {
+                    *reachable |= *via_reachable;
                 }
             }
         }

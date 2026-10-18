@@ -163,7 +163,7 @@ where
             }
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
-                Err(err) => return Ok(err.into_response()),
+                Err(err) => return Ok(err.into_response_with_protocol(&**protocol)),
             };
             let mut request = match convert_request(parts, body) {
                 Ok(request) => request.map(Some),
@@ -317,7 +317,7 @@ where
 
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
-                Err(err) => return Ok(err.into_response()),
+                Err(err) => return Ok(err.into_response_with_protocol(&**protocol)),
             };
             let request = match convert_request(parts, crate::body::RequestBody::new(body)) {
                 Ok(request) => request,
@@ -329,7 +329,7 @@ where
                 Err(err) => return Ok(protocol.serialize_rejection(err)),
             };
             match service.oneshot((input, extractors)).await {
-                Ok(output) => Ok(Op::serialize_streaming_output(output, &protocol)),
+                Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
                 Err(err) => Ok(protocol.serialize_error(&err)),
             }
         })

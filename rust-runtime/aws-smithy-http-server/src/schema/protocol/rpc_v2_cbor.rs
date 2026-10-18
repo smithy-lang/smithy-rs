@@ -224,6 +224,10 @@ impl ServerProtocol for RpcV2Cbor {
         }
     }
 
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response {
+        IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::from(error))
+    }
+
     /// rpcv2Cbor's `From<RequestRejection>` collapses every transport failure into a 400
     /// `Serialization` (body `0xa0`, no `__type`, upstream #3716, and no `smithy-protocol`
     /// header). A constraint violation serializes the modeled validation error, `__type` first,

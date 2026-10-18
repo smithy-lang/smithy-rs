@@ -194,6 +194,10 @@ impl ServerProtocol for RestXml {
         IntoResponse::<RestXml>::into_response(error)
     }
 
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response {
+        IntoResponse::<RestXml>::into_response(RuntimeError::from(error))
+    }
+
     /// restXml keeps 415 for `Content-Type` failures, but its `From<RequestRejection>` has no
     /// `NotAcceptable` arm, so an `Accept` mismatch falls through to a 400 `Serialization`, NOT
     /// a 406. And its `RuntimeError` response drops the validation body entirely: every runtime

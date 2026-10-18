@@ -189,6 +189,10 @@ impl ServerProtocol for RestJson1 {
         IntoResponse::<RestJson1>::into_response(error)
     }
 
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response {
+        IntoResponse::<RestJson1>::into_response(RuntimeError::from(error))
+    }
+
     /// restJson1 is the only protocol that keeps `Accept` and `Content-Type` failures distinct:
     /// 406 and 415, per its `From<RequestRejection>` mapping. Transport failures answer with the
     /// `RuntimeError` responses; a constraint violation with the modeled validation error.

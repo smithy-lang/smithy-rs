@@ -310,6 +310,10 @@ macro_rules! aws_json_protocol {
                 IntoResponse::<$marker>::into_response(error)
             }
 
+            fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> Response {
+                IntoResponse::<$marker>::into_response(RuntimeError::from(error))
+            }
+
             /// awsJson's `From<RequestRejection>` collapses every transport failure, `Accept`
             /// and `Content-Type` mismatches included, into a 400 `Serialization`; routing
             /// through that same `From` preserves the collapse. A constraint violation answers

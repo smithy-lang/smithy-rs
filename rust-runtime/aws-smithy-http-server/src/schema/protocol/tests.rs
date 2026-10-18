@@ -729,6 +729,10 @@ fn provided_methods_collect_the_body_and_gate_nothing() {
     }
 
     impl ServerProtocol for Minimal {
+        fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> crate::response::Response {
+            panic!("unexpected extractor runtime error: {error}")
+        }
+
         fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
             static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "minimal");
             &ID
