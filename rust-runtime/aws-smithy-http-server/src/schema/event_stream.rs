@@ -23,14 +23,18 @@
 
 use std::fmt;
 use std::marker::PhantomData;
+use std::sync::OnceLock;
 
 use aws_smithy_eventstream::error::Error;
-use aws_smithy_eventstream::frame::{MarshallMessage, NoOpSigner, UnmarshallMessage, UnmarshalledMessage};
+use aws_smithy_eventstream::frame::{
+    write_message_to, MarshallMessage, NoOpSigner, UnmarshallMessage, UnmarshalledMessage,
+};
 use aws_smithy_eventstream::smithy as expect_fns;
-use aws_smithy_http::event_stream::{EventOrInitial, EventOrInitialMarshaller, EventStreamSender, InitialMessageType};
+use aws_smithy_http::event_stream::{EventStreamSender, InitialMessageType};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
-use aws_smithy_schema::{Schema, ShapeType};
+use aws_smithy_schema::{intern_header_name, Schema, ShapeType};
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
+use aws_smithy_types::str_bytes::StrBytes;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 use bytes::Bytes;
 
@@ -133,11 +137,15 @@ where
             ],
             payload,
         );
-        let initial = futures_util::stream::iter([Ok(EventOrInitial::InitialMessage(initial_message))]);
-        let events = events.into_inner().map(|event| event.map(EventOrInitial::Event));
-        let sender = EventStreamSender::from(initial.chain(events));
-        let adapter = sender.into_body_stream(EventOrInitialMarshaller::new(marshaller), error_marshaller, signer);
-        Ok(boxed(http_body_util::StreamBody::new(adapter)))
+        // Encode the initial frame up front and chain it ahead of the event frames, as the
+        // generated marshallers do, so events are not wrapped and dispatched per frame.
+        // The no-op signer leaves the frame unchanged.
+        let mut initial_frame = Vec::new();
+        write_message_to(&initial_message, &mut initial_frame)
+            .map_err(|err| SerdeError::custom(format!("failed to write the initial-response frame: {err}")))?;
+        let initial = futures_util::stream::iter([Ok(http_body::Frame::data(Bytes::from(initial_frame)))]);
+        let adapter = events.into_body_stream(marshaller, error_marshaller, signer);
+        Ok(boxed(http_body_util::StreamBody::new(initial.chain(adapter))))
     } else {
         let adapter = events.into_body_stream(marshaller, error_marshaller, signer);
         Ok(boxed(http_body_util::StreamBody::new(adapter)))
@@ -154,6 +162,9 @@ where
 /// active variant, and the variant's member schemas drive header and payload placement.
 pub struct SchemaEventMarshaller<T> {
     protocol: SharedServerProtocol,
+    /// Header strings per union variant, indexed by variant member index and filled on first
+    /// use, so each event clones shared names rather than allocating them.
+    variants: OnceLock<Box<[OnceLock<FrameStrings>]>>,
     _phantom: PhantomData<fn() -> T>,
 }
 
@@ -162,6 +173,7 @@ impl<T> SchemaEventMarshaller<T> {
     pub fn new(protocol: SharedServerProtocol) -> Self {
         Self {
             protocol,
+            variants: OnceLock::new(),
             _phantom: PhantomData,
         }
     }
@@ -179,10 +191,20 @@ impl<T: SerializableStruct> MarshallMessage for SchemaEventMarshaller<T> {
     type Input = T;
 
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
-        let capability = capability_or_marshalling_error(&self.protocol)?;
+        // A protocol's framing support is fixed, so it is checked once; later frames look the
+        // framing up only when they need it.
+        let variants = match self.variants.get() {
+            Some(variants) => variants,
+            None => {
+                capability_or_marshalling_error(&self.protocol)?;
+                self.variants
+                    .get_or_init(|| input.schema().members().iter().map(|_| OnceLock::new()).collect())
+            }
+        };
         let mut serializer = UnionVariantSerializer {
-            capability,
+            framing: Framing::Deferred(&self.protocol),
             kind: FrameKind::Event,
+            variants,
             message: None,
         };
         input
@@ -233,8 +255,15 @@ impl<E: SerializableEventError> MarshallMessage for SchemaEventErrorMarshaller<E
     fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
         let capability = capability_or_marshalling_error(&self.protocol)?;
         let (exception_type, schema, value) = input.variant();
-        build_frame(capability, exception_type, schema, value, FrameKind::Exception)
-            .map_err(|err| Error::marshalling(format!("{err}")))
+        build_frame(
+            Framing::Known(capability),
+            exception_type,
+            schema,
+            value,
+            FrameKind::Exception,
+            None,
+        )
+        .map_err(|err| Error::marshalling(format!("{err}")))
     }
 }
 
@@ -614,19 +643,96 @@ fn capability_or_marshalling_error(protocol: &SharedServerProtocol) -> Result<Ev
         .ok_or_else(|| Error::marshalling(NO_EVENT_STREAM_SUPPORT.to_owned()))
 }
 
+/// A protocol's event stream framing, either already known or looked up when first needed.
+///
+/// The lookup is a dynamic call, which is measurable per event; frames with cached header
+/// strings and raw payloads never need it.
+#[derive(Clone, Copy)]
+enum Framing<'a> {
+    Known(EventStreamFraming<'a>),
+    Deferred(&'a SharedServerProtocol),
+}
+
+impl<'a> Framing<'a> {
+    fn get(self) -> Result<EventStreamFraming<'a>, SerdeError> {
+        match self {
+            Self::Known(capability) => Ok(capability),
+            Self::Deferred(protocol) => protocol
+                .event_stream_framing()
+                .ok_or_else(|| SerdeError::custom(NO_EVENT_STREAM_SUPPORT)),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum FrameKind {
     Event,
     Exception,
 }
 
+/// `:content-type` of a frame whose payload member has `payload_type`, or whose whole struct
+/// is the payload when `None`.
+fn content_type(payload_type: Option<ShapeType>, media_type: &str) -> StrBytes {
+    match payload_type {
+        Some(ShapeType::Blob) => "application/octet-stream".into(),
+        Some(ShapeType::String) => "text/plain".into(),
+        _ => media_type.to_owned().into(),
+    }
+}
+
+/// The header strings of one event struct's frames, derived from its schema once.
+///
+/// Schema strings are only borrowed for `'_`, so building a header from them allocates, and
+/// sharing an owned copy costs two atomic reference count updates per header. Interned
+/// `'static` strings make each header free to build. The interner is bounded by the distinct
+/// names in the process's models.
+struct FrameStrings {
+    event_type: &'static str,
+    content_type: &'static str,
+    /// `@eventHeader` member names, indexed by member index.
+    header_names: Box<[Option<&'static str>]>,
+}
+
+impl FrameStrings {
+    fn new(event_type: &str, schema: &Schema<'_>, capability: EventStreamFraming<'_>) -> Self {
+        let members = schema.members();
+        let payload_type = members.iter().find(|m| m.event_payload()).map(|m| m.shape_type());
+        let mut header_names = vec![None; members.len()];
+        for member in members.iter().filter(|m| m.event_header()) {
+            if let (Some(index), Some(name)) = (member.member_index(), member.member_name()) {
+                if let Some(slot) = header_names.get_mut(index) {
+                    *slot = Some(intern_header_name(name));
+                }
+            }
+        }
+        Self {
+            event_type: intern_header_name(event_type),
+            content_type: intern_header_name(content_type(payload_type, capability.media_type).as_str()),
+            header_names: header_names.into(),
+        }
+    }
+}
+
+/// Pushes a header whose name and value are both `'static`.
+///
+/// Callers push from separate branches rather than first selecting a [`StrBytes`]: moving a
+/// branch-selected value into the header enum copies it through misaligned stack slots, which
+/// stalls on store forwarding and measurably slows per-event marshalling.
+fn push_static_header(headers: &mut Vec<Header>, name: &'static str, value: &'static str) {
+    headers.push(Header::new(name, HeaderValue::String(value.into())));
+}
+
 /// Builds one event or exception frame from a serializable event struct.
+///
+/// `strings`, when given, must have been derived from `schema`; it only avoids allocations.
+#[inline]
 fn build_frame(
-    capability: EventStreamFraming<'_>,
+    framing: Framing<'_>,
     event_type: &str,
     schema: &Schema<'_>,
     value: &dyn SerializableStruct,
     kind: FrameKind,
+    strings: Option<&FrameStrings>,
 ) -> Result<Message, SerdeError> {
     let (message_type, type_header) = match kind {
         FrameKind::Event => ("event", ":event-type"),
@@ -636,20 +742,33 @@ fn build_frame(
     // headers. Match the generated marshaller's initial capacity to avoid growth.
     let mut headers = Vec::with_capacity(4);
     headers.push(Header::new(":message-type", HeaderValue::String(message_type.into())));
-    headers.push(Header::new(
-        type_header,
-        HeaderValue::String(event_type.to_string().into()),
-    ));
+    match strings {
+        Some(strings) if strings.event_type == event_type => {
+            push_static_header(&mut headers, type_header, strings.event_type)
+        }
+        _ => headers.push(Header::new(
+            type_header,
+            HeaderValue::String(StrBytes::copy_from_str(event_type)),
+        )),
+    }
+    let push_content_type = |headers: &mut Vec<Header>, payload_type| -> Result<(), SerdeError> {
+        match strings {
+            Some(strings) => push_static_header(headers, ":content-type", strings.content_type),
+            None => headers.push(Header::new(
+                ":content-type",
+                HeaderValue::String(content_type(payload_type, framing.get()?.media_type)),
+            )),
+        }
+        Ok(())
+    };
     let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
     let has_header_members = schema.members().iter().any(|m| m.event_header());
 
     if payload_member.is_none() && !has_header_members {
         // No event traits at all (including empty structs): the whole struct is the payload,
         // encoded by the selected protocol's codec.
-        headers.push(Header::new(
-            ":content-type",
-            HeaderValue::String(capability.media_type.to_string().into()),
-        ));
+        let capability = framing.get()?;
+        push_content_type(&mut headers, None)?;
         let framed = capability
             .exception_discriminator
             .filter(|_| matches!(kind, FrameKind::Exception))
@@ -673,7 +792,8 @@ fn build_frame(
     let mut payload = None;
     {
         let mut member_ser = EventMemberSerializer {
-            capability,
+            framing,
+            header_names: strings.map(|strings| &strings.header_names[..]).unwrap_or_default(),
             headers: &mut headers,
             payload: &mut payload,
         };
@@ -683,15 +803,7 @@ fn build_frame(
         Some(member) => {
             // `:content-type` is decided by the payload member's shape, not by whether the
             // optional value was present, matching the generated marshallers this replaces.
-            let content_type = match member.shape_type() {
-                ShapeType::Blob => "application/octet-stream",
-                ShapeType::String => "text/plain",
-                _ => capability.media_type,
-            };
-            headers.push(Header::new(
-                ":content-type",
-                HeaderValue::String(content_type.to_string().into()),
-            ));
+            push_content_type(&mut headers, Some(member.shape_type()))?;
             Ok(Message::new_from_parts(headers, payload.unwrap_or_default()))
         }
         // Legacy marshallers emit an empty payload whenever headers are modeled and
@@ -747,8 +859,9 @@ impl ShapeSerializer for ExceptionBodySerializer<'_> {
 /// Receives the single `write_struct` a stream union's `serialize_members` makes for its active
 /// variant and builds the frame from it.
 struct UnionVariantSerializer<'a> {
-    capability: EventStreamFraming<'a>,
+    framing: Framing<'a>,
     kind: FrameKind,
+    variants: &'a [OnceLock<FrameStrings>],
     message: Option<Message>,
 }
 
@@ -767,12 +880,23 @@ impl ShapeSerializer for UnionVariantSerializer<'_> {
         let event_type = schema
             .member_name()
             .ok_or_else(|| SerdeError::unsupported("event stream union variant schema has no member name"))?;
+        let strings = match schema.member_index().and_then(|index| self.variants.get(index)) {
+            Some(slot) => Some(match slot.get() {
+                Some(strings) => strings,
+                None => {
+                    let capability = self.framing.get()?;
+                    slot.get_or_init(|| FrameStrings::new(event_type, value.schema(), capability))
+                }
+            }),
+            None => None,
+        };
         self.message = Some(build_frame(
-            self.capability,
+            self.framing,
             event_type,
             value.schema(),
             value,
             self.kind,
+            strings,
         )?);
         Ok(())
     }
@@ -825,7 +949,9 @@ impl ShapeSerializer for UnionVariantSerializer<'_> {
 /// `@eventHeader` members become message headers in write order; the `@eventPayload` member
 /// becomes the payload. Ordinary members are omitted when event headers are modeled.
 struct EventMemberSerializer<'a> {
-    capability: EventStreamFraming<'a>,
+    framing: Framing<'a>,
+    /// Cached `@eventHeader` names by member index; may be empty.
+    header_names: &'a [Option<&'static str>],
     headers: &'a mut Vec<Header>,
     payload: &'a mut Option<Bytes>,
 }
@@ -847,11 +973,19 @@ fn member_role(schema: &Schema<'_>) -> MemberRole {
 }
 
 impl EventMemberSerializer<'_> {
+    #[inline]
     fn push_header(&mut self, schema: &Schema<'_>, value: HeaderValue) -> Result<(), SerdeError> {
         let name = schema
             .member_name()
             .ok_or_else(|| SerdeError::unsupported("event header schema has no member name"))?;
-        self.headers.push(Header::new(name.to_owned(), value));
+        let cached = schema
+            .member_index()
+            .and_then(|index| *self.header_names.get(index)?)
+            .filter(|&cached| cached == name);
+        match cached {
+            Some(cached) => self.headers.push(Header::new(cached, value)),
+            None => self.headers.push(Header::new(StrBytes::copy_from_str(name), value)),
+        }
         Ok(())
     }
 
@@ -895,7 +1029,7 @@ impl ShapeSerializer for EventMemberSerializer<'_> {
         match member_role(schema) {
             MemberRole::Header => Err(self.unsupported("header", schema)),
             MemberRole::Payload => {
-                let mut ser = self.capability.payload_codec.create_serializer();
+                let mut ser = self.framing.get()?.payload_codec.create_serializer();
                 ser.write_struct(value.schema(), value)?;
                 *self.payload = Some(Bytes::from(ser.finish_boxed()));
                 Ok(())
@@ -1801,7 +1935,15 @@ mod tests {
             ),
         ] {
             let capability = protocol.event_stream_framing().unwrap();
-            let message = build_frame(capability, "implicit", &SCHEMA, &Implicit, FrameKind::Event).unwrap();
+            let message = build_frame(
+                Framing::Known(capability),
+                "implicit",
+                &SCHEMA,
+                &Implicit,
+                FrameKind::Event,
+                None,
+            )
+            .unwrap();
             assert_eq!(string_header(&message, "header"), Some("ann"));
             assert_eq!(string_header(&message, ":content-type"), None);
             assert!(message.payload().is_empty());
@@ -1846,7 +1988,15 @@ mod tests {
         }
         let protocol = json_protocol();
         let capability = protocol.event_stream_framing().unwrap();
-        let message = build_frame(capability, "headerOnly", &SCHEMA, &HeaderOnly, FrameKind::Event).unwrap();
+        let message = build_frame(
+            Framing::Known(capability),
+            "headerOnly",
+            &SCHEMA,
+            &HeaderOnly,
+            FrameKind::Event,
+            None,
+        )
+        .unwrap();
         assert_eq!(string_header(&message, "name"), Some("ann"));
         assert_eq!(string_header(&message, ":content-type"), None);
         assert!(message.payload().is_empty());
