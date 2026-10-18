@@ -83,6 +83,18 @@ class MultiProtocolAbFuzzHarnessTest {
         )
 
     private val side = System.getenv("MP_FUZZ_SIDE") ?: error("MP_FUZZ_SIDE must be `single` or `multi`")
+
+    /**
+     * Whether this side's servers are generated with `codegen.schemaSerde`: the `multi` side by default.
+     * Set `MP_FUZZ_AFTER_SCHEMA_SERDE=false` to compare the baseline against this checkout's legacy path.
+     */
+    private val sideSchemaSerde =
+        side == "multi" &&
+            when (val value = System.getenv("MP_FUZZ_AFTER_SCHEMA_SERDE")) {
+                null, "", "true" -> true
+                "false" -> false
+                else -> error("MP_FUZZ_AFTER_SCHEMA_SERDE must be `true` or `false`, got `$value`")
+            }
     private val output = File(System.getenv("MP_FUZZ_OUTPUT") ?: error("MP_FUZZ_OUTPUT is required"))
     private val models = File(System.getenv("MP_FUZZ_MODELS") ?: error("MP_FUZZ_MODELS is required"))
     private val multiProtocolModels =
@@ -262,7 +274,7 @@ class MultiProtocolAbFuzzHarnessTest {
         val manifest =
             Node.objectNodeBuilder().withMember("version", 1).withMember("suite", suite)
                 .withMember("side", side).withMember("coverage_scope", "partial common-denominator model; not full canonical model coverage")
-                .withMember("schemaSerde", side == "multi")
+                .withMember("schemaSerde", sideSchemaSerde)
                 .withMember("generator_server_class_location", RustServerCodegenPlugin::class.java.protectionDomain.codeSource.location.toString())
                 .withMember("generator_runtime_root", File(TestRuntimeConfig.runtimeCrateLocation.path!!).canonicalPath)
                 .withMember("baseline_provenance", "Side and model hashes do not establish a historical baseline; record the selected generator checkout separately")
@@ -359,7 +371,7 @@ class MultiProtocolAbFuzzHarnessTest {
         dest: File,
     ): File {
         val codegen = Node.objectNodeBuilder().withMember("http-1x", true)
-        codegen.withMember("schemaSerde", side == "multi")
+        codegen.withMember("schemaSerde", sideSchemaSerde)
         val servers =
             serverIntegrationTest(
                 model,

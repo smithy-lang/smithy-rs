@@ -48,6 +48,7 @@ echo "baseline: generating single-protocol servers (log: $GEN/single.log)"
 
 echo "current: generating isolated schema servers and harnesses (log: $GEN/multi.log)"
 (cd "$CURRENT_REPO" && MP_FUZZ_SIDE=multi MP_FUZZ_SINGLE_RUNTIME="$BASELINE_REPO/rust-runtime" \
+  MP_FUZZ_AFTER_SCHEMA_SERDE="${MP_FUZZ_AFTER_SCHEMA_SERDE:-true}" \
   ./gradlew :fuzzgen:test --rerun --tests "$FILTER" --no-configuration-cache) > "$GEN/multi.log" 2>&1
 
 mkdir -p "$FUZZ_ROOT/driver" "$XDG_DATA_HOME"
