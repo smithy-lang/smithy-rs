@@ -7,7 +7,7 @@ use serde_json::json;
 use support::*;
 
 #[tokio::test]
-async fn struct_http_payload_observed_per_protocol() {
+async fn rpc_protocols_serialize_struct_http_payload_member_as_a_keyed_body_member() {
     let input = json!({"h": "hv", "payload": {"a": "x"}});
     let r = send(awsjson::service(), aws_json("1.0", "ReviewAwsJson", "StructPayload", &input.to_string())).await;
     assert_eq!(r.json(), input, "awsJson1_0");
@@ -24,7 +24,7 @@ async fn struct_http_payload_observed_per_protocol() {
 }
 
 #[tokio::test]
-async fn streaming_blob_output_content_type_observed() {
+async fn rpcv2_cbor_streaming_blob_output_is_not_labelled_event_stream() {
     let r = send(rest::service(), rest("GET", "/download", &[], b"")).await;
     assert_eq!((r.header("content-type"), r.text().as_str()), (Some("application/octet-stream"), "raw blob bytes"));
     let r = send(cbor::service(), cbor("ReviewCbor", "DownloadBlob", &json!({}))).await;

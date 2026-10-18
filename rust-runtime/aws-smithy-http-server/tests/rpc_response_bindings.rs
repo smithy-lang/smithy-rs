@@ -222,7 +222,7 @@ fn aws_json_build_does_not_validate_ignored_rest_header_names() {
 }
 
 #[test]
-fn rpc_v2_cbor_ignores_rest_status_and_headers() {
+fn control_rpc_v2_cbor_ignores_rest_bindings() {
     let response = RpcV2Cbor::default().serialize_response(&OUT, &Out { code: Some(299) });
     assert_eq!(response.status(), 200);
     assert_no_rest_headers(response.headers());

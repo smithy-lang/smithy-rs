@@ -29,7 +29,7 @@ macro_rules! headerless_routes {
 }
 
 headerless_routes!(sole_rest_json_routes_requests_without_content_type, rest);
-headerless_routes!(rest_json_plus_rpcv2_cbor_routes_requests_without_content_type, rest_cbor);
+headerless_routes!(rest_json_plus_rpcv2cbor_routes_requests_without_content_type, rest_cbor);
 headerless_routes!(rest_json_plus_aws_json_routes_requests_without_content_type, rest_awsjson);
 // restJson1 and restXml cannot be told apart without `Content-Type`; protocol priority picks restJson1.
 headerless_routes!(rest_json_plus_rest_xml_routes_requests_without_content_type_to_rest_json, rest_xml);
