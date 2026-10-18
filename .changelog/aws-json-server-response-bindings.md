@@ -2,22 +2,16 @@
 applies_to: ["server"]
 authors: ["fahadzub"]
 references: []
-breaking: true
-new_feature: false
-bug_fix: true
+breaking: false
+new_feature: true
+bug_fix: false
 ---
 
-AWS JSON 1.0 and 1.1 servers now ignore REST response bindings by default.
-Successful responses use HTTP 200 and modeled client/server errors use HTTP
-400/500. Members annotated with `@httpHeader`, `@httpPrefixHeaders`, or
-`@httpResponseCode` remain ordinary body members.
-
-To retain historical success statuses, modeled error status overrides, and
-response headers, set `customizationConfig.protocols.awsJson1_0.legacyResponseBindings`
-and/or `customizationConfig.protocols.awsJson1_1.legacyResponseBindings` to `true`.
-Each flag defaults to `false` and applies independently.
-The same flags and behavior apply when `codegen.schemaSerde` is enabled.
-
-RPC v2 CBOR no longer emits modeled REST headers on errors, fixing compilation
-of generated error serializers with header-bound members. Its support for
-`@httpError` remains unchanged, as do REST JSON and REST XML response bindings.
+AWS JSON 1.0 and 1.1 servers keep their historical response bindings (the operation's
+`@http(code)` status, `@httpError` statuses, and `@httpHeader` members as headers) with or
+without `codegen.schemaSerde`. With `schemaSerde` enabled, set
+`customizationConfig.protocols.awsJson1_0.responseBindings` and/or
+`customizationConfig.protocols.awsJson1_1.responseBindings` to `"protocol"` to follow the AWS JSON
+specification instead: status 200 (errors use the `@error` class status) and every member in the
+response document with no REST headers. The setting defaults to `"historical"` and applies
+independently per protocol. REST JSON, REST XML and RPC v2 CBOR are unaffected.

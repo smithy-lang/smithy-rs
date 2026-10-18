@@ -1,0 +1,43 @@
+# Each PR review finding, exercised through generated code: one service per protocol set.
+[package]
+name = "protocol-compat"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Review-finding regression tests run against schemaSerde-generated servers."
+
+[dependencies]
+bytes = "1"
+http-body-util = "0.1"
+aws-smithy-http-server = { path = "../../../rust-runtime/aws-smithy-http-server" }
+http = "1"
+tower = { version = "0.5", features = ["util"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
+compat-rest-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-cbor-server-sdk/rust-server-codegen" }
+compat-rest-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-awsjson-server-sdk/rust-server-codegen" }
+compat-rest-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-xml-server-sdk/rust-server-codegen" }
+compat-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-server-sdk/rust-server-codegen" }
+compat-awsjson-spec-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-spec-server-sdk/rust-server-codegen" }
+compat-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-cbor-server-sdk/rust-server-codegen" }
+compat-all-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-all-server-sdk/rust-server-codegen" }
+compat-rest-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-legacy-server-sdk/rust-server-codegen" }
+compat-awsjson-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-legacy-server-sdk/rust-server-codegen" }
+compat-cbor-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-cbor-legacy-server-sdk/rust-server-codegen" }
+compat-document-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-document-legacy-server-sdk/rust-server-codegen" }
+compat-document-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-document-server-sdk/rust-server-codegen" }
+
+[dev-dependencies]
+aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
+compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
+bytes = "1"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+minicbor = { version = "2.2.1", features = ["alloc", "half"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
