@@ -41,8 +41,8 @@ impl SerializableStruct for Output<'_> {
         self.schema
     }
     fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        // Generated payload serializers pass the target's schema.
-        s.write_struct(self.target, &TargetValue(self.target))
+        // Generated serializers pass the member schema; the nested value reports its target.
+        s.write_struct(self.schema.members()[0], &TargetValue(self.target))
     }
 }
 
@@ -163,7 +163,7 @@ async fn modeled_error_payloads_are_dropped_like_legacy() {
             &ERROR
         }
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-            s.write_struct(&TARGET, &TargetValue(&TARGET))
+            s.write_struct(&PAYLOAD, &TargetValue(&TARGET))
         }
     }
     impl std::fmt::Display for PayloadError {

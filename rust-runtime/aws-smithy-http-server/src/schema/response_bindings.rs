@@ -1794,8 +1794,8 @@ mod tests {
         .unwrap();
         assert!(split.body.is_empty());
 
-        // Structure payload (written against its TARGET schema, the codegen
-        // convention): the body is the codec document of that member alone.
+        // Structure payload (written against its member schema, as codegen does):
+        // the splitter frames the standalone body using the nested value's target schema.
         let split = serialize_response_parts(
             &codec,
             &STRUCT_OUT_SCHEMA,
@@ -1870,9 +1870,9 @@ mod tests {
                     s.write_string(&F, "v")
                 }
             }
-            // Codegen convention: the payload struct is written against its
-            // TARGET schema, so the body framing comes from the target.
-            s.write_struct(&STRUCT_PAYLOAD_TARGET, &Nested)
+            // Codegen passes the member schema; Nested::schema supplies the target
+            // schema used by the REST splitter for standalone body framing.
+            s.write_struct(&STRUCT_PAYLOAD_MEMBER, &Nested)
         }
     }
 }
