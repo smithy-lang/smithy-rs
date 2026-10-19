@@ -503,8 +503,8 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
             };
             return codec.create_deserializer(error).read_struct(schema, state);
         }
-        let payload_member = members.iter().copied().find(|m| m.event_payload());
-        let has_header_members = members.iter().any(|m| m.event_header());
+        let payload_member = members.iter().copied().find(|m| m.event_payload().is_some());
+        let has_header_members = members.iter().any(|m| m.event_header().is_some());
         if payload_member.is_none() && !has_header_members {
             // No event traits at all: the whole struct is codec-encoded in the payload.
             let mut deser = self
@@ -520,7 +520,7 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
                 let member = members
                     .iter()
                     .copied()
-                    .find(|m| m.event_header() && m.member_name() == Some(name));
+                    .find(|m| m.event_header().is_some() && m.member_name() == Some(name));
                 match member {
                     Some(member) => {
                         state(member, &mut EventHeaderDeserializer { header })?;
@@ -562,7 +562,10 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
                     state(member, &mut *deser)?;
                 }
             }
-        } else if members.iter().any(|m| !m.event_header() && !m.event_payload()) {
+        } else if members
+            .iter()
+            .any(|m| m.event_header().is_none() && m.event_payload().is_none())
+        {
             // Members with neither trait form the payload document. Discard body copies
             // of event headers before they can replace the already decoded header values.
             let mut deser = self
@@ -570,7 +573,7 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
                 .payload_codec
                 .create_deserializer(&self.message.payload()[..]);
             deser.read_struct(schema, &mut |member, deser| {
-                if member.member_index().is_some() && member.event_header() {
+                if member.member_index().is_some() && member.event_header().is_some() {
                     deser.skip_value()
                 } else {
                     state(member, deser)
@@ -686,9 +689,12 @@ struct FrameStrings {
 impl FrameStrings {
     fn new(event_type: &str, schema: &Schema<'_>, capability: EventStreamFraming<'_>) -> Self {
         let members = schema.members();
-        let payload_type = members.iter().find(|m| m.event_payload()).map(|m| m.shape_type());
+        let payload_type = members
+            .iter()
+            .find(|m| m.event_payload().is_some())
+            .map(|m| m.shape_type());
         let mut header_names = vec![None; members.len()];
-        for member in members.iter().filter(|m| m.event_header()) {
+        for member in members.iter().filter(|m| m.event_header().is_some()) {
             if let (Some(index), Some(name)) = (member.member_index(), member.member_name()) {
                 if let Some(slot) = header_names.get_mut(index) {
                     *slot = Some(intern_header_name(name));
@@ -751,8 +757,8 @@ fn build_frame(
         }
         Ok(())
     };
-    let payload_member = schema.members().iter().copied().find(|m| m.event_payload());
-    let has_header_members = schema.members().iter().any(|m| m.event_header());
+    let payload_member = schema.members().iter().copied().find(|m| m.event_payload().is_some());
+    let has_header_members = schema.members().iter().any(|m| m.event_header().is_some());
 
     if payload_member.is_none() && !has_header_members {
         // No event traits at all (including empty structs): the whole struct is the payload,
@@ -953,9 +959,9 @@ enum MemberRole {
 }
 
 fn member_role(schema: &Schema<'_>) -> MemberRole {
-    if schema.event_header() {
+    if schema.event_header().is_some() {
         MemberRole::Header
-    } else if schema.event_payload() {
+    } else if schema.event_payload().is_some() {
         MemberRole::Payload
     } else {
         MemberRole::Dropped
