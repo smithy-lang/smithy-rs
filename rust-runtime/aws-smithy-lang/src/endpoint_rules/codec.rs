@@ -507,7 +507,7 @@ fn decode_version(value: &Node) -> Result<RulesVersion> {
     })
 }
 
-fn parameter_value(value: &Node, kind: ParameterType) -> Result<ParameterValue> {
+pub(super) fn parameter_value(value: &Node, kind: ParameterType) -> Result<ParameterValue> {
     let decoded = match (kind, value.value()) {
         (ParameterType::String, NodeValue::String(s)) => Some(ParameterValue::String(s.clone())),
         (ParameterType::Boolean, NodeValue::Bool(b)) => Some(ParameterValue::Boolean(*b)),
@@ -611,7 +611,7 @@ pub(crate) fn parse_path(text: &str) -> std::result::Result<Vec<PathSegment>, St
     Ok(segments)
 }
 
-fn object<'a>(value: &'a Node, expected: &str) -> Result<&'a NodeObject> {
+pub(super) fn object<'a>(value: &'a Node, expected: &str) -> Result<&'a NodeObject> {
     value.as_object().ok_or_else(|| {
         TraitDecodeError::at(
             value,
@@ -620,7 +620,7 @@ fn object<'a>(value: &'a Node, expected: &str) -> Result<&'a NodeObject> {
     })
 }
 
-fn array<'a>(value: &'a Node, expected: &str) -> Result<&'a [Node]> {
+pub(super) fn array<'a>(value: &'a Node, expected: &str) -> Result<&'a [Node]> {
     value.as_array().ok_or_else(|| {
         TraitDecodeError::at(
             value,
@@ -629,7 +629,7 @@ fn array<'a>(value: &'a Node, expected: &str) -> Result<&'a [Node]> {
     })
 }
 
-fn optional_string(object: &NodeObject, name: &str) -> Result<Option<String>> {
+pub(super) fn optional_string(object: &NodeObject, name: &str) -> Result<Option<String>> {
     object
         .get(name)
         .map(|value| {
@@ -641,7 +641,12 @@ fn optional_string(object: &NodeObject, name: &str) -> Result<Option<String>> {
         .transpose()
 }
 
-fn check_members(value: &Node, object: &NodeObject, what: &str, allowed: &[&str]) -> Result<()> {
+pub(super) fn check_members(
+    value: &Node,
+    object: &NodeObject,
+    what: &str,
+    allowed: &[&str],
+) -> Result<()> {
     match object.keys().find(|key| !allowed.contains(key)) {
         Some(key) => Err(TraitDecodeError::at(
             object.get(key).unwrap_or(value),

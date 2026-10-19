@@ -60,20 +60,114 @@
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 //!
+//! # Validation
+//!
+//! Decoding checks structure. [`EndpointBdd::validate`] checks name scoping and URL schemes,
+//! and [`validator`] checks a model's endpoint rules against the traits that bind their
+//! parameters ([`ContextParam`], [`StaticContextParams`], [`OperationContextParams`], and
+//! [`ClientContextParams`]).
+//!
+//! # Consumer contract
+//!
+//! A client that resolves endpoints owns everything request-time:
+//!
+//! 1. **Functions:** It maps each condition's [`function_name`](Condition::function_name) to a
+//!    trusted implementation, and rejects rules that use a function it does not implement.
+//!    This crate preserves unknown names rather than rejecting them.
+//! 2. **Parameter values:** It supplies a value for each parameter, applying the modeled
+//!    [`default`](Parameter::default) and rejecting a missing [`required`](Parameter::required)
+//!    value. The generated smithy-rs clients apply sources in increasing precedence: modeled
+//!    defaults, built-in values, [`ClientContextParams`], [`StaticContextParams`],
+//!    [`OperationContextParams`], then [`ContextParam`] members.
+//! 3. **Evaluation:** It evaluates each condition only when the traversal reaches it. In the
+//!    reference implementation a condition is false when its function returns no value or
+//!    `false`, and true otherwise; a true condition binds its [`assign`](Condition::assign)
+//!    name to the function's result for later conditions and the selected result. It follows
+//!    the traversal contract on [`Bdd`].
+//! 4. **Results:** It builds its own endpoint or error from the selected [`ResultRule`],
+//!    including auth schemes found in endpoint properties.
+//! 5. **Budgets:** It bounds request-time work and output size.
+//!
+//! A minimal traversal, written in client code, looks like this:
+//!
+//! ```
+//! use aws_smithy_lang::endpoint_rules::{BddRef, Condition, EndpointBdd, ResultRule};
+//!
+//! /// Returns the selected rule, or `None` when no rule matches. `test` evaluates a condition
+//! /// with the client's own function implementations and parameter values.
+//! fn select<'a>(
+//!     rules: &'a EndpointBdd,
+//!     mut test: impl FnMut(&Condition) -> bool,
+//! ) -> Option<&'a ResultRule> {
+//!     let bdd = rules.bdd();
+//!     let mut at = bdd.root();
+//!     loop {
+//!         match at {
+//!             BddRef::Node(reference) => {
+//!                 let node = bdd.node(reference);
+//!                 let value = test(&rules.conditions()[node.condition()]);
+//!                 at = if value ^ reference.is_complemented() { node.high() } else { node.low() };
+//!             }
+//!             BddRef::Result(result) => return rules.result(result),
+//!             BddRef::Terminal(_) => return None,
+//!         }
+//!     }
+//! }
+//! # use aws_smithy_lang::traits::TraitCodec;
+//! # let rules = EndpointBdd::from_node(&aws_smithy_lang::Node::from(
+//! #     [
+//! #         ("version", aws_smithy_lang::Node::from("1.1")),
+//! #         ("parameters", aws_smithy_lang::NodeObject::new().into()),
+//! #         ("conditions", vec![aws_smithy_lang::Node::from(
+//! #             [("fn", aws_smithy_lang::Node::from("f")), ("argv", vec![].into())]
+//! #                 .into_iter()
+//! #                 .collect::<aws_smithy_lang::NodeObject>(),
+//! #         )].into()),
+//! #         ("results", vec![aws_smithy_lang::Node::from(
+//! #             [
+//! #                 ("type", aws_smithy_lang::Node::from("error")),
+//! #                 ("conditions", vec![].into()),
+//! #                 ("error", "no".into()),
+//! #             ]
+//! #             .into_iter()
+//! #             .collect::<aws_smithy_lang::NodeObject>(),
+//! #         )].into()),
+//! #         ("root", 2i64.into()),
+//! #         ("nodeCount", 2i64.into()),
+//! #         ("nodes", "/////wAAAAH/////AAAAAAX14QEF9eEA".into()),
+//! #     ]
+//! #     .into_iter()
+//! #     .collect::<aws_smithy_lang::NodeObject>(),
+//! # ))?;
+//! assert!(select(&rules, |_| true).is_some());
+//! assert!(select(&rules, |_| false).is_none());
+//! # Ok::<_, Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! This crate deliberately provides no such function.
+//!
 //! [endpoint BDD trait]: https://smithy.io/2.0/additional-specs/rules-engine/specification.html
 //! [`TraitCodec`]: crate::traits::TraitCodec
 //! [`Node`]: crate::Node
 
 mod bdd;
 mod codec;
+mod context;
 mod language;
+mod validate;
 
 pub use bdd::{Bdd, BddNode, BddNodeRef, BddRef, BddResultRef, InvalidBddError};
+pub use context::{
+    ClientContextParam, ClientContextParams, ContextParam, OperationContextParam,
+    OperationContextParams, StaticContextParam, StaticContextParams, CLIENT_CONTEXT_PARAMS,
+    CONTEXT_PARAM, OPERATION_CONTEXT_PARAMS, STATIC_CONTEXT_PARAMS,
+};
 pub use language::{
     Condition, Deprecated, EndpointDefinition, Expression, ExpressionKind, Literal, Parameter,
     ParameterType, ParameterValue, Parameters, PathSegment, ResultKind, ResultRule, RulesVersion,
     Template, TemplateSegment,
 };
+pub use validate::validator;
 
 use crate::node::Node;
 use crate::shape_id::ShapeId;
