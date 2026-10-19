@@ -3,11 +3,91 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::super::{try_downcast, Body, BodyInner};
+use super::super::{boxed, try_downcast, Body, BodyInner, BoxBody};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+// Count only allocations made on the measuring thread during the synchronous boxing call.
+thread_local! {
+    static ALLOCATIONS: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
+struct CountingAllocator;
+
+fn record_allocation() {
+    let _ = ALLOCATIONS.try_with(|count| {
+        if let Some(current) = count.get() {
+            count.set(Some(current + 1));
+        }
+    });
+}
+
+// SAFETY: Each allocation operation delegates unchanged to System, including its layout
+// and pointer arguments. The thread-local counter does not allocate.
+unsafe impl GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        record_allocation();
+        unsafe { System.alloc(layout) }
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        record_allocation();
+        unsafe { System.alloc_zeroed(layout) }
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, size: usize) -> *mut u8 {
+        record_allocation();
+        unsafe { System.realloc(ptr, layout, size) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        unsafe { System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static TEST_ALLOCATOR: CountingAllocator = CountingAllocator;
+
+fn allocation_count<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    struct ResetCounter;
+    impl Drop for ResetCounter {
+        fn drop(&mut self) {
+            ALLOCATIONS.with(|count| count.set(None));
+        }
+    }
+
+    ALLOCATIONS.with(|count| {
+        assert!(count.get().is_none(), "allocation measurement must not be nested");
+        count.set(Some(0));
+    });
+    let reset = ResetCounter;
+    let result = f();
+    let count = ALLOCATIONS.with(|count| count.get().unwrap());
+    drop(reset);
+    (result, count)
+}
+
+#[tokio::test]
+async fn boxing_an_unboxed_body_allocates_and_preserves_its_contents() {
+    let bytes = Bytes::from_static(b"unboxed payload");
+    let original = Full::new(bytes.clone());
+    let (body, allocations): (BoxBody, _) = allocation_count(|| boxed(original));
+    assert!(allocations > 0, "an unboxed body needs an allocation");
+    assert_eq!(body.collect().await.unwrap().to_bytes(), bytes);
+}
+
+#[tokio::test]
+async fn boxing_an_existing_box_body_does_not_allocate() {
+    let bytes = Bytes::from_static(b"already boxed payload");
+    let original: BoxBody = boxed(Full::new(bytes.clone()));
+    let (body, allocations): (BoxBody, _) = allocation_count(|| boxed(original));
+    assert_eq!(allocations, 0, "an existing BoxBody must not be boxed again");
+    assert_eq!(body.collect().await.unwrap().to_bytes(), bytes);
+}
 
 #[tokio::test]
 async fn wrapping_a_request_body_preserves_its_buffered_state_and_storage() {
