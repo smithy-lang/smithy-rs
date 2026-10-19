@@ -327,11 +327,6 @@ impl<B> Request<B> {
         &self.uri.as_string
     }
 
-    /// Returns a reference to the parsed URI associated with this request.
-    pub fn uri_ref(&self) -> &Uri {
-        &self.uri
-    }
-
     /// Returns a mutable reference the the URI of this http::Request
     pub fn uri_mut(&mut self) -> &mut Uri {
         &mut self.uri
@@ -446,8 +441,7 @@ mod test {
         let request = super::Request::try_from(request)
             .unwrap()
             .map(|_| replacement.clone());
-        assert_eq!(request.uri_ref().path(), "/resource");
-        assert_eq!(request.uri_ref().query(), Some("key=value"));
+        assert_eq!(request.uri(), "/resource?key=value");
         let request = request.try_into_http1x().unwrap();
         assert_eq!(request.method(), "PATCH");
         assert_eq!(request.uri(), "/resource?key=value");

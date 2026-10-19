@@ -24,5 +24,5 @@ pub use error::HttpError;
 pub use header_parse::ParseError;
 pub use headers::{HeaderValue, Headers, HeadersIter};
 pub use non_utf8::NonUtf8HeaderHandling;
-pub use request::{Request, RequestParts, Uri};
+pub use request::{Request, RequestParts};
 pub use response::{Response, StatusCode};
