@@ -284,17 +284,16 @@ mod tests {
     }
 
     #[test]
-    fn typed_http_error_survives_schema_cloning_and_preserves_trait_identity() {
-        for schema in [&ERROR, &ERROR.clone()] {
-            assert!(schema.http().is_none());
-            let traits = schema.traits().unwrap();
-            assert!(traits.contains_fqn("smithy.api#error"));
-            assert!(traits.contains_fqn("smithy.api#httpError"));
-            assert_eq!(traits.len(), 2);
-            let http_error = HttpErrorTrait::from_schema(schema).unwrap();
-            assert_eq!(http_error.code(), 404);
-            assert_eq!(http_error.trait_id().as_str(), "smithy.api#httpError");
-        }
+    fn typed_http_error_preserves_trait_identity() {
+        let schema = &ERROR;
+        assert!(schema.http().is_none());
+        let traits = schema.traits().unwrap();
+        assert!(traits.contains_fqn("smithy.api#error"));
+        assert!(traits.contains_fqn("smithy.api#httpError"));
+        assert_eq!(traits.len(), 2);
+        let http_error = HttpErrorTrait::from_schema(schema).unwrap();
+        assert_eq!(http_error.code(), 404);
+        assert_eq!(http_error.trait_id().as_str(), "smithy.api#httpError");
     }
 
     #[test]
@@ -306,7 +305,10 @@ mod tests {
             map.insert(Box::new(StringTrait::new(shape_id!("smithy.api", "error"), "server")));
             map
         });
-        assert!(HttpErrorTrait::from_schema(&plain.clone().with_traits(&without_http_error)).is_none());
+        assert!(HttpErrorTrait::from_schema(
+            &Schema::new(shape_id!("example", "Plain"), ShapeType::String).with_traits(&without_http_error)
+        )
+        .is_none());
         let differently_typed: LazyLock<TraitMap> = LazyLock::new(|| {
             let mut map = TraitMap::new();
             map.insert(Box::new(StringTrait::new(HttpErrorTrait::TRAIT_ID, "404")));

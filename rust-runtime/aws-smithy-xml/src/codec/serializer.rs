@@ -1140,7 +1140,13 @@ mod tests {
             "member",
             0,
         );
-        let renamed = member.clone().with_xml_name("item");
+        let renamed = Schema::new_member(
+            shape_id!("test", "Choices", "member"),
+            ShapeType::Union,
+            "member",
+            0,
+        )
+        .with_xml_name("item");
         for (item_schema, flattened, expected) in [
             (
                 &member,

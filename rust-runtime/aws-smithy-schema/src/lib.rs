@@ -363,10 +363,7 @@ mod response_routing {
 /// Schemas are constructed at compile time (via `const`) for generated code
 /// and prelude types. The Smithy type system is closed, so no extensibility
 /// via trait objects is needed.
-///
-/// Cloning preserves all metadata while sharing the member schemas and fallback
-/// trait map, allowing adapters to override individual traits on a local copy.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Schema<'a> {
     id: ShapeId<'a>,
     shape_type: ShapeType,
@@ -484,7 +481,7 @@ pub struct Schema<'a> {
 }
 
 /// Shape-type-specific member references.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum SchemaMembers<'a> {
     /// No members (simple types).
     None,

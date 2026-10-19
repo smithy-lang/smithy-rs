@@ -99,18 +99,14 @@ fn deserialize_payload(
     deserializer: &mut dyn ShapeDeserializer,
     consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
 ) -> Result<(), SerdeError> {
-    let root = if let Some(metadata) = crate::schema::traits::XmlMetadata::from_schema(member) {
-        PayloadRoot::Schema(metadata.payload_schema())
-    } else if let Some(name) = member.xml_name() {
-        PayloadRoot::XmlName(name.value())
-    } else {
+    let Some(metadata) = crate::schema::traits::XmlMetadata::from_schema(member) else {
         return consumer(member, deserializer);
     };
     consumer(
         member,
         &mut StructuredPayloadDeserializer {
             inner: deserializer,
-            root,
+            root: metadata.payload_schema(),
         },
     )
 }
@@ -350,28 +346,16 @@ macro_rules! unsupported_reads {
 /// passes the target structure's schema. The child's XML name remains `Child`.
 struct StructuredPayloadDeserializer<'a> {
     inner: &'a mut dyn ShapeDeserializer,
-    root: PayloadRoot<'a>,
-}
-
-enum PayloadRoot<'a> {
-    Schema(&'static Schema<'static>),
-    // Compatibility for manually constructed schemas without XmlMetadata.
-    XmlName(&'a str),
+    root: &'static Schema<'static>,
 }
 
 impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
     fn read_struct(
         &mut self,
-        schema: &Schema<'_>,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        match self.root {
-            PayloadRoot::Schema(root) => self.inner.read_struct(root, consumer),
-            PayloadRoot::XmlName(name) => {
-                let root = schema.clone().with_xml_name(name);
-                self.inner.read_struct(&root, consumer)
-            }
-        }
+        self.inner.read_struct(self.root, consumer)
     }
 
     fn read_list(
@@ -544,27 +528,19 @@ mod tests {
         )
         .with_xml_name("PayloadRoot")
         .with_traits(&MEMBER_TRAITS);
-        static MEMBER_WITHOUT_METADATA: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Input", "data"),
-            ShapeType::Structure,
-            "data",
-            0,
-        )
-        .with_xml_name("PayloadRoot");
 
-        for member in [&MEMBER_WITH_METADATA, &MEMBER_WITHOUT_METADATA] {
-            let mut inner = MetadataCheckingDeserializer;
-            let mut value = None;
-            deserialize_payload(member, &mut inner, &mut |actual_member, payload| {
-                assert!(std::ptr::eq(actual_member, member));
-                payload.read_struct(&TARGET, &mut |child, deser| {
-                    value = Some(deser.read_string(child)?);
-                    Ok(())
-                })
+        let member = &MEMBER_WITH_METADATA;
+        let mut inner = MetadataCheckingDeserializer;
+        let mut value = None;
+        deserialize_payload(member, &mut inner, &mut |actual_member, payload| {
+            assert!(std::ptr::eq(actual_member, member));
+            payload.read_struct(&TARGET, &mut |child, deser| {
+                value = Some(deser.read_string(child)?);
+                Ok(())
             })
-            .unwrap();
-            assert_eq!(value.as_deref(), Some("decoded"));
-        }
+        })
+        .unwrap();
+        assert_eq!(value.as_deref(), Some("decoded"));
         assert_eq!(TARGET.xml_name().unwrap().value(), "TargetRoot");
     }
 }

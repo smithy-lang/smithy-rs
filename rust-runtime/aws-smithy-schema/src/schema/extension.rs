@@ -282,22 +282,6 @@ mod tests {
     }
 
     #[test]
-    fn cloned_schemas_recompute_extensions_after_trait_changes() {
-        static NAME: SchemaExtensionKey<String> = SchemaExtensionKey::new(|schema| {
-            schema
-                .xml_name()
-                .map_or("default", |name| name.value())
-                .to_owned()
-        });
-        let schema =
-            Schema::new(shape_id!("ns", "Cloned"), ShapeType::String).with_xml_name("original");
-        assert_eq!(schema.extension(&NAME), "original");
-        let cloned = schema.clone().with_xml_name("changed");
-        assert_eq!(cloned.extension(&NAME), "changed");
-        assert_eq!(schema.extension(&NAME), "original");
-    }
-
-    #[test]
     fn works_on_runtime_schemas() {
         let name = String::from("runtime");
         let id = crate::ShapeId::from_parts("ns#S$runtime", "ns", "S");
