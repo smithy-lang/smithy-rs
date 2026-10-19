@@ -3,12 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Endpoint rules: decode, validate, inspect, and encode `smithy.rules#endpointBdd`.
+//! Endpoint rules: decode, validate, inspect, and encode `smithy.rules#endpointBdd` and
+//! `smithy.rules#endpointRuleSet`.
 //!
-//! [`EndpointBdd`] is a [`TraitCodec`] for the [endpoint BDD trait]. Decoding checks the
+//! [`EndpointBdd`] is a [`TraitCodec`] for the endpoint BDD trait. Decoding checks the
 //! trait's structure and its binary decision diagram, so a decoded value can be traversed
 //! without bounds checks or cycle detection, and its conditions and results are
 //! source-located syntax rather than generic [`Node`]s.
+//!
+//! [`EndpointRuleSet`] is a [`TraitCodec`] for the rule-tree form of the same rules. Both
+//! share one language: [`Parameters`], [`Condition`]s, [`Expression`]s, and
+//! [`EndpointDefinition`]s. Rule trees are bounded by
+//! [`EndpointRulesLimits::max_rule_depth`], and [`EndpointRuleSet::iter_rules`] walks them
+//! without recursion.
 //!
 //! This module represents endpoint rules; it does **not** resolve endpoints. It has no
 //! function implementations, parameter values, or evaluator. A client that resolves
@@ -62,8 +69,8 @@
 //!
 //! # Validation
 //!
-//! Decoding checks structure. [`EndpointBdd::validate`] checks name scoping and URL schemes,
-//! and [`validator`] checks a model's endpoint rules against the traits that bind their
+//! Decoding checks structure. [`EndpointBdd::validate`] and [`EndpointRuleSet::validate`]
+//! check name scoping and URL schemes, and [`validator`] checks a model's endpoint rules against the traits that bind their
 //! parameters ([`ContextParam`], [`StaticContextParams`], [`OperationContextParams`], and
 //! [`ClientContextParams`]).
 //!
@@ -164,8 +171,8 @@ pub use context::{
 };
 pub use language::{
     Condition, Deprecated, EndpointDefinition, Expression, ExpressionKind, Literal, Parameter,
-    ParameterType, ParameterValue, Parameters, PathSegment, ResultKind, ResultRule, RulesVersion,
-    Template, TemplateSegment,
+    ParameterType, ParameterValue, Parameters, PathSegment, ResultKind, ResultRule, Rule, RuleKind,
+    RulesVersion, Template, TemplateSegment,
 };
 pub use validate::validator;
 
@@ -255,10 +262,82 @@ impl TraitCodec for EndpointBdd {
     }
 }
 
+/// `smithy.rules#endpointRuleSet`
+pub const ENDPOINT_RULE_SET: ShapeId = ShapeId::from_static("smithy.rules#endpointRuleSet");
+
+/// A decoded, structurally valid `smithy.rules#endpointRuleSet` trait.
+///
+/// The rule set shares its parameter, condition, expression, and endpoint language with
+/// [`EndpointBdd`]. Rules form a tree: a client tries [`rules`](Self::rules) in order, and a
+/// rule applies when all of its [`conditions`](Rule::conditions) hold. A tree rule then tries
+/// its nested rules in order. Assignments are visible to later conditions of the same rule
+/// and to everything nested within it, not to sibling rules.
+///
+/// Unknown function names are preserved. Unknown top-level members are tolerated, as in the
+/// reference implementation, and are not re-encoded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EndpointRuleSet {
+    version: RulesVersion,
+    parameters: Parameters,
+    rules: Box<[Rule]>,
+}
+
+impl EndpointRuleSet {
+    /// Decodes a trait value under `limits` rather than the default limits.
+    pub fn from_node_with_limits(
+        value: &Node,
+        limits: &EndpointRulesLimits,
+    ) -> Result<Self, TraitDecodeError> {
+        codec::decode_rule_set(value, limits)
+    }
+
+    /// The rules-engine version.
+    pub fn version(&self) -> RulesVersion {
+        self.version
+    }
+
+    /// The parameter definitions.
+    pub fn parameters(&self) -> &Parameters {
+        &self.parameters
+    }
+
+    /// The top-level rules, in the order they are tried.
+    pub fn rules(&self) -> &[Rule] {
+        &self.rules
+    }
+
+    /// Every rule, including nested rules, in document order (a tree rule precedes the rules
+    /// nested within it). The walk uses an explicit stack rather than recursion.
+    pub fn iter_rules(&self) -> impl Iterator<Item = &Rule> + '_ {
+        let mut stack: Vec<&Rule> = self.rules.iter().rev().collect();
+        std::iter::from_fn(move || {
+            let rule = stack.pop()?;
+            if let RuleKind::Tree(children) = &rule.kind {
+                stack.extend(children.iter().rev());
+            }
+            Some(rule)
+        })
+    }
+}
+
+impl TraitCodec for EndpointRuleSet {
+    const ID: ShapeId = ENDPOINT_RULE_SET;
+
+    /// Decodes a trait value under [`EndpointRulesLimits::default`].
+    fn from_node(value: &Node) -> Result<Self, TraitDecodeError> {
+        codec::decode_rule_set(value, &EndpointRulesLimits::default())
+    }
+
+    fn to_node(&self) -> Node {
+        codec::encode_rule_set(self)
+    }
+}
+
 /// Bounds applied while decoding untrusted endpoint rules.
 ///
 /// The defaults are far above every AWS service model at the time of writing (at most 17
-/// parameters, 75 conditions, 115 results, and 553 wire nodes).
+/// parameters, 75 BDD conditions, 115 results, 553 wire nodes, 389 rules in a rule set, and
+/// rule nesting 18 deep).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EndpointRulesLimits {
     max_parameters: usize,
@@ -268,6 +347,8 @@ pub struct EndpointRulesLimits {
     max_expression_depth: usize,
     max_expression_nodes: usize,
     max_template_segments: usize,
+    max_rules: usize,
+    max_rule_depth: usize,
 }
 
 impl Default for EndpointRulesLimits {
@@ -280,6 +361,8 @@ impl Default for EndpointRulesLimits {
             max_expression_depth: 100,
             max_expression_nodes: 1_000_000,
             max_template_segments: 1_000_000,
+            max_rules: 65_536,
+            max_rule_depth: 100,
         }
     }
 }
@@ -306,7 +389,7 @@ macro_rules! limits {
 limits! {
     /// The maximum number of parameters.
     max_parameters, with_max_parameters;
-    /// The maximum number of conditions.
+    /// The maximum number of conditions, counted across all rules of a rule set.
     max_conditions, with_max_conditions;
     /// The maximum number of serialized results.
     max_results, with_max_results;
@@ -318,4 +401,8 @@ limits! {
     max_expression_nodes, with_max_expression_nodes;
     /// The maximum number of template segments in one trait value.
     max_template_segments, with_max_template_segments;
+    /// The maximum number of rules in a rule set, including nested rules.
+    max_rules, with_max_rules;
+    /// The maximum nesting depth of tree rules in a rule set.
+    max_rule_depth, with_max_rule_depth;
 }

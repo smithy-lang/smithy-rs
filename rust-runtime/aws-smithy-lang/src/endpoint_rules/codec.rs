@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Decoding and encoding of `smithy.rules#endpointBdd` trait values.
+//! Encoding and decoding of `smithy.rules#endpointBdd` and `smithy.rules#endpointRuleSet` traits
 
 use super::bdd::{wire_byte_len, Bdd};
 use super::language::*;
-use super::{EndpointBdd, EndpointRulesLimits};
+use super::{EndpointBdd, EndpointRuleSet, EndpointRulesLimits};
+use crate::diagnostic::SourceLocation;
 use crate::node::{Node, NodeObject, NodeValue};
 use crate::traits::TraitDecodeError;
 
@@ -43,24 +44,8 @@ pub(super) fn decode(value: &Node, limits: &EndpointRulesLimits) -> Result<Endpo
         ));
     }
 
-    let mut decoder = Decoder {
-        limits,
-        expression_nodes: 0,
-        template_segments: 0,
-    };
-
-    let parameters_node = member(parameters)?;
-    let parameters_object = object(parameters_node, "a `parameters` object")?;
-    check_limit(
-        parameters_node,
-        "parameters",
-        parameters_object.len(),
-        limits.max_parameters(),
-    )?;
-    let parameters = parameters_object
-        .iter()
-        .map(|(name, value)| decoder.parameter(name, value))
-        .collect::<Result<Vec<_>>>()?;
+    let mut decoder = Decoder::new(limits);
+    let parameters = decoder.parameters(member(parameters)?)?;
 
     let conditions_node = member(conditions)?;
     let conditions = array(conditions_node, "a `conditions` array")?;
@@ -118,7 +103,7 @@ pub(super) fn decode(value: &Node, limits: &EndpointRulesLimits) -> Result<Endpo
 
     Ok(EndpointBdd {
         version,
-        parameters: Parameters::new(parameters),
+        parameters,
         conditions: conditions.into_boxed_slice(),
         results: results.into_boxed_slice(),
         bdd,
@@ -162,13 +147,177 @@ fn decode_base64(value: &Node, node_count: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// The root members of a `smithy.rules#endpointRuleSet` trait value.
+pub(super) const RULE_SET_MEMBERS: [&str; 3] = ["version", "parameters", "rules"];
+
+pub(super) fn decode_rule_set(
+    value: &Node,
+    limits: &EndpointRulesLimits,
+) -> Result<EndpointRuleSet> {
+    let root = object(value, "an endpointRuleSet object")?;
+    let member = |name: &str| {
+        root.get(name)
+            .ok_or_else(|| TraitDecodeError::at(value, format!("missing required member `{name}`")))
+    };
+    let version_node = member("version")?;
+    let version = decode_version(version_node)?;
+    let mut decoder = Decoder::new(limits);
+    let parameters = decoder.parameters(member("parameters")?)?;
+    let rules = decoder.rules(member("rules")?, 0)?;
+    decoder.check_version(version)?;
+    Ok(EndpointRuleSet {
+        version,
+        parameters,
+        rules,
+    })
+}
+
 struct Decoder<'a> {
     limits: &'a EndpointRulesLimits,
     expression_nodes: usize,
     template_segments: usize,
+    rules: usize,
+    conditions: usize,
+    /// The first negative `getAttr` index, which requires rules engine version 1.1.
+    negative_index: Option<SourceLocation>,
 }
 
-impl Decoder<'_> {
+impl<'a> Decoder<'a> {
+    fn new(limits: &'a EndpointRulesLimits) -> Self {
+        Self {
+            limits,
+            expression_nodes: 0,
+            template_segments: 0,
+            rules: 0,
+            conditions: 0,
+            negative_index: None,
+        }
+    }
+
+    /// Rejects syntax that the declared `version` predates.
+    fn check_version(&self, version: RulesVersion) -> Result<()> {
+        match &self.negative_index {
+            Some(location) if version < RulesVersion::V1_1 => Err(TraitDecodeError::new(format!(
+                "negative attribute path indexes require rules engine version 1.1 or later, \
+                 but the trait declares version {version}"
+            ))
+            .with_source_location(location.clone())),
+            _ => Ok(()),
+        }
+    }
+
+    fn parameters(&mut self, value: &Node) -> Result<Parameters> {
+        let parameters = object(value, "a `parameters` object")?;
+        check_limit(
+            value,
+            "parameters",
+            parameters.len(),
+            self.limits.max_parameters(),
+        )?;
+        let parameters = parameters
+            .iter()
+            .map(|(name, value)| self.parameter(name, value))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Parameters::new(parameters))
+    }
+
+    /// Decodes an array of rules nested `depth` trees deep.
+    fn rules(&mut self, value: &Node, depth: usize) -> Result<Box<[Rule]>> {
+        let rules = array(value, "a `rules` array")?;
+        if depth >= self.limits.max_rule_depth() {
+            return Err(TraitDecodeError::at(
+                value,
+                format!(
+                    "rule nesting exceeds the limit of {}",
+                    self.limits.max_rule_depth()
+                ),
+            ));
+        }
+        rules.iter().map(|rule| self.rule(rule, depth)).collect()
+    }
+
+    fn rule(&mut self, value: &Node, depth: usize) -> Result<Rule> {
+        self.rules += 1;
+        check_limit(value, "rules", self.rules, self.limits.max_rules())?;
+        let object = object(value, "a rule object")?;
+        check_members(
+            value,
+            object,
+            "rule",
+            &[
+                "type",
+                "conditions",
+                "documentation",
+                "endpoint",
+                "error",
+                "rules",
+            ],
+        )?;
+        let conditions = match object.get("conditions") {
+            None => Box::default(),
+            Some(node) => {
+                let conditions = array(node, "a `conditions` array")?;
+                self.conditions += conditions.len();
+                check_limit(
+                    node,
+                    "conditions",
+                    self.conditions,
+                    self.limits.max_conditions(),
+                )?;
+                conditions
+                    .iter()
+                    .map(|condition| self.condition(condition))
+                    .collect::<Result<_>>()?
+            }
+        };
+        let kind_node = object
+            .get("type")
+            .ok_or_else(|| TraitDecodeError::at(value, "rule is missing `type`"))?;
+        let body = |name: &str| {
+            for other in ["endpoint", "error", "rules"] {
+                if other != name {
+                    if let Some(found) = object.get(other) {
+                        return Err(TraitDecodeError::at(
+                            found,
+                            format!("a `{name}` rule must not have `{other}`"),
+                        ));
+                    }
+                }
+            }
+            object
+                .get(name)
+                .ok_or_else(|| TraitDecodeError::at(value, format!("rule is missing `{name}`")))
+        };
+        let kind = match kind_node.as_str() {
+            Some("endpoint") => RuleKind::Endpoint(self.endpoint(body("endpoint")?)?),
+            Some("error") => RuleKind::Error(self.expression(body("error")?, 0)?),
+            Some("tree") => RuleKind::Tree(self.rules(body("rules")?, depth + 1)?),
+            _ => {
+                return Err(TraitDecodeError::at(
+                    kind_node,
+                    "rule `type` must be `endpoint`, `error`, or `tree`",
+                ))
+            }
+        };
+        Ok(Rule {
+            conditions,
+            documentation: optional_string(object, "documentation")?,
+            kind,
+            location: Location(value.source_location().clone()),
+        })
+    }
+
+    /// Records the first negative index in `path`, found at `value`.
+    fn note_path(&mut self, value: &Node, path: &[PathSegment]) {
+        if self.negative_index.is_none()
+            && path
+                .iter()
+                .any(|segment| matches!(segment, PathSegment::Index(i) if *i < 0))
+        {
+            self.negative_index = Some(value.source_location().clone());
+        }
+    }
+
     fn parameter(&mut self, name: &str, value: &Node) -> Result<Parameter> {
         if name.is_empty() {
             return Err(TraitDecodeError::at(
@@ -435,9 +584,10 @@ impl Decoder<'_> {
             if let Some(path) = arguments.get(1) {
                 if let ExpressionKind::Literal(Literal::String(template)) = &path.kind {
                     if let Some(text) = template.as_static() {
-                        parse_path(text).map_err(|message| {
-                            TraitDecodeError::at(&argv.as_array().expect("array")[1], message)
-                        })?;
+                        let path_node = &argv.as_array().expect("array")[1];
+                        let path = parse_path(text)
+                            .map_err(|message| TraitDecodeError::at(path_node, message))?;
+                        self.note_path(path_node, &path);
                     }
                 }
             }
@@ -467,6 +617,11 @@ impl Decoder<'_> {
             }
             NodeValue::String(text) => {
                 let template = parse_template(text).map_err(|m| TraitDecodeError::at(value, m))?;
+                for segment in template.segments.iter() {
+                    if let TemplateSegment::Reference { path, .. } = segment {
+                        self.note_path(value, path);
+                    }
+                }
                 self.template_segments += template.segments.len();
                 if self.template_segments > self.limits.max_template_segments() {
                     return Err(TraitDecodeError::at(
@@ -681,14 +836,7 @@ fn int32(value: &Node, what: &str) -> Result<i32> {
 pub(super) fn encode(rules: &EndpointBdd) -> Node {
     let mut object = NodeObject::new();
     object.insert("version", rules.version.to_string());
-    object.insert(
-        "parameters",
-        rules
-            .parameters
-            .iter()
-            .map(|parameter| (parameter.name.clone(), encode_parameter(parameter)))
-            .collect::<NodeObject>(),
-    );
+    object.insert("parameters", encode_parameters(&rules.parameters));
     object.insert(
         "conditions",
         Node::from(
@@ -709,6 +857,60 @@ pub(super) fn encode(rules: &EndpointBdd) -> Node {
         "nodes",
         base64_simd::STANDARD.encode_to_string(rules.bdd.to_wire_bytes()),
     );
+    Node::from(object)
+}
+
+pub(super) fn encode_rule_set(rules: &EndpointRuleSet) -> Node {
+    let mut object = NodeObject::new();
+    object.insert("version", rules.version.to_string());
+    object.insert("parameters", encode_parameters(&rules.parameters));
+    object.insert("rules", encode_rules(&rules.rules));
+    Node::from(object)
+}
+
+fn encode_parameters(parameters: &Parameters) -> Node {
+    Node::from(
+        parameters
+            .iter()
+            .map(|parameter| (parameter.name.clone(), encode_parameter(parameter)))
+            .collect::<NodeObject>(),
+    )
+}
+
+/// Encodes rules. Recursion is bounded by the decoding limit on rule depth, because rules
+/// can only be constructed by decoding.
+fn encode_rules(rules: &[Rule]) -> Node {
+    Node::from(rules.iter().map(encode_rule).collect::<Vec<_>>())
+}
+
+fn encode_rule(rule: &Rule) -> Node {
+    let mut object = NodeObject::new();
+    object.insert(
+        "conditions",
+        Node::from(
+            rule.conditions
+                .iter()
+                .map(encode_condition)
+                .collect::<Vec<_>>(),
+        ),
+    );
+    if let Some(documentation) = &rule.documentation {
+        object.insert("documentation", documentation.clone());
+    }
+    match &rule.kind {
+        RuleKind::Endpoint(endpoint) => {
+            object.insert("type", "endpoint");
+            object.insert("endpoint", encode_endpoint(endpoint));
+        }
+        RuleKind::Error(error) => {
+            object.insert("type", "error");
+            object.insert("error", encode_expression(error));
+        }
+        RuleKind::Tree(rules) => {
+            object.insert("type", "tree");
+            object.insert("rules", encode_rules(rules));
+        }
+    }
     Node::from(object)
 }
 

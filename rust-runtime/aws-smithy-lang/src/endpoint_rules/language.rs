@@ -449,3 +449,47 @@ pub enum ResultKind {
     /// An error message expression.
     Error(Expression),
 }
+
+/// A rule in an endpoint rule set: conditions that must all hold, and an outcome.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rule {
+    pub(crate) conditions: Box<[Condition]>,
+    pub(crate) documentation: Option<String>,
+    pub(crate) kind: RuleKind,
+    pub(crate) location: Location,
+}
+
+impl Rule {
+    /// The conditions, in the order they are tested. Each condition sees the assignments of
+    /// the conditions before it and of its ancestors' conditions.
+    pub fn conditions(&self) -> &[Condition] {
+        &self.conditions
+    }
+
+    /// The documentation.
+    pub fn documentation(&self) -> Option<&str> {
+        self.documentation.as_deref()
+    }
+
+    /// The endpoint, error, or nested rules.
+    pub fn kind(&self) -> &RuleKind {
+        &self.kind
+    }
+
+    /// Where the rule was loaded from.
+    pub fn source_location(&self) -> &SourceLocation {
+        &self.location.0
+    }
+}
+
+/// The outcome of a [`Rule`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RuleKind {
+    /// An endpoint.
+    Endpoint(EndpointDefinition),
+    /// An error message expression.
+    Error(Expression),
+    /// Nested rules, tried in order.
+    Tree(Box<[Rule]>),
+}
