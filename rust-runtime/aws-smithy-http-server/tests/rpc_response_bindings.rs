@@ -4,7 +4,7 @@
  */
 
 //! REST bindings on a shared schema must not change RPC responses when AWS JSON is set to
-//! `responseBindings: "protocol"`. The default, `"historical"`, keeps the status codes and headers
+//! `responseBindings: "smithy-specs"`. The default, `"historical"`, keeps the status codes and headers
 //! smithy-rs awsJson servers have always sent.
 
 use aws_smithy_http_server::body::{empty, BoxBody};
@@ -101,7 +101,7 @@ fn build_aws_json(settings: Option<&[u8]>) -> Vec<Box<dyn ServerProtocol>> {
 
 /// AWS JSON protocols set to the specification's behavior.
 fn aws_json_protocols() -> Vec<Box<dyn ServerProtocol>> {
-    build_aws_json(Some(br#"{"responseBindings":"protocol"}"#))
+    build_aws_json(Some(br#"{"responseBindings":"smithy-specs"}"#))
 }
 
 async fn body_text(body: BoxBody) -> String {

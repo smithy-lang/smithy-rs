@@ -560,12 +560,12 @@ async fn rpcv2_cbor_blob_outputs_use_a_document_instead_of_a_raw_streaming_respo
     assert_eq!(decoder.position(), body.len());
 }
 
-/// An AWS JSON protocol configured with `responseBindings: "protocol"`: the specification's
+/// An AWS JSON protocol configured with `responseBindings: "smithy-specs"`: the specification's
 /// behavior, ignoring REST status and header bindings. (The default is `"historical"`.)
 fn spec_bindings<P: crate::schema::MetadataRoutedProtocol>() -> P {
     static EMPTY_SERVICE: crate::schema::ServiceSchema<'static> =
         crate::schema::ServiceSchema::new(aws_smithy_schema::shape_id!("test", "Service"), None, &[], &[]);
-    let settings = crate::schema::settings::parse_settings_json(br#"{"responseBindings":"protocol"}"#);
+    let settings = crate::schema::settings::parse_settings_json(br#"{"responseBindings":"smithy-specs"}"#);
     let context = crate::schema::ProtocolBuildContext::new(&EMPTY_SERVICE).with_settings(Some(&settings));
     P::from_build_context(&context).expect("valid settings")
 }
@@ -590,7 +590,7 @@ async fn streaming_responses_carry_the_head_only() {
     assert_eq!(response.headers().get("x-tag").unwrap(), "tagged");
 
     // awsJson stamps its own content type on event stream responses; rpcv2Cbor the event stream
-    // type plus its protocol header. With `responseBindings: "protocol"` (and always on rpcv2Cbor)
+    // type plus its protocol header. With `responseBindings: "smithy-specs"` (and always on rpcv2Cbor)
     // neither writes REST headers.
     let spec = spec_bindings::<AwsJson1_0>();
     let response = spec.serialize_streaming_response(&STREAM_OUT, &StreamOutput, &EVENTS_MEMBER, Some(body()));
