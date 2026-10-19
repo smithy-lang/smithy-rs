@@ -623,6 +623,18 @@ mod message_tests {
     }
 
     #[test]
+    fn header_name_length_is_validated_in_bytes_not_chars() {
+        // Well under the limit in characters, over it in UTF-8 bytes.
+        let name = "€".repeat(MAX_HEADER_NAME_LEN / 2);
+        assert!(name.chars().count() < MAX_HEADER_NAME_LEN);
+        assert!(name.len() > MAX_HEADER_NAME_LEN);
+        write_message_expect_err!(
+            message_with_header(name, HeaderValue::Bool(true)),
+            ErrorKind::InvalidHeaderNameLength
+        );
+    }
+
+    #[test]
     fn string_header_value_length_boundaries() {
         let longest = "a".repeat(MAX_HEADER_VALUE_LEN);
         let mut buffer = Vec::new();
