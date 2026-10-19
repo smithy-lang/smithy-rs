@@ -130,7 +130,7 @@ fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
             let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
             let waker = Waker::from(wakes.clone());
             let mut cx = Context::from_waker(&waker);
-            let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(64);
+            let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(32);
             let mut yields = 0;
             loop {
                 match future.as_mut().poll(&mut cx) {

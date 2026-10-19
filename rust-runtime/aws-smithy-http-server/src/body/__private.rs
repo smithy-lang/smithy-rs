@@ -49,7 +49,7 @@ pub enum CollectBodyError<E> {
 pub(crate) const DEFAULT_LIMIT_SIZE: Option<NonZeroUsize> = None;
 
 /// Default number of ready frame polls before body collection yields.
-pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(64).unwrap();
+pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 
 /// Default cap on the buffer reserved before reading body frames.
 pub(crate) const DEFAULT_MAX_INITIAL_CAPACITY: NonZeroUsize = NonZeroUsize::new(32 * 1024).unwrap();
@@ -152,7 +152,7 @@ impl CollectionConfigBuilder {
 ///
 /// `frame_budget` counts ready frame polls, including empty frames and trailers.
 /// A pending body poll resets the budget; exhausting it yields and wakes the task.
-/// Passing `None` uses no byte limit, a 64-frame budget, and a 32 KiB reservation cap.
+/// Passing `None` uses no byte limit, a 32-frame budget, and a 32 KiB reservation cap.
 pub async fn collect_body<B>(body: B, config: Option<CollectionConfig>) -> Result<Bytes, CollectBodyError<B::Error>>
 where
     B: HttpBody,
@@ -309,7 +309,7 @@ fn enforce_body_limit<E>(current_size: u64, limit: NonZeroUsize) -> Result<(), C
 // ============================================================================
 
 /// Default number of consecutive ready body polls before a streaming request yields.
-pub(crate) const DEFAULT_STREAMING_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
+pub(crate) const DEFAULT_STREAMING_FRAME_BUDGET: NonZeroUsize = DEFAULT_FRAME_BUDGET;
 
 pin_project_lite::pin_project! {
     /// An HTTP body that yields after a bounded number of consecutive ready polls.
