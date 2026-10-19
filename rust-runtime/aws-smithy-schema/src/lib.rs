@@ -927,14 +927,14 @@ impl<'a> Schema<'a> {
         self.http.as_ref()
     }
 
-    /// Returns `true` if this member has the `@eventHeader` trait.
-    pub fn event_header(&self) -> bool {
-        self.event_header.is_some()
+    /// Returns the `@eventHeader` trait if present.
+    pub fn event_header(&self) -> Option<&trait_types::EventHeaderTrait> {
+        self.event_header.as_ref()
     }
 
-    /// Returns `true` if this member has the `@eventPayload` trait.
-    pub fn event_payload(&self) -> bool {
-        self.event_payload.is_some()
+    /// Returns the `@eventPayload` trait if present.
+    pub fn event_payload(&self) -> Option<&trait_types::EventPayloadTrait> {
+        self.event_payload.as_ref()
     }
 
     // -- Const setters for builder-style construction in generated code --
