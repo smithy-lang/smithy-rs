@@ -31,9 +31,9 @@ internal class ServerProtocolResponseSettingsTest {
             val other = if (spec == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
             val settings =
                 settings(
-                    """{"protocols":{"$spec":{"responseBindings":"protocol"},"$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"restJson1":{"responseBindings":"protocol"}}}""",
+                    """{"protocols":{"$spec":{"responseBindings":"smithy-specs"},"$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"restJson1":{"responseBindings":"smithy-specs"}}}""",
                 )
-            check(settings.responseBindings(ShapeId.from("aws.protocols#$spec")) == AwsJsonResponseBindings.PROTOCOL)
+            check(settings.responseBindings(ShapeId.from("aws.protocols#$spec")) == AwsJsonResponseBindings.SMITHY_SPECS)
             check(settings.responseBindings(ShapeId.from("aws.protocols#$other")) == AwsJsonResponseBindings.HISTORICAL)
             check(settings.responseBindings(ShapeId.from("aws.protocols#restJson1")) == AwsJsonResponseBindings.HISTORICAL)
             check(settings.responseBindings(ShapeId.from("smithy.protocols#rpcv2Cbor")) == AwsJsonResponseBindings.HISTORICAL)
@@ -42,8 +42,8 @@ internal class ServerProtocolResponseSettingsTest {
 
     @Test
     fun `full protocol IDs use the same settings and cannot duplicate short names`() {
-        val settings = settings("""{"protocols":{"aws.protocols#awsJson1_0":{"responseBindings":"protocol"}}}""")
-        check(settings.responseBindings(json10) == AwsJsonResponseBindings.PROTOCOL)
+        val settings = settings("""{"protocols":{"aws.protocols#awsJson1_0":{"responseBindings":"smithy-specs"}}}""")
+        check(settings.responseBindings(json10) == AwsJsonResponseBindings.SMITHY_SPECS)
         expectInvalid(
             """{"protocols":{"awsJson1_0":{},"aws.protocols#awsJson1_0":{}}}""",
             "customizationConfig.protocols.awsJson1_0",

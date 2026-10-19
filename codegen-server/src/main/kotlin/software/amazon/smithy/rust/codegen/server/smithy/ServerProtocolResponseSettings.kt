@@ -19,7 +19,7 @@ internal enum class AwsJsonResponseBindings(val setting: String) {
     HISTORICAL("historical"),
 
     /** The AWS JSON specification: status 200 (errors use the `@error` class) and every member in the document. */
-    PROTOCOL("protocol"),
+    SMITHY_SPECS("smithy-specs"),
 }
 
 /**

@@ -37,7 +37,7 @@ fn reservation_builder_distinguishes_default_explicit_and_disabled_caps() {
                 .build(),
             4096,
         ),
-        (CollectionConfig::builder().maybe_initial_capacity(None).build(), 0),
+        (CollectionConfig::builder().set_initial_capacity(None).build(), 0),
     ] {
         assert_eq!(
             new_collection_buffer(u64::MAX, config.initial_capacity).capacity(),
@@ -55,7 +55,7 @@ async fn custom_reservation_caps_allow_collection_to_grow_as_data_arrives() {
             Some(
                 CollectionConfig::builder()
                     .frame_budget(NonZeroUsize::new(3).unwrap())
-                    .maybe_initial_capacity(maximum)
+                    .set_initial_capacity(maximum)
                     .build(),
             ),
         )
@@ -78,9 +78,9 @@ async fn custom_reservation_caps_preserve_body_limits_and_trailer_handling() {
                 body,
                 Some(
                     CollectionConfig::builder()
-                        .maybe_limit(NonZeroUsize::new(limit))
+                        .set_limit(NonZeroUsize::new(limit))
                         .frame_budget(NonZeroUsize::new(1).unwrap())
-                        .maybe_initial_capacity(maximum)
+                        .set_initial_capacity(maximum)
                         .build(),
                 ),
             )

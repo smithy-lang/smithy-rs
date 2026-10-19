@@ -34,7 +34,7 @@ fn expected_bodies() -> [(&'static str, serde_json::Value); 3] {
     ]
 }
 
-/// `responseBindings: "protocol"` on awsJson1_0; rpcv2Cbor ignores the bindings whatever the setting.
+/// `responseBindings: "smithy-specs"` on awsJson1_0; rpcv2Cbor ignores the bindings whatever the setting.
 #[tokio::test]
 async fn aws_json_protocol_mode_and_cbor_ignore_rest_response_bindings() {
     for (op, body) in expected_bodies() {

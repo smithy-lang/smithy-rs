@@ -167,7 +167,8 @@ async fn shared_structured_payloads_preserve_rpc_documents_and_rest_framing() {
     let cbor = RpcV2Cbor::default();
     let rest_json = RestJson1::default();
     let rest_xml = RestXml::default();
-    let settings = aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"responseBindings":"protocol"}"#);
+    let settings =
+        aws_smithy_http_server::schema::settings::parse_settings_json(br#"{"responseBindings":"smithy-specs"}"#);
     let context = ProtocolBuildContext::new(&SERVICE).with_settings(Some(&settings));
     let aws_json_10_protocol = AwsJson1_0::from_build_context(&context).unwrap();
     let aws_json_11_protocol = AwsJson1_1::from_build_context(&context).unwrap();

@@ -42,7 +42,7 @@ internal class ServerResponseBindingsTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
     fun `AWS JSON follows the specification when response bindings are set to protocol`(protocol: String) {
-        checkResponses(protocol, "protocol")
+        checkResponses(protocol, "smithy-specs")
     }
 
     @ParameterizedTest
@@ -78,7 +78,7 @@ internal class ServerResponseBindingsTest {
                 .withMember("codegen", Node.objectNodeBuilder().withMember("schemaSerde", schemaSerde).build())
         if (bindings != null) {
             val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
-            val otherBindings = if (bindings == "protocol") "historical" else "protocol"
+            val otherBindings = if (bindings == "smithy-specs") "historical" else "smithy-specs"
             val key = if (protocol == "awsJson1_1") "aws.protocols#$protocol" else protocol
             settings.withMember(
                 "customizationConfig",
@@ -91,7 +91,7 @@ internal class ServerResponseBindingsTest {
         val isRest = protocol == "restJson1" || protocol == "restXml"
         val isRpc = !isRest
         // The legacy generator (schemaSerde = false) ignores the setting and always behaves as mainline.
-        val historicalAwsJson = protocol.startsWith("awsJson") && (!schemaSerde || bindings != "protocol")
+        val historicalAwsJson = protocol.startsWith("awsJson") && (!schemaSerde || bindings != "smithy-specs")
         val emitHeaders = isRest || historicalAwsJson
         val outputStatus = if (emitHeaders) 201 else 200
         val honorErrorStatus = isRest || protocol == "rpcv2Cbor" || historicalAwsJson
@@ -183,18 +183,18 @@ internal class ServerResponseBindingsTest {
             val schemaService =
                 if (schemaSerde) {
                     """
-                async fn send(result: #{Result}<#{Output}, #{WriteError}>) -> #{Server}::response::Response {
-                    use #{Tower}::ServiceExt;
-                    let result = ::std::sync::Arc::new(::std::sync::Mutex::new(#{Some}(result)));
-                    let service = crate::Example::builder(crate::ExampleConfig::builder().build())
-                        .write(move |_: crate::input::WriteInput| {
-                            let result = result.lock().unwrap().take().unwrap();
-                            async move { result }
-                        }).build_unchecked();
-                    let request = #{Http}::Request::builder()$serviceRequest.unwrap();
-                    service.oneshot(request).await.unwrap()
-                }
-                """
+                    async fn send(result: #{Result}<#{Output}, #{WriteError}>) -> #{Server}::response::Response {
+                        use #{Tower}::ServiceExt;
+                        let result = ::std::sync::Arc::new(::std::sync::Mutex::new(#{Some}(result)));
+                        let service = crate::Example::builder(crate::ExampleConfig::builder().build())
+                            .write(move |_: crate::input::WriteInput| {
+                                let result = result.lock().unwrap().take().unwrap();
+                                async move { result }
+                            }).build_unchecked();
+                        let request = #{Http}::Request::builder()$serviceRequest.unwrap();
+                        service.oneshot(request).await.unwrap()
+                    }
+                    """
                 } else {
                     ""
                 }

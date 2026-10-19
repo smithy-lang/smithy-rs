@@ -106,11 +106,11 @@ pub struct CollectionConfigBuilder {
 impl CollectionConfigBuilder {
     /// Sets the maximum number of body bytes.
     pub fn limit(self, limit: NonZeroUsize) -> Self {
-        self.maybe_limit(Some(limit))
+        self.set_limit(Some(limit))
     }
 
     /// Sets the byte limit, or disables it with `None`.
-    pub fn maybe_limit(mut self, limit: Option<NonZeroUsize>) -> Self {
+    pub fn set_limit(mut self, limit: Option<NonZeroUsize>) -> Self {
         self.config.limit = limit;
         self
     }
@@ -122,17 +122,17 @@ impl CollectionConfigBuilder {
     }
 
     /// Sets the frame poll budget, or uses the default with `None`.
-    pub fn maybe_frame_budget(self, frame_budget: Option<NonZeroUsize>) -> Self {
+    pub fn set_frame_budget(self, frame_budget: Option<NonZeroUsize>) -> Self {
         self.frame_budget(frame_budget.unwrap_or(DEFAULT_FRAME_BUDGET))
     }
 
     /// Sets the initial buffer reservation cap.
     pub fn initial_capacity(self, initial_capacity: NonZeroUsize) -> Self {
-        self.maybe_initial_capacity(Some(initial_capacity))
+        self.set_initial_capacity(Some(initial_capacity))
     }
 
     /// Sets the reservation cap, or disables the initial reservation with `None`.
-    pub fn maybe_initial_capacity(mut self, initial_capacity: Option<NonZeroUsize>) -> Self {
+    pub fn set_initial_capacity(mut self, initial_capacity: Option<NonZeroUsize>) -> Self {
         self.config.initial_capacity = initial_capacity;
         self
     }

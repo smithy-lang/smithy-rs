@@ -27,7 +27,7 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
   "codegen": { "schemaSerde": true },
   "customizationConfig": {
     "protocols": {
-      "awsJson1_0": { "responseBindings": "protocol" },
+      "awsJson1_0": { "responseBindings": "smithy-specs" },
       "awsJson1_1": { "responseBindings": "historical" }
     }
   }
@@ -35,7 +35,7 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
 ```
 
 * `"historical"` (default): as described above.
-* `"protocol"`: status 200 for success, the `@error` class status (400/500) for errors, and
+* `"smithy-specs"`: status 200 for success, the `@error` class status (400/500) for errors, and
   every member in the document with no REST headers.
 
 Servers generated without `schemaSerde` always behave as `"historical"`; the setting is
