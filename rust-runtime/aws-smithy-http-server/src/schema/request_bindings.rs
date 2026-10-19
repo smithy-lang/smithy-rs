@@ -31,11 +31,12 @@
 use std::borrow::Cow;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-use aws_smithy_runtime_api::http::{Headers, Uri};
+use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
 use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use http::Uri;
 
 use super::timestamp::{resolve_timestamp_format, BindingLocation};
 
@@ -97,13 +98,13 @@ pub(crate) type PayloadDeserializer = fn(
 pub(crate) struct RestRequestDeserializer<'a, C> {
     codec: &'a C,
     headers: &'a Headers,
-    uri: &'a Uri,
+    uri: Uri,
     body: &'a [u8],
     payload_deserializer: Option<PayloadDeserializer>,
 }
 
 impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
-    pub(crate) fn new(codec: &'a C, uri: &'a Uri, headers: &'a Headers, body: &'a [u8]) -> Self {
+    pub(crate) fn new(codec: &'a C, uri: Uri, headers: &'a Headers, body: &'a [u8]) -> Self {
         Self {
             codec,
             headers,
@@ -1439,7 +1440,7 @@ mod tests {
 
     fn collect(uri: &Uri, headers: &Headers, body: &[u8]) -> Result<Collected, SerdeError> {
         let codec = json_codec();
-        let mut deser = RestRequestDeserializer::new(&codec, uri, headers, body);
+        let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), headers, body);
         let mut out = Collected::default();
         deser.read_struct(&INPUT_SCHEMA, &mut |member, d| {
             match member.member_index() {
@@ -1478,7 +1479,7 @@ mod tests {
         let request =
             aws_smithy_runtime_api::http::Request::try_from(builder.body(()).unwrap()).expect("valid test request");
         let parts = request.into_parts();
-        (parts.uri, parts.headers)
+        (uri.parse().expect("valid test URI"), parts.headers)
     }
 
     static QUERY_PARAMS_MEMBER: Schema<'static> = Schema::new_member(
@@ -1502,7 +1503,7 @@ mod tests {
         let codec = json_codec();
         let collect_params = |uri: &str| {
             let (uri, headers) = request_parts(uri, &[]);
-            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
             let mut params: Vec<(String, Vec<String>)> = Vec::new();
             deser
                 .read_struct(&QUERY_PARAMS_INPUT, &mut |member, d| {
@@ -1599,7 +1600,7 @@ mod tests {
             );
             let codec = json_codec();
             let (uri, headers) = request_parts("/qp?%61=x%20y&a=second", &[]);
-            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
             let mut seen = 0;
             deser
                 .read_struct(&schema, &mut |member, d| {
@@ -1640,7 +1641,7 @@ mod tests {
             let codec = json_codec();
             let headers: Vec<_> = values.iter().map(|value| ("x-media-key", *value)).collect();
             let (uri, headers) = request_parts("/prefix", &headers);
-            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
             let mut output = Vec::new();
             deser.read_struct(&schema, &mut |member, d| {
                 d.read_map(member, &mut |key, d| {
@@ -1707,7 +1708,7 @@ mod tests {
         ] {
             let codec = json_codec();
             let (uri, headers) = request_parts("/prefix?q=%20query%20", &[("x-meta-key", raw)]);
-            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
             let mut values = Vec::new();
             deser
                 .read_struct(&schema, &mut |member, d| {
@@ -1750,7 +1751,7 @@ mod tests {
         ] {
             let codec = json_codec();
             let (uri, headers) = request_parts("/prefix", &headers);
-            let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+            let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
             let mut calls = 0;
             let mut values = Vec::new();
             deser
@@ -1872,7 +1873,7 @@ mod tests {
     fn header_presence(headers: &[(&'static str, &str)]) -> Vec<(String, String)> {
         let codec = json_codec();
         let (uri, headers) = request_parts("/hp", headers);
-        let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, b"");
+        let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, b"");
         let mut set = Vec::new();
         deser
             .read_struct(&HP_INPUT, &mut |member, d| {
@@ -1975,7 +1976,7 @@ mod tests {
     fn read_payload(input: &Schema<'_>, body: &[u8]) -> Result<Option<bool>, SerdeError> {
         let codec = json_codec();
         let (uri, headers) = request_parts("/sp", &[]);
-        let mut deser = RestRequestDeserializer::new(&codec, &uri, &headers, body);
+        let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, body);
         let mut set = None;
         deser.read_struct(input, &mut |member, d| {
             if member.shape_type() == ShapeType::Document {

@@ -185,7 +185,9 @@ where
                 },
                 BodyDirective::Skip => bytes::Bytes::new(),
             };
-            let request = request.map(|_| bytes);
+            // Request::map requires Fn, so we cannot move captured bytes out of the closure.
+            // Bytes::clone is cheap: it shares the backing buffer without copying the body.
+            let request = request.map(|_| bytes.clone());
             let input = {
                 let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
                     Ok(value) => value,
@@ -381,7 +383,9 @@ where
         } else {
             (bytes::Bytes::new(), SdkBody::empty())
         };
-        let request = request.map(|_| bytes);
+        // Request::map requires Fn, so we cannot move captured bytes out of the closure.
+        // Bytes::clone is cheap: it shares the backing buffer without copying the body.
+        let request = request.map(|_| bytes.clone());
         let future = {
             let mut deserializer = protocol.deserialize_request(operation.input(), &request)?;
             deserialize(&mut *deserializer, body, protocol.clone())

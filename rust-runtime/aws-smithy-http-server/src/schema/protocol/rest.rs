@@ -166,14 +166,15 @@ impl<C: Codec> RestProtocol<C> {
             )?,
             request.body(),
         )?;
+        // Parse the public URI string here so the server does not require a runtime API accessor.
+        // Treat URI parse failures as invalid request input so the client gets a 400 response.
+        let uri = request
+            .uri()
+            .parse::<http::Uri>()
+            .map_err(|err| DeserializeError::Serde(SerdeError::invalid_input(format!("invalid request URI: {err}"))))?;
         Ok(Box::new(
-            RestRequestDeserializer::new(
-                self.codec.as_ref(),
-                request.uri_ref(),
-                request.headers(),
-                request.body(),
-            )
-            .with_payload_deserializer(self.policy.payload_deserializer),
+            RestRequestDeserializer::new(self.codec.as_ref(), uri, request.headers(), request.body())
+                .with_payload_deserializer(self.policy.payload_deserializer),
         ))
     }
 
