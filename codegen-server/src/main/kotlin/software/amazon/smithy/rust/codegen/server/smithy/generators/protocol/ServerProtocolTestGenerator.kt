@@ -19,7 +19,9 @@ import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseBodyDefi
 import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseDefinition
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -44,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR_EXTRAS
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -69,7 +72,7 @@ class ServerProtocolTestGenerator(
     /** Whether the service serves several protocols, each generating its own tests for [operationShape]. */
     private val multiProtocol: Boolean = false,
 ) : ProtocolTestGenerator() {
-    override val protocolTestsModuleSuffix: String =
+    private val protocolTestsModuleSuffix: String =
         if (multiProtocol) "_${codegenContext.protocol.name.toSnakeCase()}" else ""
 
     /** Whether the generated service runs the schema-driven request and response path. */
@@ -317,7 +320,7 @@ class ServerProtocolTestGenerator(
      * For HTTP 0.x: uses http-02x feature (default).
      * For HTTP 1.x: uses http-1x feature.
      */
-    protected override val protocolTestHelpers =
+    private val protocolTestHelpers =
         when (codegenContext.runtimeConfig.httpVersion) {
             HttpVersion.Http1x ->
                 CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig)
@@ -341,6 +344,87 @@ class ServerProtocolTestGenerator(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "decode_body_data" to protocolTestHelpers.resolve("decode_body_data"),
         )
+
+    private val assertions = ServerProtocolTestAssertions(protocolTestHelpers)
+
+    /** Render server tests with independent modules for each served protocol. */
+    internal fun renderServerTests(writer: RustWriter) {
+        val tests =
+            allMatchingTestCases().flatMap { fixBrokenTestCase(it) }.filter {
+                when {
+                    strictProtocolTests -> it.protocol == codegenContext.protocol
+                    generateOnly.isNotEmpty() -> it.id in generateOnly
+                    else -> it.protocol == codegenContext.protocol && it.id !in disabledTests
+                }
+            }
+        if (tests.isEmpty()) return
+        val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name.toSnakeCase()
+        val module =
+            RustModule.inlineTests(
+                "${operationName}_test$protocolTestsModuleSuffix",
+                additionalAttributes = listOf(Attribute(Attribute.allow("unreachable_code", "unused_variables"))),
+            )
+        writer.withInlineModule(module, null) { renderAllTestCases(tests) }
+    }
+
+    private fun findBrokenTest(test: TestCase): BrokenTest? =
+        brokenTests.find {
+            (test is TestCase.RequestTest && it is BrokenTest.RequestTest && test.id == it.id) ||
+                (test is TestCase.ResponseTest && it is BrokenTest.ResponseTest && test.id == it.id) ||
+                (test is TestCase.MalformedRequestTest && it is BrokenTest.MalformedRequestTest && test.id == it.id)
+        }
+
+    private fun fixBrokenTestCase(it: TestCase): List<TestCase> =
+        if (strictProtocolTests || findBrokenTest(it) == null) {
+            listOf(it)
+        } else {
+            logger.info("Fixing ${it.kind} test case ${it.id}")
+
+            assert(findBrokenTest(it) != null)
+
+            val brokenTest = findBrokenTest(it)!!
+            var fixed = brokenTest.fixIt(it)
+
+            val intro = "The hotfix function for broken test case ${it.kind} ${it.id}"
+            val moreInfo =
+                """This test case was identified to be broken in at least these Smithy versions: [${brokenTest.inAtLeast.joinToString()}].
+                |We are tracking things here: [${brokenTest.trackedIn.joinToString()}].
+                """.trimMargin()
+
+            // Something must change...
+            if (it == fixed) {
+                PANIC(
+                    """$intro did not make any modifications. It is likely that the test case was
+                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix
+                    |function, as the test is no longer broken.
+                    |$moreInfo
+                    """.trimMargin(),
+                )
+            }
+
+            // ... but the hotfix function is not allowed to change the test case kind...
+            if (it.kind != fixed.kind) {
+                PANIC(
+                    """$intro changed the test case kind. This is not allowed.
+                    |$moreInfo
+                    """.trimMargin(),
+                )
+            }
+
+            // ... nor its id.
+            if (it.id != fixed.id) {
+                PANIC(
+                    """$intro changed the test case id. This is not allowed.
+                    |$moreInfo
+                    """.trimMargin(),
+                )
+            }
+
+            // The latter is because we're going to generate the fixed version with an identifiable suffix.
+            fixed = fixed.suffixIdWith("_hotfixed")
+
+            listOf(it, fixed)
+        }
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         for (it in allTests) {
@@ -790,9 +874,9 @@ class ServerProtocolTestGenerator(
         testCase: HttpResponseTestCase,
     ) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
-        checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
-        checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
+        assertions.checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        assertions.checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
+        assertions.checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -811,7 +895,7 @@ class ServerProtocolTestGenerator(
         testCase: HttpMalformedResponseDefinition,
     ) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        assertions.checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -905,7 +989,7 @@ class ServerProtocolTestGenerator(
                 *codegenScope,
             )
         } else {
-            assertOk(rustWriter) {
+            assertions.assertOk(rustWriter) {
                 rust(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
@@ -930,5 +1014,14 @@ class ServerProtocolTestGenerator(
             """,
             *codegenScope,
         )
+    }
+}
+
+/** Preserve decorator replacement generators while using the server's default rendering path. */
+internal fun ProtocolTestGenerator.renderServerTests(writer: RustWriter) {
+    if (this is ServerProtocolTestGenerator) {
+        renderServerTests(writer)
+    } else {
+        render(writer)
     }
 }

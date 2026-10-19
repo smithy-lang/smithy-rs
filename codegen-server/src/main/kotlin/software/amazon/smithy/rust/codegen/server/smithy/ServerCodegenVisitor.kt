@@ -97,6 +97,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFal
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.renderServerTests
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
@@ -723,7 +724,7 @@ open class ServerCodegenVisitor(
                     shape,
                     multiProtocol = codegenContext.servedProtocols.size > 1,
                 ),
-            ).render(writer)
+            ).renderServerTests(writer)
         }
     }
 

@@ -305,14 +305,8 @@ class EventStreamUnmarshallerGenerator(
                         )
                     }
                 }
-                val finish =
-                    if (codegenTarget == CodegenTarget.SERVER && payloadReachesEnumTrait(unionStruct)) {
-                        """builder.build().map_err(|err| #{Error}::unmarshalling(format!("failed to unmarshall event due to constraint violation: {err}")))?"""
-                    } else {
-                        "builder.build()"
-                    }
                 rustTemplate(
-                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName($finish)))",
+                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(builder.build())))",
                     "Output" to unionSymbol,
                     *codegenScope,
                 )

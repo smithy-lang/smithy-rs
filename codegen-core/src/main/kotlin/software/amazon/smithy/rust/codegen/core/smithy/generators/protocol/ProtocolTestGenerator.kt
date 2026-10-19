@@ -75,20 +75,10 @@ abstract class ProtocolTestGenerator {
     private val serviceShapeId: ShapeId
         get() = codegenContext.serviceShape.id
 
-    /**
-     * Appended to the test module name; lets one operation carry a test module per protocol when the
-     * service is generated for several.
-     */
-    protected open val protocolTestsModuleSuffix: String = ""
-
-    /** Test helpers must support the HTTP types emitted by this generator. */
-    protected open val protocolTestHelpers: RuntimeType
-        get() = CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig).toType()
-
     /** The Rust module in which we should generate the protocol tests for [operationShape]. */
     private fun protocolTestsModule(): RustModule.LeafModule {
         val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
-        val testModuleName = "${operationName.toSnakeCase()}_test$protocolTestsModuleSuffix"
+        val testModuleName = "${operationName.toSnakeCase()}_test"
         val additionalAttributes = listOf(Attribute(allow("unreachable_code", "unused_variables")))
         return RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)
     }
@@ -118,7 +108,7 @@ abstract class ProtocolTestGenerator {
      * attribute, so get alerted if the test now passes, and the fixed version, which should pass.
      */
     private fun fixBrokenTestCase(it: TestCase): List<TestCase> =
-        if (strictProtocolTests || !it.isBroken()) {
+        if (!it.isBroken()) {
             listOf(it)
         } else {
             logger.info("Fixing ${it.kind} test case ${it.id}")
@@ -174,9 +164,7 @@ abstract class ProtocolTestGenerator {
 
     /** Filter out test cases that are disabled or don't match the service protocol. */
     private fun List<TestCase>.filterMatching(): List<TestCase> =
-        if (strictProtocolTests) {
-            this.filter { it.protocol == codegenContext.protocol }
-        } else if (generateOnly.isEmpty()) {
+        if (generateOnly.isEmpty()) {
             this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
         } else {
             logger.warning("Generating only specified tests")
@@ -191,10 +179,7 @@ abstract class ProtocolTestGenerator {
         }
 
     /** Do we expect this test case to fail? */
-    private val strictProtocolTests = System.getenv("SMITHY_RS_STRICT_PROTOCOL_TESTS") == "1"
-
-    private fun TestCase.expectFail(): Boolean =
-        !strictProtocolTests && (this.isBroken() || expectFail.contains(this.toFailingTest()))
+    private fun TestCase.expectFail(): Boolean = this.isBroken() || expectFail.contains(this.toFailingTest())
 
     /** Is this test case broken? */
     private fun TestCase.isBroken(): Boolean = this.findInBroken() != null
@@ -330,7 +315,7 @@ abstract class ProtocolTestGenerator {
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $variableName)",
-                protocolTestHelpers.resolve("validate_headers"),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_headers"),
             )
         }
     }
@@ -351,7 +336,7 @@ abstract class ProtocolTestGenerator {
         assertOk(rustWriter) {
             rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
-                protocolTestHelpers.resolve(checkFunction),
+                RuntimeType.protocolTest(codegenContext.runtimeConfig, checkFunction),
             )
         }
     }
@@ -364,7 +349,7 @@ abstract class ProtocolTestGenerator {
         rustWriter: RustWriter,
         inner: Writable,
     ) {
-        rustWriter.rust("#T(", protocolTestHelpers.resolve("assert_ok"))
+        rustWriter.rust("#T(", RuntimeType.protocolTest(codegenContext.runtimeConfig, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }
