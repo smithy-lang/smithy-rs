@@ -262,7 +262,9 @@ fn rest_request_content_type_is_checked_only_with_a_body() {
 
 #[test]
 fn rest_request_without_modeled_input_requires_an_absent_content_type_even_on_empty_bodies() {
-    let modeled_empty = EMPTY_IN_SCHEMA.clone().with_original_name("ModeledEmptyInput");
+    let modeled_empty = Schema::new_struct(shape_id!("test", "EmptyIn"), ShapeType::Structure, &EMPTY_MEMBERS)
+        .with_http(EMPTY_HTTP)
+        .with_original_name("ModeledEmptyInput");
     for protocol in [&*REST_JSON as &dyn ServerProtocol, &*REST_XML as &dyn ServerProtocol] {
         for content_type in ["application/json", "application/xml", "text/plain", "invalid mime"] {
             let req = request("/empty", &[("content-type", content_type)], b"");

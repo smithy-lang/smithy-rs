@@ -139,7 +139,8 @@ impl ShapeSerializer for OuterSerializer<'_> {
 enum State {
     Prefix(Bytes),
     Streaming,
-    Suffix,
+    Suffix(Option<http::HeaderMap>),
+    Trailers(http::HeaderMap),
     Done,
 }
 
@@ -177,16 +178,25 @@ impl Body for StreamingBody {
                         encoder.blob_bytes(&data);
                         Poll::Ready(Some(Ok(Frame::data(encoder.into_writer().into()))))
                     }
-                    Err(frame) => Poll::Ready(Some(Ok(frame))),
+                    Err(frame) => {
+                        // Trailers terminate the source, but the CBOR document must close first.
+                        this.state = State::Suffix(frame.into_trailers().ok());
+                        Pin::new(this).poll_frame(cx)
+                    }
                 },
                 Poll::Ready(None) => {
-                    this.state = State::Suffix;
+                    this.state = State::Suffix(None);
                     Pin::new(this).poll_frame(cx)
                 }
             },
-            State::Suffix => {
-                this.state = State::Done;
+            State::Suffix(trailers) => {
+                this.state = trailers.take().map_or(State::Done, State::Trailers);
                 Poll::Ready(Some(Ok(Frame::data(Bytes::from_static(&[0xff, 0xff])))))
+            }
+            State::Trailers(trailers) => {
+                let trailers = std::mem::take(trailers);
+                this.state = State::Done;
+                Poll::Ready(Some(Ok(Frame::trailers(trailers))))
             }
             State::Done => Poll::Ready(None),
         }
@@ -256,6 +266,40 @@ mod tests {
                 response.into_body().collect().await.unwrap().to_bytes().as_ref(),
                 expected
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn trailers_follow_the_document_suffix_and_end_the_stream() {
+        use futures_util::StreamExt;
+
+        let mut trailers = http::HeaderMap::new();
+        trailers.append("x-checksum", "first".parse().unwrap());
+        trailers.append("x-checksum", "second".parse().unwrap());
+        trailers.insert("x-stream-status", "complete".parse().unwrap());
+        for chunks in [vec![], vec![b"hello".as_slice()], vec![b"he".as_slice(), b"", b"llo"]] {
+            let frames = chunks
+                .iter()
+                .map(|chunk| Frame::data(Bytes::copy_from_slice(chunk)))
+                .chain(std::iter::once(Frame::trailers(trailers.clone())))
+                .map(Ok::<_, std::io::Error>)
+                .collect::<Vec<_>>();
+            // Trailers terminate the source; closing the document must not require another poll.
+            let source = http_body_util::StreamBody::new(
+                futures_util::stream::iter(frames).chain(futures_util::stream::pending()),
+            );
+            let mut body = response(crate::body::boxed(source)).into_body();
+            assert_eq!(data(&mut body).await.as_ref(), b"\xbf\x65fahad\x5f");
+            for chunk in chunks.iter().filter(|chunk| !chunk.is_empty()) {
+                let mut encoder = Encoder::new(Vec::new());
+                encoder.blob_bytes(chunk);
+                assert_eq!(data(&mut body).await.as_ref(), encoder.into_writer());
+            }
+            assert_eq!(data(&mut body).await.as_ref(), &[0xff, 0xff]);
+            assert!(!body.is_end_stream(), "trailers are still pending");
+            assert_eq!(body.frame().await.unwrap().unwrap().into_trailers().unwrap(), trailers);
+            assert!(body.is_end_stream());
+            assert!(body.frame().await.is_none());
         }
     }
 

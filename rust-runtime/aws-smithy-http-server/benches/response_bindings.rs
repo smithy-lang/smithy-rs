@@ -105,12 +105,29 @@ static MIXED_OUTPUT: Schema<'static> =
         .with_original_name("MixedOutput")
         .with_http(HTTP);
 
-static BODY_MEMBERS: [&Schema<'static>; 3] = [&MESSAGE, &COUNT, &ENABLED];
-static BODY_OUTPUT: std::sync::LazyLock<Schema<'static>> = std::sync::LazyLock::new(|| {
-    Schema::new_struct_view(shape_id!("bench", "BodyOutput"), ShapeType::Structure, &BODY_MEMBERS)
+static BODY_MESSAGE: Schema<'static> = Schema::new_member(
+    shape_id!("bench", "BodyOutput", "message"),
+    ShapeType::String,
+    "message",
+    0,
+);
+static BODY_COUNT: Schema<'static> = Schema::new_member(
+    shape_id!("bench", "BodyOutput", "count"),
+    ShapeType::Integer,
+    "count",
+    1,
+);
+static BODY_ENABLED: Schema<'static> = Schema::new_member(
+    shape_id!("bench", "BodyOutput", "enabled"),
+    ShapeType::Boolean,
+    "enabled",
+    2,
+);
+static BODY_MEMBERS: [&Schema<'static>; 3] = [&BODY_MESSAGE, &BODY_COUNT, &BODY_ENABLED];
+static BODY_OUTPUT: Schema<'static> =
+    Schema::new_struct(shape_id!("bench", "BodyOutput"), ShapeType::Structure, &BODY_MEMBERS)
         .with_original_name("BodyOutput")
-        .with_http(HTTP)
-});
+        .with_http(HTTP);
 
 static METADATA: Schema<'static> = Schema::new_member(
     shape_id!("bench", "PrefixOutput", "metadata"),
@@ -167,7 +184,9 @@ impl SerializableStruct for BodyOutput {
     }
 
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        write_body(serializer)
+        serializer.write_string(&BODY_MESSAGE, "response serialization benchmark")?;
+        serializer.write_integer(&BODY_COUNT, 42)?;
+        serializer.write_boolean(&BODY_ENABLED, true)
     }
 }
 

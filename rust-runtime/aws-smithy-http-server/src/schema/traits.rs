@@ -8,6 +8,46 @@
 use aws_smithy_schema::{Schema, ShapeId, Trait};
 use std::any::Any;
 
+/// XML-specific information attached to a structured HTTP payload member.
+///
+/// The payload schema retains the target's metadata and members, with its XML
+/// root name overridden by the payload member. Other protocols use the ordinary
+/// target schema. Each generated payload schema owns its codec cache.
+#[derive(Debug, Clone, Copy)]
+pub struct XmlMetadata {
+    payload_schema: &'static Schema<'static>,
+}
+
+impl XmlMetadata {
+    /// The private server metadata trait's Shape ID.
+    pub const TRAIT_ID: ShapeId<'static> = aws_smithy_schema::shape_id!("smithy.rust.server.xml", "metadata");
+
+    /// Creates metadata referring to a prebuilt XML payload schema.
+    pub const fn new(payload_schema: &'static Schema<'static>) -> Self {
+        Self { payload_schema }
+    }
+
+    /// Returns the target schema with the payload member's XML root name.
+    pub const fn payload_schema(&self) -> &'static Schema<'static> {
+        self.payload_schema
+    }
+
+    /// Reads XML metadata from a payload member's trait map.
+    pub fn from_schema<'s>(schema: &'s Schema<'_>) -> Option<&'s Self> {
+        schema.traits()?.get(&Self::TRAIT_ID)?.as_any().downcast_ref()
+    }
+}
+
+impl Trait for XmlMetadata {
+    fn trait_id(&self) -> &ShapeId<'static> {
+        &Self::TRAIT_ID
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 /// The `smithy.api#httpError` trait on an error structure.
 #[derive(Debug, Clone, Copy)]
 pub struct HttpErrorTrait {
@@ -244,17 +284,16 @@ mod tests {
     }
 
     #[test]
-    fn typed_http_error_survives_schema_cloning_and_preserves_trait_identity() {
-        for schema in [&ERROR, &ERROR.clone()] {
-            assert!(schema.http().is_none());
-            let traits = schema.traits().unwrap();
-            assert!(traits.contains_fqn("smithy.api#error"));
-            assert!(traits.contains_fqn("smithy.api#httpError"));
-            assert_eq!(traits.len(), 2);
-            let http_error = HttpErrorTrait::from_schema(schema).unwrap();
-            assert_eq!(http_error.code(), 404);
-            assert_eq!(http_error.trait_id().as_str(), "smithy.api#httpError");
-        }
+    fn typed_http_error_preserves_trait_identity() {
+        let schema = &ERROR;
+        assert!(schema.http().is_none());
+        let traits = schema.traits().unwrap();
+        assert!(traits.contains_fqn("smithy.api#error"));
+        assert!(traits.contains_fqn("smithy.api#httpError"));
+        assert_eq!(traits.len(), 2);
+        let http_error = HttpErrorTrait::from_schema(schema).unwrap();
+        assert_eq!(http_error.code(), 404);
+        assert_eq!(http_error.trait_id().as_str(), "smithy.api#httpError");
     }
 
     #[test]
@@ -266,7 +305,10 @@ mod tests {
             map.insert(Box::new(StringTrait::new(shape_id!("smithy.api", "error"), "server")));
             map
         });
-        assert!(HttpErrorTrait::from_schema(&plain.clone().with_traits(&without_http_error)).is_none());
+        assert!(HttpErrorTrait::from_schema(
+            &Schema::new(shape_id!("example", "Plain"), ShapeType::String).with_traits(&without_http_error)
+        )
+        .is_none());
         let differently_typed: LazyLock<TraitMap> = LazyLock::new(|| {
             let mut map = TraitMap::new();
             map.insert(Box::new(StringTrait::new(HttpErrorTrait::TRAIT_ID, "404")));

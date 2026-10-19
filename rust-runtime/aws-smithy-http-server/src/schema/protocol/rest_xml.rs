@@ -7,6 +7,7 @@ use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::body::BoxBody;
 use crate::protocol::rest_xml::rejection::RequestRejection;
@@ -85,12 +86,30 @@ const REQUEST_CONTENT_TYPE_ALIASES: &[&str] = &["text/xml"];
 /// untyped blob payload `application/octet-stream`, and sends an empty body for an output with
 /// no body members whether or not the user modeled it.
 pub(crate) const POLICY: RestPolicy = RestPolicy {
+    payload_deserializer: Some(deserialize_payload),
     codec_content_type: CONTENT_TYPE,
     request_content_type_aliases: &[],
     default_response_content_type: None,
     untyped_blob_payload_content_type: Some("application/octet-stream"),
     empty_document: false,
 };
+
+fn deserialize_payload(
+    member: &Schema<'_>,
+    deserializer: &mut dyn ShapeDeserializer,
+    consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+) -> Result<(), SerdeError> {
+    let Some(metadata) = crate::schema::traits::XmlMetadata::from_schema(member) else {
+        return consumer(member, deserializer);
+    };
+    consumer(
+        member,
+        &mut StructuredPayloadDeserializer {
+            inner: deserializer,
+            root: metadata.payload_schema(),
+        },
+    )
+}
 
 impl MetadataRoutedProtocol for RestXml {
     fn from_build_context(
@@ -297,4 +316,231 @@ impl Codec for ResponseXmlCodec<'_> {
 fn serialization_failure(err: SerdeError) -> Response {
     log_serialize_failure(&err);
     IntoResponse::<RestXml>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
+}
+
+macro_rules! unsupported_reads {
+    ($why:literal; $($method:ident -> $ret:ty),+ $(,)?) => {
+        $(
+            fn $method(&mut self, _schema: &Schema<'_>) -> Result<$ret, SerdeError> {
+                Err(SerdeError::unsupported($why))
+            }
+        )+
+    };
+}
+
+/// Wraps a codec deserializer to preserve a structured `@httpPayload` member's
+/// XML name when generated deserialization switches to the target shape's schema.
+/// Only the document root is aliased; child schemas and the underlying codec
+/// are passed directly to the consumer.
+///
+/// For example, if the payload member has `@xmlName("PayloadRoot")` and its target
+/// structure has `@xmlName("TargetRoot")`, the request body uses the member's name:
+///
+/// ```xml
+/// <PayloadRoot>
+///     <Child>hello</Child>
+/// </PayloadRoot>
+/// ```
+///
+/// This wrapper makes the codec expect `PayloadRoot` when the generated walker
+/// passes the target structure's schema. The child's XML name remains `Child`.
+struct StructuredPayloadDeserializer<'a> {
+    inner: &'a mut dyn ShapeDeserializer,
+    root: &'static Schema<'static>,
+}
+
+impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
+    fn read_struct(
+        &mut self,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_struct(self.root, consumer)
+    }
+
+    fn read_list(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_list(schema, consumer)
+    }
+
+    fn read_map(
+        &mut self,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.inner.read_map(schema, consumer)
+    }
+
+    unsupported_reads! {
+        "expected a structured payload";
+        read_boolean -> bool,
+        read_byte -> i8,
+        read_short -> i16,
+        read_integer -> i32,
+        read_long -> i64,
+        read_float -> f32,
+        read_double -> f64,
+        read_big_integer -> BigInteger,
+        read_big_decimal -> BigDecimal,
+        read_blob -> Blob,
+        read_timestamp -> DateTime,
+        read_string -> String,
+    }
+    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        self.inner.read_document(schema)
+    }
+    fn is_null(&self) -> bool {
+        self.inner.is_null()
+    }
+    fn container_size(&self) -> Option<usize> {
+        self.inner.container_size()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aws_smithy_schema::ShapeType;
+
+    #[test]
+    fn structured_payload_preserves_target_metadata_when_aliasing_xml_root() {
+        static TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+            let mut traits = aws_smithy_schema::TraitMap::new();
+            traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
+                aws_smithy_schema::shape_id!("test", "custom"),
+                "preserved",
+            )));
+            traits
+        });
+        static CHILD: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Target", "value"),
+            ShapeType::String,
+            "value",
+            0,
+        )
+        .with_xml_name("Child");
+        static TARGET: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Target"),
+            ShapeType::Structure,
+            &[&CHILD],
+        )
+        .with_xml_name("TargetRoot")
+        .with_original_name("OriginalTarget")
+        .with_xml_namespace("urn:test:target", Some("t"))
+        .with_sensitive()
+        .with_xml_unwrapped_output()
+        .with_traits(&TRAITS);
+
+        /// Test codec stand-in that checks root aliasing preserves the target's
+        /// other metadata and passes the original child schema to the consumer.
+        struct MetadataCheckingDeserializer;
+        impl ShapeDeserializer for MetadataCheckingDeserializer {
+            fn read_struct(
+                &mut self,
+                schema: &Schema<'_>,
+                consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                assert_eq!(schema.shape_id(), TARGET.shape_id());
+                assert_eq!(schema.shape_type(), TARGET.shape_type());
+                assert_eq!(schema.xml_name().unwrap().value(), "PayloadRoot");
+                assert_eq!(schema.original_name(), Some("OriginalTarget"));
+                let namespace = schema.xml_namespace().expect("target namespace preserved");
+                assert_eq!(namespace.uri(), "urn:test:target");
+                assert_eq!(namespace.prefix(), Some("t"));
+                assert!(schema.sensitive().is_some());
+                assert!(schema.xml_unwrapped_output());
+                assert!(std::ptr::eq(schema.traits().unwrap(), TARGET.traits().unwrap()));
+                assert_eq!(schema.members().len(), 1);
+                assert!(std::ptr::eq(schema.members()[0], &CHILD));
+                consumer(schema.members()[0], self)
+            }
+
+            fn read_list(
+                &mut self,
+                _: &Schema<'_>,
+                _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                unreachable!()
+            }
+
+            fn read_map(
+                &mut self,
+                _: &Schema<'_>,
+                _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                unreachable!()
+            }
+
+            unsupported_reads! {
+                "metadata checking only";
+                read_boolean -> bool,
+                read_byte -> i8,
+                read_short -> i16,
+                read_integer -> i32,
+                read_long -> i64,
+                read_float -> f32,
+                read_double -> f64,
+                read_big_integer -> BigInteger,
+                read_big_decimal -> BigDecimal,
+                read_blob -> Blob,
+                read_timestamp -> DateTime,
+                read_document -> Document,
+            }
+
+            fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
+                assert!(std::ptr::eq(schema, &CHILD));
+                Ok("decoded".into())
+            }
+
+            fn is_null(&self) -> bool {
+                false
+            }
+
+            fn container_size(&self) -> Option<usize> {
+                None
+            }
+        }
+
+        static PAYLOAD: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Target"),
+            ShapeType::Structure,
+            &[&CHILD],
+        )
+        .with_xml_name("PayloadRoot")
+        .with_original_name("OriginalTarget")
+        .with_xml_namespace("urn:test:target", Some("t"))
+        .with_sensitive()
+        .with_xml_unwrapped_output()
+        .with_traits(&TRAITS);
+        static MEMBER_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
+            let mut traits = aws_smithy_schema::TraitMap::new();
+            traits.insert(Box::new(crate::schema::traits::XmlMetadata::new(&PAYLOAD)));
+            traits
+        });
+        static MEMBER_WITH_METADATA: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Input", "data"),
+            ShapeType::Structure,
+            "data",
+            0,
+        )
+        .with_xml_name("PayloadRoot")
+        .with_traits(&MEMBER_TRAITS);
+
+        let member = &MEMBER_WITH_METADATA;
+        let mut inner = MetadataCheckingDeserializer;
+        let mut value = None;
+        deserialize_payload(member, &mut inner, &mut |actual_member, payload| {
+            assert!(std::ptr::eq(actual_member, member));
+            payload.read_struct(&TARGET, &mut |child, deser| {
+                value = Some(deser.read_string(child)?);
+                Ok(())
+            })
+        })
+        .unwrap();
+        assert_eq!(value.as_deref(), Some("decoded"));
+        assert_eq!(TARGET.xml_name().unwrap().value(), "TargetRoot");
+    }
 }

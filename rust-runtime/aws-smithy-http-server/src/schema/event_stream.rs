@@ -563,29 +563,19 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
                 }
             }
         } else if members.iter().any(|m| !m.event_header() && !m.event_payload()) {
-            // Members with neither trait are collectively codec-encoded in the payload,
-            // per the Smithy spec. The codec sees a view of the schema without the
-            // header-bound members: a payload key sharing a header member's name is then
-            // unknown to the codec and skipped, so it cannot overwrite the value already
-            // decoded from the message headers.
-            let implicit_members: Vec<&Schema<'_>> = members.iter().copied().filter(|m| !m.event_header()).collect();
-            let mut payload_schema =
-                Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &implicit_members);
-            // The filtered view must retain the XML document's root identity.
-            if let Some(name) = schema.xml_name() {
-                payload_schema = payload_schema.with_xml_name(name.value());
-            }
-            if let Some(namespace) = schema.xml_namespace() {
-                payload_schema = payload_schema.with_xml_namespace(namespace.uri(), namespace.prefix());
-            }
-            if let Some(name) = schema.original_name() {
-                payload_schema = payload_schema.with_original_name(name);
-            }
+            // Members with neither trait form the payload document. Discard body copies
+            // of event headers before they can replace the already decoded header values.
             let mut deser = self
                 .capability
                 .payload_codec
                 .create_deserializer(&self.message.payload()[..]);
-            deser.read_struct(&payload_schema, state)?;
+            deser.read_struct(schema, &mut |member, deser| {
+                if member.member_index().is_some() && member.event_header() {
+                    deser.skip_value()
+                } else {
+                    state(member, deser)
+                }
+            })?;
         }
         Ok(())
     }
@@ -2199,6 +2189,45 @@ mod tests {
                 assert_eq!(parsed.extra.as_deref(), Some("from payload"));
             }
             other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn implicit_payloads_skip_event_header_types_for_every_codec() {
+        let cases: [(SharedServerProtocol, &[u8]); 3] = [
+            (
+                json_protocol(),
+                br#"{"name":{"extra":"decoy"},"flag":"not a boolean","extra":"from payload"}"#,
+            ),
+            (
+                cbor_protocol(),
+                // {"name": {"extra": "decoy"}, "flag": "not a boolean", "extra": "from payload"}
+                b"\xa3\x64name\xa1\x65extra\x65decoy\x64flag\x6dnot a boolean\x65extra\x6cfrom payload",
+            ),
+            (
+                SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+                b"<AllHeaders><name><extra>decoy</extra></name><flag>not a boolean</flag>\
+                    <extra>from payload</extra></AllHeaders>",
+            ),
+        ];
+        for (protocol, payload) in cases {
+            let message = Message::new_from_parts(
+                vec![
+                    Header::new(":message-type", HeaderValue::String("event".into())),
+                    Header::new(":event-type", HeaderValue::String("allHeaders".into())),
+                    Header::new("name", HeaderValue::String("ann".into())),
+                    Header::new("flag", HeaderValue::Bool(false)),
+                ],
+                Bytes::copy_from_slice(payload),
+            );
+            match unmarshall(&protocol, &message).expect("unmarshalls") {
+                UnmarshalledMessage::Event(TestEvents::AllHeaders(parsed)) => {
+                    assert_eq!(parsed.name.as_deref(), Some("ann"));
+                    assert_eq!(parsed.flag, Some(false));
+                    assert_eq!(parsed.extra.as_deref(), Some("from payload"));
+                }
+                other => panic!("unexpected result: {other:?}"),
+            }
         }
     }
 

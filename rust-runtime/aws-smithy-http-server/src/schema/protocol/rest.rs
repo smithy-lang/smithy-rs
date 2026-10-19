@@ -34,6 +34,8 @@ fn mime_validation_failure(err: DeserializeError) -> SerdeError {
 /// follow, so the schema path stays byte-identical to them.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RestPolicy {
+    /// Optional protocol-specific handling of structured request payloads.
+    pub(crate) payload_deserializer: Option<crate::schema::request_bindings::PayloadDeserializer>,
     /// The codec's media type: codec-framed bodies and structured payloads.
     pub(crate) codec_content_type: &'static str,
     /// Further media types a request may carry wherever `codec_content_type` is expected.
@@ -164,12 +166,15 @@ impl<C: Codec> RestProtocol<C> {
             )?,
             request.body(),
         )?;
-        Ok(Box::new(RestRequestDeserializer::new(
-            self.codec.as_ref(),
-            request.uri_ref(),
-            request.headers(),
-            request.body(),
-        )))
+        Ok(Box::new(
+            RestRequestDeserializer::new(
+                self.codec.as_ref(),
+                request.uri_ref(),
+                request.headers(),
+                request.body(),
+            )
+            .with_payload_deserializer(self.policy.payload_deserializer),
+        ))
     }
 
     pub(crate) fn serialize_response(
