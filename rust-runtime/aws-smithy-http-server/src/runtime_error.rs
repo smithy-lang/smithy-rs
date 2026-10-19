@@ -8,6 +8,10 @@
 /// This type is converted into protocol-specific error variants. For example, in the
 /// [`crate::protocol::rest_json_1`] protocol, it is converted to the
 /// [`crate::protocol::rest_json_1::runtime_error::RuntimeError::InternalFailure`] variant.
+///
+/// Its response conversions support concrete protocol markers and tuples of two through ten
+/// protocols. Tuple conversions need [`IntoResponse::into_response_with_protocol`] to frame the
+/// response; a direct tuple conversion returns the shared [`RuntimeError`]'s empty 500 fallback.
 pub struct InternalFailureException;
 
 pub const INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE: &str = "invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
@@ -48,6 +52,12 @@ pub enum RuntimeError {
 
 use crate::{extension::RuntimeErrorExtension, response::IntoResponse};
 
+impl From<InternalFailureException> for RuntimeError {
+    fn from(_: InternalFailureException) -> Self {
+        Self::InternalFailure(crate::error::Error::new(String::new()))
+    }
+}
+
 impl RuntimeError {
     /// The error name used by protocol framing and [`RuntimeErrorExtension`].
     pub fn name(&self) -> &'static str {
@@ -85,6 +95,33 @@ impl<P> IntoResponse<P> for RuntimeError {
         protocol.serialize_runtime_error(self)
     }
 }
+
+macro_rules! tuple_internal_failure {
+    ($($protocol:ident),+) => {
+        impl<$($protocol),+> IntoResponse<($($protocol,)+)> for InternalFailureException {
+            fn into_response(self) -> crate::response::Response {
+                IntoResponse::<()>::into_response(RuntimeError::from(self))
+            }
+
+            fn into_response_with_protocol(
+                self,
+                protocol: &dyn crate::schema::ServerProtocol,
+            ) -> crate::response::Response {
+                protocol.serialize_runtime_error(self.into())
+            }
+        }
+    };
+}
+
+tuple_internal_failure!(P1, P2);
+tuple_internal_failure!(P1, P2, P3);
+tuple_internal_failure!(P1, P2, P3, P4);
+tuple_internal_failure!(P1, P2, P3, P4, P5);
+tuple_internal_failure!(P1, P2, P3, P4, P5, P6);
+tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7);
+tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8);
+tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8, P9);
+tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10);
 
 // Reuse each protocol's established response conversion, including its wire quirks. CBOR's
 // validation variant stores raw bytes; the other protocols store the reason as a string.

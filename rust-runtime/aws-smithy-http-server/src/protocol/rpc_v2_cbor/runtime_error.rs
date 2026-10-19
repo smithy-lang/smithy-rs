@@ -58,6 +58,10 @@ impl IntoResponse<RpcV2Cbor> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
+
+    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+        protocol.serialize_runtime_error(self.into())
+    }
 }
 
 impl IntoResponse<RpcV2Cbor> for RuntimeError {
