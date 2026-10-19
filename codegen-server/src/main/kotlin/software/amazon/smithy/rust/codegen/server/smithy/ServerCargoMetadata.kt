@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
@@ -12,8 +13,11 @@ import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
+
+internal fun serverCodegenRelease(): String =
+    ServerRustSettings::class.java.getResource("codegen-release.txt")?.readText()
+        ?: throw CodegenException("codegen-release.txt does not exist")
 
 /**
  * Records the schema code generator's artifact version in `package.metadata.smithy.codegen-release`.
@@ -27,7 +31,7 @@ internal fun serverCodegenVersionMetadata(): ManifestCustomizations =
                     mapOf(
                         "smithy" to
                             mapOf(
-                                "codegen-release" to Version.fromDefaultResource().codegenVersion,
+                                "codegen-release" to serverCodegenRelease(),
                             ),
                     ),
             ),

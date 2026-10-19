@@ -62,13 +62,8 @@ interface StructuredDataSerializerGenerator {
      */
     fun operationInputSerializer(operationShape: OperationShape): RuntimeType?
 
-    /** Whether [documentSerializer] returns a `Result` that its caller must propagate. */
-    val documentSerializerIsFallible: Boolean
-        get() = true
-
     /**
-     * Generate a serializer for a document. If [documentSerializerIsFallible] is false,
-     * the generated function returns `Vec<u8>` directly.
+     * Generate a serializer for a document.
      *
      * ```rust
      * fn serialize_document(input: &Document) -> Result<Vec<u8>, Error> {

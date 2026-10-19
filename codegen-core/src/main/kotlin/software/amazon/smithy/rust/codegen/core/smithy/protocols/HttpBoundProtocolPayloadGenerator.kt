@@ -403,9 +403,8 @@ class HttpBoundProtocolPayloadGenerator(
             }
 
             is DocumentShape -> {
-                val propagateError = if (serializer.documentSerializerIsFallible) "?" else ""
                 rust(
-                    "#T($payloadName)$propagateError",
+                    "#T($payloadName)?",
                     serializer.documentSerializer(),
                 )
             }

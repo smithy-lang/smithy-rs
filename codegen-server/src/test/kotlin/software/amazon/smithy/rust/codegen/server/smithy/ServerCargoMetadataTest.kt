@@ -42,7 +42,7 @@ internal class ServerCargoMetadataTest {
     @Test
     fun `schema manifest adds the codegen release while retaining the commit`() {
         val metadata = manifest(serverCodegenVersionMetadata())
-        metadata.getString("codegen-release") shouldBe Version.fromDefaultResource().codegenVersion
+        metadata.getString("codegen-release") shouldBe serverCodegenRelease()
         metadata.getString("codegen-version") shouldBe Version.fromDefaultResource().gitHash
     }
 
@@ -212,7 +212,7 @@ internal class ServerCargoMetadataTest {
         metadata.getBoolean("codegen.schemaSerde") shouldBe true
         metadata.getBoolean("codegen.http-1x") shouldBe true
         metadata.getList<String>("smithy.protocol") shouldBe listOf("aws.protocols#restJson1")
-        metadata.getString("smithy.codegen-release") shouldBe Version.fromDefaultResource().codegenVersion
+        metadata.getString("smithy.codegen-release") shouldBe serverCodegenRelease()
         metadata.getString("smithy.codegen-version") shouldBe Version.fromDefaultResource().gitHash
         metadata.contains("codegen.debugMode") shouldBe false
         metadata.contains("codegen.formatTimeoutSeconds") shouldBe false

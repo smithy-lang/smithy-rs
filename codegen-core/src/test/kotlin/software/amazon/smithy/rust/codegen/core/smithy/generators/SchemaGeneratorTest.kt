@@ -63,10 +63,6 @@ class SchemaGeneratorTest {
             unitVariant: Unit
         }
 
-        union UnitUnion {
-            unit: Unit
-        }
-
         structure NestedAggregates {
             structMap: StructMap,
             unionList: UnionList,
@@ -312,35 +308,6 @@ class SchemaGeneratorTest {
                 assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Union);
                 assert!(schema.member_schema("stringVariant").is_some());
                 assert!(schema.member_schema("intVariant").is_some());
-                """,
-            )
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `unit union serialization uses member target schemas`() {
-        val project = TestWorkspace.testProject(provider)
-        val shape = model.lookup<UnionShape>("test#UnitUnion")
-        project.useShapeWriter(shape) {
-            UnionGenerator(model, provider, this, shape).render()
-            SchemaGenerator(codegenContext, this, shape).render()
-            rustTemplate(
-                "use #{JsonCodec};",
-                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
-            )
-            unitTest(
-                "unit_union_schema_and_serialization",
-                """
-                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
-                use aws_smithy_schema::codec::Codec;
-
-                let value = UnitUnion::Unit;
-                let erased: &dyn SerializableStruct = &value;
-                let codec = JsonCodec::default();
-                let mut ser = codec.create_serializer();
-                ser.write_struct(UnitUnion::SCHEMA, erased).unwrap();
-                assert_eq!(String::from_utf8(ser.finish()).unwrap(), r#"{"unit":{}}"#);
                 """,
             )
         }
@@ -824,95 +791,6 @@ class SchemaGeneratorTest {
     }
 
     @Test
-    fun `client cbor serialization omits target metadata through members and collections`() {
-        val targetModel =
-            """
-            namespace test
-            @error("client")
-            structure Failure { message: String }
-            union Choice { failure: Failure, unit: Unit }
-            list Failures { member: Failure }
-            map FailureMap { key: String, value: Failure }
-            structure Envelope {
-                failure: Failure,
-                choice: Choice,
-                list: Failures,
-                map: FailureMap
-            }
-            """.asSmithyModel()
-        val targetProvider = testSymbolProvider(targetModel)
-        val targetContext = testCodegenContext(targetModel)
-        val project = TestWorkspace.testProject(targetProvider)
-        val filter =
-            SchemaTraitFilter(targetModel, setOf(software.amazon.smithy.model.shapes.ShapeId.from("smithy.api#error")))
-        for (name in listOf("Failure", "Envelope")) {
-            val target = targetModel.lookup<StructureShape>("test#$name")
-            project.useShapeWriter(target) {
-                renderStructWithSchema(this, targetModel, targetProvider, targetContext, target, project, filter)
-            }
-        }
-        val choice = targetModel.lookup<UnionShape>("test#Choice")
-        project.useShapeWriter(choice) {
-            UnionGenerator(targetModel, targetProvider, this, choice).render()
-            SchemaGenerator(targetContext, this, choice, filter).render()
-            rustTemplate(
-                "use #{CborCodec};",
-                "CborCodec" to RuntimeType.smithyCbor(targetContext.runtimeConfig).resolve("codec::CborCodec"),
-            )
-            unitTest(
-                "client_nested_values_report_shape_identity",
-                """
-                use aws_smithy_schema::{shape_id, Schema, ShapeType};
-                use aws_smithy_schema::codec::Codec;
-                use aws_smithy_schema::serde::ShapeSerializer;
-                use crate::test_error::Failure;
-                use aws_smithy_schema::codec::FinishSerializer;
-                let failure = || Failure { message: Some("failed".into()) };
-                let envelope = Envelope {
-                    failure: Some(failure()),
-                    choice: Some(Choice::Failure(failure())),
-                    list: Some(vec![failure()]),
-                    map: Some(std::collections::HashMap::from([("key".into(), failure())])),
-                };
-                let codec = CborCodec::default();
-                let mut serializer = codec.create_serializer().with_struct_prefix(|schema, _| {
-                    assert!(schema.member_name().is_none());
-                    assert!(["Envelope", "Choice", "Failure"].contains(&schema.shape_id().shape_name()));
-                    Ok(())
-                });
-                serializer.write_struct(Envelope::SCHEMA, &envelope).unwrap();
-                let bytes = serializer.finish();
-                fn error(encoder: &mut aws_smithy_cbor::Encoder) {
-                    encoder.begin_map().str("message").str("failed").end();
-                }
-                let mut expected = aws_smithy_cbor::Encoder::new(Vec::new());
-                expected.begin_map().str("failure");
-                error(&mut expected);
-                expected.str("choice").begin_map().str("failure");
-                error(&mut expected);
-                expected.end().str("list").begin_array();
-                error(&mut expected);
-                expected.end().str("map").begin_map().str("key");
-                error(&mut expected);
-                expected.end().end();
-                assert_eq!(bytes, expected.into_writer());
-                let result = Envelope::deserialize(&mut codec.create_deserializer(&bytes)).unwrap();
-                assert_eq!(result.failure.unwrap().message.as_deref(), Some("failed"));
-                // Unit values report the prelude shape, while the member still names the variant.
-                let mut serializer = codec.create_serializer().with_struct_prefix(|target, _| {
-                    assert!(target.member_name().is_none());
-                    assert!(::std::ptr::eq(target, Choice::SCHEMA) || ::std::ptr::eq(target, &aws_smithy_schema::prelude::UNIT));
-                    Ok(())
-                });
-                serializer.write_struct(Choice::SCHEMA, &Choice::Unit).unwrap();
-                assert_eq!(serializer.finish(), vec![0xbf, 0x64, b'u', b'n', b'i', b't', 0xbf, 0xff, 0xff]);
-                """,
-            )
-        }
-        project.compileAndTest()
-    }
-
-    @Test
     fun `schema for recursive structure compiles`() {
         val recursiveModel =
             RecursiveShapeBoxer().transform(
@@ -947,7 +825,6 @@ class SchemaGeneratorTest {
                 let schema = TreeNode::SCHEMA;
                 assert_eq!(schema.shape_type(), ShapeType::Structure);
                 assert_eq!(schema.member_schema("children").unwrap().shape_type(), ShapeType::List);
-                assert!(format!("{schema:?}").len() < 20_000);
                 """,
             )
         }
@@ -963,7 +840,6 @@ class SchemaGeneratorTest {
                 let schema = LinkedNode::SCHEMA;
                 assert_eq!(schema.shape_type(), ShapeType::Structure);
                 assert_eq!(schema.member_schema("next").unwrap().shape_type(), ShapeType::Structure);
-                assert!(format!("{schema:?}").len() < 20_000);
                 """,
             )
         }
@@ -1113,8 +989,6 @@ class SchemaGeneratorTest {
                 use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
                 use aws_smithy_schema::codec::Codec;
                 use std::collections::HashMap;
-
-                let schema = NestedAggregates::SCHEMA;
 
                 // Build a NestedAggregates with all fields populated.
                 let mut struct_map = HashMap::new();

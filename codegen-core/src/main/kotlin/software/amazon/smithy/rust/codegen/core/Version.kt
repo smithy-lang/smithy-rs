@@ -13,8 +13,6 @@ private const val VERSION_FILENAME = "runtime-crate-versions.json"
 
 data class Version(
     val gitHash: String,
-    /** The version of the smithy-rs codegen artifacts (e.g. the published codegen JARs), from `codegenVersion` in gradle.properties. */
-    val codegenVersion: String,
     val crates: Map<String, String>,
 ) {
     companion object {
@@ -23,7 +21,6 @@ data class Version(
             val node = Node.parse(content).expectObjectNode()
             return Version(
                 node.expectStringMember("gitHash").value,
-                node.expectStringMember("codegenVersion").value,
                 node.expectObjectMember("runtimeCrates").members.map {
                     it.key.value to it.value.expectStringNode().value
                 }.toMap(),

@@ -357,7 +357,7 @@ class SchemaGenerator(
                     val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                     if (isSparse) {
                         """
-                        ser.write_list_with_length(&$memberSchemaRef, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for item in $varName {
                                 match item {
                                     Some(item) => { $elementWrite }
@@ -369,7 +369,7 @@ class SchemaGenerator(
                         """
                     } else {
                         """
-                        ser.write_list_with_length(&$memberSchemaRef, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for item in $varName {
                                 $elementWrite
                             }
@@ -393,7 +393,7 @@ class SchemaGenerator(
                     val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                     if (isSparse) {
                         """
-                        ser.write_map_with_length(&$memberSchemaRef, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for (key, value) in $varName {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 match value {
@@ -406,7 +406,7 @@ class SchemaGenerator(
                         """
                     } else {
                         """
-                        ser.write_map_with_length(&$memberSchemaRef, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                             for (key, value) in $varName {
                                 ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                                 $valueWrite
@@ -545,7 +545,7 @@ class SchemaGenerator(
                 val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list_with_length(&$memberSchemaRef, (val).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in val {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -557,7 +557,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list_with_length(&$memberSchemaRef, (val).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in val {
                             $elementWrite
                         }
@@ -575,7 +575,7 @@ class SchemaGenerator(
                 val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map_with_length(&$memberSchemaRef, (val).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in val {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -588,7 +588,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map_with_length(&$memberSchemaRef, (val).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in val {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -668,7 +668,7 @@ class SchemaGenerator(
                 val valueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -681,7 +681,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -705,7 +705,7 @@ class SchemaGenerator(
                 val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -717,7 +717,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }
@@ -798,7 +798,7 @@ class SchemaGenerator(
                 val innerValueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             match value {
@@ -811,7 +811,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             $innerValueWrite
@@ -835,7 +835,7 @@ class SchemaGenerator(
                 val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -847,7 +847,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list_with_length($schemaExpr, ($varName).len(), &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }

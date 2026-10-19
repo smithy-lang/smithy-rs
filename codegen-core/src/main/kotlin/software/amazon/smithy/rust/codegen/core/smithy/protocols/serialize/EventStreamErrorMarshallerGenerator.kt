@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamSerdeCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
@@ -44,11 +43,7 @@ class EventStreamErrorMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
     private val useSchemaSerde: Boolean = false,
-    serdeCustomization: EventStreamSerdeCustomization? = null,
-) : EventStreamMarshallerGenerator(
-        model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType,
-        useSchemaSerde, serdeCustomization,
-    ) {
+) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType, useSchemaSerde) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
@@ -69,7 +64,7 @@ class EventStreamErrorMarshallerGenerator(
             "Header" to smithyTypes.resolve("event_stream::Header"),
             "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
             "Error" to smithyEventStream.resolve("error::Error"),
-            "SerdeContext" to (serdeCustomization?.contextType ?: smithySchema.resolve("protocol::SharedClientProtocol")),
+            "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
         )
 
     override fun render(): RuntimeType {
@@ -85,7 +80,7 @@ class EventStreamErrorMarshallerGenerator(
         marshallerType: RuntimeType,
         unionSymbol: Symbol,
     ) {
-        if (useSchemaSerde || serdeCustomization != null) {
+        if (useSchemaSerde) {
             rustTemplate(
                 """
                 ##[non_exhaustive]
@@ -95,11 +90,11 @@ class EventStreamErrorMarshallerGenerator(
                     // When no such variant exists (e.g., all errors are header-only or empty),
                     // the field is unused but still kept for API uniformity across operations.
                     ##[allow(dead_code)]
-                    protocol: #{SerdeContext},
+                    protocol: #{SharedClientProtocol},
                 }
 
                 impl ${marshallerType.name} {
-                    pub fn new(protocol: #{SerdeContext}) -> Self {
+                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
                         Self { protocol }
                     }
                 }
@@ -132,14 +127,10 @@ class EventStreamErrorMarshallerGenerator(
                 "fn marshall(&self, _input: Self::Input) -> std::result::Result<#{Message}, #{Error}>",
                 *codegenScope,
             ) {
-                if (serdeCustomization != null) {
-                    rustTemplate("let _structured_media_type = #{mediaType};", "mediaType" to serdeCustomization.mediaType())
-                }
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
                 if (errorsShape.errorMembers.isEmpty()) {
-                    // The `;` closing this statement is emitted below, together with the `Ok`.
-                    rustTemplate("let payload = #{Bytes}::new()", *codegenScope)
+                    rustTemplate("let payload = #{Bytes}::new();", *codegenScope)
                 } else {
                     rustBlock("let payload = match _input") {
                         errorsShape.errorMembers.forEach { error ->

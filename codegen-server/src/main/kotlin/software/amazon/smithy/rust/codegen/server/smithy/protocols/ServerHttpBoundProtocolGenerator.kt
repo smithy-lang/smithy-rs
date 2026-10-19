@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -48,6 +49,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -138,8 +141,9 @@ class ServerHttpBoundProtocolGenerator(
 class ServerHttpBoundProtocolPayloadGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
-) :
-    ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
+) : ProtocolPayloadGenerator {
+    private val delegate =
+        HttpBoundProtocolPayloadGenerator(
             codegenContext,
             protocol,
             HttpMessageType.RESPONSE,
@@ -165,6 +169,61 @@ class ServerHttpBoundProtocolPayloadGenerator(
                 )
             },
         )
+
+    override fun payloadMetadata(
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ): ProtocolPayloadGenerator.PayloadMetadata = delegate.payloadMetadata(operationShape, additionalPayloadContext)
+
+    override fun generatePayload(
+        writer: RustWriter,
+        shapeName: String,
+        operationShape: OperationShape,
+        additionalPayloadContext: AdditionalPayloadContext,
+    ) {
+        val member = protocol.httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()
+        val serializer = protocol.structuredDataSerializer()
+        if (codegenContext.usesSchemaHttpSerde || serializer !is ServerRestJsonSerializerGenerator ||
+            member == null || codegenContext.model.expectShape(member.target) !is DocumentShape
+        ) {
+            delegate.generatePayload(writer, shapeName, operationShape, additionalPayloadContext)
+            return
+        }
+
+        val symbolProvider = codegenContext.symbolProvider
+        val serializePayload =
+            ProtocolFunctions(codegenContext).serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
+                rustBlockTemplate(
+                    "pub fn $fnName(payload: &#{Member}) -> #{Result}<#{ByteSlab}, #{BuildError}>",
+                    *preludeScope,
+                    "Member" to symbolProvider.toSymbol(member),
+                    "ByteSlab" to RuntimeType.ByteSlab,
+                    "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
+                ) {
+                    if (symbolProvider.toSymbol(member).isOptional()) {
+                        rustTemplate(
+                            """
+                            let payload = match payload.as_ref() {
+                                #{Some}(payload) => payload,
+                                #{None} => return #{Ok}(#{Vec}::new()),
+                            };
+                            """,
+                            *preludeScope,
+                        )
+                    }
+                    rustTemplate(
+                        "#{Ok}(#{SerializeDocument}(payload))",
+                        *preludeScope,
+                        "SerializeDocument" to serializer.documentSerializer(),
+                    )
+                }
+            }
+        writer.rustTemplate(
+            "#{SerializePayload}(&$shapeName.${symbolProvider.toMemberName(member)})?",
+            "SerializePayload" to serializePayload,
+        )
+    }
+}
 
 /*
  * Generate all operation input parsers and output serializers for streaming and

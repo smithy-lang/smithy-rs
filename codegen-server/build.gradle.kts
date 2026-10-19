@@ -29,3 +29,29 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
 }
+
+val generatedResourcesDir = layout.buildDirectory.dir("generated/resources")
+val generateServerCodegenVersion by tasks.registering {
+    val codegenVersion = project.version.toString()
+    inputs.property("codegenVersion", codegenVersion)
+    outputs.dir(generatedResourcesDir)
+    doLast {
+        val versionFile =
+            generatedResourcesDir.get()
+                .file("software/amazon/smithy/rust/codegen/server/smithy/codegen-release.txt").asFile
+        versionFile.parentFile.mkdirs()
+        versionFile.writeText(codegenVersion)
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(generatedResourcesDir)
+}
+
+tasks.processResources {
+    dependsOn(generateServerCodegenVersion)
+}
+
+tasks.named("sourcesJar").configure {
+    dependsOn(generateServerCodegenVersion)
+}

@@ -99,10 +99,8 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
 
     val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
     val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
-    val codegenVersion = project.version.toString()
     inputs.property("stableCrateVersion", stableCrateVersion)
     inputs.property("unstableCrateVersion", unstableCrateVersion)
-    inputs.property("codegenVersion", codegenVersion)
 
     val cargoTomls = mutableListOf<File>()
     for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {
@@ -123,7 +121,6 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
                 fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
 
                 json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
-                json.append("  ").keyVal("codegenVersion", codegenVersion).append(",\n")
                 json.append("  \"runtimeCrates\": {\n")
                 json.append(
                     cargoTomls.map { path ->
