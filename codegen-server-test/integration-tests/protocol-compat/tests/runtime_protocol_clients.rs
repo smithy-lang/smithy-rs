@@ -27,7 +27,7 @@ macro_rules! core_suite {
             use multi_protocol_client::{Client, Config};
 
             async fn client() -> Client {
-                let address = multi_protocol::start_server().await;
+                let address = protocol_compat::multi::start_server().await;
                 Client::from_conf(
                     Config::builder()
                         .endpoint_url(format!("http://{address}"))
@@ -82,7 +82,7 @@ macro_rules! error_and_stream_suite {
             use multi_protocol_client::{Client, Config};
 
             async fn client() -> Client {
-                let address = multi_protocol::start_server().await;
+                let address = protocol_compat::multi::start_server().await;
                 Client::from_conf(
                     Config::builder()
                         .endpoint_url(format!("http://{address}"))
@@ -211,7 +211,7 @@ mod rest_json_1 {
     async fn upload_streams_the_blob() {
         use multi_protocol_client::primitives::ByteStream;
         use multi_protocol_client::{Client, Config};
-        let address = multi_protocol::start_server().await;
+        let address = protocol_compat::multi::start_server().await;
         let client = Client::from_conf(
             Config::builder()
                 .endpoint_url(format!("http://{address}"))
@@ -240,7 +240,7 @@ mod rest_xml {
 async fn one_sdk_selects_all_protocols_against_one_server() {
     use aws_smithy_schema::protocol::SharedClientProtocol;
     use multi_protocol_client::{Client, Config};
-    let address = multi_protocol::start_server().await;
+    let address = protocol_compat::multi::start_server().await;
     let protocols = [
         SharedClientProtocol::new(aws_smithy_cbor::protocol::RpcV2CborProtocol::new()),
         SharedClientProtocol::new(

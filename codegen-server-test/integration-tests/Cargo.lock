@@ -1507,6 +1507,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-protocol-client"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
+ "aws-smithy-types",
+ "bytes",
+ "fastrand",
+ "http 1.4.0",
+ "http-body-util",
+ "tracing",
+]
+
+[[package]]
 name = "multi-protocol-client-awsjson10"
 version = "0.0.1"
 dependencies = [
@@ -1822,10 +1841,13 @@ dependencies = [
 name = "protocol-compat"
 version = "0.1.0"
 dependencies = [
+ "aws-smithy-cbor",
  "aws-smithy-http-server",
+ "aws-smithy-json",
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
+ "aws-smithy-xml",
  "bytes",
  "compat-all-server-sdk",
  "compat-awsjson-legacy-server-sdk",
@@ -1849,6 +1871,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "minicbor",
+ "multi-protocol-client",
  "multi-protocol-client-awsjson10",
  "multi-protocol-client-awsjson11",
  "multi-protocol-client-restjson",

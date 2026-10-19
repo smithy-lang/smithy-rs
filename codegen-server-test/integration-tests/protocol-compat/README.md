@@ -7,12 +7,34 @@ Cross-protocol behavior tests over generated servers, in two styles:
   (`claim_order`, `routing`, `rpc_bindings`, `payloads`, `extractors`,
   `upgrade_failures`, `logging`, `api_surface`).
 - Round trips: one server serving every built-in protocol (`src/multi.rs`),
-  called by a generated client per protocol over a real socket (`clients`), and
-  by raw protocol requests (`wire`).
+  called over real sockets by a generated client per protocol (`clients`) and
+  by one schema client selecting protocols at runtime (`runtime_protocol_clients`),
+  and by raw protocol requests (`wire`).
 
 The service shares one set of handlers across AWS JSON 1.0/1.1, REST JSON, REST XML and RPCv2 CBOR.
 
-`make test` generates the server and five clients, then runs the client and wire suites. It also generates the service crates referenced by the other members of the integration-test workspace, which Cargo needs to load their manifests. The wire tests exercise the generated service directly without a listening socket and select REST XML explicitly by Content-Type.
+`make test` generates the server, five protocol-specific clients, and the runtime-selecting schema client, then runs the client and wire suites. It also generates the service crates referenced by the other members of the integration-test workspace, which Cargo needs to load their manifests. The wire tests exercise the generated service directly without a listening socket and select REST XML explicitly by Content-Type.
+
+
+The runtime client suite moved from `examples/multi-protocol/tests/clients.rs`
+retains every assertion, including empty inputs and outputs, modeled errors,
+validation, and streams. It uses the same generated `multi-protocol-client` SDK
+for all five protocols, selecting the protocol through
+`Config::builder().protocol(...)` or `set_protocol(...)`. The
+`one_sdk_selects_all_protocols_against_one_server` test calls all five protocols
+against one listening server.
+
+`make test` includes this suite; `make test-runtime-client` generates its
+dependencies and runs only this suite. With dependencies already generated:
+
+```sh
+cargo test --quiet -p protocol-compat --test runtime_protocol_clients
+```
+
+Validation recorded 23 passing and 10 failing tests. The test selecting all five
+protocols against one server passes. Failures concern AWS JSON empty-input
+routing and AWS JSON/RPCv2 CBOR event-stream initial data; their assertions remain
+unchanged.
 
 The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-core/common-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. The server integration Gradle task generates both server and client crates before running the workspace.
 

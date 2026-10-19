@@ -37,6 +37,9 @@ compat-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-t
 compat-xml-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-xml-legacy-server-sdk/rust-server-codegen" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
+aws-smithy-json = { path = "../../../rust-runtime/aws-smithy-json" }
+aws-smithy-cbor = { path = "../../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-xml = { path = "../../../rust-runtime/aws-smithy-xml" }
 compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
 bytes = "1"
 http = "1"
@@ -47,6 +50,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
 futures-util = "0.3"
+multi-protocol-client = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }
 multi-protocol-client-rpcv2cbor = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
 multi-protocol-client-awsjson10 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
 multi-protocol-client-awsjson11 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
