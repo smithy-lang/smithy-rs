@@ -255,7 +255,7 @@ impl<B> Request<B> {
     }
 
     /// Update the body of this request to be a new body.
-    pub fn map<U>(self, f: impl FnOnce(B) -> U) -> Request<U> {
+    pub fn map<U>(self, f: impl Fn(B) -> U) -> Request<U> {
         Request {
             body: f(self.body),
             uri: self.uri,
@@ -445,7 +445,7 @@ mod test {
         let replacement = String::from("body");
         let request = super::Request::try_from(request)
             .unwrap()
-            .map(|_| replacement);
+            .map(|_| replacement.clone());
         assert_eq!(request.uri_ref().path(), "/resource");
         assert_eq!(request.uri_ref().query(), Some("key=value"));
         let request = request.try_into_http1x().unwrap();
