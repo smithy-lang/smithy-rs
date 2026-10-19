@@ -932,10 +932,13 @@ class ServerServiceGenerator(
                             )
                         }
                     }.join(",")
+            // TODO(schema service build errors): Move BuildError and MissingOperationsError into aws-smithy-http-server,
+            // passing service/builder names and missing-operation details as constructor data.
             rustTemplate(
                 """
                 /// Failure to bind handlers or construct schema routing.
                 ##[derive(Debug)]
+                ##[non_exhaustive]
                 pub enum BuildError {
                     MissingOperations(MissingOperationsError),
                     Routing(#{SmithyHttpServer}::schema::routing::RouterBuildError),
