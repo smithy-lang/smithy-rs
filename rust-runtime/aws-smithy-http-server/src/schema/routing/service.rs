@@ -148,7 +148,7 @@ where
                 ..
             }] => self.route(router.as_ref(), request),
             _ => State::Routing {
-                // TODO: Investigate avoiding this Arc clone when routing needs no body I/O.
+                // TODO(routing): Investigate avoiding this Arc clone when routing needs no body I/O.
                 future: Box::pin(self.clone().route_protocols(request)),
             },
         };
