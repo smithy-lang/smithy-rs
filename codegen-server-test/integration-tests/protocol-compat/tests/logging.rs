@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! Review finding: `@sensitive` values must not reach logs when serialization fails.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;
@@ -35,11 +40,24 @@ async fn logged<F: std::future::Future<Output = Reply>>(future: F) -> (Reply, St
 
 #[tokio::test]
 async fn sensitive_values_are_not_logged_when_response_serialization_fails() {
-    let (reply, log) = logged(send(rest::service(), rest("POST", "/sensitive-timestamp", &[], b""))).await;
+    let (reply, log) = logged(send(
+        rest::service(),
+        rest("POST", "/sensitive-timestamp", &[], b""),
+    ))
+    .await;
     assert_eq!(reply.status, 400);
-    assert!(!log.contains("9223372036854775807"), "restJson1 log leaked: {log}");
-    let (reply, log) =
-        logged(send(awsjson::service(), aws_json("1.0", "ReviewAwsJson", "SensitiveTimestamp", "{}"))).await;
+    assert!(
+        !log.contains("9223372036854775807"),
+        "restJson1 log leaked: {log}"
+    );
+    let (reply, log) = logged(send(
+        awsjson::service(),
+        aws_json("1.0", "ReviewAwsJson", "SensitiveTimestamp", "{}"),
+    ))
+    .await;
     assert_eq!(reply.status, 400);
-    assert!(!log.contains("9223372036854775807"), "awsJson1_0 log leaked: {log}");
+    assert!(
+        !log.contains("9223372036854775807"),
+        "awsJson1_0 log leaked: {log}"
+    );
 }

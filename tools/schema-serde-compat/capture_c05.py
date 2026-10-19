@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Freshly generate C05 servers and save actual loopback HTTP/1.1 bytes."""
 import datetime
 import json

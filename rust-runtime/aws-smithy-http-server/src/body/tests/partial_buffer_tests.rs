@@ -135,7 +135,7 @@ fn partial_buffer_size_hint_handles_overflow_and_unknown_upper_bounds() {
         }
 
         fn size_hint(&self) -> SizeHint {
-            self.0.clone()
+            self.0
         }
     }
     for (hint, lower, upper) in [

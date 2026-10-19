@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Seeding and triage for the single-protocol versus multi-protocol A/B fuzz campaign.
 
 A "case" is one comparison: <suite>/<case>, for example multiprotocol/rest-json1. Its work directory is

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Build both fuzz targets of every case, write the seed corpus, and compare the targets on it.
 #
 #   bash init.sh                              # every suite and case

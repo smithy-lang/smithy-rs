@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared acceptance contract for the Rust fuzz driver and Python triage."""
 import json
 from pathlib import Path

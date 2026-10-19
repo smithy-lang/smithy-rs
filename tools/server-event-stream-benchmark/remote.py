@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Export source files to the user's machine, without transferring Git refs/objects.
 
 Preparation updates a CLEAN legacy checkout explicitly. run.py never does so.

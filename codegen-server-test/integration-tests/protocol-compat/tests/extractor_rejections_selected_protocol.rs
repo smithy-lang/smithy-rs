@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! Selected-protocol rejection tests over generated schema and legacy services.
 #[path = "support/extractor_rejections.rs"]
 mod harness;

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Regress C04 against newly generated legacy REST JSON and REST XML servers."""
 import datetime
 import hashlib

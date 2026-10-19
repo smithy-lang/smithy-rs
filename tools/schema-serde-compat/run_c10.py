@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Fresh C10 boundary audit. Exit 1 records differences, 2 an incomplete run."""
 import argparse
 import datetime

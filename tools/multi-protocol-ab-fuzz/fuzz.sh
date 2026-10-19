@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Run AFL campaigns for every case in parallel.
 #
 #   bash fuzz.sh <seconds> <fuzzers-per-case>

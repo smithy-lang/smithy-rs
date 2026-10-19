@@ -48,7 +48,7 @@ pub enum CollectBodyError<E> {
 /// Default maximum body bytes; `None` disables the byte limit.
 pub(crate) const DEFAULT_LIMIT_SIZE: Option<NonZeroUsize> = None;
 
-/// Default number of ready frame polls before body collection yields.
+/// Default number of consecutive ready body polls before collection or streaming yields.
 pub(crate) const DEFAULT_FRAME_BUDGET: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 
 /// Default cap on the buffer reserved before reading body frames.

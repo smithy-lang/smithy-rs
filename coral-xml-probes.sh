@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Probes for the Coral Java sample server (the one with the /stringlist echo operation), to learn how
 # Coral answers the restXml requests where the schema server and the legacy smithy-rs server differ.
 #

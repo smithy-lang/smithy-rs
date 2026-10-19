@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_cfg))]
+/* End of automatically managed default lints */
+
 //! Derive macro for hand-written [`aws-smithy-schema`](https://crates.io/crates/aws-smithy-schema)
 //! shapes.
 //!

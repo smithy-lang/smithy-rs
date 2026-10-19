@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Shared settings for the multi-protocol A/B fuzz scripts. Sourced by every script here.
 # Override any variable by exporting it before running a script.
 

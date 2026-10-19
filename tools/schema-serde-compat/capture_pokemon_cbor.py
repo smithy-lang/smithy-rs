@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Run the mainline Pokémon CBOR example and capture an actual HTTP/1.1 response."""
 import argparse
 import datetime

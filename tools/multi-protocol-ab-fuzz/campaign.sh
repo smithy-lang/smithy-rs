@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Three-phase A/B AFL campaign: legacy single-protocol servers against
 #   1. schema single-protocol servers        (strict comparison)
 #   2. schema non-conflicting bunch servers  (strict comparison)

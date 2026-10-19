@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! Request builders and response snapshots shared by the review-finding tests.
 #![allow(dead_code)]
 
@@ -24,7 +29,8 @@ impl Reply {
         self.headers.get(name).and_then(|v| v.to_str().ok())
     }
     pub fn json(&self) -> Value {
-        serde_json::from_slice(&self.body).unwrap_or_else(|e| panic!("not JSON ({e}): {:?}", self.text()))
+        serde_json::from_slice(&self.body)
+            .unwrap_or_else(|e| panic!("not JSON ({e}): {:?}", self.text()))
     }
     pub fn cbor(&self) -> Value {
         let mut decoder = minicbor::Decoder::new(&self.body);
@@ -126,7 +132,11 @@ pub fn decode_cbor(decoder: &mut minicbor::Decoder<'_>) -> Value {
         Type::Bool => json!(decoder.bool().unwrap()),
         Type::String => json!(decoder.str().unwrap()),
         Type::Bytes => json!(decoder.bytes().unwrap()),
-        Type::BytesIndef => json!(decoder.bytes_iter().unwrap().flat_map(|chunk| chunk.unwrap().to_vec()).collect::<Vec<u8>>()),
+        Type::BytesIndef => json!(decoder
+            .bytes_iter()
+            .unwrap()
+            .flat_map(|chunk| chunk.unwrap().to_vec())
+            .collect::<Vec<u8>>()),
         Type::U8
         | Type::U16
         | Type::U32
@@ -175,4 +185,3 @@ pub fn decode_cbor(decoder: &mut minicbor::Decoder<'_>) -> Value {
         other => panic!("unexpected response CBOR type {other:?}"),
     }
 }
-

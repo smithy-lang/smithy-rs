@@ -2486,27 +2486,17 @@ mod multi_protocol {
             self.router.route_with_body(request)
         }
     }
-    fn advisory_app(
-        reject: bool,
-        streaming: bool,
-    ) -> (
+    type AdvisoryApp = (
         MultiProtocolRoutingService,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::atomic::AtomicUsize>,
         Arc<std::sync::Mutex<Vec<usize>>>,
-    ) {
+    );
+
+    fn advisory_app(reject: bool, streaming: bool) -> AdvisoryApp {
         advisory_app_with_layer(reject, streaming, tower::layer::util::Identity::new())
     }
-    fn advisory_app_with_layer<L>(
-        reject: bool,
-        streaming: bool,
-        layer: L,
-    ) -> (
-        MultiProtocolRoutingService,
-        Arc<std::sync::atomic::AtomicUsize>,
-        Arc<std::sync::atomic::AtomicUsize>,
-        Arc<std::sync::Mutex<Vec<usize>>>,
-    )
+    fn advisory_app_with_layer<L>(reject: bool, streaming: bool, layer: L) -> AdvisoryApp
     where
         L: tower::Layer<SyncRoute<Body>>,
         L::Service:

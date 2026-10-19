@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Seed requests for the A/B fuzz campaign: valid and near-valid requests for every operation.
 
 The test models carry no `@httpRequestTests`, so fuzzgen's lexicon has an empty corpus. Without seeds

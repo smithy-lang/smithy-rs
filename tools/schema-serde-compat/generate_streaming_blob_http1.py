@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate and compile HTTP 1.x streaming blob servers with schemaSerde disabled."""
 import datetime
 import os

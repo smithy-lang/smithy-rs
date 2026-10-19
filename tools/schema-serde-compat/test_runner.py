@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Checks that missing results and unusable oracles cannot produce a clean audit."""
 import contextlib
 import io

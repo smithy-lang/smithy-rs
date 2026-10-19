@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Live HTTP A/B comparison of the generated servers, in three tiers.
 
 Tier `single`  — legacy single-protocol server vs schema-serde single-protocol server
