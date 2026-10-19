@@ -1456,13 +1456,17 @@ mod multi_protocol {
             Schema::new_struct(shape_id!("test", "Delete"), ShapeType::Structure, &[&LABEL])
                 .with_original_name("Delete")
                 .with_http(HttpTrait::new("DELETE", "/widgets/{id}", Some(200)));
+        static PING: Schema<'static> = Schema::new_struct(shape_id!("test", "PingInput"), ShapeType::Structure, &[])
+            .with_original_name("PingInput")
+            .with_http(HttpTrait::new("POST", "/ping", Some(200)));
         static GET_OP: OperationSchema<'static> = OperationSchema::new(FIRST_ID, &GET, &UNIT, &[]);
         static DELETE_OP: OperationSchema<'static> = OperationSchema::new(SECOND_ID, &DELETE, &UNIT, &[]);
+        static PING_OP: OperationSchema<'static> = OperationSchema::new(shape_id!("test", "Ping"), &PING, &UNIT, &[]);
         static REST: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
             None,
             &[shape_id!("aws.protocols", "restJson1")],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         static CBOR: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
@@ -1471,7 +1475,7 @@ mod multi_protocol {
                 shape_id!("aws.protocols", "restJson1"),
                 shape_id!("smithy.protocols", "rpcv2Cbor"),
             ],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         static JSON: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
@@ -1480,13 +1484,13 @@ mod multi_protocol {
                 shape_id!("aws.protocols", "restJson1"),
                 shape_id!("aws.protocols", "awsJson1_1"),
             ],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         static XML: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
             None,
             &[shape_id!("aws.protocols", "restXml")],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         static XML_CBOR: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
@@ -1495,7 +1499,7 @@ mod multi_protocol {
                 shape_id!("aws.protocols", "restXml"),
                 shape_id!("smithy.protocols", "rpcv2Cbor"),
             ],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         static XML_JSON: ServiceSchema<'static> = ServiceSchema::new(
             SERVICE_ID,
@@ -1504,7 +1508,7 @@ mod multi_protocol {
                 shape_id!("aws.protocols", "restXml"),
                 shape_id!("aws.protocols", "awsJson1_1"),
             ],
-            &[&GET_OP, &DELETE_OP],
+            &[&GET_OP, &DELETE_OP, &PING_OP],
         );
         for (schema, protocol) in [
             (&REST, "aws.protocols#restJson1"),
@@ -1515,10 +1519,16 @@ mod multi_protocol {
             (&XML_JSON, "aws.protocols#restXml"),
         ] {
             let app = app(schema, []);
-            for (method, operation) in [("GET", "first"), ("DELETE", "second")] {
+            for (method, uri, operation) in [
+                ("GET", "/widgets/123", "first"),
+                ("DELETE", "/widgets/123", "second"),
+                ("POST", "/ping", "Ping"),
+            ] {
                 assert_eq!(
-                    send(&app, Request::builder().method(method).uri("/widgets/123"), "").await,
+                    send(&app, Request::builder().method(method).uri(uri), "").await,
                     (StatusCode::OK, format!("{protocol} {operation} ")),
+                    "{method} {uri} with protocols {:?}",
+                    schema.protocols(),
                 );
             }
         }
