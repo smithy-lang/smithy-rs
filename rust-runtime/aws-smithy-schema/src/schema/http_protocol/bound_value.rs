@@ -107,6 +107,25 @@ impl<'a> HeaderValues<'a> {
         }
     }
 
+    /// Like [`Self::new`], but looks the values up by a parsed header name, which skips
+    /// re-validating the name.
+    #[inline]
+    pub(crate) fn by_name(headers: &'a Headers, name: &'a http::HeaderName) -> Self {
+        let mut values = headers.get_all_bytes_by_name(name);
+        let resolved = match (values.next(), values.next()) {
+            (None, _) => Resolved::Absent,
+            (Some(value), None) => Resolved::One(value),
+            (Some(_), Some(_)) => Resolved::Many,
+        };
+        Self {
+            headers,
+            // Repeated values are re-read by this name. That is the uncommon case, so it
+            // takes the string lookup.
+            name: name.as_str(),
+            resolved,
+        }
+    }
+
     /// Iterates the raw values, including any that are not valid UTF-8.
     #[inline]
     pub(crate) fn iter(&self) -> HeaderValuesIter<'a, impl Iterator<Item = &'a [u8]>> {

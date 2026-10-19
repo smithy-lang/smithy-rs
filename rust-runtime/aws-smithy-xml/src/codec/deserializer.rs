@@ -152,7 +152,8 @@ impl<'a> XmlDeserializer<'a> {
     }
 
     /// Resolve a child element name to a member schema by matching against
-    /// @xmlName (if present) or member_name.
+    /// @xmlName (if present) or member_name. Returns the first matching member, so
+    /// a name shared by several members always resolves to the same one.
     fn resolve_member<'s>(schema: &'s Schema<'s>, element_name: &str) -> Option<&'s Schema<'s>> {
         schema.members().iter().copied().find(|m| {
             if let Some(xml_name) = m.xml_name() {
@@ -426,8 +427,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
 
             // Dispatch child elements.
             while let Some(mut child_scope) = root.next_tag() {
-                let local = child_scope.start_el().local().to_owned();
-                let Some(member) = Self::resolve_member(schema, &local) else {
+                let Some(member) = Self::resolve_member(schema, child_scope.start_el().local())
+                else {
                     continue;
                 };
                 // For non-flattened aggregate members, the child element IS the
@@ -558,12 +559,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let mut value_text: Option<Cow<'_, str>> = None;
                 let mut value_slice: Option<&'_ [u8]> = None;
                 while let Some(mut field_scope) = entry_scope.next_tag() {
-                    let local = field_scope.start_el().local().to_owned();
-                    if local == key_name {
+                    let local = field_scope.start_el().local();
+                    let (is_key, is_value) = (local == key_name, local == value_name);
+                    if is_key {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         key = Some(text.into_owned());
-                    } else if local == value_name {
+                    } else if is_value {
                         if value_is_aggregate {
                             let el_local = field_scope.start_el().local();
                             let sub = Self::find_element_slice(input, el_local);
@@ -817,12 +819,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let mut k: Option<String> = None;
                 let mut v: Option<String> = None;
                 while let Some(mut field_scope) = entry_scope.next_tag() {
-                    let local = field_scope.start_el().local().to_owned();
-                    if local == key_name {
+                    let local = field_scope.start_el().local();
+                    let (is_key, is_value) = (local == key_name, local == value_name);
+                    if is_key {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         k = Some(text.into_owned());
-                    } else if local == value_name {
+                    } else if is_value {
                         let text = decode::try_data(&mut field_scope)
                             .map_err(|e| SerdeError::custom(e.to_string()))?;
                         v = Some(text.into_owned());
@@ -1004,6 +1007,54 @@ mod tests {
             .unwrap();
 
         assert_eq!(name, "Bob");
+    }
+
+    /// A member's own name can collide with another member's `@xmlName`. Every
+    /// occurrence of the shared element resolves to the first matching member, wherever
+    /// it appears and however often it repeats.
+    #[test]
+    fn colliding_element_names_resolve_to_the_first_member() {
+        static STATUS: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "status"),
+            ShapeType::String,
+            "status",
+            0,
+        );
+        static STATUS_TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "statusText"),
+            ShapeType::String,
+            "statusText",
+            1,
+        )
+        .with_xml_name("status");
+        static OTHER: Schema<'static> =
+            Schema::new_member(shape_id!("ns", "S", "other"), ShapeType::String, "other", 2);
+        static S: Schema<'static> = Schema::new_struct(
+            shape_id!("ns", "S"),
+            ShapeType::Structure,
+            &[&STATUS, &STATUS_TEXT, &OTHER],
+        );
+
+        fn read(xml: &[u8]) -> Vec<(usize, String)> {
+            let mut deser = XmlDeserializer::new(xml, Arc::new(XmlCodecSettings::default()));
+            let mut seen = Vec::new();
+            deser
+                .read_struct(&S, &mut |member, d| {
+                    seen.push((member.member_index().unwrap(), d.read_string(member)?));
+                    Ok(())
+                })
+                .unwrap();
+            seen
+        }
+
+        assert_eq!(
+            read(b"<S><status>a</status><status>b</status></S>"),
+            [(0, "a".to_owned()), (0, "b".to_owned())]
+        );
+        assert_eq!(
+            read(b"<S><other>x</other><status>a</status></S>"),
+            [(2, "x".to_owned()), (0, "a".to_owned())]
+        );
     }
 
     #[test]
