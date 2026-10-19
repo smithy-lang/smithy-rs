@@ -14,6 +14,7 @@ runtime-schema = ["dep:aws-smithy-schema"]
 
 [dependencies]
 aws-smithy-schema = { path = "../aws-smithy-schema", optional = true }
+base64-simd = "0.8.0"
 indexmap = "2.14.2"
 serde = "1.0.229"
 serde_json = { version = "1.0.146", features = ["float_roundtrip"] }
