@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.3.0"
+version = "1.3.1"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -102,7 +102,6 @@ dependencies = [
  "http-body-util",
  "percent-encoding",
  "pin-project-lite",
- "pin-utils",
  "tracing",
 ]
 
@@ -186,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.63.1"
+version = "0.63.2"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-http",
@@ -201,7 +200,6 @@ dependencies = [
  "http-body 0.4.6",
  "percent-encoding",
  "pin-project-lite",
- "pin-utils",
  "tracing",
 ]
 
@@ -274,7 +272,6 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
- "pin-utils",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -330,7 +327,6 @@ dependencies = [
  "itoa",
  "num-integer",
  "pin-project-lite",
- "pin-utils",
  "ryu",
  "serde",
  "time",
@@ -560,6 +556,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "compat-awsjson11-legacy-server-sdk"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-json",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "futures-util",
+ "http 1.4.0",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
+name = "compat-awsjson11-server-sdk"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
+ "aws-smithy-types",
+ "http 1.4.0",
+ "tower 0.5.3",
+]
+
+[[package]]
 name = "compat-cbor-legacy-server-sdk"
 version = "0.0.1"
 dependencies = [
@@ -680,6 +707,38 @@ dependencies = [
 
 [[package]]
 name = "compat-rest-xml-server-sdk"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
+ "aws-smithy-types",
+ "http 1.4.0",
+ "tower 0.5.3",
+]
+
+[[package]]
+name = "compat-xml-legacy-server-sdk"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "futures-util",
+ "http 1.4.0",
+ "mime",
+ "nom",
+ "percent-encoding",
+ "pin-project-lite",
+ "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
+name = "compat-xml-server-sdk"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-http",
@@ -1764,6 +1823,7 @@ name = "protocol-compat"
 version = "0.1.0"
 dependencies = [
  "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
@@ -1771,6 +1831,8 @@ dependencies = [
  "compat-awsjson-legacy-server-sdk",
  "compat-awsjson-server-sdk",
  "compat-awsjson-spec-server-sdk",
+ "compat-awsjson11-legacy-server-sdk",
+ "compat-awsjson11-server-sdk",
  "compat-cbor-legacy-server-sdk",
  "compat-cbor-server-sdk",
  "compat-document-legacy-server-sdk",
@@ -1780,6 +1842,8 @@ dependencies = [
  "compat-rest-legacy-server-sdk",
  "compat-rest-server-sdk",
  "compat-rest-xml-server-sdk",
+ "compat-xml-legacy-server-sdk",
+ "compat-xml-server-sdk",
  "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",

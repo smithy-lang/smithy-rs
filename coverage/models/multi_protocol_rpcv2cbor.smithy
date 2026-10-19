@@ -1,6 +1,6 @@
 // coverage-service: com.example.multiprotocol#MultiProtocolService
 // coverage-plugins: server
-// coverage-import: multi-protocol-common.smithy
+// coverage-import: multi-protocol-compat/multi-protocol-common.smithy
 $version: "2"
 namespace com.example.multiprotocol
 @smithy.protocols#rpcv2Cbor

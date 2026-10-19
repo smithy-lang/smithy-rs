@@ -15,7 +15,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import java.io.File
 
 internal class MultiProtocolServerModelTest {
-    private val models = File("../codegen-server-test/integration-tests/protocol-compat/models")
+    private val models = File("../codegen-core/common-test-models/multi-protocol-compat")
     private val serviceId = ShapeId.from("com.example.multiprotocol#MultiProtocolService")
 
     @Test
@@ -26,7 +26,13 @@ internal class MultiProtocolServerModelTest {
                 .addImport(models.resolve("multi-protocol-server.smithy").toPath())
                 .assemble().unwrap()
         val service = model.expectShape(serviceId, ServiceShape::class.java)
-        check(service.operations.size == 11)
+        val operations = service.operations.map { it.name }.toSet()
+        val operationsExpected =
+            setOf(
+                "Greet", "Ping", "NoInputOutput", "Upload", "Subscribe", "Publish", "StructurePayload",
+                "UnionPayload", "ResponseBindings", "RichData", "ModeledDefaults", "NullableValues",
+            )
+        check(operations == operationsExpected) { "Server bound $operations" }
         var cases = 0
         model.shapes().forEach { shape ->
             if (shape.id.namespace != serviceId.namespace) return@forEach

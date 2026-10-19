@@ -32,7 +32,7 @@ export MP_FUZZ_GENERATE=true
 export MP_FUZZ_ISOLATE_PROTOCOLS="${MP_FUZZ_ISOLATE_PROTOCOLS:-true}"
 export MP_FUZZ_OUTPUT="$GEN"
 export MP_FUZZ_MODELS="$CURRENT_REPO/codegen-core/common-test-models"
-export MP_FUZZ_MULTI_PROTOCOL_MODELS="$CURRENT_REPO/codegen-server-test/integration-tests/multi-protocol/models"
+export MP_FUZZ_MULTI_PROTOCOL_MODELS="$CURRENT_REPO/codegen-core/common-test-models/multi-protocol-compat"
 export MP_FUZZ_SUITES="${SUITES// /,}"
 FILTER='*MultiProtocolAbFuzzHarnessTest*'
 

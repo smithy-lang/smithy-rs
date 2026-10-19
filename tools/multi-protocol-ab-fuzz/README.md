@@ -26,7 +26,7 @@ Source `env.sh` first when running `abfuzz.py` or `aws-smithy-fuzz` by hand.
 | `multi` | this checkout | isolated `schemaSerde` server per protocol by default; combined profiles are explicit |
 
 Two suites (`SUITES`): `multiprotocol` reads its models and server fixtures from
-`codegen-server-test/integration-tests/protocol-compat/models`; `pokemon` reads its
+`codegen-core/common-test-models/multi-protocol-compat`; `pokemon` reads its
 shared models from `codegen-core/common-test-models` of this checkout.
 Five cases (`CASES`) per suite cover the five protocols. Set `MP_FUZZ_ISOLATE_PROTOCOLS=false`
 explicitly to generate combined protocol variants.

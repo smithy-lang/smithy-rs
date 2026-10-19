@@ -43,7 +43,6 @@ data class ClientTest(
     val dependsOn: List<String> = emptyList(),
     val addMessageToErrors: Boolean = true,
     val renameErrors: Boolean = true,
-    val modelDirectory: String = "../codegen-core/common-test-models",
 ) {
     fun toCodegenTest(): CodegenTest = CodegenTest(
         serviceShapeName,
@@ -58,7 +57,7 @@ data class ClientTest(
         append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
     }.toString()
 
-    private fun imports(): List<String> = dependsOn.map { "$modelDirectory/$it" }
+    private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
 }
 
 val allCodegenTests = listOf(
@@ -130,16 +129,22 @@ val allCodegenTests = listOf(
     ClientTest(
         "com.example.multiprotocol#MultiProtocolService",
         "multi-protocol-client",
-        dependsOn = listOf("multi-protocol-restjson.smithy", "multi-protocol-common.smithy"),
-        modelDirectory = "../codegen-server-test/integration-tests/protocol-compat/models",
+        dependsOn =
+            listOf(
+                "multi-protocol-compat/multi-protocol-restjson.smithy",
+                "multi-protocol-compat/multi-protocol-common.smithy",
+            ),
     ),
 ).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
     // Preserve the runtime-selecting client above and restore clients for the server integration suite.
     ClientTest(
         "com.example.multiprotocol#MultiProtocolService",
         "multi-protocol-client-$protocol",
-        dependsOn = listOf("multi-protocol-$protocol.smithy", "multi-protocol-common.smithy"),
-        modelDirectory = "../codegen-server-test/integration-tests/protocol-compat/models",
+        dependsOn =
+            listOf(
+                "multi-protocol-compat/multi-protocol-$protocol.smithy",
+                "multi-protocol-compat/multi-protocol-common.smithy",
+            ),
     ).toCodegenTest()
 }
 

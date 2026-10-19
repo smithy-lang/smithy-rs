@@ -217,8 +217,8 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 "com.example.multiprotocol#MultiProtocolService",
                 "multi-protocol-server-sdk",
                 imports = listOf(
-                    "integration-tests/protocol-compat/models/multi-protocol-common.smithy",
-                    "integration-tests/protocol-compat/models/multi-protocol-server.smithy",
+                    "../codegen-core/common-test-models/multi-protocol-compat/multi-protocol-common.smithy",
+                    "../codegen-core/common-test-models/multi-protocol-compat/multi-protocol-server.smithy",
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
