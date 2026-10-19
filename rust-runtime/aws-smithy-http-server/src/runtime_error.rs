@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::{extension::RuntimeErrorExtension, response::IntoResponse};
+
 /// A _protocol-agnostic_ type representing an internal framework error. As of writing, this can only
 /// occur upon failure to extract an [`crate::extension::Extension`] from the request.
 /// This type is converted into protocol-specific error variants. For example, in the
@@ -49,8 +51,6 @@ pub enum RuntimeError {
     #[error("validation failure: {0}")]
     Validation(String),
 }
-
-use crate::{extension::RuntimeErrorExtension, response::IntoResponse};
 
 impl From<InternalFailureException> for RuntimeError {
     fn from(_: InternalFailureException) -> Self {
