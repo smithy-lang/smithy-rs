@@ -63,6 +63,7 @@ const ERROR_TYPE_HEADER: http::HeaderName = http::HeaderName::from_static("x-amz
 /// restJson1 stamps `application/json` on every response nothing else labels, sets no content
 /// type on an untyped blob payload, and answers a user-modeled empty output with `{}`.
 pub(crate) const POLICY: RestPolicy = RestPolicy {
+    payload_deserializer: None,
     codec_content_type: CONTENT_TYPE,
     request_content_type_aliases: &[],
     default_response_content_type: Some(CONTENT_TYPE),

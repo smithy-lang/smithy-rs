@@ -79,6 +79,13 @@ macro_rules! unsupported_read_map {
 // The composite
 // ============================================================================
 
+/// A protocol callback for structured HTTP payload deserialization.
+pub(crate) type PayloadDeserializer = fn(
+    &Schema<'_>,
+    &mut dyn ShapeDeserializer,
+    &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+) -> Result<(), SerdeError>;
+
 /// The composite request deserializer for REST protocols: routes each member
 /// of the operation input schema to its transport location, delegating
 /// unbound members to the codec body deserializer.
@@ -92,6 +99,7 @@ pub(crate) struct RestRequestDeserializer<'a, C> {
     headers: &'a Headers,
     uri: &'a Uri,
     body: &'a [u8],
+    payload_deserializer: Option<PayloadDeserializer>,
 }
 
 impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
@@ -101,7 +109,13 @@ impl<'a, C: Codec> RestRequestDeserializer<'a, C> {
             headers,
             uri,
             body,
+            payload_deserializer: None,
         }
+    }
+
+    pub(crate) fn with_payload_deserializer(mut self, deserializer: Option<PayloadDeserializer>) -> Self {
+        self.payload_deserializer = deserializer;
+        self
     }
 }
 
@@ -258,12 +272,8 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                             {
                                 return Err(SerdeError::invalid_input("expected payload member value"));
                             }
-                            if let Some(name) = member.xml_name() {
-                                let mut payload = StructuredPayloadDeserializer {
-                                    inner: &mut deser,
-                                    xml_name: name.value(),
-                                };
-                                consumer(member, &mut payload)?;
+                            if let Some(deserialize) = self.payload_deserializer {
+                                deserialize(member, &mut deser, consumer)?;
                             } else {
                                 consumer(member, &mut deser)?;
                             }
@@ -1229,79 +1239,6 @@ impl ShapeDeserializer for PayloadBytesDeserializer<'_> {
     }
 }
 
-/// Wraps a codec deserializer to preserve a structured `@httpPayload` member's
-/// XML name when generated deserialization switches to the target shape's schema.
-/// Only the document root is aliased; child schemas and the underlying codec
-/// are passed directly to the consumer.
-///
-/// For example, if the payload member has `@xmlName("PayloadRoot")` and its target
-/// structure has `@xmlName("TargetRoot")`, the request body uses the member's name:
-///
-/// ```xml
-/// <PayloadRoot>
-///     <Child>hello</Child>
-/// </PayloadRoot>
-/// ```
-///
-/// This wrapper makes the codec expect `PayloadRoot` when the generated walker
-/// passes the target structure's schema. The child's XML name remains `Child`.
-struct StructuredPayloadDeserializer<'a> {
-    inner: &'a mut dyn ShapeDeserializer,
-    xml_name: &'a str,
-}
-
-impl ShapeDeserializer for StructuredPayloadDeserializer<'_> {
-    fn read_struct(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        let root = schema.clone().with_xml_name(self.xml_name);
-        self.inner.read_struct(&root, consumer)
-    }
-
-    fn read_list(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.inner.read_list(schema, consumer)
-    }
-
-    fn read_map(
-        &mut self,
-        schema: &Schema<'_>,
-        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.inner.read_map(schema, consumer)
-    }
-
-    unsupported_reads! {
-        "expected a structured payload";
-        read_boolean -> bool,
-        read_byte -> i8,
-        read_short -> i16,
-        read_integer -> i32,
-        read_long -> i64,
-        read_float -> f32,
-        read_double -> f64,
-        read_big_integer -> BigInteger,
-        read_big_decimal -> BigDecimal,
-        read_blob -> Blob,
-        read_timestamp -> DateTime,
-        read_string -> String,
-    }
-    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        self.inner.read_document(schema)
-    }
-    fn is_null(&self) -> bool {
-        self.inner.is_null()
-    }
-    fn container_size(&self) -> Option<usize> {
-        self.inner.container_size()
-    }
-}
-
 // ============================================================================
 // Empty struct (empty request bodies on the RPC protocols)
 // ============================================================================
@@ -1379,121 +1316,6 @@ mod tests {
         member: &'a Schema<'a>,
     ) -> Result<Option<HeaderValuesDeserializer<'a>>, SerdeError> {
         HeaderValuesDeserializer::try_new_bytes(values.into_iter().map(str::as_bytes), member)
-    }
-
-    #[test]
-    fn structured_payload_preserves_target_metadata_when_aliasing_xml_root() {
-        static TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(|| {
-            let mut traits = aws_smithy_schema::TraitMap::new();
-            traits.insert(Box::new(aws_smithy_schema::StringTrait::new(
-                aws_smithy_schema::shape_id!("test", "custom"),
-                "preserved",
-            )));
-            traits
-        });
-        static CHILD: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Target", "value"),
-            ShapeType::String,
-            "value",
-            0,
-        )
-        .with_xml_name("Child");
-        static TARGET: Schema = Schema::new_struct(
-            aws_smithy_schema::shape_id!("test", "Target"),
-            ShapeType::Structure,
-            &[&CHILD],
-        )
-        .with_xml_name("TargetRoot")
-        .with_original_name("OriginalTarget")
-        .with_xml_namespace("urn:test:target", Some("t"))
-        .with_sensitive()
-        .with_xml_unwrapped_output()
-        .with_traits(&TRAITS);
-
-        /// Test codec stand-in that checks root aliasing preserves the target's
-        /// other metadata and passes the original child schema to the consumer.
-        struct MetadataCheckingDeserializer;
-        impl ShapeDeserializer for MetadataCheckingDeserializer {
-            fn read_struct(
-                &mut self,
-                schema: &Schema<'_>,
-                consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-            ) -> Result<(), SerdeError> {
-                assert_eq!(schema.shape_id(), TARGET.shape_id());
-                assert_eq!(schema.shape_type(), TARGET.shape_type());
-                assert_eq!(schema.xml_name().unwrap().value(), "PayloadRoot");
-                assert_eq!(schema.original_name(), Some("OriginalTarget"));
-                let namespace = schema.xml_namespace().expect("target namespace preserved");
-                assert_eq!(namespace.uri(), "urn:test:target");
-                assert_eq!(namespace.prefix(), Some("t"));
-                assert!(schema.sensitive().is_some());
-                assert!(schema.xml_unwrapped_output());
-                assert!(std::ptr::eq(schema.traits().unwrap(), TARGET.traits().unwrap()));
-                assert_eq!(schema.members().len(), 1);
-                assert!(std::ptr::eq(schema.members()[0], &CHILD));
-                consumer(schema.members()[0], self)
-            }
-
-            fn read_list(
-                &mut self,
-                _: &Schema<'_>,
-                _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-            ) -> Result<(), SerdeError> {
-                unreachable!()
-            }
-
-            fn read_map(
-                &mut self,
-                _: &Schema<'_>,
-                _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-            ) -> Result<(), SerdeError> {
-                unreachable!()
-            }
-
-            unsupported_reads! {
-                "metadata checking only";
-                read_boolean -> bool,
-                read_byte -> i8,
-                read_short -> i16,
-                read_integer -> i32,
-                read_long -> i64,
-                read_float -> f32,
-                read_double -> f64,
-                read_big_integer -> BigInteger,
-                read_big_decimal -> BigDecimal,
-                read_blob -> Blob,
-                read_timestamp -> DateTime,
-                read_document -> Document,
-            }
-
-            fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
-                assert!(std::ptr::eq(schema, &CHILD));
-                Ok("decoded".into())
-            }
-
-            fn is_null(&self) -> bool {
-                false
-            }
-
-            fn container_size(&self) -> Option<usize> {
-                None
-            }
-        }
-
-        let mut inner = MetadataCheckingDeserializer;
-        let mut payload = StructuredPayloadDeserializer {
-            inner: &mut inner,
-            xml_name: "PayloadRoot",
-        };
-        let mut value = None;
-        payload
-            .read_struct(&TARGET, &mut |member, deser| {
-                value = Some(deser.read_string(member)?);
-                Ok(())
-            })
-            .unwrap();
-        assert_eq!(value.as_deref(), Some("decoded"));
-        assert_eq!(TARGET.xml_name().unwrap().value(), "TargetRoot");
     }
 
     #[test]

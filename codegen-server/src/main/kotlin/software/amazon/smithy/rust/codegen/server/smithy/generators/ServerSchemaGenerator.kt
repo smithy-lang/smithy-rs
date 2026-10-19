@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
@@ -31,10 +32,12 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -59,6 +62,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**
  * Server-side copy of [software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator]
@@ -1401,6 +1405,25 @@ class ServerSchemaGenerator(
             }
         }
 
+    /** Only XML request payload members need an alternate root schema. */
+    private fun needsXmlPayloadSchema(member: MemberShape): Boolean {
+        val context = codegenContext as? ServerCodegenContext ?: return false
+        if (RestXmlTrait.ID !in context.servedProtocols) return false
+        val container = model.expectShape(member.container)
+        val target = model.expectShape(member.target)
+        return container.hasTrait(SyntheticInputTrait::class.java) &&
+            member.hasTrait(HttpPayloadTrait::class.java) && member.hasTrait(XmlNameTrait::class.java) &&
+            !target.hasTrait(StreamingTrait::class.java) && (target is StructureShape || target is UnionShape)
+    }
+
+    // Avoid colliding with modeled member accessors on the target type.
+    private fun xmlPayloadFactoryName(target: Shape): String {
+        val accessors = target.members().map { symbolProvider.toMemberName(it).removePrefix("r#") }.toSet()
+        var name = "schema_for_xml_payload"
+        while (name in accessors) name += "_"
+        return name
+    }
+
     private fun renderSchemaStatic(
         writer: RustWriter,
         schemaPrefix: String,
@@ -1475,6 +1498,25 @@ class ServerSchemaGenerator(
                         *codegenScope,
                     )
                 }
+                if (model.memberShapes.any { it.target == shape.id && needsXmlPayloadSchema(it) }) {
+                    val traits = if (hasUnknownTraits(shape)) ".with_traits(&${schemaPrefix}_TRAITS)" else ""
+                    writer.rustTemplate(
+                        """
+                        impl #{Target} {
+                            pub(crate) const fn ${xmlPayloadFactoryName(shape)}(root_name: &'static str) -> #{Schema}<'static> {
+                                static MEMBERS: &[&#{Schema}<'static>] = $membersArray;
+                                #{Schema}::new_struct(
+                                    $schemaIdExpr,
+                                    #{ShapeType}::${shapeTypeVariant(shape)},
+                                    MEMBERS,
+                                )$traitChain$traits.with_xml_name(root_name)
+                            }
+                        }
+                        """,
+                        *codegenScope,
+                        "Target" to symbolProvider.toSymbol(shape),
+                    )
+                }
             }
 
             is ListShape -> {
@@ -1537,18 +1579,37 @@ class ServerSchemaGenerator(
                     val escapedMemberId = memberId.toString().replace("#", "##")
                     val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
                     val traitChain = memberTraitChain(member)
+                    val xmlPayload = needsXmlPayloadSchema(member)
+                    val xmlMetadata =
+                        writable {
+                            if (xmlPayload) {
+                                rustTemplate(
+                                    """
+                                    static XML_PAYLOAD_SCHEMA: #{Schema}<'static> =
+                                        #{Target}::${xmlPayloadFactoryName(target)}(${templateEscape(member.expectTrait(XmlNameTrait::class.java).value.dq())});
+                                    map.insert(#{Box}::new(#{XmlMetadata}::new(&XML_PAYLOAD_SCHEMA)));
+                                    """,
+                                    *RuntimeType.preludeScope,
+                                    "Schema" to smithySchema.resolve("Schema"),
+                                    "Target" to symbolProvider.toSymbol(target),
+                                    "XmlMetadata" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("schema::traits::XmlMetadata"),
+                                )
+                            }
+                        }
                     val unknownTraitChain =
-                        if (traitFilter.traitsFor(member).any { knownTraitSetter(it) == null }) {
+                        if (xmlPayload || traitFilter.traitsFor(member).any { knownTraitSetter(it) == null }) {
                             writer.rustTemplate(
                                 """
                                 static ${memberConstName}_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
                                     let mut map = #{TraitMap}::new();
                                     #{insertions}
+                                    #{xmlMetadata}
                                     map
                                 });
                                 """,
                                 "TraitMap" to smithySchema.resolve("TraitMap"),
                                 "insertions" to generateUnknownTraitInsertions(member, includeAdditionalTraits = false),
+                                "xmlMetadata" to xmlMetadata,
                             )
                             "\n    .with_traits(&${memberConstName}_TRAITS)"
                         } else {
