@@ -15,41 +15,66 @@ several protocols it is a tuple of them, for example `(RestJson1, RpcV2Cbor)`.
 for one protocol (a plugin, an extractor, an `IntoResponse` impl) stops compiling when it is used
 with a multi-protocol service, instead of silently not applying.
 
-## Custom `FromParts` extractors written for one protocol
+## FromParts for multiprotocol
 
-**What changes.** Request-part extractors resolve against the service's protocol type. On a service
-with one protocol, an extractor implemented for that protocol keeps working, and its rejection is
-rendered by its `IntoResponse<RestJson1>` impl exactly as before:
+Request-part extractors resolve against the service's protocol type. An extractor implemented
+only for `RestJson1` works on a restJson1 service, but does not satisfy the handler's bounds when
+the service serves several protocols, such as `(RestJson1, RpcV2Cbor)`. The builder call that
+registers a handler taking the extractor then fails to compile with an unsatisfied `FromParts`
+bound.
+
+For example, a single-protocol caller-info extractor may use the restJson1 runtime error:
 
 ```rust
+use http::request::Parts;
+use sdk::server::{
+    protocol::rest_json_1::{runtime_error::RuntimeError, RestJson1},
+    request::FromParts,
+};
+
 impl FromParts<RestJson1> for CallerInfo {
-    type Rejection = CallerInfoError;
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> { /* ... */ }
+    type Rejection = RuntimeError;
+
+    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        extract_caller_info_from_parts(parts).ok_or_else(|| {
+            tracing::warn!("Rejecting request: caller identity could not be resolved");
+            RuntimeError::Validation("Caller identity could not be resolved".to_string())
+        })
+    }
 }
 ```
 
-On a service with several protocols the protocol type is a tuple, so the same extractor no longer
-satisfies the handler's bounds.
-
-**How you notice.** A multi-protocol service fails to compile at the builder call that registers a
-handler taking `CallerInfo`, with an unsatisfied `FromParts<(...)>` bound.
-
-**What to change.** Make the extractor generic over the protocol:
+Change both the implementation to `impl<P> FromParts<P>` and the error import to the shared
+`sdk::server::runtime_error::RuntimeError` so the extractor works with any protocol:
 
 ```rust
+use http::request::Parts;
+use sdk::server::{request::FromParts, runtime_error::RuntimeError};
+
 impl<P> FromParts<P> for CallerInfo {
-    type Rejection = CallerInfoError;
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> { /* ... */ }
+    type Rejection = sdk::server::runtime_error::RuntimeError;
+
+    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        extract_caller_info_from_parts(parts).ok_or_else(|| {
+            tracing::warn!("Rejecting request: caller identity could not be resolved");
+            RuntimeError::Validation("Caller identity could not be resolved".to_string())
+        })
+    }
 }
 ```
 
-and implement `IntoResponse<P>` for the rejection type for every `P`.
+Here, `sdk` is your generated service SDK crate. The examples use your existing `CallerInfo`
+and `extract_caller_info_from_parts` helper; identity extraction and logging stay the same.
+The shared runtime error implements `IntoResponse<P>` for every `P`, including protocol tuples.
+Making the extractor generic while keeping the protocol-specific error is insufficient, because
+that error's response conversion only supports its original protocol.
 
-**Rejection framing.** Schema upgrades call `IntoResponse<P>::into_response_with_protocol`,
-passing the protocol selected for the request. The default preserves an existing rejection's
-`into_response()` response. Use the shared `server::runtime_error::RuntimeError` to have the runtime
-frame errors through that selected protocol, or override the method on your own rejection type.
-See the migration example below.
+Schema upgrades call `IntoResponse<P>::into_response_with_protocol`, passing the protocol selected
+for the request. The shared error uses that protocol to frame the rejection. If you use your own
+rejection type instead, implement `IntoResponse<P>` for every `P`; its default context-aware
+conversion preserves the response returned by its existing `into_response()` implementation.
 
 ## `IntoResponse<RestJson1>` implementations on your own types
 
@@ -141,25 +166,10 @@ semantics; do not reinterpret it as a modeled constraint violation through
 
 Keep existing protocol-specific `RuntimeError` types, imports, variants, and direct
 `IntoResponse<RestJson1>` (etc.) conversions compatible. They remain explicitly protocol-specific.
-Switching an extractor to the shared error is an explicit import change:
-
-```rust
-use aws_smithy_http_server::{request::FromParts, runtime_error::RuntimeError};
-use http::request::Parts;
-
-impl<P> FromParts<P> for CallerInfo {
-    type Rejection = RuntimeError;
-
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        extract_caller_info_from_parts(parts).ok_or_else(|| {
-            RuntimeError::Validation("Caller identity could not be resolved".to_string())
-        })
-    }
-}
-```
-
-This is a migration sketch using the service's existing `CallerInfo` and identity-extraction helper.
-Extraction remains independent of the protocol; the runtime handles rejection framing.
+Switching an extractor to the shared error requires an explicit import change.
+See [FromParts for multiprotocol](#fromparts-for-multiprotocol) for the complete before-and-after
+example using the generated SDK's re-export. Extraction remains independent of the protocol;
+the runtime handles rejection framing.
 
 The new shared error's direct `into_response()` has no selected-protocol context. Define its
 fallback: an empty response with the semantic HTTP status (400 for validation or

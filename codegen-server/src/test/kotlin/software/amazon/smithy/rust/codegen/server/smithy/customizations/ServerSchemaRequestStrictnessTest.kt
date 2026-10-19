@@ -99,7 +99,9 @@ internal class ServerSchemaRequestStrictnessTest {
                     (br#"{"value":9223372036854775807.0}"#, true),
                     (br#"{"value":9223372036854775808.0}"#, false),
                     (br#"{"value":1.5}"#, false),
-                    (br#"{"value":12.}"#, false),
+                    // Legacy servers accept a trailing decimal point: `12.` tokenizes as `12.0`, which
+                    // converts losslessly to the `Long` 12.
+                    (br#"{"value":12.}"#, true),
                     (b"{\"child\":", false),
                     (br#"{"unknown":[1,]}"#, false),
                     (b"{\"unknown\":\"raw\ncontrol\"}", false),

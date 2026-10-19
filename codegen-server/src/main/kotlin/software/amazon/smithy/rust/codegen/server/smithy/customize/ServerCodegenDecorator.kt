@@ -92,6 +92,9 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
     /**
      * Additional `map.insert(...)` statements for a shape's lazy schema trait map.
      * This lets downstream generators attach typed metadata without adding fields to Schema.
+     * Called with the service shape for the generated `ServiceSchema`'s trait map, so a decorator
+     * contributing a protocol can record that protocol's trait alongside the built-ins (the
+     * writables run inside the map's initializer, where `traits` is the mutable `TraitMap`).
      */
     fun schemaTraitInsertions(
         codegenContext: ServerCodegenContext,

@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -46,6 +46,7 @@ class ServerServiceGenerator(
     private val isConfigBuilderFallible: Boolean,
     private val protocolRegistries: List<RuntimeType> = emptyList(),
     private val additionalStreamingOperations: Set<software.amazon.smithy.model.shapes.ShapeId> = emptySet(),
+    private val protocolMarkerTypes: Map<ShapeId, RuntimeType> = emptyMap(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -1166,13 +1167,20 @@ class ServerServiceGenerator(
                 // The legacy path serves exactly the generator's protocol, which may come from a decorator.
                 rustTemplate("#{P}", "P" to protocol.markerStruct())
             } else if (served.size == 1) {
-                rustTemplate("#{P}", "P" to ServerRuntimeType.protocolType(served.single(), runtimeConfig))
+                rustTemplate("#{P}", "P" to protocolMarkerType(served.single()))
             } else {
                 rust("(")
-                served.forEach { rustTemplate("#{P}, ", "P" to ServerRuntimeType.protocolType(it, runtimeConfig)) }
+                served.forEach { rustTemplate("#{P}, ", "P" to protocolMarkerType(it)) }
                 rust(")")
             }
         }
+
+    /**
+     * The marker type for a served protocol: a decorator-supplied protocol's own marker when one
+     * was provided (via the protocol factory map), the built-in type otherwise.
+     */
+    private fun protocolMarkerType(protocol: ShapeId): RuntimeType =
+        protocolMarkerTypes[protocol] ?: ServerRuntimeType.protocolType(protocol, runtimeConfig)
 
     private fun operationEnum(): Writable =
         writable {

@@ -62,6 +62,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -288,6 +289,15 @@ open class ServerCodegenVisitor(
         val serviceShapes = DirectedWalker(model).walkShapes(service)
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
+
+        // The `crate::schema` descriptors read by the schema router. The service's trait map also
+        // records decorator-contributed protocol traits, supplied as insertions on the service shape.
+        if (codegenContext.usesSchemaHttpSerde) {
+            ServerServiceSchemaGenerator(
+                codegenContext,
+                codegenDecorator.schemaTraitInsertions(codegenContext, service),
+            ).render(rustCrate)
+        }
 
         rustCrate.getInlineModuleWriter().render()
 
@@ -761,6 +771,17 @@ open class ServerCodegenVisitor(
                 TopDownIndex.of(model).getContainedOperations(shape)
                     .filter { codegenDecorator.schemaStreamingOperation(codegenContext, it) != null }
                     .map { it.id }.toSet(),
+                if (codegenContext.usesSchemaHttpSerde) {
+                    // Resolve each served protocol's marker through its factory so that
+                    // decorator-supplied protocols provide their own marker type.
+                    codegenContext.servedProtocols.associateWith { protocol ->
+                        val protocolContext = codegenContext.copy(protocol = protocol)
+                        (protocolGeneratorFactories.getValue(protocol).protocol(protocolContext) as ServerProtocol)
+                            .markerStruct()
+                    }
+                } else {
+                    emptyMap()
+                },
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)

@@ -5,15 +5,24 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
@@ -115,13 +124,15 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
  *   operation shape ID, its input and output schemas, and its modeled errors. The operation's `@http` binding is
  *   read from its input schema, where [ServerSchemaGenerator] records it.
  * - `schema::service` holds the `ServiceSchema` static tying the service shape ID, version, protocols and
- *   operations together.
+ *   operations together, with the service's protocol traits (and their members) recorded as typed traits.
  *
  * Shape schemas are reached through the `SCHEMA` constants that [ServerSchemaConstantGenerator] renders next
  * to each generated type.
  */
 class ServerServiceSchemaGenerator(
     private val codegenContext: ServerCodegenContext,
+    /** Decorator-supplied `traits.insert(...)` statements for the service's trait map. */
+    private val serviceTraitInsertions: List<Writable> = emptyList(),
 ) {
     private val model = codegenContext.model
     private val service = codegenContext.serviceShape
@@ -135,6 +146,8 @@ class ServerServiceSchemaGenerator(
             "Schema" to smithySchema.resolve("Schema"),
             "ServiceSchema" to serverSchema.resolve("ServiceSchema"),
             "ShapeId" to smithySchema.resolve("ShapeId"),
+            "TraitMap" to smithySchema.resolve("TraitMap"),
+            *RuntimeType.preludeScope,
         )
     private val operations = TopDownIndex.of(model).getContainedOperations(service).sortedBy { it.id }
     private val serviceConstName = serviceSchemaConstName(service)
@@ -180,17 +193,70 @@ class ServerServiceSchemaGenerator(
 
             static ${serviceConstName}_OPERATIONS: &[&#{OperationSchema}<'static>] = &[$operationRefs];
 
+            /// The protocol traits applied to the service, with their members as modeled.
+            static ${serviceConstName}_TRAITS: ::std::sync::LazyLock<#{TraitMap}> = ::std::sync::LazyLock::new(|| {
+                ##[allow(unused_mut)]
+                let mut traits = #{TraitMap}::new();
+                #{ProtocolTraits}
+                #{AdditionalTraits}
+                traits
+            });
+
             /// Descriptor for the `${escape(service.id)}` service and the operations bound to it.
             pub static $serviceConstName: #{ServiceSchema}<'static> = #{ServiceSchema}::new(
                 ${shapeIdExpr(service.id)},
                 $version,
                 ${serviceConstName}_PROTOCOLS,
                 ${serviceConstName}_OPERATIONS,
-            );
+            )
+            .with_traits(&${serviceConstName}_TRAITS);
             """,
             *codegenScope,
+            "ProtocolTraits" to protocolTraits(),
+            "AdditionalTraits" to serviceTraitInsertions.join("\n"),
         )
     }
+
+    /**
+     * Inserts one typed trait per served built-in protocol, built from the trait's model node so that
+     * members left unset stay unset. Decorators record their own protocols' traits through
+     * [software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator.schemaTraitInsertions]
+     * on the service shape.
+     */
+    private fun protocolTraits(): Writable =
+        writable {
+            for (protocol in codegenContext.servedProtocols) {
+                val rustType = protocolTraitTypes[protocol] ?: continue
+                val node = service.findTrait(protocol).orElse(null)?.toNode()?.expectObjectNode() ?: ObjectNode.objectNode()
+                val chain = StringBuilder("#{Trait}::new()")
+
+                fun versions(member: String) =
+                    node.getArrayMember(member).orElse(null)?.let { list ->
+                        list.elements.joinToString(", ", prefix = "#{Vec}::from([", postfix = "])") {
+                            "#{String}::from(${it.expectStringNode().value.dq()})"
+                        }
+                    }
+                versions("http")?.let { chain.append(".with_http($it)") }
+                versions("eventStreamHttp")?.let { chain.append(".with_event_stream_http($it)") }
+                if (protocol == RestXmlTrait.ID && node.getBooleanMemberOrDefault("noErrorWrapping", false)) {
+                    chain.append(".with_no_error_wrapping(true)")
+                }
+                rustTemplate(
+                    "traits.insert(#{Box}::new($chain));",
+                    "Trait" to serverSchema.resolve("traits::$rustType"),
+                    *RuntimeType.preludeScope,
+                )
+            }
+        }
+
+    private val protocolTraitTypes =
+        mapOf(
+            AwsJson1_0Trait.ID to "AwsJson1_0Trait",
+            AwsJson1_1Trait.ID to "AwsJson1_1Trait",
+            RestJson1Trait.ID to "RestJson1Trait",
+            RestXmlTrait.ID to "RestXmlTrait",
+            Rpcv2CborTrait.ID to "Rpcv2CborTrait",
+        )
 
     private fun operationConstName(operation: OperationShape): String =
         symbolProvider.toSymbol(operation).name.toSnakeCase().uppercase()

@@ -151,7 +151,7 @@ internal class ServerSchemaMediaTypeHeadersTest {
                                             request.body(#{Server}::body::to_boxed_sync("")).unwrap()).await.unwrap();
                                         if response.status() != 200 {
                                             let status = response.status();
-                                            let bytes = #{Server}::body::__private::collect_body_limited(response.into_body(), 1024 * 1024)
+                                            let bytes = #{Server}::body::collect_body_limited(response.into_body(), 1024 * 1024)
                                                 .await.unwrap();
                                             panic!("{status}: {}", #{String}::from_utf8_lossy(&bytes));
                                         }

@@ -264,13 +264,14 @@ class MultiProtocolSchemaServiceTest {
                 tokioTest("an_operation_a_protocol_cannot_serve_is_rejected_by_that_protocol_only") {
                     rustTemplate(
                         """
-                        // rpcv2Cbor does not stream blobs: it claims the request and rejects it.
-                        let (status, _, _) = send(
+                        // rpcv2Cbor does not stream blobs: it claims the request and rejects it with an empty 501.
+                        let (status, _, body) = send(
                             post("/service/Example/operation/Upload").header("smithy-protocol", "rpc-v2-cbor"),
                             "payload",
                         )
                         .await;
-                        assert_eq!(status, 404);
+                        assert_eq!(status, 501);
+                        assert!(body.is_empty());
                         let (status, _, _) = send(#{Http}::Request::builder().method("PUT").uri("/upload")
                             .header("content-type", "application/octet-stream"), "payload").await;
                         assert_eq!(status, 200);
