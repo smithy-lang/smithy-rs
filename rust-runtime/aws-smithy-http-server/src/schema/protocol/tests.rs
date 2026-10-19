@@ -1775,7 +1775,7 @@ mod collection_future_tests {
         let (body, dropped) = pinned_frames(false);
         let config = CollectionConfig::builder()
             .frame_budget(NonZeroUsize::new(1).unwrap())
-            .maybe_initial_capacity(None)
+            .set_initial_capacity(None)
             .build();
         assert_eq!(collect_body(body, Some(config)).await.unwrap(), "abcdef");
         assert!(dropped.load(Ordering::SeqCst));

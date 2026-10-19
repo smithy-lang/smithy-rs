@@ -702,7 +702,7 @@ impl<B: HttpBody> std::future::Future for RequestBodyCollectionFuture<B> {
                 CollectionStateProj::Start { body, config } => {
                     let future = CollectBodyFuture::<B, true>::new(
                         body.take().expect("collection starts once"),
-                        Some(CollectionConfig::builder().maybe_limit(config.max_bytes).build()),
+                        Some(CollectionConfig::builder().set_limit(config.max_bytes).build()),
                     );
                     let state = match config.read_timeout {
                         Some(timeout) => CollectionState::Timed {
