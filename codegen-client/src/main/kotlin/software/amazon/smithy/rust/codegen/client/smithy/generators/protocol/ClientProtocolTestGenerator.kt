@@ -105,15 +105,11 @@ class ClientProtocolTestGenerator(
             Set<BrokenTest> = setOf()
     }
 
-    private val strictProtocolTests = System.getenv("SMITHY_RS_STRICT_PROTOCOL_TESTS") == "1"
-
     override val appliesTo: AppliesTo
         get() = AppliesTo.CLIENT
     override val expectFail: Set<FailingTest>
         get() =
-            if (strictProtocolTests) {
-                emptySet()
-            } else if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
                 // The schema path correctly handles these cases that the legacy path couldn't:
                 // - Explicit member values over defaults (rpcv2Cbor and restJson)
                 // - httpPrefixHeaders collision with @httpHeader (restJson and restXml, see #4184)
@@ -134,7 +130,7 @@ class ClientProtocolTestGenerator(
     override val disabledTests: Set<String>
         get() = emptySet()
     override val brokenTests: Set<BrokenTest>
-        get() = if (strictProtocolTests) emptySet() else BrokenTests
+        get() = BrokenTests
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 

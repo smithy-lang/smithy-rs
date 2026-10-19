@@ -79,10 +79,6 @@ class ServerProtocolTestGenerator(
     private val schemaSerde =
         (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
 
-    // The compatibility corpus must run the original assertions, including known failures.
-    // This affects generated tests only; it does not change the service implementation.
-    private val strictProtocolTests = System.getenv("SMITHY_RS_STRICT_PROTOCOL_TESTS") == "1"
-
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -268,16 +264,14 @@ class ServerProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.SERVER
     override val expectFail: Set<FailingTest>
-        get() = if (strictProtocolTests) emptySet() else ExpectFail
+        get() = ExpectFail
     override val brokenTests: Set<BrokenTest>
-        get() = if (strictProtocolTests) emptySet() else BrokenTests
+        get() = BrokenTests
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
         get() =
-            if (strictProtocolTests) {
-                emptySet()
-            } else if (schemaSerde) {
+            if (schemaSerde) {
                 DisabledTests + SchemaDisabledTests
             } else {
                 DisabledTests
@@ -352,7 +346,6 @@ class ServerProtocolTestGenerator(
         val tests =
             allMatchingTestCases().flatMap { fixBrokenTestCase(it) }.filter {
                 when {
-                    strictProtocolTests -> it.protocol == codegenContext.protocol
                     generateOnly.isNotEmpty() -> it.id in generateOnly
                     else -> it.protocol == codegenContext.protocol && it.id !in disabledTests
                 }
@@ -375,7 +368,7 @@ class ServerProtocolTestGenerator(
         }
 
     private fun fixBrokenTestCase(it: TestCase): List<TestCase> =
-        if (strictProtocolTests || findBrokenTest(it) == null) {
+        if (findBrokenTest(it) == null) {
             listOf(it)
         } else {
             logger.info("Fixing ${it.kind} test case ${it.id}")
