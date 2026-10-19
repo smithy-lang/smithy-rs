@@ -649,26 +649,7 @@ impl<'a> Schema<'a> {
         let mut schema = Self::empty_traits();
         schema.id = id;
         schema.shape_type = shape_type;
-        schema.response_routing = Self::derive_response_routing(members, true);
-        schema.members = SchemaMembers::Struct { members };
-        schema
-    }
-
-    /// Creates a filtered structure view while preserving the members' original indices.
-    ///
-    /// Used by server deserializers to hide HTTP-bound or event-header members from
-    /// the body codec. Callbacks receive the original member indices, while
-    /// `member_schema_by_index` addresses positions in the filtered slice.
-    #[doc(hidden)]
-    pub fn new_struct_view(
-        id: ShapeId<'a>,
-        shape_type: ShapeType,
-        members: &'a [&'a Schema<'a>],
-    ) -> Self {
-        let mut schema = Self::empty_traits();
-        schema.id = id;
-        schema.shape_type = shape_type;
-        schema.response_routing = Self::derive_response_routing(members, false);
+        schema.response_routing = Self::derive_response_routing(members);
         schema.members = SchemaMembers::Struct { members };
         schema
     }
@@ -683,10 +664,7 @@ impl<'a> Schema<'a> {
     /// — including one carrying only a request-side binding such as `@httpQuery` or
     /// `@httpLabel` — belongs to the document body on a response, and so sets
     /// [`response_routing::HAS_BODY_MEMBERS`] rather than a mask bit.
-    const fn derive_response_routing(
-        members: &[&Schema<'a>],
-        require_contiguous_indices: bool,
-    ) -> u64 {
+    const fn derive_response_routing(members: &[&Schema<'a>]) -> u64 {
         let mut word: u64 = 0;
         let mut i = 0;
         while i < members.len() {
@@ -701,7 +679,7 @@ impl<'a> Schema<'a> {
                 None => panic!("a struct member schema must carry a member index"),
             };
             assert!(
-                !require_contiguous_indices || index == i,
+                index == i,
                 "struct member schemas must be listed in member-index order, because the \
                  response routing mask uses a member's array position as its index"
             );

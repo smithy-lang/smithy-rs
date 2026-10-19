@@ -290,22 +290,15 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
             .any(|m| m.http_payload().is_none() && is_body_member(m));
         if has_unbound_members && !self.body.is_empty() {
             let mut body_deser = self.codec.create_deserializer(self.body);
-            // Resolve only document members. Passing the full input schema lets a body key
-            // overwrite a trusted header/label/query binding, or fail parsing its ignored type.
-            let members: Vec<_> = schema
-                .members()
-                .iter()
-                .copied()
-                .filter(|m| m.http_payload().is_none() && is_body_member(m))
-                .collect();
-            let mut body_schema = Schema::new_struct_view(schema.shape_id().clone(), schema.shape_type(), &members);
-            if let Some(name) = schema.original_name() {
-                body_schema = body_schema.with_original_name(name);
-            }
-            if let Some(name) = schema.xml_name() {
-                body_schema = body_schema.with_xml_name(name.value());
-            }
-            body_deser.read_struct(&body_schema, consumer)?;
+            // Transport bindings are authoritative. Consume their body copies without
+            // interpreting the modeled type or passing them to the generated builder.
+            body_deser.read_struct(schema, &mut |member, deser| {
+                if member.member_index().is_some() && (member.http_payload().is_some() || !is_body_member(member)) {
+                    deser.skip_value()
+                } else {
+                    consumer(member, deser)
+                }
+            })?;
         }
         Ok(())
     }
