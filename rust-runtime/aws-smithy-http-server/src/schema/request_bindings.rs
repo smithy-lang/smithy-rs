@@ -1972,17 +1972,14 @@ mod tests {
         &SP_TARGET_MEMBERS,
     );
 
-    /// Reads a payload the way generated code does (Document `null` stays present). `Ok(Some(true))` = set.
+    /// Reads a structure payload the way generated code does. `Ok(Some(true))` = set.
     fn read_payload(input: &Schema<'_>, body: &[u8]) -> Result<Option<bool>, SerdeError> {
         let codec = json_codec();
         let (uri, headers) = request_parts("/sp", &[]);
         let mut deser = RestRequestDeserializer::new(&codec, uri.clone(), &headers, body);
         let mut set = None;
-        deser.read_struct(input, &mut |member, d| {
-            if member.shape_type() == ShapeType::Document {
-                d.read_document(member)?;
-                set = Some(true);
-            } else if d.is_null() {
+        deser.read_struct(input, &mut |_, d| {
+            if d.is_null() {
                 d.read_null()?;
             } else {
                 d.read_struct(&SP_TARGET, &mut |_, _| Ok(()))?;
@@ -1994,7 +1991,7 @@ mod tests {
     }
 
     /// Legacy rejects a structure/union `@httpPayload` whose body is `null` ("expected payload
-    /// member value"); a `null` document payload is a value, and an empty body leaves it unset.
+    /// member value"); an empty body leaves it unset.
     #[test]
     fn null_struct_payload_is_rejected_like_legacy() {
         for body in [&b"null"[..], b" null", b"\n null \n"] {
@@ -2006,9 +2003,59 @@ mod tests {
         }
         assert_eq!(read_payload(&SP_INPUT, b"").unwrap(), None);
         assert_eq!(read_payload(&SP_INPUT, b"{}").unwrap(), Some(true));
-        assert_eq!(read_payload(&SP_DOC_INPUT, b"").unwrap(), None);
+    }
+
+    #[test]
+    fn document_payload_null_is_a_value() {
+        use crate::schema::protocol::RestJson1;
+        use crate::schema::{DeserializeError, ServerProtocol};
+        use aws_smithy_runtime_api::http::Request;
+        use bytes::Bytes;
+
+        let read_document_payload = |body: &[u8]| -> Result<Option<Document>, DeserializeError> {
+            let protocol = RestJson1::default();
+            let request = Request::try_from(
+                http::Request::builder()
+                    .method("POST")
+                    .uri("/sp")
+                    .header("content-type", "application/json")
+                    .body(Bytes::copy_from_slice(body))
+                    .unwrap(),
+            )
+            .unwrap();
+            let mut deser = protocol.deserialize_request(&SP_DOC_INPUT, &request)?;
+            let mut document = None;
+            deser.read_struct(&SP_DOC_INPUT, &mut |member, d| {
+                // Unlike other optional members, a document must be read even when is_null().
+                document = Some(d.read_document(member)?);
+                Ok(())
+            })?;
+            Ok(document)
+        };
+
         for body in [&b"null"[..], b" null", b"\n null \n"] {
-            assert_eq!(read_payload(&SP_DOC_INPUT, body).unwrap(), Some(true));
+            assert_eq!(
+                read_document_payload(body).unwrap(),
+                Some(Document::Null),
+                "body: {:?}",
+                std::str::from_utf8(body)
+            );
+        }
+        assert_eq!(read_document_payload(b"").unwrap(), None);
+        assert_eq!(
+            read_document_payload(br#"{"nested":[null,true,"value",42]}"#).unwrap(),
+            Some(Document::Object(HashMap::from([(
+                "nested".to_owned(),
+                Document::Array(vec![
+                    Document::Null,
+                    Document::Bool(true),
+                    Document::String("value".to_owned()),
+                    Document::Number(aws_smithy_types::Number::PosInt(42)),
+                ]),
+            )])))
+        );
+        for body in [&b"nul"[..], br#"{"nested":[}"#] {
+            assert!(read_document_payload(body).is_err(), "body: {:?}", body);
         }
     }
 
