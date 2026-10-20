@@ -103,8 +103,8 @@ class MultiProtocolAbFuzzHarnessTest {
         File(System.getenv("MP_FUZZ_MULTI_PROTOCOL_MODELS") ?: error("MP_FUZZ_MULTI_PROTOCOL_MODELS is required"))
 
     /** Tower as the generated server depends on it: 0.5 with schema serde, 0.4 on the legacy path. */
-    private fun harnessTower(): CargoDependency =
-        CargoDependency("tower", CratesIo(if (sideSchemaSerde) "0.5" else "0.4"), features = setOf("util"))
+    private fun harnessTower(schemaSerde: Boolean): CargoDependency =
+        CargoDependency("tower", CratesIo(if (schemaSerde) "0.5" else "0.4"), features = setOf("util"))
 
     /** Resolves a fixture: multi-protocol models live with the server integration suite, the rest in [models]. */
     private fun modelFile(name: String): File =
@@ -651,7 +651,7 @@ class MultiProtocolAbFuzzHarnessTest {
                                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                                     // Built here rather than via `ServerCargoDependency`, whose Tower API differs
                                     // between checkouts: this test is also compiled into the baseline.
-                                    "Tower" to harnessTower().toType(),
+                                    "Tower" to harnessTower(schemaSerde).toType(),
                                 )
                             }
                         }

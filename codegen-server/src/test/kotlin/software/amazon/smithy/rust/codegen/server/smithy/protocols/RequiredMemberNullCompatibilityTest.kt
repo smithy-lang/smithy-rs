@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -18,8 +19,28 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal class RequiredMemberNullCompatibilityTest {
+    // Legacy REST JSON writes fieldList before message; schema writes them in model order.
+    // Preserve the raw captures, but compare validation errors as JSON objects.
+    // Status and every header stay exact, as do successful and RPC response bytes.
+    private fun responses(
+        path: Path,
+        protocol: String,
+    ) = Files.readAllLines(path).map { record ->
+        if (protocol == "restJson1" && record.contains(": 400 ") && record.contains("\"x-amzn-errortype\": \"ValidationException\"")) {
+            val bodyStart = record.lastIndexOf(" [")
+            val body =
+                record.substring(bodyStart + 1).removeSurrounding("[", "]")
+                    .split(", ").map { it.toInt().toByte() }.toByteArray()
+            record.substring(0, bodyStart) to Node.parse(body.toString(Charsets.UTF_8))
+        } else {
+            record to null
+        }
+    }
+
     @Test fun `required null absent and duplicate values match legacy responses`() {
         val run = java.nio.file.Files.createTempDirectory("required-null-parity-")
         for (protocol in listOf("restJson1", "awsJson1_0", "awsJson1_1")) {
@@ -75,7 +96,7 @@ internal class RequiredMemberNullCompatibilityTest {
                     }
                 }
             }
-            assertEquals(java.nio.file.Files.readString(run.resolve("$protocol-false.txt")), java.nio.file.Files.readString(run.resolve("$protocol-true.txt")), "$protocol: $run")
+            assertEquals(responses(run.resolve("$protocol-false.txt"), protocol), responses(run.resolve("$protocol-true.txt"), protocol), "$protocol: $run")
         }
     }
 }

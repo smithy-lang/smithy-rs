@@ -157,13 +157,18 @@ class MultiProtocolSchemaServiceTest {
                     }
 
                     async fn send(request: #{Http}::request::Builder, body: &str) -> (u16, #{Http}::HeaderMap, #{String}) {
-                        let body = #{Bytes}::copy_from_slice(body.as_bytes());
+                        let (status, headers, body) = send_bytes(request, body.as_bytes()).await;
+                        (status, headers, #{String}::from_utf8_lossy(&body).into_owned())
+                    }
+
+                    async fn send_bytes(request: #{Http}::request::Builder, body: &[u8]) -> (u16, #{Http}::HeaderMap, #{Bytes}) {
+                        let body = #{Bytes}::copy_from_slice(body);
                         let request = request.body(#{Server}::body::Body::from_bytes(body)).unwrap();
                         let response = service().oneshot(request).await.unwrap();
                         let status = response.status().as_u16();
                         let headers = response.headers().clone();
                         let body = response.into_body().collect().await.unwrap().to_bytes();
-                        (status, headers, #{String}::from_utf8_lossy(&body).into_owned())
+                        (status, headers, body)
                     }
 
                     fn post(uri: &str) -> #{Http}::request::Builder {
@@ -261,20 +266,42 @@ class MultiProtocolSchemaServiceTest {
                         *scope,
                     )
                 }
-                tokioTest("an_operation_a_protocol_cannot_serve_is_rejected_by_that_protocol_only") {
+                tokioTest("cbor_upload_matches_legacy_and_rest_upload_still_streams") {
                     rustTemplate(
                         """
-                        // rpcv2Cbor does not stream blobs: it claims the request and rejects it with an empty 501.
-                        let (status, _, body) = send(
+                        // Standalone legacy CBOR returns an empty CBOR map with status 400
+                        // for missing Content-Type or an unencoded blob body, and buffers a
+                        // correctly encoded blob before dispatching it to the handler.
+                        for request in [
                             post("/service/Example/operation/Upload").header("smithy-protocol", "rpc-v2-cbor"),
-                            "payload",
-                        )
-                        .await;
-                        assert_eq!(status, 501);
-                        assert!(body.is_empty());
-                        let (status, _, _) = send(#{Http}::Request::builder().method("PUT").uri("/upload")
+                            post("/service/Example/operation/Upload").header("smithy-protocol", "rpc-v2-cbor")
+                                .header("content-type", "application/cbor"),
+                        ] {
+                            let (status, headers, body) = send_bytes(request, b"payload").await;
+                            assert_eq!(status, 400);
+                            assert_eq!(headers.len(), 1);
+                            assert_eq!(headers["content-type"], "application/cbor");
+                            assert_eq!(body.as_ref(), &[0xa0]);
+                        }
+                        let (status, headers, body) = send_bytes(
+                            post("/service/Example/operation/Upload")
+                                .header("smithy-protocol", "rpc-v2-cbor")
+                                .header("content-type", "application/cbor"),
+                            b"\xa1\x64data\x47payload",
+                        ).await;
+                        assert_eq!(status, 200);
+                        assert_eq!(headers.len(), 3);
+                        assert_eq!(headers["content-type"], "application/cbor");
+                        assert_eq!(headers["smithy-protocol"], "rpc-v2-cbor");
+                        assert_eq!(headers["content-length"], "2");
+                        assert_eq!(body.as_ref(), &[0xbf, 0xff]);
+                        let (status, headers, body) = send(#{Http}::Request::builder().method("PUT").uri("/upload")
                             .header("content-type", "application/octet-stream"), "payload").await;
                         assert_eq!(status, 200);
+                        assert_eq!(headers.len(), 2);
+                        assert_eq!(headers["content-type"], "application/json");
+                        assert_eq!(headers["content-length"], "2");
+                        assert_eq!(body, "{}");
                         """,
                         *scope,
                     )
