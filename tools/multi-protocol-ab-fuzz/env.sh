@@ -7,8 +7,9 @@
 AB_FUZZ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${CURRENT_REPO:=$(cd "$AB_FUZZ_DIR/../.." && pwd)}"      # multi-protocol schema server
 # realpath: the generated server crates embed the canonical runtime path, and a second
-# spelling of the same path (e.g. /home vs /local/home) is a cargo lockfile package collision.
-: "${BASELINE_REPO:=$(realpath "$HOME/smithy-rs-latest")}"  # one legacy server per protocol
+# spelling of the same path through a symlink is a cargo lockfile package collision.
+: "${BASELINE_REPO:?Set BASELINE_REPO to a clean legacy smithy-rs checkout}"
+BASELINE_REPO="$(realpath "$BASELINE_REPO")"
 : "${FUZZ_ROOT:=$AB_FUZZ_DIR/artifacts}"                    # generated code, driver, AFL state, replays
 : "${SUITES:=multiprotocol pokemon}"
 # Each after server serves exactly one protocol, with schema serde enabled.

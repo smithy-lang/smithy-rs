@@ -43,8 +43,7 @@ FUZZ_ROOT = Path(os.environ.get("FUZZ_ROOT", AB_FUZZ_DIR / "artifacts"))
 GEN = FUZZ_ROOT / "gen"
 LIVE = FUZZ_ROOT / "live"
 DRIVER = FUZZ_ROOT / "driver" / "bin" / "aws-smithy-fuzz"
-BASELINE_REPO = Path(os.environ.get("BASELINE_REPO",
-                                    os.path.realpath(Path.home() / "smithy-rs-latest")))
+BASELINE_REPO = None
 CURRENT_REPO = Path(os.environ.get("CURRENT_REPO", AB_FUZZ_DIR.parent.parent))
 
 SUITE_BASES = {"multiprotocol": 18000, "pokemon": 19000}
@@ -405,12 +404,18 @@ def run_tier(tier, suite, cases, revisions, summary):
 
 
 def main():
+    global BASELINE_REPO
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["run"])
     parser.add_argument("--tiers", nargs="*", default=["single", "bunch", "full"])
     parser.add_argument("--suites", nargs="*", default=["multiprotocol", "pokemon"])
     parser.add_argument("--cases", nargs="*", default=CASES)
     args = parser.parse_args()
+
+    baseline = os.environ.get("BASELINE_REPO")
+    if not baseline:
+        parser.error("Set BASELINE_REPO to a clean legacy smithy-rs checkout")
+    BASELINE_REPO = Path(baseline).resolve()
 
     if not DRIVER.exists():
         raise SystemExit(f"driver missing at {DRIVER}; run generate.sh first")

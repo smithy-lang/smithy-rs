@@ -36,9 +36,7 @@ phase() {
   echo "=== phase $name: init ($(date))"
   CASES="$cases" JOBS=6 bash init.sh
   echo "=== phase $name: fuzz ${seconds}s, $fuzzers fuzzers/case ($(date))"
-  CASES="$cases" bash fuzz.sh "$seconds" "$fuzzers"
-  echo "=== phase $name: replay ($(date))"
-  CASES="$cases" bash replay.sh
+  CASES="$cases" bash fuzz.sh --prepared "$seconds" "$fuzzers"
 }
 
 phase single "$PHASE1_CASES" "$P1_SECONDS" 5

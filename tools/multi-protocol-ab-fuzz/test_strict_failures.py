@@ -50,13 +50,13 @@ class StrictFailureTests(unittest.TestCase):
                     JOBS="1",
                 )
                 result = subprocess.run(
-                    ["bash", str(directory / script), "1", "1"],
+                    ["bash", str(directory / script), *(["--prepared"] if script == "fuzz.sh" else []), "1", "1"],
                     env=env, capture_output=True, text=True,
                 )
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 if script != "replay.sh":
-                    self.assertIn("missing-first", result.stdout)
-                    self.assertIn("missing-second", result.stdout)
+                    self.assertIn("missing-first", result.stdout + result.stderr)
+                    self.assertIn("missing-second", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
