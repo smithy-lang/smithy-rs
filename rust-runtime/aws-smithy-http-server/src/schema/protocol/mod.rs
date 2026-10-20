@@ -91,7 +91,7 @@ enum ProtocolKind {
 impl SharedServerProtocol {
     /// Borrows the protocol selected for this request from its extensions.
     ///
-    /// Reads the protocol from [`SelectedOperation`](crate::schema::SelectedOperation).
+    /// Reads the protocol through [`SelectedOperation::get_from_request`](crate::schema::SelectedOperation::get_from_request).
     /// Returns `None` if no selection is stored, including before schema routing runs.
     pub fn get_from_request<B>(request: &http::Request<B>) -> Option<&Self> {
         super::SelectedOperation::get_from_request(request).map(super::SelectedOperation::protocol)
@@ -314,10 +314,9 @@ impl<'a> EventStreamFraming<'a> {
 ///
 /// The request side takes the operation's input schema, the response side its output schema,
 /// mirroring the client's `ClientProtocolInner` with the two directions swapped. The trait is
-/// object-safe: routing stores the protocol in
-/// [`SelectedOperation`](crate::schema::SelectedOperation) in the request extensions and
-/// everything after routing works through that erased handle, so nothing downstream names a
-/// concrete protocol.
+/// object-safe: routing stores the protocol in a private request-extension carrier for
+/// [`SelectedOperation`](crate::schema::SelectedOperation). Everything after routing works
+/// through that erased handle, so nothing downstream names a concrete protocol.
 ///
 /// A response plan is precomputed per operation: Bindings, Media types, URI templates
 /// and status codes are cached.

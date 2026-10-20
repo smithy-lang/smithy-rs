@@ -30,15 +30,23 @@ pub use protocol::{
 
 pub use service::{OperationSchema, ServiceSchema};
 
-/// The protocol and the operation selected by routing, with the operation's request-body limits,
-/// stored in the request extensions.
+/// A read-only view of the protocol and operation selected by routing, with the operation's
+/// request-body limits.
 ///
 /// The protocol is erased: everything after routing works through `dyn ServerProtocol`.
 ///
 /// The operation schema is stored for consumers that are not generic over the operation:
-/// middleware and [`FromParts`](crate::request::FromParts) extractors read this extension to
+/// middleware and [`FromParts`](crate::request::FromParts) extractors use
+/// [`get_from_request`](Self::get_from_request) or [`get_from_extensions`](Self::get_from_extensions) to
 /// learn which operation was selected — for logging, auth, or metrics — without naming an `Op`
 /// type. See the middleware example on [`ServerProtocol`].
+///
+/// Routing stores this view in a private extension carrier. Inserting or removing
+/// `SelectedOperation` directly in request extensions does not change the routed selection.
+/// Middleware must preserve request extensions: clearing or replacing all extensions removes
+/// the carrier, causing the upgrade or missing-handler fallback to return an empty `500`
+/// without polling the body or invoking the handler. Routing may already have collected the body
+/// before middleware runs.
 #[derive(Clone)]
 pub struct SelectedOperation {
     protocol: SharedServerProtocol,
@@ -46,18 +54,37 @@ pub struct SelectedOperation {
     request_body: RequestBodyCollectionConfig,
 }
 
+#[derive(Clone)]
+struct SelectedOperationExtension(SelectedOperation);
+
 impl SelectedOperation {
     /// Borrows the protocol and operation selected for this request from its extensions.
     ///
     /// Returns `None` if no selection is stored, including before schema routing runs.
     pub fn get_from_request<B>(request: &http::Request<B>) -> Option<&Self> {
-        request.extensions().get::<Self>()
+        Self::get_from_extensions(request.extensions())
     }
 
-    /// Only the router creates this extension. Keeping construction crate-private means middleware
-    /// cannot replace the operation's request-body limits (for example with the unlimited
-    /// `RequestBodyCollectionConfig::default()`); to route through another protocol, use
-    /// [`with_protocol`](Self::with_protocol), which keeps them.
+    /// Borrows the routed selection from request extensions, including in a
+    /// [`FromParts`](crate::request::FromParts) extractor.
+    ///
+    /// Returns `None` before routing or if middleware discarded the request extensions.
+    pub fn get_from_extensions(extensions: &http::Extensions) -> Option<&Self> {
+        extensions.get::<SelectedOperationExtension>().map(|stored| &stored.0)
+    }
+
+    pub(crate) fn get_from_runtime_request<B>(request: &aws_smithy_runtime_api::http::Request<B>) -> Option<&Self> {
+        request
+            .extension::<SelectedOperationExtension>()
+            .map(|stored| &stored.0)
+    }
+
+    pub(crate) fn insert_into(self, extensions: &mut http::Extensions) {
+        extensions.insert(SelectedOperationExtension(self));
+    }
+
+    /// Only the router creates the selection; middleware cannot replace its operation,
+    /// protocol, or request-body limits.
     pub(crate) fn new(
         protocol: SharedServerProtocol,
         operation: &'static OperationSchema<'static>,
@@ -67,16 +94,6 @@ impl SelectedOperation {
             protocol,
             operation,
             request_body,
-        }
-    }
-
-    /// The same routed operation served through `protocol`. The operation and its request-body
-    /// limits are kept, so middleware that swaps the protocol cannot loosen them.
-    pub fn with_protocol(&self, protocol: SharedServerProtocol) -> Self {
-        Self {
-            protocol,
-            operation: self.operation,
-            request_body: self.request_body,
         }
     }
 

@@ -13,6 +13,19 @@ use http_body_util::BodyExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+#[tokio::test]
+async fn schema_missing_failure_without_context_returns_empty_internal_error() {
+    let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, crate::Error>>> {
+            panic!("missing-handler fallback must not poll the request body")
+        },
+    )));
+    let response = SchemaMissingFailure.call(http::Request::new(body)).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(response.headers().is_empty());
+    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+}
+
 /// A perfectly usable HTTP protocol that deliberately has no event-stream capability.
 #[derive(Debug, Default)]
 struct HttpOnly {
@@ -144,9 +157,7 @@ async fn check_protocol<Op: StreamingOperationShape<Input = (), Output = ()>>(
         Poll::Ready(Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::new()))))
     }));
     let mut request = http::Request::new(body);
-    request
-        .extensions_mut()
-        .insert(SelectedOperation::new(protocol, Op::SCHEMA, Default::default()));
+    SelectedOperation::new(protocol, Op::SCHEMA, Default::default()).insert_into(request.extensions_mut());
     request.extensions_mut().insert(decoded.clone());
     let handler_called = called.clone();
     let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Op, (), _> {
@@ -213,13 +224,17 @@ async fn cbor_blob_inputs_collect_before_decoding_and_count_document_framing_in_
     let wire = Bytes::from_static(b"\xa1\x64blob\x41x");
     for limit in [wire.len(), wire.len() - 1] {
         let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
-        let mut request = aws_smithy_runtime_api::http::Request::new(crate::body::RequestBody::from(wire.clone()));
-        request.headers_mut().insert("content-type", "application/cbor");
-        request.add_extension(SelectedOperation::new(
+        let mut request = http::Request::builder()
+            .header("content-type", "application/cbor")
+            .body(crate::body::RequestBody::from(wire.clone()))
+            .unwrap();
+        SelectedOperation::new(
             protocol.clone(),
             BlobInputOnly::SCHEMA,
             RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(limit)),
-        ));
+        )
+        .insert_into(request.extensions_mut());
+        let request = aws_smithy_runtime_api::http::Request::try_from(request).unwrap();
         let decoded = Arc::new(AtomicBool::new(false));
         let observed = decoded.clone();
         let result = deserialize_streaming_request(
@@ -265,13 +280,17 @@ async fn cbor_blob_input_timeout_precedes_decoding() {
         |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> { Poll::Pending },
     ));
     let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
-    let mut request = aws_smithy_runtime_api::http::Request::new(crate::body::RequestBody::new(body));
-    request.headers_mut().insert("content-type", "application/cbor");
-    request.add_extension(SelectedOperation::new(
+    let mut request = http::Request::builder()
+        .header("content-type", "application/cbor")
+        .body(crate::body::RequestBody::new(body))
+        .unwrap();
+    SelectedOperation::new(
         protocol.clone(),
         BlobInputOnly::SCHEMA,
         RequestBodyCollectionConfig::default().with_read_timeout(Some(Duration::from_millis(10))),
-    ));
+    )
+    .insert_into(request.extensions_mut());
+    let request = aws_smithy_runtime_api::http::Request::try_from(request).unwrap();
     let result = deserialize_streaming_request::<(), _>(BlobInputOnly::SCHEMA, request, protocol, |_, _, _| {
         panic!("timed out input must not be decoded")
     })
@@ -325,11 +344,12 @@ fn streaming_upgrade_budgets_body_reads_by_the_handler() {
         })
     }));
     let mut request = http::Request::new(body);
-    request.extensions_mut().insert(SelectedOperation::new(
+    SelectedOperation::new(
         SharedServerProtocol::serde_only(HttpOnly::default()),
         StreamingInput::SCHEMA,
         Default::default(),
-    ));
+    )
+    .insert_into(request.extensions_mut());
     let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, StreamingInput, (), _> {
         inner: tower::service_fn(|(body, _): (SdkBody, ())| async move {
             assert_eq!(body.collect().await.unwrap().to_bytes(), "payload");
@@ -379,6 +399,98 @@ impl OperationShape for NonStreaming {
 }
 impl SchemaOperationShape for NonStreaming {
     const SCHEMA: &'static OperationSchema<'static> = Ordinary::SCHEMA;
+}
+
+#[tokio::test]
+async fn missing_or_mismatched_selection_rejects_before_reading_input_or_calling_handlers() {
+    for streaming in [false, true] {
+        for selection in [None, Some(InputOnly::SCHEMA)] {
+            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                    panic!("invalid routing context must not poll the request body")
+                },
+            ));
+            let mut request = http::Request::new(body);
+            if let Some(operation) = selection {
+                SelectedOperation::new(
+                    SharedServerProtocol::serde_only(HttpOnly::default()),
+                    operation,
+                    Default::default(),
+                )
+                .insert_into(request.extensions_mut());
+            }
+            let called = Arc::new(AtomicBool::new(false));
+            let handler_called = called.clone();
+            let response = if streaming {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
+                    inner: tower::service_fn(move |_: ((), ())| {
+                        handler_called.store(true, Ordering::SeqCst);
+                        async { Ok::<_, Infallible>(()) }
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
+                    inner: tower::service_fn(move |_: (EmptyShape, ())| {
+                        handler_called.store(true, Ordering::SeqCst);
+                        async { Ok::<_, Infallible>(EmptyShape) }
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            };
+            assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+            assert!(response.headers().is_empty());
+            assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+            assert!(!called.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[test]
+fn selection_accessors_preserve_the_private_carrier_through_http_conversion() {
+    use crate::schema::RequestBodyCollectionConfig;
+    use std::num::NonZeroUsize;
+
+    let mut request = http::Request::new(());
+    SelectedOperation::new(
+        SharedServerProtocol::serde_only(HttpOnly::default()),
+        Ordinary::SCHEMA,
+        RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(1)),
+    )
+    .insert_into(request.extensions_mut());
+    let selected = SelectedOperation::get_from_request(&request).unwrap();
+    assert!(std::ptr::eq(
+        selected,
+        SelectedOperation::get_from_extensions(request.extensions()).unwrap()
+    ));
+    assert!(std::ptr::eq(selected.operation(), Ordinary::SCHEMA));
+    // The public view is not the extension key, even when a detached view is inserted.
+    let detached = SelectedOperation::new(
+        selected.protocol().clone(),
+        InputOnly::SCHEMA,
+        RequestBodyCollectionConfig::default(),
+    );
+    request.extensions_mut().insert(detached);
+    assert!(std::ptr::eq(
+        SelectedOperation::get_from_request(&request).unwrap().operation(),
+        Ordinary::SCHEMA
+    ));
+    let request = aws_smithy_runtime_api::http::Request::try_from(request)
+        .unwrap()
+        .map(|_| Bytes::new());
+    let selected = SelectedOperation::get_from_runtime_request(&request).unwrap();
+    assert!(std::ptr::eq(selected.operation(), Ordinary::SCHEMA));
+    assert_eq!(selected.request_body_config().max_bytes, NonZeroUsize::new(1));
 }
 
 #[tokio::test]
@@ -528,7 +640,7 @@ async fn schema_upgrades_preserve_request_metadata() {
             .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
             .unwrap();
         request.extensions_mut().insert(extension);
-        request.extensions_mut().insert(SelectedOperation::new(
+        SelectedOperation::new(
             SharedServerProtocol::serde_only(protocol),
             if streaming_input {
                 StreamingBlob::SCHEMA
@@ -536,7 +648,8 @@ async fn schema_upgrades_preserve_request_metadata() {
                 Ordinary::SCHEMA
             },
             Default::default(),
-        ));
+        )
+        .insert_into(request.extensions_mut());
         let response = if streaming_upgrade {
             let service = tower::service_fn(|_: ((), ())| async { Ok::<_, Infallible>(()) });
             if streaming_input {

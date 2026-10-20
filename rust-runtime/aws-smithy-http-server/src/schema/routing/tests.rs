@@ -782,7 +782,7 @@ async fn layers_see_selection_and_do_not_observe_routing_rejections() {
     let layer = tower::layer::layer_fn(move |inner: SyncRoute<Body>| {
         let counter = counter.clone();
         tower::service_fn(move |request: Request<Body>| {
-            assert!(request.extensions().get::<SelectedOperation>().is_some());
+            assert!(SelectedOperation::get_from_request(&request).is_some());
             counter.fetch_add(1, Ordering::SeqCst);
             inner.clone().oneshot(request)
         })
@@ -2237,7 +2237,7 @@ mod multi_protocol {
                 (
                     *operation,
                     SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-                        let selected = request.extensions().get::<SelectedOperation>().unwrap().clone();
+                        let selected = SelectedOperation::get_from_request(&request).unwrap().clone();
                         let bytes = if operation.input().members().iter().any(|member| member.streaming()) {
                             Bytes::new()
                         } else {
@@ -3234,7 +3234,7 @@ async fn cbor_blob_input_routing_selects_cbor_without_body_reads_or_rest_fallbac
             )]));
             let handler = SyncRoute::new(tower::service_fn(
                 |request: Request<Body>| -> std::future::Ready<Result<Response<BoxBody>, Infallible>> {
-                    let selected = request.extensions().get::<SelectedOperation>().unwrap();
+                    let selected = SelectedOperation::get_from_request(&request).unwrap();
                     assert_eq!(selected.protocol().protocol_id().as_str(), "smithy.protocols#rpcv2Cbor");
                     assert_eq!(selected.operation().shape_id(), UPLOAD.shape_id());
                     std::future::ready(Ok(Response::new(crate::body::empty())))

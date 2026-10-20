@@ -104,7 +104,7 @@ impl<P, Op, Extractors, S: Clone> Clone for DynUpgrade<P, Op, Extractors, S> {
 
 /// Reads the routed operation out of the request extensions and checks it is `Op`.
 pub(crate) fn selected_operation<Op: SchemaOperationShape>(extensions: &http::Extensions) -> Option<SelectedOperation> {
-    let Some(selected) = extensions.get::<SelectedOperation>().cloned() else {
+    let Some(selected) = SelectedOperation::get_from_extensions(extensions).cloned() else {
         error!("selected protocol operation missing from request extensions");
         return None;
     };
@@ -361,9 +361,7 @@ where
 {
     Box::pin(async move {
         protocol.validate_request_headers(operation, request.headers())?;
-        let config = request
-            .extension::<SelectedOperation>()
-            .map(SelectedOperation::request_body_config);
+        let config = SelectedOperation::get_from_runtime_request(&request).map(SelectedOperation::request_body_config);
         let mut request = request.map(Some);
         let body = request.body_mut().take().expect("request body is present");
         let directive = protocol.request_body_requirement(operation);
@@ -616,6 +614,8 @@ where
 mod tests;
 
 /// Missing-handler fallback using the protocol selected by schema routing.
+///
+/// Returns an empty internal server error if middleware removed the selected protocol context.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SchemaMissingFailure;
 impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
@@ -627,10 +627,10 @@ impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
     }
     fn call(&mut self, request: http::Request<crate::body::Body>) -> Self::Future {
         error!("the operation has not been set");
-        let selected = request
-            .extensions()
-            .get::<crate::schema::SelectedOperation>()
-            .expect("schema fallback requires selected protocol context");
+        let Some(selected) = SelectedOperation::get_from_request(&request) else {
+            error!("request reached the missing-handler fallback without a selected protocol operation");
+            return std::future::ready(Ok(empty_internal_server_error()));
+        };
         let rejection = crate::schema::DeserializeError::InternalFailure(crate::Error::new(String::from(
             "the operation has not been set",
         )));
