@@ -1288,7 +1288,7 @@ class SchemaGeneratorTest {
 
                 // Repeated lines, quoted list values, commas in scalar strings and HTTP dates,
                 // media-type decoding, and case-normalized prefix matching all use the same
-                // parser as the generated serde path.
+                // parser as the legacy generated path.
                 let happy = headers(&[
                     ("x-str", b"value,with,commas"),
                     ("x-int", b"42"),

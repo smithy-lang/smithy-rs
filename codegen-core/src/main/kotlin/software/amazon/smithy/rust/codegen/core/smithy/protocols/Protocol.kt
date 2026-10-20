@@ -37,7 +37,7 @@ interface Protocol {
      * codegen would both leave them behind when swapping this protocol out and omit them when
      * swapping it in.
      *
-     * The generated serde request path has no runtime protocol to delegate to, so it emits
+     * The legacy (non-schema) request path has no runtime protocol to delegate to, so it emits
      * these itself via [additionalRequestHeaders].
      *
      * Contrast [serviceRequestHeaders], which are emitted by both paths.
@@ -66,7 +66,7 @@ interface Protocol {
      *
      * Prefer the two more specific accessors when generating code, so that the runtime protocol
      * remains the single owner of protocol framing. This method exists for callers that need the
-     * complete set, such as the generated serde request path.
+     * complete set, such as the legacy request path.
      *
      * These MUST all be lowercase, or the application will panic, as per
      * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
