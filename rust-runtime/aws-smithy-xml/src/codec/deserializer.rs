@@ -132,7 +132,11 @@ impl<'a> XmlDeserializer<'a> {
         if self.text.is_some() {
             return Err(SerdeError::custom("expected XML element, found text"));
         }
-        Ok(Document::try_from(self.input).unwrap_or_else(|_| Document::new("")))
+        let mut doc = Document::try_from(self.input).unwrap_or_else(|_| Document::new(""));
+        if self.settings.validate_document && self.depth == 1 {
+            doc.check_well_formedness();
+        }
+        Ok(doc)
     }
 
     /// Extract the leaf text content. If `text` was pre-set, returns it
@@ -143,10 +147,19 @@ impl<'a> XmlDeserializer<'a> {
             return t;
         }
         let mut doc = Document::try_from(self.input).unwrap_or_else(|_| Document::new(""));
+        let top_level_strict = self.settings.validate_document && self.depth == 0;
+        if top_level_strict {
+            doc.check_well_formedness();
+        }
         let mut root = doc
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
-        decode::try_data(&mut root).map_err(|e| SerdeError::custom(e.to_string()))
+        let text = decode::try_data(&mut root).map_err(|e| SerdeError::custom(e.to_string()))?;
+        drop(root);
+        if top_level_strict {
+            Self::finish_well_formed(&mut doc)?;
+        }
+        Ok(text)
     }
 
     /// Run `f` against `self` after temporarily repointing it at a sub-slice
@@ -267,6 +280,15 @@ impl<'a> XmlDeserializer<'a> {
             .map_err(|e| SerdeError::invalid_input(format!("ill-formed XML: {e}")))
     }
 
+    /// Only the outer aggregate owns the document boundary. Its tokenizer also
+    /// drains skipped children, so nested reads do not need separate validation.
+    fn finish_document(&self, doc: &mut Document<'_>) -> Result<(), SerdeError> {
+        if self.settings.validate_document && self.depth == 1 {
+            Self::finish_well_formed(doc)?;
+        }
+        Ok(())
+    }
+
     fn resolve_timestamp_format(&self, schema: &Schema<'_>) -> Result<TimestampFormat, SerdeError> {
         let Some(t) = schema.timestamp_format() else {
             return Ok(match self.settings.default_timestamp_format() {
@@ -357,11 +379,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             // differently from the handler. Every byte of the body passes
             // through this `doc`'s tokenizer (child elements are drained
             // through it), so checking here covers nested content too.
-            let top_level_strict = self.settings.validate_document && self.depth == 1;
             let mut doc = self.document()?;
-            if top_level_strict {
-                doc.check_well_formedness();
-            }
             let mut root = doc
                 .root_element()
                 .map_err(|e| SerdeError::custom(e.to_string()))?;
@@ -403,9 +421,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 // which gives the end offset and releases the iterator borrow
                 // on `doc` so we can mutate `self`.
                 let sub = &input[start..root.end_offset()];
-                if top_level_strict {
-                    Self::finish_well_formed(&mut doc)?;
-                }
+                self.finish_document(&mut doc)?;
                 if let Some(member) = Self::resolve_member(schema, &local) {
                     self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
@@ -471,9 +487,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 }
             }
             drop(root);
-            if top_level_strict {
-                Self::finish_well_formed(&mut doc)?;
-            }
+            self.finish_document(&mut doc)?;
 
             // Dispatch each accumulated flattened-aggregate group as a single call.
             // We synthesize a `<__flat>...</__flat>` wrapper so the consumer's
@@ -530,6 +544,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let sub = &input[start..child_scope.end_offset()];
                 self.dispatch_subslice(sub, |this| consumer(this))?;
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(())
         })();
         self.leave_aggregate();
@@ -616,6 +632,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     }
                 }
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(())
         })();
         self.leave_aggregate();
@@ -751,6 +769,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     .map_err(|e| SerdeError::custom(e.to_string()))?;
                 out.push(text.into_owned());
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(out)
         })();
         self.leave_aggregate();
@@ -777,6 +797,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     .map_err(|e| SerdeError::custom(format!("invalid base64: {e}")))?;
                 out.push(Blob::new(bytes));
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(out)
         })();
         self.leave_aggregate();
@@ -803,6 +825,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     .map_err(|e| SerdeError::custom(format!("{e}")))?;
                 out.push(v);
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(out)
         })();
         self.leave_aggregate();
@@ -829,6 +853,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     .map_err(|e| SerdeError::custom(format!("{e}")))?;
                 out.push(v);
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(out)
         })();
         self.leave_aggregate();
@@ -882,6 +908,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     out.insert(k, v);
                 }
             }
+            drop(root);
+            self.finish_document(&mut doc)?;
             Ok(out)
         })();
         self.leave_aggregate();

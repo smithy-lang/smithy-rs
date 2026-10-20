@@ -112,6 +112,11 @@ impl XmlCodecSettingsBuilder {
     }
 
     /// Rejects malformed XML and trailing content without changing root-name validation.
+    ///
+    /// Applies to top-level structure, list, map, and scalar reads, including
+    /// skipped content. Checks matching tags, duplicate attribute names, and
+    /// references to the five predefined entities or valid XML 1.0 characters.
+    /// Custom DTD entity references are unsupported.
     pub fn validate_document(mut self, value: bool) -> Self {
         self.validate_document = value;
         self

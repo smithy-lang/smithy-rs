@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::unescape::unescape;
+use crate::unescape::{unescape, validate_references};
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use xmlparser::{ElementEnd, Token, Tokenizer};
@@ -191,6 +192,8 @@ pub struct Document<'a> {
     /// `Some` once [`check_well_formedness`](Self::check_well_formedness) is enabled: the
     /// `(prefix, local)` names of the currently open elements.
     open_elements: Option<Vec<(&'a str, &'a str)>>,
+    /// Attribute names on the current start tag, populated only in checking mode.
+    attribute_names: Option<HashSet<(&'a str, &'a str)>>,
     /// First well-formedness violation found while checking. Once set, iteration stops.
     malformed: Option<String>,
 }
@@ -211,19 +214,22 @@ impl<'inp> Document<'inp> {
             tokenizer: Tokenizer::from(doc),
             depth: 0,
             open_elements: None,
+            attribute_names: None,
             malformed: None,
         }
     }
 
     /// Track open elements so that ill-formed input is detected: a close tag whose name does
     /// not match the open element, an element left unclosed at the end of input, or a tokenizer
-    /// error. Without this, the decoder recovers from such input silently, which is the legacy
+    /// error. Also reject duplicate attributes and invalid references, including in skipped
+    /// content. Without this, the decoder recovers from such input silently, which is the legacy
     /// behavior. Must be called before any token is read.
     ///
     /// The first violation stops iteration (as a tokenizer error does). Call
     /// [`finish_well_formed`](Self::finish_well_formed) after decoding to surface it.
     pub(crate) fn check_well_formedness(&mut self) {
         self.open_elements = Some(Vec::new());
+        self.attribute_names = Some(HashSet::new());
     }
 
     /// Read the rest of the document and return the first well-formedness violation, if any.
@@ -340,6 +346,34 @@ impl<'inp> Iterator for Document<'inp> {
             }
             Ok(tok) => tok,
         };
+        if let Some(attributes) = self.attribute_names.as_mut() {
+            let references = match tok {
+                Token::Attribute {
+                    prefix,
+                    local,
+                    value,
+                    ..
+                } => {
+                    let name = (prefix.as_str(), local.as_str());
+                    if !attributes.insert(name) {
+                        return Some(Err(self.record_malformed(
+                            "duplicate attribute",
+                            name.0,
+                            name.1,
+                        )));
+                    }
+                    Some(value.as_str())
+                }
+                Token::Text { text } => Some(text.as_str()),
+                _ => None,
+            };
+            if let Some(text) = references {
+                if let Err(error) = validate_references(text) {
+                    self.malformed = Some(error.to_string());
+                    return Some(Err(error));
+                }
+            }
+        }
         // depth bookkeeping
         match tok {
             Token::ElementEnd {
@@ -377,6 +411,9 @@ impl<'inp> Iterator for Document<'inp> {
             t @ Token::ElementStart { prefix, local, .. } => {
                 if let Some(open) = self.open_elements.as_mut() {
                     open.push((prefix.as_str(), local.as_str()));
+                }
+                if let Some(attributes) = self.attribute_names.as_mut() {
+                    attributes.clear();
                 }
                 self.depth += 1;
                 // We want the startel and endel to have the same depth, but after the opener,
