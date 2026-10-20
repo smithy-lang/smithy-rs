@@ -5,14 +5,12 @@
 
 mod downcast_tests;
 mod partial_buffer_tests;
+mod released_body_limit_tests;
 
+use super::__private::CollectBodyError;
 use super::__private::*;
 use super::*;
-// `super::*` also exports the released `CollectBodyError`; these tests target the `__private` one.
-use super::__private::CollectBodyError;
 use std::num::NonZeroUsize;
-
-mod released_body_limit_tests;
 
 #[tokio::test]
 async fn request_body_preserves_buffered_bytes_and_trailers() {
@@ -120,7 +118,7 @@ fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
                     body,
                     Some(
                         CollectionConfig::builder()
-                            .maybe_limit(NonZeroUsize::new(limit))
+                            .set_limit(NonZeroUsize::new(limit))
                             .frame_budget(budget.unwrap_or(DEFAULT_FRAME_BUDGET))
                             .build(),
                     ),
@@ -611,13 +609,7 @@ async fn collection_preserves_trailers_with_and_without_a_limit() {
                 Ok(http_body::Frame::trailers(second_trailers.clone())),
             ]))
         };
-        let config = || {
-            Some(
-                CollectionConfig::builder()
-                    .maybe_limit(NonZeroUsize::new(limit))
-                    .build(),
-            )
-        };
+        let config = || Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build());
         let bytes = collect_body(body(), config()).await.unwrap();
         assert_eq!(bytes, "payload");
         let (bytes_with_trailers, actual_trailers) = collect_body_with_trailers(body(), config()).await.unwrap();
@@ -681,11 +673,7 @@ async fn collection_handles_huge_size_hints_without_huge_reservations() {
         assert!(matches!(
             collect_body(
                 body,
-                Some(
-                    CollectionConfig::builder()
-                        .maybe_limit(NonZeroUsize::new(limit))
-                        .build()
-                )
+                Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build())
             )
             .await,
             Err(CollectBodyError::Body(_))
@@ -700,7 +688,7 @@ async fn collection_handles_huge_size_hints_without_huge_reservations() {
         polled: &mut polled,
     };
     assert!(matches!(
-        collect_body(body, Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(1024)).build())).await,
+        collect_body(body, Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(1024)).build())).await,
         Err(CollectBodyError::BodyLimitExceeded(limit)) if limit.get() == 1024
     ));
     assert!(!polled);
@@ -714,11 +702,7 @@ async fn collection_grows_beyond_initial_reservation() {
         assert_eq!(
             collect_body(
                 body,
-                Some(
-                    CollectionConfig::builder()
-                        .maybe_limit(NonZeroUsize::new(limit))
-                        .build()
-                )
+                Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build())
             )
             .await
             .unwrap(),
@@ -732,7 +716,7 @@ async fn test_collect_body_limited_under_limit() {
     let body = from_bytes(Bytes::from("hello"));
     let result = collect_body(
         body,
-        Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(1024)).build()),
+        Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(1024)).build()),
     )
     .await;
     assert_eq!(result.unwrap(), Bytes::from("hello"));
@@ -743,7 +727,7 @@ async fn test_collect_body_limited_over_limit() {
     let body = from_bytes(Bytes::from("this is way too long"));
     let result = collect_body(
         body,
-        Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(5)).build()),
+        Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(5)).build()),
     )
     .await;
     assert!(matches!(
@@ -764,7 +748,7 @@ async fn test_collect_body_limited_chunked_exceeds_mid_stream() {
     let body = http_body_util::StreamBody::new(stream::iter(chunks));
     let result = collect_body(
         body,
-        Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(6)).build()),
+        Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(6)).build()),
     )
     .await;
     assert!(matches!(result, Err(CollectBodyError::BodyLimitExceeded(_))));
@@ -775,7 +759,7 @@ async fn test_collect_body_limited_empty_body() {
     let body = empty();
     let result = collect_body(
         body,
-        Some(CollectionConfig::builder().maybe_limit(NonZeroUsize::new(100)).build()),
+        Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(100)).build()),
     )
     .await;
     assert_eq!(result.unwrap(), Bytes::from(""));
