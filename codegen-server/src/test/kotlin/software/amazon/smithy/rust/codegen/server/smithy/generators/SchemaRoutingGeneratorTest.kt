@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -34,6 +35,127 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class SchemaRoutingGeneratorTest {
+    @Test
+    fun `missing handlers use selected protocols and tolerate rebuilt requests`() {
+        for (customProtocol in listOf(false, true)) {
+            val protocols =
+                if (customProtocol) {
+                    """
+                    @protocolDefinition
+                    @trait(selector: "service")
+                    structure bodyRouting {}
+                    @bodyRouting
+                    """
+                } else {
+                    """
+                    use aws.protocols#restJson1
+                    use smithy.protocols#rpcv2Cbor
+                    @restJson1
+                    @rpcv2Cbor
+                    """
+                }
+            val model =
+                """
+                namespace test
+                $protocols
+                service Example { operations: [Ping] }
+                @http(method: "POST", uri: "/ping")
+                operation Ping { input := {} output := {} }
+                """.asSmithyModel(smithyVersion = "2")
+            val decorator =
+                object : ServerCodegenDecorator {
+                    override val name = "Missing handler custom protocol"
+                    override val order: Byte = 0
+
+                    override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> =
+                        if (customProtocol) listOf(testProtocolRegistry(codegenContext, false)) else emptyList()
+
+                    override fun protocols(
+                        serviceId: ShapeId,
+                        currentProtocols: ServerProtocolMap,
+                    ): ServerProtocolMap =
+                        if (customProtocol) {
+                            currentProtocols + (
+                                ShapeId.from("test#bodyRouting") to
+                                    object : ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext> {
+                                        override fun protocol(codegenContext: ServerCodegenContext) =
+                                            ServerRestJsonProtocol(codegenContext)
+
+                                        override fun buildProtocolGenerator(codegenContext: ServerCodegenContext) =
+                                            ServerHttpBoundProtocolGenerator(codegenContext, ServerRestJsonProtocol(codegenContext))
+
+                                        override fun support() = ServerRestJsonFactory().support()
+                                    }
+                            )
+                        } else {
+                            currentProtocols
+                        }
+                }
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                    cargoCommand = "cargo test --quiet --lib --tests",
+                ),
+                additionalDecorators = listOf(decorator),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+            ) { context, crate ->
+                crate.testModule {
+                    tokioTest("missing_handler_fallback_survives_context_loss") {
+                        val requests =
+                            if (customProtocol) {
+                                """[("/ping", "application/json", b"{}".as_slice())]"""
+                            } else {
+                                """[
+                                    ("/ping", "application/json", b"{}".as_slice()),
+                                    ("/service/Example/operation/Ping", "application/cbor", b"\xa0".as_slice()),
+                                ]"""
+                            }
+                        rustTemplate(
+                            """
+                            use #{Tower}::ServiceExt;
+                            for remove_context in [false, true] {
+                                let layer = #{Tower}::ServiceBuilder::new().map_request(move |request: #{Http}::Request<#{Server}::body::Body>| {
+                                    assert!(request.extensions().get::<#{Server}::schema::SelectedOperation>().is_some());
+                                    if remove_context {
+                                        let (mut parts, body) = request.into_parts();
+                                        parts.extensions = #{Default}::default();
+                                        #{Http}::Request::from_parts(parts, body)
+                                    } else { request }
+                                });
+                                let service = crate::Example::builder(crate::ExampleConfig::builder().layer(layer).build()).build_unchecked();
+                                for (uri, content_type, expected_body) in $requests {
+                                    let request = #{Http}::Request::builder().method("POST").uri(uri)
+                                        .header("content-type", content_type)
+                                        .header("smithy-protocol", "rpc-v2-cbor")
+                                        .body(#{Server}::body::Body::empty()).unwrap();
+                                    let response = service.clone().oneshot(request).await.unwrap();
+                                    assert_eq!(response.status(), 500);
+                                    if remove_context {
+                                        assert!(response.headers().is_empty());
+                                    } else {
+                                        assert_eq!(response.headers()["content-type"], content_type);
+                                        if $customProtocol {
+                                            assert_eq!(response.headers()["x-test-protocol"], "0");
+                                        }
+                                    }
+                                    let body = #{BodyUtil}::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
+                                    assert_eq!(body.as_ref(), if remove_context { b"".as_slice() } else { expected_body });
+                                }
+                            }
+                            """,
+                            "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                            "Http" to RuntimeType.http(context.runtimeConfig),
+                            "Tower" to ServerCargoDependency.tower(context).toType(),
+                            "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                            *RuntimeType.preludeScope,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `adding RPC protocols preserves headerless REST requests and defers required body rejections`() {
         for ((extraProtocol, extraTrait) in listOf(
@@ -885,7 +1007,11 @@ class SchemaRoutingGeneratorTest {
                     fn serialize_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct) -> Response<BoxBody> { unreachable!() }
                     fn serialize_streaming_response(&self, _: &Schema<'_>, _: &dyn #{Schema}::serde::SerializableStruct, _: &Schema<'_>, _: Option<BoxBody>) -> Response<BoxBody> { unreachable!() }
                     fn serialize_error(&self, _: &dyn #{Server}::schema::HttpModeledError) -> Response<BoxBody> { unreachable!() }
-                    fn serialize_rejection(&self, _: #{Server}::schema::DeserializeError) -> Response<BoxBody> { unreachable!() }
+                    fn serialize_rejection(&self, error: #{Server}::schema::DeserializeError) -> Response<BoxBody> {
+                        let mut response = #{Server}::schema::protocol::RestJson1::default().serialize_rejection(error);
+                        response.headers_mut().insert("x-test-protocol", INDEX.to_string().parse().unwrap());
+                        response
+                    }
                 }
                 $routing
                 pub(crate) static REGISTRY: ProtocolRegistry = ProtocolRegistry::new(&[

@@ -69,18 +69,21 @@ internal class MissingHandlerContextCompatibilityTest {
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
                 crate.testModule {
-                    tokioTest("missing_handler_keeps_legacy_error_framing") {
+                    tokioTest("missing_handler_preserves_framing_with_context_and_handles_context_loss") {
                         rustTemplate(
                             """
                             use #{Tower}::ServiceExt;
                             use #{Futures}::FutureExt;
                             let mut observations = #{Vec}::new();
                             for remove_context in [false, true] {
-                                let layer = #{Tower}::ServiceBuilder::new().map_request(move |mut request: #{Http}::Request<#{Server}::body::Body>| {
+                                let layer = #{Tower}::ServiceBuilder::new().map_request(move |request: #{Http}::Request<#{Server}::body::Body>| {
                                     if remove_context {
-                                        request.extensions_mut().remove::<#{Server}::schema::SelectedOperation>();
+                                        let (mut parts, body) = request.into_parts();
+                                        parts.extensions = #{Default}::default();
+                                        #{Http}::Request::from_parts(parts, body)
+                                    } else {
+                                        request
                                     }
-                                    request
                                 });
                                 let config = crate::FailuresConfig::builder().layer(layer).build();
                                 let service = crate::Failures::builder(config).build_unchecked();
@@ -109,7 +112,13 @@ internal class MissingHandlerContextCompatibilityTest {
                             if $schemaSerde {
                                 let legacy: #{Vec}<#{Json}::Value> = #{Json}::from_str(
                                     &::std::fs::read_to_string(#{LegacySnapshot:S}).unwrap()).unwrap();
-                                assert_eq!(observations, legacy);
+                                // Preserve the legacy observation for the intact-context request.
+                                assert_eq!(observations[0], legacy[0]);
+                                // Schema routing cannot recover the selected protocol after
+                                // middleware discards extensions, so use the empty 500 fallback.
+                                assert_eq!(observations[1], #{Json}::json!({
+                                    "remove_context":true,"panic":false,"status":500,"headers":[],"body":[]
+                                }));
                             } else {
                                 assert!(observations.iter().all(|row| row["panic"] == false));
                                 let mut control = observations[0].clone();

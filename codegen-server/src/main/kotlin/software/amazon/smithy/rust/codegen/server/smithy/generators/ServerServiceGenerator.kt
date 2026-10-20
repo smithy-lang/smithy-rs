@@ -107,7 +107,10 @@ class ServerServiceGenerator(
             )
 
     /** Associate each operation with the name of the corresponding Zero-Sized Type (ZST) struct name. */
-    private val operationStructNames = operations.associateWith { symbolProvider.toSymbol(it).name.toPascalCase() }
+    private val operationStructNames =
+        operations.associateWith {
+            ServerOperationNames(symbolProvider.toSymbol(it)).markerType
+        }
 
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
@@ -349,7 +352,7 @@ class ServerServiceGenerator(
 
                     /// Sets the [`$structName`](crate::operation_shape::$structName) to a custom [`Service`](tower::Service).
                     /// not constrained by the Smithy contract.
-                    ${if (schemaSerde) "pub " else ""}fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
+                    fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
                     where
                         S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
                         S::Future: Send + 'static,
@@ -411,7 +414,7 @@ class ServerServiceGenerator(
                 val nullabilityChecks =
                     writable {
                         for (operationShape in operations) {
-                            val fieldName = builderFieldNames.getValue(operationShape)!!
+                            val fieldName = builderFieldNames.getValue(operationShape)
                             val operationZstTypeName = operationStructNames[operationShape]!!
                             rust(
                                 """
@@ -425,7 +428,7 @@ class ServerServiceGenerator(
                 val routesArrayElements =
                     writable {
                         for (operationShape in operations) {
-                            val fieldName = builderFieldNames.getValue(operationShape)!!
+                            val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
                             emitRouteEntries(specFunctions) { isClone ->
                                 val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
@@ -520,7 +523,7 @@ class ServerServiceGenerator(
                 val pairs =
                     writable {
                         for (operationShape in operations) {
-                            val fieldName = builderFieldNames.getValue(operationShape)!!
+                            val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
                             emitRouteEntries(specFunctions) { isClone ->
                                 val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
@@ -845,7 +848,7 @@ class ServerServiceGenerator(
             val result = if (unchecked) serviceName else "#{Result}<$serviceName, BuildError>"
             rustTemplate(
                 """
-                /// Builds the service. ${if (unchecked) "Missing handlers return the protocol's internal failure response when called." else "Every operation must have a handler."}
+                /// Builds the service. ${if (unchecked) "Missing handlers return the selected protocol's internal failure response, or an empty 500 if a layer removes the routing context." else "Every operation must have a handler."}
                 /// Configured layers run after routing, with the selected operation in request extensions.
                 /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
                 pub fn $name(self) -> $result
@@ -867,13 +870,14 @@ class ServerServiceGenerator(
 
     private fun schemaBuildInner(name: String): Writable =
         writable {
-            // ServerServiceSchemaGenerator uses the same shape-ID order for the service's operations.
+            // Each handler carries its operation schema, independently of service schema ordering.
             val handlers =
                 operations.map { operation ->
                     writable {
                         val field = builderFieldNames.getValue(operation)
                         val handler = "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))"
-                        rustTemplate(handler, *codegenScope)
+                        val operationName = operationStructNames.getValue(operation)
+                        rustTemplate("(<crate::operation_shape::$operationName as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
             // Service decorators supply static registry symbols. The routing service also
@@ -902,7 +906,7 @@ class ServerServiceGenerator(
                     #{Patterns}
                     let schema = <$serviceName as #{SmithyHttpServer}::service::SchemaServiceShape>::SCHEMA;
                     let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
-                        schema, #{Registries}, schema.operations().iter().copied().zip([#{Handlers}]), self.routing_options,
+                        schema, #{Registries}, [#{Handlers}], self.routing_options,
                     ).layer(self.layer).build().map_err(BuildError::Routing)?;
                     #{Ok}($serviceName { svc })
                 }
@@ -924,9 +928,9 @@ class ServerServiceGenerator(
                         require(!shapeId.hasMember()) { "Protocol settings must be keyed by a protocol shape ID: $protocolId" }
                         writable {
                             val id = protocolId.replace("#", "##").dq()
-                            val json = Node.printJson(section).replace("#", "##")
+                            val json = Node.printJson(section).dq().replace("#", "##")
                             rustTemplate(
-                                "(#{ShapeId}::from_parts($id, ${shapeId.namespace.dq()}, ${shapeId.name.dq()}), #{SmithyHttpServer}::schema::settings::parse_settings_json(br####\"$json\"####))",
+                                "(#{ShapeId}::from_parts($id, ${shapeId.namespace.dq()}, ${shapeId.name.dq()}), #{SmithyHttpServer}::schema::settings::parse_settings_json($json.as_bytes()))",
                                 "ShapeId" to RuntimeType.smithySchema(runtimeConfig).resolve("ShapeId"),
                                 *codegenScope,
                             )
@@ -976,7 +980,7 @@ class ServerServiceGenerator(
                                         .with_max_bytes(::std::num::NonZeroUsize::new(${codegenContext.settings.requestBodyMaxBytes()}usize)))))
                             .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
-                    ##[deprecated(note = "use builder with a service configuration")]
+                    ##[deprecated(since = "0.57.0", note = "use builder with a service configuration")]
                     pub fn builder_with_plugins<HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(
                         http_plugin: HttpPl, model_plugin: ModelPl,
                     ) -> $builderName<#{Tower}::layer::util::Identity, HttpPl, ModelPl> {
@@ -986,7 +990,7 @@ class ServerServiceGenerator(
                             routing_options: Self::routing_options(),
                         }
                     }
-                    ##[deprecated(note = "use builder with a service configuration")]
+                    ##[deprecated(since = "0.57.0", note = "use builder with a service configuration")]
                     pub fn builder_without_plugins() -> $builderName<#{Tower}::layer::util::Identity, #{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin> {
                         ##[allow(deprecated)]
                         Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin)
@@ -1008,6 +1012,7 @@ class ServerServiceGenerator(
                     /// On the schema path the routed handlers form a single service, so the layer
                     /// wraps it once and runs before protocol routing.
                     ##[deprecated(
+                        since = "0.57.0",
                         note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
                     )]
                     pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
@@ -1193,7 +1198,7 @@ class ServerServiceGenerator(
                         (shape, name) ->
                     writable {
                         if (schemaSerde) {
-                            val schemaConst = symbolProvider.toSymbol(shape).name.toSnakeCase().uppercase()
+                            val schemaConst = ServerOperationNames(symbolProvider.toSymbol(shape)).schemaConst
                             rustTemplate(
                                 "Operation::$name => crate::schema::operations::$schemaConst.shape_id().clone()",
                                 *codegenScope,
