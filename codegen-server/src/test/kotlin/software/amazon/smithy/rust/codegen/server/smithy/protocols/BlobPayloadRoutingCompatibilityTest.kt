@@ -26,6 +26,17 @@ import java.nio.file.Files
  * claims this payload through application/octet-stream, while arbitrary or absent content types
  * receive the shared routing fallback. Keep both behaviors explicit when enabling schema serde.
  *
+ * Every request below sends raw "abc" bytes to POST /upload, with no modeled @mediaType:
+ *
+ * | Request Content-Type | REST JSON alone (legacy or schema) | REST JSON + CBOR (schema) |
+ * | --- | --- | --- |
+ * | application/octet-stream | 200, upload handler runs | 200, REST JSON claims the request |
+ * | video/mp4 | 200, upload handler runs | 404, neither protocol claims the request |
+ * | absent | 200, upload handler runs | 404, neither protocol claims the request |
+ *
+ * Enabling CBOR therefore changes which raw REST uploads reach the handler. These requests
+ * exercise REST protocol identification; a CBOR-encoded upload uses its own operation URL and body.
+ *
  * "Legacy" in this test means this checkout's generated server with schemaSerde=false.
  */
 internal class BlobPayloadRoutingCompatibilityTest {
