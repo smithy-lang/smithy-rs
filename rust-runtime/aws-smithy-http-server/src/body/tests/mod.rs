@@ -5,7 +5,9 @@
 
 mod downcast_tests;
 mod partial_buffer_tests;
+mod released_body_limit_tests;
 
+use super::__private::CollectBodyError;
 use super::__private::*;
 use super::*;
 use std::num::NonZeroUsize;
@@ -607,13 +609,7 @@ async fn collection_preserves_trailers_with_and_without_a_limit() {
                 Ok(http_body::Frame::trailers(second_trailers.clone())),
             ]))
         };
-        let config = || {
-            Some(
-                CollectionConfig::builder()
-                    .set_limit(NonZeroUsize::new(limit))
-                    .build(),
-            )
-        };
+        let config = || Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build());
         let bytes = collect_body(body(), config()).await.unwrap();
         assert_eq!(bytes, "payload");
         let (bytes_with_trailers, actual_trailers) = collect_body_with_trailers(body(), config()).await.unwrap();
@@ -677,11 +673,7 @@ async fn collection_handles_huge_size_hints_without_huge_reservations() {
         assert!(matches!(
             collect_body(
                 body,
-                Some(
-                    CollectionConfig::builder()
-                        .set_limit(NonZeroUsize::new(limit))
-                        .build()
-                )
+                Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build())
             )
             .await,
             Err(CollectBodyError::Body(_))
@@ -710,11 +702,7 @@ async fn collection_grows_beyond_initial_reservation() {
         assert_eq!(
             collect_body(
                 body,
-                Some(
-                    CollectionConfig::builder()
-                        .set_limit(NonZeroUsize::new(limit))
-                        .build()
-                )
+                Some(CollectionConfig::builder().set_limit(NonZeroUsize::new(limit)).build())
             )
             .await
             .unwrap(),
