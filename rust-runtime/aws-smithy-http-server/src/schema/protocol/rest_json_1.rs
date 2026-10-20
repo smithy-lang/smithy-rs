@@ -96,7 +96,11 @@ impl MetadataRoutedProtocol for RestJson1 {
     }
 
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
-        Some(EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE).exception_http_bindings(true))
+        Some(
+            EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE)
+                .unset_initial_response_payload(b"{}")
+                .exception_http_bindings(true),
+        )
     }
 }
 
