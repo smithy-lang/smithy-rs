@@ -1,7 +1,7 @@
 $version: "2"
 
 // The server side: one service declaring every built-in protocol.
-namespace com.example.multiprotocol
+namespace smithy.rust.codegen.test.multiprotocol
 
 use aws.protocols#awsJson1_0
 use aws.protocols#awsJson1_1

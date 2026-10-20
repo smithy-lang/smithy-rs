@@ -8,33 +8,29 @@ Cross-protocol behavior tests over generated servers, in two styles:
   `upgrade_failures`, `logging`, `api_surface`).
 - Round trips: one server serving every built-in protocol (`src/multi.rs`),
   called over real sockets by a generated client per protocol (`clients`) and
-  by one schema client selecting protocols at runtime (`runtime_protocol_clients`),
-  and by raw protocol requests (`wire`).
+  by one schema client selecting protocols at runtime (`runtime_protocol_clients`).
+  Raw protocol requests exercise the same service (`wire`).
 
 The service shares one set of handlers across AWS JSON 1.0/1.1, REST JSON, REST XML and RPCv2 CBOR.
 
 `make test` generates the server, five protocol-specific clients, and the runtime-selecting schema client, then runs the client and wire suites. It also generates the service crates referenced by the other members of the integration-test workspace, which Cargo needs to load their manifests. The wire tests exercise the generated service directly without a listening socket and select REST XML explicitly by Content-Type.
 
-
-The runtime client suite moved from `examples/multi-protocol/tests/clients.rs`
-retains every assertion, including empty inputs and outputs, modeled errors,
-validation, and streams. It uses the same generated `multi-protocol-client` SDK
-for all five protocols, selecting the protocol through
-`Config::builder().protocol(...)` or `set_protocol(...)`. The
-`one_sdk_selects_all_protocols_against_one_server` test calls all five protocols
-against one listening server.
-
-`make test` includes this suite; `make test-runtime-client` generates its
-dependencies and runs only this suite. With dependencies already generated:
+The suites moved from `examples/multi-protocol` retain their assertions, including
+Unit versus explicit empty structures, modeled errors, validation, and streams.
+The runtime client suite also selects all five protocols against one listening server.
+It uses the same generated `multi-protocol-client` SDK for every protocol, selecting
+the protocol through `Config::builder().protocol(...)` or `set_protocol(...)`.
+`make test` includes this suite; `make test-runtime-client` generates its dependencies
+and runs only the runtime client suite.
+A fresh run before the move recorded 23 passing and 10 failing runtime client tests,
+plus seven passing wire tests. The existing client failures remain visible; they concern
+AWS JSON empty-input routing and RPC event-stream initial data. Run these targets alone with:
 
 ```sh
-cargo test --quiet -p protocol-compat --test runtime_protocol_clients
+cargo test --quiet -p protocol-compat --test runtime_protocol_clients --test wire --no-fail-fast
 ```
 
-Validation recorded 23 passing and 10 failing tests. The test selecting all five
-protocols against one server passes. Failures concern AWS JSON empty-input
-routing and AWS JSON/RPCv2 CBOR event-stream initial data; their assertions remain
-unchanged.
+The runnable client showcase remains in `examples/multi-protocol`.
 
 The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-core/common-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. The server integration Gradle task generates both server and client crates before running the workspace.
 
@@ -45,6 +41,26 @@ The `scenario` input selects populated, absent, empty, default, override or erro
 Native protocol tests assert the declared wire contract. A/B tests compare independently generated legacy and schema servers using the same model and inputs. The generic fuzz model has explicit reductions: see `tools/multi-protocol-ab-fuzz/README.md` and the generated model-projection manifests. A passing reduced-model comparison does not establish coverage for excluded operations or members.
 
 Earlier investigation records are in `validation/multi-protocol-enrichment/` and `validation/multi-protocol-example/report.md`. Those records predate the subsequent document-null and XML union-list fixes.
+
+## Reproducing the legacy baseline
+
+`make mainline-baseline` records the shared scenarios against freshly generated
+legacy servers with HTTP 1.x and `schemaSerde: false`. It exports the pinned
+merge-base commit `06c62da902fba6059ab34d0dc3d570907560cd3a` into a temporary
+directory and uses that source for both codegen and runtime. Models, handlers,
+and scenarios are copied from this suite; pending runtime or codegen changes
+cannot enter the oracle.
+
+The recorder updates `baselines/mainline.json` only after generation and all
+scenario replays succeed. It also writes `baselines/mainline.metadata.json`
+with the source commit, settings, and input hashes. Generated code and build
+logs remain in the printed temporary evidence directory. Python 3.12 or newer
+is required.
+
+To compare another local upstream commit, use
+`make mainline-baseline MAINLINE_REF=<commit>`. Review the resulting baseline
+diff before changing divergence pins; recording a baseline does not authorize
+changing compatibility expectations.
 
 ## Selected-protocol extractor rejection tests
 

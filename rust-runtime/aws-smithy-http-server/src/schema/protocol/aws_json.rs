@@ -133,6 +133,7 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
             .validate_skipped_string_encoding(true)
             .allow_integral_float_numbers(true)
             .strict_timestamp_formats(true)
+            .dispatch_null_members(true)
             .build(),
     )
 }

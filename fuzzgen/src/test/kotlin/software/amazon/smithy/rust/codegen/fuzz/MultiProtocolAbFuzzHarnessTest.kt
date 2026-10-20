@@ -25,6 +25,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TraitFactory
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -100,6 +101,10 @@ class MultiProtocolAbFuzzHarnessTest {
     private val models = File(System.getenv("MP_FUZZ_MODELS") ?: error("MP_FUZZ_MODELS is required"))
     private val multiProtocolModels =
         File(System.getenv("MP_FUZZ_MULTI_PROTOCOL_MODELS") ?: error("MP_FUZZ_MULTI_PROTOCOL_MODELS is required"))
+
+    /** Tower as the generated server depends on it: 0.5 with schema serde, 0.4 on the legacy path. */
+    private fun harnessTower(): CargoDependency =
+        CargoDependency("tower", CratesIo(if (sideSchemaSerde) "0.5" else "0.4"), features = setOf("util"))
 
     /** Resolves a fixture: multi-protocol models live with the server integration suite, the rest in [models]. */
     private fun modelFile(name: String): File =
@@ -349,7 +354,7 @@ class MultiProtocolAbFuzzHarnessTest {
     private fun serviceOf(suite: String) =
         when (suite) {
             "pokemon" -> "com.aws.example#PokemonService"
-            "multiprotocol" -> "com.example.multiprotocol#MultiProtocolService"
+            "multiprotocol" -> "smithy.rust.codegen.test.multiprotocol#MultiProtocolService"
             else -> error("unknown suite $suite")
         }
 
@@ -580,7 +585,7 @@ class MultiProtocolAbFuzzHarnessTest {
                 }
                 dest.resolve("generation-failure.txt").writeText(details + "\n")
                 Node.objectNodeBuilder().withMember("protocol", protocol.shapeId).withMember("schemaSerde", false)
-                    .withMember("operation", "com.example.multiprotocol#Publish")
+                    .withMember("operation", "smithy.rust.codegen.test.multiprotocol#Publish")
                     .withMember("topic_preserved", true).withMember("status", if (failure == null) "generation_supported_runtime_unverified" else "blocked_by_legacy_codegen")
                     .withMember("executed_handler_assertion_count", 0).withMember("failure", details).build()
             }
@@ -644,7 +649,9 @@ class MultiProtocolAbFuzzHarnessTest {
                                     "Http" to RuntimeType.http(context.runtimeConfig),
                                     "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
-                                    "Tower" to ServerCargoDependency.tower(context).toType(),
+                                    // Built here rather than via `ServerCargoDependency`, whose Tower API differs
+                                    // between checkouts: this test is also compiled into the baseline.
+                                    "Tower" to harnessTower().toType(),
                                 )
                             }
                         }

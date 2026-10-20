@@ -2,7 +2,7 @@ SRC_DIR := $(shell git rev-parse --show-toplevel)
 GRADLE := $(SRC_DIR)/gradlew
 MODULES := multi-protocol-server-sdk,multi-protocol-client
 
-all: test
+all: run
 
 # Generates one server and one client with runtime protocol selection. Regenerate the
 # manifests and imported models so previous module filters cannot leave stale settings.
@@ -13,7 +13,7 @@ codegen:
 		:codegen-client-test:smithyBuild --rerun :codegen-server-test:smithyBuild --rerun \
 		:codegen-client-test:assemble :codegen-server-test:assemble
 
-test: codegen
-	cargo test --quiet
+run: codegen
+	cargo run --quiet
 
-.PHONY: all codegen test
+.PHONY: all codegen run

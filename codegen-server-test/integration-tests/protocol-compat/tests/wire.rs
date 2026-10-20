@@ -202,12 +202,50 @@ async fn call(
     let request = builder
         .body(Body::new(http_body_util::Full::new(Bytes::from(body))))
         .unwrap();
-    let response = protocol_compat::multi::service().oneshot(request).await.unwrap();
+    let response = protocol_compat::multi::service()
+        .oneshot(request)
+        .await
+        .unwrap();
     let (parts, body) = response.into_parts();
     Snapshot {
         status: parts.status.as_u16(),
         headers: parts.headers,
         body: body.collect().await.unwrap().to_bytes(),
+    }
+}
+
+#[tokio::test]
+async fn cbor_distinguishes_unit_from_explicit_empty_structures() {
+    for operation in ["Ping", "NoInputOutput"] {
+        let unit = operation == "NoInputOutput";
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(format!(
+                "/service/MultiProtocolService/operation/{operation}"
+            ))
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .header("accept", "application/cbor");
+        if !unit {
+            request = request.header("content-type", "application/cbor");
+        }
+        let request = request
+            .body(Body::new(http_body_util::Full::new(Bytes::from_static(
+                if unit { b"" } else { b"\xa0" },
+            ))))
+            .unwrap();
+        let response = protocol_compat::multi::service()
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.headers()["smithy-protocol"], "rpc-v2-cbor");
+        assert_eq!(response.headers().contains_key("content-type"), !unit);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        if unit {
+            assert!(body.is_empty());
+        } else {
+            assert_eq!(decode_cbor(&mut minicbor::Decoder::new(&body)), json!({}));
+        }
     }
 }
 

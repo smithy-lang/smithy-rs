@@ -13,6 +13,19 @@ use http_body_util::BodyExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+#[tokio::test]
+async fn schema_missing_failure_without_context_returns_empty_internal_error() {
+    let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, crate::Error>>> {
+            panic!("missing-handler fallback must not poll the request body")
+        },
+    )));
+    let response = SchemaMissingFailure.call(http::Request::new(body)).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(response.headers().is_empty());
+    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+}
+
 /// A perfectly usable HTTP protocol that deliberately has no event-stream capability.
 #[derive(Debug, Default)]
 struct HttpOnly {

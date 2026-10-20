@@ -11,6 +11,27 @@ use serde_json::json;
 
 pub type Build = fn() -> Request<Body>;
 
+/// Recursively sorts object keys. Member order is not part of the contract, and whether
+/// `serde_json` keeps insertion order depends on features other crates in the build enable.
+pub fn canonical(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut entries: Vec<_> = map.into_iter().collect();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            serde_json::Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(k, v)| (k, canonical(v)))
+                    .collect(),
+            )
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(canonical).collect())
+        }
+        other => other,
+    }
+}
+
 pub fn snapshot(reply: &Reply) -> String {
     let mut headers: Vec<String> = reply
         .headers
@@ -27,11 +48,11 @@ pub fn snapshot(reply: &Reply) -> String {
         .header("content-type")
         .is_some_and(|c| c.contains("cbor"));
     let body = if is_cbor && !reply.body.is_empty() {
-        std::panic::catch_unwind(|| reply.cbor().to_string())
+        // The decoded value is canonical; `encoding=` below still pins the exact wire bytes.
+        std::panic::catch_unwind(|| canonical(reply.cbor()).to_string())
             .unwrap_or_else(|_| format!("{:?}", reply.body))
     } else if let Ok(parsed) = serde_json::from_slice::<serde_json::Value>(&reply.body) {
-        // Canonical form: map member order is not part of the contract.
-        parsed.to_string()
+        canonical(parsed).to_string()
     } else {
         reply.text()
     };

@@ -5,7 +5,7 @@ $version: "2"
 // `multi-protocol.smithy` binds these to a service declaring every built-in protocol, and
 // `multi-protocol-<protocol>.smithy` binds them to the same service ID declaring one protocol each,
 // so a client generated for each protocol can call the one server.
-namespace com.example.multiprotocol
+namespace smithy.rust.codegen.test.multiprotocol
 
 use smithy.framework#ValidationException
 
@@ -347,7 +347,7 @@ structure RichFailure {
 }
 
 // BEGIN MULTIPROTOCOL NATIVE RESPONSE FIXTURES
-apply com.example.multiprotocol#StructurePayload @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#StructurePayload @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonStructurePayloadPopulated",
@@ -669,7 +669,7 @@ apply com.example.multiprotocol#StructurePayload @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#UnionPayload @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#UnionPayload @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonUnionPayloadPopulated",
@@ -891,7 +891,7 @@ apply com.example.multiprotocol#UnionPayload @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#ResponseBindings @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#ResponseBindings @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonResponseBindingsAbsent",
@@ -1293,7 +1293,7 @@ apply com.example.multiprotocol#ResponseBindings @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#RichData @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#RichData @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonRichDataPopulated",
@@ -1629,7 +1629,7 @@ apply com.example.multiprotocol#RichData @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#ModeledDefaults @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#ModeledDefaults @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonModeledDefaultsDefault",
@@ -1821,7 +1821,7 @@ apply com.example.multiprotocol#ModeledDefaults @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#NullableValues @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#NullableValues @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonNullableValuesAbsent",
@@ -2073,7 +2073,7 @@ apply com.example.multiprotocol#NullableValues @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#DocumentValues @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#DocumentValues @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonDocumentValuesAbsent",
@@ -2300,7 +2300,7 @@ apply com.example.multiprotocol#DocumentValues @smithy.test#httpResponseTests(
 ]
 )
 
-apply com.example.multiprotocol#RichFailure @smithy.test#httpResponseTests(
+apply smithy.rust.codegen.test.multiprotocol#RichFailure @smithy.test#httpResponseTests(
 [
     {
         "id": "MultiRestjsonRichFailureError",
@@ -2389,7 +2389,7 @@ apply com.example.multiprotocol#RichFailure @smithy.test#httpResponseTests(
             "x-error-tag",
             "x-error-meta-reason"
         ],
-        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"com.example.multiprotocol#RichFailure\"}",
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"smithy.rust.codegen.test.multiprotocol#RichFailure\"}",
         "bodyMediaType": "application/json"
     },
     {
@@ -2452,7 +2452,7 @@ apply com.example.multiprotocol#RichFailure @smithy.test#httpResponseTests(
             "x-error-tag",
             "x-error-meta-reason"
         ],
-        "body": "pWdtZXNzYWdlaHJlamVjdGVkZ2RldGFpbHOjZG5hbWVqZGlhZ25vc3RpY2Vjb3VudAlmYWN0aXZl9GRldGFnaWVycm9yLXRhZ2htZXRhZGF0YaFmcmVhc29uZ2ZpeHR1cmVmX190eXBleCVjb20uZXhhbXBsZS5tdWx0aXByb3RvY29sI1JpY2hGYWlsdXJl",
+        "body": "pWdtZXNzYWdlaHJlamVjdGVkZ2RldGFpbHOjZG5hbWVqZGlhZ25vc3RpY2Vjb3VudAlmYWN0aXZl9GRldGFnaWVycm9yLXRhZ2htZXRhZGF0YaFmcmVhc29uZ2ZpeHR1cmVmX190eXBleDJzbWl0aHkucnVzdC5jb2RlZ2VuLnRlc3QubXVsdGlwcm90b2NvbCNSaWNoRmFpbHVyZQ==",
         "bodyMediaType": "application/cbor"
     }
 ]
@@ -2461,7 +2461,7 @@ apply com.example.multiprotocol#RichFailure @smithy.test#httpResponseTests(
 // END MULTIPROTOCOL NATIVE RESPONSE FIXTURES
 
 // BEGIN MULTIPROTOCOL SCENARIO REQUEST SEEDS
-apply com.example.multiprotocol#StructurePayload @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#StructurePayload @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonStructurePayloadPopulated",
@@ -2813,7 +2813,7 @@ apply com.example.multiprotocol#StructurePayload @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#UnionPayload @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#UnionPayload @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonUnionPayloadPopulated",
@@ -3065,7 +3065,7 @@ apply com.example.multiprotocol#UnionPayload @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#ResponseBindings @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#ResponseBindings @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonResponseBindingsAbsent",
@@ -3373,7 +3373,7 @@ apply com.example.multiprotocol#ResponseBindings @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#RichData @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#RichData @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonRichDataPopulated",
@@ -4070,7 +4070,7 @@ apply com.example.multiprotocol#RichData @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#ModeledDefaults @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#ModeledDefaults @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonModeledDefaultsDefault",
@@ -4378,7 +4378,7 @@ apply com.example.multiprotocol#ModeledDefaults @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#NullableValues @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#NullableValues @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonNullableValuesAbsent",
@@ -4670,7 +4670,7 @@ apply com.example.multiprotocol#NullableValues @smithy.test#httpRequestTests(
 ]
 )
 
-apply com.example.multiprotocol#DocumentValues @smithy.test#httpRequestTests(
+apply smithy.rust.codegen.test.multiprotocol#DocumentValues @smithy.test#httpRequestTests(
 [
     {
         "id": "MultiSeedRestjsonDocumentValuesAbsent",

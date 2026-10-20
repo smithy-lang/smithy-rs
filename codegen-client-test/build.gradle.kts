@@ -127,7 +127,7 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
     // One client selects all five protocols at runtime; REST JSON is its default.
     ClientTest(
-        "com.example.multiprotocol#MultiProtocolService",
+        "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
         "multi-protocol-client",
         dependsOn =
             listOf(
@@ -138,7 +138,7 @@ val allCodegenTests = listOf(
 ).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
     // Preserve the runtime-selecting client above and restore clients for the server integration suite.
     ClientTest(
-        "com.example.multiprotocol#MultiProtocolService",
+        "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
         "multi-protocol-client-$protocol",
         dependsOn =
             listOf(

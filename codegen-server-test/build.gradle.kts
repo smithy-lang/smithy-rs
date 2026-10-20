@@ -190,6 +190,12 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
+            "pokemon-service-legacy-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+            extraCodegenConfig = """"debugMode": true, "schemaSerde": false""",
+        ),
+        CodegenTest(
+            "com.aws.example#PokemonService",
             "pokemon-service-schema-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
             extraCodegenConfig = """"schemaSerde": true""",
@@ -214,7 +220,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             ),
             // One service serving every built-in protocol; integration-tests/protocol-compat drives a client per protocol.
             CodegenTest(
-                "com.example.multiprotocol#MultiProtocolService",
+                "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
                 "multi-protocol-server-sdk",
                 imports = listOf(
                     "../codegen-core/common-test-models/multi-protocol-compat/multi-protocol-common.smithy",
@@ -319,7 +325,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
-            // awsJson following the specification (`responseBindings: "protocol"`) instead of the historical default.
+            // awsJson following the specification (`responseBindings: "smithy-specs"`) instead of the historical default.
             CodegenTest(
                 "com.example.review#ReviewAwsJson",
                 "compat-awsjson-spec-server-sdk",
@@ -327,7 +333,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                     "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
                     "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
                 ),
-                extraConfig = """, "customizationConfig": {"protocols": {"awsJson1_0": {"responseBindings": "protocol"}}}""",
+                extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "smithy-specs"}}}""",
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
             CodegenTest(

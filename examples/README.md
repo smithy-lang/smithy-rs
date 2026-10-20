@@ -15,6 +15,9 @@ These servers, and their clients, are generated using smithy-rs. You're invited
 to benchmark the performance of these servers to see whether smithy-rs might be
 a suitable choice for implementing your web service.
 
+The [`multi-protocol`](multi-protocol/README.md) client showcase demonstrates
+selecting all five built-in protocols at runtime with one generated SDK.
+
 [middleware]: https://smithy-lang.github.io/smithy-rs/design/server/middleware.html
 [extractors]: https://smithy-lang.github.io/smithy-rs/design/server/from_parts.html
 

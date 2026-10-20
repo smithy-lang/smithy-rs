@@ -375,7 +375,7 @@ where
             let body = crate::body::__private::wrap_streaming_body(body);
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if directive == BodyDirective::Collect {
-            // TODO: Support incremental CBOR blob decoding once the handler contract for
+            // TODO(incremental CBOR blob decoding): Support streaming once the handler contract for
             // trailing fields and validation is settled. Collection preserves legacy timing.
             let config = config.ok_or_else(|| {
                 DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
@@ -616,6 +616,8 @@ where
 mod tests;
 
 /// Missing-handler fallback using the protocol selected by schema routing.
+///
+/// Returns an empty internal server error if middleware removed the selected protocol context.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SchemaMissingFailure;
 impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
@@ -627,10 +629,10 @@ impl Service<http::Request<crate::body::Body>> for SchemaMissingFailure {
     }
     fn call(&mut self, request: http::Request<crate::body::Body>) -> Self::Future {
         error!("the operation has not been set");
-        let selected = request
-            .extensions()
-            .get::<crate::schema::SelectedOperation>()
-            .expect("schema fallback requires selected protocol context");
+        let Some(selected) = request.extensions().get::<crate::schema::SelectedOperation>() else {
+            error!("request reached the missing-handler fallback without a selected protocol operation");
+            return std::future::ready(Ok(empty_internal_server_error()));
+        };
         let rejection = crate::schema::DeserializeError::InternalFailure(crate::Error::new(String::from(
             "the operation has not been set",
         )));

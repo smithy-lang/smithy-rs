@@ -1,7 +1,7 @@
 $version: "2"
 
 // A client of the multi-protocol service speaking restJson1 alone. REST protocols stream blobs, so this client calls `Upload` too.
-namespace com.example.multiprotocol
+namespace smithy.rust.codegen.test.multiprotocol
 
 use aws.protocols#restJson1
 

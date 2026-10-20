@@ -1,7 +1,7 @@
 $version: "2"
 
 // A client of the multi-protocol service speaking awsJson1_1 alone. RPC protocols do not stream blobs, so this client leaves `Upload` out.
-namespace com.example.multiprotocol
+namespace smithy.rust.codegen.test.multiprotocol
 
 use aws.protocols#awsJson1_1
 

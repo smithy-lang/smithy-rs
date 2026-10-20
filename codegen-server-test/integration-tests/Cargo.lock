@@ -168,6 +168,7 @@ dependencies = [
  "serde_urlencoded",
  "thiserror",
  "tokio",
+ "tower 0.4.13",
  "tower 0.5.3",
  "tower-http 0.6.8",
  "tracing",
