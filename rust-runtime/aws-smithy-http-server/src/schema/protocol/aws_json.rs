@@ -128,6 +128,7 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
             .enforce_strictness(true)
             .allow_leading_zeros(true)
             .allow_trailing_decimal_point(true)
+            .allow_empty_integer_part(true)
             .normalize_arbitrary_precision(true)
             .validate_skipped_values(validate_skipped_values)
             .validate_skipped_string_encoding(true)

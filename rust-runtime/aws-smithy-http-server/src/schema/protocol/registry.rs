@@ -42,6 +42,7 @@ use super::{BodyRoutedProtocol, MetadataRoutedProtocol, SharedServerProtocol};
 /// claim order. Constraints resolve transitively over every registered protocol, so a constraint
 /// against a protocol the service does not serve still orders the ones it does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ProtocolOrder {
     /// Ask this protocol before the named one.
     Before(&'static str),

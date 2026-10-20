@@ -28,6 +28,15 @@
 //! enabled, eligible requests without `Content-Type` offer deferred claims.
 //! If no protocol claims definitively, protocol priority selects restJson1.
 //!
+//! Enabling another protocol also changes identification of REST payload requests.
+//! A REST-only service accepts an untyped blob payload with an arbitrary or absent
+//! `Content-Type`. In a multi-protocol service, that payload claims REST through
+//! `application/octet-stream` (or its modeled `@mediaType`). A request such as
+//! `POST /upload` with `Content-Type: video/mp4`, or without a content type, can
+//! therefore receive the protocol-neutral `404` after another protocol is enabled.
+//! Payload requests do not offer the deferred claims used by eligible payload-less
+//! requests. Model the payload's media type or send its expected content type.
+//!
 //! Body routers first inspect the head with [`BodyProtocolRouter::claim`]. A
 //! [`BodyRouteClaim::ClaimedWithRoute`] dispatches without collecting the body.
 //! [`BodyRouteClaim::Claimed`] collects the body and calls [`BodyProtocolRouter::route_with_body`];
