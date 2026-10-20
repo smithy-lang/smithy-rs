@@ -44,7 +44,6 @@ fn parse_route_identity_regex(path: &str) -> Option<route_identity::RouteIdentit
     Some(route_identity::RouteIdentity {
         service: service.as_str(),
         operation: operation.as_str(),
-        route_key: &path[service.start()..],
     })
 }
 
@@ -86,7 +85,7 @@ fn scenarios() -> [(&'static str, Request<()>); 4] {
 }
 
 fn rpc_v2_cbor_router(c: &mut Criterion) {
-    let router: RpcV2CborRouter<()> = [("Service/operation/Operation", ())].into_iter().collect();
+    let router: RpcV2CborRouter<()> = [("Service.Operation", ())].into_iter().collect();
     let scenarios = scenarios();
 
     let mut group = c.benchmark_group("rpc_v2_cbor_router/handwritten");
@@ -156,7 +155,7 @@ fn route_identity_parser(c: &mut Criterion) {
 
 fn rpc_v2_cbor_routing_service(c: &mut Criterion) {
     let operation = service_fn(|_request: Request<()>| async { Ok::<_, Infallible>(Response::new(empty())) });
-    let router: RpcV2CborRouter<_> = [("Service/operation/Operation", operation)].into_iter().collect();
+    let router: RpcV2CborRouter<_> = [("Service.Operation", operation)].into_iter().collect();
     let service = RoutingService::<_, RpcV2Cbor>::new(router);
     let runtime = Runtime::new().expect("Tokio runtime");
 

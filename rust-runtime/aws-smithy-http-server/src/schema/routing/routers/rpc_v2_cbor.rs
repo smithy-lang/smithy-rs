@@ -106,12 +106,9 @@ pub(crate) fn rpc_v2_cbor_router(
                 }
             }
         }
-        names.into_iter().map(move |name| {
-            (
-                format!("{}/operation/{}", ctx.service.shape_id().shape_name(), name),
-                *target,
-            )
-        })
+        names
+            .into_iter()
+            .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
     });
     Ok(RpcV2CborProtocolRouter {
         service_schema: ctx.service,
