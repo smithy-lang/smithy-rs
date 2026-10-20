@@ -467,52 +467,6 @@ internal class ServerSchemaStreamingTest {
         """
     }
 
-    private val swapProtocolTest =
-        """
-        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(
-            #{SmithyHttpServer}::schema::protocol::AwsJson1_1::default());
-        let selected = protocol.clone();
-        let layer = #{Tower}::util::MapRequestLayer::new(move |mut request: #{Http}::Request<#{SmithyHttpServer}::body::Body>| {
-            let swapped = request.extensions().get::<#{SmithyHttpServer}::schema::SelectedOperation>().unwrap().with_protocol(selected.clone());
-            request.extensions_mut().insert(swapped);
-            request
-        });
-        ${echoService.replace("ChatServiceConfig::builder().build()", "ChatServiceConfig::builder().http_plugin(#{SmithyHttpServer}::plugin::LayerPlugin(layer)).build()")}
-        $requestFrames
-        let initial = #{SmithyTypes}::event_stream::Message::new_from_parts(vec![
-            #{SmithyTypes}::event_stream::Header::new(":message-type", #{SmithyTypes}::event_stream::HeaderValue::String("event".into())),
-            #{SmithyTypes}::event_stream::Header::new(":event-type", #{SmithyTypes}::event_stream::HeaderValue::String("initial-request".into())),
-            #{SmithyTypes}::event_stream::Header::new(":content-type", #{SmithyTypes}::event_stream::HeaderValue::String("application/json".into())),
-        ], #{Bytes}::from_static(br##"{"room":"lobby","nick":"ann"}"##));
-        let mut bytes = #{Vec}::new();
-        #{SmithyEventStream}::frame::write_message_to(&initial, &mut bytes).unwrap();
-        bytes.extend_from_slice(&body);
-        let request = #{Http}::Request::builder().method("POST").uri("/service/ChatService/operation/Chat")
-            .header("smithy-protocol", "rpc-v2-cbor")
-            .header("content-type", "application/x-amz-json-1.1")
-            .header("accept", "application/x-amz-json-1.1")
-            .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(bytes)))).unwrap();
-        let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
-        assert_eq!(response.status(), #{Http}::StatusCode::OK);
-        assert_eq!(response.headers()["content-type"], "application/x-amz-json-1.1");
-        use #{HttpBodyUtil}::BodyExt;
-        let mut bytes = response.into_body().collect().await.unwrap().to_bytes();
-        let frame = #{SmithyEventStream}::frame::read_message_from(&mut bytes).unwrap();
-        assert_eq!(frame.headers().iter().find(|h| h.name().as_str() == ":content-type").unwrap()
-            .value().as_string().unwrap().as_str(), "application/json");
-        assert_eq!(frame.payload(), br##"{"topic":"lobby/ann"}"##.as_slice());
-        for text in ["hi", "there"] {
-            let frame = #{SmithyEventStream}::frame::read_message_from(&mut bytes).unwrap();
-            assert_eq!(frame.headers().iter().find(|h| h.name().as_str() == ":content-type").unwrap()
-                .value().as_string().unwrap().as_str(), "application/json");
-            assert_eq!(std::str::from_utf8(frame.payload()).unwrap(), format!("{{\"text\":\"{text}\"}}"));
-        }
-        let bye = #{SmithyEventStream}::frame::read_message_from(&mut bytes).unwrap();
-        assert_eq!(bye.headers().iter().find(|h| h.name().as_str() == ":event-type").unwrap()
-            .value().as_string().unwrap().as_str(), "bye");
-        assert!(bytes.is_empty());
-        """
-
     private val initialRequestTests =
         """
         use #{SmithyHttpServer}::operation::StreamingOperationShape;
@@ -747,11 +701,6 @@ internal class ServerSchemaStreamingTest {
                     }
                     tokioTest("input_and_output_only") {
                         rustTemplate(directionTests(true), *scope(codegenContext))
-                    }
-                    if (sendInitial) {
-                        tokioTest("selected_alternative_protocol_controls_all_frames") {
-                            rustTemplate(swapProtocolTest, *scope(codegenContext))
-                        }
                     }
                     tokioTest("chat_over_rpcv2_cbor") {
                         rustTemplate(

@@ -116,7 +116,7 @@ class SchemaRoutingGeneratorTest {
                             use #{Tower}::ServiceExt;
                             for remove_context in [false, true] {
                                 let layer = #{Tower}::ServiceBuilder::new().map_request(move |request: #{Http}::Request<#{Server}::body::Body>| {
-                                    assert!(request.extensions().get::<#{Server}::schema::SelectedOperation>().is_some());
+                                    assert!(#{Server}::schema::SelectedOperation::get_from_request(&request).is_some());
                                     if remove_context {
                                         let (mut parts, body) = request.into_parts();
                                         parts.extensions = #{Default}::default();
@@ -351,7 +351,7 @@ class SchemaRoutingGeneratorTest {
                             }
                         }
                         let custom = #{Tower}::service_fn(|request: #{Http}::Request<#{Server}::body::Body>| async move {
-                            assert!(request.extensions().get::<#{Server}::schema::SelectedOperation>().is_some());
+                            assert!(#{Server}::schema::SelectedOperation::get_from_request(&request).is_some());
                             #{Ok}::<_, ::std::convert::Infallible>(#{Http}::Response::builder().status(202).body(#{Server}::body::empty()).unwrap())
                         });
                         let service = crate::Example::builder(crate::ExampleConfig::builder().build()).ping_custom(custom).build_unchecked();
@@ -367,7 +367,7 @@ class SchemaRoutingGeneratorTest {
                         use #{Tower}::ServiceExt;
                         let layer = #{Tower}::layer::layer_fn(|inner| {
                             #{Tower}::ServiceBuilder::new().map_request(|mut request: #{Http}::Request<#{Server}::body::Body>| {
-                                assert!(request.extensions().get::<#{Server}::schema::SelectedOperation>().is_some());
+                                assert!(#{Server}::schema::SelectedOperation::get_from_request(&request).is_some());
                                 *request.body_mut() = #{Server}::body::Body::from_bytes(r##"{"message":"replacement"}"##.into());
                                 request
                             }).service(inner)
@@ -384,18 +384,15 @@ class SchemaRoutingGeneratorTest {
                         *scope,
                     )
                 }
-                tokioTest("http_plugin_that_replaces_the_selection_cannot_lift_the_body_limit") {
+                tokioTest("http_plugin_body_replacement_preserves_the_routed_body_limit") {
                     rustTemplate(
                         """
                         use #{Tower}::ServiceExt;
-                        // Middleware can only re-insert the routed selection through `with_protocol`, which
-                        // keeps the operation's body limit; `SelectedOperation::new` is crate-private.
                         let layer = #{Tower}::layer::layer_fn(|inner| {
                             #{Tower}::ServiceBuilder::new().map_request(|mut request: #{Http}::Request<#{Server}::body::Body>| {
-                                let selected = request.extensions().get::<#{Server}::schema::SelectedOperation>().unwrap();
+                                let selected = #{Server}::schema::SelectedOperation::get_from_request(&request).unwrap();
                                 assert_eq!(selected.request_body_config().max_bytes, ::std::num::NonZeroUsize::new(1));
-                                let replaced = selected.with_protocol(selected.protocol().clone());
-                                request.extensions_mut().insert(replaced);
+                                *request.body_mut() = #{Server}::body::Body::from_bytes(r##"{"message":"replacement"}"##.into());
                                 request
                             }).service(inner)
                         });
@@ -409,7 +406,7 @@ class SchemaRoutingGeneratorTest {
                             .request_body_config(limit)
                             .build_unchecked();
                         let request = #{Http}::Request::builder().method("POST").uri("/ping").header("content-type", "application/json")
-                            .body(#{Server}::body::Body::from_bytes(r##"{"message":"hello"}"##.into())).unwrap();
+                            .body(#{Server}::body::Body::empty()).unwrap();
                         assert_eq!(service.oneshot(request).await.unwrap().status(), 400);
                         """,
                         *scope,
@@ -427,7 +424,7 @@ class SchemaRoutingGeneratorTest {
                             let layer = #{Tower}::layer::layer_fn(move |inner: #{Server}::routing::SyncRoute<#{Server}::body::Body>| {
                                 let calls = calls.clone();
                                 #{Tower}::service_fn(move |request: #{Http}::Request<#{Server}::body::Body>| {
-                                    assert!(request.extensions().get::<#{Server}::schema::SelectedOperation>().is_some());
+                                    assert!(#{Server}::schema::SelectedOperation::get_from_request(&request).is_some());
                                     calls.fetch_add(1, ::std::sync::atomic::Ordering::SeqCst);
                                     inner.clone().oneshot(request)
                                 })

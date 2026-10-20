@@ -128,11 +128,12 @@ impl MultiProtocolRoutingService {
             std::ptr::eq(binding.operation, selected.operation()),
             "router index belongs to a different operation"
         );
-        request.extensions_mut().insert(SelectedOperation::new(
+        SelectedOperation::new(
             self.state.protocols[protocol].protocol.clone(),
             binding.operation,
             binding.collection_config,
-        ));
+        )
+        .insert_into(request.extensions_mut());
         binding.handler_route.clone().call_owned(request)
     }
 
@@ -475,7 +476,7 @@ mod tests {
 
         fn route() -> SyncRoute<RequestBody> {
             SyncRoute::new(tower::service_fn(|request: Request<RequestBody>| async {
-                assert!(request.extensions().get::<SelectedOperation>().is_some());
+                assert!(SelectedOperation::get_from_request(&request).is_some());
                 let bytes = request.into_body().collect().await.unwrap().to_bytes();
                 Ok::<_, Infallible>(Response::new(crate::body::to_boxed(bytes)))
             }))
@@ -528,7 +529,7 @@ mod tests {
             counter.fetch_add(1, Ordering::Release);
 
             tower::service_fn(move |mut request: Request<Body>| {
-                assert!(request.extensions().get::<SelectedOperation>().is_some());
+                assert!(SelectedOperation::get_from_request(&request).is_some());
                 assert_eq!(request.headers()["x-layer-order"], "outer");
                 request
                     .headers_mut()

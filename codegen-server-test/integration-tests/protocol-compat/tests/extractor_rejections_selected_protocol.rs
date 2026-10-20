@@ -46,6 +46,8 @@ struct Caller;
 impl<P> FromParts<P> for Caller {
     type Rejection = RuntimeError;
     fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        aws_smithy_http_server::schema::SelectedOperation::get_from_extensions(&parts.extensions)
+            .expect("schema routing supplies selection to FromParts extractors");
         let kind = parts.headers.get("x-rejection").unwrap().to_str().unwrap();
         if kind == "success" {
             Ok(Self)
@@ -532,46 +534,6 @@ impl ServerProtocol for ExternalProtocol {
 }
 
 #[tokio::test]
-async fn upgrade_calls_the_selected_external_protocol_serializer() {
-    use aws_smithy_http_server::schema::{SelectedOperation, SharedServerProtocol};
-    use compat_rest_server_sdk::{
-        error::GetWidgetError, input::GetWidgetInput, output::GetWidgetOutput, ReviewRest,
-        ReviewRestConfig,
-    };
-    let calls = Arc::new(AtomicUsize::new(0));
-    let protocol = SharedServerProtocol::serde_only(ExternalProtocol {
-        inner: RestJson1::default(),
-        calls: calls.clone(),
-    });
-    // A middleware can replace the serde handle after routing while retaining the operation
-    // identity and its body limits. This exercises the public external-protocol seam.
-    let layer = tower::util::MapRequestLayer::new(move |mut request: Request<Body>| {
-        let selected = request
-            .extensions()
-            .get::<SelectedOperation>()
-            .unwrap()
-            .with_protocol(protocol.clone());
-        request.extensions_mut().insert(selected);
-        request
-    });
-    async fn must_not_run(_: GetWidgetInput, _: Caller) -> Result<GetWidgetOutput, GetWidgetError> {
-        panic!("external protocol rejection reached handler")
-    }
-    let service = ReviewRest::builder(ReviewRestConfig::builder().layer(layer).build())
-        .get_widget(must_not_run)
-        .build_unchecked();
-    let reply = send(service, request(Wire::Rest, "ReviewRest", "validation")).await;
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
-    assert_eq!(reply.status, 422);
-    assert_eq!(
-        reply.headers.get("x-external-protocol").unwrap(),
-        "selected"
-    );
-    assert_eq!(reply.body, "external runtime error");
-    assert!(!reply.headers.contains_key("x-amzn-errortype"));
-}
-
-#[tokio::test]
 async fn selected_framing_does_not_depend_on_protocol_tuple_order() {
     type Reversed = (RpcV2Cbor, RestJson1);
     for protocol in [
@@ -743,4 +705,5 @@ async fn registered_external_protocol_routes_to_the_generated_operation_upgrade(
         "selected"
     );
     assert_eq!(reply.body, "external runtime error");
+    assert!(!reply.headers.contains_key("x-amzn-errortype"));
 }

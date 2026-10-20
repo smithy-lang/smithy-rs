@@ -191,17 +191,61 @@ to the shared error's `into_response_with_protocol` override and does not requir
 Keep authentication errors modeled; converting them to runtime validation errors changes their
 status, bindings, and response body.
 
-Schema routing inserts `SelectedOperation` before invoking the selected operation's route,
-including its HTTP plugins. Reading this extension from per-operation middleware is the
-documented way to obtain the selected protocol; `SharedServerProtocol::get_from_request` is
-the convenience accessor. Middleware wrapping the whole router runs before selection, and
-routing rejections do not reach per-operation plugins. Middleware that forwards requests must
-preserve their extensions. Missing selection in a schema per-operation plugin indicates a
-wiring failure: handle it explicitly rather than guessing a protocol from the tuple.
+Schema routing stores the selection in a private request-extension carrier before invoking the
+selected operation's route, including its HTTP plugins. `SelectedOperation` is the public
+read-only view. Per-operation middleware reads it with:
+
+```rust
+use sdk::server::schema::SelectedOperation;
+
+let selected = SelectedOperation::get_from_request(&request).unwrap();
+let operation = selected.operation();
+let protocol = selected.protocol();
+```
+
+`FromParts` extractors read the same selection from their request parts:
+
+```rust
+let selected = SelectedOperation::get_from_extensions(&parts.extensions).unwrap();
+```
+
+`SharedServerProtocol::get_from_request` remains the convenience accessor when only the
+protocol is needed. Direct `extensions.get::<SelectedOperation>()` calls do not read the
+private carrier. Inserting or removing a public `SelectedOperation` value does not alter the
+authoritative selection. Middleware cannot replace the selected operation, protocol, or
+body limits; protocol replacement through `with_protocol` is no longer supported.
+
+Middleware wrapping the whole router runs before selection, so the accessors return `None`
+there. Routing rejections do not reach per-operation plugins. Middleware that forwards
+requests must preserve their extensions, including when reconstructing a request.
+Clearing or replacing all extensions discards the private carrier. The schema upgrade and
+missing-handler fallback then return an empty `500` with no headers, without polling the
+request body or invoking the handler. A body-routed protocol may already have collected
+the input before middleware runs. This fallback intentionally differs from legacy services,
+which do not depend on request selection metadata: registered handlers still process requests,
+and missing handlers return their protocol's internal-failure response. Missing selection in
+a schema per-operation plugin indicates a wiring failure; handle it explicitly rather than
+guessing a protocol from the tuple.
 
 The shared runtime error's context-free fallback returns an empty body, its semantic status,
 and a `RuntimeErrorExtension`, without protocol headers. It can provide a defensive response
 when selection is missing, but it cannot preserve a modeled authentication error's framing.
+
+### Future work: routing context held by upgrade services
+
+To support middleware that discards extensions, a future design could build an upgrade stack
+for each supported protocol-and-operation pair. Each upgrade would hold its immutable protocol,
+operation, and body-limit context in service state. The router would select that stack, while
+request extensions would provide the selection for middleware visibility. Tower services could
+continue accepting `Request<B>`; the context would not need to become part of the request type.
+
+The current router shares one operation route across protocols, and generated code constructs
+the upgrade and applies HTTP plugins when a handler is registered. Binding context to upgrade
+services would require deferring that construction until the selected protocol's context is
+available. Before adopting this design, evaluate middleware state sharing, stack construction
+and allocation costs, and parity for success, error, streaming, and missing-handler responses
+when extensions are discarded. This is follow-up work; the current middleware contract requires
+preserving extensions.
 
 ### Runtime support for one middleware API
 

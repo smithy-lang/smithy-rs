@@ -94,8 +94,11 @@ impl<L> MultiProtocolRoutingServiceBuilder<L> {
 
     /// Sets the handler layer, replacing any previously configured layer.
     ///
-    /// The layer is applied during construction. It runs after routing, with the selected
-    /// operation in request extensions. Compose multiple layers with a Tower layer stack.
+    /// The layer is applied during construction. It runs after routing; inspect the selection
+    /// through [`crate::schema::SelectedOperation::get_from_request`]. Forwarded requests must
+    /// preserve their extensions. Discarding them causes the upgrade or missing-handler fallback
+    /// to return an empty `500` without reading input or invoking the handler. Routing may already
+    /// have collected the input before the layer runs. Compose multiple layers with a Tower layer stack.
     pub fn layer<N>(self, layer: N) -> MultiProtocolRoutingServiceBuilder<N> {
         MultiProtocolRoutingServiceBuilder {
             service: self.service,
@@ -660,7 +663,7 @@ mod tests {
                     *operation,
                     SyncRoute::new(tower::service_fn(
                         |request: Request<crate::body::RequestBody>| async move {
-                            assert!(request.extensions().get::<SelectedOperation>().is_some());
+                            assert!(SelectedOperation::get_from_request(&request).is_some());
                             Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
                         },
                     )),

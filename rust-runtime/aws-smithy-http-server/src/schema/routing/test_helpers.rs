@@ -308,10 +308,7 @@ pub(super) fn binding(
     (
         operation,
         SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-            let selected = request
-                .extensions()
-                .get::<SelectedOperation>()
-                .expect("selection before handler");
+            let selected = SelectedOperation::get_from_request(&request).expect("selection before handler");
             assert!(std::ptr::eq(selected.operation(), operation));
             // Echo the frames, which also checks that trailers survive the routing helper.
             Ok::<_, Infallible>(Response::new(crate::body::boxed(request.into_body())))
@@ -385,9 +382,7 @@ pub(super) fn echo(
     (
         operation,
         SyncRoute::new(tower::service_fn(move |request: Request<Body>| async move {
-            let selected = request
-                .extensions()
-                .get::<SelectedOperation>()
+            let selected = SelectedOperation::get_from_request(&request)
                 .expect("selection before handler")
                 .clone();
             assert!(std::ptr::eq(selected.operation(), operation));

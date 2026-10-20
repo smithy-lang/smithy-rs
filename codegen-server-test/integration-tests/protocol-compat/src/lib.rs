@@ -77,20 +77,15 @@ pub mod legacy_document {
     }
 }
 
-/// A `ReviewRest` whose operation services sit behind a layer that tampers with the routed
-/// request's `SelectedOperation` extension, to exercise the upgrade layer's defensive paths.
+/// A `ReviewRest` whose operation services sit behind a layer that discards request
+/// extensions, to exercise the upgrade layer's context-loss response.
 pub mod tampered {
-    use std::sync::Mutex;
-
-    use aws_smithy_http_server::schema::SelectedOperation;
     use compat_rest_server_sdk::input::{GetWidgetInput, PingInput};
     use compat_rest_server_sdk::output::{GetWidgetOutput, PingOutput};
     use compat_rest_server_sdk::error::GetWidgetError;
     use compat_rest_server_sdk::{ReviewRest, ReviewRestConfig};
 
     use super::kit::Body;
-
-    static CAPTURED: Mutex<Option<SelectedOperation>> = Mutex::new(None);
 
     async fn get_widget(input: GetWidgetInput) -> Result<GetWidgetOutput, GetWidgetError> {
         Ok(GetWidgetOutput { id: Some(input.id) })
@@ -102,22 +97,9 @@ pub mod tampered {
         }
     }
 
-    /// `GET /widgets/..` requests record their selection. `POST /ping` requests then either carry
-    /// that (wrong) selection (`x-tamper: swap`) or none at all (`x-tamper: drop`).
     fn tamper(mut request: http::Request<Body>) -> http::Request<Body> {
-        if request.uri().path().starts_with("/widgets") {
-            *CAPTURED.lock().unwrap() = SelectedOperation::get_from_request(&request).cloned();
-        } else {
-            match request.headers().get("x-tamper").and_then(|v| v.to_str().ok()) {
-                Some("swap") => {
-                    let wrong = CAPTURED.lock().unwrap().clone().expect("send a GET /widgets request first");
-                    request.extensions_mut().insert(wrong);
-                }
-                Some("drop") => {
-                    request.extensions_mut().remove::<SelectedOperation>();
-                }
-                _ => {}
-            }
+        if request.headers().get("x-tamper").and_then(|v| v.to_str().ok()) == Some("drop") {
+            request.extensions_mut().clear();
         }
         request
     }

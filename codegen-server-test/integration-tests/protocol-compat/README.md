@@ -85,10 +85,9 @@ runtime implementation.
 The new target compares shared errors against generated legacy services, alternates protocols on
 one service, tests every rejection-wrapper arity from two through eight and every failure position,
 checks a service-owned context-aware override, and exercises both shared and custom streaming
-rejections without polling their request bodies. It also checks the selected external protocol
-serializer through the public middleware protocol-replacement seam, tuple-order independence,
+rejections without polling their request bodies. It also checks tuple-order independence,
 all five built-in protocol-local conversions, and the shared error's context-free fallback.
-A separate case registers an external protocol, routes a request with its router into a generated
+An external-protocol case registers the protocol, routes a request with its router into a generated
 operation's upgrade, and checks that its runtime-error serializer handles the rejection. Another
 case sends each wire protocol to one service serving all five protocols.
 
