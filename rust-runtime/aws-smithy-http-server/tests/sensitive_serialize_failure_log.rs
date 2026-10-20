@@ -40,10 +40,8 @@ impl SerializableStruct for Secret {
     fn schema(&self) -> &Schema<'_> {
         &SECRET
     }
-    fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-        // Accepted by `BigDecimal::from_str` (leading `+`, leading zeros) but not a JSON number.
-        let value: aws_smithy_types::BigDecimal = "+000987654321".parse().unwrap();
-        s.write_big_decimal(&SECRET_DEC, &value)
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        Err(SerdeError::custom("serialization failed for secret +000987654321"))
     }
 }
 
@@ -60,6 +58,12 @@ fn sensitive_body_values_are_not_logged_on_serialization_failure() {
             .finish();
         let response = tracing::subscriber::with_default(subscriber, || protocol.serialize_response(&SECRET, &Secret));
         let log = String::from_utf8(writer.0.lock().unwrap().clone()).unwrap();
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+        let event = log
+            .lines()
+            .find(|line| line.contains("failed to serialize response"))
+            .expect("serialization failure must produce a log event");
+        assert!(event.contains("error={redacted}"));
         assert!(
             !log.contains("987654321"),
             "{}: status {} leaked sensitive value into log: {log}",
