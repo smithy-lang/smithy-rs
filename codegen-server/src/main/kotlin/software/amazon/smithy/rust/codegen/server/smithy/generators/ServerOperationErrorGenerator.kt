@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -38,8 +39,14 @@ open class ServerOperationErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val operationOrEventStream: Shape,
     private val schemaSerde: Boolean = false,
-    private val runtimeConfig: RuntimeConfig = RuntimeConfig(),
+    runtimeConfig: RuntimeConfig? = null,
 ) {
+    private val runtimeConfig =
+        runtimeConfig ?: if (schemaSerde) {
+            throw CodegenException("Schema operation errors require the codegen context's runtime configuration")
+        } else {
+            RuntimeConfig()
+        }
     private val symbol = symbolProvider.toSymbol(operationOrEventStream)
 
     private fun operationErrors(): List<StructureShape> =
@@ -111,6 +118,7 @@ open class ServerOperationErrorGenerator(
         }
 
         if (schemaSerde && operationOrEventStream is OperationShape) {
+            val operationNames = ServerOperationNames(symbol)
             val schema = RuntimeType.smithySchema(runtimeConfig)
             val serializable = schema.resolve("serde::SerializableStruct")
             val server = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -131,7 +139,7 @@ open class ServerOperationErrorGenerator(
                 rustTemplate(
                     """
                     fn operation_schema(&self) -> #{Option}<&#{Server}::schema::OperationSchema<'_>> {
-                        #{Some}(<crate::operation_shape::${symbol.name} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
+                        #{Some}(<crate::operation_shape::${operationNames.markerType} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
                     }
                     """,
                     *RuntimeType.preludeScope,

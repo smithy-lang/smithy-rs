@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationNames
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
 
@@ -259,7 +260,7 @@ class ServerServiceSchemaGenerator(
         )
 
     private fun operationConstName(operation: OperationShape): String =
-        symbolProvider.toSymbol(operation).name.toSnakeCase().uppercase()
+        ServerOperationNames(symbolProvider.toSymbol(operation)).schemaConst
 
     private fun schemaRef(shape: Shape): String = "${symbolProvider.toSymbol(shape).fullName}::SCHEMA"
 

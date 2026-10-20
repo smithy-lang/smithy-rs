@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
@@ -24,15 +25,29 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 interface ValidationExceptionConversionGenerator {
     val shapeId: ShapeId
 
-    /** The symbol of the validation exception structure that constraint violations are converted into. */
-    fun validationExceptionSymbol(): Symbol
+    /**
+     * The symbol of the validation exception structure that constraint violations are converted into.
+     * Generators supporting schema HTTP serde must override this method.
+     * The default preserves source compatibility for generators supporting only legacy HTTP serde.
+     */
+    fun validationExceptionSymbol(): Symbol =
+        throw CodegenException(
+            "Validation-exception generator ${javaClass.name} for $shapeId does not support schema HTTP serde. " +
+                "Implement validationExceptionSymbol() or set codegen.schemaSerde to false.",
+        )
 
     /**
      * Convert from a top-level operation input's constraint violation into the validation exception structure
      * (`impl From<ConstraintViolation> for <ValidationException>`) for schema-driven HTTP serde.
      * Legacy HTTP serde constructs the exception inside the request rejection conversion instead.
+     * Generators supporting schema HTTP serde must override this method.
+     * The default preserves source compatibility for generators supporting only legacy HTTP serde.
      */
-    fun renderImplFromConstraintViolationForValidationException(): Writable
+    fun renderImplFromConstraintViolationForValidationException(): Writable =
+        throw CodegenException(
+            "Validation-exception generator ${javaClass.name} for $shapeId does not support schema HTTP serde. " +
+                "Implement renderImplFromConstraintViolationForValidationException() or set codegen.schemaSerde to false.",
+        )
 
     /**
      * Convert from a top-level operation input's constraint violation into

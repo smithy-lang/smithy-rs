@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -53,8 +55,8 @@ data class ServerCodegenContext(
     /**
      * The protocols the generated service serves.
      *
-     * The schema path serves every protocol the service declares, asking them in priority order at
-     * runtime to claim each request; the legacy path serves [protocol] alone.
+     * The schema path lists declared protocols in shape-ID order. Runtime routing options determine
+     * their claiming priority; the legacy path serves [protocol] alone.
      */
     val servedProtocols: List<ShapeId>
         get() =
@@ -63,6 +65,24 @@ data class ServerCodegenContext(
             } else {
                 listOf(protocol)
             }
+
+    internal val schemaInputOperations: Map<ShapeId, OperationShape> by lazy {
+        val index = OperationIndex.of(model)
+        buildMap {
+            model.operationShapes.forEach { operation ->
+                index.getInputShape(operation).orElse(null)?.let { putIfAbsent(it.id, operation) }
+            }
+        }
+    }
+
+    internal val schemaOutputOperations: Map<ShapeId, OperationShape> by lazy {
+        val index = OperationIndex.of(model)
+        buildMap {
+            model.operationShapes.forEach { operation ->
+                index.getOutputShape(operation).orElse(null)?.let { putIfAbsent(it.id, operation) }
+            }
+        }
+    }
 
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))

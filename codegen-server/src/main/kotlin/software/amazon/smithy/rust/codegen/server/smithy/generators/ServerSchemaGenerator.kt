@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
@@ -69,7 +70,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  * trimmed to the SERIALIZE-ONLY surface the schema-decoupled error path needs
  * (`renderSerializeOnly`), with the server-specific behaviors applied:
  *
- * - **Canonical model member order** in `serialize_members` (plan 2e): no
+ * - **Canonical model member order** in `serialize_members`: no
  *   protocol-specific ordering exists in generated code. RPC protocols match
  *   legacy byte-for-byte; restJson1 error bodies are gated parse-equal.
  * - **Constrained-string newtypes** (`publicConstrainedTypes=true`): members
@@ -100,7 +101,7 @@ class ServerSchemaGenerator(
                 ),
         ),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
-    /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
+    /** Override the prefix used for generated static names. Defaults to an encoding of the full shape ID. */
     val schemaPrefix: String? = null,
     private val additionalTraitInsertions: List<Writable> = emptyList(),
 ) {
@@ -108,6 +109,28 @@ class ServerSchemaGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
+    private val schemaContext = codegenContext as? ServerCodegenContext
+    private val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+
+    private fun inputOperation(shape: Shape) =
+        schemaContext?.schemaInputOperations?.get(shape.id)
+            ?: if (schemaContext == null) {
+                model.operationShapes.firstOrNull {
+                    operationIndex.getInputShape(it).orElse(null)?.id == shape.id
+                }
+            } else {
+                null
+            }
+
+    private fun outputOperation(shape: Shape) =
+        schemaContext?.schemaOutputOperations?.get(shape.id)
+            ?: if (schemaContext == null) {
+                model.operationShapes.firstOrNull {
+                    operationIndex.getOutputShape(it).orElse(null)?.id == shape.id
+                }
+            } else {
+                null
+            }
 
     // Used to decide whether a nested aggregate target reaches back to its
     // containing aggregate (a true recursive cycle in the schema graph).
@@ -116,9 +139,6 @@ class ServerSchemaGenerator(
     // of `prelude::DOCUMENT`, letting the codec see the inner aggregate's
     // member traits (e.g. `@xmlName` on map keys/values).
     private val recursiveClassifier = RecursiveShapeClassifier(model)
-
-    /** Sanitize a member name for use in Rust constant names (strips r# raw identifier prefix). */
-    private fun constantName(memberName: String): String = memberName.removePrefix("r#").removePrefix("#").uppercase()
 
     /** Check if a shape is a string enum (EnumShape or StringShape with @enum trait). */
     private fun isStringEnum(shape: Shape): Boolean = shape is EnumShape || shape.hasTrait(EnumTrait::class.java)
@@ -142,7 +162,7 @@ class ServerSchemaGenerator(
             arrayOf(
                 "Schema" to smithySchema.resolve("Schema"),
             )
-        val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
+        val schemaPrefix = this.schemaPrefix ?: defaultSchemaPrefix(shape)
 
         renderMemberSchemas(writer, schemaPrefix)
         renderSchemaStatic(writer, schemaPrefix, symbol.name)
@@ -160,6 +180,15 @@ class ServerSchemaGenerator(
         )
 
         if (shape is StructureShape) {
+            shape.allMembers.values.firstOrNull {
+                outputOperation(shape) != null && model.expectShape(it.target).hasTrait(StreamingTrait::class.java)
+            }?.let { member ->
+                val memberRef = "${schemaPrefix}_MEMBER_${constantName(symbolProvider.toMemberName(member))}"
+                writer.rustTemplate(
+                    "impl ${symbol.fullName} { pub(crate) const __STREAMING_MEMBER_SCHEMA: &'static #{Schema}<'static> = &$memberRef; }",
+                    *codegenScope,
+                )
+            }
             renderSerializableStruct(writer, symbol.fullName, schemaPrefix)
         } else if (shape is UnionShape) {
             renderSerializableUnion(writer, symbol.fullName, schemaPrefix)
@@ -507,7 +536,7 @@ class ServerSchemaGenerator(
             }
             is UnionShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, $varName)?;"
-            else -> "todo!(\"schema: unsupported union variant type\");"
+            else -> throw CodegenException("Unsupported schema serialization shape `${target.id}` (${target.type})")
         }
     }
 
@@ -612,7 +641,7 @@ class ServerSchemaGenerator(
 
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
             is UnionShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
-            else -> "todo!(\"schema: unsupported shape type for serialization\");"
+            else -> throw CodegenException("Unsupported schema serialization shape `${target.id}` (${target.type})")
         }
     }
 
@@ -622,7 +651,7 @@ class ServerSchemaGenerator(
      * [containingAggregate] is the list whose elements we're writing.
      * [parentRef] is the Rust schema constant name for that containing list,
      * used to derive the inner element's schema constant
-     * (`<parent>_MEMBER`) when the element is itself a nested aggregate.
+     * (`<parent>_MEMBER`) for nested aggregates and timestamp format traits.
      * `null` means we're past a recursive boundary upstream — every nested
      * aggregate from here down falls back to `prelude::DOCUMENT`.
      */
@@ -652,7 +681,12 @@ class ServerSchemaGenerator(
                 }
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, ${blobValueExpr(target, varName)})?;"
-            is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is TimestampShape -> {
+                // The codec resolves @timestampFormat from the schema passed to write_timestamp.
+                // The list member static retains that trait; prelude::TIMESTAMP has no format override.
+                val schemaRef = parentRef?.let { "&${it}_MEMBER" } ?: "&$prelude::TIMESTAMP"
+                "ser.write_timestamp($schemaRef, $varName)?;"
+            }
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
@@ -743,7 +777,7 @@ class ServerSchemaGenerator(
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
 
-            else -> "todo!(\"schema: unsupported list element type\");"
+            else -> throw CodegenException("Unsupported schema serialization shape `${target.id}` (${target.type})")
         }
     }
 
@@ -753,7 +787,7 @@ class ServerSchemaGenerator(
      * [containingAggregate] is the map whose values we're writing.
      * [parentRef] is the Rust schema constant name for that containing map,
      * used to derive the inner value's schema constant (`<parent>_VALUE`)
-     * when the value is itself a nested aggregate. `null` means we're past
+     * for nested aggregates and timestamp format traits. `null` means we're past
      * a recursive boundary upstream — every nested aggregate from here down
      * falls back to `prelude::DOCUMENT`.
      */
@@ -783,7 +817,12 @@ class ServerSchemaGenerator(
                 }
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, ${blobValueExpr(target, varName)})?;"
-            is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is TimestampShape -> {
+                // Map values also need their member schema to preserve @timestampFormat,
+                // including when parentRef identifies a map nested inside another collection.
+                val schemaRef = parentRef?.let { "&${it}_VALUE" } ?: "&$prelude::TIMESTAMP"
+                "ser.write_timestamp($schemaRef, $varName)?;"
+            }
             is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
@@ -873,7 +912,7 @@ class ServerSchemaGenerator(
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
 
-            else -> "todo!(\"schema: unsupported map value type\");"
+            else -> throw CodegenException("Unsupported schema serialization shape `${target.id}` (${target.type})")
         }
     }
 
@@ -1024,13 +1063,20 @@ class ServerSchemaGenerator(
                     rust("])")
                 }
                 node.isObjectNode -> {
-                    rustTemplate("{ let mut obj = #{HashMap}::new(); ", *docScope)
-                    node.expectObjectNode().stringMap.entries.forEach { (key, value) ->
-                        rust("""obj.insert("${escape(key)}".to_string(), """)
-                        nodeToDocument(value)(this)
-                        rust("); ")
+                    val entries = node.expectObjectNode().stringMap.entries
+                    if (entries.isEmpty()) {
+                        // Empty trait objects need no mutable binding: generated crates deny warnings.
+                        // This also covers empty objects nested inside another trait document.
+                        rustTemplate("#{Document}::Object(#{HashMap}::new())", *docScope)
+                    } else {
+                        rustTemplate("{ let mut obj = #{HashMap}::new(); ", *docScope)
+                        entries.forEach { (key, value) ->
+                            rust("""obj.insert("${escape(key)}".to_string(), """)
+                            nodeToDocument(value)(this)
+                            rust("); ")
+                        }
+                        rustTemplate("#{Document}::Object(obj) }", *docScope)
                     }
-                    rustTemplate("#{Document}::Object(obj) }", *docScope)
                 }
                 // Node is sealed over the cases above; this is unreachable for valid models.
                 else -> rustTemplate("#{Document}::Null", *docScope)
@@ -1046,7 +1092,7 @@ class ServerSchemaGenerator(
         for (trait in traitFilter.traitsFor(shape)) {
             val setter = knownTraitSetter(trait)
             if (setter != null) {
-                setters.add(setter)
+                setters.add(templateEscape(setter))
             }
         }
         return setters.joinToString("")
@@ -1107,35 +1153,25 @@ class ServerSchemaGenerator(
             } else {
                 ""
             }
-        return baseChain + targetTimestampFormat + targetMediaType + targetStreaming + targetSensitive
+        return baseChain + templateEscape(targetTimestampFormat) + templateEscape(targetMediaType) + targetStreaming + targetSensitive
     }
 
     /**
      * If this shape is an operation input OR output, returns a `.with_http(...)`
      * chain for the operation's `@http` trait. The `@http` trait is
-     * operation-level but is transcribed onto both sides' schemas (plan Step
-     * 4.1): the input schema drives request-URI interpretation
+     * operation-level but is transcribed onto both sides' schemas: the input schema drives request-URI interpretation
      * (`deserialize_request` label re-matching); the output schema drives
      * success-status resolution (`serialize_response`: `@httpResponseCode`
      * member if set, else `schema.http().code()`, else 200).
      * Error shapes carry `@httpError` separately in the fallback trait map.
      */
     private fun httpTraitChain(shape: Shape): String {
-        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
-        for (operation in model.operationShapes) {
-            if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id ||
-                operationIndex.getOutputShape(operation).orElse(null)?.id == shape.id
-            ) {
-                val httpTrait =
-                    operation.getTrait(software.amazon.smithy.model.traits.HttpTrait::class.java).orElse(null)
-                        ?: return ""
-                val method = httpTrait.method.dq()
-                val uri = httpTrait.uri.toString().dq()
-                val code = httpTrait.code
-                return "\n    .with_http(aws_smithy_schema::traits::HttpTrait::new($method, $uri, ${if (code == 200) "None" else "Some($code)"}))"
-            }
-        }
-        return ""
+        val operation = inputOperation(shape) ?: outputOperation(shape) ?: return ""
+        val httpTrait = operation.getTrait(software.amazon.smithy.model.traits.HttpTrait::class.java).orElse(null) ?: return ""
+        val method = templateEscape(httpTrait.method.dq())
+        val uri = templateEscape(httpTrait.uri.toString().dq())
+        val code = httpTrait.code
+        return "\n    .with_http(aws_smithy_schema::traits::HttpTrait::new($method, $uri, ${if (code == 200) "None" else "Some($code)"}))"
     }
 
     /**
@@ -1151,17 +1187,12 @@ class ServerSchemaGenerator(
      * (rather than codegen-level body wrapping) keeps runtime protocol
      * swap unaffected.
      */
-    private fun s3UnwrappedXmlOutputChain(shape: Shape): String {
-        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
-        for (operation in model.operationShapes) {
-            if (operationIndex.getOutputShape(operation).orElse(null)?.id == shape.id &&
-                operation.hasTrait(software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait::class.java)
-            ) {
-                return "\n    .with_xml_unwrapped_output()"
-            }
+    private fun s3UnwrappedXmlOutputChain(shape: Shape): String =
+        if (outputOperation(shape)?.hasTrait(software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait::class.java) == true) {
+            "\n    .with_xml_unwrapped_output()"
+        } else {
+            ""
         }
-        return ""
-    }
 
     /**
      * If this shape is the input of any operation AND every member is
@@ -1188,12 +1219,7 @@ class ServerSchemaGenerator(
      * without ever touching the codec).
      */
     private fun noBodyMembersChain(shape: Shape): String {
-        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
-        val isOperationInput =
-            model.operationShapes.any {
-                operationIndex.getInputShape(it).orElse(null)?.id == shape.id
-            }
-        if (!isOperationInput) return ""
+        if (inputOperation(shape) == null) return ""
         if (shape !is software.amazon.smithy.model.shapes.StructureShape) return ""
 
         for (member in shape.allMembers.values) {
@@ -1216,7 +1242,7 @@ class ServerSchemaGenerator(
             if (hasHttpPayload) {
                 val target = model.expectShape(member.target)
                 if (target is software.amazon.smithy.model.shapes.StructureShape ||
-                    target is software.amazon.smithy.model.shapes.UnionShape
+                    target is software.amazon.smithy.model.shapes.UnionShape || target is DocumentShape
                 ) {
                     return ""
                 }
@@ -1251,16 +1277,8 @@ class ServerSchemaGenerator(
      *
      * Returns `""` for non-aggregate targets.
      *
-     * Termination invariant: this recursion descends only through aggregate
-     * members (list element, map key/value) and stops at structure/union targets
-     * and scalars. A structure/union carries its own
-     * top-level `::SCHEMA` constant, so the descent never crosses that boundary.
-     * Combined with the Smithy guarantee that a recursive list/map/set is valid
-     * only if its cycle passes through a structure or union, the descent is
-     * bounded for any valid model. The same boundary bounds the sibling write-expr
-     * recursion ([elementWriteExpr] / [mapValueWriteExpr]). A hand-built model that
-     * violated the invariant (an aggregate-only cycle) would not terminate, but
-     * such models are rejected by Smithy validation before reaching codegen.
+     * Structure/union boundaries stop this descent. Aggregate-only cycles are rejected
+     * before emission by [validateSchemaCollections], rather than overflowing the codegen stack.
      */
     private fun emitAggregateMemberChain(
         writer: RustWriter,
@@ -1454,7 +1472,7 @@ class ServerSchemaGenerator(
                 val modelRefs =
                     members.map { member ->
                         val memberName = symbolProvider.toMemberName(member)
-                        "&${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                        "&${memberSchemaName(schemaPrefix, memberName)}"
                     }
                 val allRefs = modelRefs
                 val membersArray =
@@ -1577,7 +1595,7 @@ class ServerSchemaGenerator(
                     val target = model.expectShape(member.target)
                     val memberId = ShapeId.fromParts(schemaShapeId.namespace, schemaShapeId.name, member.memberName)
                     val escapedMemberId = memberId.toString().replace("#", "##")
-                    val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
+                    val memberConstName = memberSchemaName(schemaPrefix, rustMemberName)
                     val traitChain = memberTraitChain(member)
                     val xmlPayload = needsXmlPayloadSchema(member)
                     val xmlMetadata =
@@ -1697,5 +1715,25 @@ class ServerSchemaGenerator(
                 )
             }
         }
+    }
+
+    companion object {
+        /** Encode names injectively; case folding and aggregate suffixes cannot collide. */
+        private fun constantName(name: String): String =
+            name.toByteArray(Charsets.UTF_8).joinToString("") {
+                "%02X".format(it)
+            }
+
+        private fun defaultSchemaPrefix(shape: Shape): String = "SHAPE_${constantName(shape.id.toString())}"
+
+        internal fun memberSchemaName(
+            shape: Shape,
+            rustMemberName: String,
+        ): String = memberSchemaName(defaultSchemaPrefix(shape), rustMemberName)
+
+        private fun memberSchemaName(
+            schemaPrefix: String,
+            rustMemberName: String,
+        ): String = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
     }
 }

@@ -102,7 +102,6 @@ class ServerSchemaDeserializeGenerator(
             is StructureShape ->
                 if (shape.isReachableFromOperationInput() && !hasStreamingMember(shape)) {
                     renderStructure(shape)
-                    renderStructureInto(shape)
                 } else if (shape.isReachableFromOperationInput()) {
                     renderStructureInto(shape)
                     if (!isOperationInput(shape)) renderStructure(shape)
@@ -219,8 +218,9 @@ class ServerSchemaDeserializeGenerator(
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
                         // Explicit document null is a value; absence is handled by the request deserializer.
-                        if (symbolProvider.toSymbol(member).isOptional() && model.expectShape(member.target) !is DocumentShape) {
-                            rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
+                        if (model.expectShape(member.target) !is DocumentShape) {
+                            val clear = if (symbolProvider.toSymbol(member).isOptional()) "builder.$fieldName = None;" else ""
+                            rust("Some($index) => { if deser.is_null() { deser.read_null()?; $clear } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
                         }
@@ -288,8 +288,9 @@ class ServerSchemaDeserializeGenerator(
                                 "builder.$fieldName = Some(${memberValueExpr(member)});"
                             }
                         // Explicit document null is a value; absence is handled by the request deserializer.
-                        if (symbolProvider.toSymbol(member).isOptional() && model.expectShape(member.target) !is DocumentShape) {
-                            rust("Some($index) => { if deser.is_null() { deser.read_null()?; } else { $assignment } }")
+                        if (model.expectShape(member.target) !is DocumentShape) {
+                            val clear = if (symbolProvider.toSymbol(member).isOptional()) "builder.$fieldName = None;" else ""
+                            rust("Some($index) => { if deser.is_null() { deser.read_null()?; $clear } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
                         }
@@ -383,7 +384,8 @@ class ServerSchemaDeserializeGenerator(
      */
     private fun memberValueExpr(member: MemberShape): String {
         val target = model.expectShape(member.target)
-        val expr = readExpr(target, "member")
+        val schemaStaticRef = ServerSchemaGenerator.memberSchemaName(shape, symbolProvider.toMemberName(member))
+        val expr = readExpr(target, "member", schemaStaticRef)
         val convert = member.targetCanReachConstrainedShape(model, symbolProvider)
         val boxed = symbolProvider.toSymbol(member).isRustBoxed()
 
@@ -414,6 +416,7 @@ class ServerSchemaDeserializeGenerator(
     private fun readExpr(
         target: Shape,
         schemaRef: String,
+        schemaStaticRef: String,
     ): String =
         when (target) {
             is BooleanShape -> "deser.read_boolean($schemaRef)?"
@@ -434,8 +437,8 @@ class ServerSchemaDeserializeGenerator(
                 val name = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "$name::$FUNCTION_NAME(deser)?"
             }
-            is CollectionShape -> wrapUnconstrained(target, listReadExpr(target, schemaRef))
-            is MapShape -> wrapUnconstrained(target, mapReadExpr(target, schemaRef))
+            is CollectionShape -> wrapUnconstrained(target, listReadExpr(target, schemaRef, schemaStaticRef))
+            is MapShape -> wrapUnconstrained(target, mapReadExpr(target, schemaRef, schemaStaticRef))
             else -> throw IllegalArgumentException("cannot deserialize shape ${target.id} from a schema")
         }
 
@@ -452,6 +455,7 @@ class ServerSchemaDeserializeGenerator(
     private fun listReadExpr(
         target: CollectionShape,
         schemaRef: String,
+        schemaStaticRef: String,
     ): String {
         val element = model.expectShape(target.member.target)
         val sparse = target.hasTrait<SparseTrait>()
@@ -472,22 +476,19 @@ class ServerSchemaDeserializeGenerator(
         if (helper != null) {
             return helper
         }
-        val elementRead = sparseAware(sparse, readExpr(element, "element"), yieldsOption(element), "list")
-        // Nested structures and unions read against their own `SCHEMA`; only scalars and nested
-        // collections need the list's member schema.
-        val bindElement =
-            if (elementRead.contains("element")) {
-                "let element = $schemaRef.member().unwrap_or(${preludeFallback(element)}); "
-            } else {
-                ""
-            }
-        return "{ ${bindElement}let mut container = ::std::vec::Vec::new(); " +
+        val elementSchemaRef = "${schemaStaticRef}_MEMBER"
+        val elementRead =
+            sparseAware(sparse, readExpr(element, "&$elementSchemaRef", elementSchemaRef), yieldsOption(element), "list")
+        // Resolve nested members from the emitted statics, so nested collections cannot
+        // shadow the schema of their containing collection.
+        return "{ let mut container = ::std::vec::Vec::new(); " +
             "deser.read_list($schemaRef, &mut |deser| { container.push($elementRead); Ok(()) })?; container }"
     }
 
     private fun mapReadExpr(
         target: MapShape,
         schemaRef: String,
+        schemaStaticRef: String,
     ): String {
         val key = model.expectShape(target.key.target)
         val value = model.expectShape(target.value.target)
@@ -497,14 +498,10 @@ class ServerSchemaDeserializeGenerator(
         }
         // Keys are always read as `String`: enum keys make the map constrained, so its unconstrained type
         // holds `String` keys and validation converts them.
-        val valueRead = sparseAware(sparse, readExpr(value, "value_schema"), yieldsOption(value), "map")
-        val bindValueSchema =
-            if (valueRead.contains("value_schema")) {
-                "let value_schema = $schemaRef.member().unwrap_or(${preludeFallback(value)}); "
-            } else {
-                ""
-            }
-        return "{ ${bindValueSchema}let mut container = ::std::collections::HashMap::new(); " +
+        val valueSchemaRef = "${schemaStaticRef}_VALUE"
+        val valueRead =
+            sparseAware(sparse, readExpr(value, "&$valueSchemaRef", valueSchemaRef), yieldsOption(value), "map")
+        return "{ let mut container = ::std::collections::HashMap::new(); " +
             "deser.read_map($schemaRef, &mut |key, deser| { container.insert(key, $valueRead); Ok(()) })?; container }"
     }
 
@@ -526,28 +523,6 @@ class ServerSchemaDeserializeGenerator(
                 "($readExpr).ok_or_else(|| $serdeError::custom(\"dense $container cannot contain null values\"))?"
             else -> readExpr
         }
-
-    /** A prelude schema to read against if a generated collection schema ever lacks its member schema. */
-    private fun preludeFallback(shape: Shape): String {
-        val prelude = smithySchema.resolve("prelude").fullyQualifiedName()
-        val name =
-            when (shape) {
-                is BooleanShape -> "BOOLEAN"
-                is ByteShape -> "BYTE"
-                is ShortShape -> "SHORT"
-                is IntegerShape, is IntEnumShape -> "INTEGER"
-                is LongShape -> "LONG"
-                is FloatShape -> "FLOAT"
-                is DoubleShape -> "DOUBLE"
-                is BigIntegerShape -> "BIG_INTEGER"
-                is BigDecimalShape -> "BIG_DECIMAL"
-                is StringShape, is EnumShape -> "STRING"
-                is BlobShape -> "BLOB"
-                is TimestampShape -> "TIMESTAMP"
-                else -> "DOCUMENT"
-            }
-        return "&$prelude::$name"
-    }
 
     private fun isStringEnum(shape: Shape): Boolean = shape is EnumShape || shape.hasTrait<EnumTrait>()
 

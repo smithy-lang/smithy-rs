@@ -98,6 +98,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.renderServerTests
+import software.amazon.smithy.rust.codegen.server.smithy.generators.validateSchemaCollections
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
@@ -140,6 +141,9 @@ open class ServerCodegenVisitor(
                 moduleProvider = ServerModuleProvider,
             )
 
+        if (settings.codegenConfig.schemaSerde) {
+            validateSchemaCollections(context.model, settings.getService(context.model))
+        }
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         model = codegenDecorator.transformModel(service, baseModel, settings)
@@ -701,7 +705,7 @@ open class ServerCodegenVisitor(
 
         if (shape.isEventStream()) {
             rustCrate.withModule(ServerRustModule.Error) {
-                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape, runtimeConfig = codegenContext.runtimeConfig).render(this)
             }
         }
     }
@@ -728,6 +732,19 @@ open class ServerCodegenVisitor(
         }
     }
 
+    private fun resolveServerProtocol(
+        factory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>,
+        context: ServerCodegenContext,
+    ): ServerProtocol {
+        val protocol = factory.protocol(context)
+        return protocol as? ServerProtocol
+            ?: throw CodegenException(
+                "Protocol factory ${factory.javaClass.name} for ${context.protocol} returned ${protocol.javaClass.name}, " +
+                    "which does not implement ${ServerProtocol::class.java.name}. " +
+                    "Server protocol factories must return a ServerProtocol implementation.",
+            )
+    }
+
     /**
      * Generate service-specific code for the model:
      * - Serializers
@@ -739,7 +756,7 @@ open class ServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        val serverProtocol = resolveServerProtocol(protocolGeneratorFactory, codegenContext)
 
         val configMethods = codegenDecorator.configMethods(codegenContext)
         val isConfigBuilderFallible = configMethods.isBuilderFallible()
@@ -777,7 +794,7 @@ open class ServerCodegenVisitor(
                     // decorator-supplied protocols provide their own marker type.
                     codegenContext.servedProtocols.associateWith { protocol ->
                         val protocolContext = codegenContext.copy(protocol = protocol)
-                        (protocolGeneratorFactories.getValue(protocol).protocol(protocolContext) as ServerProtocol)
+                        resolveServerProtocol(protocolGeneratorFactories.getValue(protocol), protocolContext)
                             .markerStruct()
                     }
                 } else {

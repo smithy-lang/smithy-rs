@@ -23,12 +23,10 @@ class ServerSchemaConstantGenerator(
     private val additionalTraitInsertions: List<Writable> = emptyList(),
 ) {
     fun render() {
-        val symbol = codegenContext.symbolProvider.toSymbol(shape)
         ServerSchemaGenerator(
             codegenContext,
             writer,
             shape,
-            schemaPrefix = symbol.name.uppercase(),
             additionalTraitInsertions = additionalTraitInsertions,
         ).renderSerializeOnly()
     }
