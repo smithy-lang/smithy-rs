@@ -29,6 +29,12 @@ internal class InitialEventStreamFrameCompatibilityTest {
         val run = Files.createTempDirectory("initial-frame-parity-")
         for (protocol in listOf("awsJson1_0", "awsJson1_1", "rpcv2Cbor")) {
             val namespace = if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"
+            val responseMediaType =
+                when (protocol) {
+                    "awsJson1_0" -> "application/x-amz-json-1.0"
+                    "awsJson1_1" -> "application/x-amz-json-1.1"
+                    else -> "application/cbor"
+                }
             val model =
                 """
                 ${'$'}version: "2"
@@ -69,8 +75,13 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                 let mut valid = #{Vec}::new();
                                 #{EventStream}::frame::write_message_to(&message, &mut valid).unwrap();
                                 let mut bad_header = valid.clone(); bad_header[8] ^= 1;
-                                let mut bad_message = valid; let last = bad_message.len() - 1; bad_message[last] ^= 1;
-                                for payload in [bad_header, bad_message] {
+                                let mut bad_message = valid.clone(); let last = bad_message.len() - 1; bad_message[last] ^= 1;
+                                for (case, payload) in [
+                                    ("prelude-crc", bad_header),
+                                    ("message-crc", bad_message),
+                                    ("truncated-prelude", valid[..8].to_vec()),
+                                    ("truncated-message", valid[..valid.len() - 1].to_vec()),
+                                ] {
                                     let request = #{Http}::Request::post(${if (protocol == "rpcv2Cbor") "\"/service/Frames/operation/Read\"" else "\"/\""})
                                         .header("content-type", "application/vnd.amazon.eventstream")
                                         ${if (protocol == "rpcv2Cbor") ".header(\"smithy-protocol\", \"rpc-v2-cbor\")" else ".header(\"x-amz-target\", \"Frames.Read\")"}
@@ -80,7 +91,14 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                     let headers = response.headers().clone();
                                     #{Collect}
                                     assert_eq!(status, 400);
-                                    records.push_str(&format!("{status} {headers:?} {:?}\n", body.as_ref()));
+                                    // Observed on the generated legacy path, including both truncations.
+                                    if ${!schemaSerde} {
+                                        let mut expected_headers = #{Http}::HeaderMap::new();
+                                        expected_headers.insert("content-type", #{Http}::HeaderValue::from_static("$responseMediaType"));
+                                        assert_eq!(headers, expected_headers, "{case}");
+                                        assert_eq!(body.as_ref(), b"response error", "{case}");
+                                    }
+                                    records.push_str(&format!("{case}: {status} {headers:?} {:?}\n", body.as_ref()));
                                 }
                                 ::std::fs::write(${observations.toString().dq()}, records).unwrap();
                                 """,
