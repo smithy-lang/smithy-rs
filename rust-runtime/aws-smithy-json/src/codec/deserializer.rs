@@ -220,10 +220,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
             // Process the value — skip nulls (they represent absent optional members)
             let rem = self.remaining();
-            if !self.settings.dispatch_null_members()
-                && rem.starts_with(b"null")
-                && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric())
-            {
+            if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
                 self.advance_by(4);
             } else if let Some(member_schema) = self.settings.field_to_member(schema, &key_str) {
                 consumer(member_schema, self)?;
@@ -1396,39 +1393,6 @@ fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn null_dispatch_can_clear_an_optional_duplicate_without_changing_the_default() {
-        use aws_smithy_schema::{shape_id, ShapeType};
-
-        let text = Schema::new_member(
-            shape_id!("test", "Input", "text"),
-            ShapeType::String,
-            "text",
-            0,
-        );
-        let members = [&text];
-        let schema = Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &members);
-        for (dispatch, expected) in [(false, Some("first".to_owned())), (true, None)] {
-            let settings = JsonCodecSettings::builder()
-                .dispatch_null_members(dispatch)
-                .build();
-            let mut deserializer =
-                JsonDeserializer::new(br#"{"text":"first","text":null}"#, Arc::new(settings));
-            let mut value = None;
-            deserializer
-                .read_struct(&schema, &mut |member, reader| {
-                    if reader.is_null() {
-                        reader.read_null()?;
-                        value = None;
-                    } else {
-                        value = Some(reader.read_string(member)?);
-                    }
-                    Ok(())
-                })
-                .unwrap();
-            assert_eq!(value, expected);
-        }
-    }
 
     fn dummy_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::STRING

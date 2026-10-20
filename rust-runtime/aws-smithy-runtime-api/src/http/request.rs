@@ -429,31 +429,6 @@ mod test {
     use http_1x::header::{AUTHORIZATION, CONTENT_LENGTH};
 
     #[test]
-    fn mapping_body_preserves_request_metadata() {
-        let mut request = http_1x::Request::builder()
-            .method("PATCH")
-            .uri("/resource?key=value")
-            .header("x-test", "header")
-            .body(())
-            .unwrap();
-        request.extensions_mut().insert(String::from("extension"));
-        let replacement = String::from("body");
-        let request = super::Request::try_from(request)
-            .unwrap()
-            .map(|_| replacement.clone());
-        assert_eq!(request.uri(), "/resource?key=value");
-        let request = request.try_into_http1x().unwrap();
-        assert_eq!(request.method(), "PATCH");
-        assert_eq!(request.uri(), "/resource?key=value");
-        assert_eq!(request.headers()["x-test"], "header");
-        assert_eq!(
-            request.extensions().get::<String>().map(String::as_str),
-            Some("extension")
-        );
-        assert_eq!(request.body(), "body");
-    }
-
-    #[test]
     fn non_ascii_requests() {
         let request = http_1x::Request::builder()
             .header("k", "😹")

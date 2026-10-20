@@ -153,7 +153,6 @@ pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
-    dispatch_null_members: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
@@ -197,12 +196,6 @@ pub struct JsonCodecSettings {
 }
 
 impl JsonCodecSettings {
-    /// Whether null structure members are passed to the consumer instead of skipped.
-    /// Schema servers use this to clear optional fields while leaving required validation to builders.
-    pub fn dispatch_null_members(&self) -> bool {
-        self.dispatch_null_members
-    }
-
     /// Creates a builder for `JsonCodecSettings`.
     pub fn builder() -> JsonCodecSettingsBuilder {
         JsonCodecSettingsBuilder::default()
@@ -254,7 +247,6 @@ impl JsonCodecSettings {
             use_json_name: matches!(self.field_mapper, JsonFieldMapper::UseJsonName),
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
-            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
@@ -292,7 +284,6 @@ impl Default for JsonCodecSettings {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
-            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
@@ -333,7 +324,6 @@ pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
-    dispatch_null_members: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     default_namespace: Option<String>,
@@ -348,7 +338,6 @@ impl Default for JsonCodecSettingsBuilder {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
-            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             default_namespace: None,
@@ -360,13 +349,6 @@ impl Default for JsonCodecSettingsBuilder {
 }
 
 impl JsonCodecSettingsBuilder {
-    /// Pass null structure members to the consumer. Defaults to false, preserving existing
-    /// codec callers; schema server readers decide how each null affects their builders.
-    pub fn dispatch_null_members(mut self, value: bool) -> Self {
-        self.dispatch_null_members = value;
-        self
-    }
-
     /// Validates string contents and number syntax, rejects whitespace-only structure
     /// bodies, and checks the range of floating-point epoch timestamps.
     /// Disabled by default. Timestamp wire formats are controlled separately by
@@ -458,7 +440,6 @@ impl JsonCodecSettingsBuilder {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
-            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace,
