@@ -27,15 +27,15 @@ import java.nio.file.Files
  *
  * | Configuration | Request document | Expected response |
  * | --- | --- | --- |
- * | Legacy, schemaSerde=false | {"values": ["a", "b"]} | 200, CBOR {"count": 2} |
- * | Schema, schemaSerde=true | {"values": ["a", "b"]} | 200, identical headers and body bytes |
+ * | Generated serde, schemaSerde=false | {"values": ["a", "b"]} | 200, CBOR {"count": 2} |
+ * | Schema serde, schemaSerde=true | {"values": ["a", "b"]} | 200, identical headers and body bytes |
  *
  * Both generated servers use HTTP 1.x and this checkout's codegen/runtime. The comparison
  * verifies that enabling schema serde preserves the values member in the request and the response encoding.
  */
 internal class RpcV2CborListPayloadCompatibilityTest {
     @Test
-    fun `list payload members use the legacy keyed CBOR document`() {
+    fun `schema serde preserves the generated serde CBOR list member encoding`() {
         val model =
             """
             ${'$'}version: "2"
@@ -50,7 +50,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
             list Strings { member: String }
             """.asSmithyModel()
         val observations = Files.createTempDirectory("cbor-list-payload-")
-        // Generate the same valid model with legacy serde first, then schema serde.
+        // Generate the same valid model with generated serde first, then schema serde.
         for (schemaSerde in listOf(false, true)) {
             val snapshot = observations.resolve("$schemaSerde.txt")
             serverIntegrationTest(
@@ -63,7 +63,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
                 testCoverage = HttpTestType.Default,
             ) { context, crate ->
                 crate.testModule {
-                    tokioTest("list_payload_uses_a_keyed_document") {
+                    tokioTest("list_payload_uses_its_modeled_member_name") {
                         rustTemplate(
                             """
                             let app = crate::Payloads::builder(crate::PayloadsConfig::builder().build())
@@ -84,7 +84,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
                                 .map(|(key, value)| (key.to_string(), value.as_bytes().to_vec())).collect();
                             headers.sort();
                             #{Collect}
-                            // Preserve legacy's indefinite-length map encoding for {"count": 2}.
+                            // Preserve generated serde's indefinite-length map encoding for {"count": 2}.
                             assert_eq!(body.as_ref(), &[0xbf, 0x65, b'c', b'o', b'u', b'n', b't', 2, 0xff]);
                             let record = format!("{status} {headers:?} {:?}", body.as_ref());
                             ::std::fs::write(${snapshot.toString().dq()}, record).unwrap();

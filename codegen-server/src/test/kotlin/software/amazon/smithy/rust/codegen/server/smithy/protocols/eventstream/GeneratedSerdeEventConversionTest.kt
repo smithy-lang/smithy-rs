@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 
 /**
- * Legacy generated event unions convert unconstrained input events into modeled events.
+ * With generated serde (schemaSerde=false), event unions convert unconstrained input events into modeled events.
  * Optional members must remain optional during that conversion, including a structure
  * containing an enum, whose validation makes the generated conversion fallible.
  *
@@ -33,10 +33,10 @@ import java.nio.file.Files
  * schemaSerde=false, using this checkout's codegen/runtime. Assertions exercise generated
  * Rust TryInto conversions; event-frame decoding and HTTP responses have separate coverage.
  */
-internal class LegacyEventConversionTest {
+internal class GeneratedSerdeEventConversionTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "awsJson1_0", "awsJson1_1", "rpcv2Cbor"])
-    fun `legacy event conversions accept absent optional members`(protocol: String) {
+    fun `generated serde event conversions accept absent optional members`(protocol: String) {
         val model =
             """
             ${'$'}version: "2"
@@ -64,9 +64,9 @@ internal class LegacyEventConversionTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                // Keep this on the legacy generation path for every protocol.
+                // Keep generated serde enabled for every protocol.
                 additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false,"http-1x":true}}""").expectObjectNode(),
-                overrideTestDir = Files.createTempDirectory("legacy-event-fallibility-$protocol-").toFile(),
+                overrideTestDir = Files.createTempDirectory("generated-serde-event-conversion-$protocol-").toFile(),
                 cargoCommand = "cargo test --quiet --lib",
             ),
             testCoverage = HttpTestType.Default,

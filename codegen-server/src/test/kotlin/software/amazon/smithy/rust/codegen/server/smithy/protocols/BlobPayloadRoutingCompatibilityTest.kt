@@ -28,7 +28,7 @@ import java.nio.file.Files
  *
  * Every request below sends raw "abc" bytes to POST /upload, with no modeled @mediaType:
  *
- * | Request Content-Type | REST JSON alone (legacy or schema) | REST JSON + CBOR (schema) |
+ * | Request Content-Type | REST JSON alone (generated or schema serde) | REST JSON + CBOR (schema serde) |
  * | --- | --- | --- |
  * | application/octet-stream | 200, upload handler runs | 200, REST JSON claims the request |
  * | video/mp4 | 200, upload handler runs | 404, neither protocol claims the request |
@@ -37,15 +37,16 @@ import java.nio.file.Files
  * Enabling CBOR therefore changes which raw REST uploads reach the handler. These requests
  * exercise REST protocol identification; a CBOR-encoded upload uses its own operation URL and body.
  *
- * "Legacy" in this test means this checkout's generated server with schemaSerde=false.
+ * Generated serde means schemaSerde=false; schema serde means schemaSerde=true.
+ * All configurations use this checkout's aws-smithy-http-server runtime with HTTP 1.x.
  */
 internal class BlobPayloadRoutingCompatibilityTest {
     @Test
     fun `blob content types preserve single protocol behavior and determine multi protocol routing`() {
         val observations = Files.createTempDirectory("untyped-blob-routing-")
         System.err.println("Untyped blob routing observations: $observations")
-        // Generate legacy REST JSON, schema REST JSON, and schema REST JSON + CBOR.
-        // All use HTTP 1.x and send identical requests. Legacy codegen serves one protocol.
+        // Generate REST JSON with generated serde, then REST JSON and REST JSON + CBOR with schema serde.
+        // All use HTTP 1.x and send identical requests. Generated serde serves one protocol.
         for ((schemaSerde, multiProtocol) in listOf(false to false, true to false, true to true)) {
             val model =
                 """
