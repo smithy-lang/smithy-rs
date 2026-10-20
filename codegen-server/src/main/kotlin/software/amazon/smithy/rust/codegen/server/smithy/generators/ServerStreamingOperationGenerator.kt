@@ -334,8 +334,8 @@ class ServerStreamingOperationGenerator(
             }
             val unionShape = model.expectShape(member.target, UnionShape::class.java)
             // Whether an `initial-response` frame precedes the events is a service-level codegen setting, as
-            // on the legacy path; whether the protocol frames initial messages at all is the protocol's answer
-            // at runtime. Both are plain values handed to the runtime glue.
+            // on the legacy path. The protocol decides whether its payload carries non-stream members
+            // or an unset structure payload; HTTP-bound members stay in their HTTP bindings.
             val sendInitialResponse = codegenContext.settings.codegenConfig.alwaysSendEventStreamInitialResponse
             rustTemplate(
                 """

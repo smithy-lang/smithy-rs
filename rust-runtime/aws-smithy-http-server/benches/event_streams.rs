@@ -248,9 +248,9 @@ fn bench_response_body(criterion: &mut Criterion, protocol: &SharedServerProtoco
                 .unwrap()
                 .to_bytes();
             let mut remaining = bytes;
+            let initial = read_message_from(&mut remaining).unwrap();
+            assert_eq!(string_header(&initial, ":event-type"), "initial-response");
             if protocol.event_stream_framing().unwrap().initial_messages_in_frames {
-                let initial = read_message_from(&mut remaining).unwrap();
-                assert_eq!(string_header(&initial, ":event-type"), "initial-response");
                 let mut deser = protocol
                     .event_stream_framing()
                     .unwrap()
@@ -266,6 +266,11 @@ fn bench_response_body(criterion: &mut Criterion, protocol: &SharedServerProtoco
                     })
                     .unwrap();
                 assert_eq!(metadata.as_deref(), Some(METADATA));
+            } else {
+                assert_eq!(
+                    initial.payload().as_ref(),
+                    protocol.event_stream_framing().unwrap().unset_initial_response_payload
+                );
             }
             for _ in 0..STREAM_EVENTS {
                 let message = read_message_from(&mut remaining).unwrap();

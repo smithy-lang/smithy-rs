@@ -143,6 +143,7 @@ impl MetadataRoutedProtocol for RestXml {
     fn event_stream_framing(&self) -> Option<EventStreamFraming<'_>> {
         Some(
             EventStreamFraming::new(self.inner.codec(), CONTENT_TYPE)
+                .unset_initial_response_payload(b"")
                 .exception_http_bindings(true)
                 .xml_exceptions(&self.exception_codec, !self.no_error_wrapping),
         )

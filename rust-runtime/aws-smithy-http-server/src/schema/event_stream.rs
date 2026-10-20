@@ -90,15 +90,17 @@ where
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InitialResponsePolicy {
-    /// Emit an initial response only if the selected protocol supports initial-message framing.
+    /// Emit an initial response before the events, using the protocol's initial-message payload.
     Send,
     /// Omit the initial response.
     Omit,
 }
 
 /// Builds the response body of an event stream output: the marshalled events, preceded by an
-/// `initial-response` frame carrying the non-stream output members when the protocol frames
-/// initial messages and `initial_response` is [`InitialResponsePolicy::Send`].
+/// `initial-response` frame when `initial_response` is [`InitialResponsePolicy::Send`].
+///
+/// Protocols that carry non-stream members in initial messages serialize those members into
+/// the frame. HTTP-bound protocols use their unset payload instead, matching legacy servers.
 ///
 /// `output_schema` and `output` describe the non-stream members; the streaming member must
 /// already have been moved out of `output` into `events`.
@@ -119,12 +121,14 @@ where
         .event_stream_framing()
         .ok_or_else(|| SerdeError::custom(NO_EVENT_STREAM_SUPPORT))?;
     let signer = NoOpSigner {};
-    if capability.initial_messages_in_frames && initial_response == InitialResponsePolicy::Send {
+    if initial_response == InitialResponsePolicy::Send {
         use futures_util::StreamExt;
-        let payload = {
+        let payload = if capability.initial_messages_in_frames {
             let mut ser = capability.payload_codec.create_serializer();
             ser.write_struct(output_schema, output)?;
             Bytes::from(ser.finish_boxed())
+        } else {
+            Bytes::from_static(capability.unset_initial_response_payload)
         };
         let initial_message = Message::new_from_parts(
             vec![
@@ -2699,6 +2703,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn response_body_rpc_initial_response_preserves_output_members() {
+        use crate::schema::protocol::{AwsJson1_0, AwsJson1_1};
+        for protocol in [
+            cbor_protocol(),
+            SharedServerProtocol::metadata_routed(AwsJson1_0::default()),
+            SharedServerProtocol::metadata_routed(AwsJson1_1::default()),
+        ] {
+            let frames = collect_frames(response_body_for(&protocol, InitialResponsePolicy::Send).unwrap()).await;
+            assert_eq!(frames.len(), 2);
+            assert_eq!(string_header(&frames[0], ":event-type"), Some("initial-response"));
+            let capability = protocol.event_stream_framing().unwrap();
+            assert!(capability.initial_messages_in_frames);
+            let mut deser = capability.payload_codec.create_deserializer(frames[0].payload());
+            assert_eq!(
+                PlainEvent::deserialize(&mut *deser).unwrap(),
+                PlainEvent {
+                    text: Some("topic".to_owned())
+                }
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn response_body_omits_the_initial_response_frame_when_disabled() {
         let body = response_body_for(&cbor_protocol(), InitialResponsePolicy::Omit).expect("builds");
         let frames = collect_frames(body).await;
@@ -2707,11 +2734,70 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn response_body_omits_the_initial_response_frame_when_the_protocol_does_not_frame_it() {
-        let body = response_body_for(&json_protocol(), InitialResponsePolicy::Send).expect("builds");
-        let frames = collect_frames(body).await;
-        assert_eq!(frames.len(), 1);
-        assert_eq!(string_header(&frames[0], ":event-type"), Some("text"));
+    async fn response_body_rest_initial_response_frames_match_legacy() {
+        // Observed with generated legacy servers and alwaysSendEventStreamInitialResponse=true:
+        // REST JSON sends {}, REST XML sends zero bytes, and HTTP-bound output members stay out.
+        for (protocol, media_type, payload) in [
+            (json_protocol(), "application/json", &b"{}"[..]),
+            (
+                SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+                "application/xml",
+                &b""[..],
+            ),
+        ] {
+            assert!(!protocol.event_stream_framing().unwrap().initial_messages_in_frames);
+            let frames = collect_frames(response_body_for(&protocol, InitialResponsePolicy::Send).unwrap()).await;
+            assert_eq!(frames.len(), 2);
+            assert_eq!(string_header(&frames[0], ":message-type"), Some("event"));
+            assert_eq!(string_header(&frames[0], ":event-type"), Some("initial-response"));
+            assert_eq!(string_header(&frames[0], ":content-type"), Some(media_type));
+            assert_eq!(frames[0].payload().as_ref(), payload);
+            assert_eq!(string_header(&frames[1], ":event-type"), Some("text"));
+
+            let omitted = collect_frames(response_body_for(&protocol, InitialResponsePolicy::Omit).unwrap()).await;
+            assert_eq!(omitted.len(), 1);
+            assert_eq!(omitted[0], frames[1]);
+        }
+    }
+
+    #[tokio::test]
+    async fn response_body_rest_initial_response_does_not_poll_application_events() {
+        use http_body_util::BodyExt;
+        for protocol in [
+            json_protocol(),
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+        ] {
+            let events: EventStreamSender<TestEvents, TestEventsError> = futures_util::stream::poll_fn(|_| {
+                panic!("the initial response must arrive before polling application events");
+                #[allow(unreachable_code)]
+                std::task::Poll::Ready(None)
+            })
+            .into();
+            let output = PlainEvent {
+                text: Some("topic".to_owned()),
+            };
+            let mut body = event_stream_response_body(
+                &PLAIN_EVENT_SCHEMA,
+                &output,
+                events,
+                SchemaEventMarshaller::<TestEvents>::new(protocol.clone()),
+                SchemaEventErrorMarshaller::<TestEventsError>::new(protocol.clone()),
+                &protocol,
+                InitialResponsePolicy::Send,
+            )
+            .unwrap();
+            let bytes = tokio::time::timeout(std::time::Duration::from_secs(1), body.frame())
+                .await
+                .expect("initial response arrives on an idle stream")
+                .unwrap()
+                .unwrap()
+                .into_data()
+                .unwrap();
+            let mut bytes = bytes.as_ref();
+            let frame = aws_smithy_eventstream::frame::read_message_from(&mut bytes).unwrap();
+            assert_eq!(string_header(&frame, ":event-type"), Some("initial-response"));
+            assert!(bytes.is_empty());
+        }
     }
 
     #[tokio::test]

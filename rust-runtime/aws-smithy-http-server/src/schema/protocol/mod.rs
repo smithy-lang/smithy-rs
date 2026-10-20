@@ -236,7 +236,15 @@ pub struct EventStreamFraming<'a> {
     /// Media type of structured event payloads.
     pub media_type: &'a str,
     /// Whether non-stream members travel in initial-message frames.
+    ///
+    /// This controls their payload and initial-request handling, not whether an explicitly
+    /// requested initial-response frame is emitted.
     pub initial_messages_in_frames: bool,
+    /// Initial-response payload when non-stream members travel in HTTP bindings instead.
+    ///
+    /// Used when [`initial_messages_in_frames`](Self::initial_messages_in_frames) is false.
+    /// Legacy REST JSON sends `{}`; REST XML sends zero bytes.
+    pub unset_initial_response_payload: &'static [u8],
     /// Optional body discriminator for modeled exception frames.
     pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
     /// Whether HTTP-bound exception members are excluded from the frame payload.
@@ -259,6 +267,7 @@ impl<'a> EventStreamFraming<'a> {
             payload_codec,
             media_type,
             initial_messages_in_frames: false,
+            unset_initial_response_payload: b"",
             exception_discriminator: None,
             exception_http_bindings: false,
             xml_exception_codec: None,
@@ -290,6 +299,13 @@ impl<'a> EventStreamFraming<'a> {
     /// Sets whether non-stream members travel in initial-message frames.
     pub fn initial_messages_in_frames(mut self, initial_messages_in_frames: bool) -> Self {
         self.initial_messages_in_frames = initial_messages_in_frames;
+        self
+    }
+
+    /// Sets the initial-response payload for protocols whose non-stream members use HTTP
+    /// bindings. Defaults to zero bytes; ignored when initial messages carry output members.
+    pub fn unset_initial_response_payload(mut self, payload: &'static [u8]) -> Self {
+        self.unset_initial_response_payload = payload;
         self
     }
 }
