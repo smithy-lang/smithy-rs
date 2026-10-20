@@ -66,6 +66,11 @@ tower = { version = "0.5", features = [
     "util",
     "make",
 ], default-features = false }
+# Preserve the features relied on by existing generated servers using Tower 0.4.
+tower-legacy = { package = "tower", version = "0.4.13", features = [
+    "util",
+    "make",
+], default-features = false }
 tower-http = { version = "0.6", features = [
     "add-extension",
     "map-response-body",
