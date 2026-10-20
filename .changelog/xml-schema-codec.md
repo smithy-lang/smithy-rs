@@ -22,3 +22,8 @@ Transport adapters can skip body copies of HTTP-bound members without
 interpreting their scalar contents; reading a scalar with nested elements still
 returns an error. Avoid cloning inherited list-item names during union
 serialization.
+
+Complete opt-in document validation for scalar and collection roots as well as
+structures. Reject duplicate attribute names and invalid entity or character
+references even in skipped content, and reject malformed closing tags or trailing
+content for direct list, map, and scalar reads. Default XML recovery is unchanged.
