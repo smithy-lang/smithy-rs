@@ -1,6 +1,6 @@
 ---
 applies_to: ["client", "server"]
-authors: ["drganjoo", "fahadzub"]
+authors: ["drganjoo"]
 references: []
 breaking: false
 new_feature: true
