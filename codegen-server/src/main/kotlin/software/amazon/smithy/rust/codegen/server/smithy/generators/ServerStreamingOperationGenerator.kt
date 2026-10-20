@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -15,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
@@ -270,23 +272,33 @@ class ServerStreamingOperationGenerator(
                     )
                 }
             }
+        val body =
+            writable {
+                // Event streams contain setup statements and need a block. A blob is already
+                // an expression; extra braces trigger unused_braces in unformatted projections.
+                val needsBlock = streamingMember.isEventStream(model)
+                if (needsBlock) rust("{")
+                streamingBody(streamingMember)(this)
+                if (needsBlock) rust("}")
+            }
         return writable {
             rustTemplate(
                 """
                 let mut output = output;
                 let body = match #{take} {
-                    #{Some}(streaming) => #{Some}({ #{body:W} }),
+                    #{Some}(streaming) => #{Some}(#{body:W}),
                     #{None} => #{None},
                 };
                 protocol.serialize_streaming_response(
                     <Self as #{SchemaOperationShape}>::SCHEMA.output(),
                     &output,
-                    <Self as #{SchemaOperationShape}>::SCHEMA.output().members()[${outputShape.allMembers.values.indexOf(streamingMember)}],
+                    #{Output}::__STREAMING_MEMBER_SCHEMA,
                     body,
                 )
                 """,
                 *codegenScope,
-                "body" to streamingBody(streamingMember),
+                "Output" to symbolProvider.toSymbol(outputShape),
+                "body" to body,
                 "take" to take,
             )
         }
@@ -427,6 +439,9 @@ class ServerStreamingOperationGenerator(
      * schema-guided walker.
      */
     fun unmarshaller(unionShape: UnionShape): RuntimeType {
+        if (!codegenContext.usesSchemaHttpSerde) {
+            throw CodegenException("Schema event unmarshallers require schema HTTP serde")
+        }
         val unionSymbol = symbolProvider.toSymbol(unionShape)
         val name = "${unionSymbol.name.toPascalCase()}Unmarshaller"
         val errorSymbol =

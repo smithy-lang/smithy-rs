@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -47,7 +48,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 /** Legacy server event decoding, including validation of completed event builders. */
 internal class ServerEventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
-    codegenContext: ServerCodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val unionShape: UnionShape,
 ) {
     private val model = codegenContext.model
@@ -81,6 +82,9 @@ internal class ServerEventStreamUnmarshallerGenerator(
         )
 
     fun render(): RuntimeType {
+        if (codegenContext.usesSchemaHttpSerde) {
+            throw CodegenException("Legacy event unmarshallers cannot be emitted into a schema HTTP serde crate")
+        }
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
         return RuntimeType.forInlineFun("${unmarshallerType.name}::new", eventStreamSerdeModule) {
             renderUnmarshaller(unmarshallerType, unionSymbol)
