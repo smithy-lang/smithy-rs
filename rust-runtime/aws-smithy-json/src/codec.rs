@@ -161,6 +161,7 @@ pub struct JsonCodecSettings {
     /// read as epoch seconds and a string for a `date-time` or `epoch-seconds`
     /// member is parsed as an offset-aware `date-time`.
     strict_timestamp_formats: bool,
+    dispatch_null_members: bool,
     enforce_strictness: bool,
     validate_skipped_values: bool,
     validate_skipped_string_encoding: bool,
@@ -205,6 +206,12 @@ pub struct JsonCodecSettings {
 }
 
 impl JsonCodecSettings {
+    /// Whether null structure members are passed to the consumer instead of skipped.
+    /// Schema servers use this to clear optional fields while leaving required validation to builders.
+    pub fn dispatch_null_members(&self) -> bool {
+        self.dispatch_null_members
+    }
+
     /// Creates a builder for `JsonCodecSettings`.
     pub fn builder() -> JsonCodecSettingsBuilder {
         JsonCodecSettingsBuilder::default()
@@ -275,6 +282,7 @@ impl JsonCodecSettings {
             allow_leading_zeros: self.allow_leading_zeros,
             allow_trailing_decimal_point: self.allow_trailing_decimal_point,
             strict_timestamp_formats: self.strict_timestamp_formats,
+            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             normalize_arbitrary_precision: self.normalize_arbitrary_precision,
@@ -311,6 +319,7 @@ impl Default for JsonCodecSettings {
             allow_leading_zeros: false,
             allow_trailing_decimal_point: false,
             strict_timestamp_formats: false,
+            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             normalize_arbitrary_precision: false,
@@ -350,6 +359,7 @@ pub struct JsonCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
     strict_timestamp_formats: bool,
+    dispatch_null_members: bool,
     enforce_strictness: bool,
     validate_skipped_values: bool,
     validate_skipped_string_encoding: bool,
@@ -375,6 +385,7 @@ impl Default for JsonCodecSettingsBuilder {
             allow_leading_zeros: false,
             allow_trailing_decimal_point: false,
             strict_timestamp_formats: false,
+            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
             normalize_arbitrary_precision: false,
@@ -461,6 +472,13 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Pass null structure members to the consumer. Defaults to false, preserving existing
+    /// codec callers; schema server readers decide how each null affects their builders.
+    pub fn dispatch_null_members(mut self, value: bool) -> Self {
+        self.dispatch_null_members = value;
+        self
+    }
+
     /// Sets the protocol id surfaced in `DocumentSettings`
     /// diagnostics. Defaults to `aws.smithy.json#JsonCodec`. AWS
     /// protocols (awsJson1_0, awsJson1_1, restJson1) supply their own
@@ -525,6 +543,7 @@ impl JsonCodecSettingsBuilder {
             allow_leading_zeros: self.allow_leading_zeros,
             allow_trailing_decimal_point: self.allow_trailing_decimal_point,
             strict_timestamp_formats: self.strict_timestamp_formats,
+            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             normalize_arbitrary_precision: self.normalize_arbitrary_precision,
@@ -843,6 +862,7 @@ mod tests {
             .allow_leading_zeros(true)
             .allow_trailing_decimal_point(true)
             .strict_timestamp_formats(true)
+            .dispatch_null_members(true)
             .build();
 
         let round_tripped = original.to_builder().build();
@@ -868,5 +888,6 @@ mod tests {
         assert!(round_tripped.allow_leading_zeros);
         assert!(round_tripped.allow_trailing_decimal_point);
         assert!(round_tripped.strict_timestamp_formats());
+        assert!(round_tripped.dispatch_null_members());
     }
 }

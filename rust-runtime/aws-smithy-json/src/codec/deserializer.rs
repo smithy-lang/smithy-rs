@@ -234,10 +234,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
 
-            // Document null is a value. Other null members represent absence.
+            // Document null is a value. Existing consumers skip other null members; schema
+            // server readers opt in to receive them and apply their builder semantics.
             let member_schema = self.resolve_member(schema, &key_str);
             let rem = self.remaining();
-            if rem.starts_with(b"null")
+            if !self.settings.dispatch_null_members()
+                && rem.starts_with(b"null")
                 && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric())
                 && !member_schema.is_some_and(|member| member.shape_type() == ShapeType::Document)
             {
@@ -1405,6 +1407,40 @@ fn parse_integral_decimal(text: &str) -> Result<i64, SerdeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn null_dispatch_can_clear_an_optional_duplicate_without_changing_the_default() {
+        use aws_smithy_schema::shape_id;
+
+        let text = Schema::new_member(
+            shape_id!("test", "Input", "text"),
+            ShapeType::String,
+            "text",
+            0,
+        );
+        let members = [&text];
+        let schema = Schema::new_struct(shape_id!("test", "Input"), ShapeType::Structure, &members);
+        for (dispatch, expected) in [(false, Some("first".to_owned())), (true, None)] {
+            let settings = JsonCodecSettings::builder()
+                .dispatch_null_members(dispatch)
+                .build();
+            let mut deserializer =
+                JsonDeserializer::new(br#"{"text":"first","text":null}"#, Arc::new(settings));
+            let mut value = None;
+            deserializer
+                .read_struct(&schema, &mut |member, reader| {
+                    if reader.is_null() {
+                        reader.read_null()?;
+                        value = None;
+                    } else {
+                        value = Some(reader.read_string(member)?);
+                    }
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(value, expected);
+        }
+    }
 
     #[test]
     fn document_member_null_is_dispatched_as_a_value() {

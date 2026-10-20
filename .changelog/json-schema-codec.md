@@ -18,3 +18,8 @@ and quoted non-finite values.
 Add opt-in normalization of arbitrary-precision decimal text to valid JSON numbers
 while retaining rejection by default. Preserve explicit null document members and
 expose the schema JSON deserializer byte position.
+
+Add opt-in dispatch of null structure members to deserializer consumers. Schema
+servers use this to preserve legacy duplicate-member semantics: a later null can
+clear an earlier optional value. Existing codec callers continue to skip non-
+document null members by default.
