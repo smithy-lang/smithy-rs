@@ -1579,20 +1579,6 @@ mod tests {
     // would produce JSON no parser accepts, so the raw path rewrites
     // them.
 
-    /// Text accepted by `BigInteger::from_str` that is not an RFC 8259
-    /// JSON number.
-    ///
-    /// `FromStr` is structurally strict but deliberately permits leading
-    /// zeros, which RFC 8259 forbids — that gap is exactly what this path
-    /// has to catch, so every entry here must still parse.
-    const NON_JSON_BIG_INTEGERS: &[&str] = &["00123", "007", "-01", "0000", "-0000"];
-
-    /// Text accepted by `BigDecimal::from_str` that is not an RFC 8259
-    /// JSON number. Same leading-zero gap as above.
-    const NON_JSON_BIG_DECIMALS: &[&str] = &[
-        "00123", "007", "-01", "00.1", "-01.5", "007e2", "0000", "00.0", "01e-3",
-    ];
-
     fn normalizing_settings() -> Arc<JsonCodecSettings> {
         Arc::new(
             JsonCodecSettings::builder()

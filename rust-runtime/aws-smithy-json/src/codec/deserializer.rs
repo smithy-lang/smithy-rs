@@ -1054,7 +1054,8 @@ impl<'a> JsonDeserializer<'a> {
     /// Skips a JSON number, validating it against the RFC 8259 grammar
     /// `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`. Whatever follows is left for the
     /// enclosing container's separator check. The configured leading-zero and
-    /// empty-fraction allowances apply to both read and discarded values.
+    /// empty-fraction and empty-integer-part allowances apply to both read and
+    /// discarded values.
     fn skip_number(&mut self) -> Result<(), SerdeError> {
         let rem = self.remaining();
         let invalid = || SerdeError::invalid_input("invalid number");
@@ -1074,6 +1075,11 @@ impl<'a> JsonDeserializer<'a> {
                     i += 1;
                 }
             }
+            Some(b'.')
+                if self.settings.allow_empty_integer_part
+                    && i == 1
+                    && rem.first() == Some(&b'-')
+                    && rem.get(i + 1).is_some_and(|b| b.is_ascii_digit()) => {}
             _ => return Err(invalid()),
         }
         if rem.get(i) == Some(&b'.') {
@@ -1480,6 +1486,58 @@ mod tests {
                 .unwrap();
             assert_eq!(actual, expected, "{body}");
         }
+    }
+
+    #[test]
+    fn empty_integer_part_allowance_matches_legacy_negative_fractions() {
+        for allow in [false, true] {
+            for trailing in [false, true] {
+                let settings = Arc::new(
+                    JsonCodecSettings::builder()
+                        .enforce_strictness(true)
+                        .allow_empty_integer_part(allow)
+                        .allow_trailing_decimal_point(trailing)
+                        .build(),
+                );
+                for (text, expected) in [
+                    ("-.123", Some(-0.123)),
+                    ("-.123e2", Some(-12.3)),
+                    ("-.0", Some(-0.0)),
+                    ("-0.123", Some(-0.123)),
+                    (".123", None),
+                    ("-.", None),
+                    ("-.e2", None),
+                    ("-.123e", None),
+                    ("-.123x", None),
+                ] {
+                    let accepted = expected.is_some() && (allow || text == "-0.123");
+                    let result = JsonDeserializer::new(text.as_bytes(), settings.clone())
+                        .read_double(dummy_schema());
+                    assert_eq!(
+                        result.is_ok(),
+                        accepted,
+                        "{text}, allow={allow}, trailing={trailing}"
+                    );
+                    if accepted {
+                        assert_eq!(result.unwrap(), expected.unwrap());
+                    }
+                    let body = format!(r#"{{"ignored":{text}}}"#);
+                    assert_eq!(
+                        JsonDeserializer::new(body.as_bytes(), settings.clone())
+                            .read_struct(dummy_schema(), &mut |_, _| Ok(()))
+                            .is_ok(),
+                        accepted,
+                        "skipped {text}, allow={allow}, trailing={trailing}",
+                    );
+                }
+            }
+        }
+        assert!(!JsonCodecSettings::default().allow_empty_integer_part);
+        assert!(
+            !JsonCodecSettings::builder()
+                .build()
+                .allow_empty_integer_part
+        );
     }
 
     #[test]
