@@ -51,8 +51,12 @@ affect the result. No stage uses a time budget.
 ## Java failures and `java-fixes.patch`
 
 Java's compiler fails on some valid rule sets (accepted by Java's own parser, type checker, and
-`RuleEvaluator`). `manifest.json`'s `javaFailures` lists the random seeds and Java's errors.
-`java-fixes.patch` is a minimal fix for each cause, applied to the pinned sources:
+`RuleEvaluator`), and can compile others into a BDD that selects a different result.
+`manifest.json`'s `javaFailures` lists the random seeds Java fails on, with Java's errors.
+`java-fixes.patch` is a minimal fix for each cause, applied to the pinned sources. The Rust
+compiler (`src/endpoint_rules/compiler`) makes the same fixes.
+
+Failures:
 
 - `No field named X`: `CoalesceTransform` inlines a binding used by exactly one later
   condition, counting only condition references. Uses in the rule's result or nested rules
@@ -64,6 +68,18 @@ Java's compiler fails on some valid rule sets (accepted by Java's own parser, ty
   type ...`: `EndpointBddTrait.removeUnreferencedConditions` removes conditions that unreachable
   results still need to type-check: an assignment they use, or an `isSet` that proves a
   reference set. The fix keeps those conditions.
+
+Wrong results, which no fixture triggers:
+
+- `CoalesceTransform` replaces `x = f(...)` followed by `g(x)` with `g(coalesce(f(...), zero))`,
+  where `zero` is `""` or `false`. When `f` has no value, or is false, the rule no longer fails
+  if `g(zero)` holds: `not(stringEquals(x, "a"))` does. The fix only coalesces such bindings into
+  `stringEquals` or `booleanEquals` against a different literal, or into `substring`. It also
+  never coalesces into a template, where Java writes the `coalesce` call into the template text.
+- `VariableConsolidationTransform` records renames by name across the rule set. When a binding
+  is removed because an ancestor binds the same expression, its references are renamed to the
+  ancestor's name, unless a later rename of the same name replaces it. They then refer to
+  another binding. The fix keeps the input rule set in that case.
 
 Those seeds are recorded with pipeline `CompileBdd with java-fixes.patch`. The patched run fails
 unless every other fixture is byte-identical to the unpatched run. Each random fixture is also

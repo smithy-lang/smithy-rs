@@ -21,7 +21,12 @@ impl PartialEq for Location {
     }
 }
 
+// Location not included in equality checks
 impl Eq for Location {}
+// Also not included in hashes
+impl std::hash::Hash for Location {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
 
 impl fmt::Debug for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -238,7 +243,7 @@ impl ParameterValue {
 }
 
 /// An expression: a literal, a reference to a parameter or assignment, or a function call.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Expression {
     pub(crate) kind: ExpressionKind,
     pub(crate) location: Location,
@@ -257,7 +262,7 @@ impl Expression {
 }
 
 /// The kinds of [`Expression`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ExpressionKind {
     /// A literal value.
@@ -276,7 +281,7 @@ pub enum ExpressionKind {
 }
 
 /// A literal value.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Literal {
     /// A boolean.
@@ -292,7 +297,7 @@ pub enum Literal {
 }
 
 /// A string template such as `https://{Region}.{PartitionResult#dnsSuffix}`.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Template {
     pub(crate) segments: Box<[TemplateSegment]>,
 }
@@ -314,7 +319,7 @@ impl Template {
 }
 
 /// A segment of a [`Template`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum TemplateSegment {
     /// Literal text, with `{{` and `}}` escapes already removed.
@@ -339,7 +344,7 @@ pub enum PathSegment {
 }
 
 /// A condition: a function call whose result may be assigned to a name.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Condition {
     pub(crate) function: Expression,
     pub(crate) assign: Option<String>,
@@ -381,7 +386,7 @@ impl Condition {
 }
 
 /// An endpoint definition.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EndpointDefinition {
     pub(crate) url: Expression,
     pub(crate) headers: Box<[(String, Box<[Expression]>)]>,
@@ -416,7 +421,7 @@ impl EndpointDefinition {
 }
 
 /// A conditionless endpoint or error rule, as used for BDD results.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ResultRule {
     pub(crate) documentation: Option<String>,
     pub(crate) kind: ResultKind,
@@ -441,7 +446,7 @@ impl ResultRule {
 }
 
 /// The outcome of a [`ResultRule`].
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ResultKind {
     /// An endpoint.

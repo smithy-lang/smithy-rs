@@ -159,6 +159,7 @@
 
 mod bdd;
 mod codec;
+mod compiler;
 mod context;
 mod language;
 mod validate;

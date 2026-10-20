@@ -172,6 +172,13 @@ pub(super) fn decode_rule_set(
     })
 }
 
+/// Decodes one condition, for tests that compare conditions with recorded ones.
+#[cfg(test)]
+pub(super) fn decode_condition(value: &Node) -> Result<Condition> {
+    let limits = EndpointRulesLimits::default();
+    Decoder::new(&limits).condition(value)
+}
+
 struct Decoder<'a> {
     limits: &'a EndpointRulesLimits,
     expression_nodes: usize,
@@ -1054,23 +1061,30 @@ pub(crate) fn encode_template(template: &Template) -> String {
                 out.push_str(name);
                 if !path.is_empty() {
                     out.push('#');
-                    for (i, segment) in path.iter().enumerate() {
-                        match segment {
-                            PathSegment::Key(key) => {
-                                if i > 0 {
-                                    out.push('.');
-                                }
-                                out.push_str(key);
-                            }
-                            PathSegment::Index(index) => {
-                                out.push('[');
-                                out.push_str(&index.to_string());
-                                out.push(']');
-                            }
-                        }
-                    }
+                    out.push_str(&encode_path(path));
                 }
                 out.push('}');
+            }
+        }
+    }
+    out
+}
+
+/// Encodes an attribute path, such as `resourceId[1]`, as written after `#` or in `getAttr`.
+pub(crate) fn encode_path(path: &[PathSegment]) -> String {
+    let mut out = String::new();
+    for (i, segment) in path.iter().enumerate() {
+        match segment {
+            PathSegment::Key(key) => {
+                if i > 0 {
+                    out.push('.');
+                }
+                out.push_str(key);
+            }
+            PathSegment::Index(index) => {
+                out.push('[');
+                out.push_str(&index.to_string());
+                out.push(']');
             }
         }
     }

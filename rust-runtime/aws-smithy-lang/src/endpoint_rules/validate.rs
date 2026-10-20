@@ -142,6 +142,18 @@ impl EndpointRuleSet {
     /// Functions are not checked. The rule tree is walked with an explicit stack.
     pub fn validate(&self) -> Vec<Diagnostic> {
         let mut diagnostics = undocumented_parameters(self.parameters());
+        diagnostics.extend(self.check_rules(true));
+        diagnostics
+    }
+
+    /// The errors for names assigned or referenced out of scope, as Java's type checker
+    /// reports them.
+    pub(crate) fn scope_errors(&self) -> Vec<Diagnostic> {
+        self.check_rules(false)
+    }
+
+    fn check_rules(&self, check_urls: bool) -> Vec<Diagnostic> {
+        let mut diagnostics = Vec::new();
         let parameters = self.parameters();
         // Assignments in scope, innermost last, with the conditions that made them.
         let mut scope: Vec<(&str, &Condition)> = Vec::new();
@@ -198,7 +210,9 @@ impl EndpointRuleSet {
             match rule.kind() {
                 RuleKind::Endpoint(endpoint) => {
                     visit_endpoint(endpoint, &mut check);
-                    diagnostics.extend(invalid_url_scheme(endpoint));
+                    if check_urls {
+                        diagnostics.extend(invalid_url_scheme(endpoint));
+                    }
                 }
                 RuleKind::Error(message) => visit_expression(message, &mut check),
                 RuleKind::Tree(children) => {
