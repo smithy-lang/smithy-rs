@@ -20,11 +20,21 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * A raw Blob payload without a modeled media type accepts any Content-Type in a REST-only service.
+ * Adding another protocol introduces protocol identification before operation dispatch: REST JSON
+ * claims this payload through application/octet-stream, while arbitrary or absent content types
+ * receive the shared routing fallback. Keep both behaviors explicit when enabling schema serde.
+ *
+ * "Legacy" in this test means this checkout's generated server with schemaSerde=false.
+ */
 internal class BlobPayloadRoutingCompatibilityTest {
     @Test
     fun `blob content types preserve single protocol behavior and determine multi protocol routing`() {
         val observations = Files.createTempDirectory("untyped-blob-routing-")
         System.err.println("Untyped blob routing observations: $observations")
+        // Generate legacy REST JSON, schema REST JSON, and schema REST JSON + CBOR.
+        // All use HTTP 1.x and send identical requests. Legacy codegen serves one protocol.
         for ((schemaSerde, multiProtocol) in listOf(false to false, true to false, true to true)) {
             val model =
                 """
@@ -59,13 +69,15 @@ internal class BlobPayloadRoutingCompatibilityTest {
                                     #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput { size: input.data.as_ref().len() as i32 })
                                 }).build().unwrap();
                             let mut records = #{String}::new();
+                            // Arbitrary, default Blob, and absent Content-Type, with the same raw bytes.
                             for content_type in [#{Some}("video/mp4"), #{Some}("application/octet-stream"), #{None}] {
                                 let mut request = #{Http}::Request::post("/upload");
                                 if let #{Some}(value) = content_type { request = request.header("content-type", value); }
                                 let request = request.body(#{Server}::body::to_boxed_sync("abc")).unwrap();
                                 let response = #{Tower}::ServiceExt::oneshot(app.clone(), request).await.unwrap();
                                 let status = response.status().as_u16();
-                                // Pinned after running the legacy and schema configurations.
+                                // REST-only servers accept all three cases. With CBOR also enabled,
+                                // only application/octet-stream identifies REST JSON for this payload.
                                 let expected_status = if $multiProtocol && content_type != #{Some}("application/octet-stream") { 404 } else { 200 };
                                 assert_eq!(status, expected_status, "{content_type:?}");
                                 let mut headers: #{Vec}<_> = response.headers().iter()
@@ -75,6 +87,8 @@ internal class BlobPayloadRoutingCompatibilityTest {
                                 if status == 200 {
                                     assert_eq!(body.as_ref(), b"{\"size\":3}");
                                 } else {
+                                    // No protocol claimed the request: pin the shared fallback's
+                                    // headers and body as well as its 404 status.
                                     assert!(headers.is_empty());
                                     assert_eq!(body.as_ref(), b"<UnknownOperationException/>\n");
                                 }
@@ -94,6 +108,8 @@ internal class BlobPayloadRoutingCompatibilityTest {
                 }
             }
         }
+        // Compare complete REST-only responses: status, sorted headers, and body bytes.
+        // The multi-protocol behavior is asserted separately in its generated Rust test.
         assertEquals(Files.readString(observations.resolve("false-false.txt")), Files.readString(observations.resolve("true-false.txt")))
     }
 }
