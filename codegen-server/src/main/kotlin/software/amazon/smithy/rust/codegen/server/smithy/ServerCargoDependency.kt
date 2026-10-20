@@ -27,13 +27,19 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
-    private val legacyTower = CargoDependency.Tower.withFeature("util")
+    private val legacyTower = CargoDependency("tower", CratesIo("0.4"))
     private val schemaTower = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
 
     /**
+     * Tower 0.4 dependency retained for compatibility with legacy server decorators.
+     * Use [tower] to select the dependency for the codegen context.
+     */
+    val Tower: CargoDependency = legacyTower
+
+    /**
      * Legacy HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
-     * Enable utilities explicitly: the HTTP 1.x runtime no longer enables Tower 0.4's utilities
-     * transitively, and generated protocol tests and service examples use them.
+     * Preserve the legacy dependency declaration; both runtimes enable Tower 0.4's
+     * utilities transitively for existing generated servers.
      */
     fun tower(codegenContext: CodegenContext): CargoDependency =
         if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) schemaTower else legacyTower

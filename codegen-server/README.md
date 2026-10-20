@@ -27,8 +27,8 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
   "codegen": { "schemaSerde": true },
   "customizationConfig": {
     "protocols": {
-      "awsJson1_0": { "responseBindings": "smithy-specs" },
-      "awsJson1_1": { "responseBindings": "historical" }
+      "aws.protocols#awsJson1_0": { "responseBindings": "smithy-specs" },
+      "aws.protocols#awsJson1_1": { "responseBindings": "historical" }
     }
   }
 }
@@ -38,8 +38,9 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
 * `"smithy-specs"`: status 200 for success, the `@error` class status (400/500) for errors, and
   every member in the document with no REST headers.
 
-Servers generated without `schemaSerde` always behave as `"historical"`; the setting is
-validated but has no effect there. REST JSON/XML apply REST response bindings and RPC v2 CBOR
-ignores them, whatever this setting says. The short AWS JSON keys above are normalized to their
-full protocol shape IDs; `aws.protocols#awsJson1_0` and `aws.protocols#awsJson1_1` are also accepted.
-Specify each protocol once.
+Servers generated without `schemaSerde` always behave as `"historical"` and leave
+`customizationConfig.protocols` unparsed. REST JSON/XML apply REST response bindings and RPC v2 CBOR
+ignores them, whatever this setting says. With `schemaSerde: true`, protocol settings must use full protocol shape IDs,
+including custom protocols (for example, `com.amazon.coral#rpcv1`). The shared `common` section is
+the only exception. Shorthand keys such as `awsJson1_0` or `restJson1` are rejected during settings
+loading. This validation does not apply to legacy servers.

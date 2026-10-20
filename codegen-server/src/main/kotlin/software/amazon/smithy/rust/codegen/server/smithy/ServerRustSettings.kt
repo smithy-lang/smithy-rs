@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
@@ -62,32 +63,48 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
-    internal val protocolResponseSettings = ServerProtocolResponseSettings.from(customizationConfig)
+    private val parsedProtocolSettings by lazy { parseProtocolSettings() }
+    internal val protocolResponseSettings = ServerProtocolResponseSettings.from(protocolSettings())
 
     /**
-     * The per-protocol settings under `customizationConfig.protocols`, keyed by protocol shape ID,
-     * with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
+     * The schema-only settings under `customizationConfig.protocols`, keyed by full protocol shape ID
+     * (or the shared `common` key), with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
+     * Legacy servers leave this customization section unparsed.
      *
      * Protocol sections are passed through to the generated `ProtocolOptions` as documents keyed
      * by shape ID. The common request body limit is emitted as typed body configuration instead.
      * Protocol authors parse their own documents when constructing their protocol or router.
      */
-    fun protocolSettings(): Map<String, ObjectNode> {
+    fun protocolSettings(): Map<String, ObjectNode> =
+        if (codegenConfig.schemaSerde) parsedProtocolSettings else emptyMap()
+
+    private fun parseProtocolSettings(): Map<String, ObjectNode> {
+        val protocolsPath = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY"
+        val protocols = customizationConfig?.getMember(PROTOCOLS_CUSTOMIZATION_KEY)?.orNull()
+        if (protocols != null && !protocols.isObjectNode) {
+            throw CodegenException("`$protocolsPath` must be a JSON object")
+        }
         val sections =
-            customizationConfig
-                ?.getObjectMember(PROTOCOLS_CUSTOMIZATION_KEY)?.orNull()
+            protocols?.expectObjectNode()
                 ?.members
                 ?.entries
                 ?.associate { (key, value) ->
-                    val protocolId =
-                        when (key.value) {
-                            "awsJson1_0", "awsJson1_1" -> "aws.protocols#${key.value}"
-                            else -> key.value
+                    val protocolId = key.value
+                    val path = "$protocolsPath.$protocolId"
+                    if (protocolId != COMMON_PROTOCOL_SETTINGS_KEY) {
+                        val shapeId = runCatching { ShapeId.from(protocolId) }.getOrNull()
+                        if (shapeId == null || shapeId.hasMember()) {
+                            throw CodegenException(
+                                "`$path` must use a full protocol shape ID without a member, " +
+                                    "such as `aws.protocols#restJson1`, or the shared `common` key. " +
+                                    "Protocol shorthand names are not supported.",
+                            )
                         }
-                    protocolId to
-                        value.expectObjectNode(
-                            "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.${key.value}` must be a JSON object",
-                        )
+                    }
+                    if (!value.isObjectNode) {
+                        throw CodegenException("`$path` must be a JSON object")
+                    }
+                    protocolId to value.expectObjectNode()
                 }.orEmpty()
         if (!codegenConfig.rpcV2CborAddCapitalizedRoute) {
             return sections
@@ -114,10 +131,11 @@ data class ServerRustSettings(
      * `Content-Length` values; services should set a positive value.
      *
      * The legacy `codegen.requestBodyMaxBytes` value is copied here when this setting is absent.
-     * Both the schema routing path and legacy generators read this at generation time.
+     * The legacy generator reads `codegen.requestBodyMaxBytes` without parsing protocol settings.
      * Schema routing stores the result in its typed request body configuration.
      */
     fun requestBodyMaxBytes(): Long {
+        if (!codegenConfig.schemaSerde) return codegenConfig.requestBodyMaxBytes
         val key = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$COMMON_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_MAX_BYTES_KEY"
         val value =
             protocolSettings()[COMMON_PROTOCOL_SETTINGS_KEY]
@@ -137,9 +155,12 @@ data class ServerRustSettings(
      * codegen and, through [protocolSettings], the schema routing path.
      */
     fun rpcV2CborCapitalizeRoutes(): Boolean =
-        protocolSettings()[RPC_V2_CBOR_PROTOCOL_ID]
-            ?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false)
-            ?: false
+        if (codegenConfig.schemaSerde) {
+            protocolSettings()[RPC_V2_CBOR_PROTOCOL_ID]
+                ?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false) ?: false
+        } else {
+            codegenConfig.rpcV2CborAddCapitalizedRoute
+        }
 
     companion object {
         /** Key under `customizationConfig` holding the per-protocol settings sections. */
@@ -202,7 +223,12 @@ data class ServerRustSettings(
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
-                customizationConfig = foldLegacyRequestBodyMaxBytes(coreRustSettings.customizationConfig, codegenSettingsNode.orNull()),
+                customizationConfig =
+                    if (serverCodegenConfig.schemaSerde) {
+                        foldLegacyRequestBodyMaxBytes(coreRustSettings.customizationConfig, codegenSettingsNode.orNull())
+                    } else {
+                        coreRustSettings.customizationConfig
+                    },
             ).also { it.requestBodyMaxBytes() }
         }
     }
@@ -252,6 +278,7 @@ data class ServerCodegenConfig(
      * clients depending on the lenient behavior.
      */
     val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
+    val requestBodyMaxBytes: Long = 0L,
     val rpcV2CborAddCapitalizedRoute: Boolean = DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
     val schemaSerde: Boolean = DEFAULT_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
@@ -324,6 +351,7 @@ data class ServerCodegenConfig(
                 "addValidationExceptionToConstrainedOperations" to ConfigDefault<Boolean?>(null),
                 "alwaysSendEventStreamInitialResponse" to ConfigDefault(DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE),
                 "allowMissingUnionVariant" to ConfigDefault(DEFAULT_ALLOW_MISSING_UNION_VARIANT),
+                "requestBodyMaxBytes" to ConfigDefault(0L),
                 HTTP_1X_CONFIG_KEY to ConfigDefault(DEFAULT_HTTP_1X),
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to ConfigDefault(DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE),
                 SCHEMA_SERDE_CONFIG_KEY to ConfigDefault(DEFAULT_SCHEMA_SERDE),
@@ -398,13 +426,18 @@ data class ServerCodegenConfig(
                         DEFAULT_ALLOW_MISSING_UNION_VARIANT,
                     ),
                 http1x = configuredHttp1x ?: (schemaSerde || DEFAULT_HTTP_1X),
+                requestBodyMaxBytes = configNode.getNumberMemberOrDefault(ServerRustSettings.REQUEST_BODY_MAX_BYTES_KEY, 0L).toLong(),
                 rpcV2CborAddCapitalizedRoute =
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                         DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
                     ),
                 schemaSerde = schemaSerde,
-            )
+            ).also {
+                require(it.requestBodyMaxBytes >= 0) {
+                    "`requestBodyMaxBytes` must be non-negative, got ${it.requestBodyMaxBytes}"
+                }
+            }
         } else {
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,

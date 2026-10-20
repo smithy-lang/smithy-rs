@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 
@@ -23,10 +22,11 @@ internal enum class AwsJsonResponseBindings(val setting: String) {
 }
 
 /**
- * Server-only settings under `customizationConfig.protocols.<awsJson1_0|awsJson1_1>.responseBindings`.
+ * Server-only `responseBindings` settings under the full AWS JSON protocol shape IDs in
+ * `customizationConfig.protocols`.
  *
  * Only the schema runtime (`codegen.schemaSerde: true`) reads the value; legacy generated servers
- * always behave as [AwsJsonResponseBindings.HISTORICAL]. The setting is validated here so a typo fails codegen.
+ * always behave as [AwsJsonResponseBindings.HISTORICAL]. A supplied value is validated here; unknown setting keys are ignored.
  */
 internal class ServerProtocolResponseSettings private constructor(
     private val responseBindings: Map<ShapeId, AwsJsonResponseBindings>,
@@ -43,19 +43,11 @@ internal class ServerProtocolResponseSettings private constructor(
                 ShapeId.from("aws.protocols#awsJson1_1"),
             )
 
-        fun from(customizationConfig: ObjectNode?): ServerProtocolResponseSettings {
-            val protocols =
-                expectObject(customizationConfig?.getMember("protocols")?.orElse(null), PROTOCOLS_PATH)
+        fun from(protocols: Map<String, ObjectNode>): ServerProtocolResponseSettings {
             val values =
                 AWS_JSON_PROTOCOLS.associateWith { protocol ->
-                    val short = protocols?.getMember(protocol.name)?.orElse(null)
-                    val full = protocols?.getMember(protocol.toString())?.orElse(null)
-                    if (short != null && full != null) {
-                        throw CodegenException("Use only one of `$PROTOCOLS_PATH.${protocol.name}` and `$PROTOCOLS_PATH.$protocol`")
-                    }
-                    val key = if (full != null) protocol.toString() else protocol.name
-                    val path = "$PROTOCOLS_PATH.$key"
-                    val settings = expectObject(full ?: short, path)
+                    val path = "$PROTOCOLS_PATH.$protocol"
+                    val settings = protocols[protocol.toString()]
                     val value = settings?.getMember(RESPONSE_BINDINGS)?.orElse(null)
                     if (value == null) {
                         AwsJsonResponseBindings.HISTORICAL
@@ -68,19 +60,6 @@ internal class ServerProtocolResponseSettings private constructor(
                     }
                 }
             return ServerProtocolResponseSettings(values)
-        }
-
-        private fun expectObject(
-            node: Node?,
-            path: String,
-        ): ObjectNode? {
-            if (node == null) {
-                return null
-            }
-            if (!node.isObjectNode) {
-                throw CodegenException("`$path` must be a JSON object")
-            }
-            return node.expectObjectNode()
         }
     }
 }
