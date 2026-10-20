@@ -49,8 +49,8 @@ pub enum Error {
 
 /// A [`Router`] supporting the [Smithy RPC v2 CBOR] protocol.
 ///
-/// Register routes using `Service/operation/Operation` keys. Request lookup borrows
-/// this tail directly from the URI, ignoring any prefix and service namespace.
+/// Register routes using `Service.Operation` keys, preserving the contract with legacy
+/// generated services. Request lookup ignores URI prefixes and service namespaces.
 ///
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
@@ -69,7 +69,8 @@ impl<S> RpcV2CborRouter<S> {
     pub(crate) fn match_target(&self, path: &str) -> Option<&S> {
         let identity = parse_route_identity(path)?;
         tracing::trace!(service = %identity.service, operation = %identity.operation, "parsed service and operation from URI");
-        self.routes.get(identity.route_key)
+        self.routes
+            .get(format!("{}.{}", identity.service, identity.operation).as_str())
     }
     /// Builds routing keys owned by a runtime service schema adapter.
     pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
@@ -214,7 +215,7 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
 
         let request_path = request.uri().path();
         tracing::trace!(%request_path, "parsing service and operation from URI");
-        // The route key is a slice of the request path; no intermediate String is needed.
+        // Parse the URI, then look up the legacy `Service.Operation` registration key.
         let route = self.match_target(request_path).ok_or(Error::NotFound)?;
         Ok(route.clone())
     }
@@ -299,27 +300,22 @@ mod tests {
                 Some(RouteIdentity {
                     service: "Service",
                     operation: "Operation",
-                    route_key: "Service/operation/Operation",
                 }),
                 parse_route_identity(uri),
                 "uri: {uri}",
             );
         }
-        for (uri, service, operation, route_key) in [
-            ("/service/a/operation/b", "a", "b", "a/operation/b"),
-            ("/service/_a/operation/b", "_a", "b", "_a/operation/b"),
-            ("/service/a___/operation/b", "a___", "b", "a___/operation/b"),
-            ("/service/_a_/operation/b", "_a_", "b", "_a_/operation/b"),
-            ("/service/a/operation/b_", "a", "b_", "a/operation/b_"),
-            ("/service/a/operation/_b", "a", "_b", "a/operation/_b"),
-            ("/service/com.x._a/operation/b", "_a", "b", "_a/operation/b"),
+        for (uri, service, operation) in [
+            ("/service/a/operation/b", "a", "b"),
+            ("/service/_a/operation/b", "_a", "b"),
+            ("/service/a___/operation/b", "a___", "b"),
+            ("/service/_a_/operation/b", "_a_", "b"),
+            ("/service/a/operation/b_", "a", "b_"),
+            ("/service/a/operation/_b", "a", "_b"),
+            ("/service/com.x._a/operation/b", "_a", "b"),
         ] {
             assert_eq!(
-                Some(RouteIdentity {
-                    service,
-                    operation,
-                    route_key,
-                }),
+                Some(RouteIdentity { service, operation }),
                 parse_route_identity(uri),
                 "uri: {uri}",
             );
@@ -459,8 +455,7 @@ mod tests {
     #[test]
     fn owned_routes_match_uri_tails_in_both_map_modes() {
         for count in [1, super::ROUTE_CUTOFF + 1] {
-            let router =
-                RpcV2CborRouter::from_owned((0..count).map(|i| (format!("Service/operation/Operation{i}"), i)));
+            let router = RpcV2CborRouter::from_owned((0..count).map(|i| (format!("Service.Operation{i}"), i)));
             for i in 0..count {
                 for path in [
                     format!("/service/Service/operation/Operation{i}"),
@@ -509,7 +504,7 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = [("Service/operation/Operation", ())].into_iter().collect();
+        let router: RpcV2CborRouter<_> = [("Service.Operation", ())].into_iter().collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.
@@ -654,13 +649,15 @@ mod tests {
     }
 
     #[test]
-    fn route_key_borrows_the_request_path() {
+    fn route_identity_borrows_the_request_path() {
         let path = "/prefix/service/namespace.Service/operation/Operation".to_string();
         let identity = parse_route_identity(&path).expect("valid route");
-        assert_eq!(identity.route_key, "Service/operation/Operation");
+        assert_eq!(identity.service, "Service");
+        assert_eq!(identity.operation, "Operation");
 
         // The borrowed pointer must be within the path's memory range.
         let path_range = path.as_ptr() as usize..path.as_ptr() as usize + path.len();
-        assert!(path_range.contains(&(identity.route_key.as_ptr() as usize)));
+        assert!(path_range.contains(&(identity.service.as_ptr() as usize)));
+        assert!(path_range.contains(&(identity.operation.as_ptr() as usize)));
     }
 }

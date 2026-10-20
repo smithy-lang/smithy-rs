@@ -78,9 +78,7 @@ where
             Ok(())
         }
         Ok(None) => Ok(()),
-        Err(err) => Err(DeserializeError::Serde(SerdeError::custom(format!(
-            "failed to read the initial-request frame: {err}"
-        )))),
+        Err(err) => Err(DeserializeError::InitialRequestFrame(err.to_string())),
     }
 }
 
@@ -2655,7 +2653,8 @@ mod tests {
         let err = apply_initial_request(|mt| receiver.try_recv_initial(mt), &protocol, |_| Ok(()))
             .await
             .expect_err("malformed frame");
-        assert!(format!("{err:?}").contains("failed to read the initial-request frame"));
+        assert!(matches!(&err, DeserializeError::InitialRequestFrame(_)));
+        assert!(err.to_string().contains("failed to read the initial-request frame"));
     }
 
     async fn collect_frames(body: BoxBody) -> Vec<Message> {

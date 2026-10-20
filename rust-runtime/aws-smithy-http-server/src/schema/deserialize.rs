@@ -31,6 +31,9 @@ pub enum DeserializeError {
     /// an unparseable header, label or query value, or a request that could not be converted
     /// into its canonical form.
     Serde(SerdeError),
+    /// Reading an RPC initial-request event frame failed. Preserve the legacy raw
+    /// validation rejection rather than treating a frame failure as a codec error.
+    InitialRequestFrame(String),
     /// Reading the request body failed, exceeded its size limit, or timed out.
     /// Preserves the typed failure while rendering the protocol's ordinary deserialization rejection.
     BodyCollection(RequestBodyCollectionError<crate::Error>),
@@ -59,6 +62,7 @@ impl std::fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Serde(err) => write!(f, "failed to deserialize request: {err}"),
+            Self::InitialRequestFrame(err) => write!(f, "failed to read the initial-request frame: {err}"),
             Self::BodyCollection(err) => write!(f, "failed to collect request body: {err}"),
             Self::ConstraintViolation(err) => {
                 write!(f, "request does not adhere to modeled constraints: {err}")
@@ -79,7 +83,7 @@ impl std::error::Error for DeserializeError {
             Self::BodyCollection(err) => Some(err),
             Self::ConstraintViolation(err) => Some(&**err),
             Self::UnsupportedMediaType(reason) => Some(&**reason),
-            Self::NotAcceptable => None,
+            Self::NotAcceptable | Self::InitialRequestFrame(_) => None,
             Self::InternalFailure(err) => Some(err),
         }
     }

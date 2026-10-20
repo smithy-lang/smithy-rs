@@ -11,7 +11,6 @@ const MIN_BYTES: usize = "/service/operation/".len();
 pub(super) struct RouteIdentity<'a> {
     pub(super) service: &'a str,
     pub(super) operation: &'a str,
-    pub(super) route_key: &'a str,
 }
 
 /// Returns true for bytes matching the Smithy `Word` production: `[A-Za-z0-9_]`.
@@ -33,8 +32,8 @@ pub(super) fn has_valid_identifier_start(identifier: &[u8]) -> bool {
 
 /// Parses a path ending in `/service/{service}/operation/{operation}`.
 ///
-/// Parsing backwards avoids scanning an arbitrary prefix and allows the route lookup key to borrow
-/// the contiguous `{service}/operation/{operation}` tail directly from the request URI.
+/// Parsing backwards avoids scanning an arbitrary prefix and borrows the service and operation
+/// names directly from the request URI.
 pub(super) fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
     let bytes = path.as_bytes();
     // A route must have at least `/service/operation` length bytes in it.
@@ -130,6 +129,5 @@ pub(super) fn parse_route_identity(path: &str) -> Option<RouteIdentity<'_>> {
     Some(RouteIdentity {
         service: &path[service_shape_start_pos..service_segment_end_pos],
         operation: &path[operation_start_pos..],
-        route_key: &path[service_shape_start_pos..],
     })
 }

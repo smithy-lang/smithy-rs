@@ -171,9 +171,11 @@ async fn sole_aws_json_claims_preserve_native_uri_method_and_target_rejections()
 #[tokio::test]
 async fn sole_cbor_claims_serialize_native_header_rejections() {
     use crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter;
+    use crate::protocol::rpc_v2_cbor::RpcV2Cbor;
+    use crate::response::IntoResponse;
     use crate::routing::Router;
 
-    let legacy = RpcV2CborRouter::from_owned([("Service/operation/first".to_owned(), ())]);
+    let legacy = RpcV2CborRouter::from_owned([("Service.first".to_owned(), ())]);
     let app = app(&RPC, []);
     for (header, forbidden) in [
         (None, None),
@@ -202,18 +204,14 @@ async fn sole_cbor_claims_serialize_native_header_rejections() {
         let RouteClaim::DeferredRejection(error) = router.claim(&request) else {
             panic!("sole CBOR must defer native header rejections");
         };
+        let native_error = legacy.match_route(&request).unwrap_err();
+        let expected = IntoResponse::<RpcV2Cbor>::into_response(native_error);
         let native: RoutingError = legacy.match_route(&request).unwrap_err().into();
         assert_eq!(error.kind(), native.kind());
-        // Every rejection, forbidden headers included, gets the unknown-operation response.
-        let expected = Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("content-type", "application/cbor")
-            .header("smithy-protocol", "rpc-v2-cbor")
-            .header("content-length", "53")
-            .body(crate::body::to_boxed(
-                b"\xbf\x66__type\x78\x2asmithy.framework#UnknownOperationException\xff".as_slice(),
-            ))
-            .unwrap();
+        // Generated legacy services return 404 with only content-type and an empty body.
+        assert_eq!(expected.status(), StatusCode::NOT_FOUND);
+        assert_eq!(expected.headers().len(), 1);
+        assert_eq!(expected.headers()["content-type"], "application/cbor");
         let (parts, ()) = request.into_parts();
         let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
             |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> { panic!("CBOR rejection read its body") },

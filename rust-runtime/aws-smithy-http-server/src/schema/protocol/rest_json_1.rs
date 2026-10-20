@@ -203,6 +203,9 @@ impl ServerProtocol for RestJson1 {
     /// `RuntimeError` responses; a constraint violation with the modeled validation error.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
+            DeserializeError::InitialRequestFrame(reason) => {
+                IntoResponse::<RestJson1>::into_response(RuntimeError::Validation(reason))
+            }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RestJson1>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }

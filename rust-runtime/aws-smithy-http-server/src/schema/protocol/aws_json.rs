@@ -327,6 +327,9 @@ macro_rules! aws_json_protocol {
             /// with the modeled validation error.
             fn serialize_rejection(&self, err: DeserializeError) -> Response {
                 match err {
+                    DeserializeError::InitialRequestFrame(reason) => {
+                        IntoResponse::<$marker>::into_response(RuntimeError::Validation(reason))
+                    }
                     DeserializeError::Serde(err) => {
                         IntoResponse::<$marker>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
                     }

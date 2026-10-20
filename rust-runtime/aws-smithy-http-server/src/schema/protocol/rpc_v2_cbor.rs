@@ -236,6 +236,9 @@ impl ServerProtocol for RpcV2Cbor {
     /// header, which is reserved for handler-returned responses.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
+            DeserializeError::InitialRequestFrame(reason) => {
+                IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Validation(reason.into_bytes()))
+            }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }
