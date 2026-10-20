@@ -106,19 +106,23 @@ async fn pokemon_service_routes_bodyless_rest_operations() {
         )
         .build_unchecked();
 
-    for content_type in ["application/json", "application/xml"] {
+    // `CheckHealth` has no modeled input. Like legacy servers (mainline answers
+    // `415 UnsupportedMediaTypeException`), a bodiless request for it must not carry a
+    // `Content-Type`; without one it is served.
+    for (content_type, expected) in [
+        (None, StatusCode::OK),
+        (Some("application/json"), StatusCode::UNSUPPORTED_MEDIA_TYPE),
+        (Some("application/xml"), StatusCode::UNSUPPORTED_MEDIA_TYPE),
+    ] {
+        let mut request = Request::builder().method("GET").uri("/ping");
+        if let Some(content_type) = content_type {
+            request = request.header("content-type", content_type);
+        }
         let response = app
             .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("/ping")
-                    .header("content-type", content_type)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(request.body(Body::empty()).unwrap())
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "{content_type}");
+        assert_eq!(response.status(), expected, "{content_type:?}");
     }
 }
