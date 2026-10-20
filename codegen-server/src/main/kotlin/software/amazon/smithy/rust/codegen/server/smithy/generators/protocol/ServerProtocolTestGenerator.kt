@@ -228,9 +228,12 @@ class ServerProtocolTestGenerator(
                 "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
 
-        private val SchemaDisabledTests =
+        private val LegacyRestXmlHeaderFailures =
             setOf(
-                // Schema RestXml response serialization does not yet match these protocol tests.
+                // Reproduced against fresh mainline: empty bound headers are omitted, and an
+                // empty-prefix header collision appends both values. Keep the upstream
+                // assertions executing as expected failures, with exact wire parity covered
+                // by RestXmlHeaderCompatibilityTest. See protocol-compat/review-20261020.md.
                 "HttpEmptyPrefixHeadersResponseServer",
                 "NullAndEmptyHeaders",
             )
@@ -264,18 +267,21 @@ class ServerProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.SERVER
     override val expectFail: Set<FailingTest>
-        get() = ExpectFail
+        get() =
+            if (codegenContext.protocol.toString() == "aws.protocols#restXml") {
+                ExpectFail +
+                    LegacyRestXmlHeaderFailures.map {
+                        FailingTest.ResponseTest(codegenContext.serviceShape.id.toString(), it)
+                    }
+            } else {
+                ExpectFail
+            }
     override val brokenTests: Set<BrokenTest>
         get() = BrokenTests
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
-        get() =
-            if (schemaSerde) {
-                DisabledTests + SchemaDisabledTests
-            } else {
-                DisabledTests
-            }
+        get() = DisabledTests
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 
@@ -725,9 +731,13 @@ class ServerProtocolTestGenerator(
         // Prefer a declared success fixture over invented defaults: required
         // constrained output members may have no valid zero/empty value.
         val responseParams =
-            responseTestCases().filterIsInstance<TestCase.ResponseTest>().firstOrNull {
-                it.targetShape.id == outputShape.id && it.protocol == codegenContext.protocol
-            }?.testCase?.params ?: Node.objectNode()
+            if (schemaSerde) {
+                responseTestCases().filterIsInstance<TestCase.ResponseTest>().firstOrNull {
+                    it.targetShape.id == outputShape.id && it.protocol == codegenContext.protocol
+                }?.testCase?.params ?: Node.objectNode()
+            } else {
+                Node.objectNode()
+            }
         withBlock("let output = ", ";") {
             instantiator.render(this, outputShape, responseParams)
         }

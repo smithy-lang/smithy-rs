@@ -5,14 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
@@ -76,26 +72,4 @@ class ServerRestJsonSerializerGenerator(
                     BeforeSerializingMemberJsonCustomization(codegenContext),
                 ),
         ),
-) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
-    override fun documentSerializer(): RuntimeType {
-        if (codegenContext.usesSchemaHttpSerde) {
-            return jsonSerializerGenerator.documentSerializer()
-        }
-        // Keep the legacy server helper infallible without changing the shared client serializer.
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
-            rustTemplate(
-                """
-                pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
-                    let mut out = #{String}::new();
-                    #{JsonValueWriter}::new(&mut out).document(input);
-                    out.into_bytes()
-                }
-                """,
-                *preludeScope,
-                "Document" to RuntimeType.document(codegenContext.runtimeConfig),
-                "ByteSlab" to RuntimeType.ByteSlab,
-                "JsonValueWriter" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("serialize::JsonValueWriter"),
-            )
-        }
-    }
-}
+) : StructuredDataSerializerGenerator by jsonSerializerGenerator

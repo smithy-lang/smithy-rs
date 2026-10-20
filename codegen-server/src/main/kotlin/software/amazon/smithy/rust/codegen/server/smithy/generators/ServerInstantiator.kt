@@ -38,6 +38,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -45,6 +47,19 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+
+class ServerAfterInstantiatingValueConstrainItIfNecessary(val codegenContext: CodegenContext) :
+    InstantiatorCustomization() {
+    override fun section(section: InstantiatorSection): Writable =
+        when (section) {
+            is InstantiatorSection.AfterInstantiatingValue ->
+                writable {
+                    if (section.shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+                        rust(""".try_into().expect("this is only used in tests")""")
+                    }
+                }
+        }
+}
 
 class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
     override fun hasFallibleBuilder(shape: StructureShape): Boolean {
@@ -91,6 +106,12 @@ class ServerInstantiator(
             codegenContext.runtimeConfig,
             ServerBuilderKindBehavior(codegenContext),
             defaultsForRequiredFields = true,
+            customizations =
+                if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) {
+                    emptyList()
+                } else {
+                    listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext))
+                },
             // Construct with direct pattern to more closely replicate actual server customer usage
             constructPattern = InstantiatorConstructPattern.DIRECT,
             customWritable = customWritable,
@@ -108,6 +129,10 @@ class ServerInstantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
+        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde != true) {
+            super.render(writer, shape, data, headers, ctx)
+            return
+        }
         if (shape is StructureShape) {
             val customized = customWritable.generate(shape)
             if (customized != null) {

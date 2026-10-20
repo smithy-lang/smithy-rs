@@ -11,7 +11,6 @@ import software.amazon.smithy.model.node.ExpectationNotMetException
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -49,7 +48,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -180,47 +178,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
         operationShape: OperationShape,
         additionalPayloadContext: AdditionalPayloadContext,
     ) {
-        val member = protocol.httpBindingResolver.responseMembers(operationShape, HttpLocation.PAYLOAD).firstOrNull()
-        val serializer = protocol.structuredDataSerializer()
-        if (codegenContext.usesSchemaHttpSerde || serializer !is ServerRestJsonSerializerGenerator ||
-            member == null || codegenContext.model.expectShape(member.target) !is DocumentShape
-        ) {
-            delegate.generatePayload(writer, shapeName, operationShape, additionalPayloadContext)
-            return
-        }
-
-        val symbolProvider = codegenContext.symbolProvider
-        val serializePayload =
-            ProtocolFunctions(codegenContext).serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
-                rustBlockTemplate(
-                    "pub fn $fnName(payload: &#{Member}) -> #{Result}<#{ByteSlab}, #{BuildError}>",
-                    *preludeScope,
-                    "Member" to symbolProvider.toSymbol(member),
-                    "ByteSlab" to RuntimeType.ByteSlab,
-                    "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
-                ) {
-                    if (symbolProvider.toSymbol(member).isOptional()) {
-                        rustTemplate(
-                            """
-                            let payload = match payload.as_ref() {
-                                #{Some}(payload) => payload,
-                                #{None} => return #{Ok}(#{Vec}::new()),
-                            };
-                            """,
-                            *preludeScope,
-                        )
-                    }
-                    rustTemplate(
-                        "#{Ok}(#{SerializeDocument}(payload))",
-                        *preludeScope,
-                        "SerializeDocument" to serializer.documentSerializer(),
-                    )
-                }
-            }
-        writer.rustTemplate(
-            "#{SerializePayload}(&$shapeName.${symbolProvider.toMemberName(member)})?",
-            "SerializePayload" to serializePayload,
-        )
+        delegate.generatePayload(writer, shapeName, operationShape, additionalPayloadContext)
     }
 }
 
@@ -730,14 +688,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape: OperationShape,
         errorShape: StructureShape? = null,
     ) {
-        // rpcv2Cbor carries no HTTP response bindings; its model transform strips them from
-        // operation shapes but not from error shapes, and the emitted error header serializer
-        // does not compile (its `?` cannot convert into the CBOR `ResponseRejection`). Skip it.
-        val skipErrorHeaders = errorShape != null && codegenContext.protocol == Rpcv2CborTrait.ID
         val bindingGenerator =
             ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val addHeadersFn =
-            if (skipErrorHeaders) null else bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        // Fresh mainline reproduction at 9267f0e25: CBOR error header serialization
+        // fails with E0277 because BuildError cannot convert into ResponseRejection.
+        // CBOR operation bindings are already body-only; use that rule for errors too.
+        val skipErrorHeaders = errorShape != null && codegenContext.protocol == Rpcv2CborTrait.ID
+        val addHeadersFn = if (skipErrorHeaders) null else bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
         if (addHeadersFn != null) {
             // Notice that we need to borrow the output only for output shapes but not for error shapes.
             val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"

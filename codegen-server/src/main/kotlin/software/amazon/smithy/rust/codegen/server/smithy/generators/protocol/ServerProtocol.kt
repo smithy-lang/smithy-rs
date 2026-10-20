@@ -61,13 +61,13 @@ interface ServerProtocol : Protocol {
     fun markerStruct(): RuntimeType
 
     /** Returns the Rust router type. */
-    fun routerType(): RuntimeType = error("This protocol does not support legacy router generation")
+    fun routerType(): RuntimeType
 
     /**
      * Returns the name of the constructor to be used on the `Router` type, to instantiate a `Router` using this
      * protocol.
      */
-    fun serverRouterRuntimeConstructor(): String = error("This protocol does not support legacy router generation")
+    fun serverRouterRuntimeConstructor(): String
 
     /**
      * Returns a writable for the `RequestSpec` for an operation.
@@ -77,13 +77,12 @@ interface ServerProtocol : Protocol {
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = error("This protocol does not support legacy request specification generation")
+    ): Writable
 
     /**
      * Returns the Rust type of the `RequestSpec` for an operation.
      */
-    fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        error("This protocol does not support legacy request specification generation")
+    fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
 
     /**
      * In some protocols, such as `restJson1` and `rpcv2Cbor`,
@@ -366,7 +365,7 @@ class ServerRpcV2CborProtocol(
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
     /**
-     * The RPC v2 CBOR router keys its map by `"{service}/operation/{operationName}"`, where `operationName`
+     * The RPC v2 CBOR router keys its map by `"{service}.{operationName}"`, where `operationName`
      * is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the URI that the
      * spec-compliant client generates. See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
      */
@@ -376,7 +375,7 @@ class ServerRpcV2CborProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust("$serviceName/operation/${operationShape.id.name}".dq())
+        rust("$serviceName.${operationShape.id.name}".dq())
     }
 
     /**
@@ -407,7 +406,7 @@ class ServerRpcV2CborProtocol(
         if (verbatimOperationName == capitalizedOperationName) {
             return emptyList()
         }
-        return listOf(writable { rust("$serviceName/operation/$capitalizedOperationName".dq()) })
+        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
