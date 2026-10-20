@@ -12,12 +12,31 @@ fn main() {
         .parse()
         .unwrap();
     let deep_validation = std::env::args().nth(2).as_deref() == Some("true");
-    std::thread::spawn(|| {
+    let runtime = metrics::runtime(workers);
+    #[cfg(feature = "runtime-diagnostics")]
+    let runtime_metrics = runtime.metrics();
+    std::thread::spawn(move || {
+        #[cfg(feature = "runtime-diagnostics")]
+        let mut monitor: Option<metrics::RuntimeMonitor> = None;
         for line in std::io::stdin().lock().lines() {
             match line.unwrap().as_str() {
-                "snapshot" => println!("{}", metrics::snapshot()),
+                "snapshot" => {
+                    #[allow(unused_mut)]
+                    let mut snapshot = metrics::snapshot();
+                    #[cfg(feature = "runtime-diagnostics")]
+                    {
+                        snapshot["tokio_runtime"] =
+                            monitor.take().expect("reset before snapshot").finish();
+                    }
+                    println!("{snapshot}");
+                }
                 "reset" => {
                     metrics::reset_peak();
+                    #[cfg(feature = "runtime-diagnostics")]
+                    {
+                        assert!(monitor.is_none());
+                        monitor = Some(metrics::RuntimeMonitor::start(runtime_metrics.clone()));
+                    }
                     println!("{}", metrics::snapshot());
                 }
                 "quit" => std::process::exit(0),
@@ -26,11 +45,6 @@ fn main() {
             std::io::stdout().flush().unwrap();
         }
     });
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(workers)
-        .enable_all()
-        .build()
-        .unwrap();
     runtime.block_on(async {
         let app = BenchmarkService::builder(BenchmarkServiceConfig::builder().build())
             .upload(move |mut input: input::UploadInput| async move {

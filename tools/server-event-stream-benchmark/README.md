@@ -101,7 +101,7 @@ The representative preset runs both protocols, all three directions, both event
 types, 1 KiB payloads, concurrency 1/4/16, and 1,024 events per stream. Defaults
 are 5 seconds warmup, 15 seconds measurement, and ten paired throughput
 repetitions with alternating order. Allocation runs repeat three times per side,
-also alternating order. Latency and profiling are separate passes. This is a
+also alternating order. Latency, Tokio runtime diagnostics and profiling are separate passes. This is a
 multi-hour experiment; use explicit smaller settings for diagnostic runs.
 
 `smoke` uses eight events per stream, concurrency 1, 0.2-second warmup,
@@ -195,6 +195,40 @@ All measured modes report:
   can miss short spikes. Lifetime maximum RSS is reported separately by
   `getrusage` and includes startup/warmup.
 
+Each workload also runs a separate Tokio diagnostic pass for both server
+implementations and the shared client. These binaries enable `tokio_unstable`
+and Tokio's `schedule-latency` feature (Tokio 1.54 or newer); ordinary throughput,
+allocation and perf binaries retain their existing compiler settings.
+Tokio's own `RuntimeMetrics` supplies:
+
+- Per-worker busy duration, poll count, parks, local schedules, queue overflows
+  and stolen tasks, as counter deltas after warmup.
+- Global and worker-local queue depth, alive tasks, blocking queue depth,
+  blocking thread count and worker mean poll time (Tokio's EWMA), sampled
+  every 100 ms by an independent OS thread, with initial and final observations.
+- Task poll duration and scheduler delay histograms. Scheduler delay measures
+  time from scheduling a task until polling it, including tasks polled from
+  Tokio's LIFO slot. Logarithmic buckets cover short polls through long stalls;
+  actual bucket boundaries and per-worker count deltas are retained.
+
+Both monitors start at the measurement barrier and include final stream drain.
+The server window includes the controller margin; each worker's busy percentage
+uses its own monitor's elapsed duration. Raw before/after counters and timestamped
+gauge samples remain in `result.json`. Reports show per-process worker busy
+percentage, queue/task peaks and p99 histogram **bucket bounds**, not exact
+quantiles. Busy duration is wall time processing work, including blocking inside
+a task, rather than process CPU time. Tokio publishes some counters in batches,
+so interval-edge attribution is approximate. Sampled queue peaks can miss
+transients; the main `Runtime::block_on` future and OS threads are outside worker
+metrics. There is no custom task timing hook or heartbeat.
+
+These observations help distinguish a starved client scheduler from server
+cost: examine client scheduler delay and queued work alongside process CPU,
+stream dispatch delay and a repeat with more client resources. A high busy
+percentage alone does not establish starvation. Histogram instrumentation adds
+clock calls and changes execution cost, so diagnostic-pass throughput never
+contributes to the paired throughput comparison.
+
 Allocation-instrumented release binaries run separately and report allocations,
 requested allocated bytes per event, requested live heap at the baseline and
 end, and absolute peak requested live heap after reset at the barrier.
@@ -235,8 +269,11 @@ the exact binaries.
 python3 -m unittest discover -s tools/server-event-stream-benchmark -p 'test_*.py'
 ```
 
-Accounting tests check interval deltas, pairing, profiling/allocation exclusion,
+Accounting tests check interval deltas, pairing, instrumented-pass exclusion,
 source/cache invalidation and SMT exclusion. A smoke run adds real generation,
 compilation and live client/server preflight coverage. Servers bind only
 `127.0.0.1` on ephemeral ports; each case records the actual listener and verifies
 that the port is closed after cleanup.
+During build, Rust calibration tests verify the allocator and deliberately block
+a Tokio worker with queued tasks, checking visible backlog, busy time, and
+scheduler-delay histogram observations in both process roles.

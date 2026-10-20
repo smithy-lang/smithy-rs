@@ -73,6 +73,59 @@ def difference(before, after, events, elapsed):
     for key in ("allocations", "allocated_bytes"):
         if key in out:
             out[f"{key}_per_event"] = out[key] / events
+    if "tokio_runtime" in after:
+        out["tokio_runtime"] = runtime_difference(after["tokio_runtime"])
+    return out
+
+
+def runtime_difference(raw):
+    """Normalize Tokio counters over the sampler's own measured interval."""
+    before, after = raw["before"], raw["after"]
+    elapsed = raw["elapsed_seconds"]
+    if elapsed <= 0 or len(before["workers"]) != len(after["workers"]):
+        raise ValueError("Invalid Tokio runtime interval or changed worker count")
+
+    def delta(first, last):
+        if last < first:
+            raise ValueError("Tokio cumulative counter regressed")
+        return last - first
+
+    workers = []
+    for first, last in zip(before["workers"], after["workers"]):
+        if first.keys() != last.keys():
+            raise ValueError("Tokio worker counter set changed")
+        worker = {key: delta(first[key], last[key]) for key in first}
+        worker["busy_percent"] = 100 * worker["busy_ns"] / (elapsed * 1e9)
+        workers.append(worker)
+    out = {"elapsed_seconds": elapsed, "workers": workers,
+           "worker_busy_percent_mean": statistics.mean(w["busy_percent"] for w in workers),
+           "sample_interval_seconds": raw["sample_interval_seconds"], "samples": len(raw["samples"])}
+    for key in ("alive_tasks", "global_queue_depth", "blocking_queue_depth", "blocking_threads"):
+        out[f"{key}_sampled_peak"] = max(s[key] for s in raw["samples"])
+    for i, worker in enumerate(workers):
+        worker["local_queue_depth_sampled_peak"] = max(s["workers"][i]["local_queue_depth"] for s in raw["samples"])
+    for name in ("poll_time", "schedule_latency"):
+        if len(before[name]) != len(after[name]):
+            raise ValueError("Tokio histogram bucket count changed")
+        buckets = []
+        for first, last in zip(before[name], after[name]):
+            if (first["start_ns"], first["end_ns"]) != (last["start_ns"], last["end_ns"]):
+                raise ValueError("Tokio histogram ranges changed")
+            if len(first["worker_counts"]) != len(workers) or len(last["worker_counts"]) != len(workers):
+                raise ValueError("Tokio histogram worker count changed")
+            counts = [delta(a, b) for a, b in zip(first["worker_counts"], last["worker_counts"])]
+            buckets.append({**last, "worker_counts": counts, "count": sum(counts)})
+        count = sum(b["count"] for b in buckets)
+        histogram = {"samples": count, "buckets": buckets}
+        for percentile in (50, 95, 99):
+            cumulative = 0
+            histogram[f"p{percentile}_bounds_ns"] = None
+            for bucket in buckets:
+                cumulative += bucket["count"]
+                if count and cumulative >= math.ceil(count * percentile / 100):
+                    histogram[f"p{percentile}_bounds_ns"] = [bucket["start_ns"], bucket["end_ns"]]
+                    break
+        out[name] = histogram
     return out
 
 
@@ -357,7 +410,7 @@ def report(dest, rows, comparison="unspecified"):
     for r in data:
         ratio = r["paired_throughput_ratio"]
         text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["legacy"]["events_per_second_median"]:.1f} | {r["schema"]["events_per_second_median"]:.1f} | {ratio["median"]:.3f} ({ratio["min"]:.3f}–{ratio["max"]:.3f}), n={ratio["pairs"]} |')
-    text += ["", "Raw result.json files retain accounting and separate latency passes. Allocation, latency and perf passes do not contribute to throughput ratios. No runs are discarded; the observed range is not a confidence interval. Seeded paired bootstrap intervals estimate the geometric mean ratio, assume independent pairs, and are withheld below ten pairs. They do not establish machine isolation or client headroom.", "",
+    text += ["", "Raw result.json files retain accounting and separate latency passes. Allocation, latency, Tokio diagnostics and perf passes do not contribute to throughput ratios. No runs are discarded; the observed range is not a confidence interval. Seeded paired bootstrap intervals estimate the geometric mean ratio, assume independent pairs, and are withheld below ten pairs. They do not establish machine isolation or client headroom.", "",
              "| Protocol | Direction | Event | Bytes | Concurrency | Geometric mean ratio | Bootstrap 95% interval |",
              "|---|---|---|---:|---:|---:|---|"]
     for r in data:
@@ -377,6 +430,23 @@ def report(dest, rows, comparison="unspecified"):
              "|---|---|---|---:|---:|---:|---:|---:|---:|"]
     for r in data:
         text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["legacy"]["server_cpu_ns_per_event_median"]:.0f} | {r["schema"]["server_cpu_ns_per_event_median"]:.0f} | {r["legacy"]["client_cpu_ns_per_event_median"]:.0f} | {r["schema"]["client_cpu_ns_per_event_median"]:.0f} |')
+    text += ["", "Separate Tokio runtime diagnostic passes:", "",
+             "| Protocol | Direction | Event | Bytes | Concurrency | Side | Process | Workers busy mean % | Global queue peak | Local queue peak | Alive task peak | Schedule delay p99 bucket µs | Poll time p99 bucket µs |",
+             "|---|---|---|---:|---:|---|---|---:|---:|---:|---:|---|---|"]
+    def bounds(histogram):
+        value = histogram["p99_bounds_ns"]
+        if value is None:
+            return "no samples"
+        low, high = value
+        return f"≥{low / 1000:.2f}" if high == 2**64 - 1 else f"[{low / 1000:.2f}, {high / 1000:.2f})"
+    for r in rows:
+        if r["mode"] != "runtime":
+            continue
+        for role in ("server", "client"):
+            runtime = r[role]["tokio_runtime"]
+            local_peak = max(w["local_queue_depth_sampled_peak"] for w in runtime["workers"])
+            text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["side"]} | {role} | {runtime["worker_busy_percent_mean"]:.2f} | {runtime["global_queue_depth_sampled_peak"]} | {local_peak} | {runtime["alive_tasks_sampled_peak"]} | {bounds(runtime["schedule_latency"])} | {bounds(runtime["poll_time"])} |')
+    text += ["", "Worker busy time measures time processing work, including blocking inside a task; it is not CPU time. Scheduling delay is Tokio's time from scheduling a task to polling it, distinct from offered-stream dispatch delay. Histogram percentiles are bucket bounds, not exact quantiles. Queue peaks are sampled every 100 ms and can miss transients. Per-worker deltas, histogram buckets and raw samples are retained in result.json. Runtime counters can be published in batches near interval boundaries; worker utilization is an estimate and is not clamped. The main block_on future and OS threads are outside worker metrics. High worker activity alone does not establish starvation; examine scheduler delay, queues, process CPU, stream dispatch delay and a client-resource sweep together."]
     text += ["", "Separate allocation passes (absolute heap peak, not a subtraction from idle):", "",
              "| Protocol | Direction | Event | Bytes | Concurrency | Pair | Side | Process | Sampled RSS peak MiB | Requested heap peak MiB | Allocations/event | Requested bytes/event |",
              "|---|---|---|---:|---:|---:|---|---|---:|---:|---:|---:|"]
@@ -465,6 +535,7 @@ def main():
                     rows.append(row)
             for side in ("legacy", "schema"):
                 rows.append(execute(**args, side=side, mode="latency"))
+                rows.append(execute(**args, side=side, mode="runtime"))
             if direction == "duplex" and parallel == concurrency[-1] and size == 1024 and not a.no_profiles:
                 for profile, side in itertools.product(("stat", "record"), ("legacy", "schema")):
                     rows.append(execute(**args, side=side, mode="profile", profile=profile))

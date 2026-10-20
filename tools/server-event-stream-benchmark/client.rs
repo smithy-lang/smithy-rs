@@ -240,11 +240,7 @@ fn main() {
         .unwrap_or_else(|_| "2".into())
         .parse()
         .unwrap();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(workers)
-        .enable_all()
-        .build()
-        .unwrap();
+    let runtime = metrics::runtime(workers);
     runtime.block_on(async {
         let mut http = hyper014::Client::builder();
         http.http2_only(true);
@@ -273,10 +269,18 @@ fn main() {
         assert_eq!(line.trim(), "go");
         metrics::reset_peak();
         let before = metrics::snapshot();
+        #[cfg(feature = "runtime-diagnostics")]
+        let monitor = metrics::RuntimeMonitor::start(runtime.metrics());
         let start = Instant::now();
         let samples = phase(client, work.clone(), concurrency, duration, rate).await;
         let elapsed = start.elapsed().as_secs_f64();
         let after = metrics::snapshot();
+        #[cfg(feature = "runtime-diagnostics")]
+        let after = {
+            let mut after = after;
+            after["tokio_runtime"] = monitor.finish();
+            after
+        };
         assert!(samples.events > 0);
         println!("{}", json!({
             "load_model": if rate.is_some() { "scheduled-arrivals" } else { "closed-loop" },

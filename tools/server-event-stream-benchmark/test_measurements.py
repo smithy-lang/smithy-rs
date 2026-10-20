@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from common import fingerprint, toolchain, validate_generation, write_json
-from run import counters, difference, paired_interval, report, summary, topology
+from run import counters, difference, paired_interval, report, runtime_difference, summary, topology
 from prepare import prepare
 
 
@@ -21,7 +21,57 @@ def row(side, pair, rate, mode="cpu"):
     }
 
 
+def runtime_interval():
+    def snapshot(busy, count):
+        return {"workers": [{"busy_ns": busy, "polls": count, "parks": count}],
+                **{name: [{"start_ns": 0, "end_ns": 100, "worker_counts": [count]},
+                          {"start_ns": 100, "end_ns": 2**64 - 1, "worker_counts": [count]}]
+                   for name in ("poll_time", "schedule_latency")}}
+    return {"before": snapshot(4_000_000_000, 10), "after": snapshot(5_000_000_000, 20),
+            "elapsed_seconds": 2, "sample_interval_seconds": 0.1,
+            "samples": [{"alive_tasks": 7, "global_queue_depth": 3, "blocking_queue_depth": 2,
+                         "blocking_threads": 1, "workers": [{"local_queue_depth": 4, "mean_poll_ns_ewma": 50}]}]}
+
+
 class Measurements(unittest.TestCase):
+    def test_runtime_deltas_use_monitor_window_and_preserve_bucket_bounds(self):
+        raw = runtime_interval()
+        result = runtime_difference(raw)
+        self.assertEqual(result["workers"][0]["busy_ns"], 1_000_000_000)
+        self.assertEqual(result["worker_busy_percent_mean"], 50)
+        self.assertEqual(result["global_queue_depth_sampled_peak"], 3)
+        self.assertEqual(result["workers"][0]["local_queue_depth_sampled_peak"], 4)
+        self.assertEqual(result["schedule_latency"]["samples"], 20)
+        self.assertEqual(result["schedule_latency"]["p50_bounds_ns"], [0, 100])
+        self.assertEqual(result["schedule_latency"]["p99_bounds_ns"], [100, 2**64 - 1])
+        before = {"user_seconds": 0, "system_seconds": 0}
+        after = {**before, "tokio_runtime": raw}
+        self.assertEqual(difference(before, after, 10, 8)["tokio_runtime"]["worker_busy_percent_mean"], 50)
+        self.assertEqual(after["tokio_runtime"], raw)
+
+    def test_runtime_rejects_changed_workers_buckets_and_regressed_counters(self):
+        for mutate in (
+            lambda r: r["after"]["workers"].append({}),
+            lambda r: r["after"]["workers"][0].update(busy_ns=0),
+            lambda r: r["after"]["poll_time"][0].update(start_ns=1),
+            lambda r: r["after"]["schedule_latency"][0].update(worker_counts=[0]),
+        ):
+            raw = runtime_interval()
+            mutate(raw)
+            with self.assertRaises(ValueError):
+                runtime_difference(raw)
+
+    def test_runtime_report_identifies_scheduler_delay_and_process(self):
+        diagnostic = row("schema", 0, 1, "runtime")
+        for role in ("server", "client"):
+            diagnostic[role]["tokio_runtime"] = runtime_difference(runtime_interval())
+        with tempfile.TemporaryDirectory() as tmp:
+            report(Path(tmp), [row("legacy", 0, 10), row("schema", 0, 20), diagnostic])
+            text = (Path(tmp) / "report.md").read_text()
+            self.assertIn("Schedule delay p99 bucket", text)
+            self.assertIn("schema | client | 50.00 | 3 | 4 | 7", text)
+            self.assertIn("is not CPU time", text)
+
     def test_cpu_and_allocation_interval_accounting(self):
         before = {"user_seconds": 3, "system_seconds": 1, "allocations": 200, "allocated_bytes": 3000}
         after = {"user_seconds": 5, "system_seconds": 2, "allocations": 240, "allocated_bytes": 4000}
@@ -33,7 +83,7 @@ class Measurements(unittest.TestCase):
         self.assertEqual(result["allocated_bytes_per_event"], 50)
 
     def test_ratios_are_paired_and_instrumented_runs_excluded(self):
-        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory"), row("schema", 2, 999999, "latency")]
+        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory"), row("schema", 2, 999999, "latency"), row("schema", 2, 999999, "runtime")]
         result = summary(rows)[0]
         self.assertEqual(result["paired_throughput_ratio"], {"median": 1.25, "min": 0.5, "max": 2, "pairs": 2})
         self.assertEqual(result["schema"]["events_per_second_median"], 15)
