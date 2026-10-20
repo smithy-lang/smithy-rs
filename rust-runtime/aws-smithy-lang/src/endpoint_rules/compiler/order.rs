@@ -170,3 +170,69 @@ impl Cones {
         Self { depth, results }
     }
 }
+
+/// Java's `ConditionDependencyGraph` over the CFG's conditions, as the optimizers use it:
+/// where each condition of an order may move without being tested before a dependency.
+pub(super) struct DependencyGraph {
+    dependencies: Dependencies,
+    /// The graph position of each canonical condition index.
+    position: Vec<usize>,
+}
+
+impl DependencyGraph {
+    pub(super) fn new(cfg: &Cfg) -> Self {
+        let conditions = cfg.condition_order();
+        let refs: Vec<_> = conditions.iter().map(|&i| &cfg.canonical[i]).collect();
+        let mut position = vec![usize::MAX; cfg.canonical.len()];
+        for (p, &i) in conditions.iter().enumerate() {
+            position[i] = p;
+        }
+        Self {
+            dependencies: Dependencies::new(&refs),
+            position,
+        }
+    }
+
+    /// Whether canonical condition `condition` directly depends on `on`.
+    pub(super) fn depends_on(&self, condition: usize, on: usize) -> bool {
+        self.dependencies.predecessors[self.position[condition]].contains(&self.position[on])
+    }
+
+    /// Java's `OrderConstraints` for `order`, a permutation of the canonical conditions.
+    pub(super) fn constraints(&self, order: &[usize]) -> Constraints {
+        let n = order.len();
+        // The order position of each graph position.
+        let mut at = vec![0; n];
+        for (i, &condition) in order.iter().enumerate() {
+            at[self.position[condition]] = i;
+        }
+        let mut min = vec![0isize; n];
+        let mut max = vec![n as isize - 1; n];
+        for (i, &condition) in order.iter().enumerate() {
+            for &dependency in &self.dependencies.predecessors[self.position[condition]] {
+                let d = at[dependency];
+                min[i] = min[i].max(d as isize + 1);
+                max[d] = max[d].min(i as isize - 1);
+            }
+        }
+        Constraints { min, max }
+    }
+}
+
+/// The positions to which each condition of an order may move. Bounds are signed because an
+/// invalid order can leave a condition no valid position.
+pub(super) struct Constraints {
+    pub(super) min: Vec<isize>,
+    pub(super) max: Vec<isize>,
+}
+
+impl Constraints {
+    pub(super) fn can_move(&self, from: usize, to: isize) -> bool {
+        from as isize == to || (to >= self.min[from] && to <= self.max[from])
+    }
+
+    /// Whether every condition is already where it may be.
+    pub(super) fn is_valid(&self) -> bool {
+        (0..self.min.len()).all(|j| self.min[j] <= j as isize && self.max[j] >= j as isize)
+    }
+}

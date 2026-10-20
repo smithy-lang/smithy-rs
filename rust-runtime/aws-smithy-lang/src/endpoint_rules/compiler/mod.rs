@@ -20,8 +20,13 @@
 
 mod builder;
 mod cfg;
+mod cost;
+mod cost_optimization;
+mod finish;
 mod functions;
 mod order;
+mod search;
+mod sift;
 mod ssa;
 mod syntax;
 
@@ -103,6 +108,17 @@ fn unoptimized(
     let order = order::initial_order(&cfg, &cfg.condition_order());
     let diagram = builder::compile(&cfg, order)?;
     Ok((ssa, cfg, diagram))
+}
+
+/// Compiles `rule_set` as Java's `CompileBdd` does: builds the BDD, sifts it, lowers its
+/// expected cost, reverses its nodes, and drops conditions no node tests.
+fn compile(rule_set: &EndpointRuleSet) -> Result<EndpointBdd, CompileError> {
+    let (ssa, cfg, diagram) = unoptimized(rule_set)?;
+    let diagram = sift::sift(&cfg, diagram)?;
+    let diagram = cost_optimization::optimize(&cfg, diagram)?;
+    let diagram = finish::reverse(diagram);
+    let diagram = finish::remove_unreferenced_conditions(&cfg, diagram);
+    endpoint_bdd(&ssa, &cfg, &diagram)
 }
 
 /// Publishes a diagram as a checked [`EndpointBdd`].

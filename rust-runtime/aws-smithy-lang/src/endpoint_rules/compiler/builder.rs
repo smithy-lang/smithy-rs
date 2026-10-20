@@ -12,6 +12,7 @@
 
 use super::cfg::{Cfg, Node, NodeId};
 use super::CompileError;
+use rustc_hash::FxBuildHasher;
 use std::collections::HashMap;
 
 pub(super) const TRUE: i32 = 1;
@@ -26,12 +27,20 @@ fn is_result(reference: i32) -> bool {
     reference >= RESULT_OFFSET
 }
 
+/// The builder's tables, which optimizers query millions of times. Their keys are node and
+/// variable numbers the builder assigns, so a keyed hash that resists chosen collisions buys
+/// nothing, and `FxHash` is several times faster.
+type Table = HashMap<[i32; 3], i32, FxBuildHasher>;
+
 #[derive(Debug, Default)]
 pub(super) struct BddBuilder {
     /// `[condition, high, low]`, starting with the terminal sentinel.
     pub(super) nodes: Vec<[i32; 3]>,
-    unique: HashMap<[i32; 3], i32>,
-    ite_cache: HashMap<[i32; 3], i32>,
+    unique: Table,
+    ite_cache: Table,
+    /// Buffers `reduce` reuses, so repeated compiles do not reallocate them.
+    spare_nodes: Vec<[i32; 3]>,
+    renumbered: Vec<Option<i32>>,
 }
 
 impl BddBuilder {
@@ -40,6 +49,14 @@ impl BddBuilder {
             nodes: vec![[-1, TRUE, FALSE]],
             ..Self::default()
         }
+    }
+
+    /// Empties the builder, keeping its tables' capacity (Java's `reset`).
+    pub(super) fn reset(&mut self) {
+        self.nodes.clear();
+        self.nodes.push([-1, TRUE, FALSE]);
+        self.unique.clear();
+        self.ite_cache.clear();
     }
 
     /// The node `reference` addresses, which must not be a leaf.
@@ -154,11 +171,14 @@ impl BddBuilder {
         if is_leaf(root) {
             return root;
         }
-        let old = std::mem::replace(&mut self.nodes, vec![[-1, TRUE, FALSE]]);
-        self.unique.clear();
-        self.ite_cache.clear();
-        let mut renumbered = vec![None; old.len()];
+        let spare = std::mem::take(&mut self.spare_nodes);
+        let old = std::mem::replace(&mut self.nodes, spare);
+        self.reset();
+        let mut renumbered = std::mem::take(&mut self.renumbered);
+        renumbered.clear();
+        renumbered.resize(old.len(), None);
         let new_root = self.reduce_node(&old, &mut renumbered, root.abs());
+        (self.spare_nodes, self.renumbered) = (old, renumbered);
         complement(root < 0, new_root)
     }
 
@@ -204,7 +224,7 @@ fn complement(complemented: bool, reference: i32) -> i32 {
 }
 
 /// A BDD in Java's encoding, with conditions and results as indexes into the CFG's.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct Diagram {
     pub(super) root: i32,
     /// Decision nodes, after the sentinel.
@@ -218,15 +238,23 @@ pub(super) struct Diagram {
 /// Java's `BddCompiler.compile`: converts the CFG with conditions in `order` (canonical
 /// indexes), numbering results as they are first reached, high branches first.
 pub(super) fn compile(cfg: &Cfg, order: Vec<usize>) -> Result<Diagram, CompileError> {
-    let variables: HashMap<usize, i32> = order
-        .iter()
-        .enumerate()
-        .map(|(v, &i)| (i, v as i32))
-        .collect();
-    let mut builder = BddBuilder::new();
+    compile_with(&mut BddBuilder::new(), cfg, order)
+}
+
+/// [`compile`], reusing `builder`'s allocations.
+pub(super) fn compile_with(
+    builder: &mut BddBuilder,
+    cfg: &Cfg,
+    order: Vec<usize>,
+) -> Result<Diagram, CompileError> {
+    builder.reset();
+    let mut variables = vec![0; cfg.canonical.len()];
+    for (v, &i) in order.iter().enumerate() {
+        variables[i] = v as i32;
+    }
     let mut results: Vec<usize> = Vec::new();
-    let mut result_ids: HashMap<usize, i32> = HashMap::new();
-    let mut converted: HashMap<NodeId, i32> = HashMap::new();
+    let mut result_ids: Vec<Option<i32>> = vec![None; cfg.results.len()];
+    let mut converted: Vec<Option<i32>> = vec![None; cfg.nodes.len()];
     enum Step {
         Enter(NodeId),
         Exit(NodeId),
@@ -235,19 +263,19 @@ pub(super) fn compile(cfg: &Cfg, order: Vec<usize>) -> Result<Diagram, CompileEr
     while let Some(step) = stack.pop() {
         match step {
             Step::Enter(id) => {
-                if converted.contains_key(&id) {
+                if converted[id.index()].is_some() {
                     continue;
                 }
                 match cfg.node(id) {
                     Node::Result(result) => {
                         let index = match result {
                             None => 0,
-                            Some(result) => *result_ids.entry(*result).or_insert_with(|| {
+                            Some(result) => *result_ids[*result].get_or_insert_with(|| {
                                 results.push(*result);
                                 results.len() as i32
                             }),
                         };
-                        converted.insert(id, RESULT_OFFSET + index);
+                        converted[id.index()] = Some(RESULT_OFFSET + index);
                     }
                     Node::Condition { high, low, .. } => {
                         stack.extend([Step::Exit(id), Step::Enter(*low), Step::Enter(*high)]);
@@ -263,23 +291,25 @@ pub(super) fn compile(cfg: &Cfg, order: Vec<usize>) -> Result<Diagram, CompileEr
                 else {
                     unreachable!("only condition nodes exit")
                 };
-                let (mut high, mut low) = (converted[high], converted[low]);
+                let converted_id =
+                    |id: &NodeId| converted[id.index()].expect("children exit first");
+                let (mut high, mut low) = (converted_id(high), converted_id(low));
                 if condition.negated {
                     std::mem::swap(&mut high, &mut low);
                 }
-                let test = builder.make_node(variables[&condition.index], TRUE, FALSE);
+                let test = builder.make_node(variables[condition.index], TRUE, FALSE);
                 let node = builder.ite(test, high, low);
-                converted.insert(id, node);
+                converted[id.index()] = Some(node);
             }
         }
         if builder.nodes.len() >= (RESULT_OFFSET - 1) as usize {
             return Err(CompileError::new("the BDD has too many nodes"));
         }
     }
-    let root = builder.reduce(converted[&cfg.root]);
+    let root = builder.reduce(converted[cfg.root.index()].expect("the root is converted"));
     Ok(Diagram {
         root,
-        nodes: builder.nodes.split_off(1),
+        nodes: builder.nodes[1..].to_vec(),
         conditions: order,
         results,
     })

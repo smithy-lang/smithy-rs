@@ -718,6 +718,7 @@ dependencies = [
  "criterion 0.8.2",
  "indexmap 2.14.2",
  "proptest",
+ "rustc-hash",
  "serde",
  "serde_json",
 ]

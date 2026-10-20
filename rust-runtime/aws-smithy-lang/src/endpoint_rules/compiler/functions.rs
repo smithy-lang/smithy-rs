@@ -49,31 +49,37 @@ impl ReturnType {
 pub(super) struct Function {
     pub(super) name: &'static str,
     pub(super) returns: ReturnType,
+    /// Java's `FunctionDefinition.getCost`: a relative evaluation cost.
+    pub(super) cost: i32,
 }
 
-const fn function(name: &'static str, returns: ReturnType) -> Function {
-    Function { name, returns }
+const fn function(name: &'static str, returns: ReturnType, cost: i32) -> Function {
+    Function {
+        name,
+        returns,
+        cost,
+    }
 }
 
 use ReturnType::{Any, Boolean, Optional, Record, String, StringArray};
 
 /// The functions of rules engine 1.1 and the AWS extensions, as defined by Smithy Java.
 const FUNCTIONS: &[Function] = &[
-    function("booleanEquals", Boolean),
-    function("coalesce", Any),
-    function("getAttr", Any),
-    function("isSet", Boolean),
-    function("isValidHostLabel", Boolean),
-    function("ite", Any),
-    function("not", Boolean),
-    function("parseURL", Optional(&Record)),
-    function("split", StringArray),
-    function("stringEquals", Boolean),
-    function("substring", Optional(&String)),
-    function("uriEncode", String),
-    function("aws.isVirtualHostableS3Bucket", Boolean),
-    function("aws.parseArn", Optional(&Record)),
-    function("aws.partition", Optional(&Record)),
+    function("booleanEquals", Boolean, 9),
+    function("coalesce", Any, 10),
+    function("getAttr", Any, 25),
+    function("isSet", Boolean, 8),
+    function("isValidHostLabel", Boolean, 80),
+    function("ite", Any, 10),
+    function("not", Boolean, 5),
+    function("parseURL", Optional(&Record), 200),
+    function("split", StringArray, 60),
+    function("stringEquals", Boolean, 30),
+    function("substring", Optional(&String), 50),
+    function("uriEncode", String, 100),
+    function("aws.isVirtualHostableS3Bucket", Boolean, 80),
+    function("aws.parseArn", Optional(&Record), 100),
+    function("aws.partition", Optional(&Record), 120),
 ];
 
 /// The function named `name`.

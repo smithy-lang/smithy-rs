@@ -21,6 +21,13 @@ use std::collections::{HashMap, HashSet};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct NodeId(usize);
 
+impl NodeId {
+    /// The index of this node in [`Cfg::nodes`].
+    pub(super) fn index(self) -> usize {
+        self.0
+    }
+}
+
 /// A canonical condition, possibly negated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct ConditionRef {

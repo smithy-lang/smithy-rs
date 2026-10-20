@@ -6,8 +6,9 @@
 //! Compares each compiler stage with Smithy Java's, as recorded in `tests/fixtures/endpoint_bdd`
 //! (see its README).
 
+use super::builder::Diagram;
 use super::cfg::Cfg;
-use super::{check, endpoint_bdd, ssa, unoptimized};
+use super::{check, cost_optimization, endpoint_bdd, finish, sift, ssa, unoptimized};
 use crate::endpoint_rules::codec::decode_condition;
 use crate::endpoint_rules::language::{Rule, RuleKind};
 use crate::endpoint_rules::{EndpointBdd, EndpointRuleSet};
@@ -93,6 +94,39 @@ impl Fixture {
             bdd.insert(name, field(recorded, name));
         }
         EndpointBdd::from_node(&bdd.into()).unwrap()
+    }
+
+    /// Java's BDD at `stage` as a [`Diagram`] over `cfg`, which must be the CFG of this
+    /// fixture's rule set, with the results `cfg_results` (results do not depend on order).
+    fn diagram(&self, stage: &str, cfg: &Cfg, results: &[usize]) -> Diagram {
+        let recorded = self.member(stage).as_object().unwrap();
+        let number = |node: &Node| match node.value() {
+            NodeValue::Number(n) => n.as_i64().unwrap(),
+            _ => panic!("{}: expected a number", self.name),
+        };
+        let cfg_order = cfg.condition_order();
+        let conditions = recorded
+            .get("order")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| cfg_order[number(i) as usize])
+            .collect();
+        let bytes = base64_simd::STANDARD
+            .decode_to_vec(recorded.get("nodes").unwrap().as_str().unwrap())
+            .unwrap();
+        let words: Vec<i32> = bytes
+            .chunks(4)
+            .map(|w| i32::from_be_bytes(w.try_into().unwrap()))
+            .collect();
+        Diagram {
+            root: number(recorded.get("root").unwrap()) as i32,
+            // Skip the sentinel.
+            nodes: words[3..].chunks(3).map(|n| [n[0], n[1], n[2]]).collect(),
+            conditions,
+            results: results.to_vec(),
+        }
     }
 
     /// Java's SSA rule set, recorded when it differs from the input.
@@ -256,5 +290,79 @@ fn unoptimized_bdd_matches_java() {
             &actual,
             &fixture.stage("unoptimized"),
         );
+    }
+}
+
+#[test]
+fn cost_optimized_bdd_matches_java() {
+    for fixture in fixtures() {
+        let (ssa, cfg, unoptimized) = unoptimized(&fixture.rule_set()).unwrap();
+        let sifted = fixture.diagram("sifted", &cfg, &unoptimized.results);
+        let java = endpoint_bdd(&ssa, &cfg, &sifted).unwrap();
+        assert_same_bdd(&fixture.name, &java, &fixture.stage("sifted"));
+        let optimized = cost_optimization::optimize(&cfg, sifted).unwrap();
+        let actual = endpoint_bdd(&ssa, &cfg, &optimized).unwrap();
+        assert_same_bdd(
+            &format!("{} cost-optimized", fixture.name),
+            &actual,
+            &fixture.stage("costOptimized"),
+        );
+    }
+}
+
+#[test]
+fn reversed_bdd_matches_java() {
+    for fixture in fixtures() {
+        let (ssa, cfg, unoptimized) = unoptimized(&fixture.rule_set()).unwrap();
+        let optimized = fixture.diagram("costOptimized", &cfg, &unoptimized.results);
+        let actual = endpoint_bdd(&ssa, &cfg, &finish::reverse(optimized)).unwrap();
+        assert_same_bdd(
+            &format!("{} reversed", fixture.name),
+            &actual,
+            &fixture.stage("reversed"),
+        );
+    }
+}
+
+#[test]
+fn compiled_bdd_matches_java() {
+    for fixture in fixtures() {
+        let (ssa, cfg, unoptimized) = unoptimized(&fixture.rule_set()).unwrap();
+        let reversed = fixture.diagram("reversed", &cfg, &unoptimized.results);
+        let compiled = finish::remove_unreferenced_conditions(&cfg, reversed);
+        let actual = endpoint_bdd(&ssa, &cfg, &compiled).unwrap();
+        let expected = EndpointBdd::from_node(fixture.member("compiled")).unwrap();
+        assert_same_bdd(&format!("{} compiled", fixture.name), &actual, &expected);
+    }
+}
+
+/// Runs every stage from the rule set, checking each against Java's. Sifting dominates.
+#[test]
+fn pipeline_matches_java() {
+    for fixture in fixtures() {
+        let name = &fixture.name;
+        let (ssa, cfg, diagram) = unoptimized(&fixture.rule_set()).unwrap();
+        let check = |stage: &str, diagram: &Diagram| {
+            let actual = endpoint_bdd(&ssa, &cfg, diagram).unwrap();
+            assert_same_bdd(&format!("{name} {stage}"), &actual, &fixture.stage(stage));
+        };
+        let diagram = sift::sift(&cfg, diagram).unwrap();
+        check("sifted", &diagram);
+        let diagram = cost_optimization::optimize(&cfg, diagram).unwrap();
+        check("costOptimized", &diagram);
+        let diagram = finish::reverse(diagram);
+        check("reversed", &diagram);
+        let diagram = finish::remove_unreferenced_conditions(&cfg, diagram);
+        let actual = endpoint_bdd(&ssa, &cfg, &diagram).unwrap();
+        let expected = EndpointBdd::from_node(fixture.member("compiled")).unwrap();
+        assert_same_bdd(&format!("{name} compiled"), &actual, &expected);
+        // `compile` runs the same stages; check it where that is quick.
+        if diagram.nodes.len() < 200 {
+            assert_eq!(
+                super::compile(&fixture.rule_set()).unwrap(),
+                expected,
+                "{name}"
+            );
+        }
     }
 }
