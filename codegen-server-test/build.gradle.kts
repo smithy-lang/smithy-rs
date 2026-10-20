@@ -202,7 +202,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
         ),
     ).flatMap { it.bothHttpVersions() }.map {
         if (it.module.endsWith("-http0x")) {
-            // Legacy projections must disable schema serde, which otherwise enables HTTP 1.x.
+            // Generated serde projections must disable schema serde, which otherwise enables HTTP 1.x.
             it.copy(extraCodegenConfig = it.extraCodegenConfig?.replace(""""schemaSerde": true""", """"schemaSerde": false"""))
         } else if (it.module == "pokemon-service-server-sdk") {
             // Only the schema-driven HTTP/1.x example serves multiple protocols.
@@ -229,7 +229,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
             // One service per protocol set, all serving the operations in integration-tests/protocol-compat.
-            // Legacy codegen with a request body limit, to exercise the generated body collection code.
+            // Generated serde codegen with a request body limit, to exercise the generated body collection code.
             CodegenTest(
                 "com.example.review#ReviewRest",
                 "compat-rest-legacy-limit-server-sdk",
@@ -240,7 +240,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 extraConfig = """, "customizationConfig": {"protocols": {"common": {"requestBodyMaxBytes": 1000}}}""",
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
             ),
-            // rpcv2Cbor error with a header-bound member, on schemaSerde and its legacy twin.
+            // rpcv2Cbor error with a header-bound member, on schemaSerde and its generated serde twin.
             CodegenTest(
                 "com.example.review#ReviewCborErrors",
                 "compat-cbor-errors-server-sdk",
@@ -372,7 +372,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
             ),
-            // Legacy (schemaSerde=false) twins on HTTP 1.x, for wire comparison with the schema services above.
+            // Generated serde (schemaSerde=false) twins on HTTP 1.x, for wire comparison with the schema services above.
             CodegenTest(
                 "com.example.review#ReviewRest",
                 "compat-rest-legacy-server-sdk",

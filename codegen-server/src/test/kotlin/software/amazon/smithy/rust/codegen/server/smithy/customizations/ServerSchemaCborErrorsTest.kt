@@ -46,7 +46,7 @@ internal class ServerSchemaCborErrorsTest {
             map FailureMap { key: String, value: Failure }
             union Choice { failure: Failure }
         """.asSmithyModel()
-        // Establish the legacy wire for this exact error-containing model before
+        // Establish the generated serde wire for this exact error-containing model before
         // checking its schema encoding. Collection counts include error values.
         serverIntegrationTest(
             model,

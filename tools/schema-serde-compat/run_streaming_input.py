@@ -2,7 +2,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Fresh generated legacy/schema servers exercised by the live HTTP/2 event-stream client."""
+"""Fresh generated serde/schema serde servers exercised by the live HTTP/2 event-stream client."""
 import datetime
 import json
 import os

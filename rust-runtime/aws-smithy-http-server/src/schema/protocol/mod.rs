@@ -243,13 +243,13 @@ pub struct EventStreamFraming<'a> {
     /// Initial-response payload when non-stream members travel in HTTP bindings instead.
     ///
     /// Used when [`initial_messages_in_frames`](Self::initial_messages_in_frames) is false.
-    /// Legacy REST JSON sends `{}`; REST XML sends zero bytes.
+    /// Generated serde REST JSON sends `{}`; REST XML sends zero bytes.
     pub unset_initial_response_payload: &'static [u8],
     /// Optional body discriminator for modeled exception frames.
     pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
     /// Whether HTTP-bound exception members are excluded from the frame payload.
     pub exception_http_bindings: bool,
-    /// Codec for received exception frames that carry a REST XML error envelope, as legacy
+    /// Codec for received exception frames that carry a REST XML error envelope, as generated serde
     /// restXml servers expect. The codec reads the `<Error>` element without validating its
     /// root name.
     pub xml_exception_codec: Option<&'a dyn DynCodec>,
@@ -406,7 +406,7 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// response, so this never fails outward.
     ///
     /// Built-in protocols add the buffered body's byte count as `Content-Length` only when
-    /// no modeled value is present. Matching legacy generated responses, modeled values take
+    /// no modeled value is present. Matching generated serde responses, modeled values take
     /// precedence without length-specific validation or normalization.
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response;
 
@@ -423,7 +423,7 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The body is passed separately because `serialize_members` omits streaming members
     /// and the response must own their streams.
     ///
-    /// Built-in protocols do not infer a length or collect the stream. Matching legacy generated
+    /// Built-in protocols do not infer a length or collect the stream. Matching generated serde
     /// responses, modeled `Content-Length` values are preserved without length-specific validation
     /// or normalization.
     fn serialize_streaming_response(
@@ -528,7 +528,7 @@ pub trait BodyRoutedProtocol: ServerProtocol + Sized {
 }
 
 /// Converts a body collection failure into the protocol's rejection response, retaining
-/// legacy wire behavior: the failure surfaces as an ordinary request-deserialization error.
+/// generated serde wire behavior: the failure surfaces as an ordinary request-deserialization error.
 pub(crate) fn body_collection_rejection(
     protocol: &dyn ServerProtocol,
     error: RequestBodyCollectionError<crate::Error>,

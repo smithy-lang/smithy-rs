@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 
 /**
- * Run the same HTTP requests against separate generated legacy and schema services.
+ * Run the same HTTP requests against separate generated serde and schema services.
  * No known differences are omitted, including structured payloads on modeled errors.
  */
 internal class RestXmlStrictCompatibilityTest {

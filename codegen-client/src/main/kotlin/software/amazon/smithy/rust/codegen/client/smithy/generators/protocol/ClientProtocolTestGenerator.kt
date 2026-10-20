@@ -110,7 +110,7 @@ class ClientProtocolTestGenerator(
     override val expectFail: Set<FailingTest>
         get() =
             if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-                // The schema path correctly handles these cases that the legacy path couldn't:
+                // The schema path correctly handles these cases that the generated serde path couldn't:
                 // - Explicit member values over defaults (rpcv2Cbor and restJson)
                 // - httpPrefixHeaders collision with @httpHeader (restJson and restXml, see #4184)
                 ExpectFail.filterNot {

@@ -433,7 +433,7 @@ impl JsonCodecSettingsBuilder {
     }
 
     /// Permits leading zeros in JSON numbers even with `enforce_strictness(true)`.
-    /// Disabled by default. This matches the legacy JSON parser without relaxing
+    /// Disabled by default. This matches the generated serde JSON parser without relaxing
     /// other grammar checks. Applies to read and skipped numbers alike.
     pub fn allow_leading_zeros(mut self, value: bool) -> Self {
         self.allow_leading_zeros = value;

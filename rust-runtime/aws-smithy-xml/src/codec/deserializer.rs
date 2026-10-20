@@ -1363,7 +1363,7 @@ mod tests {
     /// processing instructions and attribute values inside a flattened list,
     /// a list of structs and a map with struct values must not change what is
     /// decoded. Values follow `try_data`: the first text node wins, and CDATA
-    /// is skipped (matching the legacy decoder).
+    /// is skipped (matching the generated serde decoder).
     #[test]
     fn read_struct_ignores_markup_in_comments_cdata_pi_attrs() {
         static S_ITEMS: Schema<'static> =
@@ -1591,7 +1591,7 @@ mod tests {
     // entirely, so they never reach `read_struct`. Operations that DO have body-bound members and
     // receive an empty body are responding to a malformed wire format —
     // the deserializer surfaces that as an error rather than silently
-    // returning a default-built struct (which the legacy XML parser also
+    // returning a default-built struct (which the generated serde XML parser also
     // did not do).
     #[test]
     fn read_struct_empty_body_errors() {
@@ -2137,7 +2137,7 @@ mod tests {
     }
 
     /// With `strict_collection_element_names`, a wrapped list takes only the
-    /// children named as its member, as the legacy generated parsers do.
+    /// children named as its member, as the generated serde parsers do.
     /// Without it every child is an item, whether or not strictness is
     /// enforced.
     #[test]

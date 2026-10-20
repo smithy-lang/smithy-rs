@@ -212,11 +212,11 @@ impl ServerProtocol for RpcV2Cbor {
         .unwrap_or_else(serialization_failure)
     }
 
-    /// Method mismatches return the legacy server's bare `405` by default. The
+    /// Method mismatches return the generated serde server's bare `405` by default. The
     /// `methodNotAllowedAsNotFound` setting selects the unknown-operation `404` instead.
     /// Unsupported operations return an empty `501`. Every other routing rejection, including
     /// framing violations such as a forbidden `x-amz-target`/`x-amzn-target` header or an invalid
-    /// `smithy-protocol` value, returns the legacy empty `404` for a single-protocol service.
+    /// `smithy-protocol` value, returns the generated serde empty `404` for a single-protocol service.
     /// Multi-protocol services serialize the CBOR unknown-operation error after claiming.
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         match err.kind() {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Legacy observations for the selected-protocol extractor rejection change.
+//! Generated serde observations for the selected-protocol extractor rejection change.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
 use harness::*;

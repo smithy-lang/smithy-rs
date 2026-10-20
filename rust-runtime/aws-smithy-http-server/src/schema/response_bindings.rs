@@ -19,7 +19,7 @@
 //!
 //! The response `Content-Type` is not decided here: it is the protocol's policy, derived from
 //! the schema alone. RPC protocols serialize body-only through the same entry point, except
-//! legacy AWS JSON response bindings, which copy header-bound members into both locations.
+//! generated serde AWS JSON response bindings, which copy header-bound members into both locations.
 
 use std::cell::Cell;
 use std::collections::hash_map::Entry;
@@ -48,7 +48,7 @@ pub(crate) enum ResponseValueKind {
     /// Successful operation output. With no body members the HTTP body is empty, unless
     /// `empty_document` is set and the schema was modeled by the user (it then carries an
     /// original name): the JSON and CBOR protocols write an empty document, `{}` or `bf ff`, for
-    /// such outputs, exactly as the legacy generated serializers do. The same flag makes an unset
+    /// such outputs, exactly as the generated serde serializers do. The same flag makes an unset
     /// structure `@httpPayload` an empty document rather than an empty body.
     OperationOutput { empty_document: bool },
     /// The head of a streaming output: bound members only, nothing is written to the body.
@@ -184,7 +184,7 @@ enum ResponseStrategy {
     BindingsOnly,
     /// Serialize every member into the response body through the codec.
     CodecBody,
-    /// Serialize every member into the response body and also capture bound headers for legacy AWS JSON.
+    /// Serialize every member into the response body and also capture bound headers for generated serde AWS JSON.
     CodecBodyWithHeaders,
     /// Serialize unbound members into the response body while capturing bound headers and status.
     SplitBody,
@@ -221,7 +221,7 @@ pub(crate) struct CompiledResponsePlan {
     members: Box<[ResponseMemberPlan]>,
     /// An unset structure `@httpPayload` is written as the codec's empty document.
     unset_structure_payload_is_document: bool,
-    /// A REST modeled error with an `@httpPayload` member: legacy servers drop the payload and
+    /// A REST modeled error with an `@httpPayload` member: generated serde servers drop the payload and
     /// write the error as a document of its unbound members, which a payload shape has none of
     /// (`{}` on restJson1, `<Error></Error>` on restXml), whether or not the payload is set.
     payload_dropped_for_error_document: bool,
@@ -329,7 +329,7 @@ impl CompiledResponsePlan {
                 })
             }
             ResponseStrategy::CodecBodyWithHeaders => {
-                // Legacy AWS JSON responses serialize the complete response body and
+                // Generated serde AWS JSON responses serialize the complete response body and
                 // independently collect modeled headers.
                 let mut serializer = codec.create_serializer();
                 serializer.write_struct(schema, value)?;
@@ -1025,7 +1025,7 @@ impl ShapeSerializer for HeaderListCollector<'_> {
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        // Legacy encodes media-typed strings before emitting each list element.
+        // Generated serde encodes media-typed strings before emitting each list element.
         // Base64 has no list delimiters to quote; capture_header also skips empty values.
         if self.media_type || schema.media_type().is_some() {
             let encoded = aws_smithy_types::base64::encode(value.as_bytes());
@@ -1096,7 +1096,7 @@ impl ShapeSerializer for PrefixHeaderCollector<'_> {
                 Ok(())
             }
             Some(key) => {
-                // An empty value is still sent (`x-p-empty:`), as legacy does: unlike bound
+                // An empty value is still sent (`x-p-empty:`), as generated serde does: unlike bound
                 // headers, prefix headers have no skip-empty rule.
                 let full_name = format!("{}{}", self.prefix, key);
                 let name = http::HeaderName::try_from(full_name.as_str()).map_err(|err| {
@@ -1770,7 +1770,7 @@ mod tests {
         assert!(split.body.is_empty());
 
         // An unset structure payload is the codec's empty document where the protocol asks for
-        // one (restJson1's legacy serializer writes `{}`), an empty body elsewhere.
+        // one (restJson1's generated serde serializer writes `{}`), an empty body elsewhere.
         struct Unset;
         impl SerializableStruct for Unset {
             fn schema(&self) -> &Schema<'_> {
@@ -1807,7 +1807,7 @@ mod tests {
         assert_eq!(String::from_utf8(split.body.to_vec()).unwrap(), r#"{"f":"v"}"#);
     }
 
-    /// Legacy servers serialize a REST modeled error as the document of its unbound members and
+    /// Generated serde servers serialize a REST modeled error as the document of its unbound members and
     /// drop an `@httpPayload` member, set or not: restJson1 writes `{}`.
     #[test]
     fn modeled_errors_omit_payload_members_like_legacy() {

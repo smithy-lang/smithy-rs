@@ -28,7 +28,7 @@ interface ValidationExceptionConversionGenerator {
     /**
      * The symbol of the validation exception structure that constraint violations are converted into.
      * Generators supporting schema HTTP serde must override this method.
-     * The default preserves source compatibility for generators supporting only legacy HTTP serde.
+     * The default preserves source compatibility for generators supporting only generated HTTP serde.
      */
     fun validationExceptionSymbol(): Symbol =
         throw CodegenException(
@@ -39,9 +39,9 @@ interface ValidationExceptionConversionGenerator {
     /**
      * Convert from a top-level operation input's constraint violation into the validation exception structure
      * (`impl From<ConstraintViolation> for <ValidationException>`) for schema-driven HTTP serde.
-     * Legacy HTTP serde constructs the exception inside the request rejection conversion instead.
+     * Generated HTTP serde constructs the exception inside the request rejection conversion instead.
      * Generators supporting schema HTTP serde must override this method.
-     * The default preserves source compatibility for generators supporting only legacy HTTP serde.
+     * The default preserves source compatibility for generators supporting only generated HTTP serde.
      */
     fun renderImplFromConstraintViolationForValidationException(): Writable =
         throw CodegenException(

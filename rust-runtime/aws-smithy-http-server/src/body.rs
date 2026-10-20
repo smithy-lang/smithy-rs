@@ -12,7 +12,7 @@ use crate::error::{BoxError, Error};
 use bytes::Bytes;
 use std::fmt;
 
-// Preserve the public bound used by previously generated legacy servers.
+// Preserve the public bound used by previously generated servers.
 pub use http_body::Body as HttpBody;
 
 /// Internal helpers used by generated server code.
@@ -316,7 +316,7 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 }
 
 // ============================================================================
-// Legacy Size-limited Body Collection
+// Size-limited Body Collection
 // ============================================================================
 
 /// An error produced by [`collect_body_limited`] when the body exceeds the configured limit.

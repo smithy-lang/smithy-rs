@@ -316,7 +316,7 @@ Upgrade and streaming conversion are defined in
 [Schema-driven server serde](rfc0047_server_schema_serde.md).
 
 Generated schema services use this routing and upgrade path even when they
-declare only one protocol. Services without `schemaSerde` retain legacy routing
+declare only one protocol. Services without `schemaSerde` retain generated serde routing
 and upgrade.
 
 ## Validation
@@ -327,7 +327,7 @@ and incompatible `Content-Type`, empty documents, raw and typed payloads,
 modeled content-type headers, and live streams. Compare routing rejection status,
 headers, and body bytes against native behavior. RPCv2 CBOR retains the schema
 protocol's existing Coral-compatible rejection framing, which differs from the
-legacy Rust router's generic empty 404 for some header failures.
+generated serde Rust router's generic empty 404 for some header failures.
 
 Generated integration tests should send requests in each declared protocol to
 the same typed handler and assert protocol-specific response and error bytes.

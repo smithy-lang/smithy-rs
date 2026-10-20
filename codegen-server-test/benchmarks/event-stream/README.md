@@ -1,9 +1,12 @@
 # Generated server event-stream Criterion benchmarks
 
-Rust benchmarks compare generated legacy serde, generated schema serde, and a
+Rust benchmarks compare generated serde, schema serde, and a
 schema server with REST JSON and RPC v2 CBOR enabled together. All SDKs come
 from the same checkout and model. Every projection sets `http-1x: true`;
 single-protocol projections differ only in `schemaSerde`.
+
+Existing benchmark labels and projection names containing `legacy` identify generated
+serde (`schemaSerde: false`) over HTTP 1.x with `aws-smithy-http-server`.
 
 `make codegen` uses the repository's Gradle server-codegen tasks, just like
 `examples/multi-protocol`. Five generated SDKs are dependencies of this standalone
@@ -13,7 +16,7 @@ transport is involved in running the benchmark.
 ```sh
 cd codegen-server-test/benchmarks/event-stream
 make test
-make bench                       # small: legacy versus schema
+make bench                       # small: generated serde versus schema serde
 make bench PRESET=medium         # add the multiprotocol server
 make bench PRESET=full           # all payload/count combinations
 ```
@@ -24,7 +27,7 @@ to `small`. Presets change the matrix, retaining the same measurement duration:
 
 | Preset | Implementations | Workloads | Cases | Approximate time |
 | --- | --- | --- | ---: | ---: |
-| `small` (default) | Legacy, single-protocol schema | 1 KiB × 64 events | 24 | 28 minutes |
+| `small` (default) | Generated serde, single-protocol schema | 1 KiB × 64 events | 24 | 28 minutes |
 | `medium` | Add multiprotocol schema | 1 KiB × 64 events | 36 | 42 minutes |
 | `full` | All three | All four payload/count points | 144 | 2 hours 48 minutes |
 

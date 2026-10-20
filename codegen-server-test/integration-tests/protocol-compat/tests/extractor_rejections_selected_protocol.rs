@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Selected-protocol rejection tests over generated schema and legacy services.
+//! Selected-protocol rejection tests over schema serde and generated serde services.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
 

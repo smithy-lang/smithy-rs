@@ -53,7 +53,7 @@ pub trait IntoResponse<Protocol> {
     /// this method to frame a rejection through the selected protocol, as
     /// [`crate::runtime_error::RuntimeError`] and the modeled-error blanket implementation do.
     /// Schema upgrades call this method for extractor rejections; middleware returning modeled
-    /// errors must also supply its selected protocol. Direct calls and legacy upgrades continue
+    /// errors must also supply its selected protocol. Direct calls and generated serde upgrades continue
     /// to use [`Self::into_response`].
     fn into_response_with_protocol(self, _protocol: &dyn crate::schema::ServerProtocol) -> http::Response<BoxBody>
     where

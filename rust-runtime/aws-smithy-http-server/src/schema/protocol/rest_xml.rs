@@ -23,7 +23,7 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 /// Stateful schema-driven restXml protocol implementation.
 ///
 /// Wrapped collections read only their modeled item and entry names. Requests accept
-/// `application/xml`, and parsing checks the modeled root while retaining the legacy
+/// `application/xml`, and parsing checks the modeled root while retaining the generated serde
 /// parser's recovery from malformed XML.
 #[derive(Debug)]
 pub struct RestXml {
@@ -200,7 +200,7 @@ impl ServerProtocol for RestXml {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         // restXml carries no discriminator: the error structure is the body.
         let schema = error.schema();
-        // Legacy can omit this header, depending on the operation's success output.
+        // Generated serde can omit this header, depending on the operation's success output.
         let content_type = match error.operation_schema() {
             Some(operation) => self.inner.response_content_type(operation.output()),
             None => Some(CONTENT_TYPE),
@@ -262,7 +262,7 @@ impl ServerProtocol for RestXml {
             DeserializeError::NotAcceptable => {
                 IntoResponse::<RestXml>::into_response(RuntimeError::from(RequestRejection::NotAcceptable))
             }
-            // The smuggled reason string never reaches the wire; legacy renders `{}` regardless.
+            // The smuggled reason string never reaches the wire; generated serde renders `{}` regardless.
             DeserializeError::ConstraintViolation(_) => {
                 IntoResponse::<RestXml>::into_response(RuntimeError::Validation(String::new()))
             }
@@ -288,7 +288,7 @@ impl<'a> ResponseXmlCodec<'a> {
         }
     }
 
-    /// Modeled errors are documents rooted at `Error`: like legacy servers, they drop an
+    /// Modeled errors are documents rooted at `Error`: like generated serde servers, they drop an
     /// `@httpPayload` member, so its `@xmlName` never names the root.
     fn for_error(inner: &'a aws_smithy_xml::codec::XmlCodec) -> Self {
         Self {
@@ -304,7 +304,7 @@ impl Codec for ResponseXmlCodec<'_> {
 
     fn create_serializer(&self) -> Self::Serializer {
         let mut serializer = self.inner.create_serializer();
-        // Legacy payload naming gives the member's @xmlName precedence over the target.
+        // Generated serde payload naming gives the member's @xmlName precedence over the target.
         // Without an override, the serializer resolves the target's name as usual.
         if let Some(name) = self.payload_member.and_then(|member| member.xml_name()) {
             serializer.set_next_root_xml_name(name.value().to_owned());

@@ -175,7 +175,7 @@ internal class RestStreamingBlobInputCompatibilityTest {
                 val actual = Files.readAllLines(captures.resolve("true-$publicTypes-$case.wire"))
                 val actualBody = Files.readAllBytes(captures.resolve("true-$publicTypes-$case.body"))
                 check(actual.take(2) == legacy.take(2)) { "$protocol $case status or headers differ" }
-                // Keep the raw legacy/schema captures. JSON object member order is insignificant.
+                // Keep the raw generated serde and schema serde captures. JSON object member order is insignificant.
                 if (protocol == "restJson1") {
                     check(ObjectNode.parse(actualBody.decodeToString()) == ObjectNode.parse(legacyBody.decodeToString())) {
                         "$protocol $case JSON response differs"

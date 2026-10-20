@@ -5,10 +5,16 @@ Each entry describes what breaks or changes, how you notice it, and what to chan
 
 Services that do not enable `schemaSerde` are unaffected.
 
+This guide calls `schemaSerde: false` **generated serde** and `schemaSerde: true`
+**schema serde**. Generated serde emits protocol serializers and deserializers;
+schema serde uses runtime schema walkers. Serde mode is separate from HTTP version
+selection: `aws-smithy-legacy-http-server` is the HTTP 0.x runtime, while
+`aws-smithy-http-server` supports both serde modes over HTTP 1.x.
+
 ## RPC v2 CBOR streaming blob inputs
 
 Schema serde preserves `@streaming` on blob shapes, so RPC v2 CBOR handlers receive
-`ByteStream` fields where legacy CBOR codegen generated `Blob` fields. To access all
+`ByteStream` fields where generated serde CBOR codegen generated `Blob` fields. To access all
 bytes in a handler, use `input.data.collect().await?.into_bytes()` instead of
 `input.data.as_ref()`.
 
@@ -143,7 +149,7 @@ to serialize mapped authentication errors directly, as the following helpers ill
 
 ### One implementation for single- and multi-protocol schema services
 
-The distinction is schema versus legacy serialization, not single versus multiple protocols.
+The distinction is schema versus generated serde serialization, not single versus multiple protocols.
 With `schemaSerde: true`, routing supplies `SelectedOperation` for single-protocol services too.
 The same middleware implementation can remain generic over `P`, require
 `Op::Error: HttpModeledError`, and use the selected protocol for both kinds of service:
@@ -152,7 +158,7 @@ The same middleware implementation can remain generic over `P`, require
 | --- | --- |
 | Schema, single protocol (`P = RestJson1`, for example) | Selected protocol's `serialize_runtime_error` and `serialize_error`. |
 | Schema, multiple protocols (`P = (RestJson1, RpcV2Cbor)`, for example) | The same calls, using the protocol selected for each request. |
-| Legacy, schema serde disabled | Existing `IntoResponse<P>` conversions for its concrete protocol marker. |
+| Generated serde, schema serde disabled | Existing `IntoResponse<P>` conversions for its concrete protocol marker. |
 
 No single-protocol schema fallback or tuple-specific implementation is needed. Even when `P`
 is a concrete marker, the schema middleware obtains framing from the request's selected handle.
@@ -221,7 +227,7 @@ requests must preserve their extensions, including when reconstructing a request
 Clearing or replacing all extensions discards the private carrier. The schema upgrade and
 missing-handler fallback then return an empty `500` with no headers, without polling the
 request body or invoking the handler. A body-routed protocol may already have collected
-the input before middleware runs. This fallback intentionally differs from legacy services,
+the input before middleware runs. This fallback intentionally differs from generated serde services,
 which do not depend on request selection metadata: registered handlers still process requests,
 and missing handlers return their protocol's internal-failure response. Missing selection in
 a schema per-operation plugin indicates a wiring failure; handle it explicitly rather than
@@ -250,7 +256,7 @@ preserving extensions.
 ### Runtime support for one middleware API
 
 A middleware library can keep one public entry point, such as
-`plugins.authenticate(client, config)`, for legacy, single-protocol schema, and multi-protocol
+`plugins.authenticate(client, config)`, for generated serde, single-protocol schema, and multi-protocol
 schema services. Callers do not inherently need to choose a serialization mode. The updated
 runtime provides the following adapters for middleware retaining its existing `IntoResponse<P>`
 bounds:
@@ -260,7 +266,7 @@ bounds:
   supplies `HttpModeledError`, so no new per-error generated implementation is needed. Its
   context-free conversion returns an empty body with the modeled HTTP status, no protocol
   headers, and a `ModeledErrorExtension` containing the error's shape name. An invalid status
-  falls back to 500. Legacy generated error implementations remain unchanged.
+  falls back to 500. Generated serde error implementations remain unchanged.
 * Context-aware `IntoResponse` implementations for `InternalFailureException` on protocol
   tuples of two through ten elements. They serialize shared `RuntimeError::InternalFailure`
   through the supplied protocol. A direct tuple conversion returns an empty 500 with no protocol
@@ -294,8 +300,8 @@ fn middleware_response<P, E: IntoResponse<P>>(
 
 Both authentication failure and body-collection failure use this helper.
 The existing `Op::Error: IntoResponse<P>` and `InternalFailureException: IntoResponse<P>` bounds
-are satisfied automatically. Legacy requests retain their static conversions; schema requests
-use their selected protocol, whether `P` is one marker or a tuple. Existing legacy and schema SDKs
+are satisfied automatically. Generated serde requests retain their static conversions; schema requests
+use their selected protocol, whether `P` is one marker or a tuple. Existing generated serde and schema SDKs
 need no new generated error implementation for this bridge.
 
 `Infallible` retains its response support through the blanket implementation. A service-owned
@@ -413,19 +419,19 @@ missing connection-info, request-ID, and metrics extractors as well.
 ### Compatibility verification and regression tests
 
 Before editing behavior-changing runtime or codegen implementation, generate and run a focused
-legacy service with schema serde disabled. Use the same model, protocol, configuration, and inputs
+generated serde service with schema serde disabled. Use the same model, protocol, configuration, and inputs
 for the schema comparison. Record observed status, headers, exact body bytes, and relevant response
 extensions for extractor success and rejection, including streaming operations. Report the baseline
-and proposed differences before implementation; any difference from legacy requires explicit user
+and proposed differences before implementation; any difference from generated serde requires explicit user
 direction. Source inspection is not a substitute for that reproduction.
 
 Tests must exercise generated services and actual upgrade paths, not only direct trait calls:
 
 | Case | Required assertions |
 | --- | --- |
-| Single-protocol legacy extractor and custom rejection | Existing `FromParts<RestJson1>` and `IntoResponse<RestJson1>` compile unchanged; schema response matches the recorded legacy response. |
-| Shared runtime error on each single protocol | Each variant matches the corresponding legacy protocol-local runtime error's status, headers, body bytes, and response extensions. |
-| One multi-protocol service, generic extractor, shared validation error | Requests selecting restJson1 and rpcv2Cbor receive their respective legacy runtime-validation framing; the selected protocol controls conversion. |
+| Single-protocol generated serde extractor and custom rejection | Existing `FromParts<RestJson1>` and `IntoResponse<RestJson1>` compile unchanged; schema response matches the recorded generated serde response. |
+| Shared runtime error on each single protocol | Each variant matches the corresponding generated serde protocol-local runtime error's status, headers, body bytes, and response extensions. |
+| One multi-protocol service, generic extractor, shared validation error | Requests selecting restJson1 and rpcv2Cbor receive their respective generated serde runtime-validation framing; the selected protocol controls conversion. |
 | Repeated requests selecting different protocols | Selection does not leak across requests or depend on protocol tuple ordering. |
 | Multiple extractors | Failure at different tuple positions forwards the selected protocol through `any_rejections`; cover every generated wrapper arity from two through eight. |
 | Existing custom response | A type implementing only the old conversion keeps its chosen status, custom headers, exact body, and response extensions on both protocols. |
@@ -436,7 +442,7 @@ Tests must exercise generated services and actual upgrade paths, not only direct
 | Direct conversions | Old protocol-local conversions remain compatible; the new shared error's context-free fallback is pinned separately. |
 | Custom protocol implementation | Its serializer is invoked for the shared error through routing, including a protocol registration supplied by the service. |
 
-Keep legacy observations explicit in comparison tests. Do not rewrite expectations to fit a new
+Keep generated serde observations explicit in comparison tests. Do not rewrite expectations to fit a new
 serializer. In particular, assert the existing protocol behavior even when content types or body
 bytes look surprising; wire-format cleanup is a separate compatibility decision.
 

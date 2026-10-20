@@ -49,7 +49,7 @@ import java.security.MessageDigest
 /**
  * Generates one side of the single-protocol versus multi-protocol A/B fuzz harnesses.
  *
- * Run it from a clean `main` checkout with `MP_FUZZ_SIDE=single` to produce a legacy single-protocol server and
+ * Run it from a clean `main` checkout with `MP_FUZZ_SIDE=single` to produce a generated serde single-protocol server and
  * fuzz target per protocol, and from the multi-protocol branch with `MP_FUZZ_SIDE=multi` to produce one server
  * serving every protocol and its fuzz target. Both sides read the same model files from `MP_FUZZ_MODELS`.
  *
@@ -88,7 +88,7 @@ class MultiProtocolAbFuzzHarnessTest {
 
     /**
      * Whether this side's servers are generated with `codegen.schemaSerde`: the `multi` side by default.
-     * Set `MP_FUZZ_AFTER_SCHEMA_SERDE=false` to compare the baseline against this checkout's legacy path.
+     * Set `MP_FUZZ_AFTER_SCHEMA_SERDE=false` to compare the baseline against this checkout's generated serde path.
      */
     private val sideSchemaSerde =
         side == "multi" &&
@@ -102,7 +102,7 @@ class MultiProtocolAbFuzzHarnessTest {
     private val multiProtocolModels =
         File(System.getenv("MP_FUZZ_MULTI_PROTOCOL_MODELS") ?: error("MP_FUZZ_MULTI_PROTOCOL_MODELS is required"))
 
-    /** Tower as the generated server depends on it: 0.5 with schema serde, 0.4 on the legacy path. */
+    /** Tower as the generated server depends on it: 0.5 with schema serde, 0.4 on the generated serde path. */
     private fun harnessTower(schemaSerde: Boolean): CargoDependency =
         CargoDependency("tower", CratesIo(if (schemaSerde) "0.5" else "0.4"), features = setOf("util"))
 
@@ -553,7 +553,7 @@ class MultiProtocolAbFuzzHarnessTest {
         }
     }
 
-    /** Reproduce legacy RPC generation restrictions with the original event-stream input member. */
+    /** Reproduce generated serde RPC generation restrictions with the original event-stream input member. */
     @Test
     @EnabledIfEnvironmentVariable(named = "MP_FUZZ_VERIFY_EXCLUSIONS", matches = "true")
     fun verifyOriginalRpcEventStreamGeneration() {

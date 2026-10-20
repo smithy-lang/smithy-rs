@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 /**
  * A restXml server reads a modeled exception frame received in an input event stream from the
  * `@restXml` error envelope: `<ErrorResponse><Error>` by default, `<Error>` with
- * `noErrorWrapping`. The legacy generated parser establishes the expected outcomes, and the
+ * `noErrorWrapping`. The generated serde parser establishes the expected outcomes, and the
  * schema server, which reads `noErrorWrapping` from its generated `ServiceSchema`, must match.
  */
 internal class RestXmlEventStreamErrorEnvelopeTest {

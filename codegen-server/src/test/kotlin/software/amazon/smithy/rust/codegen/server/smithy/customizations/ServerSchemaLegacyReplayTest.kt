@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
-/** Replays identical request bytes through separately generated legacy and schema servers. */
+/** Replays identical request bytes through separately generated serde and schema servers. */
 internal class ServerSchemaLegacyReplayTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "awsJson1_0", "awsJson1_1"])

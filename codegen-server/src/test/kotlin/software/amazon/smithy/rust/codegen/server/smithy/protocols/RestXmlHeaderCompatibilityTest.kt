@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
-/** Pins the legacy behavior behind the two executed upstream header expected failures. */
+/** Pins the generated serde behavior behind the two executed upstream header expected failures. */
 internal class RestXmlHeaderCompatibilityTest {
     @Test
     fun `empty headers and bound prefix collisions match legacy`() {

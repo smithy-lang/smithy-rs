@@ -99,7 +99,7 @@ data class ClientCodegenConfig(
     val includeLegacyClient: Boolean = DEFAULT_ENABLE_LEGACY_CLIENT,
     /**
      * If true, opts this service out of schema-based serialization/deserialization even when its
-     * protocol is enabled in `SchemaSerdeAllowlist`, generating the legacy per-shape
+     * protocol is enabled in `SchemaSerdeAllowlist`, emitting the per-shape generated serde
      * `protocol_serde` path instead.
      *
      * This is a one-way switch: it can only turn schema serde *off*. Setting it to `false` (the
@@ -107,7 +107,7 @@ data class ClientCodegenConfig(
      * protocol is not allowlisted has no effect, because schema serde is already off there.
      *
      * The intended use is an escape hatch during the phased rollout of schema serde — a service
-     * that hits a schema-path bug can be reverted to the legacy path in its `smithy-build.json`
+     * that hits a schema-path bug can be reverted to the generated serde path in its `smithy-build.json`
      * without removing its whole protocol from the allowlist.
      */
     val disableSchemaSerde: Boolean = DEFAULT_DISABLE_SCHEMA_SERDE,

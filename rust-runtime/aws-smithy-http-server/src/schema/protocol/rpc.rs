@@ -77,7 +77,7 @@ impl<C> RpcProtocol<C> {
         self.codec.as_ref()
     }
 
-    /// The legacy RPC deserializers never touch the body of a memberless input.
+    /// The generated serde RPC deserializers never touch the body of a memberless input.
     pub fn reads_request_body(&self, input: &Schema<'_>) -> bool {
         !input.members().is_empty()
     }

@@ -25,7 +25,7 @@ import java.nio.file.Files
 /**
  * A blob body is a single expression; wrapping it in Some({ ... }) triggers unused_braces.
  * Compile a required streaming payload with warnings denied and compare its
- * actual response bytes and headers to generated legacy services.
+ * actual response bytes and headers to generated serde services.
  */
 internal class StreamingOutputWarningsCompatibilityTest {
     @Test

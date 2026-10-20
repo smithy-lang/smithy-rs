@@ -54,7 +54,7 @@ class ServerOperationGenerator(
         val responseFmt = generator.responseFmt()
 
         val operationIdAbsolute = operationId.toString().replace("#", "##")
-        // OperationShape is shared with legacy plugins; schema IDs live in SchemaOperationShape::SCHEMA.
+        // OperationShape is shared with generated serde plugins; schema IDs live in SchemaOperationShape::SCHEMA.
         val shapeIdType = "#{SmithyHttpServer}::shape_id::ShapeId"
         val id =
             if (schemaSerde) {

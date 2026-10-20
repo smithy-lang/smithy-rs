@@ -69,7 +69,7 @@ data class ServerRustSettings(
     /**
      * The schema-only settings under `customizationConfig.protocols`, keyed by full protocol shape ID
      * (or the shared `common` key), with the legacy `codegen.rpcV2CborAddCapitalizedRoute` flag folded in.
-     * Legacy servers leave this customization section unparsed.
+     * Generated serde servers leave this customization section unparsed.
      *
      * Protocol sections are passed through to the generated `ProtocolOptions` as documents keyed
      * by shape ID. The common request body limit is emitted as typed body configuration instead.
@@ -131,7 +131,7 @@ data class ServerRustSettings(
      * `Content-Length` values; services should set a positive value.
      *
      * The legacy `codegen.requestBodyMaxBytes` value is copied here when this setting is absent.
-     * The legacy generator reads `codegen.requestBodyMaxBytes` without parsing protocol settings.
+     * Codegen with generated serde reads `codegen.requestBodyMaxBytes` without parsing protocol settings.
      * Schema routing stores the result in its typed request body configuration.
      */
     fun requestBodyMaxBytes(): Long {
@@ -151,7 +151,7 @@ data class ServerRustSettings(
     }
 
     /**
-     * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the legacy router
+     * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the generated serde router
      * codegen and, through [protocolSettings], the schema routing path.
      */
     fun rpcV2CborCapitalizeRoutes(): Boolean =

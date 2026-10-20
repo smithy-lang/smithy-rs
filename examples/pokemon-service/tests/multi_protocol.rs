@@ -106,7 +106,7 @@ async fn pokemon_service_routes_bodyless_rest_operations() {
         )
         .build_unchecked();
 
-    // `CheckHealth` has no modeled input. Like legacy servers (mainline answers
+    // `CheckHealth` has no modeled input. Like generated serde servers (mainline answers
     // `415 UnsupportedMediaTypeException`), a bodiless request for it must not carry a
     // `Content-Type`; without one it is served.
     for (content_type, expected) in [

@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType as RT
  * loop, and asserts the outcome. `{"expectOk": true}` requires success and
  * `{"expectErrorContaining": "..."}` requires a failure whose full error chain contains
  * the text. An optional `schemaSerdeAlsoContaining` adds text that is required only when
- * the client uses schema serde, whose errors carry the parser's message; the legacy
+ * the client uses schema serde, whose errors carry the parser's message; the generated serde
  * generated parser reports a fixed message, and a control must hold on both paths so it
  * can guard either side of an A/B run. Controls print no stats, so they never appear in benchmark results. They
  * exist because the timing loops discard their results, so a loop cannot notice that a

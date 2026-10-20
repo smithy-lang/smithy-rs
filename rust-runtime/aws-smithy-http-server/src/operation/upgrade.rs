@@ -374,7 +374,7 @@ where
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if directive == BodyDirective::Collect {
             // TODO(incremental CBOR blob decoding): Support streaming once the handler contract for
-            // trailing fields and validation is settled. Collection preserves legacy timing.
+            // trailing fields and validation is settled. Collection preserves generated serde timing.
             let config = config.ok_or_else(|| {
                 DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
                     "selected operation missing while preparing collected input",

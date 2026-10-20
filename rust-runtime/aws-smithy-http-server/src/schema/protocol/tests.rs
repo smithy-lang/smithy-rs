@@ -347,7 +347,7 @@ fn accept_header_gates_every_protocol() {
     assert!(matches!(err, DeserializeError::NotAcceptable), "{err}");
 
     // restJson1 labels every response `application/json` unless the output says otherwise, and
-    // gates `Accept` against that label even when the output has no body: the legacy server
+    // gates `Accept` against that label even when the output has no body: the generated serde server
     // generates the gate for `NoInputAndNoOutput`. restXml labels nothing and so gates nothing.
     let req = request("/empty", &[("accept", "text/xml")], b"");
     assert!(matches!(
@@ -393,7 +393,7 @@ fn accept_expectation_follows_the_output_payload() {
     static STRING_OUT: Schema<'static> =
         Schema::new_struct(shape_id!("test", "TextOut"), ShapeType::Structure, &STRING_OUT_MEMBERS);
 
-    // An untyped blob payload carries no content type on restJson1 (the legacy server sets
+    // An untyped blob payload carries no content type on restJson1 (the generated serde server sets
     // none), so nothing is gated; restXml labels it `application/octet-stream` and gates that.
     let req = request("/empty", &[("accept", "application/json")], b"");
     assert!(REST_JSON
@@ -883,7 +883,7 @@ async fn payload_outputs_are_labeled_from_the_schema_not_the_value() {
         }
     }
 
-    // The legacy restJson1 server labels a string payload `text/plain` whether or not it is set,
+    // The generated serde restJson1 server labels a string payload `text/plain` whether or not it is set,
     // and never labels an untyped blob payload.
     let response = REST_JSON.serialize_response(&STRING_OUT, &Text(Some("hello")));
     assert_eq!(response.headers().get("content-type").unwrap(), "text/plain");
@@ -995,7 +995,7 @@ async fn rpc_v2_cbor_frames_errors_with_a_leading_type_member() {
     assert!(bytes.windows(9).any(|w| w == b"test#Boom"), "full shape ID present");
 }
 
-// --- rejection responses: byte-for-byte the legacy `RuntimeError` responses ---
+// --- rejection responses: byte-for-byte the generated serde `RuntimeError` responses ---
 
 fn media_type_failure() -> DeserializeError {
     DeserializeError::from(crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
@@ -1089,7 +1089,7 @@ async fn rest_xml_rejections_collapse_not_acceptable_to_a_400() {
     assert_eq!(response.headers().get("content-type").unwrap(), "application/xml");
     assert_eq!(get_body_as_string(response.into_body()).await, "{}");
 
-    // restXml's `From<RequestRejection>` has no `NotAcceptable` arm: legacy falls through to a
+    // restXml's `From<RequestRejection>` has no `NotAcceptable` arm: generated serde falls through to a
     // 400 `Serialization`, not a 406.
     let response = REST_XML.serialize_rejection(DeserializeError::NotAcceptable);
     assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
@@ -1125,7 +1125,7 @@ async fn rpc_v2_cbor_rejections_collapse_to_a_400_without_the_protocol_header() 
         let response = RPC_V2_CBOR.serialize_rejection(err);
         assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
         assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
-        // Legacy never sets `smithy-protocol` on the runtime-error path.
+        // Generated serde never sets `smithy-protocol` on the runtime-error path.
         assert!(response.headers().get(&SMITHY_PROTOCOL_HEADER).is_none());
         // The body is an empty CBOR map with no `__type` (upstream #3716, preserved).
         assert_eq!(body_bytes(response).await.as_ref(), &[0xa0]);
@@ -1164,7 +1164,7 @@ async fn rpc_v2_cbor_constraint_violations_have_no_protocol_header() {
     use crate::extension::RuntimeErrorExtension;
 
     // Modeled CBOR body with a leading `__type`, but, unlike handler-returned errors, no
-    // `smithy-protocol` header: legacy's runtime-error path never sets it.
+    // `smithy-protocol` header: generated serde's runtime-error path never sets it.
     let response = RPC_V2_CBOR.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     assert_eq!(response.status(), http::StatusCode::UNPROCESSABLE_ENTITY);
     assert!(response.headers().get(&SMITHY_PROTOCOL_HEADER).is_none());
@@ -1182,7 +1182,7 @@ async fn rpc_v2_cbor_constraint_violations_have_no_protocol_header() {
 async fn rest_xml_constraint_violations_reproduce_the_legacy_empty_body() {
     use crate::extension::RuntimeErrorExtension;
 
-    // Legacy restXml drops the validation body entirely: 400, `application/xml`, literal `{}`.
+    // Generated serde restXml drops the validation body entirely: 400, `application/xml`, literal `{}`.
     let response = REST_XML.serialize_rejection(DeserializeError::ConstraintViolation(Box::new(Boom)));
     assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
     assert_eq!(response.headers().get("content-type").unwrap(), "application/xml");

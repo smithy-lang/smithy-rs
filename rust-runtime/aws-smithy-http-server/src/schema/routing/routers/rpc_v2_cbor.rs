@@ -21,7 +21,7 @@ use crate::schema::routing::{
 /// The header alone can offer a deferred rejection but cannot claim a request.
 /// Routing after a claim rejects forbidden headers. Streaming blob inputs are collected
 /// and decoded by the selected protocol before handler dispatch.
-/// Route identity retains the legacy acceptance of URI prefixes and service namespaces;
+/// Route identity retains the generated serde acceptance of URI prefixes and service namespaces;
 /// configured capitalized operation aliases also participate in the known-route check.
 /// As the sole protocol, claims perform native routing and defer its errors, including
 /// missing or unsupported protocol headers, instead of declining protocol ownership.

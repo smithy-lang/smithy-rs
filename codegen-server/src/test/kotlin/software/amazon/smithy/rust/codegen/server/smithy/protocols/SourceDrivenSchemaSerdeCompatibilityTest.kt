@@ -81,7 +81,7 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                                     .redirectOutput(run.resolve("$protocol-$mode-cargo.log").toFile())
                             process.environment()["SCHEMA_COMPAT_OBSERVATIONS"] = run.resolve("$protocol-$mode.jsonl").toString()
                             // Keep the strict compilation probe separate from runtime observations:
-                            // legacy XML attributes leave a generated setter unused.
+                            // generated serde XML attributes leave a generated setter unused.
                             process.environment()["RUSTFLAGS"] = if (protocol == "rest-xml") "-D warnings -A dead_code" else "-D warnings"
                             check(process.start().waitFor() == 0) {
                                 "Cargo failed: ${run.resolve("$protocol-$mode-cargo.log")}"
@@ -168,7 +168,7 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                         val observation = Node.parse(line).expectObjectNode()
                         assertTrue(observation.expectMember("panic").isNullNode, "$protocol $mode: $observation")
                         val wire = observation.withoutMember("logs")
-                        // Captured legacy REST JSON validation errors put fieldList before
+                        // Captured generated serde REST JSON validation errors put fieldList before
                         // message; schema preserves model order. The parsed body, status,
                         // and all headers are still compared, and raw wire captures remain.
                         val validationError =

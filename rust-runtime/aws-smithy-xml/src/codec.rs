@@ -125,7 +125,7 @@ impl XmlCodecSettingsBuilder {
 
     /// Reads only the children of a wrapped list that are named as its member
     /// (`member`, or the member's `@xmlName`) and only the `entry` children of
-    /// a wrapped map, skipping the others, as the legacy generated parsers do.
+    /// a wrapped map, skipping the others, as the generated serde parsers do.
     ///
     /// Off by default: every child element is an item or an entry whatever its
     /// name. Flattened lists and maps are not affected; their elements are

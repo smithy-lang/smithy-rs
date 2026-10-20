@@ -180,7 +180,7 @@ class MultiProtocolSchemaServiceTest {
                 tokioTest("each_protocol_claims_its_own_requests") {
                     rustTemplate(
                         """
-                        // REST and AWS JSON honor the legacy modeled HTTP success status.
+                        // REST and AWS JSON honor the generated serde modeled HTTP success status.
                         let (status, headers, body) =
                             send(post("/greet").header("content-type", "application/json"), r##"{"name":"json"}"##).await;
                         assert_eq!((status, headers["content-type"].to_str().unwrap()), (201, "application/json"));
@@ -269,7 +269,7 @@ class MultiProtocolSchemaServiceTest {
                 tokioTest("cbor_upload_matches_legacy_and_rest_upload_still_streams") {
                     rustTemplate(
                         """
-                        // Standalone legacy CBOR returns an empty CBOR map with status 400
+                        // Standalone generated serde CBOR returns an empty CBOR map with status 400
                         // for missing Content-Type or an unencoded blob body, and buffers a
                         // correctly encoded blob before dispatching it to the handler.
                         for request in [

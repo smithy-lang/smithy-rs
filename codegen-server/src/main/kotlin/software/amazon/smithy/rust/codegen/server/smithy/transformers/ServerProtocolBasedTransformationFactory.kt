@@ -41,7 +41,7 @@ object ServerProtocolBasedTransformationFactory {
         // The schema path serves every declared protocol from one model, so it keeps the HTTP binding
         // traits REST protocols need; rpcv2Cbor ignores them at runtime.
         // It also preserves `@streaming` on blobs, including in CBOR-only services. Those members
-        // therefore use `ByteStream`; the legacy CBOR transformation below removes `@streaming`,
+        // therefore use `ByteStream`; the generated serde CBOR transformation below removes `@streaming`,
         // producing `Blob` members instead. Enabling schema serde changes that generated API.
         if (settings.codegenConfig.schemaSerde && settings.runtimeConfig.httpVersion == HttpVersion.Http1x) {
             return model

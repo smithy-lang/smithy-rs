@@ -16,7 +16,7 @@
 //! `&str` (mapping invalid UTF-8 to an empty string), splits on commas without regard for
 //! quoting, and ignores the schema's `@timestampFormat`. The header semantics that AWS SDKs
 //! have shipped for years live in `aws_smithy_runtime_api::http::header_parse`, and this
-//! module is built on those primitives so the schema path and the generated legacy path
+//! module is built on those primitives so the schema path and the generated serde path
 //! cannot drift.
 
 use crate::serde::{SerdeError, ShapeDeserializer};
@@ -195,7 +195,7 @@ impl<'a> HttpHeaderValueDeserializer<'a> {
 
     /// Returns true when this header is present but the member would parse to no value.
     ///
-    /// The generated legacy path reports that as an absent member, so the composite must
+    /// The generated serde path reports that as an absent member, so the composite must
     /// not invoke the consumer in this case; there is no way to express "no value" through
     /// a `read_*` return type.
     ///
@@ -637,7 +637,7 @@ impl ShapeDeserializer for HeaderTokenDeserializer<'_> {
 /// Presents the HTTP response status code to a generated `@httpResponseCode` member.
 ///
 /// The modeled type is always an integer, so this reads a value it already holds rather than
-/// parsing anything. The generated legacy path assigns the status unconditionally, so the
+/// parsing anything. The generated serde path assigns the status unconditionally, so the
 /// composite always invokes the consumer for this member.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct HttpStatusDeserializer {
@@ -946,7 +946,7 @@ impl ShapeDeserializer for HttpPrefixHeadersDeserializer<'_> {
 ///
 /// # An empty body means an absent member
 ///
-/// The generated legacy path guards the assignment with `if !body.is_empty()`, so an empty
+/// The generated serde path guards the assignment with `if !body.is_empty()`, so an empty
 /// payload leaves the member `None`. That rule applies to structured payloads too, so the
 /// check lives in the composite's payload routing rather than here. [`is_null`](Self::is_null)
 /// stays false for the same reason it does on the other bound-value deserializers.
@@ -1579,7 +1579,7 @@ mod tests {
 
     #[test]
     fn a_list_whose_values_are_empty_reads_as_an_empty_vec() {
-        // The generated legacy path reports an empty parse result as an *absent* member, so
+        // The generated serde path reports an empty parse result as an *absent* member, so
         // the composite must consult `parses_to_no_value` rather than assigning this.
         let h = one!(b"");
         assert!(deser(&h, "x-test")
@@ -1818,7 +1818,7 @@ mod tests {
     fn a_prefixed_header_with_repeated_values_is_a_cardinality_error() {
         // The pre-existing schema path used `HashMap::insert` and silently kept one value.
         // Routing each header through the shared scalar parser makes this an error, matching
-        // the generated legacy path.
+        // the generated serde path.
         let h = headers(&[("x-meta-color", b"red"), ("x-meta-color", b"blue")]);
         let err = prefix(&h, "x-meta-")
             .read_string_string_map(&PREFIX_MEMBER)

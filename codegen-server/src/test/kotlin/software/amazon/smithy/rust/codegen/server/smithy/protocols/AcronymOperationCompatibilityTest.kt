@@ -65,7 +65,7 @@ internal class AcronymOperationCompatibilityTest {
                     tokioTest("acronym_operation_responses") {
                         rustTemplate(
                             """
-                            // Preserve the public marker spellings observed in the legacy service.
+                            // Preserve the public marker spellings observed in the generated serde service.
                             assert_eq!(
                                 <crate::operation_shape::AcLsUpdateStatus as #{Server}::operation::OperationShape>::ID.absolute(),
                                 "test.acronymoperations##ACLsUpdateStatus",

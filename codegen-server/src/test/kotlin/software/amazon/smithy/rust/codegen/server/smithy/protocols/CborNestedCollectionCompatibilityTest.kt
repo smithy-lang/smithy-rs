@@ -156,7 +156,7 @@ internal class CborNestedCollectionCompatibilityTest {
                 }
             }
         }
-        // Keep the full legacy HTTP observations, including CBOR framing, in the comparison.
+        // Keep the full generated serde HTTP observations, including CBOR framing, in the comparison.
         assertEquals(Files.readString(run.resolve("false.txt")), Files.readString(run.resolve("true.txt")), run.toString())
     }
 }

@@ -1,5 +1,9 @@
 # protocol-compat
 
+These tests compare generated serde (`schemaSerde: false`) with schema serde
+(`schemaSerde: true`). Existing fixture names containing `legacy` identify generated
+serde; HTTP 1.x fixtures use `aws-smithy-http-server`.
+
 Cross-protocol behavior tests over generated servers, in two styles:
 
 - Behavior pinning: shared handlers mounted on generated services covering each
@@ -38,14 +42,14 @@ The server model in `codegen-core/common-test-models/multi-protocol-compat/multi
 
 The `scenario` input selects populated, absent, empty, default, override or error responses where applicable. REST carries it in `x-scenario`; RPC carries it as an ordinary body member. Tagged response fixtures drive the fuzz handlers, and request fixtures seed these selectors.
 
-Native protocol tests assert the declared wire contract. A/B tests compare independently generated legacy and schema servers using the same model and inputs. The generic fuzz model has explicit reductions: see `tools/multi-protocol-ab-fuzz/README.md` and the generated model-projection manifests. A passing reduced-model comparison does not establish coverage for excluded operations or members.
+Native protocol tests assert the declared wire contract. A/B tests compare independently generated serde and schema servers using the same model and inputs. The generic fuzz model has explicit reductions: see `tools/multi-protocol-ab-fuzz/README.md` and the generated model-projection manifests. A passing reduced-model comparison does not establish coverage for excluded operations or members.
 
 Earlier investigation records are in `validation/multi-protocol-enrichment/` and `validation/multi-protocol-example/report.md`. Those records predate the subsequent document-null and XML union-list fixes.
 
-## Reproducing the legacy baseline
+## Reproducing the generated serde baseline
 
 `make mainline-baseline` records the shared scenarios against freshly generated
-legacy servers with HTTP 1.x and `schemaSerde: false`. It exports the pinned
+generated serde servers with HTTP 1.x and `schemaSerde: false`. It exports the pinned
 merge-base commit `06c62da902fba6059ab34d0dc3d570907560cd3a` into a temporary
 directory and uses that source for both codegen and runtime. Models, handlers,
 and scenarios are copied from this suite; pending runtime or codegen changes
@@ -72,17 +76,17 @@ rejections. The comparison includes the full header map, exact body bytes, and
 extensions, verify handler dispatch, and distinguish required and optional request extensions.
 
 The constants in `tests/support/extractor_rejections.rs` were established by running the generated
-legacy fixtures. For example, a restJson1 validation rejection has status 400, JSON content type,
+generated serde fixtures. For example, a restJson1 validation rejection has status 400, JSON content type,
 `x-amzn-errortype: ValidationException`, and the raw validation message as its body. The CBOR
 runtime-validation fixture also returns the raw supplied bytes with its CBOR content type; the
 tests deliberately preserve that observation.
 
 `extractor_rejections_selected_protocol` verifies the shared `RuntimeError`,
 `IntoResponse::into_response_with_protocol`, and `ServerProtocol::serialize_runtime_error` APIs
-through generated services. Both this target and the legacy comparison target pass with the
+through generated services. Both this target and the generated serde comparison target pass with the
 runtime implementation.
 
-The new target compares shared errors against generated legacy services, alternates protocols on
+The new target compares shared errors against generated serde services, alternates protocols on
 one service, tests every rejection-wrapper arity from two through eight and every failure position,
 checks a service-owned context-aware override, and exercises both shared and custom streaming
 rejections without polling their request bodies. It also checks tuple-order independence,
@@ -99,4 +103,4 @@ cargo test --quiet -p protocol-compat --test extractor_rejections_selected_proto
 ```
 
 The Pokemon example is deferred. Existing protocol-specific error responses are compared against
-the recorded legacy expectations; the new shared error's context-free fallback is tested separately.
+the recorded generated serde expectations; the new shared error's context-free fallback is tested separately.

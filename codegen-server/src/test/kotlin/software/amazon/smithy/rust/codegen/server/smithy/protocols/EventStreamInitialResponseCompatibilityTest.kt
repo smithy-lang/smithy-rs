@@ -136,7 +136,7 @@ internal class EventStreamInitialResponseCompatibilityTest {
                                     }
                                     assert_eq!(frames.len(), usize::from(send_initial) + if idle { 0 } else { 2 });
                                     if send_initial {
-                                        // Verified legacy baseline: REST metadata remains in HTTP headers;
+                                        // Verified generated serde baseline: REST metadata remains in HTTP headers;
                                         // initial-response is {} for REST JSON and zero bytes for REST XML.
                                         let initial = &frames[0];
                                         assert_eq!(initial.headers().len(), 3);

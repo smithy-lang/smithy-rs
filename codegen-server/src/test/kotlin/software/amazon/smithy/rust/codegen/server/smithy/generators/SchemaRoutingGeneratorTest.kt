@@ -238,7 +238,7 @@ class SchemaRoutingGeneratorTest {
                             assert_eq!(response.status(), 415);
                             for body in ["", "{}", r##"{"value":"present"}"##] {
                                 let response = service.clone().oneshot(request("POST", "/required", body, #{None})).await.unwrap();
-                                // A sole REST protocol retains legacy zero-byte required-field validation.
+                                // A sole REST protocol retains generated serde zero-byte required-field validation.
                                 let expected = if ${extraTrait.isEmpty()} && body.is_empty() { 400 } else { 415 };
                                 assert_eq!(response.status(), expected);
                             }

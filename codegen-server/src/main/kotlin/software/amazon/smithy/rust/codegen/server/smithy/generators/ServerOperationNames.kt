@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 /**
  * Names shared by operation declarations and their references.
  *
- * Preserve the legacy marker spelling while encoding schema names injectively.
+ * Preserve the existing marker spelling while encoding schema names injectively.
  * Case folding and suffixes such as `_ERRORS` must not make descriptors collide
  * with other descriptors or their auxiliary statics. The symbol carries service renames.
  */

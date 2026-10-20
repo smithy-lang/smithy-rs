@@ -29,7 +29,7 @@ Upgrade services
 With `schemaSerde`, generated services use `DynUpgrade` for ordinary operations
 and `DynStreamingUpgrade` for operations with streaming input or output.
 Both select the protocol per request rather than through a protocol type parameter.
-Services without `schemaSerde` retain the legacy `Upgrade` path.
+Services without `schemaSerde` retain the generated serde `Upgrade` path.
 
 Routing supplies `SelectedOperation`: the canonical operation schema, selected
 protocol, and body collection policy. Upgrade checks operation identity and uses
@@ -125,4 +125,4 @@ Changes checklist
 - [ ] Schema descriptors and protocol-independent typed walkers.
 - [ ] Runtime binding adapters, codecs, upgrade, and rejection framing.
 - [ ] Generated Rust configuration overrides and runtime initial-response policy.
-- [ ] Legacy parity tests for bindings, validation, payloads, errors, and streams.
+- [ ] Generated serde parity tests for bindings, validation, payloads, errors, and streams.

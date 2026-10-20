@@ -28,7 +28,7 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 #[derive(Debug)]
 /// Defaults to validating escape syntax in skipped strings without decoding Unicode.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
-/// to skip escape validation, matching legacy smithy-rs servers.
+/// to skip escape validation, matching generated serde smithy-rs servers.
 ///
 /// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
 /// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members
@@ -65,7 +65,7 @@ impl AwsJson1_0 {
 #[derive(Debug)]
 /// Defaults to validating escape syntax in skipped strings without decoding Unicode.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
-/// to skip escape validation, matching legacy smithy-rs servers.
+/// to skip escape validation, matching generated serde smithy-rs servers.
 ///
 /// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
 /// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members

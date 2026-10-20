@@ -26,9 +26,9 @@ internal class ServerSchemaMediaTypeHeadersTest {
         for (protocol in listOf("restJson1", "restXml")) {
             val contentType = if (protocol == "restJson1") "application/json" else "application/xml"
             for (schemaSerde in listOf(false, true)) {
-                // Legacy media-type formatting passes enum/newtype wrappers directly to
+                // Generated serde media-type formatting passes enum/newtype wrappers directly to
                 // base64::encode, which cannot compile. Compare plain strings against
-                // legacy and exercise those wrappers in the schema path separately.
+                // generated serde and exercise those wrappers in the schema path separately.
                 val wrapperHeaders =
                     if (schemaSerde) {
                         """

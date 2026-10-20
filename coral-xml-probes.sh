@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Probes for the Coral Java sample server (the one with the /stringlist echo operation), to learn how
-# Coral answers the restXml requests where the schema server and the legacy smithy-rs server differ.
+# Coral answers the restXml requests where the schema serde and generated serde smithy-rs servers differ.
 #
 #   bash coral-xml-probes.sh                 # against http://localhost:8000
 #   BASE=http://host:8000 bash coral-xml-probes.sh > coral-results.txt
@@ -25,7 +25,7 @@ OPEN="<$ROOT xmlns=\"$NS\">"
 CLOSE="</$ROOT>"
 GOOD="$OPEN<$LIST><member>a</member></$LIST>$CLOSE"
 
-# probe <id> <description> <legacy smithy-rs> <schema smithy-rs> <curl args...>
+# probe <id> <description> <generated serde smithy-rs> <schema serde smithy-rs> <curl args...>
 probe() {
   local id=$1 what=$2 legacy=$3 schema=$4
   shift 4
@@ -52,7 +52,7 @@ post() { # post <content-type or -> <body>
   fi
 }
 
-run() { # run <id> <what> <legacy> <schema> <content-type> <body> [extra curl args...]
+run() { # run <id> <what> <generated serde> <schema serde> <content-type> <body> [extra curl args...]
   local id=$1 what=$2 legacy=$3 schema=$4 ct=$5 body=$6
   shift 6
   local args=()
@@ -61,7 +61,7 @@ run() { # run <id> <what> <legacy> <schema> <content-type> <body> [extra curl ar
 }
 
 # ---------------------------------------------------------------------------------------------
-# A. Ill-formed XML. The legacy server recovers and runs the handler; the schema server answers 400.
+# A. Ill-formed XML. The generated serde server recovers and runs the handler; schema serde answers 400.
 #    For each: does Coral run the handler (and with which list), or reject, and with what status/body?
 
 run A0 "baseline: well-formed list" \

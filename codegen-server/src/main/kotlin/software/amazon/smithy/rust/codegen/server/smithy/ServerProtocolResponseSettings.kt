@@ -25,7 +25,7 @@ internal enum class AwsJsonResponseBindings(val setting: String) {
  * Server-only `responseBindings` settings under the full AWS JSON protocol shape IDs in
  * `customizationConfig.protocols`.
  *
- * Only the schema runtime (`codegen.schemaSerde: true`) reads the value; legacy generated servers
+ * Only the schema runtime (`codegen.schemaSerde: true`) reads the value; generated serde servers
  * always behave as [AwsJsonResponseBindings.HISTORICAL]. A supplied value is validated here; unknown setting keys are ignored.
  */
 internal class ServerProtocolResponseSettings private constructor(

@@ -23,7 +23,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 internal class RequiredMemberNullCompatibilityTest {
-    // Legacy REST JSON writes fieldList before message; schema writes them in model order.
+    // Generated serde REST JSON writes fieldList before message; schema writes them in model order.
     // Preserve the raw captures, but compare validation errors as JSON objects.
     // Status and every header stay exact, as do successful and RPC response bytes.
     private fun responses(

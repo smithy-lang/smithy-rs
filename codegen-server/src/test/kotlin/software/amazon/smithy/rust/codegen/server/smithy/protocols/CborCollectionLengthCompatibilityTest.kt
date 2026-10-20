@@ -133,7 +133,7 @@ internal class CborCollectionLengthCompatibilityTest {
             }
         }
         // Both implementations generated the same model and exercised the same
-        // inputs over their HTTP response path. Keep legacy bytes explicit.
+        // inputs over their HTTP response path. Keep generated serde bytes explicit.
         for (count in listOf(0, 1, 23, 24, 255, 256)) {
             check(
                 Files.readAllBytes(observations.resolve("legacy-$count.bin"))

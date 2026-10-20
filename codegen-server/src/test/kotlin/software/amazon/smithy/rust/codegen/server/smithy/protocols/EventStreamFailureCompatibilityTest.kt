@@ -74,7 +74,7 @@ internal class EventStreamFailureCompatibilityTest {
                 xml -> """b"<ErrorResponse><Error><message>broken</message></Error></ErrorResponse>".as_slice()"""
                 else -> """br##"{"message":"broken"}"##.as_slice()"""
             }
-        // Output error envelopes and discriminators were observed on generated legacy servers.
+        // Output error envelopes and discriminators were observed on generated serde servers.
         val outputErrorPayload =
             when (protocol) {
                 "rpcv2Cbor" -> """b"\xbf\x66__type\x78\x20test.streamfailure##StreamFailure\x67message\x66broken\xff".as_slice()"""
@@ -255,7 +255,7 @@ internal class EventStreamFailureCompatibilityTest {
                                 headers.sort();
                                 #{Collect}
                                 if ${!schemaSerde} {
-                                    // Literal wire expectations pinned after replaying the legacy receiver.
+                                    // Literal wire expectations pinned after replaying the generated serde receiver.
                                     let expected_body = $expectedResponseBody;
                                     assert_eq!(status, 200, "{case}");
                                     assert_eq!(body.as_ref(), expected_body, "{case}");
@@ -317,7 +317,7 @@ internal class EventStreamFailureCompatibilityTest {
                                 ${if (cbor) """expected_headers.push(("smithy-protocol".to_owned(), b"rpc-v2-cbor".to_vec()));""" else ""}
                                 expected_headers.sort();
                                 assert_eq!(headers, expected_headers);
-                                // Legacy sends the next event after the exception; no initial frame by default.
+                                // Generated serde sends the next event after the exception; no initial frame by default.
                                 let expected_frames = [
                                     ("event", ":event-type", "note", $notePayload),
                                     ("exception", ":exception-type", "failure", $outputErrorPayload),

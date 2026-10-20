@@ -3,14 +3,14 @@
 
 """Live HTTP A/B comparison of the generated servers, in three tiers.
 
-Tier `single`  — legacy single-protocol server vs schema-serde single-protocol server
+Tier `single`  — generated serde single-protocol server vs schema-serde single-protocol server
                  (same one protocol on both sides). Pure serde comparison: no routing
                  ambiguity, every divergence is a finding.
-Tier `bunch`   — legacy single-protocol servers vs schema servers serving non-conflicting
+Tier `bunch`   — generated serde single-protocol servers vs schema servers serving non-conflicting
                  protocol sets (never awsJson1_0 with awsJson1_1, never restJson1 with
                  restXml): bunch-json = awsJson1_0 + restJson1 + rpcv2Cbor,
                  bunch-xml = awsJson1_1 + restXml + rpcv2Cbor.
-Tier `full`    — legacy singles vs one server serving all five protocols (plus the
+Tier `full`    — generated serde singles vs one server serving all five protocols (plus the
                  no-restJson1 full-xml server for the rest-xml-nojson comparison).
 
     source env.sh && FUZZ_ROOT=$AB_FUZZ_DIR/artifacts-live python3 live.py run

@@ -426,7 +426,7 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // The legacy deserializers call these setters. Under `schemaSerde` the schema walkers write the
+        // The generated serde deserializers call these setters. Under `schemaSerde` the schema walkers write the
         // fields directly, leaving these setters unused on the schema HTTP path.
         if (codegenContext.settings.codegenConfig.schemaSerde) {
             Attribute.AllowDeadCode.render(writer)

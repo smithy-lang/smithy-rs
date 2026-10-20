@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The same middleware bounds accept generated legacy errors and schema modeled errors.
+//! The same middleware bounds accept generated serde errors and schema modeled errors.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
 
@@ -152,7 +152,7 @@ macro_rules! parity {
                 if kind == "internal" {
                     assert_eq!(before, observed_runtime_rejection($wire, "internal"));
                 } else {
-                    // Compare with the real generated legacy handler-error serializer.
+                    // Compare with the real generated serde handler-error serializer.
                     use $legacy::{error::GetWidgetError, input::GetWidgetInput, output::GetWidgetOutput, $service, $config};
                     let service = $service::builder::<Body, _, _, _>($config::builder().build())
                         .get_widget(|_: GetWidgetInput| async { Err::<GetWidgetOutput, _>(GetWidgetError::make_error()) })

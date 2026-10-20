@@ -26,7 +26,7 @@ import java.nio.file.Files
 /**
  * Empty object-valued traits must compile under the same deny-warnings policy as protocol projections.
  * Exercise empty object and array defaults, and verify that fixing Rust emission preserves
- * the trait documents and legacy HTTP responses.
+ * the trait documents and generated serde HTTP responses.
  */
 internal class EmptyTraitDocumentCompatibilityTest {
     @Test

@@ -45,7 +45,7 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
-/** Legacy server event decoding, including validation of completed event builders. */
+/** Generated serde server event decoding, including validation of completed event builders. */
 internal class ServerEventStreamUnmarshallerGenerator(
     private val protocol: Protocol,
     private val codegenContext: ServerCodegenContext,

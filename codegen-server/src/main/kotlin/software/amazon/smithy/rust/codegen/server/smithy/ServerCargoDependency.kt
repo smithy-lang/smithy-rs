@@ -31,14 +31,14 @@ object ServerCargoDependency {
     private val schemaTower = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
 
     /**
-     * Tower 0.4 dependency retained for compatibility with legacy server decorators.
+     * Tower 0.4 dependency retained for compatibility with existing server decorators.
      * Use [tower] to select the dependency for the codegen context.
      */
     val Tower: CargoDependency = legacyTower
 
     /**
-     * Legacy HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
-     * Preserve the legacy dependency declaration; both runtimes enable Tower 0.4's
+     * Generated HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
+     * Preserve the existing dependency declaration; both runtimes enable Tower 0.4's
      * utilities transitively for existing generated servers.
      */
     fun tower(codegenContext: CodegenContext): CargoDependency =

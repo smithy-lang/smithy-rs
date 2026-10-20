@@ -49,7 +49,7 @@ pub(super) fn assemble_response(
     status: u16,
     content_type: Option<&str>,
 ) -> Result<Response, SerdeError> {
-    // Match legacy generated responses: modeled values take precedence without
+    // Match generated serde responses: modeled values take precedence without
     // length-specific validation, and the computed length is only a fallback.
     let builder = aws_smithy_http::header::set_response_header_if_absent(
         response_head(&split, status, content_type),

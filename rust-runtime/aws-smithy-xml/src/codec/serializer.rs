@@ -364,7 +364,7 @@ impl XmlSerializer {
     /// opened with.
     ///
     /// Always emits `<name attrs>...</name>` form, never `<name attrs/>`.
-    /// Both forms are equivalent XML, but legacy smithy-rs (and S3's recorded
+    /// Both forms are equivalent XML, but generated serde smithy-rs (and S3's recorded
     /// request fixtures) use the explicit-close form. Matching that prevents
     /// false-positive content-length mismatches in DVR-replay tests like
     /// `s3::select_object_content::test_success`, where `<CSV></CSV>` differs

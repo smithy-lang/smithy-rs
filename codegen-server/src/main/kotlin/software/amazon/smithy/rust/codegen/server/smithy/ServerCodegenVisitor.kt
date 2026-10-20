@@ -831,7 +831,7 @@ open class ServerCodegenVisitor(
         }
 
         // Under `schemaSerde`, a streaming operation runs on the schema path end to end: its
-        // `StreamingOperationShape` glue replaces the legacy `FromRequest`/`IntoResponse` pair.
+        // `StreamingOperationShape` glue replaces the generated serde `FromRequest`/`IntoResponse` pair.
         val streamingCustomization = codegenDecorator.schemaStreamingOperation(codegenContext, shape)
         val schemaStreaming =
             codegenContext.usesSchemaHttpSerde &&
@@ -853,7 +853,7 @@ open class ServerCodegenVisitor(
             }
         }
 
-        // Schema operations use runtime HTTP serde, so they need no legacy FromRequest/IntoResponse glue.
+        // Schema operations use runtime HTTP serde, so they need no generated serde FromRequest/IntoResponse glue.
         if (!codegenContext.usesSchemaHttpSerde) {
             rustCrate.withModule(ServerRustModule.Operation) {
                 protocolGenerator.renderOperation(this, shape)

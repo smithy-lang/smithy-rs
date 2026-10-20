@@ -98,7 +98,7 @@ pub enum InitialResponsePolicy {
 /// `initial-response` frame when `initial_response` is [`InitialResponsePolicy::Send`].
 ///
 /// Protocols that carry non-stream members in initial messages serialize those members into
-/// the frame. HTTP-bound protocols use their unset payload instead, matching legacy servers.
+/// the frame. HTTP-bound protocols use their unset payload instead, matching generated serde servers.
 ///
 /// `output_schema` and `output` describe the non-stream members; the streaming member must
 /// already have been moved out of `output` into `events`.
@@ -438,7 +438,7 @@ impl EventFrameDeserializer<'_> {
     }
 }
 
-/// Returns the `<Error>` element of a REST XML error envelope, with the rules of the legacy
+/// Returns the `<Error>` element of a REST XML error envelope, with the rules of the generated serde
 /// `rest_xml_wrapped_errors::error_scope`: the root must be `<ErrorResponse>`, and its first
 /// `<Error>` child holds the error members.
 fn wrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
@@ -454,7 +454,7 @@ fn wrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
         .ok_or_else(|| SerdeError::custom("no error found inside of ErrorResponse"))
 }
 
-/// Checks a `@restXml(noErrorWrapping: true)` error, with the rules of the legacy
+/// Checks a `@restXml(noErrorWrapping: true)` error, with the rules of the generated serde
 /// `rest_xml_unwrapped_errors::error_scope`: the root must be `<Error>`.
 fn unwrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
     let mut document =
@@ -492,7 +492,7 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
             return Ok(());
         }
         if let Some(codec) = self.capability.xml_exception_codec.filter(|_| self.is_exception()) {
-            // Like legacy restXml servers: an empty payload is an error with no members set, and
+            // Like generated serde restXml servers: an empty payload is an error with no members set, and
             // anything else must be the configured error envelope.
             let payload = &self.message.payload()[..];
             if payload.is_empty() {
@@ -804,7 +804,7 @@ fn build_frame(
             push_content_type(&mut headers, Some(member.shape_type()))?;
             Ok(Message::new_from_parts(headers, payload.unwrap_or_default()))
         }
-        // Legacy marshallers emit an empty payload whenever headers are modeled and
+        // Generated serde marshallers emit an empty payload whenever headers are modeled and
         // there is no explicit payload, even if ordinary members are also present.
         None => Ok(Message::new_from_parts(headers, Bytes::new())),
     }
@@ -1838,7 +1838,7 @@ mod tests {
         let message = marshall(&protocol, TestEvents::AllHeaders(event));
 
         let names: Vec<_> = message.headers().iter().map(|h| h.name().as_str()).collect();
-        // Without an explicit payload, ordinary members are omitted by legacy marshallers.
+        // Without an explicit payload, ordinary members are omitted by generated serde marshallers.
         assert_eq!(
             names,
             [
@@ -1945,7 +1945,7 @@ mod tests {
             assert_eq!(string_header(&message, "header"), Some("ann"));
             assert_eq!(string_header(&message, ":content-type"), None);
             assert!(message.payload().is_empty());
-            // Received implicit payloads still parse as the legacy unmarshaller does.
+            // Received implicit payloads still parse as the generated serde unmarshaller does.
             let message = Message::new_from_parts(message.headers().to_vec(), Bytes::copy_from_slice(expected));
             let mut values = [None, None];
             EventFrame::new(&message, capability)
@@ -2239,7 +2239,7 @@ mod tests {
         }
     }
 
-    /// Legacy restXml servers read a received exception frame through
+    /// Generated serde restXml servers read a received exception frame through
     /// `rest_xml_wrapped_errors::error_scope`: the error members sit in the `<Error>` child of an
     /// `<ErrorResponse>` root, and an empty payload is an error with no members set.
     #[test]
@@ -2286,7 +2286,7 @@ mod tests {
             .contains("no error found inside of ErrorResponse"));
     }
 
-    /// With `@restXml(noErrorWrapping: true)`, legacy servers read a received exception frame
+    /// With `@restXml(noErrorWrapping: true)`, generated serde servers read a received exception frame
     /// through `rest_xml_unwrapped_errors::error_scope`: the error members sit in an `<Error>`
     /// root. The setting comes from the protocol trait codegen records on the service schema.
     #[test]
@@ -2734,7 +2734,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_body_rest_initial_response_frames_match_legacy() {
-        // Observed with generated legacy servers and alwaysSendEventStreamInitialResponse=true:
+        // Observed with generated serde servers and alwaysSendEventStreamInitialResponse=true:
         // REST JSON sends {}, REST XML sends zero bytes, and HTTP-bound output members stay out.
         for (protocol, media_type, payload) in [
             (json_protocol(), "application/json", &b"{}"[..]),

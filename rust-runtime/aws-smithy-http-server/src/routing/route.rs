@@ -125,7 +125,7 @@ impl<B> Future for RouteFuture<B> {
 /// Like [`Route`], constructing it erases the type of the wrapped service. Unlike [`Route`], it is
 /// `Sync`, so the schema router can share one handler set across threads instead of copying it for
 /// every request; the wrapped service must therefore be `Send + Sync`. The protocol routers used
-/// by the legacy (non-schema) code path keep using [`Route`], which does not require `Sync`.
+/// by the generated serde code path keep using [`Route`], which does not require `Sync`.
 pub struct SyncRoute<B = hyper::body::Incoming> {
     service: BoxCloneSyncService<Request<B>, Response<BoxBody>, Infallible>,
 }
@@ -227,7 +227,7 @@ mod tests {
         assert_sync::<SyncRoute<()>>();
     }
 
-    /// `Route` must not require `Sync`: legacy handlers and layers may hold `!Sync` state.
+    /// `Route` must not require `Sync`: generated serde handlers and layers may hold `!Sync` state.
     #[test]
     fn route_accepts_a_non_sync_service() {
         let hits = std::cell::Cell::new(0u32); // Send + Clone, not Sync

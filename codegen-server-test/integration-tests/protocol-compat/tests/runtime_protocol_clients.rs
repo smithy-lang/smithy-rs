@@ -14,7 +14,7 @@
 //!   blob upload (`application/octet-stream` for both), an event stream (`application/vnd.amazon.eventstream`
 //!   for both), and an input bound only to the URI and headers. So `Upload`, `Subscribe` and `Publish`
 //!   are not called over restXml.
-//! - The restXml server keeps the legacy wire format for errors: a modeled error is not wrapped in
+//! - The restXml server keeps the generated serde wire format for errors: a modeled error is not wrapped in
 //!   `<ErrorResponse>`, and a validation error answers with `{}`. The restXml client cannot decode
 //!   either, whatever the other protocols, so the error calls are not made over restXml.
 //!

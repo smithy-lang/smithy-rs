@@ -72,7 +72,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  *
  * - **Canonical model member order** in `serialize_members`: no
  *   protocol-specific ordering exists in generated code. RPC protocols match
- *   legacy byte-for-byte; restJson1 error bodies are gated parse-equal.
+ *   generated serde byte-for-byte; restJson1 error bodies are gated parse-equal.
  * - **Constrained-string newtypes** (`publicConstrainedTypes=true`): members
  *   whose resolved Rust type is a string newtype serialize via `as_str()`.
  * - **No `Unknown` union arm**: server unions are generated with
@@ -212,7 +212,7 @@ class ServerSchemaGenerator(
     // Constrained-newtype detection (`publicConstrainedTypes=true`): the value at a
     // position resolves to a tuple-struct wrapper (`StringSet(Vec<String>)`,
     // `RangeInteger(i32)`, `LengthBlob(Blob)`, …) whose `pub(crate)` inner is
-    // accessed via `.0` — the same access pattern the legacy generated serializers
+    // accessed via `.0` — the same access pattern the generated serde serializers
     // used. With `publicConstrainedTypes=false` the resolved types are the plain
     // ones and every check below is false.
     // ------------------------------------------------------------------

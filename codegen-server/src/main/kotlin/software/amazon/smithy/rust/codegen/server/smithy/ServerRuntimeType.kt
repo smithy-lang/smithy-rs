@@ -42,7 +42,7 @@ object ServerRuntimeType {
     fun protocol(runtimeConfig: RuntimeConfig) = protocol("Protocol", "", runtimeConfig)
 
     /**
-     * The runtime type for a built-in protocol. One type serves both as the legacy protocol type
+     * The runtime type for a built-in protocol. One type serves both as the generated serde protocol type
      * parameter and as the schema-driven protocol implementation.
      */
     fun protocolType(

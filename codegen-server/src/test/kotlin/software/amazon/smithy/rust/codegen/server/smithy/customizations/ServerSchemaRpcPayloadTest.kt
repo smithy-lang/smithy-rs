@@ -63,7 +63,7 @@ internal class ServerSchemaRpcPayloadTest {
     fun `shared structured payload values retain RPC member keys and REST bindings`() {
         val model = payloadModel("@awsJson1_0 @awsJson1_1 @rpcv2Cbor @restJson1 @restXml")
         // Generate one set of schema types for all five protocols. Keep AWS JSON's
-        // default historical response bindings, as in the legacy comparisons below.
+        // default historical response bindings, as in the generated serde comparisons below.
         serverIntegrationTest(
             model,
             IntegrationTestParams(
@@ -152,7 +152,7 @@ internal class ServerSchemaRpcPayloadTest {
                                                 "{name} {kind} present={present}");
                                         }
                                         "restJson1" if !present => {
-                                            // Legacy REST JSON emits an empty object for an unset
+                                            // Generated serde REST JSON emits an empty object for an unset
                                             // structure payload and an empty body for an unset union.
                                             let expected = if kind == "structure" { "{}" } else { "" };
                                             assert_eq!(body.as_ref(), expected.as_bytes(),
@@ -365,7 +365,7 @@ internal class ServerSchemaRpcPayloadTest {
         if (responseBindings == null) {
             schema shouldBe legacy
         } else {
-            // This setting is intentionally schema-only. Legacy retains historical
+            // This setting is intentionally schema-only. Generated serde retains historical
             // headers and @httpError even when given the same customization settings.
             // Preserve both observations and compare their complete documents.
             val legacyRecords = legacy.lineSequence().filter { it.isNotEmpty() }.toList()

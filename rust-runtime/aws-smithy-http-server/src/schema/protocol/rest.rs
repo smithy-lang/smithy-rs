@@ -30,7 +30,7 @@ fn mime_validation_failure(err: DeserializeError) -> SerdeError {
     SerdeError::custom(err.to_string())
 }
 
-/// How a REST protocol labels its responses. These are the rules the legacy generated servers
+/// How a REST protocol labels its responses. These are the rules the generated serde servers
 /// follow, so the schema path stays byte-identical to them.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RestPolicy {
@@ -119,7 +119,7 @@ impl<C> RestProtocol<C> {
     }
 
     /// The `Content-Type` a response for `output` carries, if any: the runtime mirror of the
-    /// legacy `HttpBindingResolver.responseContentType`. It depends on the schema alone, never on
+    /// generated serde `HttpBindingResolver.responseContentType`. It depends on the schema alone, never on
     /// which members are set.
     pub(crate) fn response_content_type<'s>(&self, output: &'s Schema<'s>) -> Option<&'s str> {
         if let Some(payload) = payload_member(output) {
@@ -140,7 +140,7 @@ impl<C> RestProtocol<C> {
         }
     }
 
-    /// The legacy REST deserializers never touch the body when nothing is bound to it.
+    /// The generated serde REST deserializers never touch the body when nothing is bound to it.
     pub(crate) fn reads_request_body(&self, input: &Schema<'_>) -> bool {
         input.members().iter().any(|m| is_body_member(m) && !m.streaming())
     }

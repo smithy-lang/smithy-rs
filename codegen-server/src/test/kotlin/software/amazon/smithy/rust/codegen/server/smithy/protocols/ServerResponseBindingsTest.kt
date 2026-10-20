@@ -89,7 +89,7 @@ internal class ServerResponseBindingsTest {
         }
         val isRest = protocol == "restJson1" || protocol == "restXml"
         val isRpc = !isRest
-        // The legacy generator (schemaSerde = false) ignores the setting and always behaves as mainline.
+        // Codegen with generated serde (schemaSerde = false) ignores the setting and always behaves as mainline.
         val historicalAwsJson = protocol.startsWith("awsJson") && (!schemaSerde || bindings != "smithy-specs")
         val emitHeaders = isRest || historicalAwsJson
         val outputStatus = if (emitHeaders) 201 else 200

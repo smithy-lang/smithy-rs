@@ -49,7 +49,7 @@ pub enum Error {
 
 /// A [`Router`] supporting the [Smithy RPC v2 CBOR] protocol.
 ///
-/// Register routes using `Service.Operation` keys, preserving the contract with legacy
+/// Register routes using `Service.Operation` keys, preserving the contract with generated serde
 /// generated services. Request lookup ignores URI prefixes and service namespaces.
 ///
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
@@ -215,7 +215,7 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
 
         let request_path = request.uri().path();
         tracing::trace!(%request_path, "parsing service and operation from URI");
-        // Parse the URI, then look up the legacy `Service.Operation` registration key.
+        // Parse the URI, then look up the generated serde `Service.Operation` registration key.
         let route = self.match_target(request_path).ok_or(Error::NotFound)?;
         Ok(route.clone())
     }

@@ -112,7 +112,7 @@ internal class MissingHandlerContextCompatibilityTest {
                             if $schemaSerde {
                                 let legacy: #{Vec}<#{Json}::Value> = #{Json}::from_str(
                                     &::std::fs::read_to_string(#{LegacySnapshot:S}).unwrap()).unwrap();
-                                // Preserve the legacy observation for the intact-context request.
+                                // Preserve the generated serde observation for the intact-context request.
                                 assert_eq!(observations[0], legacy[0]);
                                 // Schema routing cannot recover the selected protocol after
                                 // middleware discards extensions, so use the empty 500 fallback.

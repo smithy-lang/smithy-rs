@@ -31,7 +31,7 @@ pub enum DeserializeError {
     /// an unparseable header, label or query value, or a request that could not be converted
     /// into its canonical form.
     Serde(SerdeError),
-    /// Reading an RPC initial-request event frame failed. Preserve the legacy raw
+    /// Reading an RPC initial-request event frame failed. Preserve the generated serde raw
     /// validation rejection rather than treating a frame failure as a codec error.
     InitialRequestFrame(String),
     /// Reading the request body failed, exceeded its size limit, or timed out.

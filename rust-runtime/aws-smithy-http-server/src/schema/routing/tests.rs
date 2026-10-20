@@ -208,7 +208,7 @@ async fn sole_cbor_claims_serialize_native_header_rejections() {
         let expected = IntoResponse::<RpcV2Cbor>::into_response(native_error);
         let native: RoutingError = legacy.match_route(&request).unwrap_err().into();
         assert_eq!(error.kind(), native.kind());
-        // Generated legacy services return 404 with only content-type and an empty body.
+        // Generated serde services return 404 with only content-type and an empty body.
         assert_eq!(expected.status(), StatusCode::NOT_FOUND);
         assert_eq!(expected.headers().len(), 1);
         assert_eq!(expected.headers()["content-type"], "application/cbor");
@@ -437,7 +437,7 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
     );
 }
 
-/// The legacy router enums classify onto the three standard kinds; in particular the rpcv2
+/// The generated serde router enums classify onto the three standard kinds; in particular the rpcv2
 /// wire-format errors split — a missing or unsupported `smithy-protocol` header means the
 /// request never identified the protocol (Coral falls through to its generic 404), while an
 /// invalid value on an rpcv2-shaped header is a framing violation.
@@ -1596,7 +1596,7 @@ mod multi_protocol {
         }
     }
 
-    /// Built-in protocols preserve the legacy routing status, headers, and empty bodies.
+    /// Built-in protocols preserve the generated serde routing status, headers, and empty bodies.
     #[tokio::test]
     async fn routing_rejections_preserve_legacy_responses() {
         // restJson1 alone matched `/first` by URI but not by method: MethodNotAllowedException,
@@ -1793,7 +1793,7 @@ mod multi_protocol {
                 .build()
                 .unwrap();
                 for method in ["GET", "PUT", "DELETE", "HEAD", "OPTIONS"] {
-                    // The method is checked before the path, as in the legacy router.
+                    // The method is checked before the path, as in the generated serde router.
                     for path in [
                         "/service/Service/operation/first",
                         "/service/Service/operation/unknown",

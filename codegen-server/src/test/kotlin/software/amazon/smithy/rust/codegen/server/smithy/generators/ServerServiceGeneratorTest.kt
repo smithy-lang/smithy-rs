@@ -167,7 +167,7 @@ internal class ServerServiceGeneratorTest {
     }
 
     /**
-     * The legacy (non-schema) builder must not require handlers, HTTP plugins or layers to be `Sync`:
+     * The generated serde builder must not require handlers, HTTP plugins or layers to be `Sync`:
      * only the schema router shares its routes across threads.
      */
     @Test

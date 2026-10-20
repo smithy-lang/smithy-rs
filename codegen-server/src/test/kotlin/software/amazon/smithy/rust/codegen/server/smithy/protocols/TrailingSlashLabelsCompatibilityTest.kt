@@ -28,7 +28,7 @@ internal class TrailingSlashLabelsCompatibilityTest {
         val model = Files.readString(root.resolve("tools/schema-serde-compat/models/trailing-slash-labels.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("trailing-slash-labels-")
         val protocols = listOf("JsonLabels", "XmlLabels")
-        // Generate and exercise both legacy services before testing schema serde.
+        // Generate and exercise both generated serde services before testing schema serde.
         for (schemaSerde in listOf(false, true)) {
             for (service in protocols) {
                 val mode = if (schemaSerde) "schema" else "legacy"

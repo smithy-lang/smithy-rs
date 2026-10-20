@@ -643,7 +643,7 @@ internal class ServerSchemaStreamingTest {
                                     assert_eq!(bytes, b"custom caller rejection".as_slice());
                                     assert!(parts.extensions.get::<#{SmithyHttpServer}::extension::RuntimeErrorExtension>().is_none());
                                 } else {
-                                    // Preserve the legacy runtime validation contract: these are raw reason bytes,
+                                    // Preserve the generated serde runtime validation contract: these are raw reason bytes,
                                     // even with the CBOR media type, and an HTTP rejection rather than an event frame.
                                     assert_eq!(parts.status, #{Http}::StatusCode::BAD_REQUEST, "{operation}, rpc={rpc}");
                                     headers.insert("content-type", #{Http}::HeaderValue::from_static(

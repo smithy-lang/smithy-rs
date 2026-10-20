@@ -82,7 +82,7 @@ internal class PrefixHeaderMediaTypeCompatibilityTest {
                                         }).to_string()) }
                                     })
                                     .build().unwrap();
-                                // Status 0 records a caught legacy panic, not an HTTP response.
+                                // Status 0 records a caught generated serde panic, not an HTTP response.
                                 let cases: Vec<(&str, Vec<(&str, &[u8])>, u16, Option<Value>)> = vec![
                                     ("missing", vec![], 200, Some(json!({}))),
                                     ("unrelated", vec![("x-other", b"!")], 200, Some(json!({}))),

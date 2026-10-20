@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Scenarios replayed against every implementation of the review services (mainline, branch legacy
+//! Scenarios replayed against every implementation of the review services (mainline, branch generated serde
 //! twin, schemaSerde). Shared by `protocol-compat` and the `protocol-compat-mainline` recorder.
 use super::*;
 use http::Request;

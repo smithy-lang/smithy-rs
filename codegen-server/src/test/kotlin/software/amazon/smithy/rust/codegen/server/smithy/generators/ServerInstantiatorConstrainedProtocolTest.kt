@@ -171,7 +171,7 @@ internal class ServerInstantiatorConstrainedProtocolTest {
                 generate()
             } else {
                 // This exact model fails on fresh mainline at 9267f0e25. Keep the
-                // legacy instantiator unchanged and assert its observed limitation.
+                // generated serde instantiator unchanged and assert its observed limitation.
                 val error = shouldThrow<MultiVersionTestFailure> { generate() }
                 error.message shouldContain "E0062"
                 error.message shouldContain "field `body` specified more than once"

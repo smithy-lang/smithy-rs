@@ -209,7 +209,7 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
         val legacy = Files.readAllLines(snapshots.resolve("false.txt"))
         for (mode in listOf("true", "shared")) {
             val schema = Files.readAllLines(snapshots.resolve("$mode.txt"))
-            // Inputs preserve legacy parsing, validation, duplicate-member and Accept behavior.
+            // Inputs preserve generated serde parsing, validation, duplicate-member and Accept behavior.
             // Downloads preserve decoded values while explicitly asserting streaming wire framing.
             schema shouldBe legacy
         }

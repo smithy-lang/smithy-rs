@@ -267,7 +267,7 @@ class ServerStreamingOperationGenerator(
             val fallible = inputShape.canReachConstrainedShape(model, symbolProvider)
             if (fallible) {
                 // A constraint violation becomes the modeled validation exception, exactly as the collected path
-                // and the legacy `RequestRejection` path do.
+                // and the generated serde `RequestRejection` path do.
                 rustTemplate(
                     """
                     builder.build().map_err(|constraint_violation| {
@@ -364,7 +364,7 @@ class ServerStreamingOperationGenerator(
             }
             val unionShape = model.expectShape(member.target, UnionShape::class.java)
             // Whether an `initial-response` frame precedes the events is a service-level codegen setting, as
-            // on the legacy path. The protocol decides whether its payload carries non-stream members
+            // on the generated serde path. The protocol decides whether its payload carries non-stream members
             // or an unset structure payload; HTTP-bound members stay in their HTTP bindings.
             val sendInitialResponse = codegenContext.settings.codegenConfig.alwaysSendEventStreamInitialResponse
             rustTemplate(

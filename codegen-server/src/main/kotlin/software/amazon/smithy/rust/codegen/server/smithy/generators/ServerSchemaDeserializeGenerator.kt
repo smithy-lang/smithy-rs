@@ -63,7 +63,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  * `Builder`, collections and unions as their `*Unconstrained` types, enums as `String`. Those flow into the
  * builder fields as `MaybeConstrained::Unconstrained` through the existing `From` impls, and the operation
  * input's `build()` validates everything at once, so `ValidationException` field paths stay identical to the
- * legacy path.
+ * generated serde path.
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
  * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
@@ -71,9 +71,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  * byte streams; streaming glue attaches live REST bodies or event receivers before validation.
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
- * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
+ * union object that set no variant, exactly as the generated serde JSON parser does: the enclosing structure member is
  * absent, a sparse collection element is `None`, and a dense collection element or a union-valued union member
- * is the same error the legacy parser raises.
+ * is the same error the generated serde parser raises.
  */
 class ServerSchemaDeserializeGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -139,7 +139,7 @@ class ServerSchemaDeserializeGenerator(
             "finish" to
                 writable {
                     if (constrained) {
-                        // A constraint violation becomes the modeled validation exception, exactly as the legacy
+                        // A constraint violation becomes the modeled validation exception, exactly as the generated serde
                         // `RequestRejection` path does, so the protocol renders it with its message and field list.
                         rustTemplate(
                             """
@@ -520,7 +520,7 @@ class ServerSchemaDeserializeGenerator(
     /**
      * Adapts an element read to its container. A sparse container stores `None` for a `null`; a dense one
      * cannot hold one, so a read that already yields `Option` (see [yieldsOption]) turns `None` into the same
-     * error the legacy parser raises.
+     * error the generated serde parser raises.
      */
     private fun sparseAware(
         sparse: Boolean,

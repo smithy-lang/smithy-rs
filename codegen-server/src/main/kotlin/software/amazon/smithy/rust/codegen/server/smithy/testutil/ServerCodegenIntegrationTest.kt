@@ -23,7 +23,7 @@ import java.nio.file.Path
  */
 sealed class HttpTestType {
     /**
-     * Run the test for all supported HTTP versions: HTTP 0.x and HTTP 1.x for legacy serde,
+     * Run the test for all supported HTTP versions: HTTP 0.x and HTTP 1.x for generated serde,
      * or HTTP 1.x for schema serde.
      */
     object ALL : HttpTestType()

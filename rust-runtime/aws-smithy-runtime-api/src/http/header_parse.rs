@@ -247,7 +247,7 @@ fn one_of_many_bytes<'a, T>(
 /// This is the scalar counterpart to [`read_many_primitive_bytes`]: it applies the same
 /// tokenizing and parsing but returns at most one value and fails if the header carried
 /// more than one. `Ok(None)` means the values produced no tokens at all, which the
-/// generated legacy path reports as an absent member.
+/// generated serde path reports as an absent member.
 pub fn one_primitive_or_none_bytes<'a, T: Parse>(
     values: impl Iterator<Item = &'a [u8]>,
 ) -> Result<Option<T>, ParseError> {
@@ -734,7 +734,7 @@ mod test {
     }
 
     /// The scalar helpers must agree with "parse into a `Vec`, then require `len() <= 1`",
-    /// which is what the generated legacy header path does. They exist only to avoid the
+    /// which is what the generated serde header path does. They exist only to avoid the
     /// discarded `Vec`, not to change any outcome.
     #[test]
     fn scalar_helpers_agree_with_the_many_value_helpers() {

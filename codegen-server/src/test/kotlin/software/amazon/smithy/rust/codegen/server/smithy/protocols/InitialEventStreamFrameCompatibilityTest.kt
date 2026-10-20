@@ -91,7 +91,7 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                     let headers = response.headers().clone();
                                     #{Collect}
                                     assert_eq!(status, 400);
-                                    // Observed on the generated legacy path, including both truncations.
+                                    // Observed on the generated serde path, including both truncations.
                                     if ${!schemaSerde} {
                                         let mut expected_headers = #{Http}::HeaderMap::new();
                                         expected_headers.insert("content-type", #{Http}::HeaderValue::from_static("$responseMediaType"));

@@ -74,7 +74,7 @@ class ServerServiceGenerator(
 
     /**
      * The erased per-operation handler type. The schema router shares one handler set across
-     * threads, so its routes (and everything wrapped into them) must be `Sync`; the legacy protocol
+     * threads, so its routes (and everything wrapped into them) must be `Sync`; the generated serde protocol
      * routers keep the non-`Sync` [`Route`] so existing handlers, plugins and layers still compile.
      */
     private val routeType = if (schemaSerde) "#{SmithyHttpServer}::routing::SyncRoute" else "#{SmithyHttpServer}::routing::Route"
@@ -85,7 +85,7 @@ class ServerServiceGenerator(
             operation.inputShape(model).findStreamingMember(model) != null ||
             operation.outputShape(model).findStreamingMember(model) != null
 
-    /** On the schema path every operation runs on one of the two schema plugins; nothing uses the legacy upgrade. */
+    /** On the schema path every operation runs on one of the two schema plugins; nothing uses the generated serde upgrade. */
     private fun upgradePlugin(operation: OperationShape): RuntimeType =
         smithyHttpServer.resolve(
             when {
@@ -1172,7 +1172,7 @@ class ServerServiceGenerator(
         writable {
             val served = codegenContext.servedProtocols
             if (!schemaSerde) {
-                // The legacy path serves exactly the generator's protocol, which may come from a decorator.
+                // The generated serde path serves exactly the generator's protocol, which may come from a decorator.
                 rustTemplate("#{P}", "P" to protocol.markerStruct())
             } else if (served.size == 1) {
                 rustTemplate("#{P}", "P" to protocolMarkerType(served.single()))

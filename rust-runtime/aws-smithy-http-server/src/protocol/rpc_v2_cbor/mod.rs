@@ -12,6 +12,6 @@ pub mod runtime_error;
 pub const SMITHY_PROTOCOL_HEADER: http::HeaderName = http::HeaderName::from_static("smithy-protocol");
 /// The `rpcv2Cbor` protocol.
 ///
-/// The same type is used as the protocol type parameter of legacy generated servers and, with
+/// The same type is used as the protocol type parameter of generated serde servers and, with
 /// `codegen.schemaSerde`, as the schema-driven protocol implementation.
 pub use crate::schema::protocol::RpcV2Cbor;

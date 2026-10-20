@@ -44,7 +44,7 @@ data class ServerCodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {
     /**
-     * Whether operations use the schema runtime instead of legacy HTTP serde.
+     * Whether operations use the schema runtime instead of generated HTTP serde.
      *
      * The protocol itself is resolved at runtime through the service builder's
      * `ProtocolRegistry`; a service whose protocol has no registration fails loudly in `build()`.
@@ -56,7 +56,7 @@ data class ServerCodegenContext(
      * The protocols the generated service serves.
      *
      * The schema path lists declared protocols in shape-ID order. Runtime routing options determine
-     * their claiming priority; the legacy path serves [protocol] alone.
+     * their claiming priority; the generated serde path serves [protocol] alone.
      */
     val servedProtocols: List<ShapeId>
         get() =

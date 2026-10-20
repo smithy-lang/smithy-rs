@@ -112,7 +112,7 @@ internal class MalformedHeadersCompatibilityTest {
                                     .map(|kind| kind.as_str().to_owned());
                                 #{Collect}
                                 // Pinned after replaying these requests with schemaSerde=false.
-                                // Legacy XML serialization rejections also have the literal body {}.
+                                // Generated serde XML serialization rejections also have the literal body {}.
                                 if ${!schemaSerde} {
                                     let success = matches!(case.as_str(), "unmodeled-invalid" | "quoted-list");
                                     assert_eq!(status, if success { 200 } else { 400 }, "{case}");

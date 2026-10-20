@@ -25,7 +25,7 @@ import java.nio.file.Files
  * Send formatted timestamps through generated request deserialization and response serialization.
  * Reading the request correctly is insufficient: using a bare timestamp schema when writing a
  * collection silently replaces its member's format with the protocol default. Pin the response
- * text and compare legacy and schema services using the same model and requests.
+ * text and compare generated serde and schema services using the same model and requests.
  */
 internal class CollectionTimestampFormatCompatibilityTest {
     @Test
@@ -37,7 +37,7 @@ internal class CollectionTimestampFormatCompatibilityTest {
     private fun checkFormats(protocol: String) {
         val xml = protocol == "restXml"
         val run = Files.createTempDirectory("collection-timestamp-parity-")
-        // Legacy XML generation cannot compile sparse timestamp maps, so that field is JSON-only.
+        // Generated serde XML generation cannot compile sparse timestamp maps, so that field is JSON-only.
         val model =
             """
             ${'$'}version: "2"

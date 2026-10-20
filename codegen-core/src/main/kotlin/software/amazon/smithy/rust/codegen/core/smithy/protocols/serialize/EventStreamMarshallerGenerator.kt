@@ -91,7 +91,7 @@ open class EventStreamMarshallerGenerator(
             // On the schema path the caller builds `body` by serializing the operation
             // input through the runtime protocol's payload codec, so `:content-type` has
             // to come from that same protocol for the same reason it does for each event
-            // frame. The protocol is therefore threaded in as a parameter; the legacy path
+            // frame. The protocol is therefore threaded in as a parameter; the generated serde path
             // keeps the literal and the original one-argument signature.
             val protocolParam = if (useSchemaSerde) ",\n                    protocol: &#{SharedClientProtocol}," else ""
             rustBlockTemplate(

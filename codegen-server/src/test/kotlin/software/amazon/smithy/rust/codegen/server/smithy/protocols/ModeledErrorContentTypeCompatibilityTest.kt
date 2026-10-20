@@ -223,7 +223,7 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                                             // ignores error header bindings, retaining their body data.
                                             assert_eq!(status, if scenario == "success" { 200 } else if !$isCbor && scenario == "invalid" { 400 } else { 422 }, "{operation}/{scenario}");
                                             if scenario != "invalid" {
-                                                // Legacy treats an empty scalar header as absent.
+                                                // Generated serde treats an empty scalar header as absent.
                                                 let expected = if $isCbor { #{Some}(document_type) } else {
                                                     content_type.filter(|value| !value.is_empty())
                                                         .or(if $isRest { default_type } else { #{Some}(document_type) })

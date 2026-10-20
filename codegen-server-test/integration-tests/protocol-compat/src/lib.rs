@@ -51,7 +51,7 @@ pub mod document {
     }
 }
 
-// Legacy (schemaSerde=false, HTTP 1.x) twins of the sole-protocol services. rpcv2Cbor's legacy model
+// Generated serde (schemaSerde=false, HTTP 1.x) twins of the sole-protocol services. rpcv2Cbor's generated serde model
 // transform turns the streaming blob into a plain blob.
 compat_service!(legacy_rest, compat_rest_legacy_server_sdk, ReviewRest, ReviewRestConfig, [::<Body, _, _, _>], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);
 compat_service!(legacy_awsjson, compat_awsjson_legacy_server_sdk, ReviewAwsJson, ReviewAwsJsonConfig, [::<Body, _, _, _>], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);

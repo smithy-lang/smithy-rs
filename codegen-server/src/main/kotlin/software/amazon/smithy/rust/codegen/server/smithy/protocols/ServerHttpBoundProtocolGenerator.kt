@@ -266,7 +266,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
                     val legacyContentType = httpBindingResolver.legacyBackwardsCompatContentType(operationShape)
                     if (legacyContentType != null) {
-                        // For operations with legacy backwards compatibility, accept both content types
+                        // For operations retaining historical content-type compatibility, accept both content types
                         rustTemplate(
                             """
                             if !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &#{ContentType}) &&
@@ -785,7 +785,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    /** Preserve the released body collection API on both legacy HTTP serde paths. */
+    /** Preserve the released body collection API on both generated HTTP serde paths. */
     private fun RustWriter.renderBodyCollection(maxBytes: Long) {
         when {
             maxBytes > 0L ->

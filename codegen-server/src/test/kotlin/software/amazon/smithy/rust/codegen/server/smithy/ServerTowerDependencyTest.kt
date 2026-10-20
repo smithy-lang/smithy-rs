@@ -80,7 +80,7 @@ internal class ServerTowerDependencyTest {
                 ),
                 testCoverage = HttpTestType.Default,
             ) { context, rustCrate ->
-                // Legacy decorators can still use the original public property.
+                // Existing decorators can still use the original public property.
                 @Suppress("DEPRECATION")
                 val middlewareTower =
                     if (context.usesSchemaHttpSerde) ServerCargoDependency.tower(context) else ServerCargoDependency.Tower
