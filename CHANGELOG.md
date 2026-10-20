@@ -1,4 +1,18 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 20th, 2026
+==================
+**New this release:**
+- :bug: (client, [smithy-rs#4921](https://github.com/smithy-lang/smithy-rs/issues/4921)) Validate `@hostLabel` members are valid host labels. A `@hostLabel` value goes straight into the
+    request authority, checked only by `http::uri::Authority::from_str` against the whole expanded
+    prefix. That parser accepts a colon, and `http::Uri` then reads everything after it as an
+    unparseable port and discards it. A label containing a colon therefore truncates the resolved host
+    and drops the service suffix.
+
+    The generated code now runs each host label through `is_valid_host_label` before building the
+    prefix. Accepted labels narrow to `[a-zA-Z0-9-]{1,63}`. A value holding `_` or `.` used to pass and
+    now fails.
+
+
 October 19th, 2026
 ==================
 **Breaking Changes:**
