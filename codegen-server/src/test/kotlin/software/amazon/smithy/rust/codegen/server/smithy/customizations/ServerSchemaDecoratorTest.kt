@@ -136,51 +136,51 @@ internal class ServerSchemaDecoratorTest {
                         unitTest("operation_descriptor_reports_the_modeled_http_binding") {
                             rust(
                                 """
-                        let echo = &crate::schema::operations::ECHO;
-                        assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
-                        let http = echo.http().expect("`@http` recorded on the operation input");
-                        assert_eq!(http.method(), "POST");
-                        assert_eq!(http.uri(), "/echo/{name}");
-                        assert_eq!(http.code(), 201);
-                        assert!(std::ptr::eq(echo.input(), crate::input::EchoInput::SCHEMA));
-                        assert!(std::ptr::eq(echo.output(), crate::output::EchoOutput::SCHEMA));
-                        // The modeled error plus the `ValidationException` the server attaches for the constrained input.
-                        assert_eq!(echo.errors().len(), 2);
-                        assert!(std::ptr::eq(echo.errors()[0], crate::error::BadThing::SCHEMA));
-                        assert!(std::ptr::eq(echo.errors()[1], crate::error::ValidationException::SCHEMA));
-                        """,
+                                let echo = &crate::schema::operations::OPERATION_4563686F;
+                                assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
+                                let http = echo.http().expect("`@http` recorded on the operation input");
+                                assert_eq!(http.method(), "POST");
+                                assert_eq!(http.uri(), "/echo/{name}");
+                                assert_eq!(http.code(), 201);
+                                assert!(std::ptr::eq(echo.input(), crate::input::EchoInput::SCHEMA));
+                                assert!(std::ptr::eq(echo.output(), crate::output::EchoOutput::SCHEMA));
+                                // The modeled error plus the `ValidationException` the server attaches for the constrained input.
+                                assert_eq!(echo.errors().len(), 2);
+                                assert!(std::ptr::eq(echo.errors()[0], crate::error::BadThing::SCHEMA));
+                                assert!(std::ptr::eq(echo.errors()[1], crate::error::ValidationException::SCHEMA));
+                                """,
                             )
                         }
                         unitTest("service_descriptor_lists_protocols_and_operations") {
                             rust(
                                 """
-                        let service = &crate::schema::service::SCHEMA_SERVICE;
-                        assert_eq!(service.shape_id().as_str(), "com.aws.example.schema##SchemaService");
-                        assert_eq!(service.version(), Some("2024-08-29"));
-                        let protocols: Vec<_> = service.protocols().iter().map(|id| id.as_str()).collect();
-                        assert_eq!(protocols, ["aws.protocols##restJson1"]);
-                        assert_eq!(service.operations().len(), 2);
-                        let ping = service
-                            .operation(&::aws_smithy_schema::shape_id!("com.aws.example.schema", "Ping"))
-                            .expect("bound operation");
-                        assert_eq!(ping.http().map(|http| http.uri()), Some("/ping"));
-                        assert!(ping.errors().is_empty());
-                        """,
+                                let service = &crate::schema::service::SCHEMA_SERVICE;
+                                assert_eq!(service.shape_id().as_str(), "com.aws.example.schema##SchemaService");
+                                assert_eq!(service.version(), Some("2024-08-29"));
+                                let protocols: Vec<_> = service.protocols().iter().map(|id| id.as_str()).collect();
+                                assert_eq!(protocols, ["aws.protocols##restJson1"]);
+                                assert_eq!(service.operations().len(), 2);
+                                let ping = service
+                                    .operation(&::aws_smithy_schema::shape_id!("com.aws.example.schema", "Ping"))
+                                    .expect("bound operation");
+                                assert_eq!(ping.http().map(|http| http.uri()), Some("/ping"));
+                                assert!(ping.errors().is_empty());
+                                """,
                             )
                         }
                     }
                     unitTest("shape_schemas_sit_next_to_their_types") {
                         rustTemplate(
                             """
-                        use #{ShapeType};
-                        // Operation schemas retain their modeled shape IDs.
-                        assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema##EchoInput");
-                        assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
-                        assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
-                        assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
-                        assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
-                        assert!(crate::error::BadThing::SCHEMA.traits().unwrap().contains_fqn("smithy.api##error"));
-                        """,
+                            use #{ShapeType};
+                            // Operation schemas retain their modeled shape IDs.
+                            assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema##EchoInput");
+                            assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
+                            assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
+                            assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
+                            assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
+                            assert!(crate::error::BadThing::SCHEMA.traits().unwrap().contains_fqn("smithy.api##error"));
+                            """,
                             *preludeScope,
                             "ShapeType" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeType"),
                         )

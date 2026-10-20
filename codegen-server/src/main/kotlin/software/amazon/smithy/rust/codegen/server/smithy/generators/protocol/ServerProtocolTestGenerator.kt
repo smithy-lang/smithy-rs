@@ -1024,6 +1024,14 @@ class ServerProtocolTestGenerator(
 internal fun ProtocolTestGenerator.renderServerTests(writer: RustWriter) {
     if (this is ServerProtocolTestGenerator) {
         renderServerTests(writer)
+    } else if ((codegenContext as? ServerCodegenContext)?.servedProtocols.orEmpty().size > 1) {
+        // Replacement generators retain their own rendering contract, including the
+        // core renderer's operation-only module names. Scope those modules by protocol.
+        val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name.toSnakeCase()
+        val protocolName = codegenContext.protocol.toString().toByteArray(Charsets.UTF_8).joinToString("") { "%02x".format(it) }
+        val module = RustModule.inlineTests("${operationName}_decorator_protocol_$protocolName")
+        val generator = this
+        writer.withInlineModule(module, null) { generator.render(this) }
     } else {
         render(writer)
     }

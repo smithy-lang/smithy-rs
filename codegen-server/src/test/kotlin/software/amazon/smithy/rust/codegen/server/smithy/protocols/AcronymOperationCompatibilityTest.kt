@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationNames
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -117,11 +118,11 @@ internal class AcronymOperationCompatibilityTest {
                                             // Marker traits must reference the descriptor declared for that operation.
                                             assert!(::std::ptr::eq(
                                                 <crate::operation_shape::AcLsUpdateStatus as #{Server}::operation::SchemaOperationShape>::SCHEMA,
-                                                &crate::schema::operations::ACLS_UPDATE_STATUS,
+                                                &crate::schema::operations::${ServerOperationNames(context.symbolProvider.toSymbol(deniedOperation)).schemaConst},
                                             ));
                                             assert!(::std::ptr::eq(
                                                 <crate::operation_shape::Http2GetStatus as #{Server}::operation::SchemaOperationShape>::SCHEMA,
-                                                &crate::schema::operations::HTTP2_GET_STATUS,
+                                                &crate::schema::operations::${ServerOperationNames(context.symbolProvider.toSymbol(successOperation)).schemaConst},
                                             ));
                                             """,
                                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
