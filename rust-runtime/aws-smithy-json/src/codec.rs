@@ -168,6 +168,7 @@ pub struct JsonCodecSettings {
     allow_integral_float_numbers: bool,
     allow_leading_zeros: bool,
     allow_trailing_decimal_point: bool,
+    allow_empty_integer_part: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
@@ -281,6 +282,7 @@ impl JsonCodecSettings {
             allow_integral_float_numbers: self.allow_integral_float_numbers,
             allow_leading_zeros: self.allow_leading_zeros,
             allow_trailing_decimal_point: self.allow_trailing_decimal_point,
+            allow_empty_integer_part: self.allow_empty_integer_part,
             strict_timestamp_formats: self.strict_timestamp_formats,
             dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id.clone(),
@@ -318,6 +320,7 @@ impl Default for JsonCodecSettings {
             allow_integral_float_numbers: false,
             allow_leading_zeros: false,
             allow_trailing_decimal_point: false,
+            allow_empty_integer_part: false,
             strict_timestamp_formats: false,
             dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
@@ -366,6 +369,7 @@ pub struct JsonCodecSettingsBuilder {
     allow_integral_float_numbers: bool,
     allow_leading_zeros: bool,
     allow_trailing_decimal_point: bool,
+    allow_empty_integer_part: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
     normalize_arbitrary_precision: bool,
@@ -384,6 +388,7 @@ impl Default for JsonCodecSettingsBuilder {
             allow_integral_float_numbers: false,
             allow_leading_zeros: false,
             allow_trailing_decimal_point: false,
+            allow_empty_integer_part: false,
             strict_timestamp_formats: false,
             dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
@@ -441,6 +446,15 @@ impl JsonCodecSettingsBuilder {
     /// Applies to read and skipped numbers alike.
     pub fn allow_trailing_decimal_point(mut self, value: bool) -> Self {
         self.allow_trailing_decimal_point = value;
+        self
+    }
+
+    /// Permits negative fractions with no integer digits, such as `-.123` or
+    /// `-.123e2`, even with `enforce_strictness(true)`. Disabled by default.
+    /// Under strict number validation, `.123`, `-.`, and `-.e2` remain invalid.
+    /// Applies to read and skipped numbers alike.
+    pub fn allow_empty_integer_part(mut self, value: bool) -> Self {
+        self.allow_empty_integer_part = value;
         self
     }
 
@@ -542,6 +556,7 @@ impl JsonCodecSettingsBuilder {
             allow_integral_float_numbers: self.allow_integral_float_numbers,
             allow_leading_zeros: self.allow_leading_zeros,
             allow_trailing_decimal_point: self.allow_trailing_decimal_point,
+            allow_empty_integer_part: self.allow_empty_integer_part,
             strict_timestamp_formats: self.strict_timestamp_formats,
             dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id,
@@ -861,6 +876,7 @@ mod tests {
             .allow_integral_float_numbers(true)
             .allow_leading_zeros(true)
             .allow_trailing_decimal_point(true)
+            .allow_empty_integer_part(true)
             .strict_timestamp_formats(true)
             .dispatch_null_members(true)
             .build();
@@ -887,6 +903,7 @@ mod tests {
         assert!(round_tripped.allow_integral_float_numbers);
         assert!(round_tripped.allow_leading_zeros);
         assert!(round_tripped.allow_trailing_decimal_point);
+        assert!(round_tripped.allow_empty_integer_part);
         assert!(round_tripped.strict_timestamp_formats());
         assert!(round_tripped.dispatch_null_members());
     }
