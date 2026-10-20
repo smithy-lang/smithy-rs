@@ -24,6 +24,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TraitFactory
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -103,6 +104,7 @@ class MultiProtocolAbFuzzHarnessTest {
     /** Resolves a fixture: multi-protocol models live with the server integration suite, the rest in [models]. */
     private fun modelFile(name: String): File =
         if (name.startsWith("multi-protocol")) multiProtocolModels.resolve(name) else models.resolve(name)
+
     private val suites = (System.getenv("MP_FUZZ_SUITES") ?: "pokemon,multiprotocol").split(",")
     private val singleRuntime = System.getenv("MP_FUZZ_SINGLE_RUNTIME")?.let { File(it) }
     private val selected =
@@ -337,7 +339,10 @@ class MultiProtocolAbFuzzHarnessTest {
         val sources =
             listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy", file).distinct()
                 .map { it to modelFile(it).readText() }
-        val canonicalSources = sources.filter { it.first in listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy") }
+        val canonicalSources =
+            sources.filter {
+                it.first in listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy")
+            }
         return project("multiprotocol", assemble(*canonicalSources.toTypedArray()), served, sources)
     }
 
@@ -608,35 +613,36 @@ class MultiProtocolAbFuzzHarnessTest {
                             tokioTest("canonical_rest_upload_preserves_bytes") {
                                 rustTemplate(
                                     """
-                                let config = crate::service::MultiProtocolServiceConfig::builder().build();
-                                let service = crate::service::MultiProtocolService::builder(config)
-                                    .upload(|input: crate::input::UploadInput| async move {
-                                        let actual = input.data.collect().await.unwrap().into_bytes();
-                                        assert!(actual.is_empty() || actual.as_ref() == &[0, 255, b'<', b'&', 10, b'"']);
-                                        #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput { size: actual.len() as i64 })
-                                    }).build_unchecked();
-                                let mut records = #{String}::from("case\tstatus\theaders\tbodyHex\n");
-                                for bytes in [vec![], vec![0u8, 255, b'<', b'&', 10, b'"']] {
-                                    let request = #{Http}::Request::builder().method("PUT").uri("/upload")
-                                        .header("content-type", "application/octet-stream")
-                                        .body(#{Server}::body::to_boxed_sync(bytes.clone())).unwrap();
-                                    let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
-                                    assert_eq!(response.status().as_u16(), 200);
-                                    let headers = format!("{:?}", response.headers());
-                                    let body = #{Server}::body::collect_body_limited(response.into_body(), 1024).await.unwrap();
-                                    let expected = if "${protocol.dir}" == "rest-json1" {
-                                        format!("{{\"size\":{}}}", bytes.len())
-                                    } else {
-                                        format!("<UploadOutput><size>{}</size></UploadOutput>", bytes.len())
-                                    };
-                                    assert_eq!(body.as_ref(), expected.as_bytes());
-                                    records.push_str(&format!("{}\t200\t{}\t{}\n", bytes.len(), headers,
-                                        body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>()));
-                                }
-                                ::std::fs::write("${records.absolutePath}", records).unwrap();
-                                """,
+                                    let config = crate::service::MultiProtocolServiceConfig::builder().build();
+                                    let service = crate::service::MultiProtocolService::builder(config)
+                                        .upload(|input: crate::input::UploadInput| async move {
+                                            let actual = input.data.collect().await.unwrap().into_bytes();
+                                            assert!(actual.is_empty() || actual.as_ref() == &[0, 255, b'<', b'&', 10, b'"']);
+                                            #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput { size: actual.len() as i64 })
+                                        }).build_unchecked();
+                                    let mut records = #{String}::from("case\tstatus\theaders\tbodyHex\n");
+                                    for bytes in [vec![], vec![0u8, 255, b'<', b'&', 10, b'"']] {
+                                        let request = #{Http}::Request::builder().method("PUT").uri("/upload")
+                                            .header("content-type", "application/octet-stream")
+                                            .body(#{Server}::body::to_boxed_sync(bytes.clone())).unwrap();
+                                        let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
+                                        assert_eq!(response.status().as_u16(), 200);
+                                        let headers = format!("{:?}", response.headers());
+                                        let body = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024)).await.unwrap().to_bytes();
+                                        let expected = if "${protocol.dir}" == "rest-json1" {
+                                            format!("{{\"size\":{}}}", bytes.len())
+                                        } else {
+                                            format!("<UploadOutput><size>{}</size></UploadOutput>", bytes.len())
+                                        };
+                                        assert_eq!(body.as_ref(), expected.as_bytes());
+                                        records.push_str(&format!("{}\t200\t{}\t{}\n", bytes.len(), headers,
+                                            body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>()));
+                                    }
+                                    ::std::fs::write("${records.absolutePath}", records).unwrap();
+                                    """,
                                     *RuntimeType.preludeScope,
                                     "Http" to RuntimeType.http(context.runtimeConfig),
+                                    "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                                     "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                                     "Tower" to ServerCargoDependency.tower(context).toType(),
                                 )
