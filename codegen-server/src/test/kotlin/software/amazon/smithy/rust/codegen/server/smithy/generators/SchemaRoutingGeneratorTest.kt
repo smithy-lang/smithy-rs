@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -200,7 +201,7 @@ class SchemaRoutingGeneratorTest {
                     "Tower" to ServerCargoDependency.tower(context).toType(),
                     *RuntimeType.preludeScope,
                 )
-            crate.testModule {
+            crate.withModule(RustModule.inlineTests("schema_routing_tests", parent = ServerRustModule.Service)) {
                 tokioTest("body_configuration_is_final_at_build_and_custom_handlers_remain_usable") {
                     rustTemplate(
                         """
@@ -378,7 +379,7 @@ class SchemaRoutingGeneratorTest {
                 additionalDecorators = listOf(decorator),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
-                crate.testModule {
+                crate.withModule(RustModule.inlineTests("streaming_routing_tests", parent = ServerRustModule.Service)) {
                     tokioTest("streaming_operations_do_not_fail_either_builder") {
                         rustTemplate(
                             """
@@ -471,7 +472,7 @@ class SchemaRoutingGeneratorTest {
             additionalDecorators = listOf(decorator),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
         ) { context, crate ->
-            crate.testModule {
+            crate.withModule(RustModule.inlineTests("shared_registry_tests", parent = ServerRustModule.Service)) {
                 tokioTest("a_shared_registry_builds_without_duplicate_protocol_registrations") {
                     rustTemplate(
                         """

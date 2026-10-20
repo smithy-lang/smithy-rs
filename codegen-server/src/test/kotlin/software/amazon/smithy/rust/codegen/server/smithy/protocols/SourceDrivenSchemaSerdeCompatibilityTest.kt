@@ -5,7 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -26,22 +27,40 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** Invoked by tools/schema-serde-compat/run.py; observations are compared by that runner. */
+/** Default CI runs a small wire-parity corpus; the external runner selects the complete audit. */
 internal class SourceDrivenSchemaSerdeCompatibilityTest {
+    private val externalAudit = System.getenv("SCHEMA_COMPAT_ROOT") != null
+    private val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
+    private val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("schema-compat-ci-")
+    private val protocols =
+        System.getenv("SCHEMA_COMPAT_PROTOCOLS")?.split(",")
+            ?: listOf("rest-json", "rest-xml", "aws-json-10", "aws-json-11", "rpc-v2-cbor")
+
     private fun settings(schemaSerde: Boolean): ObjectNode =
         Node.objectNodeBuilder()
             .withMember("codegen", Node.objectNodeBuilder().withMember("http-1x", true).withMember("schemaSerde", schemaSerde).build())
-            .withMember("runtimeConfig", Node.objectNodeBuilder().withMember("relativePath", System.getenv("SCHEMA_COMPAT_RUNTIME")).build())
+            .withMember("runtimeConfig", Node.objectNodeBuilder().withMember("relativePath", (System.getenv("SCHEMA_COMPAT_RUNTIME") ?: root.resolve("rust-runtime").toString())).build())
             .build()
 
     @Test
     fun `generate fresh legacy and schema services and observe identical requests`() {
-        val rootEnv = System.getenv("SCHEMA_COMPAT_ROOT")
-        assumeTrue(rootEnv != null, "Run tools/schema-serde-compat/run.py to select and record the audit")
-        val root = Path.of(rootEnv)
         val suite = root.resolve("tools/schema-serde-compat")
-        val run = Path.of(System.getenv("SCHEMA_COMPAT_RUN"))
-        for (protocol in System.getenv("SCHEMA_COMPAT_PROTOCOLS").split(",")) {
+        if (!externalAudit) {
+            Files.createDirectories(run.resolve("cases"))
+            val essential =
+                setOf(
+                    "body-object", "body-known-null", "body-nested-valid", "body-nested-missing",
+                    "body-blob-good", "query-empty", "xml-root", "xml-empty", "response-empty", "response-zero", "response-quotes",
+                )
+            for (protocol in protocols) {
+                val cases =
+                    Node.parse(Files.readString(suite.resolve("cases/$protocol.json"))).expectArrayNode().elements
+                        .filter { it.expectObjectNode().expectStringMember("id").value in essential }
+                assertTrue(cases.isNotEmpty(), protocol)
+                Files.writeString(run.resolve("cases/$protocol.json"), Node.printJson(Node.arrayNode(*cases.toTypedArray())))
+            }
+        }
+        for (protocol in protocols) {
             val commonFile = if (protocol == "rpc-v2-cbor") "cbor-shapes.smithy" else "bindings-and-json.smithy"
             val common = Files.readString(suite.resolve("models/$commonFile")).asSmithyModel()
             val model = Model.assembler().addModel(common).addImport(suite.resolve("models/$protocol.smithy")).assemble().unwrap()
@@ -143,14 +162,20 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                     }
                 }
             }
+            if (!externalAudit) {
+                fun wire(mode: String) =
+                    Files.readAllLines(run.resolve("$protocol-$mode.jsonl")).map { line ->
+                        val observation = Node.parse(line).expectObjectNode()
+                        assertTrue(observation.expectMember("panic").isNullNode, "$protocol $mode: $observation")
+                        observation.withoutMember("logs")
+                    }
+                assertEquals(wire("legacy"), wire("schema"), "$protocol: $run")
+            }
         }
     }
 
     @Test
     fun `record sensitive model compilation on both generators`() {
-        assumeTrue(System.getenv("SCHEMA_COMPAT_ROOT") != null)
-        val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT"))
-        val run = Path.of(System.getenv("SCHEMA_COMPAT_RUN"))
         val results = mutableListOf<String>()
         for (probe in listOf("sensitive-prefix", "sensitive-query-map", "xml-attribute")) {
             val model = Files.readString(root.resolve("tools/schema-serde-compat/models/$probe.smithy")).asSmithyModel()
@@ -167,7 +192,23 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                                 ProcessBuilder("cargo", "check", "--quiet", "--lib").directory(path.toFile())
                                     .redirectErrorStream(true).redirectOutput(run.resolve("compile-$probe-$mode.log").toFile())
                             process.environment()["RUSTFLAGS"] = "-D warnings"
-                            results.add("$probe\t$mode\t${process.start().waitFor()}")
+                            val status = process.start().waitFor()
+                            results.add("$probe\t$mode\t$status")
+                            if (!externalAudit) {
+                                // Fresh mainline fails these probes under the same warning policy.
+                                // Assert the observed failure, and require the schema generator to compile.
+                                val knownLegacyFailure = !schemaSerde && probe != "sensitive-query-map"
+                                assertEquals(if (knownLegacyFailure) 101 else 0, status, "$probe/$mode: ${run.resolve("compile-$probe-$mode.log")}")
+                                if (knownLegacyFailure) {
+                                    val diagnostic =
+                                        when (probe) {
+                                            "sensitive-prefix" -> "Sensitive Data Redacted"
+                                            "sensitive-query-map" -> "unused variable: `name`"
+                                            else -> "method `set_token` is never used"
+                                        }
+                                    assertTrue(Files.readString(run.resolve("compile-$probe-$mode.log")).contains(diagnostic), diagnostic)
+                                }
+                            }
                         },
                     ),
                     testCoverage = HttpTestType.Default,

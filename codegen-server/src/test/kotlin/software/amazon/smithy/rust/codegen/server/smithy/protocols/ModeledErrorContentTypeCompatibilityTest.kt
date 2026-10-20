@@ -48,17 +48,17 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                 val streamHandler =
                     if (isRest) {
                         """
-                                        .stream(move |_| async move {
-                                            if scenario == "success" {
-                                                #{Ok}(crate::output::StreamOutput { body: #{Types}::byte_stream::ByteStream::from_static(b"stream") })
-                                            } else {
-                                                #{Err}(crate::error::StreamError::Failure(crate::error::Failure {
-                                                    message: #{Some}("failure".into()),
-                                                    content_type: content_type.map(str::to_owned),
-                                                }))
-                                            }
-                                        })
-                    """
+                        .stream(move |_| async move {
+                            if scenario == "success" {
+                                #{Ok}(crate::output::StreamOutput { body: #{Types}::byte_stream::ByteStream::from_static(b"stream") })
+                            } else {
+                                #{Err}(crate::error::StreamError::Failure(crate::error::Failure {
+                                    message: #{Some}("failure".into()),
+                                    content_type: content_type.map(str::to_owned),
+                                }))
+                            }
+                        })
+                        """
                     } else {
                         ""
                     }
@@ -79,7 +79,7 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                         command = { path ->
                             val log = run.resolve("$service-$mode-cargo.log")
                             val process =
-                                ProcessBuilder("cargo", "test", "--verbose", "--lib", "modeled_error_content_type")
+                                ProcessBuilder("cargo", "test", "--quiet", "--lib", "modeled_error_content_type")
                                     .directory(path.toFile()).redirectErrorStream(true)
                             process.environment()["RUSTFLAGS"] = "-D warnings"
                             val running = process.start()
@@ -101,24 +101,26 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                     check(context.usesSchemaHttpSerde == schemaSerde)
                     crate.testModule {
                         tokioTest("modeled_error_content_type") {
+                            val schemaErrorChecks =
+                                if (schemaSerde) {
+                                    """
+                                    let shared = crate::error::Failure { message: #{Some}("failure".into()), content_type: #{None} };
+                                    assert!(#{Server}::schema::HttpModeledError::operation_schema(&shared).is_none());
+                                    let error = crate::error::MediaTextError::Failure(shared);
+                                    let operation = #{Server}::schema::HttpModeledError::operation_schema(&error).unwrap();
+                                    assert_eq!(operation.shape_id().shape_name(), "MediaText");
+                                    assert!(std::ptr::eq(operation.input(), crate::input::MediaTextInput::SCHEMA));
+                                    assert!(std::ptr::eq(operation.output(), crate::output::MediaTextOutput::SCHEMA));
+                                    """.trimIndent()
+                                } else {
+                                    ""
+                                }
                             rustTemplate(
                                 """
                                 use #{Tower}::ServiceExt;
                                 use #{BodyUtil}::BodyExt;
                                 use #{Json}::json;
-                                ${if (schemaSerde) {
-                                    """
-                                let shared = crate::error::Failure { message: #{Some}("failure".into()), content_type: #{None} };
-                                assert!(#{Server}::schema::HttpModeledError::operation_schema(&shared).is_none());
-                                let error = crate::error::MediaTextError::Failure(shared);
-                                let operation = #{Server}::schema::HttpModeledError::operation_schema(&error).unwrap();
-                                assert_eq!(operation.shape_id().shape_name(), "MediaText");
-                                assert!(std::ptr::eq(operation.input(), crate::input::MediaTextInput::SCHEMA));
-                                assert!(std::ptr::eq(operation.output(), crate::output::MediaTextOutput::SCHEMA));
-                                """
-                                } else {
-                                    ""
-                                }}
+                                $schemaErrorChecks
                                 let mut observations = #{Vec}::new();
                                 for scenario in ["success", "absent", "explicit", "empty", "invalid", "document-type"] {
                                     let content_type = match scenario {
@@ -216,10 +218,16 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                                         let response = app.clone().oneshot(request).await.unwrap();
                                         let status = response.status().as_u16();
                                         if ${!schemaSerde} {
-                                            assert_eq!(status, if scenario == "success" { 200 } else if $isRest && scenario == "invalid" { 400 } else if $isRest || $isCbor { 422 } else { 400 }, "{operation}/{scenario}");
+                                            // Fresh mainline at 9267f0e25 honors modeled HTTP bindings
+                                            // for AWS JSON too. CBOR's independent compilation fix
+                                            // ignores error header bindings, retaining their body data.
+                                            assert_eq!(status, if scenario == "success" { 200 } else if !$isCbor && scenario == "invalid" { 400 } else { 422 }, "{operation}/{scenario}");
                                             if scenario != "invalid" {
                                                 // Legacy treats an empty scalar header as absent.
-                                                let expected = if $isRest { content_type.filter(|value| !value.is_empty()).or(default_type) } else { #{Some}(document_type) };
+                                                let expected = if $isCbor { #{Some}(document_type) } else {
+                                                    content_type.filter(|value| !value.is_empty())
+                                                        .or(if $isRest { default_type } else { #{Some}(document_type) })
+                                                };
                                                 assert_eq!(response.headers().get("content-type").map(|h| h.to_str().unwrap()), expected, "{operation}/{scenario}");
                                             }
                                         }

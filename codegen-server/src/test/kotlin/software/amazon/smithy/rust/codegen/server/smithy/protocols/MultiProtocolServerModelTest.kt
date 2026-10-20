@@ -16,7 +16,7 @@ import java.io.File
 
 internal class MultiProtocolServerModelTest {
     private val models = File("../codegen-core/common-test-models/multi-protocol-compat")
-    private val serviceId = ShapeId.from("com.example.multiprotocol#MultiProtocolService")
+    private val serviceId = ShapeId.from("smithy.rust.codegen.test.multiprotocol#MultiProtocolService")
 
     @Test
     fun `server extensions retain all server protocol cases`() {

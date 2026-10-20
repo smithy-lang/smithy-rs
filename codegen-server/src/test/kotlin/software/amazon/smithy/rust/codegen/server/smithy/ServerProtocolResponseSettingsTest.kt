@@ -18,7 +18,7 @@ internal class ServerProtocolResponseSettingsTest {
 
     @Test
     fun `response bindings default to historical`() {
-        for (node in listOf(null, "{}", """{"protocols":{}}""", """{"protocols":{"awsJson1_0":{}}}""")) {
+        for (node in listOf(null, "{}", """{"protocols":{}}""", """{"protocols":{"aws.protocols#awsJson1_0":{}}}""")) {
             val settings = settings(node)
             check(settings.responseBindings(json10) == AwsJsonResponseBindings.HISTORICAL)
             check(settings.responseBindings(json11) == AwsJsonResponseBindings.HISTORICAL)
@@ -31,7 +31,7 @@ internal class ServerProtocolResponseSettingsTest {
             val other = if (spec == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
             val settings =
                 settings(
-                    """{"protocols":{"$spec":{"responseBindings":"smithy-specs"},"$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"restJson1":{"responseBindings":"smithy-specs"}}}""",
+                    """{"protocols":{"aws.protocols#$spec":{"responseBindings":"smithy-specs"},"aws.protocols#$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"aws.protocols#restJson1":{"responseBindings":"smithy-specs"}}}""",
                 )
             check(settings.responseBindings(ShapeId.from("aws.protocols#$spec")) == AwsJsonResponseBindings.SMITHY_SPECS)
             check(settings.responseBindings(ShapeId.from("aws.protocols#$other")) == AwsJsonResponseBindings.HISTORICAL)
@@ -41,7 +41,7 @@ internal class ServerProtocolResponseSettingsTest {
     }
 
     @Test
-    fun `full protocol IDs use the same settings and cannot duplicate short names`() {
+    fun `short protocol IDs are rejected even alongside full IDs`() {
         val settings = settings("""{"protocols":{"aws.protocols#awsJson1_0":{"responseBindings":"smithy-specs"}}}""")
         check(settings.responseBindings(json10) == AwsJsonResponseBindings.SMITHY_SPECS)
         expectInvalid(
@@ -54,7 +54,7 @@ internal class ServerProtocolResponseSettingsTest {
     fun `invalid nested objects report their configuration path`() {
         for (value in listOf("null", "true", "1", "\"value\"", "[]")) {
             expectInvalid("""{"protocols":$value}""", "customizationConfig.protocols")
-            for (protocol in listOf("awsJson1_0", "awsJson1_1")) {
+            for (protocol in listOf("aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1")) {
                 expectInvalid("""{"protocols":{"$protocol":$value}}""", "customizationConfig.protocols.$protocol")
             }
         }
@@ -62,7 +62,7 @@ internal class ServerProtocolResponseSettingsTest {
 
     @Test
     fun `response bindings must be a known string`() {
-        for (protocol in listOf("awsJson1_0", "awsJson1_1")) {
+        for (protocol in listOf("aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1")) {
             for (value in listOf("null", "1", "true", "\"legacy\"", "\"Protocol\"", "{}", "[]")) {
                 expectInvalid(
                     """{"protocols":{"$protocol":{"responseBindings":$value}}}""",
@@ -73,7 +73,13 @@ internal class ServerProtocolResponseSettingsTest {
     }
 
     private fun settings(json: String?): ServerProtocolResponseSettings =
-        serverTestRustSettings(customizationConfig = json?.let { ObjectNode.parse(it).expectObjectNode() })
+        serverTestRustSettings(
+            codegenConfig = ServerCodegenConfig(schemaSerde = true),
+            customizationConfig =
+                json?.let {
+                    ObjectNode.parse(it).expectObjectNode()
+                },
+        )
             .protocolResponseSettings
 
     private fun expectInvalid(

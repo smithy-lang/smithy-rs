@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -151,8 +152,8 @@ internal class ServerSchemaMediaTypeHeadersTest {
                                             request.body(#{Server}::body::to_boxed_sync("")).unwrap()).await.unwrap();
                                         if response.status() != 200 {
                                             let status = response.status();
-                                            let bytes = #{Server}::body::collect_body_limited(response.into_body(), 1024 * 1024)
-                                                .await.unwrap();
+                                            let bytes = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024 * 1024))
+                                                .await.unwrap().to_bytes();
                                             panic!("{status}: {}", #{String}::from_utf8_lossy(&bytes));
                                         }
                                         assert_eq!(response.status(), 200);
@@ -165,6 +166,7 @@ internal class ServerSchemaMediaTypeHeadersTest {
                                 """,
                                 *preludeScope,
                                 "Http" to RuntimeType.http(context.runtimeConfig),
+                                "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                                 "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                                 "Tower" to ServerCargoDependency.tower(context).toType(),
                             )

@@ -95,6 +95,7 @@ internal class ServerJsonDocumentPayloadTest {
                         "Tower" to ServerCargoDependency.tower(context).toType(),
                         "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                         "BodyToBytes" to ServerHttpTestHelpers.httpBodyToBytes(context.runtimeConfig, "body", "response"),
+                        "EmptyBody" to ServerHttpTestHelpers.createBodyFromBytes(context, "\"\""),
                     )
                 }
             }
@@ -102,7 +103,7 @@ internal class ServerJsonDocumentPayloadTest {
     }
 
     @Test
-    fun `legacy document helper stays infallible and all document variants serialize through both server paths`() {
+    fun `legacy document helper stays fallible and all document variants serialize through both server paths`() {
         val model =
             """
             ${'$'}version: "2"
@@ -144,7 +145,7 @@ internal class ServerJsonDocumentPayloadTest {
                     tokioTest("document_payload_bytes_and_legacy_helper_signature") {
                         if (!context.usesSchemaHttpSerde) {
                             rustTemplate(
-                                "let serialize: fn(&#{Document}) -> #{Vec}<u8> = crate::protocol_serde::serialize_document;",
+                                "let serialize = crate::protocol_serde::serialize_document;",
                                 *scope,
                             )
                         }
@@ -169,7 +170,7 @@ internal class ServerJsonDocumentPayloadTest {
                                 rustTemplate(
                                     """
                                     if let #{Some}(value) = document.as_ref() {
-                                        assert_eq!(serialize(value), expected.as_bytes());
+                                        assert_eq!(serialize(value).unwrap(), expected.as_bytes());
                                     }
                                     """,
                                     *scope,
@@ -189,7 +190,7 @@ internal class ServerJsonDocumentPayloadTest {
                                     .method("GET")
                                     .uri("/document")
                                     .header("Content-Type", "application/json")
-                                    .body(#{Server}::body::Body::empty()).unwrap();
+                                    .body(#{EmptyBody:W}).unwrap();
                                 let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
                                 assert_eq!(response.status().as_u16(), 200);
                                 #{BodyToBytes:W}
@@ -197,6 +198,7 @@ internal class ServerJsonDocumentPayloadTest {
                                 """,
                                 *scope,
                                 "BodyToBytes" to ServerHttpTestHelpers.httpBodyToBytes(context.runtimeConfig, "body", "response"),
+                                "EmptyBody" to ServerHttpTestHelpers.createBodyFromBytes(context, "\"\""),
                             )
                         }
                     }

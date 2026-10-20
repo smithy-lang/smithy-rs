@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -42,6 +44,17 @@ internal class ServerRustSettingsTest {
                 }
                 """,
             ).expectObjectNode(),
+        )
+
+    private fun schemaSettings(
+        codegenSettings: String,
+        customizationConfig: String? = null,
+    ): ServerRustSettings =
+        settings(
+            listOf("\"schemaSerde\": true", codegenSettings).filter {
+                it.isNotEmpty()
+            }.joinToString(","),
+            customizationConfig,
         )
 
     @Test
@@ -102,15 +115,15 @@ internal class ServerRustSettingsTest {
 
     @Test
     fun `requestBodyMaxBytes is read from the common protocols section`() {
-        settings("").requestBodyMaxBytes() shouldBe 0L
-        settings("", """{ "protocols": { "common": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
-        settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
+        schemaSettings("").requestBodyMaxBytes() shouldBe 0L
+        schemaSettings("", """{ "protocols": { "common": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
+        schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
     }
 
     @Test
     fun `legacy request body limit is copied into customization config`() {
         for (customization in listOf(null, "{}", """{ "protocols": {} }""")) {
-            val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
+            val settings = schemaSettings(""""requestBodyMaxBytes": 1024""", customization)
             settings.requestBodyMaxBytes() shouldBe 1024L
             settings.customizationConfig shouldBe
                 Node.parse("""{ "protocols": { "common": { "requestBodyMaxBytes": 1024 } } }""").expectObjectNode()
@@ -120,7 +133,7 @@ internal class ServerRustSettingsTest {
     @Test
     fun `copying the legacy limit preserves other customization settings`() {
         val settings =
-            settings(
+            schemaSettings(
                 """"requestBodyMaxBytes": 1024""",
                 """{ "example": true, "protocols": { "common": { "otherSetting": 1 }, "example#protocol": { "enabled": true } } }""",
             )
@@ -135,7 +148,7 @@ internal class ServerRustSettingsTest {
     fun `explicit common body limit takes precedence over the legacy setting including zero`() {
         for (limit in listOf(0, 2048)) {
             val customization = """{ "protocols": { "common": { "requestBodyMaxBytes": $limit } } }"""
-            val settings = settings(""""requestBodyMaxBytes": 1024""", customization)
+            val settings = schemaSettings(""""requestBodyMaxBytes": 1024""", customization)
             settings.requestBodyMaxBytes() shouldBe limit.toLong()
             settings.customizationConfig shouldBe Node.parse(customization).expectObjectNode()
         }
@@ -145,7 +158,7 @@ internal class ServerRustSettingsTest {
     fun `invalid legacy body limits are rejected when copied`() {
         for (value in listOf("-1", "1.5", "9223372036854775808", "true", "null", "\"8\"")) {
             shouldThrow<Exception> {
-                settings(""""requestBodyMaxBytes": $value""")
+                schemaSettings(""""requestBodyMaxBytes": $value""")
             }
         }
     }
@@ -153,7 +166,7 @@ internal class ServerRustSettingsTest {
     @Test
     fun `invalid explicit common limit is not replaced by the legacy setting`() {
         shouldThrow<Exception> {
-            settings(
+            schemaSettings(
                 """"requestBodyMaxBytes": 1024""",
                 """{ "protocols": { "common": { "requestBodyMaxBytes": null } } }""",
             )
@@ -163,7 +176,7 @@ internal class ServerRustSettingsTest {
     @Test
     fun `negative requestBodyMaxBytes is rejected when settings are loaded`() {
         shouldThrow<IllegalArgumentException> {
-            settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": -1 } } }""")
+            schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": -1 } } }""")
         }
     }
 
@@ -171,18 +184,18 @@ internal class ServerRustSettingsTest {
     fun `invalid request body limits are rejected during codegen`() {
         for (value in listOf("1.5", "9223372036854775808", "true", "null", "\"8\"")) {
             shouldThrow<Exception> {
-                settings("", """{ "protocols": { "common": { "requestBodyMaxBytes": $value } } }""")
+                schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": $value } } }""")
             }
         }
         shouldThrow<Exception> {
-            settings("", """{ "protocols": { "common": "not an object" } }""")
+            schemaSettings("", """{ "protocols": { "common": "not an object" } }""")
         }
     }
 
     @Test
     fun `protocol settings pass through arbitrary sections keyed by protocol shape ID`() {
         val sections =
-            settings(
+            schemaSettings(
                 "",
                 """{ "protocols": { "com.amazon.coral#rpcv1": { "anything": { "nested": 1 } } } }""",
             ).protocolSettings()
@@ -192,9 +205,72 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
+    fun `full IDs for built in and custom protocols are preserved only on the schema path`() {
+        val ids =
+            listOf(
+                "aws.protocols#awsJson1_0",
+                "aws.protocols#awsJson1_1",
+                "aws.protocols#restJson1",
+                "aws.protocols#restXml",
+                ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID,
+                "com.amazon.coral#rpcv1",
+                ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY,
+            )
+        val sections = ids.joinToString(",") { """"$it": {"extension": true}""" }
+        for (schemaSerde in listOf(false, true)) {
+            val parsed =
+                settings(
+                    """"schemaSerde": $schemaSerde""",
+                    """{"protocols": {$sections}}""",
+                ).protocolSettings()
+            if (!schemaSerde) {
+                parsed shouldBe emptyMap()
+                continue
+            }
+            parsed.keys shouldBe ids.toSet()
+            parsed.values.forEach {
+                it shouldBe Node.parse("""{"extension": true}""").expectObjectNode()
+            }
+        }
+    }
+
+    @Test
+    fun `protocol shorthand and invalid shape IDs are rejected only on the schema path`() {
+        val invalidIds =
+            listOf(
+                "awsJson1_0",
+                "awsJson1_1",
+                "restJson1",
+                "restXml",
+                "rpcv2Cbor",
+                "rpcv1",
+                "aws.protocols#",
+                "not a shape ID",
+                "aws.protocols#restJson1${'$'}member",
+            )
+        for (schemaSerde in listOf(false, true)) {
+            for (id in invalidIds) {
+                if (!schemaSerde) {
+                    settings("\"schemaSerde\": false", """{"protocols":{"$id":{}}}""").protocolSettings() shouldBe emptyMap()
+                    continue
+                }
+                val error =
+                    shouldThrow<CodegenException> {
+                        settings(
+                            """"schemaSerde": $schemaSerde""",
+                            """{"protocols": {"$id": {}}}""",
+                        )
+                    }
+                error.message shouldContain "`customizationConfig.protocols.$id`"
+                error.message shouldContain "full protocol shape ID"
+            }
+        }
+    }
+
+    @Test
     fun `capitalizeRoutes is read from customizationConfig protocols`() {
         val settings =
-            settings(
+            schemaSettings(
                 "",
                 """{ "protocols": { "${ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID}": { "capitalizeRoutes": true } } }""",
             )
@@ -203,7 +279,7 @@ internal class ServerRustSettingsTest {
 
     @Test
     fun `legacy rpcV2CborAddCapitalizedRoute folds into the protocol section`() {
-        val settings = settings(""""${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}": true""")
+        val settings = schemaSettings(""""${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}": true""")
         settings.rpcV2CborCapitalizeRoutes() shouldBe true
         settings.protocolSettings().getValue(ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID)
             .expectBooleanMember(ServerRustSettings.CAPITALIZE_ROUTES_KEY).value shouldBe true
@@ -212,7 +288,7 @@ internal class ServerRustSettingsTest {
     @Test
     fun `customizationConfig wins over the legacy flag on conflict`() {
         val settings =
-            settings(
+            schemaSettings(
                 """"${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}": true""",
                 """{ "protocols": { "${ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID}": { "capitalizeRoutes": false } } }""",
             )
@@ -222,12 +298,27 @@ internal class ServerRustSettingsTest {
     @Test
     fun `legacy flag folds into an existing section without other capitalizeRoutes`() {
         val settings =
-            settings(
+            schemaSettings(
                 """"${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}": true""",
                 """{ "protocols": { "${ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID}": { "otherSetting": 1 } } }""",
             )
         settings.rpcV2CborCapitalizeRoutes() shouldBe true
         settings.protocolSettings().getValue(ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID)
             .expectNumberMember("otherSetting").value shouldBe 1
+    }
+
+    @Test
+    fun `legacy settings ignore unrelated protocol sections and preserve fractional limits`() {
+        for (http1x in listOf(false, true)) {
+            for (protocols in listOf("7", "{\"unrelated\":true}", "{\"awsJson1_0\":{\"responseBindings\":\"typo\"}}")) {
+                val custom = """{"protocols":$protocols}"""
+                val loaded = settings(""""http-1x":$http1x,"requestBodyMaxBytes":3.5""", custom)
+                loaded.requestBodyMaxBytes() shouldBe 3L
+                loaded.customizationConfig shouldBe Node.parse(custom).expectObjectNode()
+                loaded.protocolSettings() shouldBe emptyMap()
+            }
+        }
+        val error = shouldThrow<IllegalArgumentException> { settings(""""requestBodyMaxBytes":-1""") }
+        error.message shouldBe "`requestBodyMaxBytes` must be non-negative, got -1"
     }
 }

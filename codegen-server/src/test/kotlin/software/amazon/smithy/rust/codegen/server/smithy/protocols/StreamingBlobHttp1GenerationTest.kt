@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -63,6 +64,17 @@ internal class StreamingBlobHttp1GenerationTest {
                 check(!context.usesSchemaHttpSerde)
                 crate.testModule {
                     tokioTest("capture_legacy_blob_responses") {
+                        val checkBody =
+                            if (service == "CborBlob") {
+                                """
+                                let mut expected = vec![0xbf, 0x64, b'd', b'a', b't', b'a', 0x40 + bytes.len() as u8];
+                                expected.extend_from_slice(&bytes);
+                                expected.push(0xff);
+                                assert_eq!(body.as_ref(), expected);
+                                """
+                            } else {
+                                "assert_eq!(body.as_ref(), bytes);"
+                            }
                         rustTemplate(
                             """
                             let mut records = #{String}::new();
@@ -73,23 +85,15 @@ internal class StreamingBlobHttp1GenerationTest {
                                 let response = crate::protocol_serde::shape_blob_echo::ser_blob_echo_http_response(output).unwrap();
                                 let status = response.status();
                                 let headers = format!("{:?}", response.headers());
-                                let body = #{Server}::body::collect_body_limited(response.into_body(), 4096).await.unwrap();
-                                ${if (service == "CborBlob") {
-                                """
-                                let mut expected = vec![0xbf, 0x64, b'd', b'a', b't', b'a', 0x40 + bytes.len() as u8];
-                                expected.extend_from_slice(&bytes);
-                                expected.push(0xff);
-                                assert_eq!(body.as_ref(), expected);
-                                """
-                            } else {
-                                "assert_eq!(body.as_ref(), bytes);"
-                            }}
+                                let body = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 4096)).await.unwrap().to_bytes();
+                                $checkBody
                                 assert_eq!(status.as_u16(), 200);
                                 records.push_str(&format!("{status}\t{headers}\t{:02x?}\n", body.as_ref()));
                             }
                             ::std::fs::write("${run.resolve("$service-baseline.txt")}", records).unwrap();
                             """,
                             "Types" to RuntimeType.smithyTypes(context.runtimeConfig),
+                            "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             *RuntimeType.preludeScope,
                         )

@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
@@ -14,18 +15,18 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
-import java.nio.file.Path
 
 internal class LegacyRpcResponseBindingsTest {
     @Test
-    fun `record legacy RPC response bindings before changing compatibility`() {
-        val reportDirectory = Path.of("/tmp/legacy-rpc-response-bindings")
+    fun `legacy RPC response bindings match the fresh mainline snapshots`() {
+        val reportDirectory = Files.createTempDirectory("legacy-rpc-response-bindings-")
         Files.createDirectories(reportDirectory)
         Files.writeString(
             reportDirectory.resolve("observations.tsv"),
@@ -107,7 +108,7 @@ internal class LegacyRpcResponseBindingsTest {
                                     let text = #{String}::from_utf8_lossy(&body);
                                     let hex = body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>();
                                     let mut report = ::std::fs::OpenOptions::new().append(true)
-                                        .open("/tmp/legacy-rpc-response-bindings/observations.tsv").unwrap();
+                                        .open(${reportDirectory.resolve("observations.tsv").toString().dq()}).unwrap();
                                     writeln!(report, "$protocol\t${context.runtimeConfig.httpVersion}\t{case}\t{status}\t{headers}\t{text:?}\t{hex}").unwrap();
                                 }
                                 for code in [#{None}, #{Some}(299), #{Some}(-1)] {
@@ -137,5 +138,10 @@ internal class LegacyRpcResponseBindingsTest {
                 generated.joinToString("\n") { "${it.httpVersion}: ${it.path}" },
             )
         }
+        val expected =
+            javaClass.getResourceAsStream("/legacy-rpc-response-bindings.tsv")!!.bufferedReader().use {
+                it.readLines()
+            }
+        assertEquals(expected, Files.readAllLines(reportDirectory.resolve("observations.tsv")))
     }
 }

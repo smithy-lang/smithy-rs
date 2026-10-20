@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -128,8 +129,8 @@ internal class AwsJson11StrictCompatibilityTest {
                                             .map(|(name, value)| (name.as_str().to_owned(), value.as_bytes().to_vec()))
                                             .collect::<#{Vec}<_>>();
                                         headers.sort();
-                                        let body = #{Server}::body::collect_body_limited(response.into_body(), 1024 * 1024)
-                                            .await.unwrap();
+                                        let body = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024 * 1024))
+                                            .await.unwrap().to_bytes();
                                         if let #{Some}((_, value)) = headers.iter().find(|(name, _)| name == "content-length") {
                                             assert_eq!(#{String}::from_utf8(value.clone()).unwrap().parse::<usize>().unwrap(),
                                                 body.len(), "{case}");
@@ -142,6 +143,7 @@ internal class AwsJson11StrictCompatibilityTest {
                                 """,
                                 *RuntimeType.preludeScope,
                                 "Http" to RuntimeType.http(context.runtimeConfig),
+                                "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                                 "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                                 "Tower" to ServerCargoDependency.tower(context).toType(),
                             )
@@ -157,11 +159,12 @@ internal class AwsJson11StrictCompatibilityTest {
         }
         val legacy = Files.readString(observations.resolve("legacy.tsv"))
         assertAll(
-            "Compare schemaSerde with the corrected legacy AWS JSON response bindings",
+            "Compare schemaSerde with the observed mainline AWS JSON response bindings",
             {
                 for (row in legacy.lineSequence().drop(1).filter { it.isNotBlank() }) {
                     val columns = row.split('\t')
-                    val expected = if (columns[0].startsWith("Fail/")) 400 else 200
+                    // Fresh mainline at 9267f0e25 honors this model's HTTP status traits.
+                    val expected = if (columns[0].startsWith("Fail/")) 409 else 201
                     assertEquals(expected, columns[1].toInt(), "Legacy fixture status: ${columns[0]}")
                 }
             },

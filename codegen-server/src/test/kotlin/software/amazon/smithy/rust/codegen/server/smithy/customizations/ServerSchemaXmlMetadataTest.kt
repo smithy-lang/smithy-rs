@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -176,8 +177,8 @@ internal class ServerSchemaXmlMetadataTest {
                                     .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))
                                     .collect();
                                 headers.sort();
-                                let bytes = #{Server}::body::collect_body_limited(response.into_body(), 1024 * 1024)
-                                    .await.unwrap();
+                                let bytes = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024 * 1024))
+                                    .await.unwrap().to_bytes();
                                 use std::fmt::Write;
                                 writeln!(snapshots, "{path}\t{body}\t{status}\t{headers:?}\t{:?}", bytes.as_ref()).unwrap();
                             }
@@ -185,6 +186,7 @@ internal class ServerSchemaXmlMetadataTest {
                             """,
                             *preludeScope,
                             "Http" to RuntimeType.http(context.runtimeConfig),
+                            "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Tower" to ServerCargoDependency.tower(context).toType(),
                         )
@@ -304,8 +306,8 @@ internal class ServerSchemaXmlMetadataTest {
                                     .body(#{Server}::body::to_boxed_sync(body)).unwrap();
                                 let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
                                 assert_eq!(response.status().as_u16(), 200);
-                                let bytes = #{Server}::body::collect_body_limited(response.into_body(), 1024)
-                                    .await.unwrap();
+                                let bytes = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024))
+                                    .await.unwrap().to_bytes();
                                 assert_eq!(bytes.as_ref(), expected.as_bytes());
                             }
                             """,
@@ -313,6 +315,7 @@ internal class ServerSchemaXmlMetadataTest {
                             "Schema" to RuntimeType.smithySchema(context.runtimeConfig),
                             "Metadata" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("schema::traits::XmlMetadata"),
                             "Http" to RuntimeType.http(context.runtimeConfig),
+                            "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Tower" to ServerCargoDependency.tower(context).toType(),
                         )

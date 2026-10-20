@@ -111,8 +111,29 @@ internal class CborIntegerListCompatibilityTest {
                     crate.testModule {
                         for ((fixture, fixtureParams) in fixtures) {
                             tokioTest("integer_list_wire_observation_$fixture") {
-                                withBlock("let output = ", ";") {
-                                    ServerInstantiator(context).render(this, operation.outputShape(context.model), fixtureParams)
+                                if (!schemaSerde && publicConstrainedTypes && fixture == "collections") {
+                                    // Fresh mainline's test instantiator fails to convert constrained
+                                    // list elements (E0308). Construct valid typed values explicitly
+                                    // so the wire comparison still exercises the unchanged serializer.
+                                    rustTemplate(
+                                        """
+                                        let output = crate::output::GetOutput::builder()
+                                            .dense(#{Some}(vec![-2147483648, -25, -1, 0, 24, 2147483647]))
+                                            .sparse(#{Some}(vec![#{None}, #{Some}(-1), #{Some}(0), #{None}, #{Some}(24)]))
+                                            .nested(#{Some}(vec![vec![], vec![-1, 24]]))
+                                            .map(#{Some}(std::collections::HashMap::from([("key".into(), vec![-1, 24])])))
+                                            .bounded(#{Some}(vec![-1, 24].try_into().unwrap()))
+                                            .constrained(#{Some}(vec![(-1i32).try_into().unwrap(), 24i32.try_into().unwrap()]))
+                                            .member_constrained(#{Some}(vec![(-1i32).try_into().unwrap(), 24i32.try_into().unwrap()]))
+                                            .enums(#{Some}(vec![0, 1]))
+                                            .build();
+                                        """,
+                                        *preludeScope,
+                                    )
+                                } else {
+                                    withBlock("let output = ", ";") {
+                                        ServerInstantiator(context).render(this, operation.outputShape(context.model), fixtureParams)
+                                    }
                                 }
                                 rustTemplate(
                                     """

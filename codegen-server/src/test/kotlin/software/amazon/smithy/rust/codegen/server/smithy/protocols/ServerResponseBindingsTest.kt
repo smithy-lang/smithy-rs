@@ -79,10 +79,9 @@ internal class ServerResponseBindingsTest {
         if (bindings != null) {
             val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
             val otherBindings = if (bindings == "smithy-specs") "historical" else "smithy-specs"
-            val key = if (protocol == "awsJson1_1") "aws.protocols#$protocol" else protocol
             settings.withMember(
                 "customizationConfig",
-                Node.parse("""{"protocols":{"$key":{"responseBindings":"$bindings"},"$other":{"responseBindings":"$otherBindings"}}}"""),
+                Node.parse("""{"protocols":{"aws.protocols#$protocol":{"responseBindings":"$bindings"},"aws.protocols#$other":{"responseBindings":"$otherBindings"}}}"""),
             )
         }
         System.getenv("SCHEMA_COMPAT_RUNTIME")?.let {

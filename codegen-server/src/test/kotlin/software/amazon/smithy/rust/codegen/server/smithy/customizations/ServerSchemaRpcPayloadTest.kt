@@ -140,8 +140,8 @@ internal class ServerSchemaRpcPayloadTest {
                                     }
                                     let length = response.headers().get("content-length").unwrap()
                                         .to_str().unwrap().parse::<usize>().unwrap();
-                                    let body = #{Server}::body::collect_body_limited(response.into_body(), 1024)
-                                        .await.unwrap();
+                                    let body = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024))
+                                        .await.unwrap().to_bytes();
                                     assert_eq!(length, body.len(), "{name} {kind} present={present}");
                                     match name {
                                         "restXml" => {
@@ -181,6 +181,7 @@ internal class ServerSchemaRpcPayloadTest {
                             }
                         }
                         """,
+                        "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                         "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                         "Schema" to RuntimeType.smithySchema(context.runtimeConfig),
                         "Cbor" to RuntimeType.smithyCbor(context.runtimeConfig),
@@ -201,7 +202,7 @@ internal class ServerSchemaRpcPayloadTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
     fun `AWS JSON protocol bindings preserve legacy documents with explicit HTTP differences`(protocol: String) {
-        compareLegacy(protocol, responseBindings = "protocol")
+        compareLegacy(protocol, responseBindings = "smithy-specs")
     }
 
     private fun compareLegacy(
@@ -310,8 +311,8 @@ internal class ServerSchemaRpcPayloadTest {
                                     .map(|(name, value)| (name.as_str().to_owned(), value.to_str().unwrap().to_owned()))
                                     .collect::<#{Vec}<_>>();
                                 headers.sort();
-                                let body = #{Server}::body::collect_body_limited(response.into_body(), 1024)
-                                    .await.unwrap();
+                                let body = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024))
+                                    .await.unwrap().to_bytes();
                                 let length = headers.iter().find(|(name, _)| name == "content-length").unwrap();
                                 assert_eq!(length.1.parse::<usize>().unwrap(), body.len());
                                 // CBOR permits both definite and indefinite maps. Compare their
@@ -348,6 +349,7 @@ internal class ServerSchemaRpcPayloadTest {
                             }
                             ::std::fs::write("${snapshot.toAbsolutePath()}", records).unwrap();
                             """,
+                            "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Marker" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve(marker),
                             "Schema" to RuntimeType.smithySchema(context.runtimeConfig),

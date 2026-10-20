@@ -162,7 +162,7 @@ internal class ServerCargoMetadataTest {
     fun `explicit protocol defaults are omitted without dropping unknown settings`() {
         val metadata =
             metadata(
-                """, "customizationConfig": {"protocols": {
+                """, "codegen": {"schemaSerde": true}, "customizationConfig": {"protocols": {
                 "aws.protocols#restXml": {"strictCollectionElementNames": true, "validateDocument": false, "acceptTextXml": false},
                 "aws.protocols#restJson1": {"validateSkippedValues": false},
                 "aws.protocols#awsJson1_0": {"validateSkippedValues": false},
@@ -185,7 +185,7 @@ internal class ServerCargoMetadataTest {
 
     @Test
     fun `metadata records the legacy route flag folded into customization settings`() {
-        val metadata = metadata(""", "codegen": {"rpcV2CborAddCapitalizedRoute": true}""")
+        val metadata = metadata(""", "codegen": {"schemaSerde": true, "rpcV2CborAddCapitalizedRoute": true}""")
         metadata.protocolTables()[ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID] shouldBe mapOf("capitalizeRoutes" to true)
     }
 
