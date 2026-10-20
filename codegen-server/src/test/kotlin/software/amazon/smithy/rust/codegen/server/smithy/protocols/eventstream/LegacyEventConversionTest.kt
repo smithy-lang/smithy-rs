@@ -17,6 +17,22 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * Legacy generated event unions convert unconstrained input events into modeled events.
+ * Optional members must remain optional during that conversion, including a structure
+ * containing an enum, whose validation makes the generated conversion fallible.
+ *
+ * | Event variant | Input to the conversion | Expected result |
+ * | --- | --- | --- |
+ * | Empty | Empty structure | Conversion succeeds |
+ * | Scalar | Header and scalar value absent | Conversion succeeds |
+ * | Structured | Optional nested structure absent | Conversion succeeds |
+ * | EnumBody | Optional structure containing an enum absent | Conversion succeeds |
+ *
+ * Each case runs for REST JSON, AWS JSON 1.0/1.1, and RPC v2 CBOR with HTTP 1.x and
+ * schemaSerde=false, using this checkout's codegen/runtime. Assertions exercise generated
+ * Rust TryInto conversions; event-frame decoding and HTTP responses have separate coverage.
+ */
 internal class LegacyEventConversionTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "awsJson1_0", "awsJson1_1", "rpcv2Cbor"])
@@ -48,6 +64,7 @@ internal class LegacyEventConversionTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
+                // Keep this on the legacy generation path for every protocol.
                 additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false,"http-1x":true}}""").expectObjectNode(),
                 overrideTestDir = Files.createTempDirectory("legacy-event-fallibility-$protocol-").toFile(),
                 cargoCommand = "cargo test --quiet --lib",
@@ -59,6 +76,7 @@ internal class LegacyEventConversionTest {
                     rustTemplate(
                         """
                         use crate::unconstrained::event_stream_unconstrained::EventStreamUnconstrained;
+                        // Omit every optional member, including the whole enum-containing structure.
                         for event in [
                             EventStreamUnconstrained::Empty(crate::model::Empty {}),
                             EventStreamUnconstrained::Scalar(crate::model::Scalar { header: #{None}, value: #{None} }),

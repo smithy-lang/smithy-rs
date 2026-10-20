@@ -20,6 +20,19 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * RPC v2 CBOR keeps an @httpPayload list inside the operation's keyed document.
+ * The request encodes {"values": ["a", "b"]} and uses the RPC operation URL; the
+ * modeled @http URI /count does not select the route for this protocol.
+ *
+ * | Configuration | Request document | Expected response |
+ * | --- | --- | --- |
+ * | Legacy, schemaSerde=false | {"values": ["a", "b"]} | 200, CBOR {"count": 2} |
+ * | Schema, schemaSerde=true | {"values": ["a", "b"]} | 200, identical headers and body bytes |
+ *
+ * Both generated servers use HTTP 1.x and this checkout's codegen/runtime. The comparison
+ * protects the list member's document wrapping and response encoding when enabling schema serde.
+ */
 internal class RpcV2CborListPayloadCompatibilityTest {
     @Test
     fun `list payload members use the legacy keyed CBOR document`() {
@@ -37,6 +50,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
             list Strings { member: String }
             """.asSmithyModel()
         val observations = Files.createTempDirectory("cbor-list-payload-")
+        // Generate the same valid model with legacy serde first, then schema serde.
         for (schemaSerde in listOf(false, true)) {
             val snapshot = observations.resolve("$schemaSerde.txt")
             serverIntegrationTest(
@@ -60,6 +74,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
                                 .header("content-type", "application/cbor")
                                 .header("smithy-protocol", "rpc-v2-cbor")
                                 .body(#{Server}::body::to_boxed_sync(
+                                    // A CBOR map with the "values" key and a two-element string array.
                                     vec![0xa1u8, 0x66, b'v', b'a', b'l', b'u', b'e', b's', 0x82, 0x61, b'a', 0x61, b'b']
                                 )).unwrap();
                             let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
@@ -69,6 +84,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
                                 .map(|(key, value)| (key.to_string(), value.as_bytes().to_vec())).collect();
                             headers.sort();
                             #{Collect}
+                            // Preserve legacy's indefinite-length map encoding for {"count": 2}.
                             assert_eq!(body.as_ref(), &[0xbf, 0x65, b'c', b'o', b'u', b'n', b't', 2, 0xff]);
                             let record = format!("{status} {headers:?} {:?}", body.as_ref());
                             ::std::fs::write(${snapshot.toString().dq()}, record).unwrap();
@@ -83,6 +99,7 @@ internal class RpcV2CborListPayloadCompatibilityTest {
                 }
             }
         }
+        // Compare the recorded status, sorted headers, and exact CBOR response bytes.
         assertEquals(Files.readString(observations.resolve("false.txt")), Files.readString(observations.resolve("true.txt")))
     }
 }
