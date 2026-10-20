@@ -366,11 +366,17 @@ where
             .map(SelectedOperation::request_body_config);
         let mut request = request.map(Some);
         let body = request.body_mut().take().expect("request body is present");
-        let input_streams = operation.input().members().iter().any(|member| member.streaming());
+        let directive = protocol.request_body_requirement(operation);
+        let input_streams = operation.input().members().iter().any(|member| {
+            member.streaming()
+                && (member.shape_type() == aws_smithy_schema::ShapeType::Union || directive != BodyDirective::Collect)
+        });
         let (bytes, body) = if input_streams {
             let body = crate::body::__private::wrap_streaming_body(body);
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
-        } else if protocol.request_body_requirement(operation) == BodyDirective::Collect {
+        } else if directive == BodyDirective::Collect {
+            // TODO: Support incremental CBOR blob decoding once the handler contract for
+            // trailing fields and validation is settled. Collection preserves legacy timing.
             let config = config.ok_or_else(|| {
                 DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
                     "selected operation missing while preparing collected input",

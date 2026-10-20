@@ -205,6 +205,85 @@ async fn rest_streaming_blob_inputs_remain_supported() {
     }
 }
 
+#[tokio::test]
+async fn cbor_blob_inputs_collect_before_decoding_and_count_document_framing_in_the_limit() {
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionConfig, RequestBodyCollectionError};
+    use std::num::NonZeroUsize;
+
+    let wire = Bytes::from_static(b"\xa1\x64blob\x41x");
+    for limit in [wire.len(), wire.len() - 1] {
+        let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
+        let mut request = aws_smithy_runtime_api::http::Request::new(crate::body::RequestBody::from(wire.clone()));
+        request.headers_mut().insert("content-type", "application/cbor");
+        request.add_extension(SelectedOperation::new(
+            protocol.clone(),
+            BlobInputOnly::SCHEMA,
+            RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(limit)),
+        ));
+        let decoded = Arc::new(AtomicBool::new(false));
+        let observed = decoded.clone();
+        let result = deserialize_streaming_request(
+            BlobInputOnly::SCHEMA,
+            request,
+            protocol,
+            move |deserializer, body, _| {
+                observed.store(true, Ordering::SeqCst);
+                assert_eq!(body.bytes(), Some(b"".as_slice()), "collected inputs have no live body");
+                let mut blob = Bytes::new();
+                let result = deserializer.read_struct(&BLOBS, &mut |member, deserializer| {
+                    blob = deserializer.read_blob(member)?.into_bytes();
+                    Ok(())
+                });
+                Box::pin(async move {
+                    result?;
+                    Ok(blob)
+                })
+            },
+        )
+        .await;
+        if limit == wire.len() {
+            assert_eq!(result.unwrap(), "x");
+            assert!(decoded.load(Ordering::SeqCst));
+        } else {
+            assert!(matches!(
+                result,
+                Err(DeserializeError::BodyCollection(
+                    RequestBodyCollectionError::BodyLimitExceeded(_)
+                ))
+            ));
+            assert!(!decoded.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[tokio::test]
+async fn cbor_blob_input_timeout_precedes_decoding() {
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionConfig, RequestBodyCollectionError};
+    use std::time::Duration;
+
+    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> { Poll::Pending },
+    ));
+    let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
+    let mut request = aws_smithy_runtime_api::http::Request::new(crate::body::RequestBody::new(body));
+    request.headers_mut().insert("content-type", "application/cbor");
+    request.add_extension(SelectedOperation::new(
+        protocol.clone(),
+        BlobInputOnly::SCHEMA,
+        RequestBodyCollectionConfig::default().with_read_timeout(Some(Duration::from_millis(10))),
+    ));
+    let result = deserialize_streaming_request::<(), _>(BlobInputOnly::SCHEMA, request, protocol, |_, _, _| {
+        panic!("timed out input must not be decoded")
+    })
+    .await;
+    assert!(matches!(
+        result,
+        Err(DeserializeError::BodyCollection(
+            RequestBodyCollectionError::Timeout { .. }
+        ))
+    ));
+}
+
 #[test]
 fn streaming_upgrade_budgets_body_reads_by_the_handler() {
     use std::sync::atomic::AtomicUsize;

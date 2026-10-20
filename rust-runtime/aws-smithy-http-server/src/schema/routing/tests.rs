@@ -943,19 +943,9 @@ fn operation_metadata_classifies_streaming_and_cbor_routes_without_an_indexed_ta
                 .body(())
                 .unwrap();
             assert_eq!(router.recognizes_streaming_input(&request), input);
-            if blob_input {
-                assert_eq!(
-                    router.route(&request).unwrap_err().kind(),
-                    RoutingErrorKind::UnsupportedOperation
-                );
-            } else {
-                assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
-            }
+            assert_eq!(router.route(&request).unwrap().index(), usize::MAX);
             if service.protocols().len() > 1 {
                 assert!(matches!(router.claim(&request), RouteClaim::Claimed));
-            } else if blob_input {
-                assert!(matches!(router.claim(&request), RouteClaim::DeferredRejection(error)
-                    if error.kind() == RoutingErrorKind::UnsupportedOperation));
             } else {
                 assert!(matches!(router.claim(&request), RouteClaim::ClaimedWithRoute(_)));
             }
@@ -1879,7 +1869,7 @@ mod multi_protocol {
     }
 
     #[tokio::test]
-    async fn rpc_v2_cbor_rejects_blob_inputs_while_rest_serves_them() {
+    async fn rpc_v2_cbor_and_rest_route_blob_inputs() {
         static DATA: Schema<'static> =
             Schema::new_member(shape_id!("test", "Upload", "data"), ShapeType::Blob, "data", 0)
                 .with_streaming()
@@ -1908,8 +1898,10 @@ mod multi_protocol {
         let rpc = || post("/service/Service/operation/first").header(SMITHY_PROTOCOL_HEADER, "rpc-v2-cbor");
         for service in [&BOTH, &CBOR_ONLY] {
             let (status, text) = send(&app(service, []), rpc(), "").await;
-            assert_eq!(status, StatusCode::NOT_IMPLEMENTED, "{:?}", service.protocols());
-            assert!(text.is_empty());
+            assert_eq!(
+                (status, text.as_str()),
+                (StatusCode::OK, "smithy.protocols#rpcv2Cbor first ")
+            );
         }
         let (status, text) = send(
             &app(&BOTH, []),
@@ -3196,7 +3188,7 @@ fn an_invalid_modeled_media_type_fails_the_router_build() {
 }
 
 #[tokio::test]
-async fn cbor_blob_input_routing_rejects_without_body_reads_handler_calls_or_rest_fallback() {
+async fn cbor_blob_input_routing_selects_cbor_without_body_reads_or_rest_fallback() {
     use aws_smithy_types::Document;
 
     static DATA: Schema<'static> =
@@ -3241,8 +3233,11 @@ async fn cbor_blob_input_routing_rejects_without_body_reads_handler_calls_or_res
                 Document::Object(HashMap::from([("capitalizeRoutes".into(), Document::Bool(capitalize))])),
             )]));
             let handler = SyncRoute::new(tower::service_fn(
-                |_: Request<Body>| -> std::future::Ready<Result<Response<BoxBody>, Infallible>> {
-                    panic!("CBOR streaming blob input reached a handler or fell through to REST")
+                |request: Request<Body>| -> std::future::Ready<Result<Response<BoxBody>, Infallible>> {
+                    let selected = request.extensions().get::<SelectedOperation>().unwrap();
+                    assert_eq!(selected.protocol().protocol_id().as_str(), "smithy.protocols#rpcv2Cbor");
+                    assert_eq!(selected.operation().shape_id(), UPLOAD.shape_id());
+                    std::future::ready(Ok(Response::new(crate::body::empty())))
                 },
             ));
             let app = MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
@@ -3257,7 +3252,7 @@ async fn cbor_blob_input_routing_rejects_without_body_reads_handler_calls_or_res
                 let name = if capitalize { "Upload" } else { "upload" };
                 let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
                     |_| -> Poll<Option<Result<Frame<Bytes>, Error>>> {
-                        panic!("CBOR streaming blob input rejection polled its body")
+                        panic!("routing must leave CBOR blob collection to the upgrade")
                     },
                 )));
                 let request = Request::builder()
@@ -3269,7 +3264,7 @@ async fn cbor_blob_input_routing_rejects_without_body_reads_handler_calls_or_res
                     .unwrap();
                 assert_wire_response(
                     app.clone().oneshot(request).await.unwrap(),
-                    crate::operation::empty_not_implemented(),
+                    Response::new(crate::body::empty()),
                 )
                 .await;
             }
