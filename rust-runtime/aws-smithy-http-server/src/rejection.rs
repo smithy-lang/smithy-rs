@@ -47,6 +47,17 @@ pub mod any_rejections {
                         $($name::$var ($var) => $var.into_response(),)*
                     }
                 }
+
+                #[allow(non_snake_case)]
+                fn into_response_with_protocol(
+                    self,
+                    protocol: &dyn crate::schema::ServerProtocol,
+                ) -> http::Response<crate::body::BoxBody> {
+                    match self {
+                        $($name::$var ($var) =>
+                            <$var as IntoResponse<P>>::into_response_with_protocol($var, protocol),)*
+                    }
+                }
             }
         )
     }
