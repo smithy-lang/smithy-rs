@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -22,7 +23,7 @@ import java.nio.file.Path
 
 internal class StreamingBlobInputTest {
     @Test
-    fun `REST inputs remain live and CBOR blob inputs reject with public and private builders`() {
+    fun `REST inputs remain live and CBOR inputs are collected with public and private builders`() {
         val captures = Files.createTempDirectory(Files.createDirectories(Path.of("../tools/schema-serde-compat/.runs")), "streaming-blob-input-").toAbsolutePath()
         for ((schema, publicTypes) in listOf(false to true, true to true, true to false)) {
             val model =
@@ -70,7 +71,7 @@ internal class StreamingBlobInputTest {
                         rustTemplate(
                             """
                             use #{Tokio}::io::{AsyncReadExt, AsyncWriteExt};
-                            for mode in ${if (schema) "[2]" else "0..2"} {
+                            for mode in ${if (schema) "0..3" else "0..2"} {
                                 let entered = ::std::sync::Arc::new(#{Tokio}::sync::Notify::new());
                                 let handler_entered = entered.clone();
                                 let completed = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
@@ -123,7 +124,7 @@ internal class StreamingBlobInputTest {
                                     socket.write_all(prefix).await.unwrap();
                                     socket.write_all(b"\r\n").await.unwrap();
                                 }
-                                if $schema {
+                                if mode == 2 {
                                     // The client has not sent blob bytes or EOF. Collection here would deadlock.
                                     let mut early = [0u8; 4096];
                                     #{Tokio}::time::timeout(::std::time::Duration::from_secs(5), async {
@@ -132,6 +133,12 @@ internal class StreamingBlobInputTest {
                                             read = socket.read(&mut early) => panic!("early response in mode {mode}: {:?}", &early[..read.unwrap()]),
                                         }
                                     }).await.unwrap_or_else(|_| panic!("handler not entered in mode {mode}"));
+                                } else {
+                                    // Neither the blob nor trailing fields have arrived yet.
+                                    // CBOR handlers must wait for the complete validated input.
+                                    assert!(#{Tokio}::time::timeout(
+                                        ::std::time::Duration::from_millis(100), entered.notified()
+                                    ).await.is_err(), "CBOR handler entered before body completion");
                                 }
                                 let payload = vec![b'x'; 16 * 1024];
                                 for _ in 0..64 {
@@ -157,13 +164,25 @@ internal class StreamingBlobInputTest {
                             *scope,
                         )
                     }
-                    if (schema) {
-                        tokioTest("cbor_blob_inputs_reject_without_reading_or_calling_handlers") {
+                    run {
+                        val uploadBytes =
+                            if (schema) {
+                                "input.fahad.collect().await.unwrap().into_bytes().to_vec()"
+                            } else {
+                                "input.fahad.as_ref().map(|blob| blob.as_ref().to_vec()).unwrap_or_default()"
+                            }
+                        val optionalBytes =
+                            if (schema) {
+                                "input.data.collect().await.unwrap().into_bytes().to_vec()"
+                            } else {
+                                "input.data.as_ref().map(|blob| blob.as_ref().to_vec()).unwrap_or_default()"
+                            }
+                        tokioTest("cbor_blob_inputs_match_legacy_before_dispatch") {
                             rustTemplate(
                                 """
                                 use #{Tower}::ServiceExt;
-                                use #{Futures}::StreamExt;
                                 use #{BodyUtil}::BodyExt;
+                                let mut records = #{String}::new();
                                 for wire in [
                                     b"\xa2\x65title\x65hello\x65fahad\x41x".as_slice(),
                                     b"\xa2\x65fahad\x41x\x65title\x65hello".as_slice(),
@@ -173,46 +192,84 @@ internal class StreamingBlobInputTest {
                                     b"\xa2\x65fahad\x41x\x65title\x65hello\x00".as_slice(),
                                     b"\xa0".as_slice(),
                                     b"".as_slice(),
+                                    b"\xa1\x65title\x65hello".as_slice(),
+                                    b"\xa2\x65title\x65hello\x65fahad\x40".as_slice(),
+                                    b"\xa2\x65title\x65hello\x65fahad\xf6".as_slice(),
+                                    b"\xa2\x65title\x65hello\x65fahad\x43x".as_slice(),
+                                    b"\xa2\x65title\x65hello\x65fahad\x5f\x41x\x41y\xff".as_slice(),
+                                    b"\xa1\x64data\x41x".as_slice(),
+                                    b"\xa1\x64data\x40".as_slice(),
+                                    b"\xa1\x64data\xf6".as_slice(),
                                 ] {
                                     for operation in ["Upload", "OptionalOnly"] {
-                                        let called = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
-                                        let upload_called = called.clone();
-                                        let optional_called = called.clone();
+                                        let observed = ::std::sync::Arc::new(::std::sync::Mutex::new(#{None}));
+                                        let upload_observed = observed.clone();
+                                        let optional_observed = observed.clone();
+                                        let eof = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
+                                        let upload_eof = eof.clone();
+                                        let optional_eof = eof.clone();
                                         let service = crate::Uploads::builder(crate::UploadsConfig::builder().build())
-                                            .upload(move |_: crate::input::UploadInput| {
-                                                upload_called.store(true, ::std::sync::atomic::Ordering::SeqCst);
-                                                async { #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {}) }
+                                            .upload(move |input: crate::input::UploadInput| {
+                                                assert!(upload_eof.load(::std::sync::atomic::Ordering::SeqCst));
+                                                let observed = upload_observed.clone();
+                                                async move {
+                                                    let bytes = $uploadBytes;
+                                                    *observed.lock().unwrap() = #{Some}((input.title.as_str().to_owned(), bytes));
+                                                    #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {})
+                                                }
                                             })
-                                            .optional_only(move |_: crate::input::OptionalOnlyInput| {
-                                                optional_called.store(true, ::std::sync::atomic::Ordering::SeqCst);
-                                                async { crate::output::OptionalOnlyOutput {} }
+                                            .optional_only(move |input: crate::input::OptionalOnlyInput| {
+                                                assert!(optional_eof.load(::std::sync::atomic::Ordering::SeqCst));
+                                                let observed = optional_observed.clone();
+                                                async move {
+                                                    let bytes = $optionalBytes;
+                                                    *observed.lock().unwrap() = #{Some}((#{String}::new(), bytes));
+                                                    crate::output::OptionalOnlyOutput {}
+                                                }
                                             }).build_unchecked();
-                                        let polled = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
-                                        let body_polled = polled.clone();
-                                        let frames = #{Futures}::stream::iter([#{Ok}::<_, ::std::io::Error>(
-                                            #{HttpBody}::Frame::data(#{Bytes}::Bytes::copy_from_slice(wire))
-                                        )]).inspect(move |_| { body_polled.store(true, ::std::sync::atomic::Ordering::SeqCst); });
+                                        let mut bytes = wire.to_vec().into_iter();
+                                        let body_eof = eof.clone();
+                                        let frames = #{Futures}::stream::poll_fn(move |_| {
+                                            let next = bytes.next().map(|byte|
+                                                #{Ok}::<_, ::std::convert::Infallible>(#{HttpBody}::Frame::data(#{Bytes}::Bytes::from(vec![byte])))
+                                            );
+                                            if next.is_none() {
+                                                body_eof.store(true, ::std::sync::atomic::Ordering::SeqCst);
+                                            }
+                                            ::std::task::Poll::Ready(next)
+                                        });
                                         let response = service.oneshot(#{Http}::Request::builder().method("POST")
                                             .uri(format!("/service/Uploads/operation/{operation}"))
                                             .header("content-type", "application/cbor")
                                             .header("smithy-protocol", "rpc-v2-cbor")
                                             .body(#{BodyUtil}::StreamBody::new(frames)).unwrap()).await.unwrap();
-                                        assert_eq!(response.status(), 501);
-                                        assert!(response.headers().is_empty());
-                                        assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
-                                        assert!(!called.load(::std::sync::atomic::Ordering::SeqCst));
-                                        assert!(!polled.load(::std::sync::atomic::Ordering::SeqCst));
+                                        let status = response.status().as_u16();
+                                        let mut headers = response.headers().iter().map(|(name, value)|
+                                            (name.as_str().to_owned(), value.to_str().unwrap().to_owned())
+                                        ).collect::<#{Vec}<_>>();
+                                        headers.sort();
+                                        let body = response.into_body().collect().await.unwrap().to_bytes();
+                                        let value: #{Ciborium}::value::Value = #{Ciborium}::de::from_reader(body.as_ref()).unwrap();
+                                        assert_eq!(observed.lock().unwrap().is_some(), status == 200);
+                                        records.push_str(&format!("{operation}\t{:02x?}\t{status}\t{headers:?}\t{value:?}\t{:?}\n",
+                                            wire, *observed.lock().unwrap()));
                                     }
                                 }
+                                ::std::fs::write("$captures/$schema-$publicTypes-inputs.txt", records).unwrap();
                                 """,
                                 *scope,
                                 "Futures" to CargoDependency.FuturesUtil.toType(),
                                 "HttpBody" to CargoDependency.HttpBody1x.toType(),
+                                "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
                             )
                         }
                     }
                 }
             }
+        }
+        val legacy = Files.readAllLines(captures.resolve("false-true-inputs.txt"))
+        for (publicTypes in listOf(true, false)) {
+            Files.readAllLines(captures.resolve("true-$publicTypes-inputs.txt")) shouldBe legacy
         }
     }
 }

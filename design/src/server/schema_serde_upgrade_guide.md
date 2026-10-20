@@ -5,6 +5,24 @@ Each entry describes what breaks or changes, how you notice it, and what to chan
 
 Services that do not enable `schemaSerde` are unaffected.
 
+## RPC v2 CBOR streaming blob inputs
+
+Schema serde preserves `@streaming` on blob shapes, so RPC v2 CBOR handlers receive
+`ByteStream` fields where legacy CBOR codegen generated `Blob` fields. To access all
+bytes in a handler, use `input.data.collect().await?.into_bytes()` instead of
+`input.data.as_ref()`.
+
+For CBOR requests, the server collects the complete document under the configured
+body limit and timeout, decodes the blob and other fields with the existing codec,
+and validates the input before invoking the handler. The handler's `ByteStream`
+contains the decoded blob bytes, including when fields follow the blob in the
+document. It does not contain CBOR framing. Nullable blob members that are absent
+are represented by an empty `ByteStream` in the shared non-optional Rust field.
+
+REST streaming blob uploads still pass the live body to the same handler after
+decoding and validating HTTP-bound metadata. Incremental CBOR input decoding is
+deferred until the handler contract for trailing fields and validation is settled.
+
 ## The service's protocol type
 
 **What changes.** `ServiceShape::Protocol` names the protocols the service serves. For a service

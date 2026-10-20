@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
@@ -107,6 +109,7 @@ class ServerStreamingOperationGenerator(
             "ShapeDeserializer" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::ShapeDeserializer"),
             "SharedServerProtocol" to smithyHttpServer.resolve("schema::SharedServerProtocol"),
             "StreamingInputFuture" to smithyHttpServer.resolve("operation::StreamingInputFuture"),
+            "BodyDirective" to smithyHttpServer.resolve("schema::BodyDirective"),
             "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
             "RequestBody" to smithyHttpServer.resolve("body::RequestBody"),
             "deserialize_streaming_request" to smithyHttpServer.resolve("operation::deserialize_streaming_request"),
@@ -186,8 +189,35 @@ class ServerStreamingOperationGenerator(
                 "Input" to inputSymbol,
                 "attachAndSet" to
                     writable {
-                        attachStreamingInput(streamingMember, inputSymbol)(this)
-                        rustTemplate("builder.$field = #{Some}(streaming);", *preludeScope)
+                        if (model.expectShape(streamingMember.target).isBlobShape) {
+                            rustTemplate(
+                                """
+                                if protocol.request_body_requirement(<Self as #{SchemaOperationShape}>::SCHEMA) != #{BodyDirective}::Collect {
+                                    builder.$field = #{Some}(#{ByteStream}::new(body));
+                                }
+                                #{absent:W}
+                                """,
+                                *codegenScope,
+                                "absent" to
+                                    writable {
+                                        if (!streamingMember.hasTrait<RequiredTrait>() && !symbolProvider.toSymbol(streamingMember).isOptional()) {
+                                            rustTemplate(
+                                                """
+                                                // The shared ByteStream type is non-optional even for a nullable blob.
+                                                // Preserve acceptance of absent CBOR members with an empty buffered stream.
+                                                if builder.$field.is_none() {
+                                                    builder.$field = #{Some}(#{ByteStream}::from_static(b""));
+                                                }
+                                                """,
+                                                *codegenScope,
+                                            )
+                                        }
+                                    },
+                            )
+                        } else {
+                            attachStreamingInput(streamingMember, inputSymbol)(this)
+                            rustTemplate("builder.$field = #{Some}(streaming);", *preludeScope)
+                        }
                     },
                 "finish" to finishInput(),
             )

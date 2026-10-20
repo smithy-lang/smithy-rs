@@ -12,10 +12,11 @@ members. Responses use `application/cbor` and stream an indefinite-length CBOR b
 string without collecting the `ByteStream` or setting Content-Length; event-stream-only
 Accept headers are rejected as in the legacy server.
 
-RPC v2 CBOR operations with streaming blob inputs temporarily return an empty 501
-before input decoding, body reads, or handler invocation. Input support is deferred
-until the completion and validation API is settled. This intentionally differs from
-the legacy generated server, which collects these inputs.
+RPC v2 CBOR streaming blob inputs are collected and decoded with the existing CBOR
+codec before handler invocation, preserving legacy parsing and validation timing.
+Handlers receive the ordinary modeled input with the decoded blob in a buffered
+`ByteStream`. Incremental CBOR input decoding is deferred until the handler contract
+for trailing fields and validation is settled.
 
 REST blob inputs and outputs continue to stream raw bytes, including when the same
 service also serves RPC v2 CBOR. Handlers accept their ordinary modeled input with

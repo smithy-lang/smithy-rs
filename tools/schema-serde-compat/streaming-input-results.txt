@@ -1,13 +1,37 @@
-Current design (October 17, 2026)
-- REST blob handlers take their ordinary operation input, containing a ByteStream.
-- HTTP-bound metadata is deserialized and validated before invoking the handler;
+Current design (October 20, 2026)
+- Blob handlers take their ordinary operation input, containing a ByteStream.
+- For REST, HTTP-bound metadata is deserialized and validated before invoking the handler;
   the live body is passed through without collection.
 - The deferred StreamingInput API, StreamingRequestDecoder, and streaming_input
   runtime module have been removed.
-- RPC v2 CBOR streaming blob inputs are temporarily rejected with empty HTTP 501
-  before body polling or handler dispatch. CBOR blob outputs remain supported.
+- RPC v2 CBOR streaming blob inputs are collected under the selected operation's
+  body limit and timeout, then decoded with the existing CBOR codec. The blob is
+  converted to a buffered ByteStream, and all fields are validated before dispatch.
+  Duplicate streaming members retain legacy last-value behavior. CBOR blob outputs
+  remain supported.
+- Incremental CBOR decoding and its handler contract for trailing fields and
+  validation are deferred. No completion/session API is exposed to handlers.
 - Unsupported event streams also return empty HTTP 501.
 - The notes below describe the superseded implementation and its historical tests.
+
+Verification of the current design (October 20, 2026)
+- Fresh legacy baseline: .runs/cbor-streaming-blob-16180726138409856110/.
+  Legacy accepts raw/empty/binary uploads, retains the last duplicate blob value,
+  and rejects malformed, trailing, and missing required inputs. Accept errors
+  precede decoding. Status, headers and complete wire bodies are retained.
+- Matching generated CBOR/REST comparison:
+  .runs/cbor-streaming-blob-8799275603020629631/.
+  All 44 CBOR cases match decoded legacy results in schema-only and shared modes.
+  Download framing remains the previously agreed indefinite byte string.
+- .runs/streaming-blob-input-4970278957535829928/:
+  32 input cases match legacy status, headers, decoded response and handler values
+  with public and private builders. Includes fields before/after the blob,
+  validation failures, duplicates, absence, empty/null, fragmented definite and
+  indefinite byte strings, malformed input and trailing bytes.
+  Eight 1 MiB socket uploads passed: CBOR waits for completion; REST remains live.
+- 18 targeted generated-server integration cases passed across the streaming,
+  routing and compatibility suites. Runtime: 464 tests plus 33 doctests passed;
+  17 doctests ignored. Kotlin formatting, Rust formatting and diff checks passed.
 
 Streaming blob inputs: implementation and verification
 

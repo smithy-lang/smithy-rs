@@ -67,8 +67,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  *
  * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
  * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
- * builder ([INTO_FUNCTION_NAME]) that skips the streaming member. Streaming glue attaches the
- * streaming body or event receiver before building and validating the input.
+ * builder ([INTO_FUNCTION_NAME]). The walker reads document-bound streaming blobs into buffered
+ * byte streams; streaming glue attaches live REST bodies or event receivers before validation.
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
  * union object that set no variant, exactly as the legacy JSON parser does: the enclosing structure member is
@@ -238,8 +238,8 @@ class ServerSchemaDeserializeGenerator(
     }
 
     /**
-     * Reads ordinary members into the existing builder. Streaming blobs are owned by the runtime
-     * input session, and event receivers are attached by event-stream glue.
+     * Reads document members into the existing builder, including collected streaming blobs.
+     * REST deserializers omit live streaming payloads; event receivers are attached by glue.
      */
     private fun renderStructureInto(shape: StructureShape) {
         val symbol = symbolProvider.toSymbol(shape)
@@ -275,12 +275,24 @@ class ServerSchemaDeserializeGenerator(
                         if (member.isEventStream(model)) {
                             return@forEachIndexed
                         }
-                        if (model.expectShape(member.target) is BlobShape &&
-                            model.expectShape(member.target).hasTrait<StreamingTrait>()
-                        ) {
+                        val fieldName = symbolProvider.toMemberName(member)
+                        val target = model.expectShape(member.target)
+                        if (target is BlobShape && target.hasTrait<StreamingTrait>()) {
+                            rustTemplate(
+                                """
+                                #{Some}($index) => {
+                                    if deser.is_null() {
+                                        deser.read_null()?;
+                                    } else {
+                                        builder.$fieldName = #{Some}(#{ByteStream}::from(deser.read_blob(member)?.into_bytes()));
+                                    }
+                                }
+                                """,
+                                "ByteStream" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("byte_stream::ByteStream"),
+                                *RuntimeType.preludeScope,
+                            )
                             return@forEachIndexed
                         }
-                        val fieldName = symbolProvider.toMemberName(member)
                         val assignment =
                             if (yieldsOption(member)) {
                                 "builder.$fieldName = ${memberValueExpr(member)};"

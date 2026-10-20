@@ -23,7 +23,7 @@ import java.nio.file.Path
 
 internal class RpcV2CborStreamingBlobCompatibilityTest {
     @Test
-    fun `CBOR outputs match legacy while streaming blob inputs are temporarily rejected`() {
+    fun `CBOR blob inputs and decoded outputs match legacy`() {
         val modelText =
             """
             ${'$'}version: "2"
@@ -79,7 +79,7 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                 val uploaded =
                     if (schemaSerde) {
                         """
-                        { let _ = input; #{Bytes}::Bytes::new() }
+                        input.data.collect().await.unwrap().into_bytes()
                         """.trimIndent()
                     } else {
                         "#{Bytes}::Bytes::copy_from_slice(input.data.as_ref())"
@@ -102,7 +102,6 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                 })
                                 .upload(move |input: #{UploadInput}| {
                                     async move {
-                                    assert!(!$schemaSerde, "CBOR streaming blob inputs must be rejected before the handler");
                                     let bytes = $uploaded;
                                     #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput {
                                         data: #{Some}(#{Types}::Blob::new(bytes)),
@@ -160,11 +159,6 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     if let #{Some}((_, length)) = headers.iter().find(|(name, _)| name == "content-length") {
                                         assert_eq!(length.parse::<usize>().unwrap(), body.len());
                                     }
-                                    if $schemaSerde && operation == "Upload" {
-                                        assert_eq!(status, 501);
-                                        assert!(headers.is_empty());
-                                        assert!(body.is_empty());
-                                    }
                                     if operation != "Events" && status == 200 {
                                         if operation == "Download" && $schemaSerde {
                                             assert!(!headers.iter().any(|(name, _)| name == "content-length"));
@@ -177,9 +171,7 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                                     }
                                     wire_records.push_str(&format!("{operation}\t{case}\t{accept:?}\t{status}\t{headers:?}\t{:02x?}\n", body.as_ref()));
                                     // Compare CBOR values, preserving byte strings; map framing can differ.
-                                    let document = if $schemaSerde && operation == "Upload" && status == 501 {
-                                        "UnsupportedStreamingBlobInput".to_owned()
-                                    } else if operation == "Events" && status == 200 {
+                                    let document = if operation == "Events" && status == 200 {
                                         body.iter().map(|byte| format!("{byte:02x}")).collect::<#{String}>()
                                     } else {
                                         let mut cursor = ::std::io::Cursor::new(&body);
@@ -217,14 +209,9 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
         val legacy = Files.readAllLines(snapshots.resolve("false.txt"))
         for (mode in listOf("true", "shared")) {
             val schema = Files.readAllLines(snapshots.resolve("$mode.txt"))
-            // Retain the complete legacy observations. Only streaming blob input dispatch
-            // intentionally changes; outputs and event streams still match the baseline.
-            schema.filterNot { it.startsWith("Upload\t") } shouldBe legacy.filterNot { it.startsWith("Upload\t") }
-            val oldUploads = legacy.filter { it.startsWith("Upload\t") }
-            val newUploads = schema.filter { it.startsWith("Upload\t") }
-            newUploads.size shouldBe oldUploads.size
-            // Like the unsupported-event guard, this rejection precedes Accept validation.
-            newUploads.forEach { check("\t501\t[]\tUnsupportedStreamingBlobInput" in it) }
+            // Inputs preserve legacy parsing, validation, duplicate-member and Accept behavior.
+            // Downloads preserve decoded values while explicitly asserting streaming wire framing.
+            schema shouldBe legacy
         }
     }
 

@@ -378,7 +378,9 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// Specifies whether deserialization needs the request body. The default collects it.
     ///
     /// Returning [`BodyDirective::Skip`] leaves the deserialization request's body empty.
-    /// Streaming inputs bypass collection and receive the live body separately.
+    /// Event-stream inputs bypass collection and receive the live body separately.
+    /// Streaming blob inputs honor `Collect`: the codec reads the blob and ordinary fields
+    /// before handler dispatch. With `Skip`, streaming glue receives the live body separately.
     fn request_body_requirement(&self, _operation: &OperationSchema<'_>) -> BodyDirective {
         BodyDirective::Collect
     }
@@ -388,8 +390,9 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The `Content-Type` check happens here; the returned deserializer resolves `@http` bindings
     /// from the request and hands body members to its internal codec. Synchronous over an
     /// already collected body. The request retains HTTP metadata, including extensions.
-    /// Its body is empty when collection is skipped or the input streams; streaming glue
-    /// receives the live body separately.
+    /// Its body is empty when collection is skipped or the input is an event stream;
+    /// streaming glue receives the live body separately. Collected streaming blobs are
+    /// decoded from the document and exposed to handlers as buffered byte streams.
     fn deserialize_request<'a>(
         &'a self,
         input: &Schema<'_>,
