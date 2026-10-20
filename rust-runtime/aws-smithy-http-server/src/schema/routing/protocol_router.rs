@@ -207,6 +207,7 @@ pub enum ProtocolResolutionError {
 /// definitely claims the request. If none does, the first deferred claim owns it.
 /// Once selected, routing errors are terminal and framed by that protocol.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum RouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly.
     ClaimedWithRoute(OperationTarget),
@@ -276,6 +277,7 @@ impl CollectedBody {
 /// protocols. Routing errors are returned by [`BodyProtocolRouter::route_with_body`] after
 /// the protocol claims the request.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum BodyRouteClaim {
     /// The protocol claims the request and knows the operation. Dispatch directly without
     /// calling [`BodyProtocolRouter::route_with_body`].
@@ -338,6 +340,7 @@ pub trait BodyProtocolRouter: Send + Sync + fmt::Debug {
 /// [`BodyRoutedProtocol`](crate::schema::BodyRoutedProtocol) a [`Body`](Self::Body) one,
 /// so dispatch matching on this enum speaks the claim protocol the registration promised.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum SharedProtocolRouter {
     /// Selects operations from request metadata alone.
     Metadata(Box<dyn MetadataProtocolRouter>),
