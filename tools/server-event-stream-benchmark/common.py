@@ -10,6 +10,8 @@ import subprocess
 import tomllib
 
 HERE = Path(__file__).resolve().parent
+# Pinned release for explicit historical comparisons.
+DEFAULT_LEGACY_RELEASE = "release-2026-09-30.2"
 PROTOCOLS = {"rest_json": "@aws.protocols#restJson1", "rpc_v2_cbor": "@smithy.protocols#rpcv2Cbor"}
 EXCLUDED = {".git", ".gradle", "build", "target", "__pycache__", "artifacts", ".idea"}
 SOURCE_ROOTS = ("codegen-core", "codegen-server", "codegen-client", "rust-runtime", "buildSrc", "gradle")

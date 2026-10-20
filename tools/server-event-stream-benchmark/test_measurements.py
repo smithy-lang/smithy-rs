@@ -9,7 +9,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from common import fingerprint, toolchain, validate_generation, write_json
-from run import counters, difference, report, summary, topology
+from run import counters, difference, paired_interval, report, summary, topology
+from prepare import prepare
 
 
 def row(side, pair, rate, mode="cpu"):
@@ -32,10 +33,36 @@ class Measurements(unittest.TestCase):
         self.assertEqual(result["allocated_bytes_per_event"], 50)
 
     def test_ratios_are_paired_and_instrumented_runs_excluded(self):
-        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory")]
+        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory"), row("schema", 2, 999999, "latency")]
         result = summary(rows)[0]
         self.assertEqual(result["paired_throughput_ratio"], {"median": 1.25, "min": 0.5, "max": 2, "pairs": 2})
         self.assertEqual(result["schema"]["events_per_second_median"], 15)
+
+    def test_uncertainty_is_paired_reproducible_and_withheld_for_small_samples(self):
+        self.assertIsNone(paired_interval([1, 2, 3])["bootstrap_95_interval"])
+        exact = paired_interval([2] * 10)
+        self.assertEqual(exact["bootstrap_95_interval"], [2, 2])
+        ratios = [0.8, 0.9, 1, 1.1, 1.2] * 2
+        result = paired_interval(ratios)
+        self.assertEqual(result, paired_interval(ratios))
+        low, high = result["bootstrap_95_interval"]
+        self.assertLess(low, result["geometric_mean"])
+        self.assertGreater(high, result["geometric_mean"])
+
+    def test_same_revision_rejects_a_different_baseline_before_generation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "both servers from --current"):
+                prepare(root / "cache", root / "baseline", root / "current", "unused")
+            self.assertFalse((root / "cache").exists())
+
+    def test_cached_comparison_design_cannot_be_reused_for_another_design(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            write_json(cache / "generation.json", {})
+            with patch("prepare.validate_generation", return_value={"comparison": "release"}):
+                with self.assertRaisesRegex(SystemExit, "different comparison design"):
+                    prepare(cache, cache, cache, "unused")
 
     def test_unpaired_runs_fail(self):
         with self.assertRaises(AssertionError):

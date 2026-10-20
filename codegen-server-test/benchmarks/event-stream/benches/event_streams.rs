@@ -5,7 +5,7 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use event_stream_benchmark::{
-    drain, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
+    drain, hyper_in_memory, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
 };
 use std::{hint::black_box, time::Duration};
 
@@ -59,6 +59,11 @@ impl Preset {
 
 fn event_streams(criterion: &mut Criterion) {
     let preset = Preset::from_env();
+    let transport = std::env::var("BENCH_TRANSPORT").unwrap_or_else(|_| "tower".into());
+    assert!(
+        matches!(transport.as_str(), "tower" | "hyper-memory"),
+        "BENCH_TRANSPORT must be tower or hyper-memory"
+    );
     let workloads = preset.workloads();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -68,7 +73,8 @@ fn event_streams(criterion: &mut Criterion) {
         for direction in Direction::ALL {
             for kind in Kind::ALL {
                 let mut group = criterion.benchmark_group(format!(
-                    "{}/{}/{}",
+                    "{}/{}/{}/{}",
+                    transport,
                     protocol.name(),
                     direction.name(),
                     kind.name()
@@ -86,6 +92,11 @@ fn event_streams(criterion: &mut Criterion) {
                     group.throughput(Throughput::Elements(count as u64));
                     for &implementation in preset.implementations() {
                         let service = server(implementation, case);
+                        let service = if transport == "hyper-memory" {
+                            runtime.block_on(hyper_in_memory(service))
+                        } else {
+                            service
+                        };
                         runtime.block_on(fixture.validate(service.clone()));
                         group.bench_function(
                             BenchmarkId::new(

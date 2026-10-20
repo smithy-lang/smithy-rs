@@ -439,6 +439,19 @@ val eventStreamBenchmarkTests =
             )
         }
     } +
+        // Match the selected single-protocol service's initial-response setting.
+        // The global setting must be false for REST and true for CBOR, so the
+        // two multi-protocol projections differ only in that setting.
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-rest-json-schema",
+            imports =
+                listOf(
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": false""",
+        ) +
         CodegenTest(
             "benchmark.eventstream#BenchmarkService",
             "event-stream-bench-multi-schema",

@@ -66,17 +66,19 @@ pub fn event(kind: &str, size: usize, sequence: usize) -> Events {
 }
 
 #[allow(unreachable_patterns)]
-pub fn verify(value: &Events, kind: &str, size: usize, sequence: usize) {
+pub fn verify(value: &Events, kind: &str, size: usize, sequence: usize, deep: bool) {
     match value {
         Events::Binary(v) => {
             assert_eq!(kind, "binary");
             assert_eq!(v.sequence, Some(sequence as i64));
             let payload = v.payload.as_ref().unwrap();
             assert_eq!(payload.as_ref().len(), size);
-            assert!(payload
-                .as_ref()
-                .iter()
-                .all(|b| *b == (sequence % 251) as u8));
+            if deep {
+                assert!(payload
+                    .as_ref()
+                    .iter()
+                    .all(|b| *b == (sequence % 251) as u8));
+            }
         }
         Events::Structured(v) => {
             assert_eq!(kind, "structured");
@@ -84,14 +86,14 @@ pub fn verify(value: &Events, kind: &str, size: usize, sequence: usize) {
             let payload = v.payload.as_ref().unwrap();
             let text = payload.text.as_ref().unwrap();
             assert_eq!(text.len(), size);
+            if !deep {
+                return;
+            }
             assert!(text.bytes().all(|b| b == b'x'));
             let nested = payload.nested.as_ref().unwrap();
             assert_eq!(nested.label.as_deref(), Some(METADATA));
             assert_eq!(nested.enabled, Some(true));
-            assert_eq!(
-                payload.values.as_ref().unwrap(),
-                &(0..8).collect::<Vec<i32>>()
-            );
+            assert_eq!(payload.values.as_ref().unwrap(), &[0, 1, 2, 3, 4, 5, 6, 7]);
         }
         _ => panic!("unexpected event variant: {value:?}"),
     }

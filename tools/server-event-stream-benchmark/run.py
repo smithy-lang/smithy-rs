@@ -8,9 +8,11 @@ import csv
 from datetime import datetime, timezone
 import itertools
 import json
+import math
 import os
 from pathlib import Path
 import selectors
+import random
 import shutil
 import socket
 import statistics
@@ -75,6 +77,8 @@ def difference(before, after, events, elapsed):
 
 
 def binary(cache, protocol, role, mode):
+    if mode == "latency":
+        mode = "cpu"
     return cache / "runners" / protocol / role / f"target-{mode}" / "release" / f"stream-bench-{role}"
 
 
@@ -170,7 +174,7 @@ def perf_finish(profiles):
     return results
 
 
-def case(cache, dest, protocol, side, direction, kind, size, count, concurrency, warmup, seconds, mode, server_cpus, client_cpus, workers, preflight=False, profile=None):
+def case(cache, dest, protocol, side, direction, kind, size, count, concurrency, warmup, seconds, mode, server_cpus, client_cpus, workers, preflight=False, profile=None, stream_rate=0, duplex_window=None, deep_validation=False):
     dest.mkdir(parents=True, exist_ok=False)
     server = client = None
     profiles = []
@@ -182,7 +186,7 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
     result = None
     port = None
     try:
-        server_command = ["taskset", "-c", server_cpus, str(binary(cache, protocol, side, mode)), str(workers)]
+        server_command = ["taskset", "-c", server_cpus, str(binary(cache, protocol, side, mode)), str(workers), str(preflight or deep_validation).lower()]
         commands.append(server_command)
         log = (dest / "server.stderr").open("w")
         logs.append(log)
@@ -198,7 +202,9 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
         if not matching:
             raise RuntimeError(f"Missing loopback listener on {port}")
         (dest / "listener.txt").write_text("\n".join(matching) + "\n")
-        client_command = ["taskset", "-c", client_cpus, str(binary(cache, protocol, "client", mode)), endpoint, direction, kind, str(size), str(count), str(concurrency), str(warmup), str(seconds), str(preflight).lower()]
+        latency = mode == "latency" or preflight
+        window = duplex_window or count
+        client_command = ["taskset", "-c", client_cpus, str(binary(cache, protocol, "client", mode)), endpoint, direction, kind, str(size), str(count), str(concurrency), str(warmup), str(seconds), str(preflight).lower(), str(stream_rate), str(latency).lower(), str(window), str(deep_validation).lower()]
         commands.append(client_command)
         log = (dest / "client.stderr").open("w")
         logs.append(log)
@@ -232,6 +238,12 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
             done.set()
             sampler.join(timeout=2)
             events, elapsed = result["events"], result["elapsed_seconds"]
+            if events != result["streams"] * count:
+                raise RuntimeError("Client event accounting does not match completed streams")
+            if stream_rate and result["streams"] != math.ceil(stream_rate * seconds):
+                raise RuntimeError("Scheduled arrivals were omitted from completed-stream accounting")
+            if latency and result["completion"]["samples"] != result["streams"]:
+                raise RuntimeError("Latency histogram omitted completed streams")
             result["server"] = difference(before, after, events, elapsed)
             result["client"] = difference(result.pop("before"), result.pop("after"), events, elapsed)
             result["rss"] = {"idle_kib": idle, "samples": len(sampling), "interval_seconds": 0.1}
@@ -277,6 +289,24 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
                     raise RuntimeError(f"Benchmark listener {port} is still open")
 
 
+def paired_interval(ratios):
+    """Seeded percentile bootstrap of the geometric mean paired ratio.
+
+    Ten independent pairs is a minimum reporting gate, not a guarantee of
+    sufficient precision. Thermal drift and correlated runs can invalidate the
+    interval's interpretation; raw pairs and run order remain available.
+    """
+    logs = [math.log(r) for r in ratios]
+    estimate = math.exp(statistics.mean(logs))
+    if len(logs) < 10:
+        return {"geometric_mean": estimate, "bootstrap_95_interval": None,
+                "reason": "Fewer than ten pairs; descriptive results only"}
+    rng = random.Random(0)
+    samples = sorted(math.exp(statistics.mean(rng.choices(logs, k=len(logs)))) for _ in range(5000))
+    return {"geometric_mean": estimate, "bootstrap_95_interval": [samples[125], samples[4874]],
+            "resamples": 5000, "seed": 0, "assumption": "independent paired repetitions"}
+
+
 def summary(rows):
     cpu = [r for r in rows if r["mode"] == "cpu"]
     keys = ("protocol", "direction", "kind", "size", "concurrency")
@@ -295,6 +325,7 @@ def summary(rows):
             assert legacy["pair"] == schema["pair"]
             pairs.append(schema["events_per_second"] / legacy["events_per_second"])
         item["paired_throughput_ratio"] = {"median": statistics.median(pairs), "min": min(pairs), "max": max(pairs), "pairs": len(pairs)}
+        item["paired_uncertainty"] = paired_interval(pairs)
         for side, values in sides.items():
             item[side] = {
                 "events_per_second_median": statistics.median(r["events_per_second"] for r in values),
@@ -305,7 +336,7 @@ def summary(rows):
     return results
 
 
-def report(dest, rows):
+def report(dest, rows, comparison="unspecified"):
     data = summary(rows)
     write_json(dest / "summary.json", data)
     with (dest / "summary.csv").open("w", newline="") as f:
@@ -316,27 +347,45 @@ def report(dest, rows):
             writer.writerow({**{k: r[k] for k in fields[:5]}, "legacy_events_s": r["legacy"]["events_per_second_median"], "schema_events_s": r["schema"]["events_per_second_median"], **{f"paired_ratio_{k}": r["paired_throughput_ratio"][k] for k in ("median", "min", "max")}, "pairs": r["paired_throughput_ratio"]["pairs"]})
     text = [
         "# Generated client/server event-stream comparison\n",
-        "Legacy is updated upstream; schema is a snapshot of the current working tree. Differences include revision changes as well as server serialization. Application MiB/s counts text/blob bytes, excluding framing, headers and structured metadata; duplex counts completed round trips. CPU, sampled RSS, requested heap, and profiling are separate observations.\n",
+        f"Comparison: {comparison}. `legacy` labels identify generated serde. "
+        + ("Both servers and the shared client come from the same source tree; server schemaSerde differs."
+           if comparison == "same-revision" else "Different revisions can confound serialization comparisons.")
+        + " Application MiB/s counts text/blob bytes, excluding framing, headers and structured metadata; duplex counts completed round trips. CPU, sampled RSS, requested heap, and latency/profiling are separate observations.\n",
         "| Protocol | Direction | Event | Bytes | Concurrency | Legacy events/s | Schema events/s | Paired schema/legacy (median, range) |",
         "|---|---|---|---:|---:|---:|---:|---|",
     ]
     for r in data:
         ratio = r["paired_throughput_ratio"]
         text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["legacy"]["events_per_second_median"]:.1f} | {r["schema"]["events_per_second_median"]:.1f} | {ratio["median"]:.3f} ({ratio["min"]:.3f}–{ratio["max"]:.3f}), n={ratio["pairs"]} |')
-    text += ["", "Raw result.json files contain per-process CPU, allocation counts/bytes, heap baseline/peak, RSS samples, and p50/p95/p99 stream/first-event/duplex latency with sample counts. Allocation and perf passes do not contribute to throughput ratios. No runs are discarded and the observed run range is not a confidence interval."]
+    text += ["", "Raw result.json files retain accounting and separate latency passes. Allocation, latency and perf passes do not contribute to throughput ratios. No runs are discarded; the observed range is not a confidence interval. Seeded paired bootstrap intervals estimate the geometric mean ratio, assume independent pairs, and are withheld below ten pairs. They do not establish machine isolation or client headroom.", "",
+             "| Protocol | Direction | Event | Bytes | Concurrency | Geometric mean ratio | Bootstrap 95% interval |",
+             "|---|---|---|---:|---:|---:|---|"]
+    for r in data:
+        uncertainty = r["paired_uncertainty"]
+        interval = uncertainty["bootstrap_95_interval"]
+        display = f"{interval[0]:.3f}–{interval[1]:.3f}" if interval else "insufficient pairs"
+        text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {uncertainty["geometric_mean"]:.3f} | {display} |')
+    text += ["", "Separate latency runs:", "",
+             "| Protocol | Direction | Event | Concurrency | Side | Load model | Offered streams/s | Streams | Dispatch p99 ms | Completion p99 ms | Drain s |",
+             "|---|---|---|---:|---|---|---:|---:|---:|---:|---:|"]
+    for r in rows:
+        if r["mode"] != "latency":
+            continue
+        text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["concurrency"]} | {r["side"]} | {r["load_model"]} | {r["offered_streams_per_second"] or "unpaced"} | {r["streams"]} | {r["dispatch_delay"]["p99_ns"] / 1e6:.3f} | {r["completion"]["p99_ns"] / 1e6:.3f} | {r["drain_seconds"]:.3f} |')
+    text += ["", "Scheduled-arrival completion/first-event latency includes delay from intended arrival to dispatch. Every scheduled stream is drained; drain time and dispatch lag reveal overload. Fixed-concurrency closed-loop latency only describes that workload. At a fixed offered rate, throughput ratios are achieved completion-rate comparisons, not maximum-capacity ratios."]
     text += ["", "| Protocol | Direction | Event | Bytes | Concurrency | Legacy server CPU ns/event | Schema server CPU ns/event | Legacy client CPU ns/event | Schema client CPU ns/event |",
              "|---|---|---|---:|---:|---:|---:|---:|---:|"]
     for r in data:
         text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["legacy"]["server_cpu_ns_per_event_median"]:.0f} | {r["schema"]["server_cpu_ns_per_event_median"]:.0f} | {r["legacy"]["client_cpu_ns_per_event_median"]:.0f} | {r["schema"]["client_cpu_ns_per_event_median"]:.0f} |')
     text += ["", "Separate allocation passes (absolute heap peak, not a subtraction from idle):", "",
-             "| Protocol | Direction | Event | Bytes | Concurrency | Side | Process | Sampled RSS peak MiB | Requested heap peak MiB | Allocations/event | Requested bytes/event |",
-             "|---|---|---|---:|---:|---|---|---:|---:|---:|---:|"]
+             "| Protocol | Direction | Event | Bytes | Concurrency | Pair | Side | Process | Sampled RSS peak MiB | Requested heap peak MiB | Allocations/event | Requested bytes/event |",
+             "|---|---|---|---:|---:|---:|---|---|---:|---:|---:|---:|"]
     for r in rows:
         if r["mode"] != "memory":
             continue
         for role in ("server", "client"):
             metrics = r[role]
-            text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r["side"]} | {role} | {r["rss"][role + "_sampled_peak_kib"] / 1024:.2f} | {metrics["after"]["requested_peak_heap_bytes"] / 1048576:.2f} | {metrics["allocations_per_event"]:.2f} | {metrics["allocated_bytes_per_event"]:.1f} |')
+            text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["size"]} | {r["concurrency"]} | {r.get("pair", 0)} | {r["side"]} | {role} | {r["rss"][role + "_sampled_peak_kib"] / 1024:.2f} | {metrics["after"]["requested_peak_heap_bytes"] / 1048576:.2f} | {metrics["allocations_per_event"]:.2f} | {metrics["allocated_bytes_per_event"]:.1f} |')
     text += ["", "Counter and sampling runs, including availability and exit codes, are recorded per case in `result.json`. Counter attachment brackets the measurement barrier, so its interval also includes a small idle/control margin. Sampling stack/hotspot files are retained beside each profile."]
     (dest / "report.md").write_text("\n".join(text) + "\n")
 
@@ -352,6 +401,12 @@ def main():
     p.add_argument("--no-profiles", action="store_true")
     p.add_argument("--seconds", type=float)
     p.add_argument("--pairs", type=int)
+    p.add_argument("--concurrency", type=int, nargs="+", help="In-flight stream limits to sweep")
+    p.add_argument("--stream-rate", type=float, default=0, help="Scheduled streams/s; 0 selects closed-loop saturation")
+    p.add_argument("--duplex-window", type=int, help="Timestamp queue capacity for latency runs; default is events per stream")
+    p.add_argument("--memory-pairs", type=int, default=3)
+    p.add_argument("--deep-validation", action="store_true", help="Include full payload scans in measured work; preflight always checks them")
+    p.add_argument("--events-per-stream", type=int, help="Event count per stream (at least two)")
     a = p.parse_args()
     cache = a.cache.resolve()
     build = validate_build(cache)
@@ -366,14 +421,22 @@ def main():
     dest.mkdir(parents=True, exist_ok=False)
     write_json(dest / "provenance.json", {"build": build, "generation": json.loads((cache / "generation.json").read_text()), "args": vars(a) | {"cache": str(cache), "output": str(dest)}, "topology": topo, "cpuinfo": Path("/proc/cpuinfo").read_text(), "loadavg": Path("/proc/loadavg").read_text(), "uname": list(os.uname())})
     # argparse contains Path objects; saved explicitly above.
-    warmup = 0.2 if a.preset == "smoke" else 2
-    seconds = a.seconds if a.seconds is not None else (0.5 if a.preset == "smoke" else 10)
-    pairs = a.pairs if a.pairs is not None else (1 if a.preset == "smoke" else 3)
-    if seconds <= 0 or pairs <= 0:
+    warmup = 0.2 if a.preset == "smoke" else 5
+    seconds = a.seconds if a.seconds is not None else (0.5 if a.preset == "smoke" else 15)
+    pairs = a.pairs if a.pairs is not None else (1 if a.preset == "smoke" else 10)
+    if not math.isfinite(seconds) or seconds <= 0 or pairs <= 0:
         p.error("--seconds and --pairs must be positive")
-    count = 8 if a.preset == "smoke" else 1024
+    count = a.events_per_stream or (8 if a.preset == "smoke" else 1024)
+    if a.events_per_stream is not None and not 2 <= a.events_per_stream <= 2147483647:
+        p.error("--events-per-stream must be between 2 and 2147483647")
     sizes = [64, 1024, 65536] if a.preset == "full" else [1024]
-    concurrency = [1] if a.preset == "smoke" else [1, 16]
+    concurrency = a.concurrency or ([1] if a.preset == "smoke" else [1, 4, 16])
+    if len(set(concurrency)) != len(concurrency) or any(c <= 0 for c in concurrency):
+        p.error("--concurrency must contain distinct positive counts")
+    if not math.isfinite(a.stream_rate) or a.stream_rate < 0:
+        p.error("--stream-rate must be finite and nonnegative")
+    if a.memory_pairs <= 0 or (a.duplex_window is not None and a.duplex_window <= 0):
+        p.error("--memory-pairs and --duplex-window must be positive")
     rows = []
     index = 0
 
@@ -387,7 +450,7 @@ def main():
         for protocol, side, direction, kind in itertools.product(PROTOCOLS, ("legacy", "schema"), ("upload", "download", "duplex"), ("structured", "binary")):
             execute(protocol=protocol, side=side, direction=direction, kind=kind, size=64, count=4, concurrency=1, warmup=0, seconds=0, mode="cpu", preflight=True)
         for protocol, direction, kind, size, parallel in itertools.product(PROTOCOLS, ("upload", "download", "duplex"), ("structured", "binary"), sizes, concurrency):
-            args = dict(protocol=protocol, direction=direction, kind=kind, size=size, count=count, concurrency=parallel, warmup=warmup, seconds=seconds)
+            args = dict(protocol=protocol, direction=direction, kind=kind, size=size, count=count, concurrency=parallel, warmup=warmup, seconds=seconds, stream_rate=a.stream_rate, duplex_window=a.duplex_window, deep_validation=a.deep_validation)
             for pair in range(pairs):
                 for side in (("legacy", "schema") if pair % 2 == 0 else ("schema", "legacy")):
                     row = execute(**args, side=side, mode="cpu")
@@ -395,14 +458,20 @@ def main():
                     write_json(dest / f"{index:04d}" / "result.json", row)
                     rows.append(row)
                     write_json(dest / "results.json", rows)
+            for pair in range(1 if a.preset == "smoke" else a.memory_pairs):
+                for side in (("legacy", "schema") if pair % 2 == 0 else ("schema", "legacy")):
+                    row = execute(**args, side=side, mode="memory")
+                    row["pair"] = pair
+                    rows.append(row)
             for side in ("legacy", "schema"):
-                rows.append(execute(**args, side=side, mode="memory"))
+                rows.append(execute(**args, side=side, mode="latency"))
             if direction == "duplex" and parallel == concurrency[-1] and size == 1024 and not a.no_profiles:
                 for profile, side in itertools.product(("stat", "record"), ("legacy", "schema")):
                     rows.append(execute(**args, side=side, mode="profile", profile=profile))
             write_json(dest / "results.json", rows)
         validate_build(cache)
-        report(dest, rows)
+        generation = json.loads((cache / "generation.json").read_text())
+        report(dest, rows, generation.get("comparison", "unspecified"))
     except BaseException as error:
         write_json(dest / "failure.json", {"error": str(error), "cases_completed": index - 1})
         raise

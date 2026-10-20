@@ -8,16 +8,46 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from common import HERE, PROTOCOLS, cargo_env, command, digest, fingerprint, generation_hash, validate_generation, write_json
+from common import DEFAULT_LEGACY_RELEASE, HERE, PROTOCOLS, cargo_env, command, digest, fingerprint, generation_hash, validate_generation, write_json
 
 
-def prepare(cache, baseline, current):
+def verify_legacy_release(baseline, release):
+    def git(*args):
+        return subprocess.check_output(["git", *args], cwd=baseline, text=True, stderr=subprocess.DEVNULL).strip()
+
+    try:
+        head = git("rev-parse", "HEAD")
+    except (subprocess.CalledProcessError, OSError):
+        raise SystemExit(f"Legacy baseline {baseline} is not a Git checkout")
+    try:
+        tagged = git("rev-parse", f"{release}^{{commit}}")
+    except subprocess.CalledProcessError:
+        raise SystemExit(f"Legacy baseline {baseline} has no tag {release}; fetch tags there or pass --legacy-release")
+    if head != tagged:
+        raise SystemExit(f"Legacy baseline HEAD {head[:12]} is not {release} ({tagged[:12]}); check out that release or pass --legacy-release")
+    if git("status", "--porcelain"):
+        raise SystemExit(f"Legacy baseline {baseline} has uncommitted changes; the pinned release must be clean")
+
+
+def prepare(cache, baseline, current, legacy_release, comparison="same-revision"):
+    if comparison == "same-revision" and baseline != current:
+        raise SystemExit("same-revision comparison must generate both servers from --current")
     if (cache / "generation.json").exists():
-        validate_generation(cache)
+        data = validate_generation(cache)
+        if data.get("comparison") != comparison:
+            raise SystemExit("Cache has a different comparison design. Use a new cache.")
+        if comparison == "release" and data.get("legacy_release") != legacy_release:
+            raise SystemExit(f"Cache was prepared with legacy release {data.get('legacy_release')!r}, not {legacy_release!r}. Use a new cache.")
         print(f"Reusing {cache}")
         return
+    if comparison == "release":
+        verify_legacy_release(baseline, legacy_release)
     cache.mkdir(parents=True, exist_ok=True)
-    provenance = {"generation_hash": generation_hash(), "generated_hashes": {}}
+    provenance = {
+        "generation_hash": generation_hash(), "comparison": comparison,
+        "legacy_release": legacy_release if comparison == "release" else None,
+        "generated_hashes": {},
+    }
     for side, repo in (("legacy", baseline), ("schema", current)):
         dest = cache / side
         dest.mkdir(exist_ok=True)
@@ -74,7 +104,12 @@ def prepare(cache, baseline, current):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--cache", type=Path, default=HERE / "artifacts/cache")
-    p.add_argument("--baseline", type=Path, default=Path.home() / "smithy-rs-latest")
+    p.add_argument("--comparison", choices=["same-revision", "release"], default="same-revision")
+    p.add_argument("--baseline", type=Path, help="Separate checkout for --comparison release")
     p.add_argument("--current", type=Path, default=HERE.parents[1])
+    p.add_argument("--legacy-release", default=DEFAULT_LEGACY_RELEASE, help="Release tag the legacy baseline must be checked out at")
     a = p.parse_args()
-    prepare(a.cache.resolve(), a.baseline.resolve(), a.current.resolve())
+    if a.baseline and a.comparison != "release":
+        p.error("--baseline requires --comparison release")
+    baseline = a.current if a.comparison == "same-revision" else (a.baseline or Path.home() / "smithy-rs-latest")
+    prepare(a.cache.resolve(), baseline.resolve(), a.current.resolve(), a.legacy_release, a.comparison)

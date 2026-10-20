@@ -11,6 +11,7 @@ fn main() {
         .unwrap_or_else(|| "1".into())
         .parse()
         .unwrap();
+    let deep_validation = std::env::args().nth(2).as_deref() == Some("true");
     std::thread::spawn(|| {
         for line in std::io::stdin().lock().lines() {
             match line.unwrap().as_str() {
@@ -32,10 +33,10 @@ fn main() {
         .unwrap();
     runtime.block_on(async {
         let app = BenchmarkService::builder(BenchmarkServiceConfig::builder().build())
-            .upload(|mut input: input::UploadInput| async move {
+            .upload(move |mut input: input::UploadInput| async move {
                 let mut count = 0;
                 while let Some(value) = input.events.recv().await.expect("valid upload event") {
-                    events::verify(&value, &input.kind, input.size as usize, count);
+                    events::verify(&value, &input.kind, input.size as usize, count, deep_validation);
                     count += 1;
                 }
                 assert_eq!(count, input.count as usize);
@@ -52,11 +53,11 @@ fn main() {
                 };
                 Ok::<_, bench_sdk::error::DownloadError>(output::DownloadOutput::builder().metadata(events::METADATA.into()).events(stream.into()).build().unwrap())
             })
-            .duplex(|mut input: input::DuplexInput| async move {
+            .duplex(move |mut input: input::DuplexInput| async move {
                 let stream = async_stream::stream! {
                     let mut count = 0;
                     while let Some(value) = input.events.recv().await.expect("valid duplex event") {
-                        events::verify(&value, &input.kind, input.size as usize, count);
+                        events::verify(&value, &input.kind, input.size as usize, count, deep_validation);
                         count += 1;
                         yield Ok(value);
                     }

@@ -156,3 +156,4 @@ generated_server!(rest_json_schema, rest_json_schema);
 generated_server!(cbor_legacy, cbor_legacy);
 generated_server!(cbor_schema, cbor_schema);
 generated_server!(multi_schema, multi_schema);
+generated_server!(multi_rest_json_schema, multi_rest_json_schema);

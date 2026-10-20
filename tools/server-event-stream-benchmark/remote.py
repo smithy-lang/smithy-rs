@@ -4,7 +4,8 @@
 
 """Export source files to the user's machine, without transferring Git refs/objects.
 
-Preparation updates a CLEAN legacy checkout explicitly. run.py never does so.
+Preparation checks out the pinned release in a CLEAN legacy checkout explicitly.
+run.py never touches Git. The benchmark host is never defaulted; pass --host.
 """
 import argparse
 import json
@@ -13,7 +14,7 @@ import shlex
 import subprocess
 import tarfile
 import tempfile
-from common import HERE, digest, write_json
+from common import DEFAULT_LEGACY_RELEASE, HERE, digest, write_json
 
 
 def export(repo, archive):
@@ -39,10 +40,12 @@ def export(repo, archive):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--host", default="cloudl")
+    p.add_argument("--host", required=True, help="SSH host that runs the benchmark; deliberately has no default")
     p.add_argument("--destination", required=True, help="Absolute NEW directory on the remote machine")
     p.add_argument("--repo", type=Path, default=HERE.parents[1])
-    p.add_argument("--update-baseline", action="store_true")
+    p.add_argument("--baseline", default="~/smithy-rs-latest", help="Legacy checkout path on the remote machine; expanded by the remote shell")
+    p.add_argument("--legacy-release", default=DEFAULT_LEGACY_RELEASE, help="Release tag to check out in the legacy checkout with --update-baseline")
+    p.add_argument("--update-baseline", action="store_true", help="Fetch tags and check out --legacy-release in the clean remote legacy checkout")
     a = p.parse_args()
     if not a.destination.startswith("/"):
         p.error("--destination must be absolute")
@@ -55,5 +58,13 @@ if __name__ == "__main__":
         with archive.open("rb") as src:
             subprocess.run(["ssh", a.host, f"tar -xz -C {dest}"], stdin=src, check=True)
     if a.update_baseline:
-        subprocess.run(["ssh", a.host, 'test -z "$(git -C ~/smithy-rs-latest status --porcelain)" && git -C ~/smithy-rs-latest pull --ff-only'], check=True)
+        release = shlex.quote(a.legacy_release)
+        # Expand only a leading home shorthand; quote the remaining path.
+        baseline = '"$HOME"/' + shlex.quote(a.baseline[2:]) if a.baseline.startswith("~/") else shlex.quote(a.baseline)
+        script = (
+            f'test -z "$(git -C {baseline} status --porcelain)"'
+            f" && git -C {baseline} fetch --tags origin"
+            f" && git -C {baseline} -c advice.detachedHead=false checkout --detach {release}"
+        )
+        subprocess.run(["ssh", a.host, script], check=True)
     print(f"Source snapshot: {a.host}:{a.destination}")

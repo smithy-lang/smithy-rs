@@ -113,8 +113,52 @@ pub fn server(implementation: Implementation, case: Case) -> Server {
         (Implementation::Schema, Protocol::RestJson) => services::rest_json_schema::server(case),
         (Implementation::Legacy, Protocol::RpcV2Cbor) => services::cbor_legacy::server(case),
         (Implementation::Schema, Protocol::RpcV2Cbor) => services::cbor_schema::server(case),
-        (Implementation::MultiSchema, _) => services::multi_schema::server(case),
+        (Implementation::MultiSchema, Protocol::RestJson) => {
+            services::multi_rest_json_schema::server(case)
+        }
+        (Implementation::MultiSchema, Protocol::RpcV2Cbor) => services::multi_schema::server(case),
     }
+}
+
+/// Runs Hyper's HTTP/2 client and server over a bounded in-memory byte stream.
+///
+/// The connection is established before timing and reused across requests. This
+/// includes HTTP/2 framing, flow control and task scheduling, but no kernel socket
+/// or TCP stack. Dropping the service closes the client side of the connection.
+pub async fn hyper_in_memory(server: Server) -> Server {
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+
+    let (client_io, server_io) = tokio::io::duplex(64 * 1024);
+    let service = hyper::service::service_fn(move |request: Request<hyper::body::Incoming>| {
+        let server = server.clone();
+        async move { server.oneshot(request.map(Body::new)).await }
+    });
+    tokio::spawn(async move {
+        hyper::server::conn::http2::Builder::new(TokioExecutor::new())
+            .serve_connection(TokioIo::new(server_io), service)
+            .await
+            .expect("in-memory HTTP/2 server");
+    });
+    let (sender, connection) = hyper::client::conn::http2::handshake::<_, _, Body>(
+        TokioExecutor::new(),
+        TokioIo::new(client_io),
+    )
+    .await
+    .expect("in-memory HTTP/2 handshake");
+    tokio::spawn(async move {
+        connection.await.expect("in-memory HTTP/2 client");
+    });
+    BoxCloneService::new(tower::service_fn(move |request: Request<Body>| {
+        let mut sender = sender.clone();
+        async move {
+            sender.ready().await.expect("in-memory HTTP/2 readiness");
+            let response = sender
+                .send_request(request)
+                .await
+                .expect("in-memory HTTP/2 request");
+            Ok::<_, Infallible>(response.map(|body| Body::new(body).boxed_unsync()))
+        }
+    }))
 }
 
 #[derive(Debug)]

@@ -1,12 +1,16 @@
 # Generated server event-stream benchmark
 
-Compare the legacy server from a clean, updated `~/smithy-rs-latest` with the
-schema server from the current working tree. Both use the same model and the
-same generated Rust client per protocol. Clients and servers are separate
-processes exchanging real, unsigned event streams over loopback HTTP/2.
-This compares two revisions, so a measured difference cannot be attributed
-solely to schema serialization.
+The default comparison generates two servers from the **same source tree**, with
+`schemaSerde: false` (generated serde) and `schemaSerde: true` (schema serde).
+One generated Rust client per protocol is shared by both. Clients and servers
+are separate processes exchanging unsigned event streams over loopback HTTP/2.
+Existing executable/cache labels containing `legacy` mean generated serde,
+independently of HTTP version.
 
+For a historical release comparison, explicitly select `--comparison release`.
+That comparison includes revision and dependency differences and cannot isolate
+schema serialization. `--legacy-release` selects the pinned release tag
+(default `release-2026-09-30.2`).
 The current side exercises the [schema event-stream runtime](../../rust-runtime/aws-smithy-http-server/src/schema/event_stream.rs).
 Generation validation checks the generated server's marshaller, unmarshaller,
 and response-body calls, so an ignored setting cannot silently benchmark the
@@ -16,29 +20,39 @@ The checked-in model and programs are the benchmark. SDKs, Cargo lockfiles,
 binaries, profiles and results are retained under ignored `artifacts/`.
 No production runtime APIs are changed.
 
-## Prepare on cloudl
+## Prepare on a benchmark host
 
-From this checkout, export a new source snapshot including uncommitted
-production sources. The destination must not exist. This copies files, not Git
-objects or refs. `--update-baseline` requires the remote legacy checkout to be
-clean and performs `git pull --ff-only`.
+For local use:
 
 ```sh
-python3 tools/server-event-stream-benchmark/remote.py \
-  --host cloudl \
-  --destination /home/fahadzub/event-stream-benchmark-SNAPSHOT \
-  --update-baseline
-ssh cloudl
-cd ~/event-stream-benchmark-SNAPSHOT
-export PATH="$HOME/.cargo/bin:$PATH"
 python3 tools/server-event-stream-benchmark/prepare.py
 python3 tools/server-event-stream-benchmark/build.py
 python3 tools/server-event-stream-benchmark/run.py --preset smoke
 python3 tools/server-event-stream-benchmark/run.py --preset representative
 ```
 
-`prepare.py` can also run directly on any Linux machine with the two checkouts.
-Set `--baseline`, `--current`, and `--cache` as needed. It never updates Git.
+For a remote benchmark host, first copy a new source snapshot, then run the same
+commands on that host. `--host` is required; the destination must not exist.
+
+```sh
+python3 tools/server-event-stream-benchmark/remote.py \
+  --host YOUR_BENCHMARK_HOST \
+  --destination /home/$USER/event-stream-benchmark-SNAPSHOT
+```
+
+`prepare.py` accepts `--current` and `--cache`. It never updates Git. Both servers
+and the common client come from `--current` by default. To compare releases:
+
+```sh
+python3 tools/server-event-stream-benchmark/prepare.py \
+  --comparison release --baseline ~/smithy-rs-latest \
+  --legacy-release release-2026-09-30.2 --cache /tmp/event-stream-release-cache
+```
+
+Release mode verifies that the baseline is clean and at the selected tag.
+`remote.py --update-baseline` fetches tags and checks out `--legacy-release` in
+its `--baseline` checkout. Cache reuse rejects changes in comparison design or
+release selection.
 `build.py` never runs generation. `run.py` never pulls, generates, or compiles;
 it rejects stale source/configuration/SDK/binary/lockfile/compiler fingerprints.
 Use a new cache to preserve a prior comparison when sources change. The same
@@ -48,8 +62,8 @@ The Gradle init script loads each checkout's real server/client codegen plugin.
 Legacy settings disable `schemaSerde` when the checkout supports that flag;
 older legacy codegen has no schema serialization path. Current settings enable it.
 Both use HTTP 1.x **types** and always send CBOR initial-response metadata.
-The transport itself is HTTP/2. One unsigned client SDK is generated from the
-legacy checkout per protocol and reused for both servers.
+The transport itself is HTTP/2. One unsigned client SDK is generated per protocol and reused for both servers.
+It comes from the current tree in same-revision mode, or the baseline in release mode.
 Its fixed Hyper 0.14 connector forces HTTP/2 through the public connector
 builder; both servers use their HTTP 1.x transport implementations.
 The scripts require Python 3.11 or newer.
@@ -63,8 +77,10 @@ REST JSON and RPC v2 CBOR each run:
 - Download: the server produces messages lazily; the client validates every
   payload, event sequence/header, count, metadata, and end of stream.
 - Duplex: the server echoes messages while the request is still open; the
-  client produces and receives concurrently. A bounded 64-event timestamp
-  queue limits outstanding messages. Preflight gates the producer after its
+  client produces and receives concurrently. Throughput runs do not collect
+  event timestamps. Latency runs use a timestamp queue sized to the stream
+  event count by default; `--duplex-window` permits an explicit sensitivity
+  experiment. Preflight gates the producer after its
   first event until the first echo arrives, proving a response before request
   end of stream. Each stream has a fixed upper bound on message count.
 
@@ -74,23 +90,77 @@ event payload. Non-stream members exercise REST headers and CBOR
 initial-request/initial-response messages. Preflight also verifies a modeled
 stream error following two valid messages. Any corruption, incomplete stream,
 unexpected error, process failure, or timeout fails the run; such a run is not
-reported as successful throughput. Measurement verifies payloads too, so
-application validation cost is included identically on both sides.
+reported as successful throughput. Preflight deeply validates every payload. Measurement checks event type,
+sequence, length, count, metadata and end of stream; full byte scans and nested
+value checks require `--deep-validation`. Validation is identical on both sides.
+This flag permits a sensitivity experiment for validation overhead.
 
 ## Presets and measurements
 
-The default representative preset runs both protocols, all three directions,
-both event types, 1 KiB payloads, concurrency 1/16, 1,024 events per stream,
-2 seconds warmup, 10 seconds measurement, and three paired repetitions.
-Legacy/schema order alternates by pair. Memory passes are separate; duplex
-at concurrency 16 also has separate counter and sampling passes. Allow
-roughly 35–45 minutes, plus generation/build time.
+The representative preset runs both protocols, all three directions, both event
+types, 1 KiB payloads, concurrency 1/4/16, and 1,024 events per stream. Defaults
+are 5 seconds warmup, 15 seconds measurement, and ten paired throughput
+repetitions with alternating order. Allocation runs repeat three times per side,
+also alternating order. Latency and profiling are separate passes. This is a
+multi-hour experiment; use explicit smaller settings for diagnostic runs.
 
 `smoke` uses eight events per stream, concurrency 1, 0.2-second warmup,
-0.5-second measurement, and one pair. It exercises every workload and both
-implementations; its timings are not statistically meaningful.
-`full` additionally sweeps 64-byte and 64-KiB payloads.
-`--seconds`, `--pairs`, and `--no-profiles` control a diagnostic run.
+0.5-second measurement, and one throughput/allocation pair. Its timings are
+not statistically meaningful. `full` additionally sweeps 64-byte and 64-KiB
+payloads. `--seconds`, `--pairs`, `--memory-pairs`, `--concurrency`, and
+`--no-profiles` control the experiment. `--events-per-stream` overrides stream
+length, making stream-start overhead and long-stream steady-state costs explicit.
+
+### Load models and why this is not stock wrk2
+
+Stock [wrk2](https://github.com/giltene/wrk2) is an HTTP/1.x request/response
+load generator. This tool uses HTTP/2 and must generate, decode and validate
+Smithy frames, including a bidirectional stream whose response starts before
+request completion. Stock wrk2 cannot exercise that contract. We adopt its
+intended-arrival-time measurement principle in the generated client.
+
+The default **closed-loop** run measures completed event throughput at a fixed
+number of concurrent streams. It cannot establish production tail latency at a
+fixed external arrival rate. For a scheduled stream-arrival experiment:
+
+```sh
+python3 tools/server-event-stream-benchmark/run.py --preset representative \
+  --stream-rate 20 --concurrency 1 4 16 --no-profiles
+```
+
+`--stream-rate` is streams per second, not events per second. Arrivals follow an
+absolute schedule independent of completion, with the concurrency setting
+limiting active streams. Delayed arrivals retain their intended timestamps;
+stream completion and first-event latency include dispatch backlog. All scheduled
+streams are drained, and dispatch delay and drain duration are reported. Large
+backlogs can hit the run timeout and fail the experiment. This models queued
+stream arrivals with a concurrency cap; it does not independently pace events
+inside each stream. Duplex event RTT starts at event production, separately from
+stream-arrival latency. At a fixed offered rate, throughput ratios describe
+achieved completion rates, not maximum server capacity.
+
+Use a rate sweep below and above observed capacity, examine client CPU cost and
+dispatch lag, and repeat with more client resources before attributing a plateau
+to the server. Verify stable results with longer warmup/measurement, repeated
+runs, and explicit CPU placements; affinity alone is not machine isolation.
+
+### Socket-free variants
+
+The existing [Criterion benchmark](../../codegen-server-test/benchmarks/event-stream/README.md)
+provides two same-revision modes using pre-encoded request fixtures:
+
+```sh
+cd codegen-server-test/benchmarks/event-stream
+make bench TRANSPORT=tower
+make bench TRANSPORT=hyper-memory
+```
+
+`tower` calls the generated service with `oneshot` and drains the response body.
+`hyper-memory` runs Hyper HTTP/2 client/server connections over a bounded
+in-memory byte stream. It includes HTTP/2 framing, flow control and scheduling,
+with no sockets or TCP stack. Neither includes the generated client or the same
+payload-generation workload as this network tool; compare each mode on its own.
+The difference between modes is not an exact TCP or HTTP/2 cost subtraction.
 
 Default affinity uses server CPU 0 and client CPUs 1,2, with one server
 worker and two client workers. Override `--server-cpus`, `--client-cpus`, and
@@ -111,10 +181,16 @@ Ordinary release binaries report:
   completed round trip, not two events or twice the application bytes.
 - Per-process user/system CPU seconds, utilization as a percentage of one
   core, and CPU nanoseconds per event/round trip.
+Separate latency runs report:
+
 - Stream completion and download/duplex first-event p50/p95/p99 latency.
   Duplex round-trip latency starts before enqueueing the event for wire
   serialization and includes queueing, transport, server and client work.
-  Histograms include sample counts and have three significant digits.
+  Histograms are reused per worker, include sample counts, and have three
+  significant digits. Throughput/allocation runs disable latency histograms
+  and per-event timestamp queueing.
+All measured modes report:
+
 - Idle RSS and RSS sampled every 100 ms during measurement. Sampled peak
   can miss short spikes. Lifetime maximum RSS is reported separately by
   `getrusage` and includes startup/warmup.
@@ -145,9 +221,13 @@ and diagnostic logs remain available for inspection.
 Each timestamped result directory contains provenance, raw JSON, commands,
 process stderr, listener/cleanup evidence, RSS samples, counter/profile files,
 `summary.csv`, and `report.md`. `summary.json` includes server/client CPU cost.
-Summaries show median throughput and paired schema/legacy ratios, with the
-observed min/max range and pair count. No outliers are discarded and the range
-is not a confidence interval. Keep the entire cache (including generated SDKs,
+Summaries show median throughput and paired ratios, with observed min/max and
+pair count. They also show the geometric mean paired ratio and a deterministic
+95% percentile bootstrap interval (5,000 resamples, seed 0), withheld below ten
+pairs. Ten pairs is a reporting threshold, not a precision guarantee. The interval
+assumes independent repetitions and does not correct thermal drift or correlated
+noise. No outliers are discarded, and the observed range is not a confidence
+interval. Latency runs are exploratory observations, not confidence estimates. Keep the entire cache (including generated SDKs,
 models, settings, logs, compiler information and locks) with results to rerun
 the exact binaries.
 

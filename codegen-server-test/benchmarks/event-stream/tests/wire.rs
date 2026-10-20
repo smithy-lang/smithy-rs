@@ -4,7 +4,7 @@
  */
 
 use event_stream_benchmark::{
-    drain, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
+    drain, hyper_in_memory, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
 };
 
 #[test]
@@ -44,6 +44,56 @@ fn generated_sdk_paths_match_the_benchmark_labels() {
     check_sdk!("event-stream-bench-rpc-v2-cbor-legacy", false);
     check_sdk!("event-stream-bench-rpc-v2-cbor-schema", true);
     check_sdk!("event-stream-bench-multi-schema", true);
+    check_sdk!("event-stream-bench-multi-rest-json-schema", true);
+}
+
+#[test]
+fn in_memory_http2_preserves_stream_payloads_and_errors() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        for protocol in Protocol::ALL {
+            for direction in Direction::ALL {
+                for kind in Kind::ALL {
+                    // Exceeds the duplex buffer and HTTP/2's initial stream window.
+                    let case = Case {
+                        protocol,
+                        direction,
+                        kind,
+                        size: 65536,
+                        count: 3,
+                    };
+                    for implementation in Implementation::ALL {
+                        let service = hyper_in_memory(server(implementation, case)).await;
+                        Fixture::new(case)
+                            .fragmented(8191)
+                            .validate(service.clone())
+                            .await;
+                        // Multiplex response bodies on the same connection without sockets.
+                        let first = Fixture::new(case);
+                        let second = Fixture::new(case);
+                        futures_util::future::join(
+                            first.validate(service.clone()),
+                            second.validate(service.clone()),
+                        )
+                        .await;
+                        // Reuse the connection and exercise complete body draining.
+                        assert!(
+                            drain(service.clone(), Fixture::new(case).request())
+                                .await
+                                .bytes
+                                > 0
+                        );
+                        if direction == Direction::Download {
+                            Fixture::with_error(case, true).validate(service).await;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 #[test]

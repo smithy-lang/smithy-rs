@@ -3,20 +3,25 @@
 Rust benchmarks compare generated serde, schema serde, and a
 schema server with REST JSON and RPC v2 CBOR enabled together. All SDKs come
 from the same checkout and model. Every projection sets `http-1x: true`;
-single-protocol projections differ only in `schemaSerde`.
+single-protocol projections differ only in `schemaSerde`. Two multi-protocol
+projections select the same initial-response policy as the corresponding
+single-protocol service (REST false, CBOR true), avoiding an extra empty REST
+frame or missing CBOR metadata in the comparison.
 
 Existing benchmark labels and projection names containing `legacy` identify generated
 serde (`schemaSerde: false`) over HTTP 1.x with `aws-smithy-http-server`.
 
 `make codegen` uses the repository's Gradle server-codegen tasks, just like
-`examples/multi-protocol`. Five generated SDKs are dependencies of this standalone
-Cargo workspace. No Python, generated client, listening socket, or network
-transport is involved in running the benchmark.
+`examples/multi-protocol`. Six generated SDKs are dependencies of this standalone
+Cargo workspace. No Python, generated SDK client, or listening socket is involved. The default
+transport calls Tower directly; an optional Hyper mode exercises HTTP/2 over an
+in-memory byte stream. Both generate all services from this checkout.
 
 ```sh
 cd codegen-server-test/benchmarks/event-stream
 make test
-make bench                       # small: generated serde versus schema serde
+make bench TRANSPORT=tower       # direct service calls (default)
+make bench TRANSPORT=hyper-memory # HTTP/2 over an in-memory byte stream
 make bench PRESET=medium         # add the multiprotocol server
 make bench PRESET=full           # all payload/count combinations
 ```
@@ -76,8 +81,16 @@ CLI options can override these defaults for an explicitly labeled diagnostic run
 
 ## What is measured
 
-Each timed iteration sends one `http::Request` to the generated Tower service
-using `oneshot`, then polls its response body through end of stream:
+Each timed iteration sends one `http::Request`, then polls its response body
+through end of stream. `TRANSPORT=tower` uses the generated Tower service
+through `oneshot`. `TRANSPORT=hyper-memory` uses a persistent Hyper HTTP/2
+connection over `tokio::io::duplex` with a 64 KiB buffer, established before
+timing. It includes HTTP/2 framing, flow control and task scheduling, without
+TCP or sockets. Benchmark names include the transport so result histories do
+not mix the two modes. With Cargo directly, set `BENCH_TRANSPORT=hyper-memory`.
+Do not treat the difference between modes as an exact transport cost subtraction.
+
+Both modes exercise:
 
 | Workload | Server work |
 | --- | --- |
