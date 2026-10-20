@@ -592,13 +592,11 @@ impl ShapeSerializer for XmlSerializer {
             } else {
                 None
             };
-            let inherited_name = self.list_item_name.clone();
-            let name = match (&root_override, &inherited_name) {
-                (Some(override_name), _) => override_name.as_str(),
-                (None, Some(item_name)) => item_name.as_ref(),
-                (None, None) => Self::element_name(schema),
-            };
             let saved_list_item = self.list_item_name.take();
+            let name = root_override
+                .as_deref()
+                .or(saved_list_item.as_deref())
+                .unwrap_or_else(|| Self::element_name(schema));
             self.open_element(name);
             self.write_xmlns(schema, None);
             // Two-pass: attributes first (so they land in the still-pending

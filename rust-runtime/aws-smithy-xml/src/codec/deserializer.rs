@@ -42,9 +42,10 @@ pub struct XmlDeserializer<'a> {
     /// aggregate sub-deserializers this is the slice of the parent input
     /// covering the relevant element. Ignored when `text` is set.
     input: &'a [u8],
-    /// Pre-extracted leaf text. When `Some`, scalar reads consume it
-    /// directly without re-parsing `input`; aggregate reads error.
-    text: Option<Cow<'a, str>>,
+    /// Pre-extracted leaf text, including any extraction error. Scalar reads
+    /// consume this result; a consumer that skips the value also skips errors
+    /// about its leaf shape. Aggregate reads error when this is present.
+    text: Option<Result<Cow<'a, str>, SerdeError>>,
     settings: Arc<XmlCodecSettings>,
     /// Aggregate nesting depth. Incremented at the top of each
     /// `read_struct` / `read_list` / `read_map` and decremented before
@@ -94,7 +95,7 @@ impl<'a> XmlDeserializer<'a> {
     fn from_text(text: Cow<'a, str>, settings: Arc<XmlCodecSettings>) -> Self {
         Self {
             input: b"",
-            text: Some(text),
+            text: Some(Ok(text)),
             settings,
             depth: 0,
         }
@@ -139,7 +140,7 @@ impl<'a> XmlDeserializer<'a> {
     /// and reads its text content.
     fn take_text(&mut self) -> Result<Cow<'a, str>, SerdeError> {
         if let Some(t) = self.text.take() {
-            return Ok(t);
+            return t;
         }
         let mut doc = Document::try_from(self.input).unwrap_or_else(|_| Document::new(""));
         let mut root = doc
@@ -161,9 +162,14 @@ impl<'a> XmlDeserializer<'a> {
         r
     }
 
-    /// Run `f` against `self` after temporarily setting pre-extracted leaf
-    /// text. State is restored on return.
-    fn dispatch_text<R>(&mut self, text: Cow<'a, str>, f: impl FnOnce(&mut Self) -> R) -> R {
+    /// Run `f` against `self` after temporarily setting a leaf-text result.
+    /// Extraction errors surface only when the consumer reads the value.
+    /// State is restored on return.
+    fn dispatch_text<R>(
+        &mut self,
+        text: Result<Cow<'a, str>, SerdeError>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         let saved_input = std::mem::replace(&mut self.input, b"");
         let saved_text = self.text.replace(text);
         let r = f(self);
@@ -416,7 +422,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                         .unwrap_or("");
                     if let Some(value) = root.start_el().attr(attr_name) {
                         let text = Cow::Owned(value.to_owned());
-                        self.dispatch_text(text, |this| consumer(member, this))?;
+                        self.dispatch_text(Ok(text), |this| consumer(member, this))?;
                     }
                 }
             }
@@ -456,8 +462,10 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                         .or_insert_with(|| (member, Vec::new()));
                     entry.1.extend_from_slice(sub);
                 } else {
+                    // Keep extraction errors with the value: a transport adapter may
+                    // discard this member without reading its modeled scalar type.
                     let text = decode::try_data(&mut child_scope)
-                        .map_err(|e| SerdeError::custom(e.to_string()))?;
+                        .map_err(|e| SerdeError::custom(e.to_string()));
                     drop(child_scope);
                     self.dispatch_text(text, |this| consumer(member, this))?;
                 }
@@ -604,7 +612,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                         // which borrows `self.input: &'a [u8]`, so its lifetime
                         // is `'a`.
                         let t: Cow<'_, str> = t;
-                        self.dispatch_text(t.into_owned().into(), |this| consumer(k, this))?;
+                        self.dispatch_text(Ok(t.into_owned().into()), |this| consumer(k, this))?;
                     }
                 }
             }
@@ -2906,11 +2914,8 @@ mod skip_value_contract {
 
     #[test]
     fn skipping_an_aggregate_member_with_nested_content_does_not_consume_siblings() {
-        // Nested content only reaches the consumer for an aggregate-typed member: for a
-        // scalar member `read_struct` extracts leaf text with `try_data` *before*
-        // dispatching, so nested content is rejected by the parent regardless of
-        // skipping. Here `bound` is a structure, so the parent hands the consumer a
-        // sub-slice view — and skipping that must not disturb the outer iteration.
+        // Here `bound` is a structure, so the parent hands the consumer a sub-slice
+        // view. Skipping that must not disturb the outer iteration.
         // Member 0 is aggregate-typed this time, which routes it through
         // `dispatch_subslice`; members 1 and 2 stay scalars. It needs no sub-members of
         // its own because the consumer never reads it.
@@ -2946,6 +2951,27 @@ mod skip_value_contract {
             .unwrap();
         assert_eq!(body.as_deref(), Some("real"));
         assert_eq!(tail.as_deref(), Some("end"));
+    }
+
+    #[test]
+    fn skipping_a_scalar_member_ignores_its_nested_content() {
+        let xml = b"<Output><bound><body>decoy</body></bound>\
+                    <body>real</body><tail>end</tail></Output>";
+        let (body, tail) = skip_bound(xml).unwrap();
+        assert_eq!(body.as_deref(), Some("real"));
+        assert_eq!(tail.as_deref(), Some("end"));
+    }
+
+    #[test]
+    fn reading_a_scalar_member_still_rejects_nested_content() {
+        let xml = b"<Output><bound><body>decoy</body></bound>\
+                    <body>real</body><tail>end</tail></Output>";
+        let mut deser = XmlDeserializer::new(xml, Arc::new(XmlCodecSettings::default()));
+        let result = deser.read_struct(&OUTPUT, &mut |member, value| {
+            value.read_string(member)?;
+            Ok(())
+        });
+        assert!(result.is_err());
     }
 
     #[test]
