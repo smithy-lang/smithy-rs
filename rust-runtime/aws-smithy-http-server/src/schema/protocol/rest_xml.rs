@@ -246,6 +246,9 @@ impl ServerProtocol for RestXml {
     /// violation must NOT serialize the modeled error here. Both are the protocol's wire contract.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
+            DeserializeError::InitialRequestFrame(reason) => {
+                IntoResponse::<RestXml>::into_response(RuntimeError::Validation(reason))
+            }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RestXml>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }

@@ -133,6 +133,7 @@ fn schema_codec(validate_skipped_values: bool) -> aws_smithy_json::codec::JsonCo
             .validate_skipped_string_encoding(true)
             .allow_integral_float_numbers(true)
             .strict_timestamp_formats(true)
+            .dispatch_null_members(true)
             .build(),
     )
 }
@@ -327,6 +328,9 @@ macro_rules! aws_json_protocol {
             /// with the modeled validation error.
             fn serialize_rejection(&self, err: DeserializeError) -> Response {
                 match err {
+                    DeserializeError::InitialRequestFrame(reason) => {
+                        IntoResponse::<$marker>::into_response(RuntimeError::Validation(reason))
+                    }
                     DeserializeError::Serde(err) => {
                         IntoResponse::<$marker>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
                     }

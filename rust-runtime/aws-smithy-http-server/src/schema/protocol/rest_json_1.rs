@@ -48,6 +48,7 @@ impl RestJson1 {
                         .validate_skipped_string_encoding(true)
                         .allow_integral_float_numbers(true)
                         .strict_timestamp_formats(true)
+                        .dispatch_null_members(true)
                         .build(),
                 ),
                 crate::schema::protocol::rest_json_1::POLICY,
@@ -199,6 +200,9 @@ impl ServerProtocol for RestJson1 {
     /// `RuntimeError` responses; a constraint violation with the modeled validation error.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
+            DeserializeError::InitialRequestFrame(reason) => {
+                IntoResponse::<RestJson1>::into_response(RuntimeError::Validation(reason))
+            }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RestJson1>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }

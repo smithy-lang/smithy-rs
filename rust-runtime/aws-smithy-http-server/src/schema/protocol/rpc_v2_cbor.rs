@@ -32,6 +32,7 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 pub struct RpcV2Cbor {
     pub(crate) inner: crate::schema::protocol::rpc::RpcProtocol<RpcV2CborSerde>,
     method_not_allowed_as_not_found: bool,
+    legacy_routing_errors: bool,
 }
 
 impl Default for RpcV2Cbor {
@@ -45,6 +46,7 @@ impl Default for RpcV2Cbor {
                 crate::schema::protocol::rpc::RpcStreaming::EventStreamContentType,
             ),
             method_not_allowed_as_not_found: false,
+            legacy_routing_errors: false,
         }
     }
 }
@@ -106,6 +108,7 @@ impl MetadataRoutedProtocol for RpcV2Cbor {
         ctx: &crate::schema::ProtocolBuildContext<'_>,
     ) -> Result<Self, crate::schema::routing::RouterBuildError> {
         Ok(Self {
+            legacy_routing_errors: ctx.service.protocols().len() == 1,
             method_not_allowed_as_not_found: crate::schema::settings::get::<bool>(
                 ctx.settings,
                 "methodNotAllowedAsNotFound",
@@ -213,12 +216,19 @@ impl ServerProtocol for RpcV2Cbor {
     /// `methodNotAllowedAsNotFound` setting selects the unknown-operation `404` instead.
     /// Unsupported operations return an empty `501`. Every other routing rejection, including
     /// framing violations such as a forbidden `x-amz-target`/`x-amzn-target` header or an invalid
-    /// `smithy-protocol` value, is the unknown-operation response: `404` with the CBOR `__type` body.
+    /// `smithy-protocol` value, returns the legacy empty `404` for a single-protocol service.
+    /// Multi-protocol services serialize the CBOR unknown-operation error after claiming.
     fn serialize_routing_error(&self, err: &crate::schema::routing::RoutingError) -> Response {
         match err.kind() {
             crate::schema::routing::RoutingErrorKind::UnsupportedOperation => crate::operation::empty_not_implemented(),
             crate::schema::routing::RoutingErrorKind::MethodNotAllowed if !self.method_not_allowed_as_not_found => {
                 crate::routing::method_disallowed()
+            }
+            crate::schema::routing::RoutingErrorKind::MethodNotAllowed => {
+                self.serialize_error(&crate::schema::routing::RoutingError::unknown_operation())
+            }
+            _ if self.legacy_routing_errors => {
+                IntoResponse::<RpcV2Cbor>::into_response(crate::protocol::rpc_v2_cbor::router::Error::NotFound)
             }
             _ => self.serialize_error(&crate::schema::routing::RoutingError::unknown_operation()),
         }
@@ -236,6 +246,9 @@ impl ServerProtocol for RpcV2Cbor {
     /// header, which is reserved for handler-returned responses.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
+            DeserializeError::InitialRequestFrame(reason) => {
+                IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Validation(reason.into_bytes()))
+            }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Serialization(crate::Error::new(err)))
             }
