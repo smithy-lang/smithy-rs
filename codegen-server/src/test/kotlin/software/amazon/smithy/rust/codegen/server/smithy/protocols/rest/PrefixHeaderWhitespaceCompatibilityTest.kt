@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -22,11 +22,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Sends plain-string and enum prefix headers with surrounding whitespace, empty values, and
+ * invalid enum values to legacy and schema REST services. Handler output exposes the parsed map
+ * values so the test can pin legacy trimming and validation rules. Status, headers, and response
+ * bodies must agree between the two generated implementations.
+ */
 internal class PrefixHeaderWhitespaceCompatibilityTest {
     @Test
     fun `prefix header strings preserve legacy whitespace and validation semantics`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/prefix-header-whitespace.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/prefix-header-whitespace.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("prefix-header-whitespace-")
         val protocols = listOf("JsonPrefixHeaders", "XmlPrefixHeaders")
         for (schemaSerde in listOf(false, true)) {

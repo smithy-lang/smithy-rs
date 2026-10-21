@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -21,11 +21,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Sends media-typed prefix headers containing base64, quoting, empty tokens, repeated values,
+ * invalid UTF-8, and malformed encodings through REST JSON and REST XML servers. It pins legacy
+ * decoded values and rejection responses, then checks schema captures against them. Established
+ * legacy panic cases are recorded explicitly, while the schema path is required to avoid panics.
+ */
 internal class PrefixHeaderMediaTypeCompatibilityTest {
     @Test
     fun `media typed prefix headers preserve legacy decoding and rejection behavior`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/prefix-header-media-type.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/prefix-header-media-type.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("prefix-header-media-type-")
         val protocols = listOf("JsonPrefixMedia", "XmlPrefixMedia")
         for (schemaSerde in listOf(false, true)) {

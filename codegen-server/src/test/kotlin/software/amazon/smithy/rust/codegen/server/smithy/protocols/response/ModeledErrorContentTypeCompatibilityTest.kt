@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.response
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -22,15 +22,19 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Calls operations with empty, document, text, blob, media-typed, and streaming outputs, returning
+ * both success values and modeled errors. Across all five protocols it checks how operation
+ * output metadata determines error content type and how invalid values are rejected. Schema
+ * error wrappers must retain the correct operation descriptor, and wire captures must match legacy.
+ */
 internal class ModeledErrorContentTypeCompatibilityTest {
     @Test
     fun `modeled error content type follows the operation output`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/error-content-type.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/error-content-type.smithy")).asSmithyModel()
         val run =
-            System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createDirectories(root.resolve("tools/schema-serde-compat/.runs")).let {
-                Files.createTempDirectory(it, "C05-")
-            }
+            System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("C05-")
         val protocols =
             listOf("JsonErrorContentType", "XmlErrorContentType", "Json10ErrorContentType", "Json11ErrorContentType", "CborErrorContentType")
         for (schemaSerde in listOf(false, true)) {

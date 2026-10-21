@@ -1,0 +1,2392 @@
+[
+  {
+    "id": "query-empty",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "query-scalar-first",
+    "uri": "/bindings?q=first&q=second",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-integer-first",
+    "uri": "/bindings?n=7&n=bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-integer-bad-first",
+    "uri": "/bindings?n=bad&n=7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-bool",
+    "uri": "/bindings?b=True",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-lists",
+    "uri": "/bindings?list=a&list=b&list=",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-plus",
+    "uri": "/bindings?q=a+b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-invalid-utf8",
+    "uri": "/bindings?q=%FF",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-escape",
+    "uri": "/bindings?q=%&q=%GG",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-date-list",
+    "uri": "/bindings?dates=0&dates=1.5",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-date-invalid",
+    "uri": "/bindings?dates=bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-empty-value",
+    "uri": "/bindings?q&n=",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "query-unknown",
+    "uri": "/bindings?unknown=a&unknown=b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser"
+  },
+  {
+    "id": "header-x-text-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-text-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-text-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        " a "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-text-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-text-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "\"a,b\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-text-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "one"
+      ],
+      [
+        "x-text",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "+7"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "1,2"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-6",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "1.0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-7",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "2147483648"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-number-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "one"
+      ],
+      [
+        "x-number",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"a,b\",c"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"a\\\"b\",c"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "a,,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-6",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"unterminated"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-list-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "one"
+      ],
+      [
+        "x-list",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "\"e30=\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "e30="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "e30=,e30="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "/w=="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-media-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "one"
+      ],
+      [
+        "x-media",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-date-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-date-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "Thu, 01 Jan 1970 00:00:00 GMT"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-date-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-date-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-date-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "one"
+      ],
+      [
+        "x-date",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-dates-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        "Thu, 01 Jan 1970 00:00:00 GMT, Fri, 02 Jan 1970 00:00:00 GMT"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-dates-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-dates-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        "one"
+      ],
+      [
+        "x-dates",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " value "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "\"a,b\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-x-meta-key-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "one"
+      ],
+      [
+        "x-meta-key",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "header-nonutf8",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        {
+          "hex": "ff"
+        }
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser"
+  },
+  {
+    "id": "prefix-media-0",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "e30="
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "prefix-media-1",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "\"e30=\""
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "prefix-media-2",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " e30= "
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "prefix-media-3",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "bad"
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "prefix-media-4",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "/w=="
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "prefix-media-5",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        ""
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn"
+  },
+  {
+    "id": "label-label-0",
+    "uri": "/label/rex",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-1",
+    "uri": "/label/a%2Fb",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-2",
+    "uri": "/label/a+b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-3",
+    "uri": "/label/%FF",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-4",
+    "uri": "/label/%GG",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-5",
+    "uri": "/label/a%20b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-label-6",
+    "uri": "/label/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-0",
+    "uri": "/greedy/a/b/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-1",
+    "uri": "/greedy/a//b/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-2",
+    "uri": "/greedy/a/end/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-3",
+    "uri": "/greedy//end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-4",
+    "uri": "/greedy/a/b/end/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-number-0",
+    "uri": "/number/7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-number-1",
+    "uri": "/number/%37",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-number-2",
+    "uri": "/number/+7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-number-3",
+    "uri": "/number/2147483648",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-number-4",
+    "uri": "/number/-1",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-timestamp-0",
+    "uri": "/timestamp/0",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-timestamp-1",
+    "uri": "/timestamp/1.5",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-timestamp-2",
+    "uri": "/timestamp/%30",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-timestamp-3",
+    "uri": "/timestamp/bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-trailing-0",
+    "uri": "/trailing/rex",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-trailing-1",
+    "uri": "/trailing/rex/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-trailing-0",
+    "uri": "/greedy-trailing/a/b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "label-greedy-trailing-1",
+    "uri": "/greedy-trailing/a/b/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET"
+  },
+  {
+    "id": "body-empty",
+    "uri": "/body",
+    "body": "",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-space",
+    "uri": "/body",
+    "body": " ",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-object",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-null",
+    "uri": "/body",
+    "body": "null",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-array",
+    "uri": "/body",
+    "body": "[]",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-trailing",
+    "uri": "/body",
+    "body": "{}junk",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-second",
+    "uri": "/body",
+    "body": "{}{}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-unknown",
+    "uri": "/body",
+    "body": "{\"unknown\":{\"x\":[1,null,true]}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-unknown-bad",
+    "uri": "/body",
+    "body": "{\"unknown\":[1,]}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-known-duplicate",
+    "uri": "/body",
+    "body": "{\"text\":\"a\",\"text\":\"b\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-known-null",
+    "uri": "/body",
+    "body": "{\"text\":\"a\",\"text\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-rename",
+    "uri": "/body",
+    "body": "{\"original\":\"wrong\",\"renamed\":\"yes\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-default-null",
+    "uri": "/body",
+    "body": "{\"defaulted\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/body",
+    "body": "{\"nested\":{}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/body",
+    "body": "{\"nested\":{\"required\":\"ok\"}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-union-empty",
+    "uri": "/body",
+    "body": "{\"choice\":{}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-union-unknown",
+    "uri": "/body",
+    "body": "{\"choice\":{\"unknown\":\"x\"}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-union-null",
+    "uri": "/body",
+    "body": "{\"choice\":{\"text\":null}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-union-many",
+    "uri": "/body",
+    "body": "{\"choice\":{\"text\":\"x\",\"integer\":1}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-list-null",
+    "uri": "/body",
+    "body": "{\"list\":[\"a\",null,\"b\"]}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-sparse-list",
+    "uri": "/body",
+    "body": "{\"sparseList\":[\"a\",null,\"b\"]}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-map-null",
+    "uri": "/body",
+    "body": "{\"map\":{\"k\":null}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-sparse-map",
+    "uri": "/body",
+    "body": "{\"sparseMap\":{\"k\":null}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-map-duplicate",
+    "uri": "/body",
+    "body": "{\"map\":{\"k\":\"a\",\"k\":\"b\"}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-blob-bad",
+    "uri": "/body",
+    "body": "{\"blob\":\"bad\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/body",
+    "body": "{\"blob\":\"e30=\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-timestamp-string",
+    "uri": "/body",
+    "body": "{\"timestamp\":\"1.5\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-timestamp-number",
+    "uri": "/body",
+    "body": "{\"timestamp\":1.5}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-document-null",
+    "uri": "/body",
+    "body": "{\"document\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-document-array",
+    "uri": "/body",
+    "body": "{\"document\":[1,true,\"x\",null]}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-null",
+    "uri": "/body",
+    "body": "{\"integer\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-0",
+    "uri": "/body",
+    "body": "{\"integer\":0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer--1",
+    "uri": "/body",
+    "body": "{\"integer\":-1}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-1.0",
+    "uri": "/body",
+    "body": "{\"integer\":1.0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-1e0",
+    "uri": "/body",
+    "body": "{\"integer\":1e0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-1",
+    "uri": "/body",
+    "body": "{\"integer\":\"1\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-NaN",
+    "uri": "/body",
+    "body": "{\"integer\":\"NaN\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-Infinity",
+    "uri": "/body",
+    "body": "{\"integer\":\"Infinity\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-1e400",
+    "uri": "/body",
+    "body": "{\"integer\":1e400}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-integer-true",
+    "uri": "/body",
+    "body": "{\"integer\":true}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-null",
+    "uri": "/body",
+    "body": "{\"long\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-0",
+    "uri": "/body",
+    "body": "{\"long\":0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long--1",
+    "uri": "/body",
+    "body": "{\"long\":-1}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-1.0",
+    "uri": "/body",
+    "body": "{\"long\":1.0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-1e0",
+    "uri": "/body",
+    "body": "{\"long\":1e0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-1",
+    "uri": "/body",
+    "body": "{\"long\":\"1\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-NaN",
+    "uri": "/body",
+    "body": "{\"long\":\"NaN\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-Infinity",
+    "uri": "/body",
+    "body": "{\"long\":\"Infinity\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-1e400",
+    "uri": "/body",
+    "body": "{\"long\":1e400}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-long-true",
+    "uri": "/body",
+    "body": "{\"long\":true}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-null",
+    "uri": "/body",
+    "body": "{\"float\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-0",
+    "uri": "/body",
+    "body": "{\"float\":0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float--1",
+    "uri": "/body",
+    "body": "{\"float\":-1}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-1.0",
+    "uri": "/body",
+    "body": "{\"float\":1.0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-1e0",
+    "uri": "/body",
+    "body": "{\"float\":1e0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-1",
+    "uri": "/body",
+    "body": "{\"float\":\"1\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-NaN",
+    "uri": "/body",
+    "body": "{\"float\":\"NaN\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-Infinity",
+    "uri": "/body",
+    "body": "{\"float\":\"Infinity\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-1e400",
+    "uri": "/body",
+    "body": "{\"float\":1e400}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-float-true",
+    "uri": "/body",
+    "body": "{\"float\":true}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-null",
+    "uri": "/body",
+    "body": "{\"double\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-0",
+    "uri": "/body",
+    "body": "{\"double\":0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double--1",
+    "uri": "/body",
+    "body": "{\"double\":-1}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-1.0",
+    "uri": "/body",
+    "body": "{\"double\":1.0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-1e0",
+    "uri": "/body",
+    "body": "{\"double\":1e0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-1",
+    "uri": "/body",
+    "body": "{\"double\":\"1\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-NaN",
+    "uri": "/body",
+    "body": "{\"double\":\"NaN\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-Infinity",
+    "uri": "/body",
+    "body": "{\"double\":\"Infinity\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-1e400",
+    "uri": "/body",
+    "body": "{\"double\":1e400}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-double-true",
+    "uri": "/body",
+    "body": "{\"double\":true}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-null",
+    "uri": "/body",
+    "body": "{\"boolean\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-0",
+    "uri": "/body",
+    "body": "{\"boolean\":0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean--1",
+    "uri": "/body",
+    "body": "{\"boolean\":-1}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-1.0",
+    "uri": "/body",
+    "body": "{\"boolean\":1.0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-1e0",
+    "uri": "/body",
+    "body": "{\"boolean\":1e0}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-1",
+    "uri": "/body",
+    "body": "{\"boolean\":\"1\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-NaN",
+    "uri": "/body",
+    "body": "{\"boolean\":\"NaN\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-Infinity",
+    "uri": "/body",
+    "body": "{\"boolean\":\"Infinity\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-1e400",
+    "uri": "/body",
+    "body": "{\"boolean\":1e400}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-boolean-true",
+    "uri": "/body",
+    "body": "{\"boolean\":true}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "payload-string-0",
+    "uri": "/string-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-1",
+    "uri": "/string-payload",
+    "body": "null",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-2",
+    "uri": "/string-payload",
+    "body": "{}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-3",
+    "uri": "/string-payload",
+    "body": "{\"required\":\"ok\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-4",
+    "uri": "/string-payload",
+    "body": "[]",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-5",
+    "uri": "/string-payload",
+    "body": "\"hello\"",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-6",
+    "uri": "/string-payload",
+    "body": "hello",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-string-nonutf8",
+    "uri": "/string-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody",
+    "body_hex": "ff"
+  },
+  {
+    "id": "payload-blob-0",
+    "uri": "/blob-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-1",
+    "uri": "/blob-payload",
+    "body": "null",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-2",
+    "uri": "/blob-payload",
+    "body": "{}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-3",
+    "uri": "/blob-payload",
+    "body": "{\"required\":\"ok\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-4",
+    "uri": "/blob-payload",
+    "body": "[]",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-5",
+    "uri": "/blob-payload",
+    "body": "\"hello\"",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-6",
+    "uri": "/blob-payload",
+    "body": "hello",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-blob-nonutf8",
+    "uri": "/blob-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody",
+    "body_hex": "ff"
+  },
+  {
+    "id": "payload-struct-0",
+    "uri": "/struct-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-1",
+    "uri": "/struct-payload",
+    "body": "null",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-2",
+    "uri": "/struct-payload",
+    "body": "{}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-3",
+    "uri": "/struct-payload",
+    "body": "{\"required\":\"ok\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-4",
+    "uri": "/struct-payload",
+    "body": "[]",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-5",
+    "uri": "/struct-payload",
+    "body": "\"hello\"",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-6",
+    "uri": "/struct-payload",
+    "body": "hello",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-struct-nonutf8",
+    "uri": "/struct-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody",
+    "body_hex": "ff"
+  },
+  {
+    "id": "payload-document-0",
+    "uri": "/document-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-1",
+    "uri": "/document-payload",
+    "body": "null",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-2",
+    "uri": "/document-payload",
+    "body": "{}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-3",
+    "uri": "/document-payload",
+    "body": "{\"required\":\"ok\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-4",
+    "uri": "/document-payload",
+    "body": "[]",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-5",
+    "uri": "/document-payload",
+    "body": "\"hello\"",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-6",
+    "uri": "/document-payload",
+    "body": "hello",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody"
+  },
+  {
+    "id": "payload-document-nonutf8",
+    "uri": "/document-payload",
+    "body": "",
+    "headers": [],
+    "source": "HttpBindingGenerator.deserializePayloadBody",
+    "body_hex": "ff"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/response",
+    "body": "{\"scenario\": \"empty\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-empty-headers",
+    "uri": "/response",
+    "body": "{\"scenario\": \"empty-headers\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/response",
+    "body": "{\"scenario\": \"zero\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/response",
+    "body": "{\"scenario\": \"quotes\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-invalid-public",
+    "uri": "/response",
+    "body": "{\"scenario\": \"invalid-public\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-invalid-secret",
+    "uri": "/response",
+    "body": "{\"scenario\": \"invalid-secret\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "response-invalid-prefix-key",
+    "uri": "/response",
+    "body": "{\"scenario\": \"invalid-prefix-key\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-invalid-prefix-value",
+    "uri": "/response",
+    "body": "{\"scenario\": \"invalid-prefix-value\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-date",
+    "uri": "/response",
+    "body": "{\"scenario\": \"date\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-0",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-0\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-99",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-99\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-100",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-100\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-204",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-204\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-304",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-304\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-600",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-600\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-999",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-999\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-1000",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-1000\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code-65536",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code-65536\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-code--1",
+    "uri": "/response",
+    "body": "{\"scenario\": \"code--1\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "sensitive-success",
+    "uri": "/sensitive/SECRET_LABEL/nested/end?secret=SECRET_QUERY",
+    "body": "{\"body\":\"SECRET_BODY\"}",
+    "headers": [
+      [
+        "x-secret",
+        "SECRET_HEADER"
+      ],
+      [
+        "x-meta-SECRET_KEY",
+        "SECRET_VALUE"
+      ]
+    ],
+    "source": "ServerHttpSensitivityGenerator; InstrumentPlugin",
+    "forbidden_log_markers": [
+      "SECRET_LABEL",
+      "SECRET_QUERY",
+      "SECRET_BODY",
+      "SECRET_HEADER",
+      "SECRET_RESPONSE",
+      "SECRET_VALUE",
+      "secret_key"
+    ]
+  },
+  {
+    "id": "content-type-none",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": false
+  },
+  {
+    "id": "content-type-wrong",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "text/plain"
+  },
+  {
+    "id": "content-type-charset",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "application/json; charset=utf-8"
+  },
+  {
+    "id": "content-type-bad",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "broken"
+  },
+  {
+    "id": "content-type-case",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "Application/Json"
+  },
+  {
+    "id": "body-unknown-escape",
+    "uri": "/body",
+    "body": "{\"unknown\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-known-escape",
+    "uri": "/body",
+    "body": "{\"text\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-document-escape",
+    "uri": "/body",
+    "body": "{\"document\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-unknown-surrogate",
+    "uri": "/body",
+    "body": "{\"unknown\":\"\\uD800\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-known-surrogate",
+    "uri": "/body",
+    "body": "{\"text\":\"\\uD800\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-limited-short",
+    "uri": "/body",
+    "body": "{\"limited\":\"x\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-limited-valid",
+    "uri": "/body",
+    "body": "{\"limited\":\"yes\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-limited-long",
+    "uri": "/body",
+    "body": "{\"limited\":\"abcde\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-unique-duplicate",
+    "uri": "/body",
+    "body": "{\"unique\":[\"x\",\"x\"]}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-enum-valid",
+    "uri": "/body",
+    "body": "{\"mode\":\"a\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-enum-invalid",
+    "uri": "/body",
+    "body": "{\"mode\":\"other\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-int-enum-valid",
+    "uri": "/body",
+    "body": "{\"intMode\":1}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-int-enum-invalid",
+    "uri": "/body",
+    "body": "{\"intMode\":9}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-large-long",
+    "uri": "/body",
+    "body": "{\"long\":9007199254740993.0}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-negative-overflow",
+    "uri": "/body",
+    "body": "{\"double\":-1e400}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-underflow",
+    "uri": "/body",
+    "body": "{\"double\":1e-400}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-default-duplicate-null",
+    "uri": "/body",
+    "body": "{\"defaulted\":7,\"defaulted\":null}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-integer-duplicate-null",
+    "uri": "/body",
+    "body": "{\"integer\":7,\"integer\":null}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "body-map-duplicate-null",
+    "uri": "/body",
+    "body": "{\"map\":{\"k\":\"x\",\"k\":null}}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators"
+  },
+  {
+    "id": "accept-application/json",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-*/*",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "*/*"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-application/*",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/*"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-text/plain",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "text/plain"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-application/json;q=0",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json;q=0"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-application/json, text/plain",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json, text/plain"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "accept-not-a-mime",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "not-a-mime"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader"
+  },
+  {
+    "id": "body-document-depth-63",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "body-document-depth-64",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "body-document-depth-65",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "body-document-depth-127",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "body-document-depth-128",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "body-document-depth-129",
+    "uri": "/body",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container"
+  },
+  {
+    "id": "response-media-prefix",
+    "uri": "/media-response",
+    "method": "GET",
+    "headers": [],
+    "body_hex": "",
+    "content_type": false,
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "modeled-default",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "7b227363656e6172696f223a202264656661756c74227d",
+    "content_type": "application/json",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 409
+  },
+  {
+    "id": "modeled-override",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "7b227363656e6172696f223a20226f76657272696465227d",
+    "content_type": "application/json",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "modeled-invalid-header",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "7b227363656e6172696f223a2022696e76616c69642d686561646572227d",
+    "content_type": "application/json",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "modeled-headers",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "7b227363656e6172696f223a202268656164657273227d",
+    "content_type": "application/json",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-empty-stream",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-text",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000006b0000004a1dc931bb0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b2274657874223a202268656c6c6f227d8f4793cc",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "event-empty-event",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005b0000004bcbefb9ab0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070005456d7074790d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e9a139033",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-empty-event-garbage",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "000000620000004b67de635c0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070005456d7074790d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e67617262616765a575171e",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-unknown-event",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005f0000004dd70cba5e0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007556e6b6e6f776e0d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d0667d486",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "000000580000004382944b490d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d7479706507000a746578742f706c61696e68656c6c6f3e0eb125",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw-bad-type",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005e00000049ed0157f70d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e68656c6c6fe7317e5d",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw-nonutf8",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "00000054000000434764a6480d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d7479706507000a746578742f706c61696eff73337a8d",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-headers",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000007f0000005e9273d4840d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e066865616465720700076f7574736964657b2274657874223a202268656c6c6f227d67a7746f",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-header-in-body",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "000000930000005e7f57fe5a0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e066865616465720700076f7574736964657b22686561646572223a2022696e73696465222c202274657874223a202268656c6c6f227d03596f3a",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-duplicate-header",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000007c0000006af4675ae10d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e066865616465720700056669727374066865616465720700046c6173747b7db027165c",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-wrong-message-type",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005c0000004a0ec8552d0d3a6d6573736167652d7479706507000577726f6e670b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7db58caafc",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-missing-message-type",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000004600000034932586350b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d1f35e676",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-missing-event-type",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000004900000037887c405e0d3a6d6573736167652d747970650700056576656e740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d4c96537e",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-initial",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "00000067000000555531d14f0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d7479706507000f696e697469616c2d726571756573740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d685222010000006b0000004a1dc931bb0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b2274657874223a20226166746572227da52d075b",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-two-events",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "000000670000004ad839dcba0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b2274657874223a202261227d423f770f000000670000004ad839dcba0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b2274657874223a202262227d4079c956",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-truncated",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005c0000004a0ec8552d0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d6aa300",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-bad-crc",
+    "uri": "/events",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "0000005c0000004a0ec8552d0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f6a736f6e7b7d6aa3005c",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "streaming-blob-empty",
+    "uri": "/streaming-blob",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "",
+    "content_type": "application/octet-stream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "streaming-blob-bytes",
+    "uri": "/streaming-blob",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "00ff68656c6c6f",
+    "content_type": "application/octet-stream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  }
+]

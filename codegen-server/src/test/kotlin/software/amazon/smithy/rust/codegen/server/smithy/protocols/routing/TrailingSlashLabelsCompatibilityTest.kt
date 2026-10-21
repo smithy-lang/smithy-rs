@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.routing
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -22,11 +22,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Uses the dedicated label fixture to replay plain, trailing-slash, greedy, suffix, and query
+ * routes through legacy and schema REST JSON/XML servers. It pins legacy routing statuses and
+ * handler-visible label strings, then compares complete response captures. This covers label
+ * extraction and routing together rather than only parsing a URI template.
+ */
 internal class TrailingSlashLabelsCompatibilityTest {
     @Test
     fun `trailing template slashes preserve legacy routing and label values`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/trailing-slash-labels.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/trailing-slash-labels.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("trailing-slash-labels-")
         val protocols = listOf("JsonLabels", "XmlLabels")
         // Generate and exercise both generated serde services before testing schema serde.
