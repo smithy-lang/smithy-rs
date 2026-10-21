@@ -223,8 +223,8 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
                 "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
                 "multi-protocol-server-sdk",
                 imports = listOf(
-                    "../codegen-core/common-test-models/multi-protocol-compat/multi-protocol-common.smithy",
-                    "../codegen-core/common-test-models/multi-protocol-compat/multi-protocol-server.smithy",
+                    "custom-test-models/multi-protocol-compat/multi-protocol-common.smithy",
+                    "custom-test-models/multi-protocol-compat/multi-protocol-server.smithy",
                 ),
                 extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
             ),
