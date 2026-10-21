@@ -111,11 +111,12 @@ class ClientProtocolTestGenerator(
         get() =
             if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
                 // The schema path correctly handles these cases that the legacy path couldn't:
-                // - Explicit member values over defaults (rpcv2Cbor and restJson)
+                // - Explicit member values over defaults (awsJson1_0, rpcv2Cbor, and restJson)
                 // - httpPrefixHeaders collision with @httpHeader (restJson and restXml, see #4184)
                 ExpectFail.filterNot {
                     it is FailingTest.RequestTest && it.id in
                         setOf(
+                            "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults",
                             "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults",
                             "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults",
                             "RestJsonHttpEmptyPrefixHeadersRequestClient",
