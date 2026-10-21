@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Mirrors the gate this module carried while it lived in `src/client.rs`. An integration test
-// target always compiles, so the gate has to move here or the build breaks without these features.
 #![cfg(all(
     feature = "client",
     any(feature = "test-util", feature = "legacy-test-util")
