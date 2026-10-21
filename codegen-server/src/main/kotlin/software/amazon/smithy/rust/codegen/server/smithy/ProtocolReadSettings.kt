@@ -58,6 +58,36 @@ internal object ProtocolReadSettings {
         return legacyValue to legacyPath
     }
 
+    /**
+     * Maximum buffered bytes for a non-streaming request body from the common protocol section,
+     * or `null` when the legacy `codegen.requestBodyMaxBytes` value (parsed separately, with its
+     * original validation) applies.
+     */
+    fun requestBodyMaxBytes(
+        customizationConfig: ObjectNode?,
+        legacyCodegenConfig: ObjectNode?,
+    ): Long? {
+        val key = ServerCodegenConfig.REQUEST_BODY_MAX_BYTES_CONFIG_KEY
+        val (value, path) = resolve(customizationConfig, key, legacyCodegenConfig, "codegen.$key")
+        if (path != "$COMMON_PATH.$key") {
+            return null
+        }
+        val errorMessage = "`$path` must be a non-negative integer that fits in a Long"
+        if (value == null || !value.isNumberNode) {
+            throw CodegenException(errorMessage)
+        }
+        val maxBytes =
+            try {
+                value.expectNumberNode().value.toString().toBigDecimal().longValueExact()
+            } catch (_: ArithmeticException) {
+                throw CodegenException(errorMessage)
+            }
+        if (maxBytes < 0) {
+            throw CodegenException(errorMessage)
+        }
+        return maxBytes
+    }
+
     /** Maximum consecutive ready HTTP body frames; zero disables forced yielding. */
     fun eventStreamReadPollBudget(
         customizationConfig: ObjectNode?,

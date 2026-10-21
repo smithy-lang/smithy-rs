@@ -265,16 +265,20 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
-        let request_body_read_timeout = self
-            .request_body_read_timeout
-            .map(|config| RequestBodyReadTimeoutState {
+        let request_body_read_timeout = self.request_body_read_timeout.map(|config| {
+            debug_assert!(
+                !config.timeout.is_zero(),
+                "disabled request body read timeouts must be represented as None"
+            );
+            RequestBodyReadTimeoutState {
                 sleep: Box::pin(tokio::time::sleep(config.timeout)),
                 timeout: config.timeout,
                 version: req.version(),
                 operation: config.operation,
                 #[cfg(feature = "request-id")]
                 request_id: request_id(&req),
-            });
+            }
+        });
         UpgradeFuture {
             service: Some(service),
             inner: Inner::FromRequest {

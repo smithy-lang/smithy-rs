@@ -90,6 +90,14 @@ data class ServerRustSettings(
             val httpVersion = if (serverCodegenConfig.http1x) HttpVersion.Http1x else HttpVersion.Http0x
             val runtimeConfig = coreRustSettings.runtimeConfig.copy(httpVersion = httpVersion)
 
+            // `customizationConfig.protocols.common.requestBodyMaxBytes` takes precedence over
+            // the legacy `codegen.requestBodyMaxBytes` already parsed into the codegen config.
+            val commonRequestBodyMaxBytes =
+                ProtocolReadSettings.requestBodyMaxBytes(
+                    coreRustSettings.customizationConfig,
+                    codegenSettingsNode.orElse(null),
+                )
+
             return ServerRustSettings(
                 service = coreRustSettings.service,
                 moduleName = coreRustSettings.moduleName,
@@ -98,7 +106,9 @@ data class ServerRustSettings(
                 moduleDescription = coreRustSettings.moduleDescription,
                 moduleRepository = coreRustSettings.moduleRepository,
                 runtimeConfig = runtimeConfig,
-                codegenConfig = serverCodegenConfig,
+                codegenConfig =
+                    commonRequestBodyMaxBytes?.let { serverCodegenConfig.copy(requestBodyMaxBytes = it) }
+                        ?: serverCodegenConfig,
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
@@ -339,7 +349,9 @@ data class RequestBodyReadTimeouts(
  * [requestBodyMaxBytes]: Maximum number of bytes to buffer when deserializing a non-streaming
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
- *   values). Default is `0` (no limit) for backwards compatibility.
+ *   values). Default is `0` (no limit) for backwards compatibility. Configured with
+ *   `customizationConfig.protocols.common.requestBodyMaxBytes`; the legacy
+ *   `codegen.requestBodyMaxBytes` key is read when the common key is absent.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
  *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
