@@ -6,10 +6,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -65,7 +65,7 @@ internal class GeneratedSerdeEventConversionTest {
             model,
             IntegrationTestParams(
                 // Keep generated serde enabled for every protocol.
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false,"http-1x":true}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).withHttp1x().toObjectNode(),
                 overrideTestDir = Files.createTempDirectory("generated-serde-event-conversion-$protocol-").toFile(),
                 cargoCommand = "cargo test --quiet --lib",
             ),

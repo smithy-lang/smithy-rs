@@ -7,11 +7,11 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -51,7 +51,7 @@ internal class ServerSchemaCborErrorsTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib --tests",
             ),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -109,7 +109,7 @@ internal class ServerSchemaCborErrorsTest {
         val servers =
             serverIntegrationTest(
                 model,
-                IntegrationTestParams(additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode()),
+                IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode()),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
                 crate.testModule {

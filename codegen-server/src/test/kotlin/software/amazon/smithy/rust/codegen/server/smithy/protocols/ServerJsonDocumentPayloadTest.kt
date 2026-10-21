@@ -6,12 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -46,10 +46,7 @@ internal class ServerJsonDocumentPayloadTest {
             model,
             IntegrationTestParams(
                 additionalSettings =
-                    Node.objectNode().withMember(
-                        "codegen",
-                        Node.objectNode().withMember("schemaSerde", schemaSerde),
-                    ),
+                    ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib -- --nocapture",
             ),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -119,14 +116,14 @@ internal class ServerJsonDocumentPayloadTest {
             """.asSmithyModel()
 
         for ((http1x, schemaSerde) in listOf(false to null, false to false, true to null, true to false, true to true)) {
-            var codegen = Node.objectNode().withMember("http-1x", http1x)
+            val settings = ServerAdditionalSettings.builder().withHttp1x(http1x)
             if (schemaSerde != null) {
-                codegen = codegen.withMember("schemaSerde", schemaSerde)
+                settings.schemaSerde(schemaSerde)
             }
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = Node.objectNode().withMember("codegen", codegen),
+                    additionalSettings = settings.toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib --tests",
                 ),
                 testCoverage = HttpTestType.Default,

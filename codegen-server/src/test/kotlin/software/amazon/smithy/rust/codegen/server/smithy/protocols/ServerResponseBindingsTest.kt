@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -74,8 +75,7 @@ internal class ServerResponseBindingsTest {
             Files.readString(root.resolve("tools/schema-serde-compat/models/response-bindings-$protocol.smithy"))
                 .asSmithyModel(smithyVersion = "2")
         val settings =
-            Node.objectNodeBuilder()
-                .withMember("codegen", Node.objectNodeBuilder().withMember("schemaSerde", schemaSerde).build())
+            ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().toBuilder()
         if (bindings != null) {
             val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
             val otherBindings = if (bindings == "smithy-specs") "historical" else "smithy-specs"

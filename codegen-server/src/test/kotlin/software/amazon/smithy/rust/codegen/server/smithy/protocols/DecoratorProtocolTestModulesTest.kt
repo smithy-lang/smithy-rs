@@ -5,11 +5,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -68,7 +68,7 @@ internal class DecoratorProtocolTestModulesTest {
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":$schemaSerde,"http-1x":true}}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).withHttp1x().toObjectNode(),
                     overrideTestDir = Files.createTempDirectory("decorator-protocol-tests-$schemaSerde-").toFile(),
                     cargoCommand = "cargo test --quiet --lib",
                 ),

@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -380,14 +381,13 @@ class MultiProtocolAbFuzzHarnessTest {
         service: String,
         dest: File,
     ): File {
-        val codegen = Node.objectNodeBuilder().withMember("http-1x", true)
-        codegen.withMember("schemaSerde", sideSchemaSerde)
+        val settings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(sideSchemaSerde)
         val servers =
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
                     service = service,
-                    additionalSettings = Node.objectNode().withMember("codegen", codegen.build()),
+                    additionalSettings = settings.toObjectNode(),
                     command = { dir -> println("generated $dir") },
                 ),
                 testCoverage = HttpTestType.Default,
@@ -569,7 +569,7 @@ class MultiProtocolAbFuzzHarnessTest {
                             model,
                             IntegrationTestParams(
                                 service = serviceOf("multiprotocol"),
-                                additionalSettings = Node.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+                                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
                                 command = { dir -> println("generated original Publish at $dir") },
                             ),
                             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -609,7 +609,7 @@ class MultiProtocolAbFuzzHarnessTest {
                         model,
                         IntegrationTestParams(
                             service = serviceOf("multiprotocol"),
-                            additionalSettings = Node.parse("""{"codegen":{"schemaSerde":$schemaSerde}}""").expectObjectNode(),
+                            additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
                             cargoCommand = "cargo test --quiet --lib --tests --offline",
                         ),
                         testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

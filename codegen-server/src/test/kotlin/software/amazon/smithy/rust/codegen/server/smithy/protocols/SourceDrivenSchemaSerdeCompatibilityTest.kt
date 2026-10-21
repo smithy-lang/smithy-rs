@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -37,8 +38,7 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
             ?: listOf("rest-json", "rest-xml", "aws-json-10", "aws-json-11", "rpc-v2-cbor")
 
     private fun settings(schemaSerde: Boolean): ObjectNode =
-        Node.objectNodeBuilder()
-            .withMember("codegen", Node.objectNodeBuilder().withMember("http-1x", true).withMember("schemaSerde", schemaSerde).build())
+        ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode().toBuilder()
             .withMember("runtimeConfig", Node.objectNodeBuilder().withMember("relativePath", (System.getenv("SCHEMA_COMPAT_RUNTIME") ?: root.resolve("rust-runtime").toString())).build())
             .build()
 

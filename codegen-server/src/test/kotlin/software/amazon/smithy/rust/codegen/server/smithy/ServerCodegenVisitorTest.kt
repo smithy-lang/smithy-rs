@@ -10,11 +10,11 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
@@ -67,10 +67,7 @@ class ServerCodegenVisitorTest {
             generatePluginContext(
                 model,
                 additionalSettings =
-                    Node.objectNode().withMember(
-                        "codegen",
-                        Node.objectNode().withMember("schemaSerde", schemaSerde).withMember("http-1x", true),
-                    ),
+                    ServerAdditionalSettings.builder().schemaSerde(schemaSerde).withHttp1x().toObjectNode(),
             )
         val visitor =
             ServerCodegenVisitor(

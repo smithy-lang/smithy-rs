@@ -5,8 +5,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -30,7 +30,7 @@ internal class OperationDescriptorNamesTest {
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"http-1x":true,"schemaSerde":$schemaSerde}}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib",
                 ),
                 testCoverage = HttpTestType.Default,

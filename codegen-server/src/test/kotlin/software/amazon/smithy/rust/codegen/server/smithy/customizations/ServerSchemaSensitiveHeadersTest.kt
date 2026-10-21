@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -52,7 +52,7 @@ internal class ServerSchemaSensitiveHeadersTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                 cargoCommand = "cargo test --quiet",
             ),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

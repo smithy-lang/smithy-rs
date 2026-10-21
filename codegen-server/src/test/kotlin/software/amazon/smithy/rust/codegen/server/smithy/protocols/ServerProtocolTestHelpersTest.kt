@@ -7,8 +7,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
@@ -47,7 +47,7 @@ internal class ServerProtocolTestHelpersTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":$schemaSerde}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib --tests",
             ),
             testCoverage =

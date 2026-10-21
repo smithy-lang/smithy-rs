@@ -6,8 +6,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
@@ -31,9 +31,8 @@ internal class StreamingInputLiveGenerationTest {
                     IntegrationTestParams(
                         service = "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
                         overrideTestDir = run.resolve("$mode-${if (initial) "initial" else "no-initial"}").toFile(),
-                        additionalSettings = ObjectNode.parse(
-                            """{"codegen":{"http-1x":true,"schemaSerde":$schema,"alwaysSendEventStreamInitialResponse":$initial}}""",
-                        ).expectObjectNode(),
+                        additionalSettings =
+                            ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schema).alwaysSendEventStreamInitialResponse(initial).toObjectNode(),
                         command = {},
                     ),
                     testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

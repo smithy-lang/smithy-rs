@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -101,27 +100,14 @@ class AllowMissingUnionVariantTest {
         model,
         IntegrationTestParams(
             service = "test#AllowMissingUnionVariantService",
-            additionalSettings = settings(enabled, schemaSerde),
+            additionalSettings =
+                ServerAdditionalSettings.builder()
+                    .allowMissingUnionVariant(enabled)
+                    .schemaSerde(schemaSerde)
+                    .toObjectNode(),
         ),
         testCoverage = HttpTestType.Default,
     ) { _, _ -> }
-
-    /** The schema-based request path needs `schemaSerde` and `http1x`; the builder has no `schemaSerde` knob. */
-    private fun settings(
-        allowMissingUnionVariant: Boolean,
-        schemaSerde: Boolean,
-    ): ObjectNode {
-        val builder = ServerAdditionalSettings.builder().allowMissingUnionVariant(allowMissingUnionVariant)
-        if (!schemaSerde) {
-            return builder.toObjectNode()
-        }
-        val node = builder.withHttp1x().toObjectNode()
-        val codegen =
-            node.expectObjectMember("codegen").toBuilder()
-                .withMember(ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY, true)
-                .build()
-        return node.toBuilder().withMember("codegen", codegen).build()
-    }
 
     @Test
     fun `an empty union body parses to None when allowMissingUnionVariant is enabled`() {
