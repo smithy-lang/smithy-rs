@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Provides protocol-specific requests, response snapshots, and failing extractors
+//! for the rejection suites. It records reference runtime errors and checks custom
+//! rejection responses so the tests compare actual HTTP behavior with shared fixtures.
+//!
 #![allow(dead_code)]
 
 use aws_smithy_http_server::{
@@ -160,7 +164,7 @@ runtime_service!(
     ReviewRestConfig,
     [],
     rest_json_1::RestJson1,
-    rest_json_1::runtime_error::RuntimeError
+    aws_smithy_http_server::runtime_error::RuntimeError
 );
 runtime_service!(legacy_cbor, compat_cbor_legacy_server_sdk, ReviewCbor, ReviewCborConfig, [::<Body, _, _, _>], rpc_v2_cbor::RpcV2Cbor, rpc_v2_cbor::runtime_error::RuntimeError);
 runtime_service!(
@@ -170,7 +174,7 @@ runtime_service!(
     ReviewCborConfig,
     [],
     rpc_v2_cbor::RpcV2Cbor,
-    rpc_v2_cbor::runtime_error::RuntimeError
+    aws_smithy_http_server::runtime_error::RuntimeError
 );
 runtime_service!(legacy_json, compat_awsjson_legacy_server_sdk, ReviewAwsJson, ReviewAwsJsonConfig, [::<Body, _, _, _>], aws_json_10::AwsJson1_0, aws_json::runtime_error::RuntimeError);
 runtime_service!(
@@ -180,7 +184,7 @@ runtime_service!(
     ReviewAwsJsonConfig,
     [],
     aws_json_10::AwsJson1_0,
-    aws_json::runtime_error::RuntimeError
+    aws_smithy_http_server::runtime_error::RuntimeError
 );
 
 runtime_service!(legacy_json11, compat_awsjson11_legacy_server_sdk, ReviewAwsJson11, ReviewAwsJson11Config, [::<Body, _, _, _>], aws_smithy_http_server::protocol::aws_json_11::AwsJson1_1, aws_json::runtime_error::RuntimeError);
@@ -191,7 +195,7 @@ runtime_service!(
     ReviewAwsJson11Config,
     [],
     aws_smithy_http_server::protocol::aws_json_11::AwsJson1_1,
-    aws_json::runtime_error::RuntimeError
+    aws_smithy_http_server::runtime_error::RuntimeError
 );
 runtime_service!(legacy_xml, compat_xml_legacy_server_sdk, ReviewXml, ReviewXmlConfig, [::<Body, _, _, _>], aws_smithy_http_server::protocol::rest_xml::RestXml, aws_smithy_http_server::protocol::rest_xml::runtime_error::RuntimeError);
 runtime_service!(
@@ -201,7 +205,7 @@ runtime_service!(
     ReviewXmlConfig,
     [],
     aws_smithy_http_server::protocol::rest_xml::RestXml,
-    aws_smithy_http_server::protocol::rest_xml::runtime_error::RuntimeError
+    aws_smithy_http_server::runtime_error::RuntimeError
 );
 
 pub const REJECTIONS: [&str; 5] = [
@@ -267,7 +271,7 @@ impl std::fmt::Display for CustomRejection {
     }
 }
 
-/// Deliberately implements ONLY the existing method, even after the new hook is added.
+/// Legacy callers retain the complete custom HTTP response.
 impl<P> aws_smithy_http_server::response::IntoResponse<P> for CustomRejection {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
@@ -279,6 +283,15 @@ impl<P> aws_smithy_http_server::response::IntoResponse<P> for CustomRejection {
                 "service chose this response",
             ))
             .unwrap()
+    }
+}
+
+impl aws_smithy_http_server::response::IntoResponseWithProtocol for CustomRejection {
+    fn into_response_with_protocol(
+        self,
+        _: &dyn aws_smithy_http_server::schema::ServerProtocol,
+    ) -> http::Response<BoxBody> {
+        aws_smithy_http_server::response::IntoResponse::<()>::into_response(self)
     }
 }
 

@@ -200,13 +200,32 @@ class ServerServiceGenerator(
         fieldName: String,
     ): Writable =
         writable {
+            val applyHttpPlugin =
+                writable {
+                    if (schemaSerde) {
+                        rustTemplate(
+                            """
+                            let svc = #{SmithyHttpServer}::plugin::Plugin::<
+                                $serviceName<L>,
+                                crate::operation_shape::${operationStructNames.getValue(operation)},
+                                _,
+                                #{SmithyHttpServer}::response::SchemaSerde,
+                            >::apply(&self.http_plugin, svc);
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rust("let svc = self.http_plugin.apply(svc);")
+                    }
+                }
             rustTemplate(
                 """
                 let svc = #{UpgradePlugin}::<UpgradeExtractors>::new().apply(svc);
-                let svc = self.http_plugin.apply(svc);
+                #{ApplyHttpPlugin}
                 self.${fieldName}_custom(svc)
                 """,
                 "UpgradePlugin" to upgradePlugin(operation),
+                "ApplyHttpPlugin" to applyHttpPlugin,
                 *codegenScope,
             )
         }
@@ -274,7 +293,7 @@ class ServerServiceGenerator(
                                     crate::operation_shape::$structName,
                                     ModelPl::Output
                                 >
-                            >::Output
+                            >::Output${if (schemaSerde) ", #{SmithyHttpServer}::response::SchemaSerde" else ""}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
@@ -336,7 +355,7 @@ class ServerServiceGenerator(
                                     crate::operation_shape::$structName,
                                     ModelPl::Output
                                 >
-                            >::Output
+                            >::Output${if (schemaSerde) ", #{SmithyHttpServer}::response::SchemaSerde" else ""}
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,

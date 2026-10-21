@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Rejects requests in shared and custom extractors on schema services and checks
+//! that each rejection is serialized using the request's selected protocol. Streaming
+//! cases assert that rejection occurs before polling the body. Tuple extractors,
+//! custom response hooks, and absent-selection fallbacks have separate assertions.
+//!
 //! Selected-protocol rejection tests over schema serde and generated serde services.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
@@ -10,7 +15,9 @@ mod harness;
 use aws_smithy_http_server::{
     body::Body,
     request::FromParts,
-    response::{IntoResponse, Response},
+    response::{
+        IntoResponse, IntoResponseWithProtocol, IntoResponseWithRequest, Response, SchemaSerde,
+    },
     runtime_error::RuntimeError,
     schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1, RestXml, RpcV2Cbor, ServerProtocol},
 };
@@ -229,6 +236,8 @@ impl<P> IntoResponse<P> for ContextRejection {
     fn into_response(self) -> Response {
         panic!("schema upgrade fell back to the old method")
     }
+}
+impl IntoResponseWithProtocol for ContextRejection {
     fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
         Response::builder()
             .status(403)
@@ -416,11 +425,10 @@ async fn shared_serializer_matches_all_five_protocol_local_conversions() {
                     _ => unreachable!(),
                 };
                 let before: Response = IntoResponse::<$marker>::into_response(legacy);
-                let after: Response =
-                    <RuntimeError as IntoResponse<Protocols>>::into_response_with_protocol(
-                        shared_error(kind),
-                        &$protocol,
-                    );
+                let after: Response = IntoResponseWithProtocol::into_response_with_protocol(
+                    shared_error(kind),
+                    &$protocol,
+                );
                 assert_eq!(after.status(), before.status(), "{kind}");
                 assert_eq!(after.headers(), before.headers(), "{kind}");
                 assert_eq!(
@@ -536,19 +544,20 @@ impl ServerProtocol for ExternalProtocol {
 #[tokio::test]
 async fn selected_framing_does_not_depend_on_protocol_tuple_order() {
     type Reversed = (RpcV2Cbor, RestJson1);
+    fn accepts_tuple<P>()
+    where
+        RuntimeError: IntoResponseWithRequest<P, SchemaSerde>,
+    {
+    }
+    accepts_tuple::<Protocols>();
+    accepts_tuple::<Reversed>();
     for protocol in [
         &RestJson1::default() as &dyn ServerProtocol,
         &RpcV2Cbor::default() as &dyn ServerProtocol,
     ] {
         for kind in REJECTIONS {
-            let first = <RuntimeError as IntoResponse<Protocols>>::into_response_with_protocol(
-                shared_error(kind),
-                protocol,
-            );
-            let reversed = <RuntimeError as IntoResponse<Reversed>>::into_response_with_protocol(
-                shared_error(kind),
-                protocol,
-            );
+            let first = shared_error(kind).into_response_with_protocol(protocol);
+            let reversed = shared_error(kind).into_response_with_protocol(protocol);
             assert_eq!(snapshot(first).await, snapshot(reversed).await);
         }
     }

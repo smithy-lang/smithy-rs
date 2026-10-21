@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Uses one middleware abstraction to produce runtime and modeled errors for legacy
+//! and schema services. It compares the responses with handler-generated errors and
+//! checks that schema middleware uses the selected protocol and preserves modeled
+//! error extensions for each request.
+//!
 //! The same middleware bounds accept generated serde errors and schema modeled errors.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
@@ -19,9 +24,8 @@ use aws_smithy_http_server::{
     extension::ModeledErrorExtension,
     operation::OperationShape,
     plugin::{HttpMarker, Plugin},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, IntoResponseWithRequest, Response},
     runtime_error::InternalFailureException,
-    schema::SharedServerProtocol,
     service::ServiceShape,
 };
 use harness::{observed_runtime_rejection, request, snapshot, Reply, Wire, MESSAGE};
@@ -37,14 +41,14 @@ struct RejectPlugin;
 
 impl HttpMarker for RejectPlugin {}
 
-impl<Ser, Op, S> Plugin<Ser, Op, S> for RejectPlugin
+impl<Ser, Op, S, SerdeMode> Plugin<Ser, Op, S, SerdeMode> for RejectPlugin
 where
     Ser: ServiceShape,
     Op: OperationShape,
-    Op::Error: MakeError + IntoResponse<Ser::Protocol>,
-    InternalFailureException: IntoResponse<Ser::Protocol>,
+    Op::Error: MakeError + IntoResponseWithRequest<Ser::Protocol, SerdeMode>,
+    InternalFailureException: IntoResponseWithRequest<Ser::Protocol, SerdeMode>,
 {
-    type Output = RejectMiddleware<Ser::Protocol, Op::Error, S>;
+    type Output = RejectMiddleware<Ser::Protocol, Op::Error, S, SerdeMode>;
 
     fn apply(&self, inner: S) -> Self::Output {
         RejectMiddleware {
@@ -54,12 +58,12 @@ where
     }
 }
 
-struct RejectMiddleware<P, E, S> {
+struct RejectMiddleware<P, E, S, SerdeMode> {
     inner: S,
-    marker: PhantomData<fn() -> (P, E)>,
+    marker: PhantomData<fn() -> (P, E, SerdeMode)>,
 }
 
-impl<P, E, S: Clone> Clone for RejectMiddleware<P, E, S> {
+impl<P, E, S: Clone, SerdeMode> Clone for RejectMiddleware<P, E, S, SerdeMode> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -68,18 +72,11 @@ impl<P, E, S: Clone> Clone for RejectMiddleware<P, E, S> {
     }
 }
 
-fn respond<P, E: IntoResponse<P>>(error: E, protocol: Option<&SharedServerProtocol>) -> Response {
-    match protocol {
-        Some(protocol) => error.into_response_with_protocol(&**protocol),
-        None => error.into_response(),
-    }
-}
-
-impl<P, E, S> Service<Request<Body>> for RejectMiddleware<P, E, S>
+impl<P, E, S, SerdeMode> Service<Request<Body>> for RejectMiddleware<P, E, S, SerdeMode>
 where
     S: Service<Request<Body>, Response = Response, Error = Infallible>,
-    E: MakeError + IntoResponse<P>,
-    InternalFailureException: IntoResponse<P>,
+    E: MakeError + IntoResponseWithRequest<P, SerdeMode>,
+    InternalFailureException: IntoResponseWithRequest<P, SerdeMode>,
 {
     type Response = Response;
     type Error = Infallible;
@@ -90,11 +87,10 @@ where
     }
 
     fn call(&mut self, request: Request<Body>) -> Self::Future {
-        let protocol = SharedServerProtocol::get_from_request(&request);
         let response = if request.headers()["x-rejection"] == "internal" {
-            respond::<P, _>(InternalFailureException, protocol)
+            InternalFailureException.into_response_with_request(&request)
         } else {
-            respond::<P, _>(E::make_error(), protocol)
+            E::make_error().into_response_with_request(&request)
         };
         ready(Ok(response))
     }
