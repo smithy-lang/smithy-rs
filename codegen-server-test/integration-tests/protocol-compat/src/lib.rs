@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Assembles the generated service variants and specialized handler/extractor fixtures
+//! used by the integration suites. It provides single-protocol legacy/schema services,
+//! combined-protocol services, and context-tampering or custom-rejection configurations
+//! so tests can observe the same application behavior under different routing paths.
+//!
 //! The same handlers mounted on every generated review service, one module per protocol set,
 //! plus [`multi`], the server serving every built-in protocol that the generated clients and
 //! wire tests drive.

@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Compares extractor failures from generated legacy and schema services. It checks
+//! required versus optional request extensions, prevents handlers from running on
+//! rejection, and verifies that custom HTTP rejection responses retain their status,
+//! headers, and body across ordinary and streaming requests.
+//!
 //! Generated serde observations for the selected-protocol extractor rejection change.
 #[path = "support/extractor_rejections.rs"]
 mod harness;

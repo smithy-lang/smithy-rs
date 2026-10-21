@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Calls RPC operations whose models contain REST status and header bindings.
+//! It checks that AWS JSON smithy-specs mode and CBOR keep those members in the
+//! response document, while default AWS JSON retains its historical HTTP bindings.
+//!
 //! Review finding: REST response bindings (`@http(code)`, `@httpResponseCode`, `@httpHeader`) on RPC protocols.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

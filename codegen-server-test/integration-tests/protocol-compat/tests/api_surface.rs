@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Checks generated Rust API compatibility: operation IDs use the server crate's
+//! ShapeId type, and a schema service supports adding a layer after construction
+//! and boxing the service. Compilation and a successful request exercise those APIs.
+//!
 //! Review finding: `ShapeId` exists in both `aws-smithy-http-server` and `aws-smithy-schema`.
 use std::any::TypeId;
 

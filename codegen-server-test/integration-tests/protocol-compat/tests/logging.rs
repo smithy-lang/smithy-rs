@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Forces response serialization failures involving sensitive modeled values and
+//! captures the emitted logs. It checks the expected rejection and asserts that
+//! secret scalar and timestamp values are absent from diagnostics.
+//!
 //! Review finding: `@sensitive` values must not reach logs when serialization fails.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

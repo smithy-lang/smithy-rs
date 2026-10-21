@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Sends requests that more than one configured protocol can recognize. A response
+//! identifies the protocol that claimed each request, and assertions pin the selection
+//! order so changing protocol priority cannot silently change application behavior.
+//!
 //! Review finding: protocol order decides ambiguous requests when several protocols are enabled.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

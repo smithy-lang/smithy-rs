@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Sends headerless REST requests and unknown-operation requests to generated service
+//! variants. It checks that valid bodiless operations reach their handlers and pins
+//! each protocol's rejection status, headers, and body, including ambiguous REST
+//! requests resolved by protocol priority.
+//!
 //! Review findings: header-less REST requests and unclaimed requests, on generated services.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

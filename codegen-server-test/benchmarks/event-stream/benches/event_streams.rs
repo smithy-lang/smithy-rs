@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Measures generated-server event-stream processing for REST JSON and rpcv2Cbor,
+//! comparing legacy serde, schema serde, and shared-protocol services. Each selected
+//! workload builds real frames, drives the configured in-process transport, and
+//! consumes the response; supporting wire tests validate the benchmark fixtures.
+//!
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use event_stream_benchmark::{
     drain, hyper_in_memory, server, Case, Direction, Fixture, Implementation, Kind, Protocol,

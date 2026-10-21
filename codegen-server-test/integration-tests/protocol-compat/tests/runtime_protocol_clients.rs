@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Uses one generated schema client to select each supported protocol at runtime
+//! and call one multi-protocol server over sockets. It checks successful operations,
+//! modeled and validation errors, and supported streaming calls. The detailed notes
+//! below explain which ambiguous REST XML requests are excluded.
+//!
 //! One generated schema client selects each protocol at runtime and calls the same server
 //! implementation over real sockets.
 

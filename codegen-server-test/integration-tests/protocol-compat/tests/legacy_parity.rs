@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Replays shared scenarios against branch legacy and schema services and compares
+//! them with responses recorded from unmodified mainline. Listed divergence snapshots
+//! pin intentional or known differences; new, changed, or disappearing differences
+//! fail unless the explicit update mode is used to rewrite those snapshots.
+//!
 //! Replays the shared scenarios against the schemaSerde=true services and against the branch's
 //! schemaSerde=false twins (HTTP 1.x), and compares both with `baselines/mainline.json`, the
 //! responses recorded from unmodified mainline codegen by `protocol-compat-mainline`

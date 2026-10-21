@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Implements one generated service serving all five supported protocols through
+//! shared handlers. It returns predictable success, validation, modeled-error, blob,
+//! and event-stream values and can start a socket server for generated client tests.
+//!
 //! A `MultiProtocolService` serving rpcv2Cbor, awsJson1.0, awsJson1.1, restJson1 and restXml from one
 //! set of handlers.
 

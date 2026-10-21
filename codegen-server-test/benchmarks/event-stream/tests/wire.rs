@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Validates the event-stream benchmark before comparing timings. It checks that
+//! implementation labels select the intended generated SDK, that in-memory HTTP/2
+//! preserves payloads, and that legacy and schema services emit equivalent decoded
+//! events with a modeled failure following the successful events.
+//!
 use event_stream_benchmark::{
     drain, hyper_in_memory, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
 };

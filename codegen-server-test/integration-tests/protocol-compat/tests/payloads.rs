@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Checks structured @httpPayload outputs on AWS JSON and CBOR and verifies that RPC
+//! serialization retains the modeled payload member's document key. It also checks
+//! that a streaming CBOR blob response uses the blob content type rather than the
+//! event-stream content type.
+//!
 //! Review findings: structure `@httpPayload` over RPC protocols, streaming blob content type.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

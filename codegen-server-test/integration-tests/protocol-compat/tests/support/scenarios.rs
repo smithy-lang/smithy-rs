@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Defines the common REST, AWS JSON, CBOR, and document request scenarios replayed
+//! by the mainline recorder and branch compatibility tests. Response snapshots
+//! canonicalize values so every implementation is compared using the same inputs
+//! and representation.
+//!
 //! Scenarios replayed against every implementation of the review services (mainline, branch generated serde
 //! twin, schemaSerde). Shared by `protocol-compat` and the `protocol-compat-mainline` recorder.
 use super::*;

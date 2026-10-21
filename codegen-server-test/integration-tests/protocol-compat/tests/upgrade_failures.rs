@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Discards selected-operation context in request middleware and calls the generated
+//! schema service. A control request succeeds, while the modified request must return
+//! the pinned bare 500 response when the upgrade layer cannot recover routing context.
+//!
 //! The upgrade layer answers discarded routing context with a bare 500.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

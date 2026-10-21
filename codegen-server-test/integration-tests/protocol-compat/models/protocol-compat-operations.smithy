@@ -1,5 +1,9 @@
 $version: "2"
 
+// Shared operations for generated-server compatibility tests: bodiless REST routes, response
+// bindings, structured and streaming payloads, prefix headers, labels, and sensitive outputs.
+// Service variants and the mainline recorder use the same operations to compare wire results.
+
 // One operation per PR #4894 review finding. Each is bound to every REST and RPC protocol so the
 // same wire request can be observed on a sole-protocol service and on multi-protocol services.
 namespace com.example.review

@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Provides the benchmark's transport adapters and response consumers. It drives
+//! generated services directly or over in-memory Hyper connections and drains real
+//! response frames, allowing the same workload to exercise each serde implementation.
+//!
 //! Generated server event streams exercised entirely in process.
 mod fixtures;
 mod services;

@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Builds deterministic event-stream requests and expected responses for the benchmark.
+//! It encodes structured and binary event payloads, fragments bodies, and validates
+//! decoded events, frame counts, and modeled stream failures for JSON and CBOR.
+//!
 use crate::{Case, Direction, Kind, Protocol, Server, METADATA};
 use aws_smithy_eventstream::frame::{read_message_from, write_message_to};
 use aws_smithy_http_server::body::Body;
