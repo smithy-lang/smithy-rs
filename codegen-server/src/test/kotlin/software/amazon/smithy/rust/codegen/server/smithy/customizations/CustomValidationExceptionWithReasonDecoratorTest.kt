@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -106,9 +107,10 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
                         additionalSettings =
                             Node.objectNodeBuilder().withMember(
                                 "codegen",
-                                Node.objectNodeBuilder()
-                                    .withMember("schemaSerde", schemaSerde)
-                                    .withMember("http-1x", schemaSerde)
+                                ServerAdditionalSettings.builder()
+                                    .schemaSerde(schemaSerde)
+                                    .withHttp1x(schemaSerde)
+                                    .toObjectNode().expectObjectMember("codegen").toBuilder()
                                     .withMember("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", "com.amazonaws.constraints#ValidationException")
                                     .build(),
                             ).build(),

@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -57,7 +58,7 @@ internal class RestStreamingBlobInputCompatibilityTest {
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":$schema,"publicConstrainedTypes":$publicTypes}}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schema).publicConstrainedTypes(publicTypes).toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib --tests",
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

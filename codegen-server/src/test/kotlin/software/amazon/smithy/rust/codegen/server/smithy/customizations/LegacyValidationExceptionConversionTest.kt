@@ -12,7 +12,6 @@ import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -21,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -85,10 +85,7 @@ internal class LegacyValidationExceptionConversionTest {
     private fun params(schemaSerde: Boolean) =
         IntegrationTestParams(
             additionalSettings =
-                Node.objectNode().withMember(
-                    "codegen",
-                    Node.objectNode().withMember("schemaSerde", schemaSerde),
-                ),
+                ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
             cargoCommand = "cargo test --quiet --lib --tests",
         )
 

@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -67,7 +68,7 @@ internal class ServerSchemaRpcPayloadTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib --tests",
             ),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -231,14 +232,14 @@ internal class ServerSchemaRpcPayloadTest {
             val snapshot = observations.resolve("$schemaSerde.txt")
             val customization =
                 if (responseBindings == null) {
-                    ""
+                    ObjectNode.objectNode()
                 } else {
-                    ""","customizationConfig":{"protocols":{"aws.protocols#$protocol":{"responseBindings":"$responseBindings"}}}"""
+                    ObjectNode.parse("""{"customizationConfig":{"protocols":{"aws.protocols#$protocol":{"responseBindings":"$responseBindings"}}}}""").expectObjectNode()
                 }
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":$schemaSerde}$customization}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().merge(customization),
                     cargoCommand = "cargo test --quiet --lib --tests",
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

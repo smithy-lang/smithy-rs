@@ -5,11 +5,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -53,14 +53,14 @@ internal class LegacyCborErrorHeadersCompatibilityTest {
     }
 
     private fun generate(schemaSerde: Boolean?) {
-        var codegen = Node.objectNode().withMember("http-1x", true)
+        val settings = ServerAdditionalSettings.builder().withHttp1x(true)
         if (schemaSerde != null) {
-            codegen = codegen.withMember("schemaSerde", schemaSerde)
+            settings.schemaSerde(schemaSerde)
         }
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = Node.objectNode().withMember("codegen", codegen),
+                additionalSettings = settings.toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib",
             ),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

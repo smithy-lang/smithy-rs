@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -42,9 +43,7 @@ internal class AwsJson10StrictCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings =
-                        ObjectNode.parse(
-                            """{"codegen":{"schemaSerde":$schemaSerde}}""",
-                        ).expectObjectNode().let { settings ->
+                        ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().let { settings ->
                             System.getenv("SCHEMA_COMPAT_RUNTIME")?.let {
                                 settings.toBuilder().withMember("runtimeConfig", ObjectNode.parse("""{"relativePath":"$it"}""")).build()
                             } ?: settings

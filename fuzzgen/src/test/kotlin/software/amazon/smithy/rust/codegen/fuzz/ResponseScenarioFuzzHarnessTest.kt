@@ -10,6 +10,7 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -74,7 +75,7 @@ class ResponseScenarioFuzzHarnessTest {
                     model,
                     IntegrationTestParams(
                         service = "test.fuzzscenario#Scenarios",
-                        additionalSettings = Node.objectNode().withMember("codegen", Node.objectNode().withMember("schemaSerde", schema)),
+                        additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schema).toObjectNode(),
                         command = { dir -> println("generated scenario schema=$schema at $dir") },
                     ),
                     testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -24,7 +25,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 
 class MultiProtocolSchemaServiceTest {
     private val schemaSerde =
-        IntegrationTestParams(additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode())
+        IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode())
 
     private val model =
         """
@@ -113,13 +114,15 @@ class MultiProtocolSchemaServiceTest {
             } else {
                 IntegrationTestParams(
                     additionalSettings =
-                        ObjectNode.parse(
-                            """{"codegen":{"schemaSerde":true},"customizationConfig":{"protocols":{
+                        ServerAdditionalSettings.builder().schemaSerde().toObjectNode().merge(
+                            ObjectNode.parse(
+                                """{"customizationConfig":{"protocols":{
                     "aws.protocols#awsJson1_0":{"validateSkippedValues":${mode >= 2}},
                     "aws.protocols#awsJson1_1":{"validateSkippedValues":${mode == 2}},
                     "aws.protocols#restJson1":{"validateSkippedValues":${mode == 2}}
                 }}}""",
-                        ).expectObjectNode(),
+                            ).expectObjectNode(),
+                        ),
                 )
             }
         serverIntegrationTest(

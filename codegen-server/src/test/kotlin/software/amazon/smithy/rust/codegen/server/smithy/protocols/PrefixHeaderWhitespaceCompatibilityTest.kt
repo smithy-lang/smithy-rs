@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -32,10 +33,7 @@ internal class PrefixHeaderWhitespaceCompatibilityTest {
             for (service in protocols) {
                 val mode = if (schemaSerde) "schema" else "legacy"
                 val settings =
-                    Node.objectNodeBuilder().withMember(
-                        "codegen",
-                        Node.objectNodeBuilder().withMember("http-1x", true).withMember("schemaSerde", schemaSerde).build(),
-                    )
+                    ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode().toBuilder()
                 System.getenv("SCHEMA_COMPAT_RUNTIME")?.let {
                     settings.withMember("runtimeConfig", Node.objectNodeBuilder().withMember("relativePath", it).build())
                 }

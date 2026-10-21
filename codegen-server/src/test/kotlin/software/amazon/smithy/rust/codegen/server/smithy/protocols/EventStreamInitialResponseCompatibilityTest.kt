@@ -6,12 +6,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -61,9 +61,7 @@ internal class EventStreamInitialResponseCompatibilityTest {
                     IntegrationTestParams(
                         overrideTestDir = snapshots.resolve("server-$sendInitial-$schemaSerde").toFile(),
                         additionalSettings =
-                            ObjectNode.parse(
-                                """{"codegen":{"schemaSerde":$schemaSerde,"alwaysSendEventStreamInitialResponse":$sendInitial}}""",
-                            ).expectObjectNode(),
+                            ServerAdditionalSettings.builder().schemaSerde(schemaSerde).alwaysSendEventStreamInitialResponse(sendInitial).toObjectNode(),
                         cargoCommand = "cargo test --quiet --lib --tests",
                     ),
                     testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

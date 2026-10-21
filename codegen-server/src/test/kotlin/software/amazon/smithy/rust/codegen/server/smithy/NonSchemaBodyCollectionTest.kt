@@ -6,13 +6,13 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -61,9 +61,7 @@ internal class NonSchemaBodyCollectionTest {
                     IntegrationTestParams(
                         overrideTestDir = Files.createTempDirectory("smithy-body-collection-crate-").toFile(),
                         additionalSettings =
-                            ObjectNode.parse(
-                                """{"codegen":{"schemaSerde":false,"requestBodyMaxBytes":$maxBytes}}""",
-                            ).expectObjectNode(),
+                            ServerAdditionalSettings.builder().schemaSerde(false).requestBodyMaxBytes(maxBytes.toLong()).toObjectNode(),
                         cargoCommand = "cargo test --quiet --lib --tests",
                     ),
                     testCoverage = HttpTestType.Only(version),

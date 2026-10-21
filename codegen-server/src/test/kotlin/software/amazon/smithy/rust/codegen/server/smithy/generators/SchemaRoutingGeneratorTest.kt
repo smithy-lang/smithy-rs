@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -94,7 +95,7 @@ class SchemaRoutingGeneratorTest {
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib --tests",
                 ),
                 additionalDecorators = listOf(decorator),
@@ -187,7 +188,7 @@ class SchemaRoutingGeneratorTest {
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
-                    additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib --tests",
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -312,7 +313,7 @@ class SchemaRoutingGeneratorTest {
             }
         serverIntegrationTest(
             model,
-            IntegrationTestParams(additionalSettings = ObjectNode.builder().withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build()).build()),
+            IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode()),
             additionalDecorators = listOf(decorator),
             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
         ) { context, crate ->
@@ -494,7 +495,7 @@ class SchemaRoutingGeneratorTest {
                 }
             serverIntegrationTest(
                 model,
-                IntegrationTestParams(additionalSettings = ObjectNode.builder().withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build()).build()),
+                IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode()),
                 additionalDecorators = listOf(decorator),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
@@ -585,7 +586,7 @@ class SchemaRoutingGeneratorTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib --tests",
             ),
             additionalDecorators = listOf(decorator),
@@ -637,7 +638,7 @@ class SchemaRoutingGeneratorTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
                 cargoCommand = "cargo test --quiet --lib --tests",
             ),
             additionalDecorators = listOf(decorator),
@@ -657,8 +658,7 @@ class SchemaRoutingGeneratorTest {
             """.asSmithyModel(smithyVersion = "2")
         for (asNotFound in listOf(null, false, true)) {
             val settings =
-                ObjectNode.builder()
-                    .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+                ServerAdditionalSettings.builder().schemaSerde().toObjectNode().toBuilder()
             if (asNotFound != null) {
                 settings.withMember(
                     "customizationConfig",
@@ -720,8 +720,7 @@ class SchemaRoutingGeneratorTest {
             operation getFoo { input := { value: String } output := {} }
             """.asSmithyModel(smithyVersion = "2")
         val settings =
-            ObjectNode.builder()
-                .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+            ServerAdditionalSettings.builder().schemaSerde().toObjectNode().toBuilder()
                 .withMember(
                     "customizationConfig",
                     ObjectNode.builder().withMember(
@@ -864,8 +863,7 @@ class SchemaRoutingGeneratorTest {
             map AttrMap { key: String value: String }
             """.asSmithyModel(smithyVersion = "2")
         val settings =
-            ObjectNode.builder()
-                .withMember("codegen", ObjectNode.builder().withMember("schemaSerde", true).build())
+            ServerAdditionalSettings.builder().schemaSerde().toObjectNode().toBuilder()
         if (strictCollectionElementNames != null) {
             settings.withMember(
                 "customizationConfig",

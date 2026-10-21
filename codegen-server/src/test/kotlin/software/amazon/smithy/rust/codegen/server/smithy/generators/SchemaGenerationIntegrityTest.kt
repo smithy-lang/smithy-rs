@@ -12,6 +12,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
@@ -39,7 +40,7 @@ internal class SchemaGenerationIntegrityTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true},"customizationConfig":{"protocols":{"custom#protocol":{"raw":"\"####","hash":"#value"}}}}""").expectObjectNode(),
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode().merge(ObjectNode.parse("""{"customizationConfig":{"protocols":{"custom#protocol":{"raw":"\"####","hash":"#value"}}}}""").expectObjectNode()),
                 cargoCommand = "cargo test --quiet --lib",
             ),
             testCoverage = HttpTestType.Default,
@@ -109,7 +110,7 @@ internal class SchemaGenerationIntegrityTest {
                     serverIntegrationTest(
                         model,
                         IntegrationTestParams(
-                            additionalSettings = ObjectNode.parse("""{"codegen":{"schemaSerde":true}}""").expectObjectNode(),
+                            additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
                         ),
                         testCoverage = HttpTestType.Default,
                     )
