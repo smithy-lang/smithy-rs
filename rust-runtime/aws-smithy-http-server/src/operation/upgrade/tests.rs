@@ -13,6 +13,8 @@ use http_body_util::BodyExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod logging;
+
 #[tokio::test]
 async fn schema_missing_failure_without_context_returns_empty_internal_error() {
     let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(

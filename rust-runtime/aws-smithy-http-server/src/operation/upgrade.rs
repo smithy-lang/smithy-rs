@@ -14,7 +14,7 @@ use std::{
 use futures_util::ready;
 use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Service, ServiceExt};
-use tracing::{error, trace};
+use tracing::{debug, error, trace};
 
 use crate::{
     body::{BoxBody, __private::HttpBody},
@@ -163,24 +163,38 @@ where
             }
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
-                Err(err) => return Ok(err.into_response_with_protocol(&**protocol)),
+                Err(err) => {
+                    // Typically a missing layer, for example `Extension<State>` without `ExtensionLayer`.
+                    // Match legacy FromRequest: log the rejection with Display, preserving its diagnostic.
+                    error!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                        "additional parameter for the handler function could not be constructed");
+                    return Ok(err.into_response_with_protocol(&**protocol));
+                }
             };
             let mut request = match convert_request(parts, body) {
                 Ok(request) => request.map(Some),
-                Err(err) => return Ok(protocol.serialize_rejection(err)),
+                Err(err) => {
+                    debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                        "failed to deserialize request into operation's input");
+                    return Ok(protocol.serialize_rejection(err));
+                }
             };
             let body = request.body_mut().take().expect("request body is present");
             if let Err(err) = protocol.validate_request_headers(operation, request.headers()) {
+                debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                    "failed to deserialize request into operation's input");
                 return Ok(protocol.serialize_rejection(err));
             }
             let bytes = match protocol.request_body_requirement(operation) {
                 BodyDirective::Collect => match collect_request_body(body, &selected.request_body_config()).await {
                     Ok(bytes) => bytes,
                     Err(err) => {
+                        debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                            "failed to deserialize request into operation's input");
                         return Ok(crate::schema::body_collection_rejection(
                             &**protocol,
                             err.map_body_error(crate::Error::new),
-                        ))
+                        ));
                     }
                 },
                 BodyDirective::Skip => bytes::Bytes::new(),
@@ -191,11 +205,19 @@ where
             let input = {
                 let mut deserializer = match protocol.deserialize_request(operation.input(), &request) {
                     Ok(value) => value,
-                    Err(err) => return Ok(protocol.serialize_rejection(err)),
+                    Err(err) => {
+                        debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                            "failed to deserialize request into operation's input");
+                        return Ok(protocol.serialize_rejection(err));
+                    }
                 };
                 match Op::Input::deserialize(&mut *deserializer) {
                     Ok(value) => value,
-                    Err(err) => return Ok(protocol.serialize_rejection(err)),
+                    Err(err) => {
+                        debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                            "failed to deserialize request into operation's input");
+                        return Ok(protocol.serialize_rejection(err));
+                    }
                 }
             };
             match service.oneshot((input, extractors)).await {
@@ -319,16 +341,30 @@ where
 
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
-                Err(err) => return Ok(err.into_response_with_protocol(&**protocol)),
+                Err(err) => {
+                    // Typically a missing layer, for example `Extension<State>` without `ExtensionLayer`.
+                    // Match legacy FromRequest: log the rejection with Display, preserving its diagnostic.
+                    error!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                        "additional parameter for the handler function could not be constructed");
+                    return Ok(err.into_response_with_protocol(&**protocol));
+                }
             };
             let request = match convert_request(parts, crate::body::RequestBody::new(body)) {
                 Ok(request) => request,
-                Err(err) => return Ok(protocol.serialize_rejection(err)),
+                Err(err) => {
+                    debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                        "failed to deserialize request into operation's input");
+                    return Ok(protocol.serialize_rejection(err));
+                }
             };
             let future = Op::deserialize_streaming_input(request, protocol.clone());
             let input = match future.await {
                 Ok(value) => value,
-                Err(err) => return Ok(protocol.serialize_rejection(err)),
+                Err(err) => {
+                    debug!(error = %err, operation = %operation.shape_id(), protocol = %protocol.protocol_id(),
+                        "failed to deserialize request into operation's input");
+                    return Ok(protocol.serialize_rejection(err));
+                }
             };
             match service.oneshot((input, extractors)).await {
                 Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
