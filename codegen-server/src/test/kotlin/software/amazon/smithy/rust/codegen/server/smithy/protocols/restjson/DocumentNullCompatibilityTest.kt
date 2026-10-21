@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.restjson
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -21,11 +21,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Sends absent bodies, explicit JSON null, ordinary document values, and malformed JSON to
+ * legacy and schema REST JSON payload handlers. It checks that null remains a present Document
+ * value while an absent body remains absent. Structured and union payloads must retain the
+ * legacy rejection of null. Complete recorded responses must agree between the two serde modes.
+ */
 internal class DocumentNullCompatibilityTest {
     @Test
     fun `REST JSON document payload null remains present like legacy`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/document-null.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/document-null.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("document-null-")
         val protocols = listOf("RestDocumentNull")
         for (schemaSerde in listOf(false, true)) {

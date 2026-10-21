@@ -463,7 +463,27 @@ val eventStreamBenchmarkTests =
             extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": true""",
         )
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests
+// Run the same server compatibility fixtures through generated serde and schema serde.
+val compatibilityProtocolTests =
+    listOf("restJson1", "restXml").flatMap { protocol ->
+        listOf(
+            "body-bindings-$protocol" to "test.bodybindings#Orders",
+            "collection-timestamps-$protocol" to "test.collectiontimestamps#Times",
+            "prefix-headers-$protocol-plain" to "test.prefixwhitespace#Headers",
+            "prefix-headers-$protocol-media" to "test.prefixwhitespace#Headers",
+        ).flatMap { (model, service) ->
+            listOf(false, true).map { schemaSerde ->
+                CodegenTest(
+                    service,
+                    "compat-$model-${if (schemaSerde) "schema" else "generated"}",
+                    imports = listOf("schema-serde-compat/protocol-tests/$model.smithy"),
+                    extraCodegenConfig = """"http-1x": true, "schemaSerde": $schemaSerde""",
+                )
+            }
+        }
+    }
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests
 
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)

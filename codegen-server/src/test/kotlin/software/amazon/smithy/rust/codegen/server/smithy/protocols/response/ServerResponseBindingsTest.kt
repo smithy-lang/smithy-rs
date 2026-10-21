@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.response
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -27,6 +27,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Calls success and modeled-error operations carrying status, header, and prefix-header bindings
+ * under every supported protocol. It checks historical AWS JSON behavior by default and explicit
+ * smithy-specs behavior on the schema path, while REST and CBOR keep their own protocol rules.
+ * The same model also verifies that generated legacy serde ignores the schema-only binding option.
+ */
 internal class ServerResponseBindingsTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])
@@ -72,7 +78,7 @@ internal class ServerResponseBindingsTest {
     ) {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
         val model =
-            Files.readString(root.resolve("tools/schema-serde-compat/models/response-bindings-$protocol.smithy"))
+            Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-bindings-$protocol.smithy"))
                 .asSmithyModel(smithyVersion = "2")
         val settings =
             ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().toBuilder()

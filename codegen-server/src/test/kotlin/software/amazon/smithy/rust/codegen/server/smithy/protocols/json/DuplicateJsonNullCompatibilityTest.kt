@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.json
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -21,11 +21,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Sends JSON objects with missing, repeated, null, and incorrectly typed members through REST
+ * JSON and AWS JSON 1.0/1.1 servers. The handler exposes the final assigned scalar values so the
+ * test pins legacy overwrite/null semantics and rejection behavior. It compares complete
+ * response captures from independently generated legacy and schema services.
+ */
 internal class DuplicateJsonNullCompatibilityTest {
     @Test
     fun `duplicate JSON null values match legacy member assignment`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/duplicate-json-null.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/duplicate-json-null.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("duplicate-json-null-")
         val protocols = listOf("RestDuplicateNull", "Json10DuplicateNull", "Json11DuplicateNull")
         for (schemaSerde in listOf(false, true)) {

@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.awsjson
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -23,17 +23,19 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Executes identical named cases through independently generated servers.
- * Includes HTTP binding traits on RPC shapes, populated payloads, and modeled errors.
+ * Replays 32 named output and modeled-error scenarios through independently generated AWS JSON
+ * 1.0 legacy and schema servers. The model includes populated documents and payloads plus HTTP
+ * binding traits on RPC shapes. It checks that the intended handlers run, validates content
+ * lengths, and compares statuses, all response headers, and body bytes for every scenario.
  */
 internal class AwsJson10StrictCompatibilityTest {
     @Test
     fun `populated outputs and errors preserve the legacy HTTP contract`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/response-strict-aws-json-10.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-strict-aws-json-10.smithy")).asSmithyModel()
         val observations =
             Files.createDirectories(
-                Path.of(System.getenv("SCHEMA_COMPAT_RUN") ?: root.resolve("tools/schema-serde-compat/.runs/response-${java.util.UUID.randomUUID()}").toString())
+                (System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("schema-compat-response-"))
                     .resolve("aws-json-10-strict"),
             )
         val configurations = listOf("legacy" to false, "schema" to true)

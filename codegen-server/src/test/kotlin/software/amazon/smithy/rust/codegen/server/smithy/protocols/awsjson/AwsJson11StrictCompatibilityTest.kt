@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.awsjson
 
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -24,18 +24,20 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Compare complete HTTP responses from independently generated AWS JSON 1.1 services.
- * HTTP binding traits deliberately remain in the model, including custom success/error codes.
+ * Replays populated outputs, omitted values, and modeled errors through generated AWS JSON 1.1
+ * legacy and schema servers. The model deliberately includes REST-style status, header, and payload
+ * bindings on RPC operations. It pins observed legacy statuses, checks response content lengths,
+ * and requires identical recorded HTTP responses when schema serde is enabled.
  */
 internal class AwsJson11StrictCompatibilityTest {
     @Test
     fun `generated AWS JSON 11 servers agree for populated payloads and HTTP binding traits`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val modelText = Files.readString(root.resolve("tools/schema-serde-compat/models/response-strict-aws-json-11.smithy"))
+        val modelText = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-strict-aws-json-11.smithy"))
         val model = modelText.asSmithyModel()
         val observations =
             Files.createDirectories(
-                Path.of(System.getenv("SCHEMA_COMPAT_RUN") ?: root.resolve("tools/schema-serde-compat/.runs/response-${java.util.UUID.randomUUID()}").toString())
+                (System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("schema-compat-response-"))
                     .resolve("aws-json-11-strict"),
             )
         System.err.println("AWS JSON 1.1 strict comparison observations: $observations")

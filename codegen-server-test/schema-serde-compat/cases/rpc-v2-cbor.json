@@ -1,0 +1,1807 @@
+[
+  {
+    "id": "body-object",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a0",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-array",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "80",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-unknown",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167756e6b6e6f776ea161788301f6f5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-rename",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a2686f726967696e616c6577726f6e676772656e616d656463796573",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-default-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16964656661756c746564f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1666e6573746564a0",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1666e6573746564a1687265717569726564626f6b",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-union-empty",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16663686f696365a0",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-union-unknown",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16663686f696365a167756e6b6e6f776e6178",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-union-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16663686f696365a16474657874f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-union-many",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16663686f696365a26474657874617867696e746567657201",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-list-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c697374836161f66162",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-sparse-list",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16a7370617273654c697374836161f66162",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-map-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1636d6170a1616bf6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-sparse-map",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1697370617273654d6170a1616bf6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-blob-bad",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a164626c6f6263626164",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a164626c6f62646533303d",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-timestamp-string",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16974696d657374616d7063312e35",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-timestamp-number",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16974696d657374616d70fb3ff8000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e746567657200",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer--1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e746567657220",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-1.0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-1e0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e74656765726131",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-NaN",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572634e614e",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-Infinity",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e746567657268496e66696e697479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-1e400",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572fb7ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-integer-true",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e7465676572f5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e6700",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long--1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e6720",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-1.0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-1e0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e676131",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-NaN",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67634e614e",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-Infinity",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e6768496e66696e697479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-1e400",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67fb7ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-long-true",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67f5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f617400",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float--1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f617420",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-1.0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-1e0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f61746131",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-NaN",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174634e614e",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-Infinity",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f617468496e66696e697479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-1e400",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174fb7ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-float-true",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a165666c6f6174f5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c6500",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double--1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c6520",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-1.0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-1e0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65fb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c656131",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-NaN",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65634e614e",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-Infinity",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c6568496e66696e697479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-1e400",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65fb7ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-double-true",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65f5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616ef6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616e00",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean--1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616e20",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-1.0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616efb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-1e0",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616efb3ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-1",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616e6131",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-NaN",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616e634e614e",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-Infinity",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616e68496e66696e697479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-1e400",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616efb7ff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-boolean-true",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167626f6f6c65616ef5",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f65656d707479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-empty-headers",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6d656d7074792d68656164657273",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f647a65726f",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6671756f746573",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-invalid-public",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6e696e76616c69642d7075626c6963",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-invalid-secret",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6e696e76616c69642d736563726574",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "response-invalid-prefix-key",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f72696e76616c69642d7072656669782d6b6579",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-invalid-prefix-value",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f74696e76616c69642d7072656669782d76616c7565",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-date",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6464617465",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-0",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f66636f64652d30",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-99",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f67636f64652d3939",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-100",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f68636f64652d313030",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-204",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f68636f64652d323034",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-304",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f68636f64652d333034",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-600",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f68636f64652d363030",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-999",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f68636f64652d393939",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-1000",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f69636f64652d31303030",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code-65536",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6a636f64652d3635353336",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-code--1",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f67636f64652d2d31",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-limited-short",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1676c696d697465646178",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-limited-valid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1676c696d6974656463796573",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-limited-long",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1676c696d69746564656162636465",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-enum-valid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646d6f64656161",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-enum-invalid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646d6f6465656f74686572",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-int-enum-valid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e744d6f646501",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-int-enum-invalid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a167696e744d6f646509",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-large-long",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6f6e67fb4340000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-negative-overflow",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65fbfff0000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-underflow",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a166646f75626c65fb0000000000000000",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-empty",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-indefinite",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "bfff",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "cbor-trailing",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a001",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-truncated",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-break",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "ff",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-unknown-tag",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16474657874c06568656c6c6f",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-blob-bytes",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a164626c6f62426162",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-timestamp-tag",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a16974696d657374616d70c100",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-duplicate-null",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a264746578746566697273746474657874f6",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-duplicate-value",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a264746578746566697273746474657874646c617374",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-indefinite-string",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a164746578747f61616162ff",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "cbor-indefinite-list",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1646c6973749f6161ff",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-media-prefix",
+    "uri": "/service/Audit/operation/MediaResponse",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "modeled-default",
+    "uri": "/service/Audit/operation/Modeled",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a1687363656e6172696f6764656661756c74",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 409
+  },
+  {
+    "id": "modeled-override",
+    "uri": "/service/Audit/operation/Modeled",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a1687363656e6172696f686f76657272696465",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "modeled-invalid-header",
+    "uri": "/service/Audit/operation/Modeled",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a1687363656e6172696f6e696e76616c69642d686561646572",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "modeled-headers",
+    "uri": "/service/Audit/operation/Modeled",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a1687363656e6172696f6768656164657273",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-empty-stream",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-text",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "000000660000004ae559f50a0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a164746578746568656c6c6fcb58aa0e",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "event-empty-event",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005b0000004bcbefb9ab0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070005456d7074790d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72eefe4ab1",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-empty-event-garbage",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "000000620000004b67de635c0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070005456d7074790d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72676172626167653d40e729",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-unknown-event",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005e0000004dea6c93ee0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007556e6b6e6f776e0d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a0f3b3d19b",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "000000580000004382944b490d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d7479706507000a746578742f706c61696e68656c6c6f3e0eb125",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw-bad-type",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005e00000049ed0157f70d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f7268656c6c6f8f973b53",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-raw-nonutf8",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "00000054000000434764a6480d3a6d6573736167652d747970650700056576656e740b3a6576656e742d747970650700035261770d3a636f6e74656e742d7479706507000a746578742f706c61696eff73337a8d",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-headers",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000007a0000005e5a935bf40d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72066865616465720700076f757473696465a164746578746568656c6c6f9ff38ff4",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-header-in-body",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "000000880000005e686758c90d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72066865616465720700076f757473696465a26668656164657266696e7369646564746578746568656c6c6f47ccd3e9",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-duplicate-header",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000007b0000006a464786f10d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070007486561646572730d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72066865616465720700056669727374066865616465720700046c617374a0b75a1eb0",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-wrong-message-type",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005b0000004abce8893d0d3a6d6573736167652d7479706507000577726f6e670b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a07b7f2750",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-missing-message-type",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000004500000034d485fce50b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a024232c49",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-missing-event-type",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000004800000037b51c69ee0d3a6d6573736167652d747970650700056576656e740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a0bbdaeec5",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-initial",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "00000066000000556851f8ff0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d7479706507000f696e697469616c2d726571756573740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a0664f82dc000000660000004ae559f50a0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a16474657874656166746572740c42c9",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-two-events",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "000000620000004a10d953ca0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a164746578746161b45121e5000000620000004a10d953ca0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a1647465787461622d58705f",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-truncated",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005b0000004abce8893d0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a0343a45",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "event-bad-crc",
+    "uri": "/service/Audit/operation/Stream",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "0000005b0000004abce8893d0d3a6d6573736167652d747970650700056576656e740b3a6576656e742d74797065070004546578740d3a636f6e74656e742d747970650700106170706c69636174696f6e2f63626f72a0343a45fd",
+    "content_type": "application/vnd.amazon.eventstream",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "streaming-blob-empty",
+    "uri": "/service/Audit/operation/StreamingBlob",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a16576616c756540",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "streaming-blob-bytes",
+    "uri": "/service/Audit/operation/StreamingBlob",
+    "method": "POST",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "body_hex": "a16576616c75654700ff68656c6c6f",
+    "content_type": "application/cbor",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  }
+]

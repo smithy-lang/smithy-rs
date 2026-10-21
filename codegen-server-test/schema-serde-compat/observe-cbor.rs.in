@@ -1,0 +1,12 @@
+fn record_body(input: &crate::input::BodyInput) {
+    *OBSERVED.lock().unwrap() = Some(json!({
+        "text":input.text, "integer":input.integer, "long":input.long,
+        "float":format!("{:?}",input.float), "double":format!("{:?}",input.double),
+        "boolean":input.boolean, "timestamp":format!("{:?}",input.timestamp),
+        "blob":format!("{:?}",input.blob), "list":input.list,
+        "sparse_list":input.sparse_list, "map":input.map, "sparse_map":input.sparse_map,
+        "nested":format!("{:?}",input.nested), "choice":format!("{:?}",input.choice),
+        "defaulted":input.defaulted,
+        "original":input.original, "limited":format!("{:?}",input.limited), "unique":format!("{:?}",input.unique), "mode":format!("{:?}",input.mode), "int_mode":format!("{:?}",input.int_mode)
+    }));
+}

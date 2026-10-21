@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.streaming
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
@@ -22,15 +22,21 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Generates HTTP 1.x servers with schemaSerde=false from the streaming-blob fixture for REST
+ * and CBOR. It compiles and exercises the generated blob handlers, checking successful status
+ * and expected response bytes. This protects the legacy streaming code path after adopting the
+ * HTTP 1.x body types.
+ */
 internal class StreamingBlobHttp1GenerationTest {
     @Test
     fun `generate streaming blob servers with HTTP 1 and generated serde`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
         val run =
             System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of)
-                ?: Files.createDirectories(root.resolve("tools/schema-serde-compat/.runs"))
+                ?: Files.createTempDirectory("schema-compat-streaming-")
                     .let { Files.createTempDirectory(it, "streaming-blob-http1-") }
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/streaming-blob-http1.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/streaming-blob-http1.smithy")).asSmithyModel()
         for (service in listOf("RestBlob", "CborBlob")) {
             val settings =
                 ServerAdditionalSettings.builder().withHttp1x().schemaSerde(false).toObjectNode().toBuilder()

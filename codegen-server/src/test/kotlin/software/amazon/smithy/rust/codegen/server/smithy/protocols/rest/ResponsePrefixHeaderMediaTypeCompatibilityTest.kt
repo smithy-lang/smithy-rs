@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.server.smithy.protocols
+package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -22,15 +22,19 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * Returns media-typed prefix header maps on successful outputs and modeled errors, including
+ * empty maps, special values, and invalid header keys. It checks base64 encoding, preservation
+ * of plain headers, and rejection status, then compares legacy and schema captures. This guards
+ * the interaction between generated prefix-header metadata and runtime response serialization.
+ */
 internal class ResponsePrefixHeaderMediaTypeCompatibilityTest {
     @Test
     fun `media typed response prefix headers preserve legacy encoding and errors`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("tools/schema-serde-compat/models/response-prefix-header-media-type.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-prefix-header-media-type.smithy")).asSmithyModel()
         val run =
-            System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createDirectories(root.resolve("tools/schema-serde-compat/.runs")).let {
-                Files.createTempDirectory(it, "C04-")
-            }
+            System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("C04-")
         val protocols = listOf("JsonResponsePrefixMedia", "XmlResponsePrefixMedia")
         for (schemaSerde in listOf(false, true)) {
             for (service in protocols) {
