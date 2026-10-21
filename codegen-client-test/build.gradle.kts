@@ -43,6 +43,7 @@ data class ClientTest(
     val dependsOn: List<String> = emptyList(),
     val addMessageToErrors: Boolean = true,
     val renameErrors: Boolean = true,
+    val modelRoot: String = "../codegen-core/common-test-models",
 ) {
     fun toCodegenTest(): CodegenTest = CodegenTest(
         serviceShapeName,
@@ -57,7 +58,7 @@ data class ClientTest(
         append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
     }.toString()
 
-    private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
+    private fun imports(): List<String> = dependsOn.map { "$modelRoot/$it" }
 }
 
 val allCodegenTests = listOf(
@@ -129,10 +130,11 @@ val allCodegenTests = listOf(
     ClientTest(
         "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
         "multi-protocol-client",
+        modelRoot = "../codegen-server-test/custom-test-models/multi-protocol-compat",
         dependsOn =
             listOf(
-                "multi-protocol-compat/multi-protocol-restjson.smithy",
-                "multi-protocol-compat/multi-protocol-common.smithy",
+                "multi-protocol-restjson.smithy",
+                "multi-protocol-common.smithy",
             ),
     ),
 ).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
@@ -140,10 +142,11 @@ val allCodegenTests = listOf(
     ClientTest(
         "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
         "multi-protocol-client-$protocol",
+        modelRoot = "../codegen-server-test/custom-test-models/multi-protocol-compat",
         dependsOn =
             listOf(
-                "multi-protocol-compat/multi-protocol-$protocol.smithy",
-                "multi-protocol-compat/multi-protocol-common.smithy",
+                "multi-protocol-$protocol.smithy",
+                "multi-protocol-common.smithy",
             ),
     ).toCodegenTest()
 }
