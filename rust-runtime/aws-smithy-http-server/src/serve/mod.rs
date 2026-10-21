@@ -92,6 +92,16 @@
 //! ```
 //!
 //! [`ListenerExt::limit_connections`] remains available for listener-level composition.
+//! The connection permit stays attached to the socket across HTTP upgrades.
+//! Applications that downcast upgraded IO with
+//! `hyper_util::server::conn::auto::upgrade::downcast` must use
+//! `TokioIo<ConnLimiterIo<L::Io>>` as the IO type. [`IncomingStream`] continues
+//! to expose the listener's original IO type to the service factory.
+//!
+//! Before Hyper selects HTTP/1 or HTTP/2, a separate 30-second HTTP version detection
+//! deadline bounds clients that send no bytes or an incomplete HTTP/2 preface.
+//! Configure it with [`Serve::http_version_detection_timeout`]. This deadline ends
+//! once the HTTP version is identified; it does not limit the connection's lifetime.
 //!
 //! ### Accessing Connection Information
 //!
@@ -136,6 +146,7 @@
 //!
 //! | Timeout Type | What It Does | How to Configure |
 //! |--------------|--------------|------------------|
+//! | **HTTP Version Detection** | Time limit for identifying HTTP/1 or HTTP/2 | 30 s by default; override via [`.http_version_detection_timeout()`](Serve::http_version_detection_timeout) |
 //! | **Header Read** | Time limit for reading HTTP headers | 30 s by default; override via `.configure_hyper()` with `.http1().header_read_timeout()` |
 //! | **Request** | Time limit for processing one request | Tower's `TimeoutLayer` |
 //! | **Connection Duration** | Total connection lifetime limit | Custom accept loop with `tokio::time::timeout` |
@@ -301,6 +312,9 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 /// Default maximum number of concurrently accepted TCP connections.
 pub const DEFAULT_MAX_CONNECTIONS: usize = 16_384;
 
+/// Default timeout for identifying HTTP/1 or HTTP/2 on an accepted connection.
+pub const DEFAULT_HTTP_VERSION_DETECTION_TIMEOUT: Duration = Duration::from_secs(30);
+
 // ============================================================================
 // Type Bounds Documentation
 // ============================================================================
@@ -399,7 +413,7 @@ pub const DEFAULT_MAX_CONNECTIONS: usize = 16_384;
 /// a service that handles all HTTP requests on that connection. `IncomingStream`
 /// provides the connection information needed to customize service creation based on:
 /// - The remote address (for logging or access control)
-/// - The underlying IO type (for protocol detection or configuration)
+/// - The underlying IO type (for HTTP version detection or configuration)
 ///
 /// # Design
 ///
@@ -567,6 +581,7 @@ where
 /// Before awaiting, you can configure it:
 /// - [`configure_hyper`](Self::configure_hyper) - Configure Hyper's connection builder
 /// - [`max_connections`](Self::max_connections) - Configure the accepted-connection limit
+/// - [`http_version_detection_timeout`](Self::http_version_detection_timeout) - Configure the initial HTTP version detection deadline
 /// - [`with_graceful_shutdown`](Self::with_graceful_shutdown) - Enable graceful shutdown
 /// - [`local_addr`](Self::local_addr) - Get the bound address
 ///
@@ -577,6 +592,7 @@ pub struct Serve<L, M, S, B> {
     make_service: M,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     max_connections: Option<usize>,
+    http_version_detection_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -589,6 +605,7 @@ where
             .field("listener", &self.listener)
             .field("has_hyper_config", &self.hyper_builder.is_some())
             .field("max_connections", &self.max_connections)
+            .field("http_version_detection_timeout", &self.http_version_detection_timeout)
             .finish_non_exhaustive()
     }
 }
@@ -603,6 +620,7 @@ where
             make_service,
             hyper_builder: None,
             max_connections: Some(DEFAULT_MAX_CONNECTIONS),
+            http_version_detection_timeout: Some(DEFAULT_HTTP_VERSION_DETECTION_TIMEOUT),
             _marker: PhantomData,
         }
     }
@@ -613,7 +631,8 @@ where
     /// such as timeouts, max concurrent streams, keep-alive behavior, etc.
     ///
     /// **Note:** Calling this replaces the default builder entirely, opting out of the built-in
-    /// defaults. You are responsible for setting your own timeouts.
+    /// Hyper defaults. You are responsible for setting your own Hyper timeouts.
+    /// The connection limit and HTTP version detection timeout remain enabled.
     ///
     /// The configuration is applied once and the configured builder is cloned
     /// for each connection, providing optimal performance.
@@ -665,6 +684,19 @@ where
         self
     }
 
+    /// Set the timeout for identifying HTTP/1 or HTTP/2 on an accepted connection.
+    ///
+    /// The default is 30 seconds. The deadline starts before Hyper reads the
+    /// HTTP preface and does not reset as bytes arrive. Once the HTTP version is
+    /// identified, Hyper's configured timeouts take over.
+    ///
+    /// This remains enabled when using [`Self::configure_hyper`]. Pass `None`
+    /// to disable it.
+    pub fn http_version_detection_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.http_version_detection_timeout = timeout;
+        self
+    }
+
     /// Enable graceful shutdown for the server.
     pub fn with_graceful_shutdown<F>(self, signal: F) -> ServeWithGracefulShutdown<L, M, S, F, B>
     where
@@ -676,6 +708,7 @@ where
             signal,
             self.hyper_builder,
             self.max_connections,
+            self.http_version_detection_timeout,
         )
     }
 
@@ -689,7 +722,7 @@ where
 ///
 /// Accepts connections in a loop and handles them with the connection handler.
 macro_rules! accept_loop {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr, $http_version_detection_timeout:expr) => {
         loop {
             let connection_permit = acquire_connection_permit($connection_limiter.as_ref()).await;
             let (io, remote_addr) = $listener.accept().await;
@@ -698,7 +731,7 @@ macro_rules! accept_loop {
                 io,
                 remote_addr,
                 $hyper_builder.as_ref(),
-                true,
+                $http_version_detection_timeout,
                 None,
                 connection_permit,
             )
@@ -713,7 +746,7 @@ macro_rules! accept_loop {
 /// Uses `tokio::select!` to race between accepting new connections and receiving the
 /// shutdown signal.
 macro_rules! accept_loop_with_shutdown {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr, $signal:expr, $graceful:expr) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_limiter:expr, $http_version_detection_timeout:expr, $signal:expr, $graceful:expr) => {
         loop {
             let connection_permit = tokio::select! {
                 permit = acquire_connection_permit($connection_limiter.as_ref()) => permit,
@@ -731,7 +764,7 @@ macro_rules! accept_loop_with_shutdown {
                         io,
                         remote_addr,
                         $hyper_builder.as_ref(),
-                        true,
+                        $http_version_detection_timeout,
                         Some(&$graceful),
                         connection_permit,
                     )
@@ -772,11 +805,18 @@ where
                 mut make_service,
                 hyper_builder,
                 max_connections,
+                http_version_detection_timeout,
                 _marker,
             } = self;
             let connection_limiter = connection_limiter(max_connections);
 
-            accept_loop!(listener, make_service, hyper_builder, connection_limiter)
+            accept_loop!(
+                listener,
+                make_service,
+                hyper_builder,
+                connection_limiter,
+                http_version_detection_timeout
+            )
         })
     }
 }
@@ -802,6 +842,7 @@ pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     shutdown_timeout: Option<Duration>,
     max_connections: Option<usize>,
+    http_version_detection_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -815,6 +856,7 @@ where
             .field("has_hyper_config", &self.hyper_builder.is_some())
             .field("shutdown_timeout", &self.shutdown_timeout)
             .field("max_connections", &self.max_connections)
+            .field("http_version_detection_timeout", &self.http_version_detection_timeout)
             .finish_non_exhaustive()
     }
 }
@@ -826,6 +868,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
         signal: F,
         hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
         max_connections: Option<usize>,
+        http_version_detection_timeout: Option<Duration>,
     ) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
@@ -837,6 +880,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
             hyper_builder,
             shutdown_timeout: None,
             max_connections,
+            http_version_detection_timeout,
             _marker: PhantomData,
         }
     }
@@ -877,6 +921,15 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
         self
     }
 
+    /// Set the initial HTTP version detection timeout.
+    ///
+    /// The default is 30 seconds. Pass `None` to disable it.
+    /// See [`Serve::http_version_detection_timeout`] for details.
+    pub fn http_version_detection_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.http_version_detection_timeout = timeout;
+        self
+    }
+
     /// Returns the local address this server is bound to.
     pub fn local_addr(&self) -> io::Result<L::Addr> {
         self.listener.local_addr()
@@ -913,6 +966,7 @@ where
                 hyper_builder,
                 shutdown_timeout,
                 max_connections,
+                http_version_detection_timeout,
                 _marker,
             } = self;
             let connection_limiter = connection_limiter(max_connections);
@@ -926,6 +980,7 @@ where
                 make_service,
                 hyper_builder,
                 connection_limiter,
+                http_version_detection_timeout,
                 signal,
                 graceful
             );
@@ -960,14 +1015,13 @@ where
 
 /// Connection handling function.
 ///
-/// Handles connections by using runtime branching on `use_upgrades` and optional
-/// `graceful` shutdown.
+/// Handles connections with HTTP upgrade support and optional graceful shutdown.
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
     hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
-    use_upgrades: bool,
+    http_version_detection_timeout: Option<Duration>,
     graceful: Option<&hyper_util::server::graceful::GracefulShutdown>,
     connection_permit: Option<OwnedSemaphorePermit>,
 ) where
@@ -1019,24 +1073,19 @@ async fn handle_connection<L, M, S, B>(
         Arc::new(b)
     });
 
+    // Preserve IncomingStream's original IO type while constructing the service.
+    // Hyper then owns the permit through the IO, including after an HTTP upgrade.
+    let tokio_io = TokioIo::new(ConnLimiterIo::new(
+        tokio_io.into_inner(),
+        connection_permit,
+        http_version_detection_timeout,
+    ));
     tokio::spawn(async move {
-        let _connection_permit = connection_permit;
-        let result = if use_upgrades {
-            // Auto-detect mode - use with_upgrades for HTTP/1 upgrade support
-            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-            if let Some(watcher) = watcher {
-                watcher.watch(conn).await
-            } else {
-                conn.await
-            }
+        let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
+        let result = if let Some(watcher) = watcher {
+            watcher.watch(conn).await
         } else {
-            // Protocol is already decided (http1_only or http2_only) - skip preface reading
-            let conn = builder.serve_connection(tokio_io, hyper_service);
-            if let Some(watcher) = watcher {
-                watcher.watch(conn).await
-            } else {
-                conn.await
-            }
+            conn.await
         };
 
         if let Err(err) = result {
