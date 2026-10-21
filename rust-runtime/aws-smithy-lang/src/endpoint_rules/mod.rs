@@ -17,6 +17,9 @@
 //! [`EndpointRulesLimits::max_rule_depth`], and [`EndpointRuleSet::iter_rules`] walks them
 //! without recursion.
 //!
+//! [`EndpointRuleSet::compile`] compiles a rule set into an [`EndpointBdd`]
+//! with the provided [`CompileOptions`].
+//!
 //! This module represents endpoint rules; it does **not** resolve endpoints. It has no
 //! function implementations, parameter values, or evaluator. A client that resolves
 //! endpoints supplies those, and follows the traversal contract documented on [`Bdd`].
@@ -165,6 +168,7 @@ mod language;
 mod validate;
 
 pub use bdd::{Bdd, BddNode, BddNodeRef, BddRef, BddResultRef, InvalidBddError};
+pub use compiler::{CompileError, CompileOptions};
 pub use context::{
     ClientContextParam, ClientContextParams, ContextParam, OperationContextParam,
     OperationContextParams, StaticContextParam, StaticContextParams, CLIENT_CONTEXT_PARAMS,

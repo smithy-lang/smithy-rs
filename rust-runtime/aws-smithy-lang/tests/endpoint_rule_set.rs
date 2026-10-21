@@ -7,8 +7,8 @@
 
 use aws_smithy_lang::diagnostic::{Diagnostic, Severity};
 use aws_smithy_lang::endpoint_rules::{
-    self, EndpointBdd, EndpointRuleSet, EndpointRulesLimits, ExpressionKind, RuleKind,
-    RulesVersion, ENDPOINT_RULE_SET,
+    self, CompileOptions, EndpointBdd, EndpointRuleSet, EndpointRulesLimits, ExpressionKind,
+    RuleKind, RulesVersion, ENDPOINT_RULE_SET,
 };
 use aws_smithy_lang::traits::{TraitCodec, TraitDecodeError};
 use aws_smithy_lang::{Model, Node, ShapeId};
@@ -465,4 +465,85 @@ fn model_validator_checks_rule_sets() {
     assert!(diagnostics[0]
         .message()
         .contains("endpoint parameter `Bucket` is neither built-in nor bound"));
+}
+
+fn decode(value: &Value) -> EndpointRuleSet {
+    decode_with(value, &EndpointRulesLimits::default()).unwrap()
+}
+
+#[test]
+fn compiles_rule_sets() {
+    let rule_set = decode(&rule_set());
+    let compiled = rule_set.compile(&CompileOptions::default()).unwrap();
+    // The BDD trait requires version 1.1.
+    assert_eq!(
+        (compiled.version().major(), compiled.version().minor()),
+        (1, 1)
+    );
+    assert_eq!(compiled.parameters(), rule_set.parameters());
+    assert_eq!(compiled.results().len(), 3);
+    assert_eq!(compiled.validate(), []);
+    assert_eq!(
+        EndpointBdd::from_node(&compiled.to_node()).unwrap(),
+        compiled
+    );
+}
+
+#[test]
+fn compile_rejects_unsupported_rule_sets() {
+    let mut value = rule_set();
+    value["rules"][0]["conditions"][1]["fn"] = json!("ex.custom");
+    let error = decode(&value)
+        .compile(&CompileOptions::default())
+        .unwrap_err();
+    assert_eq!(error.to_string(), "unknown function `ex.custom`");
+    assert!(!error.is_resource_limit());
+
+    let mut value = rule_set();
+    value["rules"][1]["error"] = json!("bad {Name}");
+    let error = decode(&value)
+        .compile(&CompileOptions::default())
+        .unwrap_err();
+    assert!(!error.is_resource_limit(), "{error}");
+}
+
+/// Rules each matching one value of `Region`: `n` independent conditions.
+fn chain(n: usize) -> Value {
+    let rules: Vec<Value> = (0..n)
+        .map(|i| {
+            json!({
+                "type": "endpoint",
+                "conditions": [{"fn": "stringEquals", "argv": [{"ref": "Region"}, format!("r{i}")]}],
+                "endpoint": {"url": format!("https://e{i}.example.com")}
+            })
+        })
+        .collect();
+    json!({
+        "version": "1.1",
+        "parameters": {"Region": {"type": "string", "required": false, "documentation": "d"}},
+        "rules": rules
+    })
+}
+
+#[test]
+fn compile_enforces_limits() {
+    let rule_set = decode(&chain(40));
+    let options = CompileOptions::default().with_max_conditions(40);
+    assert_eq!(rule_set.compile(&options).unwrap().conditions().len(), 40);
+
+    let error = rule_set
+        .compile(&options.clone().with_max_conditions(39))
+        .unwrap_err();
+    assert!(error.is_resource_limit());
+    assert_eq!(
+        error.to_string(),
+        "the BDD would test 40 conditions, more than the limit of 39"
+    );
+
+    let error = rule_set.compile(&options.with_max_nodes(20)).unwrap_err();
+    assert!(error.is_resource_limit());
+    assert_eq!(
+        error.to_string(),
+        "building the BDD needs more than 20 nodes"
+    );
 }

@@ -3,8 +3,8 @@
 `expected/` records every stage of Smithy Java's `CompileBdd.compileBdd` from
 `software.amazon.smithy:smithy-rules-engine:1.73.0`, the version smithy-rs pins in
 `gradle/libs.versions.toml`. `tests/endpoint_bdd_java.rs` checks the fixtures against the
-checked-in models and against this crate's codecs. A Rust compiler must reproduce each stage
-exactly; normal Rust tests never run Java.
+checked-in models and against this crate's codecs, and `src/endpoint_rules/compiler/tests.rs`
+checks that the Rust compiler reproduces each stage exactly. Normal Rust tests never run Java.
 
 ## Inputs
 

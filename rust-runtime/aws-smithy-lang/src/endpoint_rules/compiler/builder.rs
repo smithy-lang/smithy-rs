@@ -38,15 +38,25 @@ pub(super) struct BddBuilder {
     pub(super) nodes: Vec<[i32; 3]>,
     unique: Table,
     ite_cache: Table,
+    /// The most nodes, and the most cached `ite` results, a build may hold.
+    max_nodes: usize,
+    /// Set when a build reaches `max_nodes`; its nodes are then meaningless.
+    exceeded: bool,
+    /// The work list and results of `ite`, which loops rather than recursing, because its
+    /// depth grows with the number of conditions.
+    frames: Vec<Frame>,
+    values: Vec<i32>,
     /// Buffers `reduce` reuses, so repeated compiles do not reallocate them.
     spare_nodes: Vec<[i32; 3]>,
     renumbered: Vec<Option<i32>>,
 }
 
 impl BddBuilder {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(max_nodes: usize) -> Self {
         Self {
             nodes: vec![[-1, TRUE, FALSE]],
+            // Node references must stay below the result references.
+            max_nodes: max_nodes.min((RESULT_OFFSET - 1) as usize),
             ..Self::default()
         }
     }
@@ -57,6 +67,7 @@ impl BddBuilder {
         self.nodes.push([-1, TRUE, FALSE]);
         self.unique.clear();
         self.ite_cache.clear();
+        self.exceeded = false;
     }
 
     /// The node `reference` addresses, which must not be a leaf.
@@ -77,6 +88,10 @@ impl BddBuilder {
         };
         let index = match self.unique.get(&key) {
             Some(index) => *index,
+            None if self.nodes.len() >= self.max_nodes => {
+                self.exceeded = true;
+                return TRUE;
+            }
             None => {
                 let index = self.nodes.len() as i32;
                 self.nodes.push(key);
@@ -91,56 +106,100 @@ impl BddBuilder {
         }
     }
 
-    /// `f` with `condition` fixed to `value`.
-    fn cofactor(&mut self, f: i32, condition: i32, value: bool) -> i32 {
+    /// `f` with `condition` fixed to `value`, where `condition` is at or above `f`'s top
+    /// variable.
+    fn cofactor(&self, f: i32, condition: i32, value: bool) -> i32 {
         if is_leaf(f) {
             return f;
         }
         let [var, high, low] = self.node(f);
-        let result = if var == condition {
-            if value {
-                high
-            } else {
-                low
-            }
-        } else if var > condition {
+        debug_assert!(var >= condition, "cofactor below the top variable");
+        if var != condition {
             return f;
-        } else {
-            let high = self.cofactor(high, condition, value);
-            let low = self.cofactor(low, condition, value);
-            self.make_node(var, high, low)
-        };
-        complement(f < 0, result)
+        }
+        complement(f < 0, if value { high } else { low })
     }
 
     /// If `f` then `g` else `h`.
-    pub(super) fn ite(&mut self, mut f: i32, mut g: i32, mut h: i32) -> i32 {
+    pub(super) fn ite(&mut self, f: i32, g: i32, h: i32) -> i32 {
+        let mut frames = std::mem::take(&mut self.frames);
+        let mut values = std::mem::take(&mut self.values);
+        frames.push(Frame::Call([f, g, h]));
+        while let Some(frame) = frames.pop() {
+            if self.exceeded {
+                frames.clear();
+                values.clear();
+                values.push(TRUE);
+                break;
+            }
+            match frame {
+                Frame::Call([f, g, h]) => match self.ite_step(f, g, h) {
+                    Step::Done(result) => values.push(result),
+                    Step::Call(arguments) => frames.push(Frame::Call(arguments)),
+                    Step::NegatedCall(arguments) => {
+                        frames.extend([Frame::Negate, Frame::Call(arguments)])
+                    }
+                    Step::Split {
+                        key,
+                        var,
+                        low,
+                        high,
+                    } => frames.extend([
+                        Frame::Make { key, var },
+                        Frame::Call(high),
+                        Frame::Call(low),
+                    ]),
+                },
+                Frame::Negate => {
+                    let value = values.pop().expect("a call precedes its negation");
+                    values.push(-value);
+                }
+                Frame::Make { key, var } => {
+                    let high = values.pop().expect("the high call ran");
+                    let low = values.pop().expect("the low call ran");
+                    let result = self.make_node(var, high, low);
+                    if self.ite_cache.len() >= self.max_nodes {
+                        self.exceeded = true;
+                    }
+                    self.ite_cache.insert(key, result);
+                    values.push(result);
+                }
+            }
+        }
+        let result = values.pop().expect("ite produces a value");
+        debug_assert!(values.is_empty());
+        (self.frames, self.values) = (frames, values);
+        result
+    }
+
+    /// One call of Java's `ite`: its result, or the calls it makes.
+    fn ite_step(&self, mut f: i32, mut g: i32, mut h: i32) -> Step {
         if f < 0 {
             f = -f;
             std::mem::swap(&mut g, &mut h);
         }
         if f == TRUE || g == h {
-            return g;
+            return Step::Done(g);
         }
         if !is_result(g) && !is_result(h) {
             if g == TRUE && h == FALSE {
-                return f;
+                return Step::Done(f);
             } else if g == FALSE && h == TRUE {
-                return -f;
+                return Step::Done(-f);
             } else if g == f {
-                return self.ite(f, TRUE, h);
+                return Step::Call([f, TRUE, h]);
             } else if h == f {
-                return self.ite(f, g, FALSE);
+                return Step::Call([f, g, FALSE]);
             } else if g == -f {
-                return self.ite(-f, h, FALSE);
+                return Step::Call([-f, h, FALSE]);
             } else if h == -f {
-                return self.ite(-f, TRUE, g);
+                return Step::Call([-f, TRUE, g]);
             } else if g < 0 && h < 0 {
-                return -self.ite(f, -g, -h);
+                return Step::NegatedCall([f, -g, -h]);
             }
         }
         if let Some(cached) = self.ite_cache.get(&[f, g, h]) {
-            return *cached;
+            return Step::Done(*cached);
         }
         let var = [f, g, h]
             .into_iter()
@@ -148,21 +207,13 @@ impl BddBuilder {
             .map(|r| self.node(r)[0])
             .min()
             .expect("f is not a leaf");
-        let (f0, g0, h0) = (
-            self.cofactor(f, var, false),
-            self.cofactor(g, var, false),
-            self.cofactor(h, var, false),
-        );
-        let low = self.ite(f0, g0, h0);
-        let (f1, g1, h1) = (
-            self.cofactor(f, var, true),
-            self.cofactor(g, var, true),
-            self.cofactor(h, var, true),
-        );
-        let high = self.ite(f1, g1, h1);
-        let result = self.make_node(var, high, low);
-        self.ite_cache.insert([f, g, h], result);
-        result
+        let cofactors = |value| [f, g, h].map(|r| self.cofactor(r, var, value));
+        Step::Split {
+            key: [f, g, h],
+            var,
+            low: cofactors(false),
+            high: cofactors(true),
+        }
     }
 
     /// Keeps only the nodes reachable from `root`, renumbered children first, high edges
@@ -182,29 +233,71 @@ impl BddBuilder {
         complement(root < 0, new_root)
     }
 
+    /// Renumbers the node `reference` addresses and its descendants, high edges first, with
+    /// an explicit stack, because the depth is the number of conditions.
     fn reduce_node(
         &mut self,
         old: &[[i32; 3]],
         renumbered: &mut [Option<i32>],
         reference: i32,
     ) -> i32 {
-        if is_leaf(reference) {
-            return reference;
-        }
-        let index = reference.unsigned_abs() as usize - 1;
-        let mapped = match renumbered[index] {
-            Some(mapped) => mapped,
-            None => {
-                let [var, high, low] = old[index];
-                let high = self.reduce_node(old, renumbered, high);
-                let low = self.reduce_node(old, renumbered, low);
-                let mapped = self.make_node(var, high, low);
-                renumbered[index] = Some(mapped);
-                mapped
+        let mapped = |renumbered: &[Option<i32>], reference: i32| {
+            if is_leaf(reference) {
+                return Some(reference);
             }
+            let mapped = renumbered[reference.unsigned_abs() as usize - 1]?;
+            Some(complement(reference < 0, mapped))
         };
-        complement(reference < 0, mapped)
+        // A node is pushed once, then again (as `true`) once its children are pushed.
+        let mut stack = vec![(reference.abs(), false)];
+        while let Some((reference, children_done)) = stack.pop() {
+            let index = reference as usize - 1;
+            if renumbered[index].is_some() {
+                continue;
+            }
+            let [var, high, low] = old[index];
+            if children_done {
+                let high = mapped(renumbered, high).expect("the high child is renumbered");
+                let low = mapped(renumbered, low).expect("the low child is renumbered");
+                renumbered[index] = Some(self.make_node(var, high, low));
+                continue;
+            }
+            stack.push((reference, true));
+            for child in [low, high] {
+                if mapped(renumbered, child).is_none() {
+                    stack.push((child.abs(), false));
+                }
+            }
+        }
+        mapped(renumbered, reference).expect("the root is renumbered")
     }
+}
+
+/// Work left in an `ite` call.
+#[derive(Debug)]
+enum Frame {
+    /// Call `ite` and push its result.
+    Call([i32; 3]),
+    /// Negate the last result.
+    Negate,
+    /// Pop the high and low results, make their node, and cache it under `key`.
+    Make { key: [i32; 3], var: i32 },
+}
+
+/// The outcome of one `ite` call before its calls run.
+enum Step {
+    Done(i32),
+    /// The result is that of this call.
+    Call([i32; 3]),
+    /// The result is that of this call, negated.
+    NegatedCall([i32; 3]),
+    /// The result is the node testing `var` with these cofactors' results.
+    Split {
+        key: [i32; 3],
+        var: i32,
+        low: [i32; 3],
+        high: [i32; 3],
+    },
 }
 
 fn should_flip(high: i32, low: i32) -> bool {
@@ -237,8 +330,12 @@ pub(super) struct Diagram {
 
 /// Java's `BddCompiler.compile`: converts the CFG with conditions in `order` (canonical
 /// indexes), numbering results as they are first reached, high branches first.
-pub(super) fn compile(cfg: &Cfg, order: Vec<usize>) -> Result<Diagram, CompileError> {
-    compile_with(&mut BddBuilder::new(), cfg, order)
+pub(super) fn compile(
+    cfg: &Cfg,
+    order: Vec<usize>,
+    max_nodes: usize,
+) -> Result<Diagram, CompileError> {
+    compile_with(&mut BddBuilder::new(max_nodes), cfg, order)
 }
 
 /// [`compile`], reusing `builder`'s allocations.
@@ -302,8 +399,11 @@ pub(super) fn compile_with(
                 converted[id.index()] = Some(node);
             }
         }
-        if builder.nodes.len() >= (RESULT_OFFSET - 1) as usize {
-            return Err(CompileError::new("the BDD has too many nodes"));
+        if builder.exceeded {
+            return Err(CompileError::limit(format!(
+                "building the BDD needs more than {} nodes",
+                builder.max_nodes
+            )));
         }
     }
     let root = builder.reduce(converted[cfg.root.index()].expect("the root is converted"));
@@ -313,4 +413,46 @@ pub(super) fn compile_with(
         conditions: order,
         results,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `x0 ∧ x2 ∧ …` (or odd variables, from `start = 1`) below `n`, built bottom-up.
+    fn chain(builder: &mut BddBuilder, start: i32, n: i32) -> i32 {
+        (start..n)
+            .step_by(2)
+            .rev()
+            .fold(TRUE, |rest, v| builder.make_node(v, rest, FALSE))
+    }
+
+    /// Conjoining two interleaved chains makes `ite` and `reduce` descend once per variable,
+    /// which would overflow this thread's stack if they recursed.
+    #[test]
+    fn deep_operations_do_not_recurse() {
+        const N: i32 = 100_000;
+        let run = || {
+            let mut builder = BddBuilder::new(usize::MAX);
+            let (f, g) = (chain(&mut builder, 0, N), chain(&mut builder, 1, N));
+            let both = builder.ite(f, g, FALSE);
+            builder.reduce(both);
+            builder.nodes.len()
+        };
+        let thread = std::thread::Builder::new().stack_size(128 * 1024);
+        let nodes = thread.spawn(run).unwrap().join().unwrap();
+        assert_eq!(nodes, N as usize + 1);
+    }
+
+    #[test]
+    fn stops_at_the_node_limit() {
+        let mut builder = BddBuilder::new(1_000);
+        let (f, g) = (chain(&mut builder, 0, 600), chain(&mut builder, 1, 600));
+        assert!(!builder.exceeded);
+        builder.ite(f, g, FALSE);
+        assert!(builder.exceeded);
+        assert_eq!(builder.nodes.len(), 1_000);
+        builder.reset();
+        assert!(!builder.exceeded);
+    }
 }

@@ -15,9 +15,6 @@
 //! Nothing here evaluates an expression: the compiler only rewrites syntax, using the static
 //! facts in [`functions`].
 
-// The compiler is only exercised by its parity tests until it has a public entry point.
-#![cfg_attr(not(test), allow(dead_code))]
-
 mod builder;
 mod cfg;
 mod cost;
@@ -37,21 +34,119 @@ mod tests;
 use crate::endpoint_rules::bdd::Bdd;
 use crate::endpoint_rules::language::{Expression, ExpressionKind, Rule, RuleKind, RulesVersion};
 use crate::endpoint_rules::{EndpointBdd, EndpointRuleSet};
+use crate::shape_id::ShapeId;
 use builder::Diagram;
 use cfg::Cfg;
 use std::fmt;
 
+impl EndpointRuleSet {
+    /// Compiles the rule set into an [`EndpointBdd`] that selects the same result for all
+    /// parameter values. This follows Smithy Java's `CompileBdd` (`smithy-rules-engine` 1.73.0)
+    /// and produces the same BDD.
+    ///
+    /// The rule set must use only standard-library and AWS functions, and every reference
+    /// must be in scope (see [`validate`](Self::validate)). The compiler rewrites syntax and
+    /// never evaluates a function.
+    ///
+    /// Compilation is bounded by `options`. Every BDD built, including each variable order the
+    /// optimizer tries, must stay within [`CompileOptions::max_nodes`], and the optimizer tries
+    /// a number of orders proportional to the number of conditions, which is at most
+    /// [`CompileOptions::max_conditions`]. A rule set within the default limits can still take
+    /// a long time, so lower them for untrusted input. S3 takes about 2 seconds in an
+    /// optimized build.
+    pub fn compile(&self, options: &CompileOptions) -> Result<EndpointBdd, CompileError> {
+        compile(self, options)
+    }
+}
+
+/// Options for [`EndpointRuleSet::compile`].
+///
+/// The default limits are far above every AWS service model at the time of writing: at most
+/// 82 conditions after the compiler's rewrites, and 14,256 nodes in any BDD built.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompileOptions {
+    service: Option<ShapeId>,
+    max_conditions: usize,
+    max_nodes: usize,
+}
+
+impl Default for CompileOptions {
+    fn default() -> Self {
+        Self {
+            service: None,
+            max_conditions: 1_024,
+            max_nodes: 1_000_000,
+        }
+    }
+}
+
+impl CompileOptions {
+    /// The service whose rules are compiled, if set.
+    pub fn service(&self) -> Option<&ShapeId> {
+        self.service.as_ref()
+    }
+
+    /// Sets the service whose rules are compiled. For `com.amazonaws.s3#AmazonS3`, the rule
+    /// set is first rewritten as Smithy Java's `CompileBddForAws` does: availability zone IDs
+    /// and S3 Express endpoints are put in a shared form, which shrinks the BDD.
+    ///
+    /// Java also checks the rewritten rules against S3's endpoint tests, because the rewrite
+    /// is only correct given the structure of S3's rules. That needs evaluation, so it is not
+    /// done here; a caller compiling a changed S3 rule set should run those tests itself.
+    pub fn with_service(mut self, service: ShapeId) -> Self {
+        self.service = Some(service);
+        self
+    }
+
+    /// The most distinct conditions the BDD may test, after the compiler's rewrites.
+    pub fn max_conditions(&self) -> usize {
+        self.max_conditions
+    }
+
+    /// Sets [`max_conditions`](Self::max_conditions).
+    pub fn with_max_conditions(mut self, value: usize) -> Self {
+        self.max_conditions = value;
+        self
+    }
+
+    /// The most nodes, including intermediate ones, that building one BDD may create.
+    pub fn max_nodes(&self) -> usize {
+        self.max_nodes
+    }
+
+    /// Sets [`max_nodes`](Self::max_nodes).
+    pub fn with_max_nodes(mut self, value: usize) -> Self {
+        self.max_nodes = value;
+        self
+    }
+}
+
 /// Why a rule set could not be compiled.
 #[derive(Debug)]
-pub(crate) struct CompileError {
+pub struct CompileError {
     message: String,
+    resource_limit: bool,
 }
 
 impl CompileError {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            resource_limit: false,
         }
+    }
+
+    fn limit(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            resource_limit: true,
+        }
+    }
+
+    /// Whether compilation stopped at a [`CompileOptions`] limit, rather than because the
+    /// rule set cannot be compiled.
+    pub fn is_resource_limit(&self) -> bool {
+        self.resource_limit
     }
 }
 
@@ -102,37 +197,44 @@ fn check(rule_set: &EndpointRuleSet) -> Result<(), CompileError> {
 /// The SSA rule set, its CFG, and the BDD before optimization (Java's `EndpointBddTrait.from`).
 fn unoptimized(
     rule_set: &EndpointRuleSet,
+    options: &CompileOptions,
 ) -> Result<(EndpointRuleSet, Cfg, Diagram), CompileError> {
     check(rule_set)?;
     let ssa = ssa::transform(rule_set)?;
     let cfg = Cfg::new(&ssa);
+    if cfg.canonical.len() > options.max_conditions {
+        return Err(CompileError::limit(format!(
+            "the BDD would test {} conditions, more than the limit of {}",
+            cfg.canonical.len(),
+            options.max_conditions
+        )));
+    }
     let order = order::initial_order(&cfg, &cfg.condition_order());
-    let diagram = builder::compile(&cfg, order)?;
+    let diagram = builder::compile(&cfg, order, options.max_nodes)?;
     Ok((ssa, cfg, diagram))
 }
 
 /// Compiles `rule_set` as Java's `CompileBdd` does: builds the BDD, sifts it, lowers its
-/// expected cost, reverses its nodes, and drops conditions no node tests.
-fn compile(rule_set: &EndpointRuleSet) -> Result<EndpointBdd, CompileError> {
-    let (ssa, cfg, diagram) = unoptimized(rule_set)?;
-    let diagram = sift::sift(&cfg, diagram)?;
-    let diagram = cost_optimization::optimize(&cfg, diagram)?;
+/// expected cost, reverses its nodes, and drops conditions no node tests. S3's rule set is
+/// first rewritten (see [`s3`]).
+fn compile(
+    rule_set: &EndpointRuleSet,
+    options: &CompileOptions,
+) -> Result<EndpointBdd, CompileError> {
+    let rewritten;
+    let rule_set = match &options.service {
+        Some(service) if service.as_str() == s3::SERVICE => {
+            rewritten = s3::rewrite(rule_set);
+            &rewritten
+        }
+        _ => rule_set,
+    };
+    let (ssa, cfg, diagram) = unoptimized(rule_set, options)?;
+    let diagram = sift::sift(&cfg, diagram, options.max_nodes)?;
+    let diagram = cost_optimization::optimize(&cfg, diagram, options.max_nodes)?;
     let diagram = finish::reverse(diagram);
     let diagram = finish::remove_unreferenced_conditions(&cfg, diagram);
     endpoint_bdd(&ssa, &cfg, &diagram)
-}
-
-/// Compiles the rule set of `service` as Java's `CompileBddForAws` does: like [`compile`], but
-/// S3's is first rewritten (see [`s3`]).
-///
-/// Java also checks S3's rewritten rule set against its endpoint tests, which needs rule
-/// evaluation; this does not.
-fn compile_for_aws(service: &str, rule_set: &EndpointRuleSet) -> Result<EndpointBdd, CompileError> {
-    if service == s3::SERVICE {
-        compile(&s3::rewrite(rule_set))
-    } else {
-        compile(rule_set)
-    }
 }
 
 /// Publishes a diagram as a checked [`EndpointBdd`].

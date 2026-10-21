@@ -123,11 +123,11 @@ struct Sifter<'a> {
 }
 
 /// Sifts `diagram`, returning it unchanged unless a smaller BDD is found.
-pub(super) fn sift(cfg: &Cfg, diagram: Diagram) -> Result<Diagram, CompileError> {
+pub(super) fn sift(cfg: &Cfg, diagram: Diagram, max_nodes: usize) -> Result<Diagram, CompileError> {
     if diagram.conditions.is_empty() {
         return Ok(diagram);
     }
-    with_compiler(cfg, diagram.conditions.len(), |compiler| {
+    with_compiler(cfg, diagram.conditions.len(), max_nodes, |compiler| {
         Sifter {
             compiler,
             graph: DependencyGraph::new(cfg),

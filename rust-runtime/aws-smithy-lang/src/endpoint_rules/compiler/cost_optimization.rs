@@ -36,19 +36,24 @@ struct Optimizer<'a> {
     graph: DependencyGraph,
     /// The cost of each canonical condition.
     costs: Vec<i32>,
-    max_nodes: usize,
+    /// The most nodes a candidate can have.
+    max_size: usize,
 }
 
 /// Lowers `diagram`'s expected evaluation cost.
-pub(super) fn optimize(cfg: &Cfg, diagram: Diagram) -> Result<Diagram, CompileError> {
+pub(super) fn optimize(
+    cfg: &Cfg,
+    diagram: Diagram,
+    max_nodes: usize,
+) -> Result<Diagram, CompileError> {
     let baseline = diagram.nodes.len();
-    with_compiler(cfg, diagram.conditions.len(), |compiler| {
+    with_compiler(cfg, diagram.conditions.len(), max_nodes, |compiler| {
         let optimizer = Optimizer {
             compiler,
             graph: DependencyGraph::new(cfg),
             costs: cfg.canonical.iter().map(condition_cost).collect(),
             // Java truncates the allowance to an `int`.
-            max_nodes: baseline + (baseline as f64 * MAX_ALLOWED_GROWTH) as usize,
+            max_size: baseline + (baseline as f64 * MAX_ALLOWED_GROWTH) as usize,
         };
         optimizer.run(diagram)
     })
@@ -99,7 +104,7 @@ impl Optimizer<'_> {
         let mut best_cost = state.cost;
         for (i, diagram) in self
             .compiler
-            .compile_moves(&state.order, &moves, self.max_nodes)?
+            .compile_moves(&state.order, &moves, self.max_size)?
         {
             let cost = self.cost(&diagram);
             if cost < best_cost {
@@ -139,7 +144,7 @@ impl Optimizer<'_> {
                 let mut candidate = state.order.clone();
                 candidate.swap(i, i + 1);
                 let bdd = self.compiler.compile(&candidate)?;
-                if bdd.nodes.len() > self.max_nodes {
+                if bdd.nodes.len() > self.max_size {
                     continue;
                 }
                 let cost = self.cost(&bdd);

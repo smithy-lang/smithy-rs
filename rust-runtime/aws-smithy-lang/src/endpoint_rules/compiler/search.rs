@@ -39,6 +39,7 @@ pub(super) struct Compiler<'a> {
 pub(super) fn with_compiler<R>(
     cfg: &Cfg,
     conditions: usize,
+    max_nodes: usize,
     optimize: impl FnOnce(&Compiler<'_>) -> R,
 ) -> R {
     // Only a search with more candidates than conditions could be parallel.
@@ -50,8 +51,8 @@ pub(super) fn with_compiler<R>(
     thread::scope(|scope| {
         let compiler = Compiler {
             cfg,
-            builder: RefCell::new(BddBuilder::new()),
-            workers: (threads > 1).then(|| Workers::new(scope, cfg, threads)),
+            builder: RefCell::new(BddBuilder::new(max_nodes)),
+            workers: (threads > 1).then(|| Workers::new(scope, cfg, threads, max_nodes)),
         };
         // Dropping the compiler, after this, stops its workers.
         optimize(&compiler)
@@ -128,13 +129,18 @@ struct Workers {
 }
 
 impl Workers {
-    fn new<'scope>(scope: &'scope Scope<'scope, '_>, cfg: &'scope Cfg, threads: usize) -> Self {
+    fn new<'scope>(
+        scope: &'scope Scope<'scope, '_>,
+        cfg: &'scope Cfg,
+        threads: usize,
+        max_nodes: usize,
+    ) -> Self {
         let (mut jobs, mut replies) = (Vec::new(), Vec::new());
         for _ in 0..threads {
             let (job_sender, job_receiver) = mpsc::channel::<Job>();
             let (reply_sender, reply_receiver) = mpsc::channel();
             scope.spawn(move || {
-                let mut builder = BddBuilder::new();
+                let mut builder = BddBuilder::new(max_nodes);
                 // Ends when the compiler, which holds the job sender, is dropped.
                 for job in job_receiver {
                     let reply = panic::catch_unwind(AssertUnwindSafe(|| {
