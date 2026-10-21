@@ -8,7 +8,7 @@
 
 use super::builder::Diagram;
 use super::cfg::Cfg;
-use super::{check, cost_optimization, endpoint_bdd, finish, sift, ssa, unoptimized};
+use super::{check, cost_optimization, endpoint_bdd, finish, s3, sift, ssa, unoptimized};
 use crate::endpoint_rules::codec::decode_condition;
 use crate::endpoint_rules::language::{Rule, RuleKind};
 use crate::endpoint_rules::{EndpointBdd, EndpointRuleSet};
@@ -365,4 +365,33 @@ fn pipeline_matches_java() {
             );
         }
     }
+}
+
+/// `S3TreeRewriter` produces Java's rewritten S3 rule set, which `pipeline_matches_java`
+/// compiles to the checked-in S3 BDD.
+#[test]
+fn s3_rewrite_matches_java() {
+    let fixtures = fixtures();
+    let fixture = |name: &str| fixtures.iter().find(|f| f.name == name).unwrap();
+    let original = fixture("aws-s3").rule_set();
+    // Not `assert_eq!`, a rule set's debug form is megabytes and would print on failure
+    assert!(s3::rewrite(&original) == fixture("aws-s3-rewritten").rule_set());
+}
+
+/// From S3's original rule set, `compile_for_aws` produces the checked-in S3 BDD (which
+/// `tests/endpoint_bdd_java.rs` checks the `aws-s3-rewritten` fixture records); other
+/// services compile as with `compile`.
+#[test]
+fn compile_for_aws_matches_checked_in_bdds() {
+    let fixtures = fixtures();
+    let fixture = |name: &str| fixtures.iter().find(|f| f.name == name).unwrap();
+    let checked_in = |name: &str| EndpointBdd::from_node(fixture(name).member("compiled")).unwrap();
+    let s3 = super::compile_for_aws(s3::SERVICE, &fixture("aws-s3").rule_set()).unwrap();
+    assert_eq!(s3.bdd().wire_node_count(), 553);
+    assert_same_bdd("aws-s3", &s3, &checked_in("aws-s3-rewritten"));
+    let other = super::compile_for_aws(
+        "com.amazonaws.sqs#AmazonSQS",
+        &fixture("aws-sqs").rule_set(),
+    );
+    assert_eq!(other.unwrap(), checked_in("aws-sqs"));
 }

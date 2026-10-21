@@ -25,6 +25,7 @@ mod cost_optimization;
 mod finish;
 mod functions;
 mod order;
+mod s3;
 mod search;
 mod sift;
 mod ssa;
@@ -119,6 +120,19 @@ fn compile(rule_set: &EndpointRuleSet) -> Result<EndpointBdd, CompileError> {
     let diagram = finish::reverse(diagram);
     let diagram = finish::remove_unreferenced_conditions(&cfg, diagram);
     endpoint_bdd(&ssa, &cfg, &diagram)
+}
+
+/// Compiles the rule set of `service` as Java's `CompileBddForAws` does: like [`compile`], but
+/// S3's is first rewritten (see [`s3`]).
+///
+/// Java also checks S3's rewritten rule set against its endpoint tests, which needs rule
+/// evaluation; this does not.
+fn compile_for_aws(service: &str, rule_set: &EndpointRuleSet) -> Result<EndpointBdd, CompileError> {
+    if service == s3::SERVICE {
+        compile(&s3::rewrite(rule_set))
+    } else {
+        compile(rule_set)
+    }
 }
 
 /// Publishes a diagram as a checked [`EndpointBdd`].
