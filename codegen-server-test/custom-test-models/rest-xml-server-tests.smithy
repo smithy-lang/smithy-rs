@@ -1,5 +1,9 @@
 $version: "2.0"
 
+// Selects the upstream REST XML operations whose protocol cases explicitly apply to servers.
+// The server projections generate and run those request/response assertions while avoiding
+// client-only cases that do not describe the server contract.
+
 namespace smithy.rust.server.protocoltests
 
 use aws.api#service

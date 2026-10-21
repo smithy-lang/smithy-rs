@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Mounts protocol-specific request extractors on single-protocol schema services.
+//! It sends accepted and rejected caller identities and checks the resulting status,
+//! error header, and body, protecting the existing extractor API on the schema path.
+//!
 //! Protocol-specific extractors on schema services.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;

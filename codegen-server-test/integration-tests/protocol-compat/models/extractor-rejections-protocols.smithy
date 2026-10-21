@@ -1,5 +1,9 @@
 $version: "2"
 
+// Adds single-protocol AWS JSON 1.1 and REST XML services for the extractor-rejection tests.
+// The tests compare custom and default rejection responses against generated legacy services
+// without ambiguity from multi-protocol request selection.
+
 namespace com.example.review
 
 use aws.protocols#awsJson1_1

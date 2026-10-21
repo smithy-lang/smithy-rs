@@ -1,5 +1,9 @@
 $version: "2"
 
+// Defines a modeled CBOR error with an HTTP-header-bound member. Tests require the serializer
+// to compile and encode that member in the error document because rpcv2Cbor ignores the REST
+// header binding.
+
 // An rpcv2Cbor error with a header-bound member. rpcv2Cbor ignores HTTP bindings, so the member
 // belongs in the document; the generated error serializer must still compile.
 namespace com.example.review

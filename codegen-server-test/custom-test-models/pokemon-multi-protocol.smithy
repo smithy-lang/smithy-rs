@@ -1,5 +1,9 @@
 $version: "2"
 
+// Adds AWS JSON 1.0/1.1, REST XML, and rpcv2Cbor to the existing REST JSON Pokemon service.
+// The schema HTTP 1.x projection can then exercise the same generated operations under all
+// five protocols without duplicating the base service model.
+
 namespace com.aws.example
 
 use aws.protocols#awsJson1_0

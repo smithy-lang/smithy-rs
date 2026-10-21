@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Runs separately generated clients for the supported protocols against one
+//! multi-protocol server over real sockets. It checks binding round trips, empty
+//! operations, modeled and validation errors, and supported blob/event-stream calls.
+//! The detailed notes below explain the REST XML calls excluded because of ambiguous
+//! request content types.
+//!
 //! Each generated client speaks one protocol; all of them call the one server serving every
 //! protocol, over a real socket.
 

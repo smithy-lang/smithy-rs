@@ -1,5 +1,9 @@
 $version: "2"
 
+// Binds the shared compatibility operations to single- and combined-protocol service variants.
+// The integration suites compare their routing, payload serialization, response bindings,
+// extractor failures, and document handling using common handlers and request scenarios.
+
 // Services under test: the same operations served by different protocol sets.
 namespace com.example.review
 

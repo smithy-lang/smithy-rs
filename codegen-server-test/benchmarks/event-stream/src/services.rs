@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Installs equivalent upload, download, and duplex handlers on each generated SDK.
+//! The handlers validate event sequence, count, and payload size, then return the
+//! same events or modeled failure so implementation comparisons use the same work.
+//!
 use crate::{Case, Kind, Server, METADATA};
 use aws_smithy_types::Blob;
 use std::sync::Arc;

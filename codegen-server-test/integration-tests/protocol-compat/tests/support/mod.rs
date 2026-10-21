@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Builds REST, AWS JSON, and CBOR requests and snapshots complete service responses.
+//! Shared helpers decode JSON/CBOR bodies and expose headers so integration assertions
+//! can compare wire behavior consistently across generated service variants.
+//!
 //! Request builders and response snapshots shared by the review-finding tests.
 #![allow(dead_code)]
 

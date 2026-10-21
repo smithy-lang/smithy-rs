@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Defines deterministic handlers shared by the compatibility services and mainline
+//! recorder. Their outputs expose bindings, payloads, labels, and errors so the same
+//! request scenario can be compared across generated implementations.
+//!
 //! The handler macro shared with the `protocol-compat-mainline` recorder.
 
 macro_rules! compat_service {

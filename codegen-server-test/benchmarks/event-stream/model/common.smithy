@@ -1,4 +1,9 @@
 $version: "2.0"
+
+// Shared upload, download, and duplex event-stream shapes for the benchmark and wire tests.
+// Structured events, binary events, and modeled stream failures let each serde implementation
+// process the same sequence, count, and payload size.
+
 namespace benchmark.eventstream
 
 @http(method: "POST", uri: "/upload", code: 200)

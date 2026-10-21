@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Drives all five protocols directly through the generated multi-protocol service.
+//! It checks empty versus absent outputs, structure and union payloads, response
+//! bindings, nested success and error values, modeled defaults, and sparse/null
+//! collections. Explicit content types select REST XML for otherwise ambiguous calls.
+//!
 //! Sends protocol requests directly through the generated service and test handlers.
 //! Explicit content types select REST XML even when a generated client would send an ambiguous body.
 
