@@ -200,6 +200,7 @@ mod filter;
 mod http_plugins;
 mod identity;
 mod layer;
+mod legacy;
 mod model_plugins;
 #[doc(hidden)]
 pub mod scoped;
@@ -211,6 +212,7 @@ pub use filter::{filter_by_operation, FilterByOperation};
 pub use http_plugins::HttpPlugins;
 pub use identity::IdentityPlugin;
 pub use layer::{LayerPlugin, PluginLayer};
+pub use legacy::LegacyHttpPlugin;
 pub use model_plugins::ModelPlugins;
 pub use scoped::Scoped;
 pub use stack::PluginStack;
@@ -225,7 +227,10 @@ pub use stack::PluginStack;
 ///
 /// [Smithy service]: https://smithy.io/2.0/spec/service-types.html#service
 /// [operation]: https://smithy.io/2.0/spec/service-types.html#operation
-pub trait Plugin<Ser, Op, T> {
+/// `SerdeMode` defaults to generated serde for compatibility with older codegen and
+/// existing plugin implementations. Schema codegen selects `SchemaSerde` for
+/// HTTP plugins; model plugins retain their existing default mode.
+pub trait Plugin<Ser, Op, T, SerdeMode = crate::response::GeneratedSerde> {
     /// The type of the new [`Service`](tower::Service).
     type Output;
 
@@ -233,14 +238,14 @@ pub trait Plugin<Ser, Op, T> {
     fn apply(&self, input: T) -> Self::Output;
 }
 
-impl<Ser, Op, T, Pl> Plugin<Ser, Op, T> for &Pl
+impl<Ser, Op, T, Pl, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for &Pl
 where
-    Pl: Plugin<Ser, Op, T>,
+    Pl: Plugin<Ser, Op, T, SerdeMode>,
 {
     type Output = Pl::Output;
 
     fn apply(&self, inner: T) -> Self::Output {
-        <Pl as Plugin<Ser, Op, T>>::apply(self, inner)
+        <Pl as Plugin<Ser, Op, T, SerdeMode>>::apply(self, inner)
     }
 }
 
@@ -462,3 +467,110 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// ```
 pub trait ModelMarker {}
 impl<Pl> ModelMarker for &Pl where Pl: ModelMarker {}
+
+#[cfg(test)]
+mod mode_tests {
+    use super::*;
+    use crate::{
+        operation::OperationShape,
+        response::{GeneratedSerde, SchemaSerde},
+        service::{ContainsOperation, ServiceShape},
+        shape_id::ShapeId,
+    };
+
+    struct Ser;
+    struct Op;
+    enum Operations {
+        Op,
+    }
+    impl ServiceShape for Ser {
+        const ID: ShapeId = ShapeId::new("test#Ser", "test", "Ser");
+        const VERSION: Option<&'static str> = None;
+        type Protocol = ();
+        type Operations = Operations;
+    }
+    impl OperationShape for Op {
+        const ID: ShapeId = ShapeId::new("test#Op", "test", "Op");
+        type Input = ();
+        type Output = ();
+        type Error = ();
+    }
+    impl ContainsOperation<Op> for Ser {
+        const VALUE: Operations = Operations::Op;
+    }
+
+    struct ModePlugin;
+    impl<Ser, Op, SerdeMode> Plugin<Ser, Op, String, SerdeMode> for ModePlugin {
+        type Output = String;
+        fn apply(&self, input: String) -> String {
+            format!("{input}:{}", std::any::type_name::<SerdeMode>())
+        }
+    }
+    impl HttpMarker for ModePlugin {}
+
+    struct OldPlugin;
+    impl<Ser, Op> Plugin<Ser, Op, String> for OldPlugin {
+        type Output = String;
+        fn apply(&self, input: String) -> String {
+            format!("legacy:{input}")
+        }
+    }
+    impl HttpMarker for OldPlugin {}
+    impl ModelMarker for OldPlugin {}
+
+    crate::scope! { struct Included { includes: [Op], excludes: [] } }
+    crate::scope! { struct Excluded { includes: [], excludes: [Op] } }
+
+    #[test]
+    fn stacks_layers_filters_scopes_references_and_legacy_adapter_forward_mode() {
+        let plugin = Scoped::new::<Included>(ModePlugin);
+        let plugins = HttpPlugins::new()
+            .push_legacy(OldPlugin)
+            .layer(tower::layer::util::Identity::new())
+            .push(plugin);
+        assert_eq!(
+            Plugin::<Ser, Op, _, GeneratedSerde>::apply(&&plugins, "input".into()),
+            format!("legacy:input:{}", std::any::type_name::<GeneratedSerde>())
+        );
+        assert_eq!(
+            Plugin::<Ser, Op, _, SchemaSerde>::apply(&&plugins, "input".into()),
+            format!("legacy:input:{}", std::any::type_name::<SchemaSerde>())
+        );
+        let filtered = filter_by_operation(ModePlugin, |_: Operations| true);
+        match Plugin::<Ser, Op, _, SchemaSerde>::apply(&filtered, "input".to_owned()) {
+            Either::Left { value } => assert_eq!(value, format!("input:{}", std::any::type_name::<SchemaSerde>())),
+            Either::Right { .. } => panic!("included operation was skipped"),
+        }
+        let filtered = filter_by_operation(ModePlugin, |_: Operations| false);
+        match Plugin::<Ser, Op, _, SchemaSerde>::apply(&filtered, "input".to_owned()) {
+            Either::Right { value } => assert_eq!(value, "input"),
+            Either::Left { .. } => panic!("excluded operation was applied"),
+        }
+    }
+
+    #[test]
+    fn excluded_scope_needs_no_schema_implementation_of_its_inner_plugin() {
+        let plugin = Scoped::new::<Excluded>(OldPlugin);
+        assert_eq!(
+            Plugin::<Ser, Op, _, SchemaSerde>::apply(&plugin, "input".to_owned()),
+            "input"
+        );
+    }
+
+    #[test]
+    fn existing_generated_and_model_plugin_signatures_keep_their_default() {
+        let plugins = ModelPlugins::new().push(OldPlugin);
+        assert_eq!(Plugin::<Ser, Op, _>::apply(&plugins, "input".into()), "legacy:input");
+    }
+
+    #[test]
+    fn plugin_layer_preserves_its_default_and_can_forward_schema_mode() {
+        let old_layer = PluginLayer::new::<Ser, Op>(OldPlugin);
+        assert_eq!(tower::Layer::layer(&old_layer, "input".to_owned()), "legacy:input");
+        let schema_layer = PluginLayer::new::<Ser, Op>(ModePlugin).with_serde_mode::<SchemaSerde>();
+        assert_eq!(
+            tower::Layer::layer(&schema_layer, "input".to_owned()),
+            format!("input:{}", std::any::type_name::<SchemaSerde>())
+        );
+    }
+}

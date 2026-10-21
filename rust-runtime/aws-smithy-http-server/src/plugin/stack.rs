@@ -27,10 +27,10 @@ impl<Inner, Outer> PluginStack<Inner, Outer> {
     }
 }
 
-impl<Ser, Op, T, Inner, Outer> Plugin<Ser, Op, T> for PluginStack<Inner, Outer>
+impl<Ser, Op, T, Inner, Outer, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for PluginStack<Inner, Outer>
 where
-    Inner: Plugin<Ser, Op, T>,
-    Outer: Plugin<Ser, Op, Inner::Output>,
+    Inner: Plugin<Ser, Op, T, SerdeMode>,
+    Outer: Plugin<Ser, Op, Inner::Output, SerdeMode>,
 {
     type Output = Outer::Output;
 

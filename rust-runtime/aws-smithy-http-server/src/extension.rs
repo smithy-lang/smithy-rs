@@ -114,7 +114,7 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<Ser, Op, T> Plugin<Ser, Op, T> for OperationExtensionPlugin
+impl<Ser, Op, T, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {

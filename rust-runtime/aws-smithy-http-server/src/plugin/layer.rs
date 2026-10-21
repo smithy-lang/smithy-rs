@@ -12,7 +12,7 @@ use super::{HttpMarker, ModelMarker, Plugin};
 /// A [`Plugin`] which acts as a [`Layer`] `L`.
 pub struct LayerPlugin<L>(pub L);
 
-impl<Ser, Op, S, L> Plugin<Ser, Op, S> for LayerPlugin<L>
+impl<Ser, Op, S, L, SerdeMode> Plugin<Ser, Op, S, SerdeMode> for LayerPlugin<L>
 where
     L: Layer<S>,
 {
@@ -30,15 +30,16 @@ impl<L> HttpMarker for LayerPlugin<L> {}
 impl<L> ModelMarker for LayerPlugin<L> {}
 
 /// A [`Layer`] which acts as a [`Plugin`] `Pl` for specific protocol `P` and operation `Op`.
-pub struct PluginLayer<Ser, Op, Pl> {
+pub struct PluginLayer<Ser, Op, Pl, SerdeMode = crate::response::GeneratedSerde> {
     plugin: Pl,
     _ser: PhantomData<Ser>,
     _op: PhantomData<Op>,
+    _serde_mode: PhantomData<fn() -> SerdeMode>,
 }
 
-impl<S, Ser, Op, Pl> Layer<S> for PluginLayer<Ser, Op, Pl>
+impl<S, Ser, Op, Pl, SerdeMode> Layer<S> for PluginLayer<Ser, Op, Pl, SerdeMode>
 where
-    Pl: Plugin<Ser, Op, S>,
+    Pl: Plugin<Ser, Op, S, SerdeMode>,
 {
     type Service = Pl::Output;
 
@@ -53,6 +54,19 @@ impl<Pl> PluginLayer<(), (), Pl> {
             plugin,
             _ser: PhantomData,
             _op: PhantomData,
+            _serde_mode: PhantomData,
+        }
+    }
+}
+
+impl<Ser, Op, Pl, SerdeMode> PluginLayer<Ser, Op, Pl, SerdeMode> {
+    /// Selects the serialization mode used when applying the wrapped plugin.
+    pub fn with_serde_mode<NewSerdeMode>(self) -> PluginLayer<Ser, Op, Pl, NewSerdeMode> {
+        PluginLayer {
+            plugin: self.plugin,
+            _ser: PhantomData,
+            _op: PhantomData,
+            _serde_mode: PhantomData,
         }
     }
 }

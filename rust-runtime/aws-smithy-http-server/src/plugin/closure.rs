@@ -12,7 +12,7 @@ pub struct OperationFn<F> {
     f: F,
 }
 
-impl<Ser, Op, T, NewService, F> Plugin<Ser, Op, T> for OperationFn<F>
+impl<Ser, Op, T, NewService, F, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for OperationFn<F>
 where
     Ser: ContainsOperation<Op>,
     F: Fn(Ser::Operations, T) -> NewService,

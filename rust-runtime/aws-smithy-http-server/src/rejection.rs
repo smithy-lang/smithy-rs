@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::response::IntoResponse;
+use crate::response::{IntoResponse, IntoResponseWithProtocol};
 use thiserror::Error;
 
 // This is used across different protocol-specific `rejection` modules.
@@ -21,10 +21,10 @@ pub enum MissingContentTypeReason {
 }
 
 pub mod any_rejections {
-    //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
-    //! [`IntoResponse`].
+    //! Rejection enums up to size 8. Each response trait is implemented independently when every
+    //! variant implements that trait.
 
-    use super::IntoResponse;
+    use super::{IntoResponse, IntoResponseWithProtocol};
     use thiserror::Error;
 
     macro_rules! any_rejection {
@@ -47,7 +47,12 @@ pub mod any_rejections {
                         $($name::$var ($var) => $var.into_response(),)*
                     }
                 }
+            }
 
+            impl<$($var,)*> IntoResponseWithProtocol for $name<$($var),*>
+            where
+                $($var: IntoResponseWithProtocol,)*
+            {
                 #[allow(non_snake_case)]
                 fn into_response_with_protocol(
                     self,
@@ -55,7 +60,7 @@ pub mod any_rejections {
                 ) -> http::Response<crate::body::BoxBody> {
                     match self {
                         $($name::$var ($var) =>
-                            <$var as IntoResponse<P>>::into_response_with_protocol($var, protocol),)*
+                            $var.into_response_with_protocol(protocol),)*
                     }
                 }
             }

@@ -138,6 +138,18 @@ impl HttpPlugins<IdentityPlugin> {
 }
 
 impl<P> HttpPlugins<P> {
+    /// Adds an existing HTTP plugin whose behavior is independent of serde mode.
+    ///
+    /// The adapter delegates to the plugin's original generated-mode implementation.
+    /// Plugins which serialize modeled errors should instead carry `SerdeMode` and use
+    /// [`IntoResponseWithRequest`](crate::response::IntoResponseWithRequest).
+    pub fn push_legacy<NewPlugin: HttpMarker>(
+        self,
+        plugin: NewPlugin,
+    ) -> HttpPlugins<PluginStack<super::LegacyHttpPlugin<NewPlugin>, P>> {
+        self.push(super::LegacyHttpPlugin::new(plugin))
+    }
+
     /// Apply a new HTTP plugin after the ones that have already been registered.
     ///
     /// ```rust
@@ -187,9 +199,9 @@ impl<P> HttpPlugins<P> {
     }
 }
 
-impl<Ser, Op, T, InnerPlugin> Plugin<Ser, Op, T> for HttpPlugins<InnerPlugin>
+impl<Ser, Op, T, InnerPlugin, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for HttpPlugins<InnerPlugin>
 where
-    InnerPlugin: Plugin<Ser, Op, T>,
+    InnerPlugin: Plugin<Ser, Op, T, SerdeMode>,
 {
     type Output = InnerPlugin::Output;
 

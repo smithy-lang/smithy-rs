@@ -80,9 +80,9 @@ impl<P> ModelPlugins<P> {
     }
 }
 
-impl<Ser, Op, T, InnerPlugin> Plugin<Ser, Op, T> for ModelPlugins<InnerPlugin>
+impl<Ser, Op, T, InnerPlugin, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for ModelPlugins<InnerPlugin>
 where
-    InnerPlugin: Plugin<Ser, Op, T>,
+    InnerPlugin: Plugin<Ser, Op, T, SerdeMode>,
 {
     type Output = InnerPlugin::Output;
 

@@ -20,15 +20,15 @@ pub struct False;
 /// Conditionally applies a [`Plugin`] `Pl` to some service `S`.
 ///
 /// See [`True`] and [`False`].
-pub trait ConditionalApply<Ser, Op, Pl, T> {
+pub trait ConditionalApply<Ser, Op, Pl, T, SerdeMode = crate::response::GeneratedSerde> {
     type Service;
 
     fn apply(plugin: &Pl, svc: T) -> Self::Service;
 }
 
-impl<Ser, Op, Pl, T> ConditionalApply<Ser, Op, Pl, T> for True
+impl<Ser, Op, Pl, T, SerdeMode> ConditionalApply<Ser, Op, Pl, T, SerdeMode> for True
 where
-    Pl: Plugin<Ser, Op, T>,
+    Pl: Plugin<Ser, Op, T, SerdeMode>,
 {
     type Service = Pl::Output;
 
@@ -37,7 +37,7 @@ where
     }
 }
 
-impl<P, Op, Pl, T> ConditionalApply<P, Op, Pl, T> for False {
+impl<P, Op, Pl, T, SerdeMode> ConditionalApply<P, Op, Pl, T, SerdeMode> for False {
     type Service = T;
 
     fn apply(_plugin: &Pl, input: T) -> Self::Service {
@@ -90,15 +90,15 @@ pub trait Membership<Op> {
     type Contains;
 }
 
-impl<Ser, Op, T, Scope, Pl> Plugin<Ser, Op, T> for Scoped<Scope, Pl>
+impl<Ser, Op, T, Scope, Pl, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for Scoped<Scope, Pl>
 where
     Scope: Membership<Op>,
-    Scope::Contains: ConditionalApply<Ser, Op, Pl, T>,
+    Scope::Contains: ConditionalApply<Ser, Op, Pl, T, SerdeMode>,
 {
-    type Output = <Scope::Contains as ConditionalApply<Ser, Op, Pl, T>>::Service;
+    type Output = <Scope::Contains as ConditionalApply<Ser, Op, Pl, T, SerdeMode>>::Service;
 
     fn apply(&self, input: T) -> Self::Output {
-        <Scope::Contains as ConditionalApply<Ser, Op, Pl, T>>::apply(&self.plugin, input)
+        <Scope::Contains as ConditionalApply<Ser, Op, Pl, T, SerdeMode>>::apply(&self.plugin, input)
     }
 }
 

@@ -90,9 +90,9 @@ pub async fn main() {
 
     let http_plugins = HttpPlugins::new()
         // Apply the `DefaultMetricsPlugin` first
-        .push(DefaultMetricsPlugin)
+        .push_legacy(DefaultMetricsPlugin)
         // Apply the scoped `PrintPlugin`
-        .push(print_plugin)
+        .push_legacy(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
         // plugins or tests to access a `aws_smithy_http_server::extension::OperationExtension` from
         // `Response::extensions`, or infer routing failure when it's missing.

@@ -9,7 +9,7 @@ use aws_smithy_http_server::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
         rpc_v2_cbor::RpcV2Cbor,
     },
-    response::{IntoResponse, Response},
+    response::{IntoResponse, IntoResponseWithProtocol, Response},
     runtime_error::InternalFailureException,
     schema::{protocol, HttpModeledError, ServerProtocol},
 };
@@ -69,30 +69,94 @@ impl HttpModeledError for Denied {
     }
 }
 
-#[tokio::test]
-async fn modeled_error_without_protocol_has_status_and_extension_but_no_framing() {
-    let response = <Denied as IntoResponse<(RestJson1, RpcV2Cbor)>>::into_response(Denied(403));
-    let reply = snapshot(response).await;
-    assert_eq!(reply.status, StatusCode::FORBIDDEN);
-    assert!(reply.headers.is_empty());
-    assert!(reply.body.is_empty());
-    assert_eq!(reply.modeled_error.as_deref(), Some("Denied"));
-    assert!(reply.runtime_error.is_none());
+// A downstream modeled error can retain its own static conversion alongside the contextual blanket.
+impl IntoResponse<RestJson1> for Denied {
+    fn into_response(self) -> Response {
+        Response::builder()
+            .status(self.0)
+            .header("x-custom-response", "static")
+            .body(aws_smithy_http_server::body::to_boxed("custom denial"))
+            .unwrap()
+    }
 }
 
 #[tokio::test]
-async fn invalid_context_free_modeled_status_returns_internal_server_error() {
-    let response = <Denied as IntoResponse<RestJson1>>::into_response(Denied(0));
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert!(response.headers().is_empty());
-    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+async fn modeled_error_blanket_uses_selected_protocol_and_coexists_with_static_conversion() {
+    let protocols: Vec<Box<dyn ServerProtocol>> = vec![
+        Box::<protocol::RestJson1>::default(),
+        Box::<protocol::AwsJson1_0>::default(),
+        Box::<protocol::AwsJson1_1>::default(),
+        Box::<protocol::RestXml>::default(),
+        Box::<protocol::RpcV2Cbor>::default(),
+    ];
+    for protocol in protocols {
+        let response = Denied(403).into_response_with_protocol(&*protocol);
+        let reply = snapshot(response).await;
+        assert_eq!(reply, snapshot(protocol.serialize_error(&Denied(403))).await);
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        assert!(!reply.headers.is_empty());
+        assert!(!reply.body.is_empty());
+        assert_eq!(reply.modeled_error.as_deref(), Some("Denied"));
+        assert!(reply.runtime_error.is_none());
+    }
+    let direct = snapshot(IntoResponse::<RestJson1>::into_response(Denied(403))).await;
+    assert_eq!(direct.status, StatusCode::FORBIDDEN);
+    assert_eq!(direct.headers["x-custom-response"], "static");
+    assert_eq!(direct.body, "custom denial");
+    assert!(direct.modeled_error.is_none());
 }
 
 #[test]
-fn infallible_retains_response_support_through_the_blanket() {
+fn infallible_supports_both_response_traits() {
     fn assert_response<P, E: IntoResponse<P>>() {}
+    fn assert_contextual<E: IntoResponseWithProtocol>() {}
     assert_response::<RestJson1, std::convert::Infallible>();
     assert_response::<(RestJson1, RpcV2Cbor), std::convert::Infallible>();
+    assert_contextual::<std::convert::Infallible>();
+}
+
+// These are downstream implementations on upstream-owned framework errors, like Coral's adapters.
+struct CustomProtocol;
+
+macro_rules! custom_protocol_response {
+    ($($error:ty),+ $(,)?) => {
+        $(
+            impl IntoResponse<CustomProtocol> for $error {
+                fn into_response(self) -> Response {
+                    Response::builder()
+                        .status(500)
+                        .header("x-custom-protocol", "retained")
+                        .body(aws_smithy_http_server::body::to_boxed("custom framework failure"))
+                        .unwrap()
+                }
+            }
+        )+
+    };
+}
+
+custom_protocol_response!(
+    InternalFailureException,
+    aws_smithy_http_server::protocol::aws_json::runtime_error::RuntimeError,
+    aws_smithy_http_server::protocol::aws_json::router::Error,
+);
+
+#[tokio::test]
+async fn downstream_framework_static_implementations_remain_available() {
+    let responses = [
+        IntoResponse::<CustomProtocol>::into_response(InternalFailureException),
+        IntoResponse::<CustomProtocol>::into_response(
+            aws_smithy_http_server::protocol::aws_json::runtime_error::RuntimeError::Validation("reason".into()),
+        ),
+        IntoResponse::<CustomProtocol>::into_response(
+            aws_smithy_http_server::protocol::aws_json::router::Error::NotFound,
+        ),
+    ];
+    for response in responses {
+        let reply = snapshot(response).await;
+        assert_eq!(reply.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(reply.headers["x-custom-protocol"], "retained");
+        assert_eq!(reply.body, "custom framework failure");
+    }
 }
 
 async fn check_tuple<P>()
@@ -122,10 +186,7 @@ where
         ),
     ];
     for (protocol, legacy) in cases {
-        let selected = <InternalFailureException as IntoResponse<P>>::into_response_with_protocol(
-            InternalFailureException,
-            &*protocol,
-        );
+        let selected = InternalFailureException.into_response_with_protocol(&*protocol);
         assert_eq!(
             snapshot(selected).await,
             snapshot(legacy).await,
@@ -176,10 +237,7 @@ async fn concrete_marker_context_hooks_use_the_supplied_protocol() {
     where
         InternalFailureException: IntoResponse<P>,
     {
-        let selected = <InternalFailureException as IntoResponse<P>>::into_response_with_protocol(
-            InternalFailureException,
-            &protocol::RestXml::default(),
-        );
+        let selected = InternalFailureException.into_response_with_protocol(&protocol::RestXml::default());
         let legacy = IntoResponse::<RestXml>::into_response(InternalFailureException);
         assert_eq!(snapshot(selected).await, snapshot(legacy).await);
     }

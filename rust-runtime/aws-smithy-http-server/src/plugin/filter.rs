@@ -22,11 +22,11 @@ pub struct FilterByOperation<Inner, F> {
     predicate: F,
 }
 
-impl<Ser, Op, T, Inner, F> Plugin<Ser, Op, T> for FilterByOperation<Inner, F>
+impl<Ser, Op, T, Inner, F, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for FilterByOperation<Inner, F>
 where
     Ser: ContainsOperation<Op>,
     F: Fn(Ser::Operations) -> bool,
-    Inner: Plugin<Ser, Op, T>,
+    Inner: Plugin<Ser, Op, T, SerdeMode>,
     Op: OperationShape,
 {
     type Output = Either<Inner::Output, T>;
@@ -37,7 +37,7 @@ where
         } else {
             Either::Right { value: IdentityPlugin }
         };
-        either_plugin.apply(input)
+        Plugin::<Ser, Op, T, SerdeMode>::apply(&either_plugin, input)
     }
 }
 

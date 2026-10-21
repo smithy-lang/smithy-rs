@@ -9,7 +9,7 @@ use super::{HttpMarker, ModelMarker, Plugin};
 #[derive(Debug)]
 pub struct IdentityPlugin;
 
-impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
+impl<Ser, Op, S, SerdeMode> Plugin<Ser, Op, S, SerdeMode> for IdentityPlugin {
     type Output = S;
 
     fn apply(&self, svc: S) -> S {

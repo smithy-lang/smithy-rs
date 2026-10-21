@@ -104,10 +104,10 @@ where
     }
 }
 
-impl<Ser, Op, T, Le, Ri> Plugin<Ser, Op, T> for Either<Le, Ri>
+impl<Ser, Op, T, Le, Ri, SerdeMode> Plugin<Ser, Op, T, SerdeMode> for Either<Le, Ri>
 where
-    Le: Plugin<Ser, Op, T>,
-    Ri: Plugin<Ser, Op, T>,
+    Le: Plugin<Ser, Op, T, SerdeMode>,
+    Ri: Plugin<Ser, Op, T, SerdeMode>,
 {
     type Output = Either<Le::Output, Ri::Output>;
 
