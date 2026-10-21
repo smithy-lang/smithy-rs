@@ -6,18 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "A response header value that is not valid UTF-8 no longer fails the whole response.\n\nAn HTTP header value may contain any octet in `0x80..=0xFF` (obs-text, RFC 7230), and an arbitrary sequence of those is not necessarily valid UTF-8, so a service can send a value that is not representable as a Rust `String`. Previously one such value failed the entire response during the HTTP-to-SDK conversion. That happened before deserialization, whether or not anything read that header, and surfaced as a non-retryable `DispatchFailure`.\n\nHeader values are now stored as received, and the encoding requirement applies where a value is bound to a modeled member. A header bound to no member is harmless. A header bound to a member reports an error naming that member on the client, or a 400 on the server. Nothing is dropped silently.\n\nFor servers this narrows what gets rejected rather than changing the status. A non-UTF-8 value bound to a member was already a 400 and still is; it is now detected at the member binding instead of when the request was converted. A request carrying a non-UTF-8 header that no modeled member is bound to used to be rejected and is now accepted.\n\n`Headers` gained byte accessors that return every value, alongside the existing string accessors, which now skip values that are not valid UTF-8:\n\n- `Headers::get_bytes`, `Headers::get_all_bytes`, `Headers::iter_bytes`\n- `HeaderValue::as_bytes`, `HeaderValue::try_as_str`\n\n`Headers::get` returns `None` both for an absent header and for one whose value is not valid UTF-8. Use `Headers::try_get` where the difference matters: it returns `Some(Ok(_))`, `Some(Err(raw_octets))` and `None` respectively. Note also that `Headers::len` and `Headers::contains_key` count and report values the string accessors skip.\n\nTo tolerate an unreadable value rather than fail, put `NonUtf8HeaderHandling::Skip` in the config bag from an interceptor. The member then deserializes as if the header were absent, and because the header is left in place the octets stay readable, so a caller that needs the value can decode it however its service encodes it:\n\n```rust\n/// Whatever decoding this service's encoding calls for.\nfn decode_latin1(bytes: &[u8]) -> String { /* ... */ }\n\n#[derive(Clone, Debug, Default)]\nstruct ContentDispositionAsLatin1 {\n    value: Arc<Mutex<Option<String>>>,\n}\n\nimpl Intercept for ContentDispositionAsLatin1 {\n    fn name(&self) -> &'static str {\n        \"ContentDispositionAsLatin1\"\n    }\n\n    fn read_before_execution(\n        &self,\n        _context: &BeforeSerializationInterceptorContextRef<'_>,\n        cfg: &mut ConfigBag,\n    ) -> Result<(), BoxError> {\n        cfg.interceptor_state().store_put(NonUtf8HeaderHandling::Skip);\n        Ok(())\n    }\n\n    fn read_after_deserialization(\n        &self,\n        context: &AfterDeserializationInterceptorContextRef<'_>,\n        _runtime_components: &RuntimeComponents,\n        _cfg: &mut ConfigBag,\n    ) -> Result<(), BoxError> {\n        let headers = context.response().headers();\n        *self.value.lock().unwrap() = headers.get_bytes(\"content-disposition\").map(decode_latin1);\n        Ok(())\n    }\n}\n```\n\n`Skip` always yields `None` for the whole member, never a partial value. That includes `@httpPrefixHeaders`, where one unreadable entry makes the whole map `None` rather than a map silently missing that entry. A member whose header carries an unreadable value is skipped even if that header also carries a separately malformed one; a header with no unreadable value always reports its parse failure.\n\nTwo things to get right if you capture the octets this way:\n\n- Register the capturing interceptor **per operation** (`.customize().interceptor(..)`) rather than on the client. One registered on the client shares a single handle across every request, so captured values cannot be attributed to a particular call. Setting `Skip` itself is stateless and is fine to do client-wide.\n- `read_after_deserialization` runs once per *attempt*, including an attempt that ends in a service error, so **overwrite** what you captured rather than appending to it. Otherwise you accumulate an entry per attempt with no way to tell which response each came from. Only trust what you captured when `send()` returned `Ok`, because a final attempt that fails before a response is deserialized leaves the previous attempt's octets in place.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "aajtodd",
-      "references": [],
-      "since-commit": "f10719ab5a388c8c8049f292cd5f502e1ac5fd83",
-      "age": 5
-    },
-    {
       "message": "Add an opt-in Hyper 1.x connection pool with HTTP/1.1 and HTTP/2 support, bounded per-origin connections, configurable partitions, and connection telemetry. The existing default HTTP client is unchanged.\n",
       "meta": {
         "bug": false,
@@ -35,7 +23,7 @@
         "smithy-rs#4876"
       ],
       "since-commit": "ef4adf5c9ce5d70170bc9178d8b864e250171214",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix broken instance profile documentation link in `aws-config::imds::credentials::Builder::profile` by changing from inline link syntax to reference-style link syntax.\n",
@@ -49,7 +37,7 @@
         "smithy-rs#1876"
       ],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "**Behavior change:** `BigInteger::from_str` and `BigDecimal::from_str` now\nperform structural validation instead of only checking that every character is\npermitted. Inputs without a single numeric reading, such as `\"--5\"`,\n`\"1.2.3\"`, `\"1e\"`, and `\"1e+\"`, now return\n`BigNumberError::InvalidFormat`. `BigInteger` also rejects a leading `+`.\n\nThe accepted grammars are:\n\n```text\nBigInteger := '-'? DIGIT+\nBigDecimal := ('+' | '-')? ( DIGIT+ ( '.' DIGIT* )? | '.' DIGIT+ )\n              ( ('e' | 'E') ('+' | '-')? DIGIT+ )?\n```\n\n`BigDecimal` therefore continues to accept forms such as `\"+123\"`, `\".5\"`,\nand `\"1.\"`. An exponent or resulting scale outside the supported range returns\n`BigNumberError::ExponentOutOfRange`. Leading-zero forms remain accepted. When\narbitrary-precision values are emitted as raw JSON numbers, the JSON codec\nseparately rejects forms invalid under RFC 8259 and suggests\n`JsonCodecSettings::use_string_for_arbitrary_precision`.\n",
@@ -61,7 +49,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Added schema extensions to `aws-smithy-schema`, so that codecs, protocols, and\nother runtime components can compute data derived from a schema once and cache\nit on the schema. A component declares a `static`\n`aws_smithy_schema::extension::SchemaExtensionKey<T>` with a function that\nderives the value, and `Schema::extension(&KEY)` computes it the first time a\nschema is asked for it and returns the cached value afterwards. Every schema has\nthis cache, whether it was generated, written by hand, or built from a model at\nruntime, and cached values are freed when their schema is dropped.\n\nA provider computes its value from the schema through ordinary accessors and\nmust not request extensions itself: on a recursive shape that could lead back to\nthe schema being initialized. A provider that requests an extension that is not\nyet cached panics instead of deadlocking.\n\nBecause of the cache, `Schema` now has interior mutability and a destructor.\nIts constructors and `with_*` setters are still `const fn`, so schemas can still\nbe declared as `static`s and referenced from `const`s\n(`const S: &Schema<'static> = &MY_SCHEMA;`). Code generated by smithy-rs is\nunaffected. These constant-evaluation patterns no longer compile:\n\n- Borrowing a temporary schema in a `const` or `static`, for example\n  `const S: &Schema<'static> = &Schema::new(..);`, or `&Self::MEMBER` where\n  `MEMBER` is an associated `const` schema (E0492).\n- Calling a method on a schema `static` in a `const` initializer, for example\n  `const B: bool = prelude::STRING.has_http_response_binding();` (E0080).\n- Creating and dropping a schema inside a `const fn` (E0493).\n\nDeclare schemas as `static`s instead. A schema declared as a by-value `const`\nstill compiles, but every use of it is a fresh copy with an empty cache.\n",
@@ -73,7 +61,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "aws-sigv4: Upgrade p256 dependency\n",
@@ -87,7 +75,7 @@
         "smithy-rs#4845"
       ],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Added the business metrics from the user-agent feature table up to `S3_FILE_PATH` (`FLEXIBLE_CHECKSUMS_REQ_MD5` through `AGENTIC_CALLER_CURSOR`, and the S3 transfer manager metrics `S3_CUSTOM_PART_SIZE`, `S3_CUSTOM_THROUGHPUT`, `S3_CUSTOM_MEMORY_LIMIT`, `S3_ON_EC2`, `S3_FILE_PATH`), and `AwsSdkFeature` variants for the S3 transfer manager directory and configuration metrics.\n",
@@ -99,7 +87,7 @@
       "author": "azkrishpy",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The opt-in connection pool now retries a connection that fails in the network before any request is sent: a refused or reset connect, a local socket error, a DNS failure, or the connection closing during the TLS handshake. These failures were not retried at all. A TLS rejection, a proxy's refusal, and a configuration error still fail at once.\n",
@@ -111,7 +99,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Removed the `pin-utils` dependency from `aws-smithy-async`, `aws-smithy-http`, `aws-smithy-legacy-http`, `aws-smithy-runtime` and `aws-smithy-types`. The remaining `pin_mut!` uses now use `std::pin::pin!`, and three of the crates didn't use it at all.\n",
@@ -125,7 +113,7 @@
         "smithy-rs#2410"
       ],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "`aws_smithy_schema::serde::SerializableStruct` has a new required method,\n`fn schema(&self) -> &Schema<'_>`, which returns the schema of the structure or\nunion itself. Generated structures and unions implement it by returning their\n`SCHEMA`. Hand-written implementations must add it. `prelude::UNIT` provides a\nschema for `smithy.api#Unit`.\n",
@@ -137,7 +125,7 @@
       "author": "fahadzub",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Added runtime Smithy schemas, protocol-agnostic shape serialization and\ndeserialization, runtime-selectable client protocols, and generated type and\nerror registries. `DiscriminatedDocument`, `DocumentSettings`, and\n`DocumentError` provide schema-aware document conversion and discriminator-based\ntype lookup.\n\nThe released `aws_smithy_types::Document` API remains source-compatible: it is\nstill an exhaustively matchable six-variant enum, and `Document::Object` still\ncontains `HashMap<String, Document>`. Schema-aware document conversion carries\nblobs as base64 strings, timestamps as epoch-second numbers, and arbitrary\nprecision numbers as strings rather than adding variants to `Document`.\n\nSome runtime crates in this release move to a new Cargo compatibility line, so\nthis is a coordinated transition: the affected crates must be taken together.\nRequirements that pin the previous compatibility line are not made compatible.\nIn particular, a previously published `aws-config` continues to pin the previous\nline, and a partial update that upgrades only some of these crates is not\nsupported. Upgrade the affected crates together.\n",
@@ -149,7 +137,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "SigV4a signing is about 2.6x faster. It performed three P-256 scalar multiplications per request where the mathematics needs one: `generate_signing_key` built an ECDSA `SigningKey` only to serialize it straight back to bytes, and `calculate_signature` rebuilt one from those bytes. Constructing a `SigningKey` derives the verifying key, which costs a scalar multiplication as expensive as the signature itself and which signing never reads.\n\nThe derived key is now returned as the raw private scalar and signed with directly. Signatures are unchanged: the new path is `ecdsa`'s own `SigningKey` signing routine with that derivation left out, so the RFC 6979 nonce and the output bytes are identical, which a test asserts against the previous path. No public signature changes, since `generate_signing_key` already returned an opaque `impl AsRef<[u8]>`.\n\nMeasured with the crate's `sigv4a` benchmark on a Xeon Platinum 8375C:\n\n| | before | after |\n|---|---|---|\n| `generate_signing_key` | 145 µs | 0.47 µs |\n| `calculate_signature` | 316 µs | 171 µs |\n| full `http_request::sign` | 467 µs | 177 µs |\n\nWhat remains is the signature's own scalar multiplication.\n",
@@ -163,7 +151,7 @@
         "smithy-rs#4892"
       ],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "`aws-sdk-ssm` now uses schema-based serialization and deserialization instead of\nthe legacy per-shape `protocol_serde` code. SSM is the first AWS service on the\nschema serde path as part of its phased rollout; no change in wire behavior is\nexpected. Other `awsJson1_1` services are unaffected.\n",
@@ -175,7 +163,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add documentation to `PaginationStream` explaining why it does not implement the `futures::stream::Stream` trait (0.x dependency constraint) and linking to `PaginationStreamExt` for users who need Stream trait compatibility.\n",
@@ -189,7 +177,7 @@
         "smithy-rs#3396"
       ],
       "since-commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Validate `@hostLabel` members are valid host labels. A `@hostLabel` value goes straight into the\nrequest authority, checked only by `http::uri::Authority::from_str` against the whole expanded\nprefix. That parser accepts a colon, and `http::Uri` then reads everything after it as an\nunparseable port and discards it. A label containing a colon therefore truncates the resolved host\nand drops the service suffix.\n\nThe generated code now runs each host label through `is_valid_host_label` before building the\nprefix. Accepted labels narrow to `[a-zA-Z0-9-]{1,63}`. A value holding `_` or `.` used to pass and\nnow fails.\n",
@@ -203,6 +191,32 @@
         "smithy-rs#4921"
       ],
       "since-commit": "dd801783fd8da9e52aa6bd998d94d65bc913c12a",
+      "age": 2
+    },
+    {
+      "message": "Enforce the event stream protocol's header value length limit when encoding messages. String and byte array header values longer than 32,767 bytes are now rejected instead of encoded. `aws_sigv4::event_stream::sign_message` now returns an error instead of panicking when a message cannot be encoded.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "vcjana",
+      "references": [
+        "smithy-rs#4924"
+      ],
+      "since-commit": "671993b6d9705d3dcd2a7e6fa1085a54d0b5bd9a",
+      "age": 1
+    },
+    {
+      "message": "The following AWS SDK clients now use schema-based serialization and\ndeserialization instead of the legacy per-shape `protocol_serde` code as the\nnext phase of the `awsJson1_1` rollout:\n\n- `aws-sdk-servicediscovery`\n- `aws-sdk-globalaccelerator`\n- `aws-sdk-appstream`\n- `aws-sdk-marketplaceentitlement`\n- `aws-sdk-route53domains`\n- `aws-sdk-comprehend`\n- `aws-sdk-iotsecuretunneling`\n- `aws-sdk-licensemanager`\n- `aws-sdk-config`\n- `aws-sdk-pi`\n- `aws-sdk-codedeploy`\n- `aws-sdk-codecommit`\n- `aws-sdk-marketplacemetering`\n- `aws-sdk-translate`\n- `aws-sdk-transcribe`\n- `aws-sdk-organizations`\n- `aws-sdk-cognitoidentity`\n- `aws-sdk-datasync`\n- `aws-sdk-sagemaker`\n- `aws-sdk-athena`\n- `aws-sdk-storagegateway`\n- `aws-sdk-codepipeline`\n- `aws-sdk-ecrpublic`\n- `aws-sdk-lightsail`\n\nNo change in behavior or public API is expected.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [],
+      "since-commit": "671993b6d9705d3dcd2a7e6fa1085a54d0b5bd9a",
       "age": 1
     }
   ],
