@@ -14,8 +14,14 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import java.io.File
 
+/**
+ * Loads the shared multi-protocol client models together with the server extensions. It checks
+ * that every expected operation is bound, that server protocol-test cases apply only to servers,
+ * and that all 163 server cases are retained. It separately checks the client service operation
+ * sets so reorganizing the shared models cannot silently drop either side's test coverage.
+ */
 internal class MultiProtocolServerModelTest {
-    private val models = File("../codegen-core/common-test-models/multi-protocol-compat")
+    private val models = File("../codegen-server-test/custom-test-models/multi-protocol-compat")
     private val serviceId = ShapeId.from("smithy.rust.codegen.test.multiprotocol#MultiProtocolService")
 
     @Test
