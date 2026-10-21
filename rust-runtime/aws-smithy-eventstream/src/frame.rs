@@ -270,7 +270,7 @@ fn write_header_to<B: BufMut>(header: &Header, mut buffer: B) -> Result<(), Erro
 ///
 /// If any header fails to serialize, nothing is written to `buffer`.
 pub fn write_headers_to<B: BufMut>(headers: &[Header], mut buffer: B) -> Result<(), Error> {
-    let mut staged = Vec::new();
+    let mut staged = Vec::with_capacity(headers.len());
     for header in headers {
         write_header_to(header, &mut staged)?;
     }
