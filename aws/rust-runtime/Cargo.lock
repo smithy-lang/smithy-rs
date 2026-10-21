@@ -164,7 +164,7 @@ version = "1.2.0"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.61.5"
+version = "0.61.6"
 dependencies = [
  "aws-smithy-types",
  "bytes",
