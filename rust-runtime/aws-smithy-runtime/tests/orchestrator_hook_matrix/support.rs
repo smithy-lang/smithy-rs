@@ -4,10 +4,10 @@
  */
 //! Test support: the recording interceptor, and the connectors and plugins the scenarios use.
 
-use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
-use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
-use crate::client::retries::strategy::NeverRetryStrategy;
-use crate::client::test_util::{
+use aws_smithy_runtime::client::auth::no_auth::NO_AUTH_SCHEME_ID;
+use aws_smithy_runtime::client::orchestrator::endpoints::StaticUriEndpointResolver;
+use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
+use aws_smithy_runtime::client::test_util::{
     deserializer::CannedResponseDeserializer, serializer::CannedRequestSerializer,
 };
 use aws_smithy_runtime_api::box_error::BoxError;

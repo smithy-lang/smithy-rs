@@ -8,10 +8,10 @@ use super::support::{
     BaseRuntimePlugin, BoundedRetryStrategy, HookLog, Observed, PlainRecorder, ScenarioPlugin,
     ScriptedConnector,
 };
-use crate::client::auth::no_auth::NoAuthRuntimePluginV2;
-use crate::client::defaults::{default_sleep_impl_plugin, default_time_source_plugin};
-use crate::client::orchestrator::{invoke_with_stop_point, StopPoint};
 use aws_smithy_http_client::test_util::NeverClient;
+use aws_smithy_runtime::client::auth::no_auth::NoAuthRuntimePluginV2;
+use aws_smithy_runtime::client::defaults::{default_sleep_impl_plugin, default_time_source_plugin};
+use aws_smithy_runtime::client::orchestrator::{invoke_with_stop_point, StopPoint};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::http_client_fn;
 use aws_smithy_runtime_api::client::interceptors::context::{
