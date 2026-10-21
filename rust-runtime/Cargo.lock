@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.68.0"
+version = "0.69.0"
 dependencies = [
  "aws-smithy-cbor 0.64.1",
  "aws-smithy-eventstream",
