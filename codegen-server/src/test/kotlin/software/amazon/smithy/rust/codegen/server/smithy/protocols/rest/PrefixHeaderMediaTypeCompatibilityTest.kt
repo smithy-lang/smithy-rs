@@ -31,7 +31,7 @@ internal class PrefixHeaderMediaTypeCompatibilityTest {
     @Test
     fun `media typed prefix headers preserve legacy decoding and rejection behavior`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/prefix-header-media-type.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/prefix-header-media-type.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("prefix-header-media-type-")
         val protocols = listOf("JsonPrefixMedia", "XmlPrefixMedia")
         for (schemaSerde in listOf(false, true)) {

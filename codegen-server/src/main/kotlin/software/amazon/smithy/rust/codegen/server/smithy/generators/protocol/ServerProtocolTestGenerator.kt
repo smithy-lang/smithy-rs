@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
@@ -880,6 +881,22 @@ class ServerProtocolTestGenerator(
         assertions.checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
         assertions.checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
         assertions.checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
+        val forbidAdditionalHeaders =
+            testCase.vendorParams.getMember("forbidAdditionalHeaders").map {
+                if (!it.isBooleanNode) {
+                    throw CodegenException(
+                        "HTTP response protocol test `${testCase.id}` vendorParams.forbidAdditionalHeaders must be a boolean",
+                    )
+                }
+                it.expectBooleanNode().value
+            }.orElse(false)
+        if (forbidAdditionalHeaders) {
+            assertions.checkNoAdditionalHeaders(
+                rustWriter,
+                "http_response.headers()",
+                testCase.headers.keys + testCase.requireHeaders,
+            )
+        }
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -889,7 +906,15 @@ class ServerProtocolTestGenerator(
 
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isPresent) {
-            checkBody(rustWriter, testCase.body.get(), testCase.bodyMediaType.orNull())
+            checkBody(
+                rustWriter,
+                testCase.body.get(),
+                testCase.bodyMediaType.orNull(),
+                checkContentLength =
+                    (testCase.headers.keys + testCase.requireHeaders).any {
+                        it.equals("content-length", ignoreCase = true)
+                    },
+            )
         }
     }
 
@@ -980,8 +1005,25 @@ class ServerProtocolTestGenerator(
         rustWriter: RustWriter,
         body: String,
         mediaType: String?,
+        checkContentLength: Boolean = false,
     ) {
+        if (checkContentLength) {
+            rustWriter.rust(
+                """
+                let declared_content_length = http_response.headers().get("content-length")
+                    .expect("expected content-length header")
+                    .to_str().expect("content-length must be text")
+                    .parse::<usize>().expect("content-length must be an unsigned integer");
+                """,
+            )
+        }
         httpBodyToBytes().invoke(rustWriter)
+        if (checkContentLength) {
+            rustWriter.rustTemplate(
+                "#{AssertEq}(declared_content_length, body.len(), \"content-length must match the response body size\");",
+                *codegenScope,
+            )
+        }
         if (body == "") {
             rustWriter.rustTemplate(
                 """

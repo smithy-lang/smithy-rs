@@ -51,7 +51,7 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
 
     @Test
     fun `generate fresh legacy and schema services and observe identical requests`() {
-        val suite = root.resolve("codegen-server-test/schema-serde-compat")
+        val suite = root.resolve("codegen-server/src/test/resources/protocol-compat")
         if (!externalAudit) {
             Files.createDirectories(run.resolve("cases"))
             val essential =
@@ -194,7 +194,7 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
     fun `record sensitive model compilation on both generators`() {
         val results = mutableListOf<String>()
         for (probe in listOf("sensitive-prefix", "sensitive-query-map", "xml-attribute")) {
-            val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/$probe.smithy")).asSmithyModel()
+            val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/$probe.smithy")).asSmithyModel()
             for (schemaSerde in listOf(false, true)) {
                 val mode = if (schemaSerde) "schema" else "legacy"
                 serverIntegrationTest(

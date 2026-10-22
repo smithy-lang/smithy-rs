@@ -31,7 +31,7 @@ internal class DocumentNullCompatibilityTest {
     @Test
     fun `REST JSON document payload null remains present like legacy`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/document-null.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/document-null.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("document-null-")
         val protocols = listOf("RestDocumentNull")
         for (schemaSerde in listOf(false, true)) {

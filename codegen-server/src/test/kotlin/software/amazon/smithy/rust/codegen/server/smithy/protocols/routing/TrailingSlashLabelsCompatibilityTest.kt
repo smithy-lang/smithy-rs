@@ -32,7 +32,7 @@ internal class TrailingSlashLabelsCompatibilityTest {
     @Test
     fun `trailing template slashes preserve legacy routing and label values`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/trailing-slash-labels.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/trailing-slash-labels.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("trailing-slash-labels-")
         val protocols = listOf("JsonLabels", "XmlLabels")
         // Generate and exercise both generated serde services before testing schema serde.

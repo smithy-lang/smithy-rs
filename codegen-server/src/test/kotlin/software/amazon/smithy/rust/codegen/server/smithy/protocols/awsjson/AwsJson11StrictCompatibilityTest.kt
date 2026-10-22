@@ -33,7 +33,7 @@ internal class AwsJson11StrictCompatibilityTest {
     @Test
     fun `generated AWS JSON 11 servers agree for populated payloads and HTTP binding traits`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val modelText = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-strict-aws-json-11.smithy"))
+        val modelText = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/response-strict-aws-json-11.smithy"))
         val model = modelText.asSmithyModel()
         val observations =
             Files.createDirectories(

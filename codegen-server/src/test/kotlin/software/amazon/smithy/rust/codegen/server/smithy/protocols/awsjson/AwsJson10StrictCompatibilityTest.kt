@@ -32,7 +32,7 @@ internal class AwsJson10StrictCompatibilityTest {
     @Test
     fun `populated outputs and errors preserve the legacy HTTP contract`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-strict-aws-json-10.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/response-strict-aws-json-10.smithy")).asSmithyModel()
         val observations =
             Files.createDirectories(
                 (System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("schema-compat-response-"))

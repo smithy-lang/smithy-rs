@@ -36,7 +36,7 @@ internal class StreamingBlobHttp1GenerationTest {
             System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of)
                 ?: Files.createTempDirectory("schema-compat-streaming-")
                     .let { Files.createTempDirectory(it, "streaming-blob-http1-") }
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/streaming-blob-http1.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/streaming-blob-http1.smithy")).asSmithyModel()
         for (service in listOf("RestBlob", "CborBlob")) {
             val settings =
                 ServerAdditionalSettings.builder().withHttp1x().schemaSerde(false).toObjectNode().toBuilder()

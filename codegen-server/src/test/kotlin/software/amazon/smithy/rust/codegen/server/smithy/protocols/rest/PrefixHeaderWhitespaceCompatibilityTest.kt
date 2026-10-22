@@ -32,7 +32,7 @@ internal class PrefixHeaderWhitespaceCompatibilityTest {
     @Test
     fun `prefix header strings preserve legacy whitespace and validation semantics`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/prefix-header-whitespace.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/prefix-header-whitespace.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("prefix-header-whitespace-")
         val protocols = listOf("JsonPrefixHeaders", "XmlPrefixHeaders")
         for (schemaSerde in listOf(false, true)) {

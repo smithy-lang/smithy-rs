@@ -66,6 +66,27 @@ internal class ServerProtocolTestAssertions(private val protocolTestHelpers: Run
         }
     }
 
+    /** Restricts header names without changing their ordinary value or presence assertions. */
+    fun checkNoAdditionalHeaders(
+        rustWriter: RustWriter,
+        actualExpression: String,
+        allowedHeaders: Collection<String>,
+    ) {
+        rustWriter.withBlock("let allowed_headers: &[&str] = &[", "];") {
+            rust(allowedHeaders.distinct().joinToString(",") { it.dq() })
+        }
+        rustWriter.withBlock("for name in $actualExpression.keys() {", "}") {
+            rust(
+                """
+                assert!(
+                    allowed_headers.iter().any(|allowed| name.as_str().eq_ignore_ascii_case(allowed)),
+                    "unexpected response header: {}", name,
+                );
+                """,
+            )
+        }
+    }
+
     private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,

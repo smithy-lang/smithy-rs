@@ -31,7 +31,7 @@ internal class DuplicateJsonNullCompatibilityTest {
     @Test
     fun `duplicate JSON null values match legacy member assignment`() {
         val root = Path.of(System.getenv("SCHEMA_COMPAT_ROOT") ?: "..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/duplicate-json-null.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/duplicate-json-null.smithy")).asSmithyModel()
         val run = System.getenv("SCHEMA_COMPAT_RUN")?.let(Path::of) ?: Files.createTempDirectory("duplicate-json-null-")
         val protocols = listOf("RestDuplicateNull", "Json10DuplicateNull", "Json11DuplicateNull")
         for (schemaSerde in listOf(false, true)) {
