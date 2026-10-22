@@ -204,10 +204,10 @@ internal class ServerRustSettingsTest {
         val sections =
             schemaSettings(
                 "",
-                """{ "protocols": { "com.amazon.coral#rpcv1": { "anything": { "nested": 1 } } } }""",
+                """{ "protocols": { "com.example#customProtocol": { "anything": { "nested": 1 } } } }""",
             ).protocolSettings()
-        sections.keys shouldBe setOf("com.amazon.coral#rpcv1")
-        sections.getValue("com.amazon.coral#rpcv1") shouldBe
+        sections.keys shouldBe setOf("com.example#customProtocol")
+        sections.getValue("com.example#customProtocol") shouldBe
             Node.parse("""{ "anything": { "nested": 1 } }""").expectObjectNode()
     }
 
@@ -220,7 +220,7 @@ internal class ServerRustSettingsTest {
                 "aws.protocols#restJson1",
                 "aws.protocols#restXml",
                 ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID,
-                "com.amazon.coral#rpcv1",
+                "com.example#customProtocol",
                 ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY,
             )
         val sections = ids.joinToString(",") { """"$it": {"extension": true}""" }

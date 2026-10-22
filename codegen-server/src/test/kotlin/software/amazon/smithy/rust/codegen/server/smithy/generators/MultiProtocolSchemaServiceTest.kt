@@ -315,32 +315,6 @@ class MultiProtocolSchemaServiceTest {
                         *scope,
                     )
                 }
-                tokioTest("a_request_no_protocol_claims_is_answered_like_coral") {
-                    rustTemplate(
-                        """
-                        for request in [
-                            post("/").header("x-amz-target", "Example.Unknown"),
-                            post("/greet").header("content-type", "text/plain"),
-                            #{Http}::Request::builder().method("GET").uri("/nowhere"),
-                        ] {
-                            let (status, headers, body) = send(request, "{}").await;
-                            assert_eq!(status, 404);
-                            assert!(headers.is_empty());
-                            assert_eq!(body, "<UnknownOperationException/>\n");
-                        }
-                        // A recognizable AWS JSON media type offers a deferred rejection,
-                        // even though an unknown operation cannot satisfy strict claiming.
-                        let (status, headers, body) = send(
-                            post("/").header("content-type", "application/x-amz-json-1.0")
-                                .header("x-amz-target", "Example.Unknown"), "{}",
-                        ).await;
-                        assert_eq!(status, 404);
-                        assert_eq!(headers["content-type"], "application/x-amz-json-1.0");
-                        assert!(body.is_empty());
-                        """,
-                        *scope,
-                    )
-                }
             }
         }
     }

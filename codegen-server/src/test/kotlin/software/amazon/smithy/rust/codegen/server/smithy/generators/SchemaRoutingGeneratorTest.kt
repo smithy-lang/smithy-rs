@@ -741,7 +741,7 @@ class SchemaRoutingGeneratorTest {
                             .withMember("common", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
                             // An unrelated protocol's section passes through without being consulted.
                             .withMember(
-                                "com.amazon.coral#rpcv1",
+                                "com.example#customProtocol",
                                 ObjectNode.builder().withMember("anything", "opaque").build(),
                             )
                             .build(),

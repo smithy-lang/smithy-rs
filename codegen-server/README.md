@@ -50,6 +50,6 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
 Servers generated without `schemaSerde` always behave as `"historical"` and leave
 `customizationConfig.protocols` unparsed. REST JSON/XML apply REST response bindings and RPC v2 CBOR
 ignores them, whatever this setting says. With `schemaSerde: true`, protocol settings must use full protocol shape IDs,
-including custom protocols (for example, `com.amazon.coral#rpcv1`). The shared `common` section is
+including custom protocols (for example, `com.example#customProtocol`). The shared `common` section is
 the only exception. Shorthand keys such as `awsJson1_0` or `restJson1` are rejected during settings
 loading. This validation does not apply to generated serde servers.
