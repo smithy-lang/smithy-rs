@@ -673,8 +673,12 @@ where
     ///
     /// The default limit is 16,384. Once the limit is reached, `serve` stops
     /// accepting connections until an existing connection closes.
+    ///
+    /// Passing `0` disables the limit, equivalent to
+    /// [`disable_connection_limit`](Self::disable_connection_limit). Values
+    /// above [`tokio::sync::Semaphore::MAX_PERMITS`] are clamped to that value.
     pub fn max_connections(mut self, max: usize) -> Self {
-        self.max_connections = Some(max);
+        self.max_connections = (max > 0).then_some(max);
         self
     }
 
@@ -910,8 +914,12 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
     ///
     /// The default limit is 16,384. Once the limit is reached, `serve` stops
     /// accepting connections until an existing connection closes.
+    ///
+    /// Passing `0` disables the limit, equivalent to
+    /// [`disable_connection_limit`](Self::disable_connection_limit). Values
+    /// above [`tokio::sync::Semaphore::MAX_PERMITS`] are clamped to that value.
     pub fn max_connections(mut self, max: usize) -> Self {
-        self.max_connections = Some(max);
+        self.max_connections = (max > 0).then_some(max);
         self
     }
 

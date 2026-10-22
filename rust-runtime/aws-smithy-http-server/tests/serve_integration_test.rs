@@ -976,6 +976,83 @@ async fn test_disable_connection_limit_accepts_multiple_connections() {
         .expect("server should shutdown cleanly");
 }
 
+#[tokio::test]
+async fn test_max_connections_zero_disables_the_limit() {
+    let accepted_connections = Arc::new(AtomicUsize::new(0));
+    let accepted_connections_clone = accepted_connections.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind")
+        .tap_io(move |_| {
+            accepted_connections_clone.fetch_add(1, Ordering::SeqCst);
+        });
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .max_connections(0)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    let first_connection = tokio::net::TcpStream::connect(addr).await.unwrap();
+    let second_connection = tokio::net::TcpStream::connect(addr).await.unwrap();
+    for _ in 0..20 {
+        if accepted_connections.load(Ordering::SeqCst) == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(accepted_connections.load(Ordering::SeqCst), 2);
+
+    drop(first_connection);
+    drop(second_connection);
+    shutdown_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked")
+        .expect("server should shutdown cleanly");
+}
+
+/// A limit above tokio's `Semaphore::MAX_PERMITS` must be clamped, not panic the server task.
+#[tokio::test]
+async fn test_max_connections_usize_max_is_clamped_not_a_panic() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .max_connections(usize::MAX)
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    stream
+        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .expect("failed to write request");
+    let mut buffer = vec![0u8; 4096];
+    let n = stream.read(&mut buffer).await.expect("failed to read response");
+    let response_text = String::from_utf8_lossy(&buffer[..n]);
+    assert!(response_text.contains("200 OK"), "{response_text}");
+
+    shutdown_tx.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked")
+        .expect("server should shutdown cleanly");
+}
+
 /// Test that `limit_connections()` enforces the connection limit correctly using semaphores.
 #[tokio::test]
 async fn test_limit_connections_blocks_excess() {

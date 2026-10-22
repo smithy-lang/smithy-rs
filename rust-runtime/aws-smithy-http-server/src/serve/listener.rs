@@ -91,11 +91,13 @@ pub trait ListenerExt: Listener + Sized {
     /// limit concurrent in-flight requests, but does not limit connections
     /// that are idle or in the process of sending request headers.
     ///
+    /// Limits above [`Semaphore::MAX_PERMITS`] are clamped to that value.
+    ///
     /// [`tower::limit::concurrency`]: https://docs.rs/tower/latest/tower/limit/concurrency/
     fn limit_connections(self, limit: usize) -> ConnLimiter<Self> {
         ConnLimiter {
             listener: self,
-            sem: Arc::new(Semaphore::new(limit)),
+            sem: Arc::new(Semaphore::new(limit.min(Semaphore::MAX_PERMITS))),
         }
     }
 
@@ -138,7 +140,10 @@ pub(super) struct ConnectionLimit {
 impl ConnectionLimit {
     pub(super) fn new(max: usize) -> Self {
         Self {
-            sem: Arc::new(Semaphore::new(max)),
+            // Tokio panics when a semaphore is created with more than
+            // `MAX_PERMITS` permits, so clamp instead of crashing the server
+            // task when a user spells "unlimited" as `usize::MAX`.
+            sem: Arc::new(Semaphore::new(max.min(Semaphore::MAX_PERMITS))),
             max,
         }
     }
