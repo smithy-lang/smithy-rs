@@ -17,10 +17,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.hours
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 
 internal class EventStreamPollBudgetTest {
     private val model =
@@ -46,18 +42,18 @@ internal class EventStreamPollBudgetTest {
 
     @Test
     fun `poll budget defaults to 32 and accepts nonnegative integers`() {
-        check(config("{}").eventStreamReadPollBudget == 32)
-        check(settings("{}").eventStreamReadPollBudget == 32)
+        check(config("{}").requestBodyReadPollBudget == 32)
+        check(settings("{}").requestBodyReadPollBudget == 32)
         for (budget in listOf(0, 1, 32, 64, Int.MAX_VALUE)) {
-            check(config("""{"eventStreamReadPollBudget": $budget}""").eventStreamReadPollBudget == budget)
+            check(config("""{"requestBodyReadPollBudget": $budget}""").requestBodyReadPollBudget == budget)
         }
     }
 
     @Test
     fun `invalid poll budgets fail code generation`() {
         for (value in listOf("-1", "1.5", "2147483648", "9223372036854775808", "\"32\"", "true", "null")) {
-            val error = assertThrows<CodegenException> { config("""{"eventStreamReadPollBudget": $value}""") }
-            check(error.message!!.contains("customizationConfig.protocols.common.eventStreamReadPollBudget"))
+            val error = assertThrows<CodegenException> { config("""{"requestBodyReadPollBudget": $value}""") }
+            check(error.message!!.contains("customizationConfig.protocols.common.requestBodyReadPollBudget"))
         }
     }
 
@@ -74,7 +70,7 @@ internal class EventStreamPollBudgetTest {
                 "customizationConfig": {
                     "protocols": {
                         "common": {
-                            "eventStreamReadPollBudget": 3,
+                            "requestBodyReadPollBudget": 3,
                             "eventStreamTimeouts": {"messageCompletion": "30s"}
                         }
                     }
@@ -89,13 +85,11 @@ internal class EventStreamPollBudgetTest {
     @Test
     fun `zero disables forced yielding in generated receiver`() {
         checkGeneratedBudget(
-            """{"customizationConfig": {"protocols": {"common": {"eventStreamReadPollBudget": 0}}}}""",
+            """{"customizationConfig": {"protocols": {"common": {"requestBodyReadPollBudget": 0}}}}""",
             64,
             false,
         )
     }
-
-
 
     @Test
     fun `malformed common protocol configuration is rejected`() {

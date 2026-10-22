@@ -85,7 +85,7 @@ class ServerEventStreamPollBudgetHttpBindingCustomization(val codegenContext: Se
         when (section) {
             is HttpBindingSection.WrapEventStreamRequestBody ->
                 writable {
-                    val budget = codegenContext.settings.eventStreamReadPollBudget
+                    val budget = codegenContext.settings.requestBodyReadPollBudget
                     if (budget > 0) {
                         rustTemplate(
                             "let ${section.bodyVariableName} = #{wrap_with_poll_budget}(${section.bodyVariableName}, ${budget}usize);",

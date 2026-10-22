@@ -56,7 +56,7 @@ data class ServerRustSettings(
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
     val requestBodyReadTimeouts: RequestBodyReadTimeouts,
-    val eventStreamReadPollBudget: Int = ProtocolReadSettings.DEFAULT_EVENT_STREAM_READ_POLL_BUDGET,
+    val requestBodyReadPollBudget: Int = ProtocolReadSettings.DEFAULT_REQUEST_BODY_READ_POLL_BUDGET,
     val eventStreamTimeouts: EventStreamTimeouts = EventStreamTimeouts.fromCustomizationConfig(customizationConfig, requestBodyReadTimeouts),
 ) : CoreRustSettings(
         service,
@@ -119,8 +119,8 @@ data class ServerRustSettings(
                         coreRustSettings.service,
                         coreRustSettings.customizationConfig,
                     ),
-                eventStreamReadPollBudget =
-                    ProtocolReadSettings.eventStreamReadPollBudget(
+                requestBodyReadPollBudget =
+                    ProtocolReadSettings.requestBodyReadPollBudget(
                         coreRustSettings.customizationConfig,
                     ),
             )

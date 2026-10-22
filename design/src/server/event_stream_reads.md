@@ -14,7 +14,7 @@ Teams configure the budget in the `rust-server-codegen` plugin's settings in
   "customizationConfig": {
     "protocols": {
       "common": {
-        "eventStreamReadPollBudget": 64
+        "requestBodyReadPollBudget": 64
       }
     }
   }
@@ -26,6 +26,10 @@ Values must be integers from `0` through `2147483647`. The setting applies to
 all event stream request inputs generated for the service, including RPC initial
 frames. Regenerate and rebuild the service to change it; it is not a live runtime
 setting.
+
+This codegen applies `requestBodyReadPollBudget` to event stream request inputs.
+The key and accepted values match schema servers, where the same setting also
+covers routing-body reads, complete-body collection, and streaming blobs.
 
 The budget counts HTTP body frames, not decoded events or bytes. Empty data
 frames, trailers, and errors count. A natural `Pending` resets the counter.
@@ -41,7 +45,7 @@ both independently:
   "customizationConfig": {
     "protocols": {
       "common": {
-        "eventStreamReadPollBudget": 32,
+        "requestBodyReadPollBudget": 32,
         "requestBodyReadTimeouts": {
           "defaultNonPayload": "5m",
           "defaultPayload": "1h"
@@ -109,7 +113,7 @@ All event stream deadlines are configured exclusively through
 `customizationConfig.protocols.common.eventStreamTimeouts`; an empty object
 disables all three event stream deadlines, and omitting the object leaves them
 at their defaults (all disabled). The poll budget is configured exclusively
-through `customizationConfig.protocols.common.eventStreamReadPollBudget`.
+through `customizationConfig.protocols.common.requestBodyReadPollBudget`.
 Use `requestBodyReadTimeouts` for non-streaming request bodies only; entries
 for streaming operations, including event stream inputs, fail generation.
 

@@ -13,8 +13,8 @@ import java.util.logging.Logger
 /** Request-read settings shared by all protocols served by the generated service. */
 internal object ProtocolReadSettings {
     const val COMMON_PATH = "customizationConfig.protocols.common"
-    const val EVENT_STREAM_READ_POLL_BUDGET_KEY = "eventStreamReadPollBudget"
-    const val DEFAULT_EVENT_STREAM_READ_POLL_BUDGET = 32
+    const val REQUEST_BODY_READ_POLL_BUDGET_KEY = "requestBodyReadPollBudget"
+    const val DEFAULT_REQUEST_BODY_READ_POLL_BUDGET = 32
 
     fun expectObject(
         node: Node?,
@@ -115,10 +115,10 @@ internal object ProtocolReadSettings {
     }
 
     /** Maximum consecutive ready HTTP body frames; zero disables forced yielding. */
-    fun eventStreamReadPollBudget(customizationConfig: ObjectNode?): Int {
-        val (value, path) = resolve(customizationConfig, EVENT_STREAM_READ_POLL_BUDGET_KEY)
+    fun requestBodyReadPollBudget(customizationConfig: ObjectNode?): Int {
+        val (value, path) = resolve(customizationConfig, REQUEST_BODY_READ_POLL_BUDGET_KEY)
         if (value == null) {
-            return DEFAULT_EVENT_STREAM_READ_POLL_BUDGET
+            return DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
         }
         val errorMessage =
             "`$path` must be an integer between 0 and ${Int.MAX_VALUE}; 0 disables forced yielding"

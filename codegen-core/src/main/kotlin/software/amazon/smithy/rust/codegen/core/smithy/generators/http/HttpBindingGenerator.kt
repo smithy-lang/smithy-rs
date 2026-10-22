@@ -99,6 +99,10 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         val unmarshallerVariableName: String,
     ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
 
+    /**
+     * Event stream bodies are read inside the handler. Wrapping the body here is the only way to
+     * put a bound on those reads.
+     */
     data class WrapEventStreamRequestBody(
         val operationShape: OperationShape,
         val unionShape: UnionShape,
