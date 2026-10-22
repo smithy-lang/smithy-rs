@@ -21,7 +21,9 @@
 //!
 //! Deadlines are checked before polling for more body frames. Time spent between polls
 //! counts toward the current deadline, including idle gaps, handler backpressure, and
-//! scheduling delays, even when the remaining bytes are already buffered.
+//! scheduling delays, even when the remaining bytes are already buffered. An expired
+//! idle deadline first probes the stream: if the client already finished sending, a
+//! clean end-of-stream is reported instead of a timeout.
 //!
 //! # Handling timeouts in your service handler
 //!
@@ -67,12 +69,16 @@ use std::time::Duration;
 /// timeout window. Propagating the error out of the handler ends request processing;
 /// the timeout does not itself close the transport connection.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum MessageTimeoutError {
     /// The RPC initial frame did not arrive completely before its deadline.
+    #[non_exhaustive]
     InitialMessage { timeout: Duration },
     /// An event frame started arriving but did not complete before its deadline.
+    #[non_exhaustive]
     MessageCompletion { timeout: Duration },
     /// The next event's first bytes did not arrive before the idle deadline.
+    #[non_exhaustive]
     Idle { timeout: Duration },
 }
 
@@ -181,6 +187,7 @@ pub(crate) fn wrap_with_event_stream_timeouts(
         prelude_len: 0,
         sleep,
         armed,
+        buffered: None,
     })
 }
 
@@ -205,6 +212,9 @@ pin_project_lite::pin_project! {
         // Whether the current initial, completion, or idle deadline is armed.
         // Cleared after reporting a timeout, until the caller polls again.
         armed: bool,
+        // A frame read while probing for EOF on idle expiry, held so expiry can
+        // still win over ready data without losing the frame for the retry.
+        buffered: Option<http_body_1x::Frame<Bytes>>,
     }
 }
 
@@ -290,7 +300,7 @@ impl http_body_1x::Body for MessageTimeoutBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Bytes>, Self::Error>>> {
-        let this = self.project();
+        let mut this = self.project();
         let mid_frame = *this.frame_remaining > 0 || *this.prelude_len > 0;
         let timeout = if *this.reading_initial {
             *this.initial_timeout
@@ -323,6 +333,16 @@ impl http_body_1x::Body for MessageTimeoutBody {
                 } else if mid_frame {
                     MessageTimeoutError::MessageCompletion { timeout }
                 } else {
+                    // The idle deadline raced the end of the stream: a client that
+                    // already finished sending is not a slow sender, so probe for EOF
+                    // (or an underlying error) before reporting a timeout. Ready data
+                    // is buffered so expiry still wins and the retry still gets it.
+                    match this.inner.as_mut().poll_frame(cx) {
+                        Poll::Ready(None) => return Poll::Ready(None),
+                        Poll::Ready(Some(Err(error))) => return Poll::Ready(Some(Err(error))),
+                        Poll::Ready(Some(Ok(frame))) => *this.buffered = Some(frame),
+                        Poll::Pending => {}
+                    }
                     MessageTimeoutError::Idle { timeout }
                 };
                 tracing::debug!(
@@ -334,7 +354,11 @@ impl http_body_1x::Body for MessageTimeoutBody {
                 return Poll::Ready(Some(Err(Box::new(error))));
             }
         }
-        match this.inner.poll_frame(cx) {
+        let polled = match this.buffered.take() {
+            Some(frame) => Poll::Ready(Some(Ok(frame))),
+            None => this.inner.poll_frame(cx),
+        };
+        match polled {
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(data) = frame.data_ref() {
                     let mut tracker = FrameTracker {
@@ -369,7 +393,7 @@ impl http_body_1x::Body for MessageTimeoutBody {
     }
 
     fn is_end_stream(&self) -> bool {
-        http_body_1x::Body::is_end_stream(&self.inner)
+        self.buffered.is_none() && http_body_1x::Body::is_end_stream(&self.inner)
     }
 
     fn size_hint(&self) -> http_body_1x::SizeHint {
@@ -846,6 +870,24 @@ mod tests {
         }
         let mut body = idle_body(vec![], None, None, None, false);
         assert!(body.frame().await.is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn idle_expiry_after_clean_eof_reports_end_of_stream() {
+        use http_body_util::BodyExt;
+        // The client sends its last frame and half-closes; the handler takes longer
+        // than the idle window to process it. The next poll must report end-of-stream,
+        // not an idle timeout: there is no slow sender to defend against.
+        let mut body = idle_body(
+            vec![Step::Data(encode_frame(20))],
+            None,
+            Some(20),
+            Some(100),
+            false,
+        );
+        body.frame().await.unwrap().unwrap();
+        tokio::time::advance(Duration::from_millis(200)).await;
+        assert!(body.frame().await.is_none(), "clean EOF is not an idle timeout");
     }
 
     #[tokio::test(start_paused = true)]
