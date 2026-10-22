@@ -66,7 +66,7 @@ internal class ServerProtocolTestAssertions(private val protocolTestHelpers: Run
         }
     }
 
-    fun basicCheck(
+    private fun basicCheck(
         params: List<String>,
         rustWriter: RustWriter,
         expectedVariableName: String,
