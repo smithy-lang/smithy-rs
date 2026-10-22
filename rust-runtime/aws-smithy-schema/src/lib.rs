@@ -138,21 +138,6 @@ pub use schema::trait_map::TraitMap;
 pub use schema::trait_type::Trait;
 pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait};
 
-/// Derives a schema and serialization support for a hand-written struct.
-///
-/// See the macro's own documentation for the attribute reference. Requires
-/// the `derive` cargo feature.
-#[cfg(feature = "derive")]
-pub use aws_smithy_schema_derive::SmithySchema;
-
-/// Supplies a default namespace for hand-written shapes. Requires the `derive` feature.
-#[cfg(feature = "derive")]
-pub use aws_smithy_schema_derive::smithy_namespace;
-
-/// Derives schema descriptors and modeled error delegation. Requires the `derive` feature.
-#[cfg(feature = "derive")]
-pub use aws_smithy_schema_derive::{SmithyError, SmithyOperation, SmithyService};
-
 /// Interns a header name so it can be attached to a runtime-materialized schema.
 ///
 /// [`Schema::with_http_header`] is the one trait setter that requires
