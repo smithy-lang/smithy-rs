@@ -1,0 +1,14 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#MyList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.other#MyString"
+            }
+        },
+        "smithy.other#MyString": {
+            "type": "string"
+        }
+    }
+}

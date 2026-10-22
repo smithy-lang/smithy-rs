@@ -6,8 +6,8 @@
 //! Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models.
 //!
 //! A [`Model`] is an immutable collection of owned semantic [shapes](shape::Shape), produced by
-//! a [`ModelAssembler`] from any mix of [Smithy 2.0 JSON AST] documents, existing models, and
-//! shapes built in code. Assembly injects the Smithy prelude, merges the inputs, and
+//! a [`ModelAssembler`] from any mix of [Smithy 2.0 IDL] and [JSON AST] documents, existing
+//! models, and shapes built in code. Assembly injects the Smithy prelude, merges the inputs, and
 //! [validates](validation) the result; every ordinary shape reference in a `Model` resolves.
 //!
 //! Shapes are looked up by [`ShapeId`]; members by name.
@@ -55,10 +55,34 @@
 //! [`knowledge`] module provides the complete queries, as well as operation errors within a
 //! service, service-scoped parents, and incoming relationships.
 //!
+//! IDL documents are loaded with [`Model::from_idl_str`] and friends or
+//! [`ModelAssembler::add_idl_str`]. Relative shape IDs resolve against every input of an
+//! assembly, so IDL and JSON documents can refer to each other:
+//!
+//! ```
+//! use aws_smithy_lang::{Model, ShapeId};
+//!
+//! let idl = r#"
+//! $version: "2"
+//! namespace ex
+//!
+//! service Service { operations: [GetThing] }
+//! "#;
+//! let json = r#"{"smithy": "2.0", "shapes": {"ex#GetThing": {"type": "operation"}}}"#;
+//! let model = Model::assembler()
+//!     .add_idl_str("service.smithy", idl)
+//!     .add_json_str("operations.json", json)
+//!     .assemble()
+//!     .into_result()?;
+//! assert!(model.contains_shape(&ShapeId::new("ex#Service")?));
+//! # Ok::<_, Box<dyn std::error::Error>>(())
+//! ```
+//!
 //! Inputs using `apply` or mixins are rejected with
 //! [`DiagnosticCode::UnsupportedFeature`](diagnostic::DiagnosticCode).
 //!
-//! [Smithy 2.0 JSON AST]: https://smithy.io/2.0/spec/json-ast.html
+//! [Smithy 2.0 IDL]: https://smithy.io/2.0/spec/idl.html
+//! [JSON AST]: https://smithy.io/2.0/spec/json-ast.html
 
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -81,7 +105,9 @@ pub mod traversal;
 pub mod validation;
 
 mod assembler;
+mod ast_converter;
 mod ast_writer;
+mod idl_loader;
 mod json_loader;
 mod model;
 mod shape_id;

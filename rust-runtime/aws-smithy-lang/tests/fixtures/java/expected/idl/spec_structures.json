@@ -1,0 +1,60 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#DocumentedStructure": {
+            "type": "structure",
+            "members": {
+                "foo": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "This is documentation for `foo`.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "baz": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#deprecated": {},
+                        "smithy.api#documentation": "This is documentation for `baz`."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "This is MyStructure."
+            }
+        },
+        "smithy.example#Example": {
+            "type": "structure",
+            "members": {
+                "normative": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#default": true
+                    }
+                }
+            }
+        },
+        "smithy.example#ExplicitExample": {
+            "type": "structure",
+            "members": {
+                "normative": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#default": true
+                    }
+                }
+            }
+        },
+        "smithy.example#MyStructure": {
+            "type": "structure",
+            "members": {
+                "foo": {
+                    "target": "smithy.api#String"
+                },
+                "baz": {
+                    "target": "smithy.api#Integer"
+                }
+            }
+        }
+    }
+}
