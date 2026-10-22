@@ -194,43 +194,48 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
             else -> emptySection
         }
 
-    private fun eventStreamMessageTimeoutModule(runtimeConfig: RuntimeConfig): RuntimeType =
-        RuntimeType.forInlineDependency(
-            InlineDependency.forRustFile(
-                // Public so handlers can downcast to `MessageTimeoutError` and decide whether to
-                // stop processing or keep waiting (by calling `recv()` again).
-                RustModule.public(
-                    "event_stream_message_timeout",
-                    documentationOverride =
-                        """
-                        Per-message read deadlines for event stream request bodies.
+    companion object {
+        /** The inlineable module applying event stream read deadlines; also referenced by
+         * [software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerHttpBoundProtocolGenerator]
+         * to detect initial-message timeouts and reject them as `408 Request Timeout`. */
+        fun eventStreamMessageTimeoutModule(runtimeConfig: RuntimeConfig): RuntimeType =
+            RuntimeType.forInlineDependency(
+                InlineDependency.forRustFile(
+                    // Public so handlers can downcast to `MessageTimeoutError` and decide whether to
+                    // stop processing or keep waiting (by calling `recv()` again).
+                    RustModule.public(
+                        "event_stream_message_timeout",
+                        documentationOverride =
+                            """
+                            Per-message read deadlines for event stream request bodies.
 
-                        When an event stream message starts arriving but doesn't complete within the
-                        configured timeout, the event stream receiver's `recv()` call returns an error
-                        whose source chain contains [`MessageTimeoutError`](event_stream_message_timeout::MessageTimeoutError).
-                        The error is resumable: a handler may call `recv()` again to grant the message
-                        one more timeout window, or propagate the error to end request processing.
-                        The timeout does not itself close the transport connection.
+                            When an event stream message starts arriving but doesn't complete within the
+                            configured timeout, the event stream receiver's `recv()` call returns an error
+                            whose source chain contains [`MessageTimeoutError`](event_stream_message_timeout::MessageTimeoutError).
+                            The error is resumable: a handler may call `recv()` again to grant the message
+                            one more timeout window, or propagate the error to end request processing.
+                            The timeout does not itself close the transport connection.
 
-                        RPC initial reads have a separate deadline starting before their first bytes
-                        arrive. Initial-message timeouts are request rejections before the handler runs.
-                        A separate idle deadline bounds waiting between complete messages and the
-                        next message's first bytes. `MessageTimeoutError::is_idle()` identifies it.
-                        All event stream deadlines are disabled by default.
+                            RPC initial reads have a separate deadline starting before their first bytes
+                            arrive. Initial-message timeouts are request rejections before the handler runs.
+                            A separate idle deadline bounds waiting between complete messages and the
+                            next message's first bytes. `MessageTimeoutError::is_idle()` identifies it.
+                            All event stream deadlines are disabled by default.
 
-                        Deadlines are checked before reading more body frames. Time spent between
-                        polls counts toward the deadline, even when the remaining bytes are buffered.
-                        """.trimIndent(),
+                            Deadlines are checked before reading more body frames. Time spent between
+                            polls counts toward the deadline, even when the remaining bytes are buffered.
+                            """.trimIndent(),
+                    ),
+                    "/inlineable/src/event_stream_message_timeout.rs",
+                    CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
+                    CargoDependency.Bytes,
+                    CargoDependency.HttpBody1x,
+                    CargoDependency.HttpBodyUtil01x.toDevDependency(),
+                    CargoDependency.Tokio.toDevDependency(),
+                    ServerCargoDependency.PinProjectLite,
+                    ServerCargoDependency.TokioTime,
+                    CargoDependency.Tracing,
                 ),
-                "/inlineable/src/event_stream_message_timeout.rs",
-                CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
-                CargoDependency.Bytes,
-                CargoDependency.HttpBody1x,
-                CargoDependency.HttpBodyUtil01x.toDevDependency(),
-                CargoDependency.Tokio.toDevDependency(),
-                ServerCargoDependency.PinProjectLite,
-                ServerCargoDependency.TokioTime,
-                CargoDependency.Tracing,
-            ),
-        )
+            )
+    }
 }

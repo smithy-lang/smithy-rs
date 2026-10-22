@@ -296,7 +296,11 @@ impl WireClient {
             );
         }
         if rejection {
-            assert!(status.is_client_error(), "{status}");
+            assert_eq!(
+                status,
+                http_1x::StatusCode::REQUEST_TIMEOUT,
+                "an initial-message timeout must be a retryable 408"
+            );
             assert!(
                 RESULTS.lock().unwrap().is_empty(),
                 "rejection invoked the handler"
