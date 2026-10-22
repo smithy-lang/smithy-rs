@@ -622,6 +622,7 @@ dependencies = [
  "aws-smithy-http-server 0.69.0",
  "aws-smithy-http-server-metrics-macro",
  "aws-smithy-legacy-http-server",
+ "aws-smithy-schema 1.1.0",
  "bytes",
  "futures",
  "http 0.2.12",
