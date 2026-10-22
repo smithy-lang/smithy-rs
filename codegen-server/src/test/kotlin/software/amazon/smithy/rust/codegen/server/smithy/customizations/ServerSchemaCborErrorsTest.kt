@@ -20,6 +20,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates a schema-serde rpcv2Cbor server whose modeled errors appear directly and inside
+ * structures, lists, maps, and unions. It decodes the actual response bytes and checks that every
+ * error structure retains its __type discriminator, including nested ValidationException values.
+ * It also checks response status and protocol headers and confirms that schema generation does
+ * not emit the legacy protocol_serde module.
+ */
 internal class ServerSchemaCborErrorsTest {
     @Test
     fun `error structures carry their discriminator at every nesting level`() {

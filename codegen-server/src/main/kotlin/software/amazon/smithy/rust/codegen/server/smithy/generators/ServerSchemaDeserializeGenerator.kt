@@ -52,11 +52,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 /**
  * Renders the schema-driven walker that reads a structure or union from a `ShapeDeserializer`.
  *
- * The walker is what the generated `FromRequest` impl feeds the protocol's request deserializer into. It is
- * transport-blind: it drives `read_struct` on the shape's `SCHEMA` and, for each member the deserializer
- * yields, reads the value and **assigns the builder field directly**. Members never go through the by-value
- * `set_*` setters: inside the per-member closure those would move the whole builder on every member, which
- * measured at 8-13% of the request cost on realistic inputs.
+ * The schema runtime and generated streaming glue feed the selected protocol's deserializer into
+ * this walker. Both structures and unions use `read_struct` on the shape's `SCHEMA`.
+ * Each member value is assigned directly to its builder field. Calling the by-value `set_*`
+ * setters inside those closures would move the entire builder for each member.
  *
  * Constraint validation does not move. A shape that can reach a constrained shape is read into its
  * *unconstrained* representation, exactly as the JSON/CBOR parsers do: nested structures come back as their

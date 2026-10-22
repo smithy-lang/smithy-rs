@@ -18,6 +18,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates servers for HTTP 0.x and 1.x with schemaSerde omitted, disabled, or enabled.
+ * It compiles and runs Tower middleware that forwards a request and checks the successful response.
+ * The generated Cargo.toml must select Tower 0.4 for legacy serde and Tower 0.5 with the util
+ * feature for schema serde, so middleware and generated service types use compatible versions.
+ */
 internal class ServerTowerDependencyTest {
     @Test
     fun `HTTP 0x middleware builds with schema serde omitted`() = checkTowerMiddleware(false, null)

@@ -19,6 +19,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Compiles generated schemas containing awkward names and trait strings and exercises their
+ * Rust serialization. A recorder checks that serializing large blobs shares their original
+ * allocation rather than copying bytes. It also verifies body-member and media-type metadata,
+ * and requires a clear codegen error for unsupported recursion involving collections alone.
+ */
 internal class SchemaGenerationIntegrityTest {
     @Test
     fun `schema names and trait strings compile and blob serialization shares allocations`() {

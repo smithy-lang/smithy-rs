@@ -25,7 +25,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.MultiVersionTestFailure
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
-/** Native tests must construct valid typed values before assessing service behavior. */
+/**
+ * Uses the server test instantiator to construct valid constrained inputs and outputs with
+ * public constrained types enabled and disabled. It checks nested values, optional members, and
+ * explicit Document::Null values in generated Rust. The legacy path's established compilation
+ * limitations are asserted separately instead of silently changing the legacy fixture generator.
+ */
 internal class ServerInstantiatorConstrainedProtocolTest {
     @ParameterizedTest
     @ValueSource(booleans = [true, false])

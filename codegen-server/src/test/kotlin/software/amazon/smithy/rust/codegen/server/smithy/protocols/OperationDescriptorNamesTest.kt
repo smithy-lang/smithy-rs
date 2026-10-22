@@ -11,6 +11,11 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates services with operation names that could collide with generated descriptor and
+ * error-table suffixes. It compiles both legacy and schema HTTP 1.x crates so duplicate Rust
+ * names or references to the wrong operation marker fail at compile time.
+ */
 internal class OperationDescriptorNamesTest {
     @Test
     fun `operation descriptors cannot collide with error table suffixes`() {

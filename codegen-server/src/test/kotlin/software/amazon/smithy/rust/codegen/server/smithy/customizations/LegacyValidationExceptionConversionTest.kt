@@ -38,6 +38,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Implements the older validation-exception decorator interface and verifies that generated
+ * legacy servers still convert constraint violations into the expected HTTP validation error
+ * for both HTTP library versions. Enabling schema serde with an incomplete decorator must fail
+ * codegen with a useful diagnostic naming the missing schema conversion or exception symbol.
+ */
 internal class LegacyValidationExceptionConversionTest {
     private val model =
         """

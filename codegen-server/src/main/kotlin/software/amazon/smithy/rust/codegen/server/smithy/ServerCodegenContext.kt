@@ -22,12 +22,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ret
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
- * from the `rust-codegen-server` subproject.
+ * from the `codegen-server` subproject.
  *
  * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
- *
- * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
- * and server (like [JsonParserGenerator]).
  */
 data class ServerCodegenContext(
     override val model: Model,

@@ -22,7 +22,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
-/** Replays identical request bytes through separately generated serde and schema servers. */
+/**
+ * Replays identical success, malformed-input, validation-error, and event-stream requests through
+ * separately generated legacy and schema servers for REST JSON, REST XML, and AWS JSON 1.0/1.1.
+ * It records each complete HTTP response and requires the schema responses to match the legacy
+ * snapshots, protecting default behavior when schemaSerde is enabled.
+ */
 internal class ServerSchemaLegacyReplayTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "awsJson1_0", "awsJson1_1"])

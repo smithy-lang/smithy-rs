@@ -860,8 +860,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // `400 Bad Request` (plus the server drops the connection).
             //
             // Services that legitimately need to accept larger payloads can raise the limit via
-            // `customizationConfig.protocols.common.requestBodyMaxBytes`. Setting it to `0`
-            // disables the check entirely (not recommended).
+            // `codegen.requestBodyMaxBytes` for generated serde. The schema runtime reads
+            // `customizationConfig.protocols.common.requestBodyMaxBytes` separately.
+            // Setting the limit to `0` disables the check entirely (not recommended).
             renderBodyCollection(codegenContext.settings.requestBodyMaxBytes())
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
             // operation input; we simply parse it as empty operation input.

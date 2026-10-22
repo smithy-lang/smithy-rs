@@ -18,20 +18,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 
 /**
- * With generated serde (schemaSerde=false), event unions convert unconstrained input events into modeled events.
- * Optional members must remain optional during that conversion, including a structure
- * containing an enum, whose validation makes the generated conversion fallible.
- *
- * | Event variant | Input to the conversion | Expected result |
- * | --- | --- | --- |
- * | Empty | Empty structure | Conversion succeeds |
- * | Scalar | Header and scalar value absent | Conversion succeeds |
- * | Structured | Optional nested structure absent | Conversion succeeds |
- * | EnumBody | Optional structure containing an enum absent | Conversion succeeds |
- *
- * Each case runs for REST JSON, AWS JSON 1.0/1.1, and RPC v2 CBOR with HTTP 1.x and
- * schemaSerde=false, using this checkout's codegen/runtime. Assertions exercise generated
- * Rust TryInto conversions; event-frame decoding and HTTP responses have separate coverage.
+ * Generates legacy HTTP 1.x event-stream types for REST JSON, AWS JSON 1.0/1.1, and rpcv2Cbor.
+ * Rust assertions construct unconstrained event variants with optional header, scalar, or nested
+ * payload members absent and convert them to modeled events with TryInto. Every conversion must
+ * succeed, including a nested structure containing an enum whose conversion can otherwise fail.
+ * These assertions exercise generated conversion code; event-frame decoding has separate tests.
  */
 internal class GeneratedSerdeEventConversionTest {
     @ParameterizedTest

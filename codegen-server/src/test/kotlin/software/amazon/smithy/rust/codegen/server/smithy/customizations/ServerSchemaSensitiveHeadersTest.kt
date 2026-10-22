@@ -17,6 +17,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Inspects generated output schemas for sensitivity inherited from scalar, list, map, map-key,
+ * and map-value target shapes. It verifies that @sensitive metadata remains attached at the
+ * appropriate schema level and that ordinary public headers are not marked sensitive. This
+ * protects the metadata used to redact header values in runtime diagnostics.
+ */
 internal class ServerSchemaSensitiveHeadersTest {
     @Test
     fun `header schemas preserve sensitivity inherited from targets`() {

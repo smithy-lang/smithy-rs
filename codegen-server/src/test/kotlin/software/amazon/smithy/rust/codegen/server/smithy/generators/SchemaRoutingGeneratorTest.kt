@@ -35,6 +35,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Exercises generated schema service builders and routing with ordinary, streaming, and custom
+ * protocol operations. It checks protocol selection, missing handlers, middleware ordering and
+ * rebuilt requests, propagation of body limits and protocol flags, and XML collection-name
+ * settings. Decorator fixtures also verify that schema builders use runtime protocol registries
+ * and that legacy generation does not request those registries.
+ */
 class SchemaRoutingGeneratorTest {
     @Test
     fun `missing handlers use selected protocols and tolerate rebuilt requests`() {

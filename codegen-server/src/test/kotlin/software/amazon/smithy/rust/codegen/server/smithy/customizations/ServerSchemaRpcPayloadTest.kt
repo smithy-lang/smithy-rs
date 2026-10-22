@@ -23,6 +23,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * Uses one generated set of schema types for structured and union @httpPayload outputs across
+ * all five supported protocols. It checks actual success and modeled-error responses so RPC
+ * protocols retain the payload member's document key, while REST protocols apply their payload,
+ * header, and XML-name bindings. Legacy-generated services provide the comparison responses.
+ */
 internal class ServerSchemaRpcPayloadTest {
     private fun payloadModel(protocols: String) =
         """

@@ -21,6 +21,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.lang.reflect.Modifier
 
+/**
+ * Checks the Cargo.toml metadata emitted for generated servers: the codegen commit and release,
+ * served protocol IDs, explicitly supplied non-default codegen settings, and customization values.
+ * It parses the generated TOML and verifies that nested values retain their types, defaults are
+ * omitted, and legacy servers retain their baseline metadata. Reflection checks that the recorded
+ * setting defaults cover all server settings and agree with their constructor defaults.
+ */
 internal class ServerCargoMetadataTest {
     private fun manifest(manifestCustomizations: ManifestCustomizations): Toml {
         val writer = RustWriter.toml("Cargo.toml")

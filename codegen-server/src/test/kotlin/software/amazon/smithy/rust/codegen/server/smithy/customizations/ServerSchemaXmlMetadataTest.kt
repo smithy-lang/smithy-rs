@@ -23,6 +23,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * Checks how generated XML metadata wraps a payload's target schema when the member overrides
+ * its root name. Rust assertions verify shape identity, member references, namespaces, sensitivity,
+ * and cached schema extensions; JSON must ignore the XML-only metadata. HTTP request comparisons
+ * also check that XML payload-root handling agrees with the generated legacy implementation.
+ */
 internal class ServerSchemaXmlMetadataTest {
     @Test
     fun `structured payload request roots retain legacy behavior`() {
