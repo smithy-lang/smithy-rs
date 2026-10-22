@@ -51,7 +51,7 @@ use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
 use crate::body::BoxBody;
-use crate::body::__private::{CollectBodyError, CollectBodyFuture, CollectionConfig, HttpBody};
+use crate::body::__private::{CollectBodyError, CollectBodyFuture, CollectionConfig, HttpBody, DEFAULT_FRAME_BUDGET};
 use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
@@ -536,11 +536,24 @@ pub(crate) fn body_collection_rejection(
     protocol.serialize_rejection(error.into())
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct RequestBodyCollectionConfig {
     pub max_bytes: Option<NonZeroUsize>,
     pub read_timeout: Option<Duration>,
+    /// Consecutive ready HTTP body frame polls before yielding, for collection and streaming.
+    /// Defaults to 32; `None` disables forced yielding.
+    pub read_poll_budget: Option<NonZeroUsize>,
+}
+
+impl Default for RequestBodyCollectionConfig {
+    fn default() -> Self {
+        Self {
+            max_bytes: None,
+            read_timeout: None,
+            read_poll_budget: Some(DEFAULT_FRAME_BUDGET),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -560,6 +573,12 @@ impl RequestBodyCollectionConfig {
     /// Sets the read timeout; `None` disables it.
     pub fn with_read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
         self.read_timeout = read_timeout;
+        self
+    }
+
+    /// Sets the frame poll budget for collection and streaming; `None` disables forced yielding.
+    pub fn with_read_poll_budget(mut self, read_poll_budget: Option<NonZeroUsize>) -> Self {
+        self.read_poll_budget = read_poll_budget;
         self
     }
 }
@@ -587,6 +606,10 @@ impl ServiceRequestBodyConfig {
                 _ => None,
             };
             maximum.read_timeout = match (maximum.read_timeout, config.read_timeout) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+            maximum.read_poll_budget = match (maximum.read_poll_budget, config.read_poll_budget) {
                 (Some(left), Some(right)) => Some(left.max(right)),
                 _ => None,
             };
@@ -720,7 +743,12 @@ impl<B: HttpBody> std::future::Future for RequestBodyCollectionFuture<B> {
                 CollectionStateProj::Start { body, config } => {
                     let future = CollectBodyFuture::<B, true>::new(
                         body.take().expect("collection starts once"),
-                        Some(CollectionConfig::builder().set_limit(config.max_bytes).build()),
+                        Some(
+                            CollectionConfig::builder()
+                                .set_limit(config.max_bytes)
+                                .set_frame_budget(config.read_poll_budget)
+                                .build(),
+                        ),
                     );
                     let state = match config.read_timeout {
                         Some(timeout) => CollectionState::Timed {

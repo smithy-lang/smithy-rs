@@ -128,6 +128,35 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
+    fun `request body poll budget defaults to 32 and zero becomes null`() {
+        schemaSettings("").requestBodyReadPollBudget() shouldBe 32
+        schemaSettings("", """{"protocols":{"common":{"otherSetting":1}}}""").requestBodyReadPollBudget() shouldBe 32
+        for (budget in listOf(0, 1, 7, Int.MAX_VALUE)) {
+            schemaSettings(
+                "",
+                """{"protocols":{"common":{"requestBodyReadPollBudget":$budget}}}""",
+            ).requestBodyReadPollBudget() shouldBe budget.takeIf { it > 0 }
+        }
+    }
+
+    @Test
+    fun `invalid request body poll budgets fail when settings are loaded`() {
+        for (value in listOf("-1", "1.5", "2147483648", "9223372036854775808", "true", "null", "\"32\"", "{}", "[]")) {
+            val error =
+                shouldThrow<CodegenException> {
+                    schemaSettings("", """{"protocols":{"common":{"requestBodyReadPollBudget":$value}}}""")
+                }
+            error.message shouldContain "customizationConfig.protocols.common.requestBodyReadPollBudget"
+            error.message shouldContain "between 0 and 2147483647"
+        }
+    }
+
+    @Test
+    fun `legacy generation leaves the common poll budget unparsed`() {
+        settings("", """{"protocols":{"common":{"requestBodyReadPollBudget":-1}}}""").requestBodyReadPollBudget() shouldBe 32
+    }
+
+    @Test
     fun `legacy request body limit is copied into customization config`() {
         for (customization in listOf(null, "{}", """{ "protocols": {} }""")) {
             val settings = schemaSettings(""""requestBodyMaxBytes": 1024""", customization)

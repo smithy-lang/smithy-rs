@@ -72,7 +72,7 @@ data class ServerRustSettings(
      * Generated serde servers leave this customization section unparsed.
      *
      * Protocol sections are passed through to the generated `ProtocolOptions` as documents keyed
-     * by shape ID. The common request body limit is emitted as typed body configuration instead.
+     * by shape ID. Common request body settings are emitted as typed body configuration instead.
      * Protocol authors parse their own documents when constructing their protocol or router.
      */
     fun protocolSettings(): Map<String, ObjectNode> =
@@ -151,6 +151,30 @@ data class ServerRustSettings(
     }
 
     /**
+     * Maximum consecutive ready request body frames before yielding, shared by schema routing,
+     * collection, streaming blobs, and event streams. The common protocol setting defaults to
+     * 32; zero disables forced yielding and is represented by `null` after parsing.
+     */
+    fun requestBodyReadPollBudget(): Int? {
+        if (!codegenConfig.schemaSerde) return DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
+        val key = "$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$COMMON_PROTOCOL_SETTINGS_KEY.$REQUEST_BODY_READ_POLL_BUDGET_KEY"
+        val node =
+            protocolSettings()[COMMON_PROTOCOL_SETTINGS_KEY]
+                ?.getMember(REQUEST_BODY_READ_POLL_BUDGET_KEY)?.orNull()
+                ?: return DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
+        val errorMessage = "`$key` must be an integer between 0 and ${Int.MAX_VALUE}; 0 disables forced yielding"
+        if (!node.isNumberNode) throw CodegenException(errorMessage)
+        val budget =
+            try {
+                node.expectNumberNode().value.toString().toBigDecimal().intValueExact()
+            } catch (error: ArithmeticException) {
+                throw CodegenException(errorMessage, error)
+            }
+        if (budget < 0) throw CodegenException(errorMessage)
+        return budget.takeIf { it > 0 }
+    }
+
+    /**
      * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the generated serde router
      * codegen and, through [protocolSettings], the schema routing path.
      */
@@ -177,6 +201,10 @@ data class ServerRustSettings(
 
         /** Key in the shared section for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_KEY = "requestBodyMaxBytes"
+
+        /** Key in the shared section for the request body frame poll budget. */
+        const val REQUEST_BODY_READ_POLL_BUDGET_KEY = "requestBodyReadPollBudget"
+        const val DEFAULT_REQUEST_BODY_READ_POLL_BUDGET = 32
 
         private fun foldLegacyRequestBodyMaxBytes(
             customizationConfig: ObjectNode?,
@@ -229,7 +257,10 @@ data class ServerRustSettings(
                     } else {
                         coreRustSettings.customizationConfig
                     },
-            ).also { it.requestBodyMaxBytes() }
+            ).also {
+                it.requestBodyMaxBytes()
+                it.requestBodyReadPollBudget()
+            }
         }
     }
 }

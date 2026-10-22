@@ -938,7 +938,7 @@ class ServerServiceGenerator(
     private fun schemaServiceStruct(): Writable =
         writable {
             // Protocol sections use shape IDs and are parsed once into Documents. The common
-            // body limit is emitted directly into the typed request body configuration.
+            // body settings are emitted directly into the typed request body configuration.
             val protocolSettings =
                 codegenContext.settings.protocolSettings()
                     .filterKeys { it != ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY }
@@ -955,6 +955,18 @@ class ServerServiceGenerator(
                             )
                         }
                     }.join(",")
+            val readPollBudget = codegenContext.settings.requestBodyReadPollBudget()
+            val readPollBudgetConfig =
+                writable {
+                    if (readPollBudget == null) {
+                        rustTemplate("#{None}", *RuntimeType.preludeScope)
+                    } else {
+                        rustTemplate(
+                            "#{NonZeroUsize}::new(${readPollBudget}usize)",
+                            "NonZeroUsize" to RuntimeType.std.resolve("num::NonZeroUsize"),
+                        )
+                    }
+                }
             // TODO(schema service build errors): Move BuildError and MissingOperationsError into aws-smithy-http-server,
             // passing service/builder names and missing-operation details as constructor data.
             rustTemplate(
@@ -996,7 +1008,8 @@ class ServerServiceGenerator(
                             .with_service_config(#{SmithyHttpServer}::schema::ServiceConfig::default()
                                 .with_request_body(#{SmithyHttpServer}::schema::ServiceRequestBodyConfig::default()
                                     .with_global(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig::default()
-                                        .with_max_bytes(::std::num::NonZeroUsize::new(${codegenContext.settings.requestBodyMaxBytes()}usize)))))
+                                        .with_max_bytes(::std::num::NonZeroUsize::new(${codegenContext.settings.requestBodyMaxBytes()}usize))
+                                        .with_read_poll_budget(#{ReadPollBudget}))))
                             .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
                     ##[deprecated(since = "0.57.0", note = "use builder with a service configuration")]
@@ -1016,9 +1029,10 @@ class ServerServiceGenerator(
                     }
                 }
                 impl<L, HttpPl, ModelPl> $builderName<L, HttpPl, ModelPl> {
-                    /// Replaces the global and per-operation body collection configuration.
+                    /// Replaces the global and per-operation request body configuration.
                     ///
-                    /// Replaces the default from `customizationConfig.protocols.common.requestBodyMaxBytes`.
+                    /// Replaces the defaults from `customizationConfig.protocols.common`, including
+                    /// `requestBodyMaxBytes` and `requestBodyReadPollBudget`.
                     /// A configuration that sets no global byte limit allows any body size.
                     pub fn request_body_config(mut self, config: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig) -> Self {
                         self.routing_options.service_config.request_body = config;
@@ -1076,6 +1090,7 @@ class ServerServiceGenerator(
                 """,
                 *codegenScope, "Fields1" to notSetFields(), "Fields2" to notSetFields(),
                 "ProtocolSettings" to protocolSettings,
+                "ReadPollBudget" to readPollBudgetConfig,
             )
         }
 
