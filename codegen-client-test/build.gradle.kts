@@ -125,7 +125,28 @@ val allCodegenTests = listOf(
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
-).map(ClientTest::toCodegenTest)
+    // One client selects all five protocols at runtime; REST JSON is its default.
+    ClientTest(
+        "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
+        "multi-protocol-client",
+        dependsOn =
+            listOf(
+                "multi-protocol-compat/multi-protocol-restjson.smithy",
+                "multi-protocol-compat/multi-protocol-common.smithy",
+            ),
+    ),
+).map(ClientTest::toCodegenTest) + listOf("rpcv2cbor", "awsjson10", "awsjson11", "restjson", "restxml").map { protocol ->
+    // Preserve the runtime-selecting client above and restore clients for the server integration suite.
+    ClientTest(
+        "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
+        "multi-protocol-client-$protocol",
+        dependsOn =
+            listOf(
+                "multi-protocol-compat/multi-protocol-$protocol.smithy",
+                "multi-protocol-compat/multi-protocol-common.smithy",
+            ),
+    ).toCodegenTest()
+}
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

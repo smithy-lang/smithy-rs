@@ -1,0 +1,855 @@
+{
+  "run_id": "20261014T004349.017812Z",
+  "reference": "Current source with schemaSerde=false, HTTP 1.x; not a historical release or Git HEAD checkout.",
+  "git_head": "427da238334dd94a3d0976b3e82b89f55d7bfe9a",
+  "tracked_diff_sha256": "506e153e4329807942db40d5727c2c6ac468796494a09e485b1c57ad2db6659c",
+  "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
+  "total_cases": 891,
+  "cases_different_beyond_log_text": 79,
+  "protocols": [
+    {
+      "protocol": "rest-json",
+      "cases": 283,
+      "different_cases": 283,
+      "semantic_or_wire_differences": 33,
+      "wire_only_beyond_logs": 6,
+      "panics": {
+        "legacy": [
+          "prefix-media-5"
+        ],
+        "schema": []
+      },
+      "sensitive_log_leaks": {
+        "legacy": [],
+        "schema": []
+      }
+    },
+    {
+      "protocol": "aws-json-10",
+      "cases": 148,
+      "different_cases": 148,
+      "semantic_or_wire_differences": 10,
+      "wire_only_beyond_logs": 0,
+      "panics": {
+        "legacy": [],
+        "schema": []
+      },
+      "sensitive_log_leaks": {
+        "legacy": [],
+        "schema": []
+      }
+    },
+    {
+      "protocol": "aws-json-11",
+      "cases": 148,
+      "different_cases": 148,
+      "semantic_or_wire_differences": 10,
+      "wire_only_beyond_logs": 0,
+      "panics": {
+        "legacy": [],
+        "schema": []
+      },
+      "sensitive_log_leaks": {
+        "legacy": [],
+        "schema": []
+      }
+    },
+    {
+      "protocol": "rpc-v2-cbor",
+      "cases": 136,
+      "different_cases": 136,
+      "semantic_or_wire_differences": 7,
+      "wire_only_beyond_logs": 0,
+      "panics": {
+        "legacy": [],
+        "schema": []
+      },
+      "sensitive_log_leaks": {
+        "legacy": [],
+        "schema": []
+      }
+    },
+    {
+      "protocol": "rest-xml",
+      "cases": 176,
+      "different_cases": 176,
+      "semantic_or_wire_differences": 19,
+      "wire_only_beyond_logs": 0,
+      "panics": {
+        "legacy": [
+          "prefix-media-5"
+        ],
+        "schema": []
+      },
+      "sensitive_log_leaks": {
+        "legacy": [],
+        "schema": []
+      }
+    }
+  ],
+  "compile_probes": {
+    "sensitive-prefix": {
+      "legacy": 101,
+      "schema": 0
+    },
+    "sensitive-query-map": {
+      "legacy": 101,
+      "schema": 101
+    },
+    "xml-attribute": {
+      "legacy": 101,
+      "schema": 0
+    }
+  },
+  "representative_evidence": [
+    {
+      "finding": "C01",
+      "protocol": "rest-json",
+      "id": "label-trailing-0",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ]
+          },
+          "schema": {
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-amzn-errortype": [
+              "\"SerializationException\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": "TrailingInput { value: \"rex\" }",
+          "schema": null
+        },
+        "status": {
+          "legacy": 200,
+          "schema": 400
+        }
+      }
+    },
+    {
+      "finding": "C02",
+      "protocol": "rest-json",
+      "id": "header-x-meta-key-1",
+      "changed": {
+        "input": {
+          "legacy": {
+            "b": null,
+            "date": "None",
+            "dates": "None",
+            "header_dates": "None",
+            "header_list": null,
+            "list": null,
+            "media": null,
+            "meta": {
+              "key": ""
+            },
+            "n": null,
+            "number": null,
+            "params": {},
+            "q": null,
+            "text": null
+          },
+          "schema": {
+            "b": null,
+            "date": "None",
+            "dates": "None",
+            "header_dates": "None",
+            "header_list": null,
+            "list": null,
+            "media": null,
+            "meta": {
+              "key": " "
+            },
+            "n": null,
+            "number": null,
+            "params": {},
+            "q": null,
+            "text": null
+          }
+        }
+      }
+    },
+    {
+      "finding": "C03",
+      "protocol": "rest-json",
+      "id": "prefix-media-0",
+      "changed": {
+        "input": {
+          "legacy": "MediaPrefixInput { meta: Some({\"key\": \"{}\"}) }",
+          "schema": "MediaPrefixInput { meta: Some({\"key\": \"e30=\"}) }"
+        }
+      }
+    },
+    {
+      "finding": "C04",
+      "protocol": "rest-json",
+      "id": "response-media-prefix",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-meta-key": [
+              "\"e30=\""
+            ]
+          },
+          "schema": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-meta-key": [
+              "\"{}\""
+            ]
+          }
+        }
+      }
+    },
+    {
+      "finding": "C05",
+      "protocol": "rest-json",
+      "id": "query-date-list",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-amzn-errortype": [
+              "\"SerializationException\""
+            ]
+          },
+          "schema": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": null,
+          "schema": {
+            "b": null,
+            "date": "None",
+            "dates": "Some([1970-01-01T00:00:00Z, 1970-01-01T00:00:01.5Z])",
+            "header_dates": "None",
+            "header_list": null,
+            "list": null,
+            "media": null,
+            "meta": {},
+            "n": null,
+            "number": null,
+            "params": {
+              "dates": [
+                "0",
+                "1.5"
+              ]
+            },
+            "q": null,
+            "text": null
+          }
+        },
+        "status": {
+          "legacy": 400,
+          "schema": 200
+        }
+      }
+    },
+    {
+      "finding": "C06",
+      "protocol": "rest-json",
+      "id": "body-known-null",
+      "changed": {
+        "input": {
+          "legacy": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          },
+          "schema": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": "a",
+            "timestamp": "None",
+            "unique": "None"
+          }
+        }
+      }
+    },
+    {
+      "finding": "C07",
+      "protocol": "rest-json",
+      "id": "body-document-null",
+      "changed": {
+        "input": {
+          "legacy": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "Some(Null)",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          },
+          "schema": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          }
+        }
+      }
+    },
+    {
+      "finding": "C08",
+      "protocol": "rest-json",
+      "id": "body-float-1e400",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-amzn-errortype": [
+              "\"SerializationException\""
+            ]
+          },
+          "schema": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": null,
+          "schema": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "Some(inf)",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          }
+        },
+        "status": {
+          "legacy": 400,
+          "schema": 200
+        }
+      }
+    },
+    {
+      "finding": "C09",
+      "protocol": "rest-json",
+      "id": "body-large-long",
+      "changed": {
+        "input": {
+          "legacy": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": 9007199254740992,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          },
+          "schema": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "None",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": 9007199254740993,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          }
+        }
+      }
+    },
+    {
+      "finding": "C10",
+      "protocol": "rest-json",
+      "id": "body-document-depth-127",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-length": [
+              "\"2\""
+            ],
+            "content-type": [
+              "\"application/json\""
+            ]
+          },
+          "schema": {
+            "content-type": [
+              "\"application/json\""
+            ],
+            "x-amzn-errortype": [
+              "\"SerializationException\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": {
+            "blob": "None",
+            "boolean": null,
+            "choice": "None",
+            "defaulted": 17,
+            "document": "Some(Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Array([Number(PosInt(0))])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])])]))",
+            "double": "None",
+            "float": "None",
+            "int_mode": "None",
+            "integer": null,
+            "limited": "None",
+            "list": null,
+            "long": null,
+            "map": null,
+            "mode": "None",
+            "nested": "None",
+            "original": null,
+            "sparse_list": null,
+            "sparse_map": null,
+            "text": null,
+            "timestamp": "None",
+            "unique": "None"
+          },
+          "schema": null
+        },
+        "status": {
+          "legacy": 200,
+          "schema": 400
+        }
+      }
+    },
+    {
+      "finding": "C11",
+      "protocol": "rest-xml",
+      "id": "xml-attribute-as-element",
+      "changed": {
+        "input": {
+          "legacy": {
+            "boolean": null,
+            "choice": "None",
+            "flat": null,
+            "flat_map": null,
+            "integer": null,
+            "list": null,
+            "map": null,
+            "nested": "None",
+            "text": null,
+            "timestamp": "None",
+            "token": null
+          },
+          "schema": {
+            "boolean": null,
+            "choice": "None",
+            "flat": null,
+            "flat_map": null,
+            "integer": null,
+            "list": null,
+            "map": null,
+            "nested": "None",
+            "text": null,
+            "timestamp": "None",
+            "token": "x"
+          }
+        }
+      }
+    },
+    {
+      "finding": "C12",
+      "protocol": "rest-xml",
+      "id": "xml-map-missing-value",
+      "changed": {
+        "body": {
+          "legacy": {},
+          "schema": ""
+        },
+        "headers": {
+          "legacy": {
+            "content-type": [
+              "\"application/xml\""
+            ]
+          },
+          "schema": {
+            "content-length": [
+              "\"0\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": null,
+          "schema": {
+            "boolean": null,
+            "choice": "None",
+            "flat": null,
+            "flat_map": null,
+            "integer": null,
+            "list": null,
+            "map": {},
+            "nested": "None",
+            "text": null,
+            "timestamp": "None",
+            "token": null
+          }
+        },
+        "status": {
+          "legacy": 400,
+          "schema": 200
+        },
+        "wire_hex": {
+          "legacy": "7b7d",
+          "schema": ""
+        }
+      }
+    },
+    {
+      "finding": "C13",
+      "protocol": "rest-xml",
+      "id": "xml-union-two",
+      "changed": {
+        "body": {
+          "legacy": "",
+          "schema": {}
+        },
+        "headers": {
+          "legacy": {
+            "content-length": [
+              "\"0\""
+            ]
+          },
+          "schema": {
+            "content-type": [
+              "\"application/xml\""
+            ]
+          }
+        },
+        "input": {
+          "legacy": {
+            "boolean": null,
+            "choice": "Some(Integer(1))",
+            "flat": null,
+            "flat_map": null,
+            "integer": null,
+            "list": null,
+            "map": null,
+            "nested": "None",
+            "text": null,
+            "timestamp": "None",
+            "token": null
+          },
+          "schema": null
+        },
+        "status": {
+          "legacy": 200,
+          "schema": 400
+        },
+        "wire_hex": {
+          "legacy": "",
+          "schema": "7b7d"
+        }
+      }
+    },
+    {
+      "finding": "C14",
+      "protocol": "rest-xml",
+      "id": "modeled-default",
+      "changed": {
+        "headers": {
+          "legacy": {
+            "content-length": [
+              "\"49\""
+            ]
+          },
+          "schema": {
+            "content-length": [
+              "\"49\""
+            ],
+            "content-type": [
+              "\"application/xml\""
+            ]
+          }
+        }
+      }
+    },
+    {
+      "finding": "C15",
+      "protocol": "rest-json",
+      "id": "event-header-in-body",
+      "changed": {
+        "input": {
+          "legacy": {
+            "events": [
+              {
+                "event": "Headers(HeaderEvent { header: Some(\"inside\"), text: Some(\"hello\") })"
+              }
+            ]
+          },
+          "schema": {
+            "events": [
+              {
+                "event": "Headers(HeaderEvent { header: Some(\"outside\"), text: Some(\"hello\") })"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "finding": "C16",
+      "protocol": "rpc-v2-cbor",
+      "id": "event-truncated",
+      "changed": {
+        "body": {
+          "legacy": "response error",
+          "schema": "\ufffd"
+        },
+        "wire_hex": {
+          "legacy": "726573706f6e7365206572726f72",
+          "schema": "a0"
+        }
+      }
+    },
+    {
+      "finding": "C17",
+      "protocol": "rpc-v2-cbor",
+      "id": "streaming-blob-empty",
+      "changed": {
+        "input": {
+          "legacy": {
+            "api_type": "aws_smithy_types::blob::Blob",
+            "streaming_blob_hex": ""
+          },
+          "schema": {
+            "api_type": "aws_smithy_types::byte_stream::ByteStream",
+            "streaming_blob_hex": ""
+          }
+        }
+      }
+    },
+    {
+      "finding": "D01",
+      "protocol": "rest-json",
+      "id": "event-raw-bad-type",
+      "changed": {
+        "input": {
+          "legacy": {
+            "events": [
+              {
+                "detail": "ResponseError(ResponseError { source: Error { kind: Unmarshalling(\"expected :content-type to be 'text/plain', but was 'application/json'\") }, raw: Decoded(Message { headers: [Header { name: StrBytes { bytes: b\":message-type\" }, value: String(StrBytes { bytes: b\"event\" }) }, Header { name: StrBytes { bytes: b\":event-type\" }, value: String(StrBytes { bytes: b\"Raw\" }) }, Header { name: StrBytes { bytes: b\":content-type\" }, value: String(StrBytes { bytes: b\"application/json\" }) }], payload: b\"hello\" }) })",
+                "error": "response error"
+              }
+            ]
+          },
+          "schema": {
+            "events": [
+              {
+                "detail": "ResponseError(ResponseError { source: Error { kind: Unmarshalling(\"failed to unmarshall Raw: expected :content-type to be 'text/plain', but was 'application/json'\") }, raw: Decoded(Message { headers: [Header { name: StrBytes { bytes: b\":message-type\" }, value: String(StrBytes { bytes: b\"event\" }) }, Header { name: StrBytes { bytes: b\":event-type\" }, value: String(StrBytes { bytes: b\"Raw\" }) }, Header { name: StrBytes { bytes: b\":content-type\" }, value: String(StrBytes { bytes: b\"application/json\" }) }], payload: b\"hello\" }) })",
+                "error": "response error"
+              }
+            ]
+          }
+        },
+        "logs": {
+          "legacy": "DEBUG inside routing service call\nTRACE request{operation=compat.audit#Stream method=POST uri=/events headers={\"content-type\": \"application/vnd.amazon.eventstream\"}}: received complete event stream message Message { headers: [Header { name: StrBytes { bytes: b\":message-type\" }, value: String(StrBytes { bytes: b\"event\" }) }, Header { name: StrBytes { bytes: b\":event-type\" }, value: String(StrBytes { bytes: b\"Raw\" }) }, Header { name: StrBytes { bytes: b\":content-type\" }, value: String(StrBytes { bytes: b\"application/json\" }) }], payload: b\"hello\" }\nDEBUG request{operation=compat.audit#Stream method=POST uri=/events headers={\"content-type\": \"application/vnd.amazon.eventstream\"}}: response headers={\"content-type\": \"application/json\", \"content-length\": \"2\"} status_code=200 OK\n",
+          "schema": "TRACE request{operation=compat.audit#Stream method=POST uri=/events headers={\"content-type\": \"application/vnd.amazon.eventstream\"}}: received complete event stream message Message { headers: [Header { name: StrBytes { bytes: b\":message-type\" }, value: String(StrBytes { bytes: b\"event\" }) }, Header { name: StrBytes { bytes: b\":event-type\" }, value: String(StrBytes { bytes: b\"Raw\" }) }, Header { name: StrBytes { bytes: b\":content-type\" }, value: String(StrBytes { bytes: b\"application/json\" }) }], payload: b\"hello\" }\nDEBUG request{operation=compat.audit#Stream method=POST uri=/events headers={\"content-type\": \"application/vnd.amazon.eventstream\"}}: response headers={\"content-type\": \"application/json\", \"content-length\": \"2\"} status_code=200 OK\n"
+        }
+      }
+    },
+    {
+      "finding": "D02",
+      "protocol": "rest-json",
+      "id": "query-empty",
+      "changed": {
+        "logs": {
+          "legacy": "DEBUG inside routing service call\nDEBUG request{operation=compat.audit#Bindings method=POST uri=/bindings headers={\"content-type\": \"application/json\"}}: response headers={\"content-type\": \"application/json\", \"content-length\": \"2\"} status_code=200 OK\n",
+          "schema": "DEBUG request{operation=compat.audit#Bindings method=POST uri=/bindings headers={\"content-type\": \"application/json\"}}: response headers={\"content-type\": \"application/json\", \"content-length\": \"2\"} status_code=200 OK\n"
+        }
+      }
+    },
+    {
+      "finding": "D03",
+      "protocol": "rest-json",
+      "id": "response-invalid-secret",
+      "changed": {
+        "logs": {
+          "legacy": "DEBUG inside routing service call\nERROR request{operation=compat.audit#Response method=POST uri=/response headers={\"content-type\": \"application/json\"}}: failed to serialize response error=error building HTTP response: invalid field in input: secret (details: `*** Sensitive Data Redacted ***` cannot be used as a header value: failed to parse header value)\nDEBUG request{operation=compat.audit#Response method=POST uri=/response headers={\"content-type\": \"application/json\"}}: response headers={\"content-type\": \"application/json\", \"x-amzn-errortype\": \"SerializationException\"} status_code={redacted}\n",
+          "schema": "ERROR request{operation=compat.audit#Response method=POST uri=/response headers={\"content-type\": \"application/json\"}}: failed to serialize response error=\"{redacted}\" cannot be used as a header value: failed to parse header value\nDEBUG request{operation=compat.audit#Response method=POST uri=/response headers={\"content-type\": \"application/json\"}}: response headers={\"content-type\": \"application/json\", \"x-amzn-errortype\": \"SerializationException\"} status_code={redacted}\n"
+        }
+      }
+    },
+    {
+      "finding": "W01",
+      "protocol": "rest-json",
+      "id": "body-nested-missing",
+      "changed": {
+        "wire_hex": {
+          "legacy": "7b226669656c644c697374223a5b7b2270617468223a222f6e65737465642f7265717569726564222c226d657373616765223a2256616c756520617420272f6e65737465642f726571756972656427206661696c656420746f207361746973667920636f6e73747261696e743a204d656d626572206d757374206e6f74206265206e756c6c227d5d2c226d657373616765223a22312076616c69646174696f6e206572726f722064657465637465642e2056616c756520617420272f6e65737465642f726571756972656427206661696c656420746f207361746973667920636f6e73747261696e743a204d656d626572206d757374206e6f74206265206e756c6c227d",
+          "schema": "7b226d657373616765223a22312076616c69646174696f6e206572726f722064657465637465642e2056616c756520617420272f6e65737465642f726571756972656427206661696c656420746f207361746973667920636f6e73747261696e743a204d656d626572206d757374206e6f74206265206e756c6c222c226669656c644c697374223a5b7b2270617468223a222f6e65737465642f7265717569726564222c226d657373616765223a2256616c756520617420272f6e65737465642f726571756972656427206661696c656420746f207361746973667920636f6e73747261696e743a204d656d626572206d757374206e6f74206265206e756c6c227d5d7d"
+        }
+      }
+    },
+    {
+      "finding": "F01",
+      "probe": "sensitive-prefix",
+      "exit_status": {
+        "legacy": 101,
+        "schema": 0
+      },
+      "compiler_output": {
+        "legacy": "error: expected `,`, found `*`\n  --> src/protocol_serde/shape_probe.rs:79:49\n   |\n79 | ...                   \"`{\"*** Sensitive Data Redacted ***\"}` cannot be used as a header value: {err}\"\n   |                           ^ expected `,`\n\nerror: could not compile `test_legacy` (lib) due to 1 previous error\n",
+        "schema": ""
+      }
+    },
+    {
+      "finding": "F02",
+      "probe": "sensitive-query-map",
+      "exit_status": {
+        "legacy": 101,
+        "schema": 101
+      },
+      "compiler_output": {
+        "legacy": "error: unused variable: `name`\n  --> src/operation_shape.rs:38:14\n   |\n38 |             |name: &str| {\n   |              ^^^^ help: if this is intentional, prefix it with an underscore: `_name`\n   |\n   = note: `-D unused-variables` implied by `-D warnings`\n   = help: to override `-D warnings` add `#[allow(unused_variables)]`\n\nerror: could not compile `test_legacy` (lib) due to 1 previous error\n",
+        "schema": "error: unused variable: `name`\n  --> src/operation_shape.rs:36:14\n   |\n36 |             |name: &str| {\n   |              ^^^^ help: if this is intentional, prefix it with an underscore: `_name`\n   |\n   = note: `-D unused-variables` implied by `-D warnings`\n   = help: to override `-D warnings` add `#[allow(unused_variables)]`\n\nerror: could not compile `test_schema` (lib) due to 1 previous error\n"
+      }
+    },
+    {
+      "finding": "F03",
+      "probe": "xml-attribute",
+      "exit_status": {
+        "legacy": 101,
+        "schema": 0
+      },
+      "compiler_output": {
+        "legacy": "error: method `set_token` is never used\n  --> src/input.rs:45:23\n   |\n38 |     impl Builder {\n   |     ------------ method in this implementation\n...\n45 |         pub(crate) fn set_token(\n   |                       ^^^^^^^^^\n   |\n   = note: `-D dead-code` implied by `-D warnings`\n   = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`\n\nerror: could not compile `test_legacy` (lib) due to 1 previous error\n",
+        "schema": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,520 @@
+{
+  "reference": "Current source with schemaSerde=false, HTTP 1.x; not a historical release or Git HEAD checkout.",
+  "source_paths": {
+    "request_kotlin": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt",
+    "headers_kotlin": "codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/smithy/generators/http/HttpBindingGenerator.kt",
+    "header_parser_kotlin": "codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/smithy/generators/http/HttpHeaderValueParserGenerator.kt",
+    "json_kotlin": "codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/smithy/protocols/parse/JsonParserGenerator.kt",
+    "xml_kotlin": "codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/smithy/protocols/parse/XmlBindingTraitParserGenerator.kt",
+    "events_kotlin": "codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/smithy/protocols/parse/EventStreamUnmarshallerGenerator.kt",
+    "walker_kotlin": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerSchemaDeserializeGenerator.kt",
+    "sensitivity_kotlin": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerHttpSensitivityGenerator.kt",
+    "operation_kotlin": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationGenerator.kt",
+    "protocol_transform": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/transformers/ServerProtocolBasedTransformationFactory.kt",
+    "bindings_runtime": "rust-runtime/aws-smithy-http-server/src/schema/request_bindings.rs",
+    "response_runtime": "rust-runtime/aws-smithy-http-server/src/schema/response_bindings.rs",
+    "json_runtime": "rust-runtime/aws-smithy-json/src/codec/deserializer.rs",
+    "json_tokens": "rust-runtime/aws-smithy-json/src/deserialize/token.rs",
+    "xml_runtime": "rust-runtime/aws-smithy-xml/src/codec/deserializer.rs",
+    "events_runtime": "rust-runtime/aws-smithy-http-server/src/schema/event_stream.rs",
+    "upgrade": "rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs",
+    "rest_response": "rust-runtime/aws-smithy-http-server/src/schema/protocol/rest.rs",
+    "rest_xml": "rust-runtime/aws-smithy-http-server/src/schema/protocol/rest_xml.rs",
+    "response_protocol": "rust-runtime/aws-smithy-http-server/src/schema/protocol/response.rs",
+    "cbor_rejection": "rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc_v2_cbor.rs",
+    "legacy_cbor_rejection": "rust-runtime/aws-smithy-http-server/src/protocol/rpc_v2_cbor/runtime_error.rs",
+    "instrument": "rust-runtime/aws-smithy-http-server/src/instrumentation/service.rs",
+    "routing": "rust-runtime/aws-smithy-http-server/src/routing/mod.rs",
+    "streaming_kotlin": "codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerStreamingOperationGenerator.kt"
+  },
+  "findings": [
+    {
+      "id": "C01",
+      "title": "Trailing slash URI templates disagree with label extraction",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "label-trailing-0",
+        "label-greedy-trailing-0",
+        "label-greedy-trailing-1"
+      ],
+      "legacy": "TrailingInput returns 200 for /trailing/rex; greedy /a/b/ preserves the final slash in the captured value.",
+      "schema": "Returns 400 without the template trailing slash; greedy /a/b/ captures a/b.",
+      "source_anchors": [
+        "request_kotlin:serverRenderUriPathParser",
+        "bindings_runtime:extract_labels"
+      ],
+      "note": "This is the supplied example, independently reproduced in this checkout; it is not counted as a newly discovered issue."
+    },
+    {
+      "id": "C02",
+      "title": "Prefix-header strings are not trimmed",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "header-x-meta-key-1",
+        "header-x-meta-key-2"
+      ],
+      "legacy": "one_or_none_bytes trims whitespace: \" value \" becomes \"value\".",
+      "schema": "StringMapDeserializer returns the original \" value \".",
+      "source_anchors": [
+        "headers_kotlin:generateDeserializePrefixHeaderFn",
+        "header_parser_kotlin:renderHeaderValueParser",
+        "bindings_runtime:StringMapDeserializer::read_string"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C03",
+      "title": "Prefix-header media strings bypass decoding and validation",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "prefix-media-0",
+        "prefix-media-1",
+        "prefix-media-2",
+        "prefix-media-3",
+        "prefix-media-4",
+        "prefix-media-5"
+      ],
+      "legacy": "Decodes base64 e30= to {}; rejects malformed base64 and decoded invalid UTF-8. Empty media header panics after tokenization yields no value.",
+      "schema": "Returns raw header text, accepts malformed encodings, and accepts the empty value.",
+      "source_anchors": [
+        "header_parser_kotlin:renderHeaderValueParser",
+        "headers_kotlin:generateDeserializePrefixHeaderFn",
+        "bindings_runtime:StringMapDeserializer::read_string"
+      ],
+      "note": "The empty-value case is a legacy panic, not a recommendation to reproduce the panic."
+    },
+    {
+      "id": "C04",
+      "title": "Prefix-header media strings are not encoded on output",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "response-media-prefix"
+      ],
+      "legacy": "A MediaMap value {} becomes header x-meta-key: e30=.",
+      "schema": "Emits x-meta-key: {}.",
+      "source_anchors": [
+        "headers_kotlin:headerFmtFun",
+        "response_runtime:PrefixHeaderCollector::write_string"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C05",
+      "title": "Query timestamp-list member format precedence differs",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "query-date-list"
+      ],
+      "legacy": "HttpBindingIndex resolves the list binding format; epoch values 0 and 1.5 are rejected here.",
+      "schema": "Resolves the element schema timestampFormat(epoch-seconds) and accepts them.",
+      "source_anchors": [
+        "request_kotlin:serverRenderQueryStringParser",
+        "bindings_runtime:DecodedValuesDeserializer::read_timestamp"
+      ],
+      "note": "Model has @timestampFormat on the list member, not on the operation input collection member."
+    },
+    {
+      "id": "C06",
+      "title": "Duplicate JSON member followed by null preserves the previous value",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-known-null",
+        "body-integer-duplicate-null"
+      ],
+      "legacy": "{\"text\":\"a\",\"text\":null} leaves text unset.",
+      "schema": "Skips the null before the consumer callback; text remains a.",
+      "source_anchors": [
+        "json_kotlin:deserializeMember",
+        "json_runtime:read_struct",
+        "walker_kotlin:renderStructure"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C07",
+      "title": "Document null is lost",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-document-null",
+        "payload-document-1"
+      ],
+      "legacy": "Document-valued null is Some(Document::Null), including a REST document payload.",
+      "schema": "Document member or payload becomes None.",
+      "source_anchors": [
+        "json_kotlin:deserializeDocument",
+        "json_runtime:read_struct",
+        "walker_kotlin:is_null handling"
+      ],
+      "note": "payload-document-1 exists only in rest-json; body-document-null covers all JSON protocols."
+    },
+    {
+      "id": "C08",
+      "title": "Overflowing finite JSON numbers become infinity",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-float-1e400",
+        "body-double-1e400",
+        "body-negative-overflow"
+      ],
+      "legacy": "Rejects 1e400/-1e400 with HTTP 400.",
+      "schema": "Accepts and exposes positive/negative infinity to the handler.",
+      "source_anchors": [
+        "json_kotlin:deserializeNumber",
+        "json_runtime:read_float_value",
+        "json_tokens:expect_number_or_null"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C09",
+      "title": "Integral decimal precision differs",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-large-long"
+      ],
+      "legacy": "9007199254740993.0 becomes long 9007199254740992 through legacy floating-point number conversion.",
+      "schema": "Preserves 9007199254740993 with parse_integral_decimal.",
+      "source_anchors": [
+        "json_kotlin:deserializeNumber",
+        "json_runtime:parse_integral_decimal"
+      ],
+      "note": "Schema preserves more precision. This is a compatibility difference, not an assertion that the legacy rounding is preferable."
+    },
+    {
+      "id": "C10",
+      "title": "Document nesting limit differs",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-document-depth-127",
+        "body-document-depth-128",
+        "body-document-depth-129"
+      ],
+      "legacy": "Accepts these array-nested documents; token document parser has MAX_DOCUMENT_RECURSION=256.",
+      "schema": "Rejects these cases; JSON codec has a shared max depth of 128.",
+      "source_anchors": [
+        "json_tokens:expect_document_inner",
+        "json_runtime:MAX_DESERIALIZE_DEPTH/read_document"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C11",
+      "title": "XML child elements can set attribute-only members",
+      "category": "behavior",
+      "protocols": [
+        "rest-xml"
+      ],
+      "cases": [
+        "xml-attribute-as-element"
+      ],
+      "legacy": "Ignores <token>x</token> for @xmlAttribute token.",
+      "schema": "Accepts the child element and sets token=x.",
+      "source_anchors": [
+        "xml_kotlin:parseStructureInner",
+        "xml_runtime:resolve_member/read_struct"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C12",
+      "title": "Incomplete XML map entries are silently dropped",
+      "category": "behavior",
+      "protocols": [
+        "rest-xml"
+      ],
+      "cases": [
+        "xml-map-missing-key",
+        "xml-map-missing-value"
+      ],
+      "legacy": "Missing key or value is a 400 error.",
+      "schema": "Drops the incomplete entry and invokes the handler with an empty map.",
+      "source_anchors": [
+        "xml_kotlin:mapEntryParser",
+        "xml_runtime:read_map"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C13",
+      "title": "Multiple scalar XML union variants are rejected",
+      "category": "behavior",
+      "protocols": [
+        "rest-xml"
+      ],
+      "cases": [
+        "xml-union-two"
+      ],
+      "legacy": "For Choice with string then integer children, parseMember for scalar variants overwrites the earlier variant; handler receives Integer(1).",
+      "schema": "Schema union walker rejects a second variant with HTTP 400.",
+      "source_anchors": [
+        "xml_kotlin:parseUnion/parseMember",
+        "walker_kotlin:renderUnion"
+      ],
+      "note": "The finding is specifically demonstrated for scalar variants; legacy aggregate variant accumulation takes a different branch."
+    },
+    {
+      "id": "C14",
+      "title": "Modeled XML error gains a Content-Type header",
+      "category": "behavior",
+      "protocols": [
+        "rest-xml"
+      ],
+      "cases": [
+        "modeled-default",
+        "modeled-override"
+      ],
+      "legacy": "When the operation output is empty, modeled Oops error has no Content-Type, despite an XML error body.",
+      "schema": "Adds application/xml; status and body match.",
+      "source_anchors": [
+        "request_kotlin:serverRenderResponseHeaders",
+        "rest_xml:serialize_error",
+        "response_protocol:assemble_response"
+      ],
+      "note": ""
+    },
+    {
+      "id": "C15",
+      "title": "Event payload no longer overwrites an event header",
+      "category": "behavior",
+      "protocols": [
+        "rest-json",
+        "rpc-v2-cbor"
+      ],
+      "cases": [
+        "event-header-in-body"
+      ],
+      "legacy": "Frame header header=outside followed by payload {header:inside,text:hello} exposes header=inside.",
+      "schema": "Excludes event-header members from payload schema and keeps outside.",
+      "source_anchors": [
+        "events_kotlin:implicitMembers parser branch",
+        "events_runtime:EventFrameDeserializer::read_struct"
+      ],
+      "note": "Schema keeps the modeled binding boundary; reproducing the legacy overwrite would be a separate behavior decision."
+    },
+    {
+      "id": "C16",
+      "title": "CBOR initial frame failure response body differs",
+      "category": "behavior",
+      "protocols": [
+        "rpc-v2-cbor"
+      ],
+      "cases": [
+        "event-truncated",
+        "event-bad-crc"
+      ],
+      "legacy": "Initial-frame read failure becomes a validation response with literal bytes \"response error\" under application/cbor.",
+      "schema": "Returns the empty CBOR map a0, also HTTP 400.",
+      "source_anchors": [
+        "request_kotlin:try_recv_initial",
+        "legacy_cbor_rejection:RuntimeError::Validation",
+        "events_runtime:apply_initial_request",
+        "cbor_rejection:serialize_rejection"
+      ],
+      "note": "The legacy body is not a correctly encoded CBOR error object."
+    },
+    {
+      "id": "C17",
+      "title": "RPC CBOR streaming blob input public type differs",
+      "category": "public_api",
+      "protocols": [
+        "rpc-v2-cbor"
+      ],
+      "cases": [
+        "streaming-blob-empty",
+        "streaming-blob-bytes"
+      ],
+      "legacy": "Generated input field type is aws_smithy_types::blob::Blob.",
+      "schema": "Generated input field type is aws_smithy_types::byte_stream::ByteStream; observed bytes match.",
+      "source_anchors": [
+        "protocol_transform:StreamingTrait removal",
+        "walker_kotlin:streaming member handling"
+      ],
+      "note": "Harness adapts the consumption API and records type_name_of_val explicitly; this is not disguised as a wire difference."
+    },
+    {
+      "id": "D01",
+      "title": "Streaming event error detail gains a context prefix",
+      "category": "diagnostic",
+      "protocols": [
+        "rest-json",
+        "rpc-v2-cbor"
+      ],
+      "cases": [
+        "event-raw-bad-type",
+        "event-raw-nonutf8"
+      ],
+      "legacy": "Error source describes the invalid content type or UTF-8 directly.",
+      "schema": "Adds \"failed to unmarshall Raw: \" to the source description.",
+      "source_anchors": [
+        "events_kotlin:renderUnmarshallEventPayload",
+        "streaming_kotlin:renderEventUnmarshaller",
+        "events_runtime:EventFrameDeserializer"
+      ],
+      "note": ""
+    },
+    {
+      "id": "D02",
+      "title": "Routing and request rejection diagnostic events disappear",
+      "category": "diagnostic",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11",
+        "rpc-v2-cbor",
+        "rest-xml"
+      ],
+      "cases": [
+        "query-empty",
+        "query-integer-bad-first",
+        "body-array"
+      ],
+      "legacy": "Routing emits \"inside routing service call\". Request failure can emit two debug diagnostics and an Upgrade trace event.",
+      "schema": "Schema routing lacks that routing message; DynUpgrade returns rejection responses without those failure diagnostics.",
+      "source_anchors": [
+        "routing:Service::call",
+        "request_kotlin:FromRequest map_err",
+        "upgrade:Upgrade/DynUpgrade"
+      ],
+      "note": "Case names vary by protocol; raw per-protocol observations contain every event. This accounts for log-only differences in otherwise equivalent successful cases."
+    },
+    {
+      "id": "D03",
+      "title": "Header serialization diagnostic formatting and redaction marker differ",
+      "category": "diagnostic",
+      "protocols": [
+        "rest-json",
+        "rest-xml"
+      ],
+      "cases": [
+        "response-invalid-secret",
+        "xml-response-invalid-secret"
+      ],
+      "legacy": "OperationBuildError includes field name and marker *** Sensitive Data Redacted ***.",
+      "schema": "SerdeError uses the marker {redacted} and different wrapping text. Both hide SECRET_HEADER.",
+      "source_anchors": [
+        "headers_kotlin:renderHeaders",
+        "response_runtime:header_diagnostic/header_value",
+        "response_protocol:log_serialize_failure"
+      ],
+      "note": ""
+    },
+    {
+      "id": "W01",
+      "title": "Validation response JSON object member order differs",
+      "category": "wire_encoding",
+      "protocols": [
+        "rest-json",
+        "aws-json-10",
+        "aws-json-11"
+      ],
+      "cases": [
+        "body-nested-missing",
+        "body-limited-short",
+        "body-enum-invalid"
+      ],
+      "legacy": "Generated serializer emits one field order.",
+      "schema": "Schema serializer emits another order for some validation responses. Parsed JSON values match.",
+      "source_anchors": [
+        "request_kotlin:constraint rejection serialization",
+        "response_protocol:stamp_validation_extension"
+      ],
+      "note": "Byte-for-byte difference only for these observations. JSON object ordering alone is not a semantic protocol regression."
+    },
+    {
+      "id": "F01",
+      "title": "Sensitive prefix-header output does not compile on legacy",
+      "category": "compilation",
+      "protocols": [
+        "rest-json"
+      ],
+      "cases": [
+        "compile:sensitive-prefix"
+      ],
+      "legacy": "Nested unescaped quotes in renderPrefixHeader error format string cause Rust syntax failure.",
+      "schema": "Compiles.",
+      "source_anchors": [
+        "headers_kotlin:renderPrefixHeader/redactIfNecessary"
+      ],
+      "note": ""
+    },
+    {
+      "id": "F02",
+      "title": "All-sensitive query map fails deny-warnings compilation on both paths",
+      "category": "shared_compilation",
+      "protocols": [
+        "rest-json"
+      ],
+      "cases": [
+        "compile:sensitive-query-map"
+      ],
+      "legacy": "Generated query sensitivity closure leaves name unused.",
+      "schema": "Same failure from the shared sensitivity generator.",
+      "source_anchors": [
+        "sensitivity_kotlin:QuerySensitivity.closure"
+      ],
+      "note": "A shared codegen lint failure, not a schema-only regression."
+    },
+    {
+      "id": "F03",
+      "title": "XML attribute parser leaves an unused setter on legacy",
+      "category": "compilation",
+      "protocols": [
+        "rest-xml"
+      ],
+      "cases": [
+        "compile:xml-attribute"
+      ],
+      "legacy": "set_token is dead code and fails -D warnings.",
+      "schema": "Compiles.",
+      "source_anchors": [
+        "xml_kotlin:parseAttributeMember"
+      ],
+      "note": "Runtime XML corpus allows only dead_code; this separate probe preserves the strict compilation finding."
+    }
+  ]
+}

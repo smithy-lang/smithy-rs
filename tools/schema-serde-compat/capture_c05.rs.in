@@ -1,0 +1,37 @@
+use __CRATE__ as sdk;
+use hyper::service::service_fn;
+use hyper_util::rt::TokioIo;
+use tower::ServiceExt;
+
+#[tokio::main]
+async fn main() {
+    let app = sdk::__SERVICE__::builder(sdk::__SERVICE__Config::builder().build())
+        .media_text(|_| async {
+            Err(sdk::error::MediaTextError::Failure(sdk::error::Failure {
+                message: Some("failure".into()), content_type: None,
+            }))
+        })
+        .media_blob(|_| async {
+            Err(sdk::error::MediaBlobError::Failure(sdk::error::Failure {
+                message: Some("failure".into()), content_type: None,
+            }))
+        })
+        .document(|_| async {
+            Err(sdk::error::DocumentError::Failure(sdk::error::Failure {
+                message: Some("failure".into()), content_type: None,
+            }))
+        })
+        .build_unchecked();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    println!("{}", listener.local_addr().unwrap());
+    for _ in 0..3 {
+        let (stream, _) = listener.accept().await.unwrap();
+        let app = app.clone();
+        let service = service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
+            app.clone().oneshot(request)
+        });
+        hyper::server::conn::http1::Builder::new()
+            .serve_connection(TokioIo::new(stream), service)
+            .await.unwrap();
+    }
+}

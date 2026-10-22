@@ -1,0 +1,17 @@
+{
+  "awsJson1_0/non-json-number bigdecimal": {
+    "mainline": "200 [content-length: 24; content-type: application/x-amz-json-1.0] {\"amount\":+000987654321}",
+    "actual": "200 [content-length: 20; content-type: application/x-amz-json-1.0] {\"amount\":987654321}",
+    "note": "ACCEPTED: the number is rewritten to valid JSON (+000987654321 -> 987654321). Mainline sent the invalid JSON +000987654321 with a 200."
+  },
+  "restJson1/non-json-number bigdecimal": {
+    "mainline": "200 [content-length: 24; content-type: application/json] {\"amount\":+000987654321}",
+    "actual": "200 [content-length: 20; content-type: application/json] {\"amount\":987654321}",
+    "note": "ACCEPTED: the number is rewritten to valid JSON (+000987654321 -> 987654321). Mainline sent the invalid JSON +000987654321 with a 200."
+  },
+  "rpcv2Cbor/streaming blob output": {
+    "mainline": "200 [content-length: 22; content-type: application/cbor; smithy-protocol: rpc-v2-cbor] {\"data\":[114,97,119,32,98,108,111,98,32,98,121,116,101,115]} encoding=bf64646174614e72617720626c6f62206279746573ff",
+    "actual": "200 [content-type: application/cbor; smithy-protocol: rpc-v2-cbor] {\"data\":[114,97,119,32,98,108,111,98,32,98,121,116,101,115]} encoding=bf64646174615f4e72617720626c6f62206279746573ffff",
+    "note": "ACCEPTED: rpcv2Cbor keeps ByteStream for streaming blobs (one generated type across protocols); the blob is an indefinite-length byte string with no content-length. Mainline stripped @streaming, so the field was a Blob with a definite length."
+  }
+}

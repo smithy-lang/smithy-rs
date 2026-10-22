@@ -5,29 +5,39 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
+import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 class ServerRequestBindingGenerator(
     val protocol: ServerProtocol,
-    codegenContext: ServerCodegenContext,
-    operationShape: OperationShape,
-    additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
+    private val codegenContext: ServerCodegenContext,
+    private val operationShape: OperationShape,
+    private val additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) {
     private val httpBindingGenerator =
         HttpBindingGenerator(
@@ -50,13 +60,54 @@ class ServerRequestBindingGenerator(
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
         structuredHandler: RustWriter.(String) -> Unit,
-    ): RuntimeType =
-        httpBindingGenerator.generateDeserializePayloadFn(
+    ): RuntimeType {
+        val target = codegenContext.model.expectShape(binding.member.target)
+        if (binding.member.isStreaming(codegenContext.model) && target is UnionShape) {
+            return generateDeserializeEventStreamFn(binding, target)
+        }
+        return httpBindingGenerator.generateDeserializePayloadFn(
             binding,
             protocol.deserializePayloadErrorType(binding).toSymbol(),
             structuredHandler,
             HttpMessageType.REQUEST,
         )
+    }
+
+    private fun generateDeserializeEventStreamFn(
+        binding: HttpBindingDescriptor,
+        target: UnionShape,
+    ): RuntimeType {
+        check(binding.location == HttpBinding.Location.PAYLOAD)
+        val output = codegenContext.unconstrainedShapeSymbolProvider.toSymbol(binding.member)
+        val constructor = ServerEventStreamUnmarshallerGenerator(protocol, codegenContext, target).render()
+        return ProtocolFunctions(codegenContext).deserializeFn(binding.member, fnNameSuffix = "payload") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(body: &mut #{SdkBody}) -> #{Result}<#{Output}, #{Error}>",
+                *preludeScope,
+                "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                "Output" to output,
+                "Error" to protocol.deserializePayloadErrorType(binding),
+            ) {
+                rustTemplate("let unmarshaller = #{Constructor}();", "Constructor" to constructor)
+                for (customization in additionalHttpBindingCustomizations) {
+                    customization.section(
+                        HttpBindingSection.BeforeCreatingEventStreamReceiver(operationShape, target, "unmarshaller"),
+                    )(this)
+                }
+                rustTemplate(
+                    """
+                    let body = #{Replace}(body, #{SdkBody}::taken());
+                    let receiver = #{Receiver};
+                    #{Ok}(receiver)
+                    """,
+                    *preludeScope,
+                    "Replace" to RuntimeType.std.resolve("mem::replace"),
+                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "Receiver" to writable { rust("${output.rustType().qualifiedName()}::new(unmarshaller, body)") },
+                )
+            }
+        }
+    }
 
     fun generateDeserializePrefixHeadersFn(binding: HttpBindingDescriptor): RuntimeType =
         httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
