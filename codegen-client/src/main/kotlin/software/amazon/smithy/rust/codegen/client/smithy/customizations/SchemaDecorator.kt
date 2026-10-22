@@ -58,9 +58,34 @@ object SchemaSerdeAllowlist {
      */
     private val allowedServiceNamespaces: Set<String> =
         setOf(
-            // awsJson1_1 — first service on the schema path. Its model lives at
-            // `aws/sdk/aws-models/ssm.json` so CI generates and tests it.
+            // awsJson1_1 phased rollout
+            // Phase 1 — Canary
             "com.amazonaws.ssm",
+            // Phase 2 — 10-100 customers
+            "com.amazonaws.servicediscovery",
+            "com.amazonaws.globalaccelerator",
+            "com.amazonaws.appstream",
+            "com.amazonaws.marketplaceentitlementservice",
+            "com.amazonaws.route53domains",
+            "com.amazonaws.comprehend",
+            "com.amazonaws.iotsecuretunneling",
+            "com.amazonaws.licensemanager",
+            "com.amazonaws.configservice",
+            "com.amazonaws.pi",
+            "com.amazonaws.codedeploy",
+            "com.amazonaws.codecommit",
+            "com.amazonaws.marketplacemetering",
+            "com.amazonaws.translate",
+            "com.amazonaws.transcribe",
+            "com.amazonaws.organizations",
+            "com.amazonaws.cognitoidentity",
+            "com.amazonaws.datasync",
+            "com.amazonaws.sagemaker",
+            "com.amazonaws.athena",
+            "com.amazonaws.storagegateway",
+            "com.amazonaws.codepipeline",
+            "com.amazonaws.ecrpublic",
+            "com.amazonaws.lightsail",
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
@@ -71,7 +96,7 @@ object SchemaSerdeAllowlist {
             // "com.amazonaws.simple",
             // "com.amazonaws.bignumbers",
             // awsJson1_0 / awsJson1_1
-            // "aws.protocoltests.json10",
+            "aws.protocoltests.json10",
             // restXml
             // "aws.protocoltests.restxml",  // RestXml, RestXmlExtras
             // "aws.protocoltests.restxml.xmlns",
