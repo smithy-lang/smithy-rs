@@ -23,6 +23,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * Generates a restJson1 server with schemaSerde=false using both HTTP library versions.
+ * Sends JSON bodies and non-streaming blob payloads below and above a 16-byte collection limit,
+ * then repeats them with requestBodyMaxBytes=0 to verify unlimited collection. It also injects
+ * body read failures and sends an oversized streaming blob, whose bytes the handler consumes.
+ * The test checks exact statuses, headers, and response bodies against recorded legacy results:
+ * oversized collected bodies and read failures are rejected, while the streaming blob succeeds.
+ */
 internal class NonSchemaBodyCollectionTest {
     private val model =
         """

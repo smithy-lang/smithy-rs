@@ -39,15 +39,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import java.util.logging.Logger
 
 /**
- * Symbol visitor  allowing that recursively replace symbols in nested shapes.
+ * Replaces symbols in nested shapes with TypeScript runtime wrappers.
  *
  * Input / output / error structures can refer to complex types like the ones implemented inside
  * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
- * `aws_smithy_http_server_typescript::types` wraps those types that do not implement directly the
- * `napi` trait and cannot be shared safely with Typescript, providing an idiomatic Typescript / Rust API.
- *
- * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
- * `aws_smithy_http_server_typescript::types`.
+ * This symbol provider uses wrappers from `aws_smithy_http_server_typescript::types`
+ * to expose those values through NAPI with an idiomatic TypeScript / Rust API.
  */
 class TsServerSymbolVisitor(
     settings: ServerRustSettings,

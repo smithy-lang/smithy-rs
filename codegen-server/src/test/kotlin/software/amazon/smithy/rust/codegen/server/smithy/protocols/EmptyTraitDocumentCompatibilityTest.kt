@@ -24,9 +24,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.nio.file.Files
 
 /**
- * Empty object-valued traits must compile under the same deny-warnings policy as protocol projections.
- * Exercise empty object and array defaults, and verify that fixing Rust emission preserves
- * the trait documents and generated serde HTTP responses.
+ * Generates Rust from models containing empty object-valued traits and empty object and array
+ * defaults, compiling with warnings denied. It checks the default trait documents exposed by
+ * schema descriptors and sends HTTP requests through both serde modes. The response comparison
+ * ensures that valid empty documents survive code emission and serialization unchanged.
  */
 internal class EmptyTraitDocumentCompatibilityTest {
     @Test

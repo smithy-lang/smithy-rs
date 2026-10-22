@@ -66,13 +66,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**
- * Server-side copy of [software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator]
- * trimmed to the SERIALIZE-ONLY surface the schema-decoupled error path needs
- * (`renderSerializeOnly`), with the server-specific behaviors applied:
+ * Renders server shape schemas and serialization implementations for structures and unions.
+ * Adapts [software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator] to server types:
  *
- * - **Canonical model member order** in `serialize_members`: no
- *   protocol-specific ordering exists in generated code. RPC protocols match
- *   generated serde byte-for-byte; restJson1 error bodies are gated parse-equal.
+ * - Model member order in `serialize_members`; the runtime protocol applies HTTP bindings.
  * - **Constrained-string newtypes** (`publicConstrainedTypes=true`): members
  *   whose resolved Rust type is a string newtype serialize via `as_str()`.
  * - **No `Unknown` union arm**: server unions are generated with
@@ -80,10 +77,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  * - No deserialization methods are rendered (the deserialize methods in the
  *   core generator assume client-side builder conventions).
  *
- * A copy rather than a subclass because the core class is final with private
- * members, and the core file is imported verbatim from smithy-rs#4721 — it
- * must stay pristine so the eventual rebase (once #4721 merges) can drop it
- * cleanly.
+ * [ServerSchemaDeserializeGenerator] handles server builders and constraint validation separately.
+ * The core generator is final, so server-specific behavior is implemented here rather than by subclassing it.
  */
 class ServerSchemaGenerator(
     private val codegenContext: CodegenContext,
@@ -1108,6 +1103,7 @@ class ServerSchemaGenerator(
      *    doesn't carry it itself and the target is a timestamp.
      *  - `@mediaType` propagated from the target shape when the member doesn't
      *    carry it itself.
+     *  - `@streaming` propagated from blob and union targets for streaming payload handling.
      *  - `@sensitive` propagated from scalar and collection targets for diagnostic redaction.
      *
      * Used for struct/union members, list members, map keys, and map values —
@@ -1201,11 +1197,8 @@ class ServerSchemaGenerator(
      * `@httpPayload`) — equivalently, no member serializes to the request
      * body — returns `.with_no_body_members()`.
      *
-     * The runtime uses this signal to skip body-codec invocation entirely
-     * on the SER path: no XML/JSON wrapper element is opened, no
-     * `serialize_members` re-entry through the codec proxy fires, and the
-     * empty body bytes are never collected. Saves ~15-20% on header-only
-     * SER operations like S3 PutObject / CopyObject.
+     * This records whether the input needs document-codec framing. The runtime can skip
+     * JSON/XML document serialization for inputs containing only transport bindings or raw payloads.
      *
      * The semantics intentionally mirror the runtime's existing inline
      * `has_body_members` computation in
@@ -1213,7 +1206,7 @@ class ServerSchemaGenerator(
      * codegen-set `with_no_body_members()` always agrees with the runtime
      * check that gates `Content-Type` / empty-body handling.
      *
-     * `@httpPayload` on a struct/union counts as a body member because it
+     * `@httpPayload` on a struct, union, or document counts as a body member because it
      * provides body framing through the codec; `@httpPayload` on a blob
      * or string does NOT (the bytes go directly into the request body
      * without ever touching the codec).

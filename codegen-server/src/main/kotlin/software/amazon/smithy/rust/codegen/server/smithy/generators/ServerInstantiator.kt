@@ -94,6 +94,13 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
+/**
+ * Constructs values used by generated server protocol tests.
+ *
+ * Schema fixtures convert constrained values to their public types and distinguish an omitted
+ * optional document from an explicit null. Synthetic outputs use builders when omitted defaults
+ * need to be applied. Generated serde delegates to the shared instantiator to retain its behavior.
+ */
 class ServerInstantiator(
     private val codegenContext: CodegenContext,
     private val customWritable: CustomWritable = NoCustomWritable(),

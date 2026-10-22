@@ -43,6 +43,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 
 /**
+ * Overrides either direction of schema streaming glue for transports whose stream is wrapped in
+ * a generated type. Returning null keeps the built-in implementation for that direction.
+ */
+interface ServerStreamingOperationCustomization {
+    fun deserializeInput(generator: ServerStreamingOperationGenerator): Writable? = null
+
+    fun serializeOutput(generator: ServerStreamingOperationGenerator): Writable? = null
+}
+
+/**
  * Renders the `StreamingOperationShape` implementation of an operation whose input or output carries an
  * event stream or a streaming blob, under the `schemaSerde` setting.
  *
@@ -62,12 +72,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
  * The half that does not stream is written in terms of the collected path: `DeserializableShape` for the
  * input, `ServerProtocol::serialize_response` for the output.
  */
-interface ServerStreamingOperationCustomization {
-    fun deserializeInput(generator: ServerStreamingOperationGenerator): Writable? = null
-
-    fun serializeOutput(generator: ServerStreamingOperationGenerator): Writable? = null
-}
-
 class ServerStreamingOperationGenerator(
     private val codegenContext: ServerCodegenContext,
     private val operationShape: OperationShape,

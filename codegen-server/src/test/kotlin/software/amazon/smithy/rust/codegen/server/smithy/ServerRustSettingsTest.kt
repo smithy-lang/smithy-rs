@@ -14,6 +14,13 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
+/**
+ * Checks how server configuration is parsed before generating Rust. It covers schemaSerde and
+ * HTTP-version defaults, requestBodyMaxBytes defaults and validation, precedence between common
+ * protocol settings and legacy flags, and migration of capitalized CBOR routes. It also checks
+ * full protocol-ID validation and preservation of customization sections. These are configuration
+ * parsing tests; generated-server tests separately verify their effects on HTTP requests.
+ */
 internal class ServerRustSettingsTest {
     private val model =
         """

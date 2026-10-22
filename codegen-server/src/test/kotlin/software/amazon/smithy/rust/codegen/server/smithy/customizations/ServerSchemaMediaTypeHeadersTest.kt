@@ -20,6 +20,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates a schema-serde server with media-typed list headers, including enum and wrapper
+ * values. It sends encoded header values to the server, checks the decoded handler inputs, then
+ * checks the base64-encoded response headers. This verifies that member-level media types survive
+ * list serialization and deserialization instead of being replaced by plain string handling.
+ */
 internal class ServerSchemaMediaTypeHeadersTest {
     @Test
     fun `media typed list headers round trip like legacy generated services`() {

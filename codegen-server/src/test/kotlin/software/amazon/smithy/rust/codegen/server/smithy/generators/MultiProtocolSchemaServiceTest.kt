@@ -23,6 +23,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates one schema server that declares multiple protocols and sends protocol-specific
+ * requests through the same handlers. It checks dispatch, body decoding, response status and
+ * content type, rejection behavior, raw payload media types, and protocol customization flags.
+ * A separate codegen case requires a clear failure when the model declares an unsupported protocol.
+ */
 class MultiProtocolSchemaServiceTest {
     private val schemaSerde =
         IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode())

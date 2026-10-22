@@ -507,8 +507,8 @@ class ServerProtocolTestGenerator(
         }
         val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
         if (schemaSerde) {
-            // The schema path: the response travels through the erased protocol handle the service
-            // selects at routing, exactly as the schema upgrades serialize a handler's output or error.
+            // Response fixtures serialize through an erased built-in protocol with default options.
+            // Request fixtures exercise the generated service builder and its routing configuration.
             val serialize =
                 if (shape.hasTrait<ErrorTrait>()) {
                     writable {
@@ -931,7 +931,7 @@ class ServerProtocolTestGenerator(
     /**
      * Returns the body type to use for service builder in protocol tests.
      * For HTTP 0.x: uses hyper::body::Body (concrete type).
-     * For HTTP 1.x: uses smithy BoxBody (no Sync requirement for protocol tests).
+     * For HTTP 1.x: uses smithy BoxBody, or BoxBodySync when [needsSync] is true.
      */
     private fun serviceBuilderBodyType(needsSync: Boolean): RuntimeType =
         when (codegenContext.runtimeConfig.httpVersion) {
@@ -952,8 +952,7 @@ class ServerProtocolTestGenerator(
      * Returns a Writable that generates version-appropriate code for reading HTTP response body to bytes.
      * For HTTP 1.x: Uses http_body_util::BodyExt::collect()
      * For HTTP 0.x: Uses hyper::body::to_bytes()
-     *
-     * @param responseVarName The name of the HTTP response variable (e.g., "http_response")
+     * Reads the generated `http_response` variable.
      */
     private fun httpBodyToBytes(): Writable =
         writable {

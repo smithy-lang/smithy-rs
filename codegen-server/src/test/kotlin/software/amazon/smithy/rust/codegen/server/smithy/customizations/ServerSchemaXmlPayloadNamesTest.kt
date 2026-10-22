@@ -20,6 +20,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Sends requests to a generated schema REST XML server whose structured payloads have root names
+ * on the operation member and on the target shape. It checks the exact response XML and its
+ * content length for each combination, preserving the legacy precedence of member-level and
+ * target-level XML names and namespaces.
+ */
 internal class ServerSchemaXmlPayloadNamesTest {
     @Test
     fun `XML structured payload roots match legacy precedence`() {

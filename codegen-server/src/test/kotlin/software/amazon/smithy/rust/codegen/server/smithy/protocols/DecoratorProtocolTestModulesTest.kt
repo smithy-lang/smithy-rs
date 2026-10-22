@@ -17,6 +17,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
 
+/**
+ * Supplies replacement protocol generators through a codegen decorator and generates a service
+ * with protocol tests for multiple protocols. It compiles and runs the generated test modules
+ * with legacy and schema serde, checking that replacing a generator does not overwrite another
+ * protocol's tests or produce conflicting module definitions.
+ */
 internal class DecoratorProtocolTestModulesTest {
     @Test
     fun `replacement generators preserve independent protocol test modules`() {

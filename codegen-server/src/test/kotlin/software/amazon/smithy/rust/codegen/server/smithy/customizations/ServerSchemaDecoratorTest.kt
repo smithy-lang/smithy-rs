@@ -25,6 +25,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import kotlin.io.path.readText
 
+/**
+ * Generates schema-serde service, operation, shape, and error descriptors and exercises them in
+ * Rust. It checks HTTP traits, served protocols, operation inputs and outputs, modeled error status
+ * codes, and references to the correct static shape schemas. Source checks verify that enabling
+ * schema serde uses schema routing, while disabling it retains legacy serde and emits no schemas.
+ */
 internal class ServerSchemaDecoratorTest {
     private val model =
         """

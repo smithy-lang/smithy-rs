@@ -14,6 +14,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Generates response protocol tests under legacy and schema serde and runs their Rust assertions
+ * using the matching HTTP library types. Legacy cases cover HTTP 0.x and 1.x; schema cases cover
+ * HTTP 1.x. Compilation and execution check that response-test helper dependencies and body
+ * handling agree with the server's selected HTTP version.
+ */
 internal class ServerProtocolTestHelpersTest {
     @ParameterizedTest
     @ValueSource(booleans = [false, true])

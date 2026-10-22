@@ -12,6 +12,12 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
+/**
+ * Parses the responseBindings configuration for AWS JSON 1.0 and 1.1. It verifies the historical
+ * default, independent selection of smithy-specs for each protocol, and preservation of unrelated
+ * settings. Invalid values, malformed nested objects, and abbreviated protocol IDs must fail
+ * with an error that identifies the offending configuration path.
+ */
 internal class ServerProtocolResponseSettingsTest {
     private val json10 = ShapeId.from("aws.protocols#awsJson1_0")
     private val json11 = ShapeId.from("aws.protocols#awsJson1_1")

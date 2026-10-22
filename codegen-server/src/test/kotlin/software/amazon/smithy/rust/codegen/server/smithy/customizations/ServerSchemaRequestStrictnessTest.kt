@@ -18,6 +18,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+/**
+ * Sends valid and malformed bodies, header values, and protocol-specific requests to generated
+ * schema servers for REST JSON, REST XML, and rpcv2Cbor. A handler counter checks that accepted
+ * requests reach the application exactly once and rejected requests never reach it. The cases
+ * exercise typed header parsing, structured input validation, XML payload roots, and REST labels.
+ */
 internal class ServerSchemaRequestStrictnessTest {
     @Test
     fun `malformed requests never reach generated handlers`() {

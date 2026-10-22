@@ -29,6 +29,12 @@ internal fun assertValidationExceptionConversion(
     conversion.containsMatchIn(crate.resolve("src/input.rs").toFile().readText()) shouldBe schemaHttpSerde
 }
 
+/**
+ * Generates constrained-input services with schema serde enabled and disabled. It checks the
+ * Rust conversion from a constraint violation into ValidationException and the resulting HTTP
+ * error message and field path. Source assertions verify that the additional schema conversion
+ * is emitted only for schema HTTP serde, preserving the legacy conversion path.
+ */
 internal class ValidationExceptionConversionTest {
     @Test
     fun `validation conversion is confined to schema HTTP serde`() {

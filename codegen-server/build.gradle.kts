@@ -30,6 +30,7 @@ dependencies {
     testImplementation(libs.kotest.assertions.core.jvm)
 }
 
+// Embed the artifact version so generated schema crates can record it separately from the source commit.
 val generatedResourcesDir = layout.buildDirectory.dir("generated/resources")
 val generateServerCodegenVersion by tasks.registering {
     val codegenVersion = project.version.toString()
