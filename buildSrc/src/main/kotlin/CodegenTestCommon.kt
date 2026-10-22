@@ -21,6 +21,7 @@ data class CodegenTest(
     val extraConfig: String? = null,
     val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
+    val pluginName: String? = null,
 )
 
 /**
@@ -142,7 +143,7 @@ private fun generateSmithyBuild(
             "${it.module}": {
                 ${generateImports(it.imports)}
                 "plugins": {
-                    "$pluginName": {
+                    "${it.pluginName ?: pluginName}": {
                         "runtimeConfig": {
                             "relativePath": "$escapedProjectDir/rust-runtime"
                         },
@@ -187,7 +188,7 @@ private fun generateCargoWorkspace(
     [workspace]
     resolver = "2"
     members = [
-        ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
+        ${tests.joinToString(",") { "\"${it.module}/${it.pluginName ?: pluginName}\"" }}
     ]
     """.trimIndent()
 )

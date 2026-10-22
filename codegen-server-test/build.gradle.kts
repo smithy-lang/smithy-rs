@@ -22,6 +22,7 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 
 dependencies {
     implementation(project(":codegen-server"))
+    implementation(project(":codegen-client"))
     implementation(libs.smithy.aws.protocol.tests)
     implementation(libs.smithy.protocol.tests)
     implementation(libs.smithy.protocol.test.traits)
@@ -483,12 +484,37 @@ val compatibilityProtocolTests =
         }
     }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests
+// Clients for the server compatibility suite and multiprotocol example share the server-owned models.
+val compatibilityClientTests =
+    listOf(
+        "multi-protocol-client" to "restjson",
+        "multi-protocol-client-rpcv2cbor" to "rpcv2cbor",
+        "multi-protocol-client-awsjson10" to "awsjson10",
+        "multi-protocol-client-awsjson11" to "awsjson11",
+        "multi-protocol-client-restjson" to "restjson",
+        "multi-protocol-client-restxml" to "restxml",
+    ).map { (module, protocol) ->
+        CodegenTest(
+            "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
+            module,
+            imports =
+                listOf(
+                    "custom-test-models/multi-protocol-compat/multi-protocol-$protocol.smithy",
+                    "custom-test-models/multi-protocol-compat/multi-protocol-common.smithy",
+                ),
+            extraCodegenConfig =
+                """"addMessageToErrors": true, "renameErrors": true, "enableNewSmithyRuntime": "${properties.get("smithy.runtime.mode") ?: "orchestrator"}"""",
+            pluginName = "rust-client-codegen",
+        )
+    }
 
+val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests + compatibilityClientTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+
+tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", properties.get("smithy.runtime.mode") ?: "orchestrator")
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
@@ -497,14 +523,14 @@ project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, useNextest = true)
 
 tasks.register<Exec>("cargoTestIntegration") {
-    dependsOn("assemble", ":codegen-client-test:assemble")
+    dependsOn("assemble")
     workingDir(projectDir.resolve("integration-tests"))
     commandLine("cargo", "nextest", "run", "--no-tests=pass")
 }
 
 // `cargo nextest run` does not run doctests, so run them separately to preserve coverage.
 tasks.register<Exec>("cargoTestIntegrationDoctests") {
-    dependsOn("assemble", ":codegen-client-test:assemble")
+    dependsOn("assemble")
     workingDir(projectDir.resolve("integration-tests"))
     commandLine("cargo", "test", "--doc")
 }

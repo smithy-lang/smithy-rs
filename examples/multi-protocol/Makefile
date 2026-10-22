@@ -8,10 +8,10 @@ all: run
 # manifests and imported models so previous module filters cannot leave stale settings.
 codegen:
 	$(GRADLE) --project-dir $(SRC_DIR) -P modules='$(MODULES)' \
-		:codegen-client-test:generateSmithyBuild --rerun :codegen-server-test:generateSmithyBuild --rerun \
-		:codegen-client-test:generateCargoWorkspace --rerun :codegen-server-test:generateCargoWorkspace --rerun \
-		:codegen-client-test:smithyBuild --rerun :codegen-server-test:smithyBuild --rerun \
-		:codegen-client-test:assemble :codegen-server-test:assemble
+		:codegen-server-test:generateSmithyBuild --rerun \
+		:codegen-server-test:generateCargoWorkspace --rerun \
+		:codegen-server-test:smithyBuild --rerun \
+		:codegen-server-test:assemble
 
 run: codegen
 	cargo run --quiet
