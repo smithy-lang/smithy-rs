@@ -20,7 +20,7 @@ Fresh generation and execution on 2026-10-14 used the same model and inputs with
 
 - Model: `models/duplicate-json-null.smithy`.
 - Runner: `python3 tools/schema-serde-compat/run_c06.py` from the repository root.
-- Kotlin test: `codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/DuplicateJsonNullCompatibilityTest.kt`.
+- Kotlin test: `codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/json/DuplicateJsonNullCompatibilityTest.kt`.
 - Observation directory: `.runs/C06-20261014T195643.384285Z/`.
 - Result: 30 HTTP-response comparisons; six differences, consisting of the string/null and integer/null cases in each protocol. The other 24 comparisons matched, including null-before-value and invalid-type errors.
 
@@ -94,7 +94,7 @@ Fresh generation and execution on 2026-10-15 used identical models and requests 
 
 - Runner: `python3 tools/schema-serde-compat/run_c10.py`.
 - Model: `models/document-depth.smithy`.
-- Kotlin test: `codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/DocumentDepthCompatibilityTest.kt`.
+- Kotlin test: `codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/json/DocumentDepthCompatibilityTest.kt`.
 - Completed observation directory: `.runs/C10-20261015T095942.857412Z/`.
 - Coverage: arrays, objects, mixed nesting, and empty-container leaves at depths 0/1 where applicable, 124–129, and 253–257. All six generated-server builds/tests succeeded. There were 252 paired comparisons and 115 differences; no recorded panics. Source fingerprints remained unchanged during execution.
 - The run retains frozen inputs, generated servers, actual settings, runtime sources, Cargo lockfiles, build logs, per-protocol `*-legacy.jsonl` / `*-schema.jsonl`, `boundary-summary.json`, and `differences.json`. Observations include handler values, container paths/depths, status, all response header values, and exact response body bytes as `wire_hex`.

@@ -29,7 +29,7 @@ def main():
     print(f"Wire capture: {run}", flush=True)
     with (run / "gradle.log").open("w") as log:
         result = compat.run_logged([str(compat.ROOT / "gradlew"), ":codegen-server:test", "--tests",
-                                 "software.amazon.smithy.rust.codegen.server.smithy.protocols.ModeledErrorContentTypeCompatibilityTest",
+                                 "software.amazon.smithy.rust.codegen.server.smithy.protocols.response.ModeledErrorContentTypeCompatibilityTest",
                                  "--rerun-tasks", "--console=plain", "--info"], cwd=compat.ROOT, env=env, log=log)
     # Allow capturing a discrepancy before a fix as well as matching responses
     # afterward. Require every captured server to finish its fresh observation test.

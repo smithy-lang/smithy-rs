@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from run_c05 import ROOT, SUITE, runtime_snapshot, source_files, fingerprints, run_logged
-KOTLIN_TEST = ROOT / "codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/DocumentNullCompatibilityTest.kt"
+KOTLIN_TEST = ROOT / "codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/restjson/DocumentNullCompatibilityTest.kt"
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
         sources.extend(source_files(ROOT / directory))
     (run / "source-fingerprints.json").write_text(json.dumps(fingerprints(sources), indent=2) + "\n")
     command = [str(ROOT / "gradlew"), ":codegen-server:test", "--tests",
-               "software.amazon.smithy.rust.codegen.server.smithy.protocols.DocumentNullCompatibilityTest",
+               "software.amazon.smithy.rust.codegen.server.smithy.protocols.restjson.DocumentNullCompatibilityTest",
                "--rerun-tasks", "--console=plain", "--info"]
     print(f"C07 run: {run}", flush=True)
     with (run / "gradle.log").open("w") as log:

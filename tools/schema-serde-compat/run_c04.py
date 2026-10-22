@@ -72,7 +72,7 @@ def main():
         sources.extend(source_files(ROOT / directory))
     (run / "source-fingerprints.json").write_text(json.dumps(fingerprints(sources), indent=2) + "\n")
     command = [str(ROOT / "gradlew"), ":codegen-server:test", "--tests",
-               "software.amazon.smithy.rust.codegen.server.smithy.protocols.ResponsePrefixHeaderMediaTypeCompatibilityTest",
+               "software.amazon.smithy.rust.codegen.server.smithy.protocols.rest.ResponsePrefixHeaderMediaTypeCompatibilityTest",
                "--rerun-tasks", "--console=plain"]
     print(f"C04 run: {run}", flush=True)
     with (run / "gradle.log").open("w") as log:

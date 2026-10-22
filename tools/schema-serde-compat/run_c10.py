@@ -15,8 +15,8 @@ import sys
 
 from run import ROOT, SUITE, runtime_snapshot, source_files, fingerprints, compare_protocol
 
-TEST = "software.amazon.smithy.rust.codegen.server.smithy.protocols.DocumentDepthCompatibilityTest"
-KOTLIN_TEST = ROOT / "codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/DocumentDepthCompatibilityTest.kt"
+TEST = "software.amazon.smithy.rust.codegen.server.smithy.protocols.json.DocumentDepthCompatibilityTest"
+KOTLIN_TEST = ROOT / "codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/json/DocumentDepthCompatibilityTest.kt"
 
 PROTOCOLS = ["rest-json", "aws-json-10", "aws-json-11"]
 DEPTHS = [0, 1, 124, 125, 126, 127, 128, 129, 253, 254, 255, 256, 257]
