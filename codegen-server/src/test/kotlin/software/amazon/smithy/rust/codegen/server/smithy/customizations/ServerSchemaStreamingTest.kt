@@ -22,9 +22,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /**
- * A duplex event stream on the schema path: frames go in through the streaming upgrade, the handler echoes
- * them, frames come out through the streaming glue. On rpcv2Cbor the non-stream members travel in
- * `initial-request` and `initial-response` frames; on restJson1 in the URI and headers.
+ * Exercises the generated schema glue for streaming blobs and event streams: request and response
+ * directions, event headers and payloads, modeled stream errors, and RPC initial messages.
+ * It drives generated services and marshaller/unmarshaller adapters, checks wire results, and
+ * checks that extractor rejections use the selected protocol before polling the input stream.
+ * Compilation cases also cover signed event-stream receivers and configurations with initial
+ * response frames enabled or disabled.
  */
 internal class ServerSchemaStreamingTest {
     private fun model(
@@ -562,7 +565,7 @@ internal class ServerSchemaStreamingTest {
                 tokioTest("event_stream_extractor_rejections") {
                     rustTemplate(
                         """
-                        use #{SmithyHttpServer}::{request::FromParts, response::IntoResponse, runtime_error::RuntimeError};
+                        use #{SmithyHttpServer}::{request::FromParts, response::IntoResponseWithProtocol, runtime_error::RuntimeError};
                         use #{HttpBodyUtil}::BodyExt;
                         struct Caller;
                         impl<P> FromParts<P> for Caller {
@@ -584,8 +587,9 @@ internal class ServerSchemaStreamingTest {
                                 #{Err}(CustomRejection)
                             }
                         }
-                        impl<P> IntoResponse<P> for CustomRejection {
-                            fn into_response(self) -> #{SmithyHttpServer}::response::Response {
+                        impl IntoResponseWithProtocol for CustomRejection {
+                            fn into_response_with_protocol(self, _: &dyn #{SmithyHttpServer}::schema::ServerProtocol)
+                                -> #{SmithyHttpServer}::response::Response {
                                 #{Http}::Response::builder().status(429).header("x-caller-error", "missing")
                                     .body(#{SmithyHttpServer}::body::to_boxed(#{Bytes}::from_static(b"custom caller rejection"))).unwrap()
                             }
