@@ -19,7 +19,7 @@ def main():
     env["SCHEMA_COMPAT_RUNTIME"] = str(compat.runtime_snapshot(run))
     env.setdefault("CARGO_TARGET_DIR", str(compat.SUITE / ".runs/target"))
     command = [str(compat.ROOT / "gradlew"), ":codegen-server:test", "--tests",
-               "software.amazon.smithy.rust.codegen.server.smithy.protocols.StreamingBlobHttp1GenerationTest",
+               "software.amazon.smithy.rust.codegen.server.smithy.protocols.streaming.StreamingBlobHttp1GenerationTest",
                "--rerun-tasks", "--console=plain"]
     print(f"Output: {run}", flush=True)
     with (run / "gradle.log").open("w") as log:

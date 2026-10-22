@@ -25,7 +25,7 @@ def main():
         sources.extend(audit.source_files(audit.ROOT / directory))
     (run / "source-fingerprints.json").write_text(json.dumps(audit.fingerprints(sources), indent=2) + "\n")
     command = [str(audit.ROOT / "gradlew"), ":codegen-server:test", "--tests",
-               "software.amazon.smithy.rust.codegen.server.smithy.protocols.TrailingSlashLabelsCompatibilityTest",
+               "software.amazon.smithy.rust.codegen.server.smithy.protocols.routing.TrailingSlashLabelsCompatibilityTest",
                "--rerun-tasks", "--console=plain"]
     print(f"C01 run: {run}", flush=True)
     with (run / "gradle.log").open("w") as log:
