@@ -244,8 +244,11 @@ fn main() {
     runtime.block_on(async {
         let mut http = hyper014::Client::builder();
         http.http2_only(true);
+        // Match the server: HTTP/2 over loopback must not run behind Nagle.
+        let mut connector = hyper014::client::HttpConnector::new();
+        connector.set_nodelay(true);
         let transport = aws_smithy_http_client::hyper_014::HyperClientBuilder::new()
-            .hyper_builder(http).build(hyper014::client::HttpConnector::new());
+            .hyper_builder(http).build(connector);
         let config = Config::builder().behavior_version(bench_sdk::config::BehaviorVersion::latest()).endpoint_url(&a[1]).http_client(transport)
             .retry_config(bench_sdk::config::retry::RetryConfig::disabled()).build();
         let client = Client::from_conf(config);

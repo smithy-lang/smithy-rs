@@ -83,6 +83,12 @@ fn main() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         println!("READY:{}", listener.local_addr().unwrap().port());
         std::io::stdout().flush().unwrap();
+        // Nagle plus delayed ACK stalls small interactive event-stream writes for ~40ms;
+        // HTTP/2 servers are expected to run with TCP_NODELAY.
+        use bench_sdk::server::serve::ListenerExt as _;
+        let listener = listener.tap_io(|stream| {
+            let _ = stream.set_nodelay(true);
+        });
         bench_sdk::serve(listener, app.into_make_service())
             .configure_hyper(|builder| builder.http2_only())
             .await.unwrap();
