@@ -122,7 +122,6 @@ data class ServerRustSettings(
                 eventStreamReadPollBudget =
                     ProtocolReadSettings.eventStreamReadPollBudget(
                         coreRustSettings.customizationConfig,
-                        codegenSettingsNode.orElse(null),
                     ),
             )
         }
@@ -132,7 +131,6 @@ data class ServerRustSettings(
 data class RequestBodyReadTimeouts(
     val defaultNonPayloadTimeout: Duration,
     val defaultPayloadTimeout: Duration,
-    val defaultEventStreamMessageTimeout: Duration,
     val perOperation: Map<ShapeId, Duration>,
     val payloadOperationIds: Set<ShapeId>,
     val streamingOperationIds: Set<ShapeId>,
@@ -149,29 +147,13 @@ data class RequestBodyReadTimeouts(
                 .takeIf { it > Duration.ZERO }
         }
 
-    /**
-     * Per-message completion deadline for operations with an event stream input: once the first
-     * bytes of a message arrive, the complete message frame must arrive within this duration.
-     * Returns `null` (no deadline) for non-event-stream operations, or when disabled (`0`).
-     */
-    fun eventStreamMessageTimeoutFor(operationId: ShapeId): Duration? =
-        if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId] ?: defaultEventStreamMessageTimeout).takeIf { it > Duration.ZERO }
-        } else {
-            null
-        }
-
     companion object {
         private const val CONFIG_KEY = "requestBodyReadTimeouts"
         private const val DEFAULT_NON_PAYLOAD_KEY = "defaultNonPayload"
         private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
-        private const val DEFAULT_EVENT_STREAM_MESSAGE_KEY = "defaultEventStreamMessage"
         private const val PER_OPERATION_KEY = "perOperation"
         val DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT = 5.minutes
         val DEFAULT_REQUEST_BODY_READ_TIMEOUT = 1.hours
-
-        /** Event stream message timeouts are disabled unless explicitly configured. */
-        val DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT = Duration.ZERO
 
         /** Parses a duration with an explicit unit, or `0` to disable the timeout. */
         internal fun parseTimeout(
@@ -224,14 +206,15 @@ data class RequestBodyReadTimeouts(
             serviceId: ShapeId,
             customizationConfig: ObjectNode?,
         ): RequestBodyReadTimeouts {
-            val (configNode, configPath) =
-                ProtocolReadSettings.resolve(
-                    customizationConfig,
-                    CONFIG_KEY,
-                    customizationConfig,
-                    "customizationConfig.$CONFIG_KEY",
-                )
+            val (configNode, configPath) = ProtocolReadSettings.resolve(customizationConfig, CONFIG_KEY)
             val config = ProtocolReadSettings.expectObject(configNode, configPath)
+            config?.let {
+                ProtocolReadSettings.warnUnknownKeys(
+                    it,
+                    setOf(DEFAULT_NON_PAYLOAD_KEY, DEFAULT_PAYLOAD_KEY, PER_OPERATION_KEY),
+                    configPath,
+                )
+            }
             val defaultNonPayloadTimeout =
                 config
                     ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
@@ -244,15 +227,6 @@ data class RequestBodyReadTimeouts(
                     ?.map { parseTimeout(it, "$configPath.$DEFAULT_PAYLOAD_KEY") }
                     ?.orElse(null)
                     ?: DEFAULT_REQUEST_BODY_READ_TIMEOUT
-            val defaultEventStreamMessageTimeout =
-                config
-                    ?.getMember(DEFAULT_EVENT_STREAM_MESSAGE_KEY)
-                    ?.map {
-                        parseTimeout(it, "$configPath.$DEFAULT_EVENT_STREAM_MESSAGE_KEY")
-                    }
-                    ?.orElse(null)
-                    ?: DEFAULT_EVENT_STREAM_MESSAGE_TIMEOUT
-
             val service = model.expectShape(serviceId, ServiceShape::class.java)
             val containedOperations = TopDownIndex.of(model).getContainedOperations(service)
             val containedOperationIds =
@@ -305,20 +279,33 @@ data class RequestBodyReadTimeouts(
                     ?.orElse(null)
                     ?.members
                     ?.map { (key, value) ->
-                        val operationId = ShapeId.from(key.value)
+                        val operationId =
+                            try {
+                                ShapeId.from(key.value)
+                            } catch (error: RuntimeException) {
+                                throw CodegenException(
+                                    "`$configPath.$PER_OPERATION_KEY` contains invalid operation ID `${key.value}`",
+                                    error,
+                                )
+                            }
                         if (operationId !in containedOperationIds) {
                             throw CodegenException(
                                 "`$configPath.$PER_OPERATION_KEY` contains `$operationId`, " +
                                     "which is not an operation attached to service `$serviceId`",
                             )
                         }
-                        // For operations with an event stream input, the per-operation value configures
-                        // the per-message completion deadline. Other streaming inputs (e.g. `@streaming`
-                        // blobs) have no frame boundaries and remain unsupported.
-                        if (operationId in streamingOperationIds && operationId !in eventStreamInputOperationIds) {
+                        // Streaming inputs have no whole-body read deadline. Event stream inputs are
+                        // configured via `eventStreamTimeouts.perOperation` instead.
+                        if (operationId in streamingOperationIds) {
+                            val hint =
+                                if (operationId in eventStreamInputOperationIds) {
+                                    "; configure event stream deadlines via `${EventStreamTimeouts.CONFIG_PATH}.perOperation`"
+                                } else {
+                                    ""
+                                }
                             throw CodegenException(
                                 "`$configPath.$PER_OPERATION_KEY` contains streaming operation " +
-                                    "`$operationId`, but request body read timeouts are not supported for streaming inputs",
+                                    "`$operationId`, but request body read timeouts are not supported for streaming inputs$hint",
                             )
                         }
                         operationId to
@@ -332,7 +319,6 @@ data class RequestBodyReadTimeouts(
             return RequestBodyReadTimeouts(
                 defaultNonPayloadTimeout,
                 defaultPayloadTimeout,
-                defaultEventStreamMessageTimeout,
                 perOperation,
                 payloadOperationIds,
                 streamingOperationIds,
@@ -455,8 +441,6 @@ data class ServerCodegenConfig(
                 "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                // Legacy path; ProtocolReadSettings reads it only when the common setting is absent.
-                ProtocolReadSettings.EVENT_STREAM_READ_POLL_BUDGET_KEY,
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
             )
 

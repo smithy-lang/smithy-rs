@@ -47,24 +47,21 @@ data class EventStreamTimeouts(
 
         fun fromCustomizationConfig(
             customizationConfig: ObjectNode?,
-            legacyTimeouts: RequestBodyReadTimeouts,
+            requestBodyReadTimeouts: RequestBodyReadTimeouts,
         ): EventStreamTimeouts {
-            val (node, path) =
-                ProtocolReadSettings.resolve(customizationConfig, "eventStreamTimeouts", null, CONFIG_PATH)
+            val eventStreamInputOperationIds = requestBodyReadTimeouts.eventStreamInputOperationIds
+            val (node, path) = ProtocolReadSettings.resolve(customizationConfig, "eventStreamTimeouts")
             val config = ProtocolReadSettings.expectObject(node, path)
             if (config == null) {
-                // Legacy message settings still configure event completion, never the initial read.
                 return EventStreamTimeouts(
                     Duration.ZERO,
-                    legacyTimeouts.defaultEventStreamMessageTimeout,
+                    Duration.ZERO,
                     DEFAULT_IDLE_TIMEOUT,
-                    legacyTimeouts.perOperation
-                        .filterKeys { it in legacyTimeouts.eventStreamInputOperationIds }
-                        .mapValues { (_, timeout) -> OperationTimeouts(null, timeout, null) },
-                    legacyTimeouts.eventStreamInputOperationIds,
+                    emptyMap(),
+                    eventStreamInputOperationIds,
                 )
             }
-            validateKeys(config, setOf("initialMessage", "messageCompletion", "idle", "perOperation"), path)
+            ProtocolReadSettings.warnUnknownKeys(config, setOf("initialMessage", "messageCompletion", "idle", "perOperation"), path)
             val operationNode =
                 ProtocolReadSettings.expectObject(config.getMember("perOperation").orElse(null), "$path.perOperation")
             val overrides =
@@ -75,14 +72,14 @@ data class EventStreamTimeouts(
                         } catch (error: RuntimeException) {
                             throw CodegenException("`$path.perOperation` contains invalid operation ID `${key.value}`", error)
                         }
-                    if (operationId !in legacyTimeouts.eventStreamInputOperationIds) {
+                    if (operationId !in eventStreamInputOperationIds) {
                         throw CodegenException(
                             "`$path.perOperation` contains `$operationId`, which is not an event-stream input operation attached to this service",
                         )
                     }
                     val operationPath = "$path.perOperation.$operationId"
                     val settings = ProtocolReadSettings.expectObject(value, operationPath)!!
-                    validateKeys(settings, setOf("initialMessage", "messageCompletion", "idle"), operationPath)
+                    ProtocolReadSettings.warnUnknownKeys(settings, setOf("initialMessage", "messageCompletion", "idle"), operationPath)
                     operationId to
                         OperationTimeouts(
                             duration(settings, "initialMessage", operationPath),
@@ -95,7 +92,7 @@ data class EventStreamTimeouts(
                 duration(config, "messageCompletion", path) ?: Duration.ZERO,
                 duration(config, "idle", path) ?: DEFAULT_IDLE_TIMEOUT,
                 overrides,
-                legacyTimeouts.eventStreamInputOperationIds,
+                eventStreamInputOperationIds,
             )
         }
 
@@ -104,16 +101,5 @@ data class EventStreamTimeouts(
             key: String,
             path: String,
         ): Duration? = config.getMember(key).map { RequestBodyReadTimeouts.parseTimeout(it, "$path.$key") }.orElse(null)
-
-        private fun validateKeys(
-            config: ObjectNode,
-            allowed: Set<String>,
-            path: String,
-        ) {
-            val unknown = config.members.keys.map { it.value }.filter { it !in allowed }
-            if (unknown.isNotEmpty()) {
-                throw CodegenException("Unknown setting(s) in `$path`: ${unknown.joinToString(", ")}")
-            }
-        }
     }
 }

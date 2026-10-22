@@ -95,68 +95,7 @@ internal class EventStreamPollBudgetTest {
         )
     }
 
-    @Test
-    fun `legacy poll budget remains supported and common value takes precedence`() {
-        check(settings("""{"codegen": {"eventStreamReadPollBudget": 7}}""").eventStreamReadPollBudget == 7)
-        checkGeneratedBudget("""{"codegen": {"eventStreamReadPollBudget": 3}}""", 3, false)
-        val effective =
-            settings(
-                """
-                {
-                    "codegen": {"eventStreamReadPollBudget": 7},
-                    "customizationConfig": {
-                        "protocols": {"common": {"eventStreamReadPollBudget": 0}}
-                    }
-                }
-                """,
-            )
-        check(effective.eventStreamReadPollBudget == 0)
-        assertThrows<CodegenException> {
-            settings("""{"codegen": {"eventStreamReadPollBudget": -1}}""")
-        }
-        assertThrows<CodegenException> {
-            settings(
-                """
-                {
-                    "codegen": {"eventStreamReadPollBudget": 7},
-                    "customizationConfig": {
-                        "protocols": {"common": {"eventStreamReadPollBudget": null}}
-                    }
-                }
-                """,
-            )
-        }
-    }
 
-    @Test
-    fun `common timeout configuration supersedes the complete legacy timeout object`() {
-        val legacy = """{"defaultNonPayload": "7s", "defaultPayload": "8s", "defaultEventStreamMessage": "9s"}"""
-        val legacySettings = settings("""{"customizationConfig": {"requestBodyReadTimeouts": $legacy}}""")
-        check(legacySettings.requestBodyReadTimeouts.defaultNonPayloadTimeout == 7.seconds)
-        check(legacySettings.requestBodyReadTimeouts.defaultPayloadTimeout == 8.seconds)
-        check(legacySettings.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == 9.seconds)
-        for (common in listOf("{}", """{"defaultEventStreamMessage": 0}""")) {
-            val effective =
-                settings(
-                    """
-                    {
-                        "customizationConfig": {
-                            "requestBodyReadTimeouts": $legacy,
-                            "protocols": {"common": {"requestBodyReadTimeouts": $common}}
-                        }
-                    }
-                    """,
-                )
-            check(effective.requestBodyReadTimeouts.defaultNonPayloadTimeout == 5.minutes)
-            check(effective.requestBodyReadTimeouts.defaultPayloadTimeout == 1.hours)
-            check(effective.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == Duration.ZERO)
-        }
-        val unrelated =
-            settings(
-                """{"customizationConfig": {"requestBodyReadTimeouts": $legacy, "protocols": {"common": {"otherSetting": true}}}}""",
-            )
-        check(unrelated.requestBodyReadTimeouts.defaultEventStreamMessageTimeout == 9.seconds)
-    }
 
     @Test
     fun `malformed common protocol configuration is rejected`() {
@@ -166,7 +105,6 @@ internal class EventStreamPollBudgetTest {
             """{"protocols": {"common": true}}""",
             """{"protocols": {"common": {"requestBodyReadTimeouts": null}}}""",
             """{"protocols": {"common": {"requestBodyReadTimeouts": "30s"}}}""",
-            """{"protocols": {"common": {"requestBodyReadTimeouts": {"defaultEventStreamMessage": -1}}}}""",
         )) {
             val error = assertThrows<CodegenException> { settings("""{"customizationConfig": $json}""") }
             check(error.message!!.contains("customizationConfig.protocols"))

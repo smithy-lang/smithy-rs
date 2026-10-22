@@ -91,35 +91,39 @@ internal class EventStreamMessageTimeoutTest {
         blob StreamingBlob
         """.asSmithyModel()
 
-    @Test
-    fun `event stream message timeout is disabled by default`() {
-        val config =
+    private fun eventStreamTimeouts(customizationConfig: ObjectNode?): EventStreamTimeouts =
+        EventStreamTimeouts.fromCustomizationConfig(
+            customizationConfig,
             RequestBodyReadTimeouts.fromCustomizationConfig(
                 model,
                 ShapeId.from("test#EventService"),
-                null,
-            )
+                customizationConfig,
+            ),
+        )
 
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
-        // Event stream operations still get no whole-body read deadline
-        check(config.timeoutFor(ShapeId.from("test#PublishEvents")) == null)
+    @Test
+    fun `event stream message timeout is disabled by default`() {
+        val config = eventStreamTimeouts(null)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
         // The message timeout never applies to non-event-stream operations
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#Echo")) == null)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#Echo")) == null)
+        // Event stream operations still get no whole-body read deadline
+        val bodyTimeouts =
+            RequestBodyReadTimeouts.fromCustomizationConfig(model, ShapeId.from("test#EventService"), null)
+        check(bodyTimeouts.timeoutFor(ShapeId.from("test#PublishEvents")) == null)
     }
 
     @Test
     fun `event stream message timeout default can be configured`() {
         val config =
-            RequestBodyReadTimeouts.fromCustomizationConfig(
-                model,
-                ShapeId.from("test#EventService"),
+            eventStreamTimeouts(
                 objectNode(
                     """
                     {
                         "protocols": {
                             "common": {
-                                "requestBodyReadTimeouts": {
-                                    "defaultEventStreamMessage": "30s"
+                                "eventStreamTimeouts": {
+                                    "messageCompletion": "30s"
                                 }
                             }
                         }
@@ -128,27 +132,23 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == 30.seconds)
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#Echo")) == null)
-        // The event stream message timeout doesn't enable the whole-body deadline for streaming operations
-        check(config.timeoutFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#PublishEvents")) == 30.seconds)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#Echo")) == null)
     }
 
     @Test
     fun `per operation timeout on event stream operation configures the message timeout`() {
         val config =
-            RequestBodyReadTimeouts.fromCustomizationConfig(
-                model,
-                ShapeId.from("test#EventService"),
+            eventStreamTimeouts(
                 objectNode(
                     """
                     {
                         "protocols": {
                             "common": {
-                                "requestBodyReadTimeouts": {
-                                    "defaultEventStreamMessage": "30s",
+                                "eventStreamTimeouts": {
+                                    "messageCompletion": "30s",
                                     "perOperation": {
-                                        "test#PublishEvents": "5s"
+                                        "test#PublishEvents": {"messageCompletion": "5s"}
                                     }
                                 }
                             }
@@ -158,24 +158,22 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == 5.seconds)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#PublishEvents")) == 5.seconds)
     }
 
     @Test
     fun `per operation zero disables the event stream message timeout`() {
         val config =
-            RequestBodyReadTimeouts.fromCustomizationConfig(
-                model,
-                ShapeId.from("test#EventService"),
+            eventStreamTimeouts(
                 objectNode(
                     """
                     {
                         "protocols": {
                             "common": {
-                                "requestBodyReadTimeouts": {
-                                    "defaultEventStreamMessage": "30s",
+                                "eventStreamTimeouts": {
+                                    "messageCompletion": "30s",
                                     "perOperation": {
-                                        "test#PublishEvents": 0
+                                        "test#PublishEvents": {"messageCompletion": 0}
                                     }
                                 }
                             }
@@ -185,7 +183,36 @@ internal class EventStreamMessageTimeoutTest {
                 ),
             )
 
-        check(config.eventStreamMessageTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
+        check(config.messageCompletionTimeoutFor(ShapeId.from("test#PublishEvents")) == null)
+    }
+
+    @Test
+    fun `per operation request body timeout on event stream operation is rejected`() {
+        val error =
+            assertThrows<CodegenException> {
+                RequestBodyReadTimeouts.fromCustomizationConfig(
+                    model,
+                    ShapeId.from("test#EventService"),
+                    objectNode(
+                        """
+                        {
+                            "protocols": {
+                                "common": {
+                                    "requestBodyReadTimeouts": {
+                                        "perOperation": {
+                                            "test#PublishEvents": "30s"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        """,
+                    ),
+                )
+            }
+
+        check(error.message?.contains("are not supported for streaming inputs") == true)
+        check(error.message?.contains("eventStreamTimeouts") == true)
     }
 
     @Test

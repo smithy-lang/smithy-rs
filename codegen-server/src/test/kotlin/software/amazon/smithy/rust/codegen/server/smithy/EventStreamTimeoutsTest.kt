@@ -120,19 +120,24 @@ internal class EventStreamTimeoutsTest {
     }
 
     @Test
-    fun `new event timeout object supersedes legacy completion settings`() {
-        val legacy = """{"defaultEventStreamMessage": "45s", "perOperation": {"test#PublishEvents": "5s"}}"""
-        val configured = settings("""{"initialMessage": "10s", "messageCompletion": "30s"}""", legacy).eventStreamTimeouts
-        check(configured.initialMessageTimeoutFor(publish) == 10.seconds)
-        check(configured.messageCompletionTimeoutFor(publish) == 30.seconds)
-        val disabled = settings("{}", legacy).eventStreamTimeouts
+    fun `request body read timeouts never configure event stream deadlines`() {
+        // `requestBodyReadTimeouts` is for non-streaming bodies only: event stream deadlines
+        // come exclusively from `eventStreamTimeouts`, and an entry for an event stream
+        // operation in `requestBodyReadTimeouts.perOperation` fails generation.
+        val bodyTimeouts = """{"defaultNonPayload": "45s"}"""
+        val disabled = settings("{}", bodyTimeouts).eventStreamTimeouts
         check(disabled.initialMessageTimeoutFor(publish) == null)
         check(disabled.messageCompletionTimeoutFor(publish) == null)
-        val serviceSettings = settings("{}", legacy)
-        val fallback = EventStreamTimeouts.fromCustomizationConfig(null, serviceSettings.requestBodyReadTimeouts)
-        check(fallback.initialMessageTimeoutFor(publish) == null)
-        check(fallback.messageCompletionTimeoutFor(publish) == 5.seconds)
-        check(fallback.idleTimeoutFor(publish) == null)
+        val serviceSettings = settings("{}", bodyTimeouts)
+        val absent = EventStreamTimeouts.fromCustomizationConfig(null, serviceSettings.requestBodyReadTimeouts)
+        check(absent.initialMessageTimeoutFor(publish) == null)
+        check(absent.messageCompletionTimeoutFor(publish) == null)
+        check(absent.idleTimeoutFor(publish) == null)
+        val error =
+            assertThrows<CodegenException> {
+                settings("{}", """{"perOperation": {"test#PublishEvents": "5s"}}""")
+            }
+        check(error.message?.contains("are not supported for streaming inputs") == true)
     }
 
     @Test
@@ -176,13 +181,11 @@ internal class EventStreamTimeoutsTest {
             """{"idle": "9223372036854775807h"}""",
             """{"idle": null}""",
             """{"perOperation": {"test#PublishEvents": {"idle": "5d"}}}""",
-            """{"initial": "10s"}""",
             """{"perOperation": null}""",
             """{"perOperation": {"test#Echo": {"initialMessage": "10s"}}}""",
             """{"perOperation": {"test#NotAttached": {"messageCompletion": "10s"}}}""",
             """{"perOperation": {"not a shape ID": {}}}""",
             """{"perOperation": {"test#PublishEvents": "10s"}}""",
-            """{"perOperation": {"test#PublishEvents": {"completion": "10s"}}}""",
         )) {
             val error = assertThrows<CodegenException> { settings(json) }
             check(error.message!!.contains("customizationConfig.protocols.common.eventStreamTimeouts"))

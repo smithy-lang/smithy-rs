@@ -30,6 +30,38 @@ internal object ProtocolReadSettings {
     }
 
     /**
+     * Logs a warning when `config` contains keys outside `allowed`; unknown keys are ignored
+     * so configurations written for a newer codegen version keep generating.
+     */
+    fun warnUnknownKeys(
+        config: ObjectNode,
+        allowed: Set<String>,
+        path: String,
+    ) {
+        val unknown = config.members.keys.map { it.value }.filter { it !in allowed }
+        if (unknown.isNotEmpty()) {
+            Logger.getLogger("ServerRustSettings").warning(
+                "Unknown setting(s) in `$path`: ${unknown.joinToString(", ")}. " +
+                    "Known keys are: ${allowed.joinToString(", ")}.",
+            )
+        }
+    }
+
+    /** Reads `customizationConfig.protocols.common.<key>`. */
+    fun resolve(
+        customizationConfig: ObjectNode?,
+        key: String,
+    ): Pair<Node?, String> {
+        val protocols =
+            expectObject(
+                customizationConfig?.getMember("protocols")?.orElse(null),
+                "customizationConfig.protocols",
+            )
+        val common = expectObject(protocols?.getMember("common")?.orElse(null), COMMON_PATH)
+        return common?.getMember(key)?.orElse(null) to "$COMMON_PATH.$key"
+    }
+
+    /**
      * The common value takes precedence, including explicit zero or an empty timeout object.
      * Legacy configuration is read only when the corresponding common key is absent.
      */
@@ -39,21 +71,15 @@ internal object ProtocolReadSettings {
         legacyConfig: ObjectNode?,
         legacyPath: String,
     ): Pair<Node?, String> {
-        val protocols =
-            expectObject(
-                customizationConfig?.getMember("protocols")?.orElse(null),
-                "customizationConfig.protocols",
-            )
-        val common = expectObject(protocols?.getMember("common")?.orElse(null), COMMON_PATH)
-        val value = common?.getMember(key)?.orElse(null)
+        val (value, path) = resolve(customizationConfig, key)
         val legacyValue = legacyConfig?.getMember(key)?.orElse(null)
         if (value != null) {
             if (legacyValue != null) {
                 Logger.getLogger("ServerRustSettings").warning(
-                    "Both `$legacyPath` and `$COMMON_PATH.$key` are set; using `$COMMON_PATH.$key`.",
+                    "Both `$legacyPath` and `$path` are set; using `$path`.",
                 )
             }
-            return value to "$COMMON_PATH.$key"
+            return value to path
         }
         return legacyValue to legacyPath
     }
@@ -89,17 +115,8 @@ internal object ProtocolReadSettings {
     }
 
     /** Maximum consecutive ready HTTP body frames; zero disables forced yielding. */
-    fun eventStreamReadPollBudget(
-        customizationConfig: ObjectNode?,
-        legacyCodegenConfig: ObjectNode?,
-    ): Int {
-        val (value, path) =
-            resolve(
-                customizationConfig,
-                EVENT_STREAM_READ_POLL_BUDGET_KEY,
-                legacyCodegenConfig,
-                "codegen.$EVENT_STREAM_READ_POLL_BUDGET_KEY",
-            )
+    fun eventStreamReadPollBudget(customizationConfig: ObjectNode?): Int {
+        val (value, path) = resolve(customizationConfig, EVENT_STREAM_READ_POLL_BUDGET_KEY)
         if (value == null) {
             return DEFAULT_EVENT_STREAM_READ_POLL_BUDGET
         }

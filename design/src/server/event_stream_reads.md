@@ -105,21 +105,13 @@ The RPC initial read examines the first wire frame. If an optional `initial-requ
 message is omitted, the first event is read during that phase and uses the initial
 deadline; its already-complete frame is then buffered for the handler.
 
-The alternate paths, `codegen.eventStreamReadPollBudget` and
-`customizationConfig.requestBodyReadTimeouts`, are accepted as fallbacks.
-Each common key takes precedence over its alternate path. A common
-`requestBodyReadTimeouts` object replaces the complete alternate timeout object;
-omitted fields use the built-in defaults. An empty common timeout object therefore
-selects all built-in defaults. Explicit `0` values are honored. Invalid common
-values fail generation even when the alternate value is valid.
-
-The `requestBodyReadTimeouts.defaultEventStreamMessage` and scalar
-`perOperation` entries for event stream operations are accepted as completion-timeout
-fallbacks when `eventStreamTimeouts` is absent. They never enable an initial-read
-deadline. The idle deadline remains disabled when the new object is absent.
-An explicit `eventStreamTimeouts` object supersedes these alternate event settings
-as a whole; an empty object disables all three event stream deadlines.
-Use `requestBodyReadTimeouts` for non-streaming request bodies.
+All event stream deadlines are configured exclusively through
+`customizationConfig.protocols.common.eventStreamTimeouts`; an empty object
+disables all three event stream deadlines, and omitting the object leaves them
+at their defaults (all disabled). The poll budget is configured exclusively
+through `customizationConfig.protocols.common.eventStreamReadPollBudget`.
+Use `requestBodyReadTimeouts` for non-streaming request bodies only; entries
+for streaming operations, including event stream inputs, fail generation.
 
 When configured, the message deadline
 is checked before the polling budget can yield. Yielding does not reset or extend
@@ -132,6 +124,6 @@ source chain contains the generated crate's public
 window or stop processing the request. `MessageTimeoutError::is_idle()` distinguishes
 idle expiry from message-completion expiry. The timeout itself does not close the
 transport connection. RPC initial-message deadlines include the first-byte wait
-and become request rejections before the handler runs. Waiting for the first byte
+and become `408 Request Timeout` rejections before the handler runs. Waiting for the first byte
 of a later event message uses the idle deadline. Time spent between body polls,
 including handler backpressure, counts toward the current deadline.

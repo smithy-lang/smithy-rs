@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
@@ -849,6 +850,64 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
         }
+    }
+
+    @Test
+    fun `unknown request read timeout key is ignored and known keys still apply`() {
+        // Unknown keys only log a warning so configurations written for a newer
+        // codegen version keep generating; the typo'd key has no effect.
+        val config =
+            RequestBodyReadTimeouts.fromCustomizationConfig(
+                model,
+                ShapeId.from("test#TestService"),
+                objectNode(
+                    """
+                    {
+                        "protocols": {
+                            "common": {
+                                "requestBodyReadTimeouts": {
+                                    "defaultPayLoad": "30s",
+                                    "defaultNonPayload": "9s"
+                                }
+                            }
+                        }
+                    }
+                    """,
+                ),
+            )
+        check(config.defaultNonPayloadTimeout == 9.seconds)
+        check(config.defaultPayloadTimeout == 1.hours)
+    }
+
+    @Test
+    fun `malformed operation id in request read timeout overrides is rejected with the config path`() {
+        val customizationConfig =
+            objectNode(
+                """
+                {
+                    "protocols": {
+                        "common": {
+                            "requestBodyReadTimeouts": {
+                                "perOperation": {
+                                    "not a shape id": "30s"
+                                }
+                            }
+                        }
+                    }
+                }
+                """,
+            )
+
+        val exception =
+            assertThrows<CodegenException> {
+                RequestBodyReadTimeouts.fromCustomizationConfig(
+                    model,
+                    ShapeId.from("test#TestService"),
+                    customizationConfig,
+                )
+            }
+        exception.message!! shouldContain "perOperation"
+        exception.message!! shouldContain "not a shape id"
     }
 
     @Test
