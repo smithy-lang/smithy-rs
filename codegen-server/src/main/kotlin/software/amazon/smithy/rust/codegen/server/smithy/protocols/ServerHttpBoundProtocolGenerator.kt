@@ -75,6 +75,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerEventStreamMessageTimeoutHttpBindingCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -980,6 +981,31 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             val readInitialRequest =
                                 writable {
                                     if (httpBindingResolver.isRpcProtocol()) {
+                                        // An expired initial-message deadline surfaces through
+                                        // `try_recv_initial` as a body error whose source chain
+                                        // contains `MessageTimeoutError`. Reject it as a retryable
+                                        // `408 Request Timeout` instead of a validation failure.
+                                        val mapTimeoutError =
+                                            if (codegenContext.settings.eventStreamTimeouts
+                                                    .initialMessageTimeoutFor(operationShape.id) != null
+                                            ) {
+                                                writable {
+                                                    rustTemplate(
+                                                        """
+                                                        if #{MessageTimeoutError}::find_in_chain(&ev_error).is_some() {
+                                                            return #{RequestRejection}::RequestTimeout;
+                                                        }
+                                                        """,
+                                                        "MessageTimeoutError" to
+                                                            ServerEventStreamMessageTimeoutHttpBindingCustomization
+                                                                .eventStreamMessageTimeoutModule(runtimeConfig)
+                                                                .resolve("MessageTimeoutError"),
+                                                        *codegenScope,
+                                                    )
+                                                }
+                                            } else {
+                                                writable { }
+                                            }
                                         rustTemplate(
                                             """
                                             let mut receiver = receiver;
@@ -987,10 +1013,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 .try_recv_initial(#{InitialMessageType}::Request)
                                                 .await
                                                 .map_err(
-                                                    |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                        #{AllowUselessConversion}
-                                                        format!("{ev_error}").into()
-                                                    )
+                                                    |ev_error| {
+                                                        #{mapTimeoutError}
+                                                        #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                    }
                                                 )? {
                                                 #{parseInitialRequest}
                                             }
@@ -1000,6 +1029,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 RuntimeType.smithyHttp(runtimeConfig)
                                                     .resolve("event_stream::InitialMessageType"),
                                             "parseInitialRequest" to parseInitialRequest,
+                                            "mapTimeoutError" to mapTimeoutError,
                                             "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                             *codegenScope,
                                         )

@@ -541,6 +541,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn receive_resumes_after_recoverable_body_error() {
+        // A body error (e.g. an event stream message read timeout) does not poison the
+        // receiver: buffered partial-frame data is kept, and calling `recv()` again resumes
+        // reading the stream where it left off.
+        let message = encode_message("one");
+        let split = message.len() / 2;
+        let chunks: Vec<Result<_, IOError>> = map_to_frame(vec![
+            Ok(message.slice(0..split)),
+            Err(IOError::new(ErrorKind::TimedOut, FakeError)),
+            Ok(message.slice(split..)),
+        ]);
+        let chunk_stream = futures_util::stream::iter(chunks);
+        let stream_body = http_body_util::StreamBody::new(chunk_stream);
+        let body = SdkBody::from_body_1_x(stream_body);
+        let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
+        assert!(matches!(
+            receiver.recv().await,
+            Err(SdkError::DispatchFailure(_))
+        ));
+        assert_eq!(
+            TestMessage("one".into()),
+            receiver.recv().await.unwrap().unwrap()
+        );
+        assert_eq!(None, receiver.recv().await.unwrap());
+    }
+
+    #[tokio::test]
     async fn receive_message_parse_failure() {
         let chunks: Vec<Result<_, IOError>> = map_to_frame(vec![
             Ok(encode_message("one")),

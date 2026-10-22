@@ -91,11 +91,13 @@ pub trait ListenerExt: Listener + Sized {
     /// limit concurrent in-flight requests, but does not limit connections
     /// that are idle or in the process of sending request headers.
     ///
+    /// Limits above [`Semaphore::MAX_PERMITS`] are clamped to that value.
+    ///
     /// [`tower::limit::concurrency`]: https://docs.rs/tower/latest/tower/limit/concurrency/
     fn limit_connections(self, limit: usize) -> ConnLimiter<Self> {
         ConnLimiter {
             listener: self,
-            sem: Arc::new(Semaphore::new(limit)),
+            sem: Arc::new(Semaphore::new(limit.min(Semaphore::MAX_PERMITS))),
         }
     }
 
@@ -129,6 +131,40 @@ pub trait ListenerExt: Listener + Sized {
 
 impl<L: Listener> ListenerExt for L {}
 
+#[derive(Debug)]
+pub(super) struct ConnectionLimit {
+    sem: Arc<Semaphore>,
+    max: usize,
+}
+
+impl ConnectionLimit {
+    pub(super) fn new(max: usize) -> Self {
+        Self {
+            // Tokio panics when a semaphore is created with more than
+            // `MAX_PERMITS` permits, so clamp instead of crashing the server
+            // task when a user spells "unlimited" as `usize::MAX`.
+            sem: Arc::new(Semaphore::new(max.min(Semaphore::MAX_PERMITS))),
+            max,
+        }
+    }
+
+    pub(super) fn max(&self) -> usize {
+        self.max
+    }
+
+    pub(super) fn available_permits(&self) -> usize {
+        self.sem.available_permits()
+    }
+
+    pub(super) async fn acquire(&self) -> OwnedSemaphorePermit {
+        self.sem
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should never be closed")
+    }
+}
+
 /// Return type of [`ListenerExt::limit_connections`].
 ///
 /// See that method for details.
@@ -150,7 +186,7 @@ impl<T: Listener> Listener for ConnLimiter<T> {
             .await
             .expect("semaphore should never be closed");
         let (io, addr) = self.listener.accept().await;
-        (ConnLimiterIo { io, permit }, addr)
+        (ConnLimiterIo::new(io, Some(permit), None), addr)
     }
 
     fn local_addr(&self) -> tokio::io::Result<Self::Addr> {
@@ -161,19 +197,65 @@ impl<T: Listener> Listener for ConnLimiter<T> {
 pin_project! {
     /// A connection counted by [`ConnLimiter`].
     ///
-    /// See [`ListenerExt::limit_connections`] for details.
+    /// Also used by [`super::serve`] to retain connection permits across HTTP
+    /// upgrades and bound the initial HTTP version detection read.
+    ///
+    /// The permit is released when this IO object is dropped.
     #[derive(Debug)]
     pub struct ConnLimiterIo<T> {
         #[pin]
         io: T,
-        permit: OwnedSemaphorePermit,
+        permit: Option<OwnedSemaphorePermit>,
+        http_version_detection_deadline: Option<Pin<Box<tokio::time::Sleep>>>,
+        preface_bytes_read: usize,
     }
 }
 
-// Simply forward implementation to `io` field.
+impl<T> ConnLimiterIo<T> {
+    pub(super) fn new(
+        io: T,
+        permit: Option<OwnedSemaphorePermit>,
+        http_version_detection_timeout: Option<Duration>,
+    ) -> Self {
+        Self {
+            io,
+            permit,
+            http_version_detection_deadline: http_version_detection_timeout
+                .map(|timeout| Box::pin(tokio::time::sleep(timeout))),
+            preface_bytes_read: 0,
+        }
+    }
+}
+
 impl<T: AsyncRead> AsyncRead for ConnLimiterIo<T> {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<io::Result<()>> {
-        self.project().io.poll_read(cx, buf)
+        // Hyper's auto builder waits for this preface (or a mismatch) before
+        // constructing a protocol-specific connection and starting its timers.
+        const HTTP2_PREFACE: &[u8] = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+        let this = self.project();
+        if let Some(deadline) = this.http_version_detection_deadline.as_mut() {
+            if deadline.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP version detection timed out",
+                )));
+            }
+        }
+
+        let filled_before = buf.filled().len();
+        let result = this.io.poll_read(cx, buf);
+        if matches!(&result, Poll::Ready(Ok(()))) && this.http_version_detection_deadline.is_some() {
+            let bytes = &buf.filled()[filled_before..];
+            let remaining_preface = &HTTP2_PREFACE[*this.preface_bytes_read..];
+            let compared = bytes.len().min(remaining_preface.len());
+            if bytes[..compared] != remaining_preface[..compared] || compared == remaining_preface.len() {
+                // Once Hyper can choose an HTTP version, its own timers take over.
+                *this.http_version_detection_deadline = None;
+            } else {
+                *this.preface_bytes_read += compared;
+            }
+        }
+        result
     }
 }
 
@@ -267,4 +349,64 @@ fn is_connection_error(e: &io::Error) -> bool {
         e.kind(),
         io::ErrorKind::ConnectionRefused | io::ErrorKind::ConnectionAborted | io::ErrorKind::ConnectionReset
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test(start_paused = true)]
+    async fn http_version_detection_deadline_does_not_reset_when_bytes_arrive() {
+        let (io, mut client) = tokio::io::duplex(64);
+        let mut io = ConnLimiterIo::new(io, None, Some(super::super::DEFAULT_HTTP_VERSION_DETECTION_TIMEOUT));
+        let mut byte = [0];
+
+        client.write_all(b"P").await.unwrap();
+        io.read_exact(&mut byte).await.unwrap();
+        tokio::time::advance(Duration::from_secs(29)).await;
+        client.write_all(b"R").await.unwrap();
+        io.read_exact(&mut byte).await.unwrap();
+        tokio::time::advance(Duration::from_secs(1)).await;
+
+        let error = io.read_exact(&mut byte).await.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn http_version_detection_deadline_ends_after_http1_or_complete_http2_preface() {
+        let http2_preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
+        // Exercise every split of the preface, plus bytes beyond the preface.
+        for (bytes, split) in [(b"GET /test HTTP/1.1\r\n".as_slice(), 1)]
+            .into_iter()
+            .chain((1..http2_preface.len()).map(|split| (http2_preface.as_slice(), split)))
+            .chain([(b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\nextra".as_slice(), 0)])
+        {
+            let (io, mut client) = tokio::io::duplex(64);
+            let mut io = ConnLimiterIo::new(io, None, Some(Duration::from_secs(30)));
+            let mut buffer = vec![0; bytes.len()];
+            client.write_all(&bytes[..split]).await.unwrap();
+            io.read_exact(&mut buffer[..split]).await.unwrap();
+            client.write_all(&bytes[split..]).await.unwrap();
+            io.read_exact(&mut buffer[split..]).await.unwrap();
+            assert_eq!(buffer, bytes);
+
+            tokio::time::advance(Duration::from_secs(31)).await;
+            client.write_all(b"later").await.unwrap();
+            let mut buffer = [0; 5];
+            io.read_exact(&mut buffer).await.unwrap();
+            assert_eq!(&buffer, b"later");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn http_version_detection_deadline_can_be_disabled() {
+        let (io, mut client) = tokio::io::duplex(64);
+        let mut io = ConnLimiterIo::new(io, None, None);
+        tokio::time::advance(Duration::from_secs(31)).await;
+        client.write_all(b"P").await.unwrap();
+        let mut buffer = [0];
+        io.read_exact(&mut buffer).await.unwrap();
+        assert_eq!(&buffer, b"P");
+    }
 }
