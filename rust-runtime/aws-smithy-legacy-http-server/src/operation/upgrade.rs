@@ -107,7 +107,10 @@ where
 }
 
 struct RequestBodyReadTimeoutState {
-    sleep: Pin<Box<tokio::time::Sleep>>,
+    // Created on the first pending poll rather than per request, so requests whose
+    // input is ready immediately never need a timer. This keeps runtimes without a
+    // tokio time driver working and avoids a per-request allocation.
+    sleep: Option<Pin<Box<tokio::time::Sleep>>>,
     timeout: Duration,
     version: Version,
     operation: &'static str,
@@ -206,7 +209,11 @@ where
                         Poll::Ready(result) => result,
                         Poll::Pending => {
                             if let Some(timeout) = this.request_body_read_timeout {
-                                if timeout.sleep.as_mut().poll(cx).is_ready() {
+                                let duration = timeout.timeout;
+                                let sleep = timeout
+                                    .sleep
+                                    .get_or_insert_with(|| Box::pin(tokio::time::sleep(duration)));
+                                if sleep.as_mut().poll(cx).is_ready() {
                                     return Poll::Ready(Ok(timeout.response()));
                                 }
                             }
@@ -268,7 +275,7 @@ where
         let request_body_read_timeout = self
             .request_body_read_timeout
             .map(|config| RequestBodyReadTimeoutState {
-                sleep: Box::pin(tokio::time::sleep(config.timeout)),
+                sleep: None,
                 timeout: config.timeout,
                 version: req.version(),
                 operation: config.operation,
