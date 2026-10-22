@@ -10,11 +10,11 @@
 //! documentation for [`aws_smithy_http_server::plugin::ModelMarker`] calls out, most model
 //! plugins' implementation are _operation-specific_, which are simpler.
 
-use std::{marker::PhantomData, pin::Pin};
+use std::{marker::PhantomData, pin::Pin, sync::LazyLock};
 
 use aws_smithy_schema::{
     serde::{SerdeError, SerializableStruct, ShapeSerializer},
-    Schema, SmithySchema,
+    shape_id, Schema, ShapeType, StringTrait, TraitMap,
 };
 
 use pokemon_service_server_sdk::server::{
@@ -81,18 +81,60 @@ pub enum AuthorizeServiceError<E> {
 /// The authorization failure is described as a Smithy error shape. Each selected
 /// protocol supplies its own content type, error discriminator, and serialized body.
 ///
-/// The derive generates the schema (exposed as `AuthorizeError::SCHEMA`) along with
-/// the `SerializableStruct`, `Display`, `Error`, and
-/// `HttpModeledError` implementations that protocols use to serialize the error.
-#[derive(Debug, SmithySchema)]
-#[smithy(
-    namespace = "pokemon_service.authz",
-    error = "client",
-    http_error = 401,
-    target = "server"
-)]
+/// The schema and trait implementations below let protocols serialize the error.
+#[derive(Debug)]
 pub struct AuthorizeError {
     pub message: String,
+}
+
+static AUTHORIZE_ERROR_MESSAGE: Schema<'static> = Schema::new_member(
+    shape_id!("pokemon_service.authz", "AuthorizeError", "message"),
+    ShapeType::String,
+    "message",
+    0,
+);
+static AUTHORIZE_ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+    let mut traits = TraitMap::new();
+    traits.insert(Box::new(StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
+static AUTHORIZE_ERROR_SCHEMA: Schema<'static> = Schema::new_struct(
+    shape_id!("pokemon_service.authz", "AuthorizeError"),
+    ShapeType::Structure,
+    &[&AUTHORIZE_ERROR_MESSAGE],
+)
+.with_traits(&AUTHORIZE_ERROR_TRAITS);
+
+impl AuthorizeError {
+    /// The schema for the authorization failure.
+    pub const SCHEMA: &'static Schema<'static> = &AUTHORIZE_ERROR_SCHEMA;
+}
+
+impl SerializableStruct for AuthorizeError {
+    fn schema(&self) -> &Schema<'_> {
+        Self::SCHEMA
+    }
+
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        serializer.write_string(&AUTHORIZE_ERROR_MESSAGE, &self.message)
+    }
+}
+
+impl std::fmt::Display for AuthorizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for AuthorizeError {}
+
+impl HttpModeledError for AuthorizeError {
+    fn status_code(&self) -> u16 {
+        401
+    }
 }
 
 // A wrapper exposes the schema and members of its active error variant. It has
