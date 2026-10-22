@@ -78,7 +78,8 @@ class RustReservedWordSymbolProvider(
                     return base.toSymbol(shape)
                 }
                 val previousName = base.toMemberName(shape)
-                val escapedName = this.toMemberName(shape)
+                // Prefix leading digit with an underscore to avoid invalid identifiers; allow extra leading underscores.
+                val escapedName = this.toMemberName(shape).replace(Regex("^(_*\\d)"), "_$1")
                 // if the names don't match and it isn't a simple escaping with `r#`, record a rename
                 renamedSymbol.toBuilder().name(escapedName)
                     .letIf(escapedName != previousName && !escapedName.contains("r#")) {
