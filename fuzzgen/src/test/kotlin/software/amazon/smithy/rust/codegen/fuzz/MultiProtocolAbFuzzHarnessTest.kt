@@ -15,12 +15,17 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ModelSerializer
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.HttpHeaderTrait
+import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
+import software.amazon.smithy.model.traits.HttpResponseCodeTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TraitFactory
 import software.amazon.smithy.model.transform.ModelTransformer
@@ -165,8 +170,10 @@ class MultiProtocolAbFuzzHarnessTest {
             }
         protocolSpecificOperations.forEach { canonical.expectShape(it, OperationShape::class.java) }
         val reduceEventStreamMember = modelProfile.any { it.dir in listOf("aws-json-10", "aws-json-11") }
+        // Legacy rpcv2Cbor servers serialize HTTP bindings of modeled errors, which the protocol ignores.
+        val reduceCborErrorBindings = suite == "multiprotocol" && modelProfile.any { it.dir == "rpcv2-cbor" }
         val transformer = ModelTransformer.create()
-        val reduced =
+        val protocolReduced =
             transformer.mapShapes(canonical) { shape ->
                 when (shape.id) {
                     serviceId -> {
@@ -194,6 +201,14 @@ class MultiProtocolAbFuzzHarnessTest {
                     }
                     else -> shape
                 }
+            }
+        val reduced =
+            transformer.removeTraitsIf(protocolReduced) { shape, trait ->
+                val container = (shape as? MemberShape)?.let { protocolReduced.expectShape(it.container) }
+                val cbor =
+                    container != null && container.hasTrait(ErrorTrait::class.java) &&
+                        (trait is HttpHeaderTrait || trait is HttpPrefixHeadersTrait || trait is HttpResponseCodeTrait)
+                reduceCborErrorBindings && cbor
             }
         // Match the generated server's validation error surface for every constrained operation,
         // including newly added structure/union payload inputs. Record each added error in the diff.
@@ -255,6 +270,18 @@ class MultiProtocolAbFuzzHarnessTest {
                             .withMember("reason", "Legacy AWS JSON event-stream input codegen requires the stream to be the sole input member")
                             .withMember("scope", "Both sides of profiles serving AWS JSON; retained by CBOR-only and REST-only profiles")
                             .withMember("model_validity", "REST supports additional bound input members; this is a legacy AWS JSON codegen restriction, not a blanket RPC invalidity claim")
+                            .build(),
+                    )
+                } else {
+                    emptyList()
+                } +
+                if (reduceCborErrorBindings) {
+                    listOf(
+                        Node.objectNodeBuilder().withMember("kind", "traits")
+                            .withMember("shape", "httpHeader, httpPrefixHeaders, and httpResponseCode on error members")
+                            .withMember("reason", "Legacy rpcv2Cbor servers serialize error HTTP bindings, which fails to compile")
+                            .withMember("scope", "Both sides of multiprotocol profiles serving rpcv2Cbor; REST error binding coverage is lost in combined profiles")
+                            .withMember("model_validity", "rpcv2Cbor ignores HTTP bindings: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2-cbor.html#shape-serialization")
                             .build(),
                     )
                 } else {
