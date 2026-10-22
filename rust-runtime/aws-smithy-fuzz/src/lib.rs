@@ -21,7 +21,7 @@ use tower::ServiceExt;
 mod protocol;
 mod types;
 pub use lazy_static;
-pub use protocol::pin_protocol;
+pub use protocol::{canonicalize_header_order, normalize_request, pin_protocol};
 pub use types::{Body, FuzzResult, HttpRequest, HttpResponse};
 
 #[macro_export]
@@ -70,9 +70,10 @@ impl FuzzTarget {
     pub fn invoke_bytes(&self, input: &[u8]) -> FuzzResult {
         // The driver applies the same campaign identity to both shared libraries,
         // including direct invocation and replay. The baseline crate is untouched.
-        let normalized = std::env::var("SMITHY_FUZZ_PROTOCOL").ok().map(|protocol| {
-            let mut request = HttpRequest::from_bytes(input);
-            pin_protocol(&mut request, &protocol);
+        // Header order is canonicalized too, so both targets append header values identically.
+        // Bytes that do not decode as a request reach the target unchanged.
+        let normalized = HttpRequest::from_unknown_bytes(input).map(|mut request| {
+            normalize_request(&mut request);
             request.as_bytes()
         });
         let input = normalized.as_deref().unwrap_or(input);

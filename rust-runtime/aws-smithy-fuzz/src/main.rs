@@ -837,9 +837,7 @@ fn replay(
         let http_request = HttpRequest::from_unknown_bytes(&data);
         let comparison_request = http_request.as_ref().map(|request| {
             let mut request = request.clone();
-            if let Ok(protocol) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
-                aws_smithy_fuzz::pin_protocol(&mut request, &protocol);
-            }
+            aws_smithy_fuzz::normalize_request(&mut request);
             request
         });
         let mut baseline = None;
@@ -959,9 +957,7 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
             if request.into_http_request_04x().is_some() {
                 // Compare the same campaign-normalized request that both libraries receive.
                 let mut comparison_request = request.clone();
-                if let Ok(protocol) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
-                    aws_smithy_fuzz::pin_protocol(&mut comparison_request, &protocol);
-                }
+                aws_smithy_fuzz::normalize_request(&mut comparison_request);
                 let mut results = vec![];
                 for library in &libraries {
                     results.push(library.invoke_bytes(data));
