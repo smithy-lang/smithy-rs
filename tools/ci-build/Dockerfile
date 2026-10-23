@@ -92,7 +92,7 @@ RUN yum -y install --allowerasing \
     rustup --version; \
     rustup component add rustfmt; \
     rustup component add clippy; \
-    rustup toolchain install ${rust_nightly_version} --component clippy; \
+    rustup toolchain install ${rust_nightly_version} --component clippy --component miri --component rust-src; \
     rustup target add x86_64-unknown-linux-musl; \
     rustup target add aarch64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \

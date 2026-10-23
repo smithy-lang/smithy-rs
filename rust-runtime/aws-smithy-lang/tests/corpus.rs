@@ -308,3 +308,102 @@ fn corpus_knowledge_invariants() {
         assert_eq!(again, contained_ids, "{name}");
     }
 }
+
+/// Every corpus model builds, both in full and for its service, and the schemas agree with
+/// the model.
+#[cfg(feature = "runtime-schema")]
+#[test]
+fn corpus_runtime_schemas() {
+    use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+    use aws_smithy_lang::shape::MemberView;
+    use aws_smithy_schema::Schema;
+
+    for path in corpus() {
+        let model = load(&path);
+        let name = path.display();
+        let all = RuntimeSchemaSet::try_from(&model).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let service = model.services().next().unwrap();
+        let scoped = RuntimeSchemaSet::builder(&model)
+            .for_service(service.id())
+            .build()
+            .unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(scoped.len() <= all.len(), "{name}");
+        assert_eq!(
+            scoped.operations().len(),
+            service.contained_operations().len(),
+            "{name}"
+        );
+
+        let operations = model.knowledge().operations();
+        for operation in scoped.operations() {
+            let knowledge = operations.get(operation.id()).unwrap();
+            let view = knowledge.operation();
+            let input = operation.input();
+            assert_eq!(input.shape_id().as_str(), view.input().as_str(), "{name}");
+            assert_eq!(
+                input.members().len(),
+                knowledge.input_members().len(),
+                "{name}: {}",
+                operation.id()
+            );
+            assert_eq!(
+                input.http().is_some(),
+                view.has_trait(&ShapeId::from_static("smithy.api#http")),
+                "{name}: {}",
+                operation.id()
+            );
+            assert_eq!(
+                operation.output().shape_id().as_str(),
+                view.output().as_str()
+            );
+            let errors: Vec<_> = operation
+                .errors()
+                .iter()
+                .map(|error| error.shape_id().as_str())
+                .collect();
+            let expected: Vec<_> = knowledge
+                .errors_in(service.id())
+                .unwrap()
+                .map(|error| error.id().as_str())
+                .collect();
+            assert_eq!(errors, expected, "{name}: {}", operation.id());
+        }
+
+        // Every member schema mirrors its model member, and is the one schema for that
+        // member: structure and union member slices, list members, and map keys and values
+        // all point at the schema registered under the member's ID.
+        let same_member = |schema: &Schema<'_>, view: MemberView<'_>| {
+            assert_eq!(schema.member_name(), Some(view.name()), "{name}");
+            assert_eq!(schema.shape_id().as_str(), view.id().as_str(), "{name}");
+            assert!(
+                std::ptr::eq(schema, all.schema(view.id()).unwrap()),
+                "{name}: {}",
+                view.id()
+            );
+        };
+        for shape in model.non_prelude_shapes() {
+            let Some(schema) = all.schema(shape.id()) else {
+                continue;
+            };
+            match shape.shape_type() {
+                ShapeType::Structure | ShapeType::Union => {
+                    assert_eq!(schema.members().len(), shape.members().len(), "{name}");
+                    for (member, view) in schema.members().iter().zip(shape.members().iter()) {
+                        same_member(member, view);
+                    }
+                }
+                ShapeType::List => {
+                    let list = shape.as_list().unwrap();
+                    same_member(schema.member().unwrap(), list.member());
+                }
+                ShapeType::Map => {
+                    let map = shape.as_map().unwrap();
+                    same_member(schema.key().unwrap(), map.key());
+                    // `Schema::member` is a map's value.
+                    same_member(schema.member().unwrap(), map.value());
+                }
+                _ => {}
+            }
+        }
+    }
+}

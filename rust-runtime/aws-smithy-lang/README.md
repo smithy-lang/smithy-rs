@@ -13,6 +13,14 @@ source location (file, line, column, and JSON Pointer), and errors and
 diagnostics report it. Inputs that use `apply` or mixins are rejected with an
 `UnsupportedFeature` diagnostic.
 
+With the optional `runtime-schema` feature, `runtime_schema::RuntimeSchemaSet`
+converts a `Model` into `aws-smithy-schema` `Schema`s, the descriptors that
+generated clients use for schema-based serialization, so a client can work with
+a model loaded at runtime. The conversion validates schema-relevant trait values
+and reports located errors, builds each operation its own input schema with the
+operation's `@http` binding, and can be limited to one service. The feature adds
+a dependency on `aws-smithy-schema` and, through it, the Smithy client runtime.
+
 <!-- anchor_start:footer -->
 This crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) and the [smithy-rs](https://github.com/smithy-lang/smithy-rs) code generator. In most cases, it should not be used directly.
 <!-- anchor_end:footer -->
