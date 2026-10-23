@@ -12,7 +12,7 @@ rust-version = "1.94.1"
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-xmlparser = "0.13.5"
+xmlparser = "0.13.6"
 
 [dev-dependencies]
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test" }

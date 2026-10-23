@@ -1,0 +1,21 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#A": {
+      "type": "resource",
+      "resources": [
+        {
+          "target": "ex#B"
+        }
+      ]
+    },
+    "ex#B": {
+      "type": "resource",
+      "resources": [
+        {
+          "target": "ex#A"
+        }
+      ]
+    }
+  }
+}

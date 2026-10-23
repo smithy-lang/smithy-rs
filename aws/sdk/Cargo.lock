@@ -598,7 +598,6 @@ dependencies = [
  "aws-smithy-schema",
  "aws-smithy-types",
  "aws-types",
- "bytes",
  "fastrand 2.5.0",
  "http 1.5.0",
  "proptest",
@@ -1254,7 +1253,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -1298,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.64.0"
+version = "0.64.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -1363,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.61.5"
+version = "0.61.6"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -1607,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
