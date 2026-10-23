@@ -714,9 +714,11 @@ dependencies = [
  "aws-smithy-runtime-api 1.19.2",
  "aws-smithy-schema 1.1.0",
  "aws-smithy-types 1.9.1",
+ "base64-simd",
  "criterion 0.8.2",
  "indexmap 2.14.2",
  "proptest",
+ "rustc-hash",
  "serde",
  "serde_json",
 ]
