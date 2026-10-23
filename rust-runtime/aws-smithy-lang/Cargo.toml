@@ -1,6 +1,9 @@
 [package]
 name = "aws-smithy-lang"
 version = "0.1.0"
+# Still working out exactly where this crate will live, what its name will be, etc.
+# avoiding publishing for now
+publish = false
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models."
 edition = "2021"
