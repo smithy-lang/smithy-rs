@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from common import fingerprint, toolchain, validate_generation, write_json
-from run import counters, difference, paired_interval, report, runtime_difference, summary, topology
+from run import binary, counters, difference, paired_interval, report, runtime_difference, summary, topology, trace_artifacts, validate_server_timing
 from prepare import prepare
 
 
@@ -34,6 +34,40 @@ def runtime_interval():
 
 
 class Measurements(unittest.TestCase):
+    def test_dial9_retains_every_numbered_trace_segment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp)
+            with self.assertRaises(RuntimeError):
+                trace_artifacts(dest)
+            (dest / "server-trace.0.bin").write_bytes(b"first")
+            (dest / "server-trace.1.bin").write_bytes(b"second")
+            result = trace_artifacts(dest)
+            self.assertEqual(result["bytes"], 11)
+            self.assertEqual(len(result["artifacts"]), 2)
+            self.assertEqual(len(result["artifacts"][0]["sha256"]), 64)
+            (dest / "server-trace.2.bin").touch()
+            with self.assertRaises(RuntimeError):
+                trace_artifacts(dest)
+
+    def test_latency_and_dial9_share_the_ordinary_client(self):
+        cache = Path("/cache")
+        for mode, target in (("latency", "timing"), ("dial9", "dial9")):
+            self.assertIn(f"target-{target}", str(binary(cache, "rest_json", "legacy", mode)))
+            self.assertIn("target-cpu", str(binary(cache, "rest_json", "client", mode)))
+
+    def test_server_timing_rejects_missing_streams_or_samples(self):
+        timing = {"requests_started": 2, "responses_ready": 2, "bodies_completed": 2,
+                  "active": 0, "errors": 0, "aborted": 0, "statuses": {"200": 2},
+                  **{name: {"samples": 2} for name in
+                     ("response_ready", "first_frame_ready", "body_complete",
+                      "service_poll_active", "body_poll_active")}}
+        validate_server_timing(timing, 2)
+        for change in ({"bodies_completed": 1}, {"aborted": 1},
+                       {"statuses": {"500": 2}}, {"body_complete": {"samples": 1}},
+                       {"first_frame_ready": None}):
+            with self.assertRaises(RuntimeError):
+                validate_server_timing(timing | change, 2)
+
     def test_runtime_deltas_use_monitor_window_and_preserve_bucket_bounds(self):
         raw = runtime_interval()
         result = runtime_difference(raw)
@@ -83,7 +117,7 @@ class Measurements(unittest.TestCase):
         self.assertEqual(result["allocated_bytes_per_event"], 50)
 
     def test_ratios_are_paired_and_instrumented_runs_excluded(self):
-        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory"), row("schema", 2, 999999, "latency"), row("schema", 2, 999999, "runtime")]
+        rows = [row("legacy", 0, 10), row("schema", 1, 10), row("schema", 0, 20), row("legacy", 1, 20), row("schema", 2, 999999, "memory"), row("schema", 2, 999999, "latency"), row("schema", 2, 999999, "runtime"), row("schema", 2, 999999, "dial9")]
         result = summary(rows)[0]
         self.assertEqual(result["paired_throughput_ratio"], {"median": 1.25, "min": 0.5, "max": 2, "pairs": 2})
         self.assertEqual(result["schema"]["events_per_second_median"], 15)

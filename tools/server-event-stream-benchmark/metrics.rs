@@ -65,7 +65,7 @@ pub fn reset_peak() {
     PEAK.store(LIVE.load(Ordering::Relaxed), Ordering::Relaxed);
 }
 
-pub fn runtime(workers: usize) -> Runtime {
+pub fn runtime_builder(workers: usize) -> Builder {
     let mut builder = Builder::new_multi_thread();
     builder.worker_threads(workers).enable_all();
     #[cfg(feature = "runtime-diagnostics")]
@@ -83,7 +83,12 @@ pub fn runtime(workers: usize) -> Runtime {
                 LogHistogram::builder().max_value(std::time::Duration::from_secs(60)),
             ));
     }
-    builder.build().unwrap()
+    builder
+}
+
+#[cfg_attr(feature = "dial9", allow(dead_code))]
+pub fn runtime(workers: usize) -> Runtime {
+    runtime_builder(workers).build().unwrap()
 }
 
 // Use an OS thread so a blocked Tokio worker cannot also block observation.

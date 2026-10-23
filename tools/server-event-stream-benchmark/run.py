@@ -131,6 +131,8 @@ def runtime_difference(raw):
 
 def binary(cache, protocol, role, mode):
     if mode == "latency":
+        mode = "cpu" if role == "client" else "timing"
+    if mode == "dial9" and role == "client":
         mode = "cpu"
     return cache / "runners" / protocol / role / f"target-{mode}" / "release" / f"stream-bench-{role}"
 
@@ -243,7 +245,10 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
         commands.append(server_command)
         log = (dest / "server.stderr").open("w")
         logs.append(log)
-        server = subprocess.Popen(server_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1)
+        server_env = {**os.environ}
+        if mode == "dial9":
+            server_env["BENCH_DIAL9_TRACE"] = str(dest / "server-trace.bin")
+        server = subprocess.Popen(server_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1, env=server_env)
         ready = line(server)
         if not ready.startswith("READY:"):
             raise RuntimeError(f"Unexpected server readiness: {ready}")
@@ -255,7 +260,9 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
         if not matching:
             raise RuntimeError(f"Missing loopback listener on {port}")
         (dest / "listener.txt").write_text("\n".join(matching) + "\n")
-        latency = mode == "latency" or preflight
+        latency = mode in ("latency", "dial9") or preflight
+        if preflight and mode in ("latency", "dial9"):
+            control(server, "reset")
         window = duplex_window or count
         client_command = ["taskset", "-c", client_cpus, str(binary(cache, protocol, "client", mode)), endpoint, direction, kind, str(size), str(count), str(concurrency), str(warmup), str(seconds), str(preflight).lower(), str(stream_rate), str(latency).lower(), str(window), str(deep_validation).lower()]
         commands.append(client_command)
@@ -267,6 +274,9 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
             result = json.loads(line(client, 60))
             if result["preflight"] != "passed":
                 raise RuntimeError("Preflight failed")
+            if mode in ("latency", "dial9"):
+                result["server_timing"] = control(server, "snapshot")["server_timing"]
+                validate_server_timing(result["server_timing"], 2)
         else:
             if line(client, 60 + warmup) != "WARM":
                 raise RuntimeError("Missing warmup barrier")
@@ -298,6 +308,9 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
             if latency and result["completion"]["samples"] != result["streams"]:
                 raise RuntimeError("Latency histogram omitted completed streams")
             result["server"] = difference(before, after, events, elapsed)
+            if mode in ("latency", "dial9"):
+                result["server_timing"] = after["server_timing"]
+                validate_server_timing(result["server_timing"], result["streams"])
             result["client"] = difference(result.pop("before"), result.pop("after"), events, elapsed)
             result["rss"] = {"idle_kib": idle, "samples": len(sampling), "interval_seconds": 0.1}
             for role in ("server", "client"):
@@ -318,6 +331,14 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
             client.stdin.flush()
         if client.wait(timeout=10) != 0:
             raise RuntimeError("Client failed")
+        # A normal exit drains Tokio workers and seals Dial9's trace. SIGTERM
+        # is reserved for failure cleanup because it skips recorder shutdown.
+        server.stdin.write("quit\n")
+        server.stdin.flush()
+        if server.wait(timeout=15) != 0:
+            raise RuntimeError("Server failed to shut down cleanly")
+        if mode == "dial9":
+            result["dial9"] = trace_artifacts(dest)
         result.update({"protocol": protocol, "side": side, "direction": direction, "kind": kind, "size": size, "events_per_stream": count, "concurrency": concurrency, "mode": mode, "profile": profile})
         write_json(dest / "result.json", result)
         return result
@@ -340,6 +361,30 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
                 probe.settimeout(1)
                 if probe.connect_ex(("127.0.0.1", port)) == 0:
                     raise RuntimeError(f"Benchmark listener {port} is still open")
+
+
+def trace_artifacts(dest):
+    # DiskBuffer treats the requested path as a prefix and seals numbered
+    # segments (server-trace.0.bin, ...), including its single_file preset.
+    paths = sorted(dest.glob("server-trace*.bin"))
+    if not paths or any(p.stat().st_size == 0 for p in paths):
+        raise RuntimeError("Dial9 did not produce a complete trace")
+    artifacts = [{"artifact": str(p), "bytes": p.stat().st_size,
+                  "sha256": digest(p)} for p in paths]
+    return {"artifacts": artifacts, "bytes": sum(p["bytes"] for p in artifacts)}
+
+
+def validate_server_timing(timing, streams):
+    if (timing["requests_started"] != streams
+            or timing["responses_ready"] != streams
+            or timing["bodies_completed"] != streams
+            or timing["active"] or timing["errors"] or timing["aborted"]
+            or timing["statuses"] != {"200": streams}):
+        raise RuntimeError(f"Server timing does not account for all completed streams: {timing}")
+    for name in ("response_ready", "first_frame_ready", "body_complete",
+                 "service_poll_active", "body_poll_active"):
+        if timing[name] is None or timing[name]["samples"] != streams:
+            raise RuntimeError(f"Missing server {name} samples")
 
 
 def paired_interval(ratios):
@@ -426,6 +471,18 @@ def report(dest, rows, comparison="unspecified"):
             continue
         text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["concurrency"]} | {r["side"]} | {r["load_model"]} | {r["offered_streams_per_second"] or "unpaced"} | {r["streams"]} | {r["dispatch_delay"]["p99_ns"] / 1e6:.3f} | {r["completion"]["p99_ns"] / 1e6:.3f} | {r["drain_seconds"]:.3f} |')
     text += ["", "Scheduled-arrival completion/first-event latency includes delay from intended arrival to dispatch. Every scheduled stream is drained; drain time and dispatch lag reveal overload. Fixed-concurrency closed-loop latency only describes that workload. At a fixed offered rate, throughput ratios are achieved completion-rate comparisons, not maximum-capacity ratios."]
+    text += ["", "Server latency in separate instrumented passes:", "",
+             "| Protocol | Direction | Event | Concurrency | Side | Mode | Streams | Response ready p50 ms | First frame p50 ms | Body complete p50 ms | Body complete p99 ms | Service poll active p50 ms | Body poll active p50 ms |",
+             "|---|---|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for r in rows:
+        if r["mode"] not in ("latency", "dial9"):
+            continue
+        t = r["server_timing"]
+        values = [t[name]["p50_ns"] / 1e6 for name in ("response_ready", "first_frame_ready", "body_complete")]
+        values += [t["body_complete"]["p99_ns"] / 1e6]
+        values += [t[name]["p50_ns"] / 1e6 for name in ("service_poll_active", "body_poll_active")]
+        text.append(f'| {r["protocol"]} | {r["direction"]} | {r["kind"]} | {r["concurrency"]} | {r["side"]} | {r["mode"]} | {r["streams"]} | ' + " | ".join(f"{v:.3f}" for v in values) + " |")
+    text += ["", "Server clocks start at HTTP service entry, after Hyper parses request headers and before routing/deserialization. Response ready includes the service future; first frame and body completion include lazy event serialization and backpressure. Completion means EOS handed to Hyper, not socket flush or peer receipt. Active poll durations sum wall time inside service/body polls and exclude time between polls; they are not CPU time. All completed streams must have a timing sample. Dial9 records the same request span across service and body polls; explicit elapsed-nanosecond fields retain wall latency. Its filtered trace files are retained per case and are flushed on graceful shutdown. Instrumented passes do not enter throughput ratios."]
     text += ["", "| Protocol | Direction | Event | Bytes | Concurrency | Legacy server CPU ns/event | Schema server CPU ns/event | Legacy client CPU ns/event | Schema client CPU ns/event |",
              "|---|---|---|---:|---:|---:|---:|---:|---:|"]
     for r in data:
@@ -470,6 +527,7 @@ def main():
     p.add_argument("--server-workers", type=int, default=1)
     p.add_argument("--no-profiles", action="store_true")
     p.add_argument("--seconds", type=float)
+    p.add_argument("--warmup", type=float, help="Override warmup seconds")
     p.add_argument("--pairs", type=int)
     p.add_argument("--concurrency", type=int, nargs="+", help="In-flight stream limits to sweep")
     p.add_argument("--stream-rate", type=float, default=0, help="Scheduled streams/s; 0 selects closed-loop saturation")
@@ -477,6 +535,8 @@ def main():
     p.add_argument("--memory-pairs", type=int, default=3)
     p.add_argument("--deep-validation", action="store_true", help="Include full payload scans in measured work; preflight always checks them")
     p.add_argument("--events-per-stream", type=int, help="Event count per stream (at least two)")
+    p.add_argument("--diagnostics", nargs="*", choices=["memory", "latency", "runtime", "dial9"],
+                   default=["memory", "latency", "runtime", "dial9"], help="Separate diagnostic passes to run")
     a = p.parse_args()
     cache = a.cache.resolve()
     build = validate_build(cache)
@@ -491,9 +551,11 @@ def main():
     dest.mkdir(parents=True, exist_ok=False)
     write_json(dest / "provenance.json", {"build": build, "generation": json.loads((cache / "generation.json").read_text()), "args": vars(a) | {"cache": str(cache), "output": str(dest)}, "topology": topo, "cpuinfo": Path("/proc/cpuinfo").read_text(), "loadavg": Path("/proc/loadavg").read_text(), "uname": list(os.uname())})
     # argparse contains Path objects; saved explicitly above.
-    warmup = 0.2 if a.preset == "smoke" else 5
+    warmup = a.warmup if a.warmup is not None else (0.2 if a.preset == "smoke" else 5)
     seconds = a.seconds if a.seconds is not None else (0.5 if a.preset == "smoke" else 15)
     pairs = a.pairs if a.pairs is not None else (1 if a.preset == "smoke" else 10)
+    if not math.isfinite(warmup) or warmup < 0:
+        p.error("--warmup must be finite and nonnegative")
     if not math.isfinite(seconds) or seconds <= 0 or pairs <= 0:
         p.error("--seconds and --pairs must be positive")
     count = a.events_per_stream or (8 if a.preset == "smoke" else 1024)
@@ -517,8 +579,9 @@ def main():
         return case(cache, dest / f"{index:04d}", server_cpus=a.server_cpus, client_cpus=a.client_cpus, workers=a.server_workers, **kwargs)
 
     try:
-        for protocol, side, direction, kind in itertools.product(PROTOCOLS, ("legacy", "schema"), ("upload", "download", "duplex"), ("structured", "binary")):
-            execute(protocol=protocol, side=side, direction=direction, kind=kind, size=64, count=4, concurrency=1, warmup=0, seconds=0, mode="cpu", preflight=True)
+        preflight_modes = ["cpu"] + [m for m in ("latency", "dial9") if m in a.diagnostics]
+        for protocol, side, direction, kind, mode in itertools.product(PROTOCOLS, ("legacy", "schema"), ("upload", "download", "duplex"), ("structured", "binary"), preflight_modes):
+            execute(protocol=protocol, side=side, direction=direction, kind=kind, size=64, count=4, concurrency=1, warmup=0, seconds=0, mode=mode, preflight=True)
         for protocol, direction, kind, size, parallel in itertools.product(PROTOCOLS, ("upload", "download", "duplex"), ("structured", "binary"), sizes, concurrency):
             args = dict(protocol=protocol, direction=direction, kind=kind, size=size, count=count, concurrency=parallel, warmup=warmup, seconds=seconds, stream_rate=a.stream_rate, duplex_window=a.duplex_window, deep_validation=a.deep_validation)
             for pair in range(pairs):
@@ -528,14 +591,15 @@ def main():
                     write_json(dest / f"{index:04d}" / "result.json", row)
                     rows.append(row)
                     write_json(dest / "results.json", rows)
-            for pair in range(1 if a.preset == "smoke" else a.memory_pairs):
+            for pair in range((1 if a.preset == "smoke" else a.memory_pairs) if "memory" in a.diagnostics else 0):
                 for side in (("legacy", "schema") if pair % 2 == 0 else ("schema", "legacy")):
                     row = execute(**args, side=side, mode="memory")
                     row["pair"] = pair
                     rows.append(row)
             for side in ("legacy", "schema"):
-                rows.append(execute(**args, side=side, mode="latency"))
-                rows.append(execute(**args, side=side, mode="runtime"))
+                for mode in ("latency", "runtime", "dial9"):
+                    if mode in a.diagnostics:
+                        rows.append(execute(**args, side=side, mode=mode))
             if direction == "duplex" and parallel == concurrency[-1] and size == 1024 and not a.no_profiles:
                 for profile, side in itertools.product(("stat", "record"), ("legacy", "schema")):
                     rows.append(execute(**args, side=side, mode="profile", profile=profile))

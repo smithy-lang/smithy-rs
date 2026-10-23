@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 mod events;
 mod metrics;
+#[cfg(feature = "server-timing")]
+mod timing;
 use bench_sdk::{input, output, BenchmarkService, BenchmarkServiceConfig};
 use std::io::{BufRead, Write};
 
@@ -12,10 +14,38 @@ fn main() {
         .parse()
         .unwrap();
     let deep_validation = std::env::args().nth(2).as_deref() == Some("true");
+    #[cfg(not(feature = "dial9"))]
     let runtime = metrics::runtime(workers);
+    #[cfg(feature = "dial9")]
+    let (recorder, runtime) = {
+        use dial9::{Dial9HandleTokioExt, DiskBuffer, TokioAttachOptions};
+        use dial9_utils::tracing_layer::Dial9TracingLayer;
+        use tracing_subscriber::prelude::*;
+        let path = std::env::var("BENCH_DIAL9_TRACE").expect("BENCH_DIAL9_TRACE is required");
+        let recorder = dial9::recorder(DiskBuffer::single_file(path).unwrap()).build();
+        let builder = metrics::runtime_builder(workers);
+        let runtime = recorder
+            .handle()
+            .attach_tokio_runtime(builder, TokioAttachOptions::default())
+            .unwrap();
+        tracing_subscriber::registry()
+            .with(
+                Dial9TracingLayer::new().with_filter(tracing_subscriber::filter::filter_fn(
+                    |metadata| metadata.is_span() && metadata.fields().field("dial9").is_some(),
+                )),
+            )
+            .init();
+        (recorder, runtime)
+    };
+    #[cfg(feature = "server-timing")]
+    let timings = std::sync::Arc::new(timing::Timings::default());
+    #[cfg(feature = "server-timing")]
+    let control_timings = timings.clone();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     #[cfg(feature = "runtime-diagnostics")]
     let runtime_metrics = runtime.metrics();
     std::thread::spawn(move || {
+        let mut shutdown_tx = Some(shutdown_tx);
         #[cfg(feature = "runtime-diagnostics")]
         let mut monitor: Option<metrics::RuntimeMonitor> = None;
         for line in std::io::stdin().lock().lines() {
@@ -28,10 +58,16 @@ fn main() {
                         snapshot["tokio_runtime"] =
                             monitor.take().expect("reset before snapshot").finish();
                     }
+                    #[cfg(feature = "server-timing")]
+                    {
+                        snapshot["server_timing"] = control_timings.snapshot();
+                    }
                     println!("{snapshot}");
                 }
                 "reset" => {
                     metrics::reset_peak();
+                    #[cfg(feature = "server-timing")]
+                    control_timings.reset();
                     #[cfg(feature = "runtime-diagnostics")]
                     {
                         assert!(monitor.is_none());
@@ -39,7 +75,10 @@ fn main() {
                     }
                     println!("{}", metrics::snapshot());
                 }
-                "quit" => std::process::exit(0),
+                "quit" => {
+                    let _ = shutdown_tx.take().unwrap().send(());
+                    break;
+                }
                 _ => panic!("unknown control command"),
             }
             std::io::stdout().flush().unwrap();
@@ -89,8 +128,21 @@ fn main() {
         let listener = listener.tap_io(|stream| {
             let _ = stream.set_nodelay(true);
         });
-        bench_sdk::serve(listener, app.into_make_service())
+        #[cfg(feature = "server-timing")]
+        let make_service = bench_sdk::server::routing::IntoMakeService::new(
+            timing::TimingService::new(app, timings),
+        );
+        #[cfg(not(feature = "server-timing"))]
+        let make_service = app.into_make_service();
+        bench_sdk::serve(listener, make_service)
             .configure_hyper(|builder| builder.http2_only())
+            .with_graceful_shutdown(async { let _ = shutdown_rx.await; })
             .await.unwrap();
     });
+    #[cfg(feature = "dial9")]
+    {
+        // Flush worker-local buffers before sealing the final trace segment.
+        drop(runtime);
+        recorder.graceful_shutdown(std::time::Duration::from_secs(5));
+    }
 }

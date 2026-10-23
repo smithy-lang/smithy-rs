@@ -101,7 +101,7 @@ The representative preset runs both protocols, all three directions, both event
 types, 1 KiB payloads, concurrency 1/4/16, and 1,024 events per stream. Defaults
 are 5 seconds warmup, 15 seconds measurement, and ten paired throughput
 repetitions with alternating order. Allocation runs repeat three times per side,
-also alternating order. Latency, Tokio runtime diagnostics and profiling are separate passes. This is a
+also alternating order. Latency, Dial9 traces, Tokio runtime diagnostics and profiling are separate passes. This is a
 multi-hour experiment; use explicit smaller settings for diagnostic runs.
 
 `smoke` uses eight events per stream, concurrency 1, 0.2-second warmup,
@@ -110,6 +110,64 @@ not statistically meaningful. `full` additionally sweeps 64-byte and 64-KiB
 payloads. `--seconds`, `--pairs`, `--memory-pairs`, `--concurrency`, and
 `--no-profiles` control the experiment. `--events-per-stream` overrides stream
 length, making stream-start overhead and long-stream steady-state costs explicit.
+`--warmup` overrides the warmup interval. `--diagnostics` selects the separate
+passes (`memory latency runtime dial9` by default). For a shorter server-timing
+experiment that retains ten throughput pairs:
+
+```sh
+python3 tools/server-event-stream-benchmark/build.py --modes cpu timing dial9
+python3 tools/server-event-stream-benchmark/run.py --preset representative \
+  --warmup 1 --seconds 2 --pairs 10 --concurrency 1 \
+  --diagnostics latency dial9 --no-profiles
+```
+
+### Server timing and Dial9
+
+Latency passes use a separate server binary with the same outer HTTP service
+and response-body wrappers for generated serde and schema serde. The shared
+client uses its ordinary binary. Server measurement starts when Hyper calls
+the HTTP service, after parsing request headers and before routing and input
+deserialization. Histograms retain sample count, p50/p95/p99 and maximum:
+
+- `response_ready`: time until the service returns response headers and a body.
+- `first_frame_ready`: time until the first serialized data frame is handed to Hyper.
+- `body_complete`: time until response-body end of stream is handed to Hyper.
+- `service_poll_active` and `body_poll_active`: summed wall time inside the
+  response future and response-body polls. These exclude time between polls
+  but include blocking or preemption during a poll; they are not CPU time.
+
+Download and duplex serialization is lazy: returning the response does not end
+the request timer. The body wrapper forwards frames, errors, trailers, size
+hints and end-of-stream state. Known end-of-stream on a final frame completes
+the timer even if Hyper skips another poll. Empty responses, errors and
+abandoned responses are accounted for separately. Each request retains its
+measurement window across a reset, and warmup is excluded from histograms.
+Normal measured runs require exactly one complete set of server samples per
+client-completed stream, zero active/error/aborted requests, and HTTP 200.
+Correctness preflight also runs with both diagnostic wrappers enabled.
+
+These boundaries measure serialized output availability, not socket flush or
+peer receipt. Streaming wall latency includes client pacing and HTTP/2
+backpressure. Client end-to-end latency and per-process CPU remain complementary
+measurements.
+
+Dial9 uses pinned `dial9` and `dial9-utils` 0.5.5 dependencies. Its separate server
+binary builds with `--cfg tokio_unstable`, attaches the recorder to a Tokio
+runtime with the requested worker count, and installs `Dial9TracingLayer`.
+The layer captures only spans declaring the `dial9` marker; the benchmark's
+`server_request` span covers service and body polling and records explicit
+response/first-frame/completion elapsed nanoseconds and outcome. It is entered
+per poll, never held across an await. Runtime traces can also include warmup;
+benchmark request spans and timing histograms start at the measurement reset.
+CPU and memory sampling are not enabled by this mode.
+
+The runner sets `BENCH_DIAL9_TRACE` to each case's `server-trace.bin` prefix;
+Dial9 seals numbered files such as `server-trace.0.bin`. All segments stay
+on the benchmark host. After the client exits, the controller requests graceful
+server shutdown; the server drops Tokio workers and drains the recorder before
+exiting. A missing trace or failed shutdown fails the case. Artifact path, size
+and SHA-256 are saved in `result.json`. Diagnostic throughput is excluded from
+the paired throughput comparison.
 
 ### Load models and why this is not stock wrk2
 
