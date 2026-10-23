@@ -1,6 +1,9 @@
 [package]
 name = "aws-smithy-lang"
 version = "0.1.0"
+# Still working out exactly where this crate will live, what its name will be, etc.
+# avoiding publishing for now
+publish = false
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models."
 edition = "2021"
@@ -9,7 +12,12 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [features]
-# Builds runtime `aws-smithy-schema` schemas from a `Model`. See `runtime_schema`.
+# Builds runtime `aws-smithy-schema` schemas from a `Model`. See `runtime_schema` module docs.
+# Optional so that model tooling (loading, validating, inspecting) does not depend on the
+# Smithy runtime: enabling it adds `aws-smithy-schema` and, through it,
+# `aws-smithy-runtime-api`, `aws-smithy-types`, `http`, and `tokio`.
+# Also in the future the aws-smithy-lang crate might live in another repo and this
+# functionality might end up in a bridge crate.
 runtime-schema = ["dep:aws-smithy-schema"]
 
 [dependencies]
