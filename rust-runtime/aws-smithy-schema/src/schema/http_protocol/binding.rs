@@ -655,14 +655,6 @@ impl<'a> BindingState<'a> {
     }
 }
 
-/// Resolves an `@httpHeader` name into the `Cow<'static, str>` that
-/// `Headers::insert` requires.
-///
-/// `value_static()` is `Some` for every schema that can be built today — the
-/// only `@httpHeader` constructor takes `&'static str` — so this is a
-/// zero-allocation borrow in practice. The owned arm exists so that relaxing
-/// `@httpHeader` to accept arena-borrowed names stays an additive change
-/// instead of breaking this call site.
 /// Inserts a header bound to `member`, returning an error rather than panicking when the
 /// name or value is not a valid HTTP header component.
 ///
@@ -677,14 +669,72 @@ fn insert_header(
     member: &Schema<'_>,
     location: std::fmt::Arguments<'_>,
 ) -> Result<(), SerdeError> {
-    headers.try_insert(name, value).map(|_| ()).map_err(|err| {
-        SerdeError::invalid_input(format!(
-            "cannot serialize {} to {location}: {err}",
-            member.member_name().unwrap_or("member"),
-        ))
-    })
+    headers
+        .try_insert(name, value)
+        .map(|_| ())
+        .map_err(|err| header_error(member, location, err))
 }
 
+#[cold]
+fn header_error(
+    member: &Schema<'_>,
+    location: std::fmt::Arguments<'_>,
+    err: aws_smithy_runtime_api::http::HttpError,
+) -> SerdeError {
+    SerdeError::invalid_input(format!(
+        "cannot serialize {} to {location}: {err}",
+        member.member_name().unwrap_or("member"),
+    ))
+}
+
+/// The parsed [`http::HeaderName`] of a member's `@httpHeader`, cached on the member schema.
+///
+/// `Headers` converts a string name into an `http::HeaderName` on every insert. For a
+/// non-standard name, such as any `x-amz-*` header, that copies the name into a new
+/// allocation, and a name with an uppercase letter is copied once more first. Cloning a
+/// cached `HeaderName` only bumps a reference count.
+///
+/// `None` when the member has no `@httpHeader`, or its name is not a valid header name. In
+/// the second case [`insert_bound_header`] falls back to the string path, which reports the
+/// error.
+pub(crate) static HTTP_HEADER_NAME: crate::extension::SchemaExtensionKey<Option<http::HeaderName>> =
+    crate::extension::SchemaExtensionKey::new(|member| {
+        member
+            .http_header()
+            .and_then(|header| http::HeaderName::try_from(header.value()).ok())
+    });
+
+/// Inserts a value for a member bound with `@httpHeader`, using the member's cached
+/// [`HTTP_HEADER_NAME`].
+fn insert_bound_header(
+    headers: &mut Headers,
+    member: &Schema<'_>,
+    header: &crate::traits::HttpHeaderTrait<'_>,
+    value: String,
+) -> Result<(), SerdeError> {
+    match member.extension(&HTTP_HEADER_NAME) {
+        Some(name) => headers
+            .try_insert(name.clone(), value)
+            .map(|_| ())
+            .map_err(|err| header_error(member, format_args!("header `{}`", header.value()), err)),
+        None => insert_header(
+            headers,
+            header_name(header),
+            value,
+            member,
+            format_args!("header `{}`", header.value()),
+        ),
+    }
+}
+
+/// Resolves an `@httpHeader` name into the `Cow<'static, str>` that
+/// `Headers::insert` requires, for a member with no cached [`HTTP_HEADER_NAME`].
+///
+/// `value_static()` is `Some` for every schema that can be built today — the
+/// only `@httpHeader` constructor takes `&'static str` — so this is a
+/// zero-allocation borrow in practice. The owned arm exists so that relaxing
+/// `@httpHeader` to accept arena-borrowed names stays an additive change
+/// instead of breaking this call site.
 fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str> {
     match header.value_static() {
         Some(name) => Cow::Borrowed(name),
@@ -729,6 +779,10 @@ struct Proxy<'p, 'a> {
 }
 
 impl<'p, 'a> SerializableStruct for Proxy<'p, 'a> {
+    fn schema(&self) -> &Schema<'_> {
+        self.value.schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         // Returning an error rather than panicking: this is unreachable with
         // every codec in this repo, because a codec that nests
@@ -803,13 +857,7 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            insert_header(
-                self.state.headers,
-                header_name(header),
-                header_val,
-                schema,
-                format_args!("header `{}`", header.value()),
-            )?;
+            insert_bound_header(self.state.headers, schema, header, header_val)?;
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -1012,13 +1060,7 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
             let header = schema.http_header().unwrap();
-            insert_header(
-                self.state.headers,
-                header_name(header),
-                encoded,
-                schema,
-                format_args!("header `{}`", header.value()),
-            )?;
+            insert_bound_header(self.state.headers, schema, header, encoded)?;
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -1111,17 +1153,8 @@ impl<'a> BindingState<'a> {
         }
         match binding {
             HttpBinding::Header => {
-                // `Headers::insert` needs a `'static` name; `header_name`
-                // recovers one from the trait, which is a zero-allocation
-                // borrow for every schema constructible today.
                 if let Some(header) = schema.http_header() {
-                    insert_header(
-                        self.headers,
-                        header_name(header),
-                        value.to_string(),
-                        schema,
-                        format_args!("header `{}`", header.value()),
-                    )?;
+                    insert_bound_header(self.headers, schema, header, value.to_string())?;
                 }
             }
             HttpBinding::Query => {
@@ -1743,6 +1776,10 @@ mod tests {
 
     struct EmptyStruct;
     impl SerializableStruct for EmptyStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &TEST_SCHEMA
+        }
+
         fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1763,6 +1800,10 @@ mod tests {
 
     struct NameStruct;
     impl SerializableStruct for NameStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &STRUCT_WITH_MEMBER
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&NAME_MEMBER, "Alice")
         }
@@ -2070,6 +2111,10 @@ mod tests {
 
         struct HeaderOnlyStruct;
         impl SerializableStruct for HeaderOnlyStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &HEADER_ONLY_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&HEADER_MEMBER, "hello")
             }
@@ -2140,6 +2185,10 @@ mod tests {
     /// codec wrapped it as well.
     struct StructPayloadStruct;
     impl SerializableStruct for StructPayloadStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &STRUCT_PAYLOAD_UNKNOWN
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_struct(&STRUCT_PAYLOAD_MEMBER, &NameStruct)
         }
@@ -2303,6 +2352,10 @@ mod tests {
     }
 
     impl SerializableStruct for LocallyComputedPayload {
+        fn schema(&self) -> &Schema<'_> {
+            &STRING_PAYLOAD_STRUCT
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             if self.blob {
                 // Heap-allocated here and freed at the end of this scope.
@@ -2364,6 +2417,10 @@ mod tests {
     fn blob_payload_reaches_the_body_without_copying() {
         struct OwnedBlobPayload(aws_smithy_types::Blob);
         impl SerializableStruct for OwnedBlobPayload {
+            fn schema(&self) -> &Schema<'_> {
+                &BLOB_PAYLOAD_STRUCT
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_blob(&BLOB_PAYLOAD_MEMBER, self.0.clone())
             }
@@ -2463,6 +2520,10 @@ mod tests {
 
     struct HeaderStruct;
     impl SerializableStruct for HeaderStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &HEADER_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&HEADER_MEMBER, "my-token-value")
         }
@@ -2495,6 +2556,9 @@ mod tests {
         );
         struct ListStruct;
         impl SerializableStruct for ListStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &LIST_SCHEMA
+            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_list(&LIST_MEMBER, &|e| {
                     for v in ["plain", " a", "b ", "(x)", "c,d", "q\"q"] {
@@ -2524,8 +2588,8 @@ mod tests {
     /// for a name a dynamic client would intern once at model-load time.
     ///
     /// This is what the `@httpHeader` constructor pin costs and what it still
-    /// permits: a non-`'static` schema binds headers fine, and the insert stays
-    /// allocation-free because `value_static()` is `Some`.
+    /// permits: a non-`'static` schema binds headers fine, and its cached
+    /// `HeaderName` is freed with the schema.
     #[test]
     fn http_header_on_a_runtime_built_schema() {
         // Structural strings: owned locally, dropped at end of scope. The
@@ -2558,20 +2622,29 @@ mod tests {
             &members,
         );
 
-        struct RuntimeStruct<'a>(&'a Schema<'a>, &'a str);
+        struct RuntimeStruct<'a> {
+            schema: &'a Schema<'a>,
+            member: &'a Schema<'a>,
+            value: &'a str,
+        }
         impl SerializableStruct for RuntimeStruct<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                self.schema
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-                s.write_string(self.0, self.1)
+                s.write_string(self.member, self.value)
             }
         }
+        let input = RuntimeStruct {
+            schema: &schema,
+            member: &member,
+            value: &arena[1],
+        };
+        assert!(std::ptr::eq(input.schema(), &schema));
 
         let request = make_protocol()
-            .serialize_request(
-                &RuntimeStruct(&member, &arena[1]),
-                &schema,
-                "https://example.com",
-                &ConfigBag::base(),
-            )
+            .serialize_request(&input, &schema, "https://example.com", &ConfigBag::base())
             .unwrap();
 
         assert_eq!(
@@ -2596,6 +2669,10 @@ mod tests {
 
     struct IntHeaderStruct;
     impl SerializableStruct for IntHeaderStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &INT_HEADER_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_HEADER_MEMBER, 3)
         }
@@ -2630,6 +2707,10 @@ mod tests {
 
     struct BoolHeaderStruct;
     impl SerializableStruct for BoolHeaderStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &BOOL_HEADER_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_boolean(&BOOL_HEADER_MEMBER, true)
         }
@@ -2662,6 +2743,10 @@ mod tests {
 
     struct QueryStruct;
     impl SerializableStruct for QueryStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &QUERY_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&QUERY_MEMBER, "blue")
         }
@@ -2692,6 +2777,10 @@ mod tests {
 
     struct IntQueryStruct;
     impl SerializableStruct for IntQueryStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &INT_QUERY_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_QUERY_MEMBER, 42)
         }
@@ -2726,6 +2815,10 @@ mod tests {
 
     struct MultiQueryStruct;
     impl SerializableStruct for MultiQueryStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &MULTI_QUERY_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&Q1, "x")?;
             s.write_string(&Q2, "y")
@@ -2751,6 +2844,10 @@ mod tests {
     fn http_query_percent_encodes_values() {
         struct SpaceQueryStruct;
         impl SerializableStruct for SpaceQueryStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &QUERY_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&QUERY_MEMBER, "hello world")
             }
@@ -2784,6 +2881,10 @@ mod tests {
 
     struct LabelStruct;
     impl SerializableStruct for LabelStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &LABEL_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&LABEL_MEMBER, "my-bucket")
         }
@@ -2806,6 +2907,10 @@ mod tests {
     fn http_label_percent_encodes() {
         struct SpecialLabelStruct;
         impl SerializableStruct for SpecialLabelStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &LABEL_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&LABEL_MEMBER, "my bucket/name")
             }
@@ -2837,6 +2942,10 @@ mod tests {
 
     struct IntLabelStruct;
     impl SerializableStruct for IntLabelStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &INT_LABEL_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_integer(&INT_LABEL_MEMBER, 123)
         }
@@ -2916,6 +3025,9 @@ mod tests {
         ));
         struct Get(&'static str);
         impl SerializableStruct for Get {
+            fn schema(&self) -> &Schema<'_> {
+                &GET_SCHEMA
+            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&BUCKET, self.0)?;
                 s.write_string(&KEY, "my-key")
@@ -2966,6 +3078,10 @@ mod tests {
 
     struct CombinedStruct;
     impl SerializableStruct for CombinedStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &COMBINED_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&COMBINED_LABEL, "item-42")?;
             s.write_string(&COMBINED_HEADER, "secret")?;
@@ -3011,6 +3127,10 @@ mod tests {
 
     struct PrefixHeaderStruct;
     impl SerializableStruct for PrefixHeaderStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &PREFIX_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_map(&PREFIX_MEMBER, &|s| {
                 s.write_string(&STRING, "Color")?;
@@ -3040,6 +3160,9 @@ mod tests {
     fn serialize_prefix_entry(key: &'static str, value: &'static str) -> Result<(), SerdeError> {
         struct Entry(&'static str, &'static str);
         impl SerializableStruct for Entry {
+            fn schema(&self) -> &Schema<'_> {
+                &PREFIX_SCHEMA
+            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_map(&PREFIX_MEMBER, &|s| {
                     s.write_string(&STRING, self.0)?;
@@ -3084,6 +3207,9 @@ mod tests {
     fn invalid_header_value_is_an_error_not_a_panic() {
         struct Scalar;
         impl SerializableStruct for Scalar {
+            fn schema(&self) -> &Schema<'_> {
+                &HEADER_SCHEMA
+            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&HEADER_MEMBER, "secret\r\ninjected: 1")
             }
@@ -3098,6 +3224,9 @@ mod tests {
         );
         struct List;
         impl SerializableStruct for List {
+            fn schema(&self) -> &Schema<'_> {
+                &LIST_SCHEMA
+            }
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_list(&LIST_MEMBER, &|e| {
                     e.write_string(&STRING, "ok")?;
@@ -3120,6 +3249,101 @@ mod tests {
         }
     }
 
+    /// A modeled header name that `http` rejects has no cached `HeaderName`, so the insert
+    /// falls back to the string path, which reports the error. It must do so on every
+    /// request, not only the one that first computed the cache entry.
+    #[test]
+    fn invalid_modeled_header_name_is_an_error_not_a_panic() {
+        static BAD_MEMBER: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "B"), ShapeType::String, "bad", 0)
+                .with_http_header("has space");
+        static BAD_SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "B"),
+            ShapeType::Structure,
+            &[&BAD_MEMBER],
+        );
+        struct Bad;
+        impl SerializableStruct for Bad {
+            fn schema(&self) -> &Schema<'_> {
+                &BAD_SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&BAD_MEMBER, "value")
+            }
+        }
+        let protocol = make_protocol();
+        for _ in 0..2 {
+            let err = protocol
+                .serialize_request(&Bad, &BAD_SCHEMA, "https://example.com", &ConfigBag::base())
+                .expect_err("an invalid header name must be rejected");
+            let message = err.to_string();
+            assert!(message.contains("bad to header `has space`"), "{message}");
+        }
+    }
+
+    /// Scalar, list and blob headers all insert the member's cached `HeaderName`. A second
+    /// request reuses the cached names and must produce the same headers.
+    #[test]
+    fn cached_header_names_are_reused_by_every_header_write() {
+        static SCALAR: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "H"),
+            ShapeType::String,
+            "scalar",
+            0,
+        )
+        .with_http_header("X-Amz-Scalar");
+        static LIST: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "H"), ShapeType::List, "list", 1)
+                .with_http_header("x-amz-list");
+        static BLOB: Schema<'static> =
+            Schema::new_member(crate::shape_id!("test", "H"), ShapeType::Blob, "blob", 2)
+                .with_http_header("Content-MD5");
+        static SCHEMA: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "H"),
+            ShapeType::Structure,
+            &[&SCALAR, &LIST, &BLOB],
+        );
+        struct Headers3;
+        impl SerializableStruct for Headers3 {
+            fn schema(&self) -> &Schema<'_> {
+                &SCHEMA
+            }
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&SCALAR, "one")?;
+                s.write_list(&LIST, &|e| {
+                    e.write_string(&STRING, "a")?;
+                    e.write_string(&STRING, "b")
+                })?;
+                s.write_blob(&BLOB, aws_smithy_types::Blob::new("md5"))
+            }
+        }
+        let protocol = make_protocol();
+        for _ in 0..2 {
+            let request = protocol
+                .serialize_request(
+                    &Headers3,
+                    &SCHEMA,
+                    "https://example.com",
+                    &ConfigBag::base(),
+                )
+                .unwrap();
+            let mut headers: Vec<_> = request
+                .headers()
+                .iter()
+                .filter(|(name, _)| !name.starts_with("content-type"))
+                .collect();
+            headers.sort();
+            assert_eq!(
+                headers,
+                [
+                    ("content-md5", "bWQ1"),
+                    ("x-amz-list", "a, b"),
+                    ("x-amz-scalar", "one"),
+                ]
+            );
+        }
+    }
+
     // -- @httpQueryParams tests --
 
     static QUERY_PARAMS_MEMBER: Schema<'static> =
@@ -3134,6 +3358,10 @@ mod tests {
 
     struct QueryParamsStruct;
     impl SerializableStruct for QueryParamsStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &QUERY_PARAMS_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_map(&QUERY_PARAMS_MEMBER, &|s| {
                 s.write_string(&STRING, "page")?;
@@ -3176,6 +3404,10 @@ mod tests {
 
     struct TimestampHeaderStruct;
     impl SerializableStruct for TimestampHeaderStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &TS_HEADER_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_timestamp(&TS_HEADER_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
         }
@@ -3214,6 +3446,10 @@ mod tests {
 
     struct TimestampQueryStruct;
     impl SerializableStruct for TimestampQueryStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &TS_QUERY_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_timestamp(&TS_QUERY_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
         }
@@ -3258,6 +3494,10 @@ mod tests {
 
     struct MixedStruct;
     impl SerializableStruct for MixedStruct {
+        fn schema(&self) -> &Schema<'_> {
+            &MIXED_SCHEMA
+        }
+
         fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             s.write_string(&BOUND_MEMBER, "in-header")?;
             s.write_string(&UNBOUND_MEMBER, "in-body")

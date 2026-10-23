@@ -131,10 +131,8 @@ impl JsonSerializer {
         // `@xmlName` for the XML codec), but that member's name is a
         // *position label* — not a JSON field key.
         if self.in_struct_context {
-            if let Some(name) = self.field_name(schema) {
-                self.output.push('"');
-                self.output.push_str(&crate::escape::escape_string(name));
-                self.output.push_str("\":");
+            if let Some(key) = self.settings.member_key(schema) {
+                self.output.push_str(key);
             }
         }
         self.needs_comma = true;
@@ -144,11 +142,6 @@ impl JsonSerializer {
         if self.map_depth > 0 {
             self.expecting_map_key = true;
         }
-    }
-
-    /// Resolves the JSON field name for a member schema.
-    fn field_name<'a>(&self, schema: &'a Schema<'a>) -> Option<&'a str> {
-        self.settings.member_to_field(schema)
     }
 
     /// Gets the timestamp format to use, respecting @timestampFormat trait.
@@ -760,6 +753,21 @@ mod tests {
 
         struct TestObject;
         impl SerializableStruct for TestObject {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Struct"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[
+                        &ACTIVE_MEMBER,
+                        &NAME_MEMBER,
+                        &COUNT_MEMBER,
+                        &PRICE_MEMBER,
+                        &ITEMS_MEMBER,
+                    ],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_boolean(&ACTIVE_MEMBER, true)?;
                 s.write_string(&NAME_MEMBER, "test")?;
@@ -873,6 +881,15 @@ mod tests {
 
         struct AddressStruct;
         impl SerializableStruct for AddressStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Address"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&STREET, &CITY, &ZIP],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&STREET, "123 Main St")?;
                 s.write_string(&CITY, "Seattle")?;
@@ -888,6 +905,15 @@ mod tests {
             active: bool,
         }
         impl SerializableStruct for CompanyStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Company"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&COMP_NAME, &EMPLOYEES, &METADATA, &ACTIVE],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&COMP_NAME, self.name)?;
                 s.write_list(&EMPLOYEES, &|s| {
@@ -910,6 +936,15 @@ mod tests {
 
         struct UserStruct;
         impl SerializableStruct for UserStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "User"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&ID, &NAME, &SCORES, &ADDRESS, &COMPANIES, &TAGS],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_long(&ID, 12345)?;
                 s.write_string(&NAME, "John Doe")?;
@@ -989,6 +1024,15 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "MyStruct"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&FOO_MEMBER, &BAR_MEMBER],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&FOO_MEMBER, "hello")?;
                 s.write_integer(&BAR_MEMBER, 42)?;
@@ -1038,22 +1082,36 @@ mod tests {
         )
         .with_json_name(&arena[1]);
 
-        struct RuntimeStruct<'a>(&'a Schema<'a>);
-        impl SerializableStruct for RuntimeStruct<'_> {
-            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-                s.write_integer(self.0, 42)
-            }
-        }
-
-        let struct_schema = Schema::new(
+        // The struct schema is runtime-built too, so the value reports it by borrowing.
+        let members = [&bar_member];
+        let struct_schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Structure,
+            &members,
         );
+
+        struct RuntimeStruct<'a> {
+            schema: &'a Schema<'a>,
+            member: &'a Schema<'a>,
+        }
+        impl SerializableStruct for RuntimeStruct<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                self.schema
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(self.member, 42)
+            }
+        }
+        let value = RuntimeStruct {
+            schema: &struct_schema,
+            member: &bar_member,
+        };
+        assert!(std::ptr::eq(value.schema(), &struct_schema));
 
         // The runtime @jsonName must win over the runtime member name.
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
-        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
-            .unwrap();
+        ser.write_struct(&struct_schema, &value).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"RuntimeBaz":42}"#);
 
@@ -1061,10 +1119,118 @@ mod tests {
         let mut ser = JsonSerializer::new(Arc::new(
             JsonCodecSettings::builder().use_json_name(false).build(),
         ));
-        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
-            .unwrap();
+        ser.write_struct(&struct_schema, &value).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"bar":42}"#);
+    }
+
+    /// Field names are escaped once, when their key is cached on the schema. A member
+    /// name or `@jsonName` that needs escaping must still produce valid JSON, on the
+    /// first serialization and on later ones that reuse the cached key.
+    #[test]
+    fn cached_field_keys_are_escaped() {
+        use aws_smithy_schema::serde::SerializableStruct;
+
+        let names: Vec<String> = vec![
+            String::from("quote\"d"),         // member name
+            String::from("back\\slash"),      // member name
+            String::from("line\nbreak\u{1}"), // @jsonName
+        ];
+        let quoted = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Escapes"),
+            ShapeType::String,
+            &names[0],
+            0,
+        );
+        let renamed = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Escapes"),
+            ShapeType::String,
+            &names[1],
+            1,
+        )
+        .with_json_name(&names[2]);
+        let members = [&quoted, &renamed];
+        let struct_schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Escapes"),
+            ShapeType::Structure,
+            &members,
+        );
+
+        struct Escapes<'a>(&'a Schema<'a>, &'a Schema<'a>, &'a Schema<'a>);
+        impl SerializableStruct for Escapes<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                self.0
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(self.1, "a")?;
+                s.write_string(self.2, "b")
+            }
+        }
+        let value = Escapes(&struct_schema, &quoted, &renamed);
+
+        for _ in 0..2 {
+            let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+            ser.write_struct(&struct_schema, &value).unwrap();
+            let output = String::from_utf8(ser.finish()).unwrap();
+            assert_eq!(output, r#"{"quote\"d":"a","line\nbreak\u0001":"b"}"#);
+            let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+            assert_eq!(parsed["quote\"d"], "a");
+            assert_eq!(parsed["line\nbreak\u{1}"], "b");
+
+            let mut ser = JsonSerializer::new(Arc::new(
+                JsonCodecSettings::builder().use_json_name(false).build(),
+            ));
+            ser.write_struct(&struct_schema, &value).unwrap();
+            let output = String::from_utf8(ser.finish()).unwrap();
+            assert_eq!(output, r#"{"quote\"d":"a","back\\slash":"b"}"#);
+        }
+    }
+
+    /// A schema is shared by every codec in the process, so the key cached on it must
+    /// not depend on the settings of whichever codec reached it first. The existing
+    /// `@jsonName` test reaches its schemas with `use_json_name(true)` first; this one
+    /// starts with `use_json_name(false)`.
+    #[test]
+    fn cached_field_keys_do_not_depend_on_which_codec_was_first() {
+        use aws_smithy_schema::serde::SerializableStruct;
+
+        static RENAMED: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "FirstCodec"),
+            ShapeType::String,
+            "memberName",
+            0,
+        )
+        .with_json_name("wireName");
+        static STRUCT: Schema<'static> = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "FirstCodec"),
+            ShapeType::Structure,
+            &[&RENAMED],
+        );
+
+        struct FirstCodec;
+        impl SerializableStruct for FirstCodec {
+            fn schema(&self) -> &Schema<'_> {
+                &STRUCT
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&RENAMED, "v")
+            }
+        }
+
+        let serialize = |use_json_name: bool| {
+            let mut ser = JsonSerializer::new(Arc::new(
+                JsonCodecSettings::builder()
+                    .use_json_name(use_json_name)
+                    .build(),
+            ));
+            ser.write_struct(&STRUCT, &FirstCodec).unwrap();
+            String::from_utf8(ser.finish()).unwrap()
+        };
+        assert_eq!(serialize(false), r#"{"memberName":"v"}"#);
+        assert_eq!(serialize(true), r#"{"wireName":"v"}"#);
+        assert_eq!(serialize(false), r#"{"memberName":"v"}"#);
     }
 
     #[test]
@@ -1088,6 +1254,10 @@ mod tests {
 
         struct Inner;
         impl SerializableStruct for Inner {
+            fn schema(&self) -> &Schema<'_> {
+                &INNER_SCHEMA
+            }
+
             fn serialize_members(
                 &self,
                 ser: &mut dyn ShapeSerializer,
@@ -1236,6 +1406,15 @@ mod tests {
 
         struct Outer;
         impl SerializableStruct for Outer {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "Outer"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&A, &B, &C],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&A, "1")?;
                 s.write_map(&B, &|s| {
@@ -1258,7 +1437,7 @@ mod tests {
         assert_eq!(output, r#"{"a":"1","b":{"k":"v"},"c":"2"}"#);
     }
 
-    /// `@jsonName` is part of the same `field_name(schema)` resolution
+    /// `@jsonName` is part of the same `member_key(schema)` resolution
     /// pipeline that emits `member_name`, so context-aware suppression
     /// must apply equally to it. A member schema in non-struct context
     /// with `@jsonName` set must NOT emit the JSON name as a key.
@@ -1531,6 +1710,15 @@ mod tests {
         enabled: bool,
     }
     impl SerializableStruct for ConnectionDraining {
+        fn schema(&self) -> &Schema<'_> {
+            static SCHEMA: Schema<'static> = Schema::new_struct(
+                aws_smithy_schema::shape_id!("test", "ConnectionDraining"),
+                aws_smithy_schema::ShapeType::Structure,
+                &[&CD_ENABLED],
+            );
+            &SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             // Non-optional value-type member: unconditional write (mirrors codegen).
             let val = &self.enabled;
@@ -1541,6 +1729,10 @@ mod tests {
         connection_draining: ConnectionDraining,
     }
     impl SerializableStruct for LoadBalancerAttributes {
+        fn schema(&self) -> &Schema<'_> {
+            &LBA_SCHEMA
+        }
+
         fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
             ser.write_struct(&LBA_CD, &self.connection_draining)
         }
@@ -1614,6 +1806,15 @@ mod tests {
             name: &'static str,
         }
         impl SerializableStruct for EndpointConfig {
+            fn schema(&self) -> &Schema<'_> {
+                static SCHEMA: Schema<'static> = Schema::new_struct(
+                    aws_smithy_schema::shape_id!("test", "EndpointConfig"),
+                    aws_smithy_schema::ShapeType::Structure,
+                    &[&EC_NAME],
+                );
+                &SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&EC_NAME, self.name)
             }
@@ -1623,6 +1824,10 @@ mod tests {
             Config(EndpointConfig),
         }
         impl SerializableStruct for Endpoint {
+            fn schema(&self) -> &Schema<'_> {
+                &ENDPOINT_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 match self {
                     Endpoint::Arn(v) => s.write_string(&EP_ARN, v),
@@ -1635,6 +1840,10 @@ mod tests {
             remote: Endpoint,
         }
         impl SerializableStruct for Input {
+            fn schema(&self) -> &Schema<'_> {
+                &INPUT_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_struct(&CC_ATTACH, &self.attach)?;
                 s.write_struct(&CC_REMOTE, &self.remote)

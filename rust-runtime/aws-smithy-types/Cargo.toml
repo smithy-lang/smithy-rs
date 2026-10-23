@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-types"
-version = "1.9.0"
+version = "1.9.1"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -43,7 +43,6 @@ hyper-0-14 = { package = "hyper", version = "0.14.26", optional = true }
 itoa = "1.0.17"
 num-integer = "0.1.46"
 pin-project-lite = "0.2.14"
-pin-utils = "0.1.0"
 ryu = "1.0.22"
 time = { version = "0.3.4", features = ["parsing"] }
 
@@ -56,10 +55,10 @@ tokio-util = { version = "0.7.18", optional = true }
 base64 = "0.13.0"
 ciborium = { version = "0.2.1" }
 lazy_static = "1.4"
-proptest = "1"
+proptest = "1.11.0"
 rand = "0.8.4"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.146"
 tokio = { version = "1.49.0", features = [
     "macros",
     "rt",
@@ -91,7 +90,7 @@ name = "base64"
 harness = false
 
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
-version = "1.0.228"
+version = "1.0.229"
 features = ["derive"]
 
 [lints.rust]

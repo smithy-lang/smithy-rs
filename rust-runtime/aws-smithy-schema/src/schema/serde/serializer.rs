@@ -55,6 +55,20 @@ pub trait ShapeSerializer {
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError>;
 
+    /// Writes a list with a known number of elements, including sparse nulls.
+    ///
+    /// The callback must write exactly `length` elements. Formats that do not
+    /// need a length use the ordinary list implementation by default.
+    fn write_list_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let _ = length;
+        self.write_list(schema, write_elements)
+    }
+
     /// Writes a map to the serializer.
     ///
     /// # Arguments
@@ -66,6 +80,20 @@ pub trait ShapeSerializer {
         schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError>;
+
+    /// Writes a map with a known number of entries, including sparse null values.
+    ///
+    /// The callback must write exactly `length` key/value pairs. Formats that
+    /// do not need a length use the ordinary map implementation by default.
+    fn write_map_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        let _ = length;
+        self.write_map(schema, write_entries)
+    }
 
     /// Writes a boolean value.
     fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError>;
@@ -166,7 +194,7 @@ pub trait ShapeSerializer {
         schema: &Schema<'_>,
         values: &[String],
     ) -> Result<(), SerdeError> {
-        self.write_list(schema, &|ser| {
+        self.write_list_with_length(schema, values.len(), &|ser| {
             for item in values {
                 ser.write_string(&crate::prelude::STRING, item)?;
             }
@@ -180,7 +208,7 @@ pub trait ShapeSerializer {
         schema: &Schema<'_>,
         values: &[aws_smithy_types::Blob],
     ) -> Result<(), SerdeError> {
-        self.write_list(schema, &|ser| {
+        self.write_list_with_length(schema, values.len(), &|ser| {
             for item in values {
                 // Refcount bump, not a payload copy: `Blob` wraps `bytes::Bytes`.
                 ser.write_blob(&crate::prelude::BLOB, item.clone())?;
@@ -195,7 +223,7 @@ pub trait ShapeSerializer {
         schema: &Schema<'_>,
         values: &[i32],
     ) -> Result<(), SerdeError> {
-        self.write_list(schema, &|ser| {
+        self.write_list_with_length(schema, values.len(), &|ser| {
             for item in values {
                 ser.write_integer(&crate::prelude::INTEGER, *item)?;
             }
@@ -205,7 +233,7 @@ pub trait ShapeSerializer {
 
     /// Writes a list of longs.
     fn write_long_list(&mut self, schema: &Schema<'_>, values: &[i64]) -> Result<(), SerdeError> {
-        self.write_list(schema, &|ser| {
+        self.write_list_with_length(schema, values.len(), &|ser| {
             for item in values {
                 ser.write_long(&crate::prelude::LONG, *item)?;
             }
@@ -219,7 +247,7 @@ pub trait ShapeSerializer {
         schema: &Schema<'_>,
         values: &std::collections::HashMap<String, String>,
     ) -> Result<(), SerdeError> {
-        self.write_map(schema, &|ser| {
+        self.write_map_with_length(schema, values.len(), &|ser| {
             for (key, value) in values {
                 ser.write_string(&crate::prelude::STRING, key)?;
                 ser.write_string(&crate::prelude::STRING, value)?;
@@ -239,6 +267,10 @@ pub trait ShapeSerializer {
 ///
 /// ```ignore
 /// impl SerializableStruct for MyStruct {
+///     fn schema(&self) -> &Schema<'_> {
+///         &MY_STRUCT_SCHEMA
+///     }
+///
 ///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
 ///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
 ///         serializer.write_integer(&AGE_SCHEMA, self.age)?;
@@ -247,12 +279,69 @@ pub trait ShapeSerializer {
 /// }
 /// ```
 pub trait SerializableStruct {
+    /// Returns the schema of this structure or union itself, not of a member targeting it.
+    ///
+    /// Borrowed from `self` so a value can report a schema built at runtime; generated
+    /// types return their `'static` schema, which coerces to the shorter lifetime.
+    fn schema(&self) -> &Schema<'_>;
+
     /// Serializes this structure's members using the provided serializer.
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }
 
 impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
+    fn schema(&self) -> &Schema<'_> {
+        (**self).schema()
+    }
+
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
         (**self).serialize_members(serializer)
+    }
+}
+
+// An infallible operation still satisfies generic serialization bounds; there is no value to serialize.
+impl SerializableStruct for std::convert::Infallible {
+    fn schema(&self) -> &Schema<'_> {
+        match *self {}
+    }
+
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        match *self {}
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use super::*;
+    use crate::{ShapeId, ShapeType};
+
+    #[test]
+    fn boxed_trait_object_reports_a_runtime_built_schema() {
+        struct Value<'a> {
+            schema: Schema<'a>,
+        }
+        impl SerializableStruct for Value<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                &self.schema
+            }
+
+            fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                Ok(())
+            }
+        }
+
+        let shape_name = String::from("RuntimeValue");
+        let id = String::from("test#RuntimeValue");
+        let value = Value {
+            schema: Schema::new_struct(
+                ShapeId::from_parts(&id, "test", &shape_name),
+                ShapeType::Structure,
+                &[],
+            ),
+        };
+        let value: Box<dyn SerializableStruct + '_> = Box::new(value);
+        assert_eq!(value.schema().shape_id().as_str(), id);
+        let forwarded = <Box<dyn SerializableStruct> as SerializableStruct>::schema(&value);
+        assert!(std::ptr::eq(forwarded, value.as_ref().schema()));
     }
 }

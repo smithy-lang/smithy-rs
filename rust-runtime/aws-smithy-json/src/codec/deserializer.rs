@@ -42,15 +42,6 @@ impl<'a> JsonDeserializer<'a> {
         }
     }
 
-    /// Resolves a JSON field name to a member schema.
-    fn resolve_member<'s>(
-        &self,
-        schema: &'s Schema<'s>,
-        field_name: &str,
-    ) -> Option<&'s Schema<'s>> {
-        self.settings.field_to_member(schema, field_name)
-    }
-
     fn remaining(&self) -> &[u8] {
         &self.input[self.position..]
     }
@@ -231,7 +222,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             let rem = self.remaining();
             if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
                 self.advance_by(4);
-            } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
+            } else if let Some(member_schema) = self.settings.field_to_member(schema, &key_str) {
                 consumer(member_schema, self)?;
             } else if &*key_str == "__type" {
                 // Protocol discriminator, never a member.
@@ -2013,6 +2004,64 @@ mod tests {
             .unwrap();
         assert_eq!(foo.as_deref(), Some("hello"));
         assert_eq!(bar, None); // "Baz" not recognized without jsonName
+    }
+
+    /// A member's own name can collide with another member's `@jsonName`. Every
+    /// occurrence of the shared field resolves to the first matching member, wherever it
+    /// appears in the object and however often it repeats.
+    #[test]
+    fn colliding_wire_names_resolve_to_the_first_member() {
+        use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+        static STATUS: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "status"),
+            ShapeType::String,
+            "status",
+            0,
+        );
+        static STATUS_TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("ns", "S", "statusText"),
+            ShapeType::String,
+            "statusText",
+            1,
+        )
+        .with_json_name("status");
+        static OTHER: Schema<'static> =
+            Schema::new_member(shape_id!("ns", "S", "other"), ShapeType::String, "other", 2);
+        static S: Schema<'static> = Schema::new_struct(
+            shape_id!("ns", "S"),
+            ShapeType::Structure,
+            &[&STATUS, &STATUS_TEXT, &OTHER],
+        );
+
+        fn read(json: &[u8]) -> Vec<(usize, String)> {
+            let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+            let mut seen = Vec::new();
+            deser
+                .read_struct(&S, &mut |member, d| {
+                    seen.push((member.member_index().unwrap(), d.read_string(member)?));
+                    Ok(())
+                })
+                .unwrap();
+            seen
+        }
+
+        assert_eq!(
+            read(br#"{"status":"a","status":"b"}"#),
+            [(0, "a".to_owned()), (0, "b".to_owned())]
+        );
+        assert_eq!(
+            read(br#"{"other":"x","status":"a"}"#),
+            [(2, "x".to_owned()), (0, "a".to_owned())]
+        );
+        assert_eq!(
+            read(br#"{"status":"a","other":"x","status":"b"}"#),
+            [
+                (0, "a".to_owned()),
+                (2, "x".to_owned()),
+                (0, "b".to_owned())
+            ]
+        );
     }
 
     fn timestamp_schema() -> &'static aws_smithy_schema::Schema<'static> {
