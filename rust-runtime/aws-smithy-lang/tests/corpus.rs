@@ -315,6 +315,8 @@ fn corpus_knowledge_invariants() {
 #[test]
 fn corpus_runtime_schemas() {
     use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+    use aws_smithy_lang::shape::MemberView;
+    use aws_smithy_schema::Schema;
 
     for path in corpus() {
         let model = load(&path);
@@ -367,19 +369,40 @@ fn corpus_runtime_schemas() {
             assert_eq!(errors, expected, "{name}: {}", operation.id());
         }
 
-        // Every member schema mirrors its model member.
+        // Every member schema mirrors its model member, and is the one schema for that
+        // member: structure and union member slices, list members, and map keys and values
+        // all point at the schema registered under the member's ID.
+        let same_member = |schema: &Schema<'_>, view: MemberView<'_>| {
+            assert_eq!(schema.member_name(), Some(view.name()), "{name}");
+            assert_eq!(schema.shape_id().as_str(), view.id().as_str(), "{name}");
+            assert!(
+                std::ptr::eq(schema, all.schema(view.id()).unwrap()),
+                "{name}: {}",
+                view.id()
+            );
+        };
         for shape in model.non_prelude_shapes() {
             let Some(schema) = all.schema(shape.id()) else {
                 continue;
             };
-            if !matches!(shape.shape_type(), ShapeType::Structure | ShapeType::Union) {
-                continue;
-            }
-            assert_eq!(schema.members().len(), shape.members().len(), "{name}");
-            for (member, view) in schema.members().iter().zip(shape.members().iter()) {
-                assert_eq!(member.member_name(), Some(view.name()), "{name}");
-                assert_eq!(member.shape_id().as_str(), view.id().as_str(), "{name}");
-                assert!(std::ptr::eq(*member, all.schema(view.id()).unwrap()));
+            match shape.shape_type() {
+                ShapeType::Structure | ShapeType::Union => {
+                    assert_eq!(schema.members().len(), shape.members().len(), "{name}");
+                    for (member, view) in schema.members().iter().zip(shape.members().iter()) {
+                        same_member(member, view);
+                    }
+                }
+                ShapeType::List => {
+                    let list = shape.as_list().unwrap();
+                    same_member(schema.member().unwrap(), list.member());
+                }
+                ShapeType::Map => {
+                    let map = shape.as_map().unwrap();
+                    same_member(schema.key().unwrap(), map.key());
+                    // `Schema::member` is a map's value.
+                    same_member(schema.member().unwrap(), map.value());
+                }
+                _ => {}
             }
         }
     }

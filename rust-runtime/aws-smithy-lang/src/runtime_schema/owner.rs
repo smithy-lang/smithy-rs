@@ -247,7 +247,9 @@ impl Storage {
     ///
     /// # Panics
     ///
-    /// If `index` was not returned by [`Builder::alloc`] for this storage.
+    /// If `index` was not returned by [`Builder::alloc`] for this storage and is out of
+    /// bounds. An in-bounds index from another storage is not undefined behavior, but
+    /// returns an unrelated schema of this storage.
     pub(super) unsafe fn schema<'a>(&'a self, index: SchemaIndex) -> &'a Schema<'a> {
         let pointer = self.allocations.schemas[index];
         // SAFETY: INV-1/INV-2/INV-3: the pointee is alive and unchanged while `self` is
@@ -264,7 +266,8 @@ impl Storage {
     ///
     /// # Panics
     ///
-    /// If `index` was not returned by [`Builder::alloc_slice`] for this storage.
+    /// If `index` was not returned by [`Builder::alloc_slice`] for this storage and is out of
+    /// bounds; see [`Storage::schema`].
     pub(super) unsafe fn slice<'a>(&'a self, index: SliceIndex) -> &'a [&'a Schema<'a>] {
         let pointer = self.allocations.slices[index];
         // SAFETY: as in `schema`; the elements point into this storage (INV-1).

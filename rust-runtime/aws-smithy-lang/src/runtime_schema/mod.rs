@@ -5,7 +5,9 @@
 
 //! Runtime [`aws_smithy_schema::Schema`]s built from a [`Model`].
 //!
-//! Requires the `runtime-schema` feature.
+//! Requires the `runtime-schema` feature. It is optional because it adds a dependency on
+//! `aws-smithy-schema` and, through it, the Smithy client runtime, which model tooling that
+//! only loads, validates, or inspects models does not need.
 //!
 //! A [`RuntimeSchemaSet`] converts every serializable shape of a model, once, into the same
 //! schema descriptors that generated code declares as statics. Protocols and codecs that
@@ -184,8 +186,11 @@ impl RuntimeSchemaSet {
     /// `@http` trait; use [`RuntimeSchemaSet::operation`] to serialize a request.
     pub fn schema(&self, id: &ShapeId) -> Option<&Schema<'_>> {
         let index = *self.graph.schemas.get(id)?;
-        // SAFETY: INV-4: `self.model` owns everything the graph borrows and outlives the
-        // returned borrow of `self`.
+        // SAFETY: INV-4: the schemas in `self.storage` borrow only model data behind
+        // `self.model`'s `Arc`, which never moves and stays alive as long as `self`, and
+        // `self.storage` stays alive for the returned borrow of `self`. `index` comes from
+        // `self.graph`, which the same `Arena::build` call produced with `self.storage`, so
+        // it addresses this storage (`Graph` itself borrows nothing).
         Some(unsafe { self.storage.schema(index) })
     }
 
