@@ -22,7 +22,7 @@ tokio = { version = "1.49.0", features = [], optional = true}
 
 # hickory-resolver enables some tokio features that break in wasm
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-hickory-resolver = {version = "0.25.2", optional = true}
+hickory-resolver = {version = "0.26.2", optional = true}
 
 
 [dev-dependencies]
