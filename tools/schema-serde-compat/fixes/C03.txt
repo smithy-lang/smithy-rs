@@ -1,0 +1,75 @@
+C03: media-typed prefix-header decoding
+Validated 2026-10-14 against freshly generated legacy and schema servers.
+
+Source evidence
+  HttpBindingGenerator.generateDeserializePrefixHeaderFn delegates each map
+  value to HttpHeaderValueParserGenerator.renderHeaderValueParser. For a string
+  with @mediaType, Kotlin emits comma/quote tokenization, base64 decoding, UTF-8
+  validation and scalar token-count validation. Schema previously passed the
+  raw header text to the handler without decoding or validating it.
+
+Fix
+  MediaHeaderMapDeserializer processes matching headers in order, delegating
+  each entry to HeaderValuesDeserializer. This reuses the existing tokenization,
+  base64 and UTF-8 handling. It counts parsed tokens rather than physical header
+  instances, so an empty instance plus a valid instance still supplies one value.
+  Plain prefix-header strings and query maps retain their existing reader.
+
+Strict compatibility includes a legacy panic
+  Kotlin's prefix parser expects a parsed value whenever a matching header name
+  exists. One or more completely empty instances produce no tokens, triggering
+  its expect. Schema deliberately preserves that panic and its message to meet
+  the requested strict compatibility target. The tests catch and compare it
+  explicitly; a panic is not counted as a successful HTTP response.
+  Quoted-empty and whitespace-only values do produce an empty string token.
+  Entry ordering also matters: an empty header before a different invalid-UTF-8
+  header panics; the reverse ordering returns 400. Parsing entries in sequence
+  preserves that behavior instead of validating the whole map up front.
+
+Repeat from the repository root
+  python3 tools/schema-serde-compat/run_c03.py
+
+  Model: tools/schema-serde-compat/models/prefix-header-media-type.smithy
+  Direct JUnit selection: :codegen-server:test
+    --tests '*PrefixHeaderMediaTypeCompatibilityTest'
+  The Python entry point uses the existing audit runtime snapshot helper to
+  compile without reading or restoring repository Markdown. Generated crates,
+  Cargo.lock files, source hashes, logs and comparison.json remain under
+  tools/schema-serde-compat/.runs/C03-<UTC timestamp>/.
+
+Test contract and coverage
+  Generate fresh REST JSON and REST XML servers with schemaSerde=false, then
+  schemaSerde=true, using HTTP 1.x. Each legacy server must meet 36 explicit
+  controls. Handlers echo parsed inputs. Compare status, all response headers
+  and exact body bytes; for expected panics, compare the panic and its message.
+  Covers quoted/unquoted base64, Unicode, decoded whitespace/NUL/newline,
+  non-JSON decoded text, invalid base64/padding/UTF-8, comma and quote parsing,
+  repeated headers, empty instances, mixed-case names, multiple map entries,
+  an empty suffix, and mixed-invalid-header ordering. Direct media headers
+  decode; media-typed query values and query maps remain undecoded.
+  Logging and response prefix-header encoding remain separate audit items.
+
+Direct results
+  Before: C03-20261014T062529.811234Z
+    Initial 32-case corpus passed every legacy control.
+    28 comparisons differed per protocol (56 of 64 total).
+  After: C03-20261014T063359.757855Z
+    Expanded 36-case corpus passed on both protocols with zero differences:
+    64 HTTP-response comparisons and eight explicit panic comparisons.
+    Expanded legacy result files were byte-identical to the preceding reference
+    run C03-20261014T063024.993715Z.
+    All 27 schema request-binding unit tests passed, including C01 and C02.
+    C02's 52 generated-server comparisons also passed against the final source
+    in C02-20261014T063508.194317Z.
+    Scoped Kotlin formatting, rustfmt and whitespace checks passed.
+
+Files changed for this item (repository-relative)
+  MODIFIED rust-runtime/aws-smithy-http-server/src/schema/request_bindings.rs
+  ADDED codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/PrefixHeaderMediaTypeCompatibilityTest.kt
+  ADDED tools/schema-serde-compat/models/prefix-header-media-type.smithy
+  ADDED tools/schema-serde-compat/run_c03.py
+  ADDED tools/schema-serde-compat/fixes/C03.txt
+  UPDATED tools/schema-serde-compat/ADDED_FILES.txt
+
+Historical audit findings/evidence are unchanged. This records C03's tested
+scope; it does not resolve the remaining audit items.

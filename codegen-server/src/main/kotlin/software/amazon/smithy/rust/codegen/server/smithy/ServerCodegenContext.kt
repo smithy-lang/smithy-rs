@@ -6,10 +6,14 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
@@ -18,12 +22,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ret
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
- * from the `rust-codegen-server` subproject.
+ * from the `codegen-server` subproject.
  *
  * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
- *
- * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
- * and server (like [JsonParserGenerator]).
  */
 data class ServerCodegenContext(
     override val model: Model,
@@ -39,6 +40,47 @@ data class ServerCodegenContext(
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {
+    /**
+     * Whether operations use the schema runtime instead of generated HTTP serde.
+     *
+     * The protocol itself is resolved at runtime through the service builder's
+     * `ProtocolRegistry`; a service whose protocol has no registration fails loudly in `build()`.
+     */
+    val usesSchemaHttpSerde: Boolean
+        get() = settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x
+
+    /**
+     * The protocols the generated service serves.
+     *
+     * The schema path lists declared protocols in shape-ID order. Runtime routing options determine
+     * their claiming priority; the generated serde path serves [protocol] alone.
+     */
+    val servedProtocols: List<ShapeId>
+        get() =
+            if (usesSchemaHttpSerde) {
+                ServiceIndex.of(model).getProtocols(serviceShape).keys.sorted()
+            } else {
+                listOf(protocol)
+            }
+
+    internal val schemaInputOperations: Map<ShapeId, OperationShape> by lazy {
+        val index = OperationIndex.of(model)
+        buildMap {
+            model.operationShapes.forEach { operation ->
+                index.getInputShape(operation).orElse(null)?.let { putIfAbsent(it.id, operation) }
+            }
+        }
+    }
+
+    internal val schemaOutputOperations: Map<ShapeId, OperationShape> by lazy {
+        val index = OperationIndex.of(model)
+        buildMap {
+            model.operationShapes.forEach { operation ->
+                index.getOutputShape(operation).orElse(null)?.let { putIfAbsent(it.id, operation) }
+            }
+        }
+    }
+
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
     }

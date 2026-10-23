@@ -1,0 +1,126 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.server.smithy
+
+import com.moandjiezana.toml.Toml
+import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+
+/**
+ * Generates servers for HTTP 0.x and 1.x with schemaSerde omitted, disabled, or enabled.
+ * It compiles and runs Tower middleware that forwards a request and checks the successful response.
+ * The generated Cargo.toml must select Tower 0.4 for legacy serde and Tower 0.5 with the util
+ * feature for schema serde, so middleware and generated service types use compatible versions.
+ */
+internal class ServerTowerDependencyTest {
+    @Test
+    fun `HTTP 0x middleware builds with schema serde omitted`() = checkTowerMiddleware(false, null)
+
+    @Test
+    fun `HTTP 0x middleware builds with schema serde disabled`() = checkTowerMiddleware(false, false)
+
+    @Test
+    fun `HTTP 1x middleware builds with schema serde omitted`() = checkTowerMiddleware(true, null)
+
+    @Test
+    fun `HTTP 1x middleware builds with schema serde disabled`() = checkTowerMiddleware(true, false)
+
+    @Test
+    fun `HTTP 1x schema middleware builds with Tower 05`() = checkTowerMiddleware(true, true)
+
+    private fun checkTowerMiddleware(
+        http1x: Boolean,
+        schemaSerde: Boolean?,
+    ) {
+        val model =
+            """
+            ${'$'}version: "2"
+            namespace test
+            use aws.protocols#restJson1
+            use smithy.test#httpRequestTests
+
+            @restJson1
+            service Example {
+                version: "1"
+                operations: [Ping]
+            }
+
+            @http(method: "POST", uri: "/ping")
+            @httpRequestTests([{
+                id: "PingRequest"
+                protocol: "aws.protocols#restJson1"
+                method: "POST"
+                uri: "/ping"
+                headers: {"Content-Type": "application/json"}
+                params: {}
+                appliesTo: "server"
+            }])
+            operation Ping {
+                input := {}
+                output := {}
+            }
+            """.asSmithyModel()
+
+        val settings = ServerAdditionalSettings.builder().withHttp1x(http1x)
+        if (schemaSerde != null) {
+            settings.schemaSerde(schemaSerde)
+        }
+        val server =
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    additionalSettings = settings.toObjectNode(),
+                    cargoCommand = "cargo test --quiet --lib --tests",
+                ),
+                testCoverage = HttpTestType.Default,
+            ) { context, rustCrate ->
+                // Existing decorators can still use the original public property.
+                @Suppress("DEPRECATION")
+                val middlewareTower =
+                    if (context.usesSchemaHttpSerde) ServerCargoDependency.tower(context) else ServerCargoDependency.Tower
+                val scope =
+                    arrayOf(
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Tower" to middlewareTower.toType(),
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    )
+                rustCrate.testModule {
+                    tokioTest("tower_layer_and_service_ext_route_a_request") {
+                        rustTemplate(
+                            """
+                            let config = crate::ExampleConfig::builder()
+                                .layer(#{Tower}::layer::util::Identity::new())
+                                .build();
+                            let app = crate::Example::builder(config)
+                                .ping(|_input: crate::input::PingInput| async { crate::output::PingOutput {} })
+                                .build().expect("service should build");
+                            let request = #{Http}::Request::builder()
+                                .method("POST")
+                                .uri("/ping")
+                                .header("Content-Type", "application/json")
+                                .body(#{Server}::body::Body::empty()).unwrap();
+                            let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
+                            assert_eq!(response.status().as_u16(), 200);
+                            """,
+                            *scope,
+                        )
+                    }
+                }
+            }.single()
+        val tower = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("dependencies.tower")
+        tower.getString("version") shouldBe if (http1x && schemaSerde == true) "0.5" else "0.4"
+        tower.getList<String>("features") shouldBe if (schemaSerde == true) listOf("util") else null
+    }
+}

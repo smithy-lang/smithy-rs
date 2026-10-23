@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
@@ -26,7 +27,23 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
-    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    private val legacyTower = CargoDependency("tower", CratesIo("0.4"))
+    private val schemaTower = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
+
+    /**
+     * Tower 0.4 dependency retained for compatibility with existing server decorators.
+     * Use [tower] to select the dependency for the codegen context.
+     */
+    val Tower: CargoDependency = legacyTower
+
+    /**
+     * Generated HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
+     * Preserve the existing dependency declaration; both runtimes enable Tower 0.4's
+     * utilities transitively for existing generated servers.
+     */
+    fun tower(codegenContext: CodegenContext): CargoDependency =
+        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) schemaTower else legacyTower
+
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))

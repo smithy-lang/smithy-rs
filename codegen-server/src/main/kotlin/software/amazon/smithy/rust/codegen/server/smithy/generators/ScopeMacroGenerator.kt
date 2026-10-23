@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class ScopeMacroGenerator(
@@ -22,10 +21,10 @@ class ScopeMacroGenerator(
 
     private fun macro(): Writable =
         writable {
-            val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name.toPascalCase()
+            val firstOperationName = ServerOperationNames(codegenContext.symbolProvider.toSymbol(operations.first())).markerType
             val operationNames =
                 operations.joinToString(" ") {
-                    codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
+                    ServerOperationNames(codegenContext.symbolProvider.toSymbol(it)).markerType
                 }
 
             // When writing `macro_rules!` we add whitespace between `$` and the arguments to avoid Kotlin templating.
@@ -43,7 +42,7 @@ class ScopeMacroGenerator(
             // iterating through the `B`.
             val operationBranches =
                 operations
-                    .map { codegenContext.symbolProvider.toSymbol(it).name.toPascalCase() }.joinToString("") {
+                    .map { ServerOperationNames(codegenContext.symbolProvider.toSymbol(it)).markerType }.joinToString("") {
                         """
                         // $it match found, pop from both `member` and `not_member`
                         (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
@@ -60,7 +59,7 @@ class ScopeMacroGenerator(
             // If we have a second operation we can perform further checks
             val otherOperationName: String? =
                 operations.toList().getOrNull(1)?.let {
-                    codegenContext.symbolProvider.toSymbol(it).name
+                    ServerOperationNames(codegenContext.symbolProvider.toSymbol(it)).markerType
                 }
             val furtherTests =
                 if (otherOperationName != null) {

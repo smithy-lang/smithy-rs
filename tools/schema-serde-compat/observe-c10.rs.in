@@ -1,0 +1,77 @@
+use #{Json}::{json, Value};
+use std::sync::Mutex;
+use std::io::Write;
+use #{Futures}::FutureExt;
+
+static OBSERVED: Mutex<Option<Value>> = Mutex::new(None);
+
+fn record(document: &Option<#{Types}::Document>) {
+    use #{Types}::Document;
+    let mut current = document.as_ref();
+    let mut containers = String::new();
+    while let Some(value) = current {
+        match value {
+            Document::Array(values) => {
+                containers.push('a');
+                if values.is_empty() { break; }
+                assert_eq!(values.len(), 1);
+                current = values.first();
+            }
+            Document::Object(values) => {
+                containers.push('o');
+                if values.is_empty() { break; }
+                assert_eq!(values.len(), 1);
+                current = Some(values.get("k").unwrap());
+            }
+            _ => break,
+        }
+    }
+    *OBSERVED.lock().unwrap() = Some(json!({
+        "document": format!("{document:?}"), "containers": containers,
+        "depth": containers.len(), "leaf": format!("{current:?}")
+    }));
+}
+
+##[#{Tokio}::test]
+async fn compat_observe() {
+    let app = #{Service}::builder(#{Config}::builder().build())
+        .body(|input: crate::input::BodyInput| async move {
+            record(&input.document);
+            crate::output::BodyOutput::builder().build()
+        })
+        #{PayloadHandler:W}
+        .build().unwrap();
+    let cases: Vec<Value> = #{Json}::from_str(include_str!(#{CorpusPath:S})).unwrap();
+    let mut observations = std::fs::File::create(std::env::var("SCHEMA_COMPAT_OBSERVATIONS").unwrap()).unwrap();
+    for case in cases {
+        *OBSERVED.lock().unwrap() = None;
+        let mut request = #{Http}::Request::post(case["uri"].as_str().unwrap())
+            .header("content-type", case["content_type"].as_str().unwrap_or("application/json"));
+        for header in case["headers"].as_array().unwrap() {
+            request = request.header(header[0].as_str().unwrap(), header[1].as_str().unwrap());
+        }
+        let request = request.body(#{Server}::body::Body::from(case["body"].as_str().unwrap().to_owned())).unwrap();
+        let result = std::panic::AssertUnwindSafe(#{Tower}::ServiceExt::oneshot(app.clone(), request)).catch_unwind().await;
+        let response = match result {
+            Ok(response) => response.unwrap(),
+            Err(error) => {
+                let panic = error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(String::as_str)).unwrap_or("non-string panic");
+                writeln!(observations, "{}", json!({"id":case["id"],"status":null,"headers":{},"body":null,"wire_hex":"",
+                    "input":*OBSERVED.lock().unwrap(),"panic":panic,"logs":"","log_leaks":[]})).unwrap();
+                observations.flush().unwrap();
+                continue;
+            }
+        };
+        let status = response.status().as_u16();
+        let mut headers = std::collections::BTreeMap::<String, Vec<String>>::new();
+        for (name, value) in response.headers() {
+            headers.entry(name.to_string()).or_default().push(format!("{value:?}"));
+        }
+        #{BodyToBytes:W}
+        let wire: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+        let body: Value = #{Json}::from_slice(&bytes).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes)));
+        writeln!(observations, "{}", json!({"id":case["id"],"status":status,"headers":headers,"body":body,"wire_hex":wire,
+            "input":*OBSERVED.lock().unwrap(),"panic":null,"logs":"","log_leaks":[]})).unwrap();
+        observations.flush().unwrap();
+    }
+}

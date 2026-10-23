@@ -22,6 +22,7 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 
 dependencies {
     implementation(project(":codegen-server"))
+    implementation(project(":codegen-client"))
     implementation(libs.smithy.aws.protocol.tests)
     implementation(libs.smithy.protocol.tests)
     implementation(libs.smithy.protocol.test.traits)
@@ -61,6 +62,11 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "rpcv2Cbor",
         ),
         CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            "rpcv2Cbor_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
@@ -70,6 +76,13 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras_no_initial_response",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+        ),
+        // Schema-driven path with event streams and initial messages on rpcv2Cbor.
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras_schema",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": true, "schemaSerde": true""",
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
@@ -97,6 +110,35 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
+        // Schema-driven (runtime) request/response path for restJson1.
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_schema",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "com.amazonaws.constraints#ConstraintsService",
+            "constraints_without_public_constrained_types_schema",
+            imports = listOf("$commonModels/constraints.smithy"),
+            extraCodegenConfig = """"publicConstrainedTypes": false, "schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJson",
+            "rest_json_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson#RestJsonExtras",
+            "rest_json_extras_schema",
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
+            "aws.protocoltests.restjson.validation#RestJsonValidation",
+            "rest_json_validation_schema",
+            extraCodegenConfig = """"ignoreUnsupportedConstraints": true, "schemaSerde": true""",
+        ),
         CodegenTest(
             "aws.protocoltests.restjson.validation#RestJsonValidation",
             "rest_json_validation",
@@ -109,8 +151,18 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "json_rpc10",
         ),
         CodegenTest(
+            "aws.protocoltests.json10#JsonRpc10",
+            "json_rpc10_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+        CodegenTest(
             "aws.protocoltests.json#JsonProtocol",
             "json_rpc11",
+        ),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocol",
+            "json_rpc11_schema",
+            extraCodegenConfig = """"schemaSerde": true""",
         ),
         CodegenTest(
             "aws.protocoltests.misc#MiscService",
@@ -130,14 +182,235 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "com.aws.example#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
-            extraCodegenConfig = """"debugMode": true""",
+            extraCodegenConfig = """"debugMode": true, "schemaSerde": true""",
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
-    ).flatMap { it.bothHttpVersions() }
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-legacy-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+            extraCodegenConfig = """"debugMode": true, "schemaSerde": false""",
+        ),
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-schema-server-sdk",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+            extraCodegenConfig = """"schemaSerde": true""",
+        ),
+    ).flatMap { it.bothHttpVersions() }.map {
+        if (it.module.endsWith("-http0x")) {
+            // Generated serde projections must disable schema serde, which otherwise enables HTTP 1.x.
+            it.copy(extraCodegenConfig = it.extraCodegenConfig?.replace(""""schemaSerde": true""", """"schemaSerde": false"""))
+        } else if (it.module == "pokemon-service-server-sdk") {
+            // Only the schema-driven HTTP/1.x example serves multiple protocols.
+            it.copy(imports = it.imports + "custom-test-models/pokemon-multi-protocol.smithy")
+        } else {
+            it
+        }
+    } +
+        listOf(
+            CodegenTest(
+                "smithy.rust.server.protocoltests#RestXmlServerTests",
+                "rest_xml_schema",
+                imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            // One service serving every built-in protocol; integration-tests/protocol-compat drives a client per protocol.
+            CodegenTest(
+                "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
+                "multi-protocol-server-sdk",
+                imports = listOf(
+                    "custom-test-models/multi-protocol-compat/multi-protocol-common.smithy",
+                    "custom-test-models/multi-protocol-compat/multi-protocol-server.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            // One service per protocol set, all serving the operations in integration-tests/protocol-compat.
+            // Generated serde codegen with a request body limit, to exercise the generated body collection code.
+            CodegenTest(
+                "com.example.review#ReviewRest",
+                "compat-rest-legacy-limit-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraConfig = """, "customizationConfig": {"protocols": {"common": {"requestBodyMaxBytes": 1000}}}""",
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            // rpcv2Cbor error with a header-bound member, on schemaSerde and its generated serde twin.
+            CodegenTest(
+                "com.example.review#ReviewCborErrors",
+                "compat-cbor-errors-server-sdk",
+                imports = listOf("integration-tests/protocol-compat/models/protocol-compat-cbor-errors.smithy"),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewCborErrors",
+                "compat-cbor-errors-legacy-server-sdk",
+                imports = listOf("integration-tests/protocol-compat/models/protocol-compat-cbor-errors.smithy"),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewRest",
+                "compat-rest-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewRestCbor",
+                "compat-rest-cbor-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewRestAwsJson",
+                "compat-rest-awsjson-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewRestXml",
+                "compat-rest-xml-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson",
+                "compat-awsjson-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewCbor",
+                "compat-cbor-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAll",
+                "compat-all-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewDocument",
+                "compat-document-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            // awsJson following the specification (`responseBindings: "smithy-specs"`) instead of the historical default.
+            CodegenTest(
+                "com.example.review#ReviewAwsJson",
+                "compat-awsjson-spec-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "smithy-specs"}}}""",
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson11",
+                "compat-awsjson11-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson11",
+                "compat-awsjson11-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewXml",
+                "compat-xml-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewXml",
+                "compat-xml-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/extractor-rejections-protocols.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            // Generated serde (schemaSerde=false) twins on HTTP 1.x, for wire comparison with the schema services above.
+            CodegenTest(
+                "com.example.review#ReviewRest",
+                "compat-rest-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewAwsJson",
+                "compat-awsjson-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewCbor",
+                "compat-cbor-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.example.review#ReviewDocument",
+                "compat-document-legacy-server-sdk",
+                imports = listOf(
+                    "integration-tests/protocol-compat/models/protocol-compat-services.smithy",
+                    "integration-tests/protocol-compat/models/protocol-compat-operations.smithy",
+                ),
+                extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
+            ),
+        )
 }
 // When iterating on protocol tests use this to speed up codegen:
 //    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
@@ -150,11 +423,98 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests
+// Server-only Criterion comparisons use the same model and HTTP types on both serde paths.
+val eventStreamBenchmarkTests =
+    listOf("rest-json", "rpc-v2-cbor").flatMap { protocol ->
+        listOf(false, true).map { schemaSerde ->
+            CodegenTest(
+                "benchmark.eventstream#BenchmarkService",
+                "event-stream-bench-$protocol-${if (schemaSerde) "schema" else "legacy"}",
+                imports =
+                    listOf(
+                        "benchmarks/event-stream/model/common.smithy",
+                        "benchmarks/event-stream/model/$protocol.smithy",
+                    ),
+                extraCodegenConfig =
+                    """"http-1x": true, "schemaSerde": $schemaSerde, "alwaysSendEventStreamInitialResponse": ${protocol == "rpc-v2-cbor"}""",
+            )
+        }
+    } +
+        // Match the selected single-protocol service's initial-response setting.
+        // The global setting must be false for REST and true for CBOR, so the
+        // two multi-protocol projections differ only in that setting.
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-rest-json-schema",
+            imports =
+                listOf(
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": false""",
+        ) +
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-schema",
+            imports =
+                listOf(
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": true""",
+        )
+
+// Run the same server compatibility fixtures through generated serde and schema serde.
+val compatibilityProtocolTests =
+    listOf("restJson1", "restXml").flatMap { protocol ->
+        listOf(
+            "body-bindings-$protocol" to "test.bodybindings#Orders",
+            "collection-timestamps-$protocol" to "test.collectiontimestamps#Times",
+            "prefix-headers-$protocol-plain" to "test.prefixwhitespace#Headers",
+            "prefix-headers-$protocol-media" to "test.prefixwhitespace#Headers",
+        ).flatMap { (model, service) ->
+            listOf(false, true).map { schemaSerde ->
+                CodegenTest(
+                    service,
+                    "compat-$model-${if (schemaSerde) "schema" else "generated"}",
+                    imports = listOf("schema-serde-compat/protocol-tests/$model.smithy"),
+                    extraCodegenConfig = """"http-1x": true, "schemaSerde": $schemaSerde""",
+                )
+            }
+        }
+    }
+
+// Clients for the server compatibility suite and multiprotocol example share the server-owned models.
+val compatibilityClientTests =
+    listOf(
+        "multi-protocol-client" to "restjson",
+        "multi-protocol-client-rpcv2cbor" to "rpcv2cbor",
+        "multi-protocol-client-awsjson10" to "awsjson10",
+        "multi-protocol-client-awsjson11" to "awsjson11",
+        "multi-protocol-client-restjson" to "restjson",
+        "multi-protocol-client-restxml" to "restxml",
+    ).map { (module, protocol) ->
+        CodegenTest(
+            "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
+            module,
+            imports =
+                listOf(
+                    "custom-test-models/multi-protocol-compat/multi-protocol-$protocol.smithy",
+                    "custom-test-models/multi-protocol-compat/multi-protocol-common.smithy",
+                ),
+            extraCodegenConfig =
+                """"addMessageToErrors": true, "renameErrors": true, "enableNewSmithyRuntime": "${properties.get("smithy.runtime.mode") ?: "orchestrator"}"""",
+            pluginName = "rust-client-codegen",
+        )
+    }
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests + compatibilityClientTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+
+tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", properties.get("smithy.runtime.mode") ?: "orchestrator")
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")

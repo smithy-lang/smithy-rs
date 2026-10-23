@@ -1,0 +1,1653 @@
+[
+  {
+    "id": "query-empty",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "query-scalar-first",
+    "uri": "/bindings?q=first&q=second",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-integer-first",
+    "uri": "/bindings?n=7&n=bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-integer-bad-first",
+    "uri": "/bindings?n=bad&n=7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-bool",
+    "uri": "/bindings?b=True",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-lists",
+    "uri": "/bindings?list=a&list=b&list=",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-plus",
+    "uri": "/bindings?q=a+b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-invalid-utf8",
+    "uri": "/bindings?q=%FF",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-escape",
+    "uri": "/bindings?q=%&q=%GG",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-date-list",
+    "uri": "/bindings?dates=0&dates=1.5",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-date-invalid",
+    "uri": "/bindings?dates=bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-empty-value",
+    "uri": "/bindings?q&n=",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "query-unknown",
+    "uri": "/bindings?unknown=a&unknown=b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        " a "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "\"a,b\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-text-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        "one"
+      ],
+      [
+        "x-text",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "+7"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "1,2"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-6",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "1.0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-7",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "2147483648"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-number-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-number",
+        "one"
+      ],
+      [
+        "x-number",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"a,b\",c"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"a\\\"b\",c"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "a,,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-6",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "\"unterminated"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-list-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-list",
+        "one"
+      ],
+      [
+        "x-list",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "\"e30=\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "e30="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "e30=,e30="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-5",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "/w=="
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-media-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-media",
+        "one"
+      ],
+      [
+        "x-media",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-date-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-date-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "Thu, 01 Jan 1970 00:00:00 GMT"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-date-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "0"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-date-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "bad"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-date-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-date",
+        "one"
+      ],
+      [
+        "x-date",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-dates-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        "Thu, 01 Jan 1970 00:00:00 GMT, Fri, 02 Jan 1970 00:00:00 GMT"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-dates-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-dates-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-dates",
+        "one"
+      ],
+      [
+        "x-dates",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-0",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        ""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-1",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-2",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " value "
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-3",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "a,b"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-4",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "\"a,b\""
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-x-meta-key-duplicate",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "one"
+      ],
+      [
+        "x-meta-key",
+        "two"
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "header-nonutf8",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [
+      [
+        "x-text",
+        {
+          "hex": "ff"
+        }
+      ]
+    ],
+    "source": "HttpHeaderValueParserGenerator.renderHeaderValueParser",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-0",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "e30="
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-1",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "\"e30=\""
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-2",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        " e30= "
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-3",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "bad"
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-4",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        "/w=="
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "prefix-media-5",
+    "uri": "/media-prefix",
+    "body": "",
+    "headers": [
+      [
+        "x-meta-key",
+        ""
+      ]
+    ],
+    "source": "HttpBindingGenerator.generateDeserializePrefixHeaderFn",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-0",
+    "uri": "/label/rex",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-1",
+    "uri": "/label/a%2Fb",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-2",
+    "uri": "/label/a+b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-3",
+    "uri": "/label/%FF",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-4",
+    "uri": "/label/%GG",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-5",
+    "uri": "/label/a%20b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-label-6",
+    "uri": "/label/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-0",
+    "uri": "/greedy/a/b/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-1",
+    "uri": "/greedy/a//b/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-2",
+    "uri": "/greedy/a/end/end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-3",
+    "uri": "/greedy//end",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-4",
+    "uri": "/greedy/a/b/end/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-number-0",
+    "uri": "/number/7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-number-1",
+    "uri": "/number/%37",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-number-2",
+    "uri": "/number/+7",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-number-3",
+    "uri": "/number/2147483648",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-number-4",
+    "uri": "/number/-1",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-timestamp-0",
+    "uri": "/timestamp/0",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-timestamp-1",
+    "uri": "/timestamp/1.5",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-timestamp-2",
+    "uri": "/timestamp/%30",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-timestamp-3",
+    "uri": "/timestamp/bad",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-trailing-0",
+    "uri": "/trailing/rex",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-trailing-1",
+    "uri": "/trailing/rex/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-trailing-0",
+    "uri": "/greedy-trailing/a/b",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "label-greedy-trailing-1",
+    "uri": "/greedy-trailing/a/b/",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderUriPathParser",
+    "method": "GET",
+    "content_type": "application/xml"
+  },
+  {
+    "id": "xml-empty",
+    "uri": "/xml",
+    "body": "",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-space",
+    "uri": "/xml",
+    "body": " ",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-root",
+    "uri": "/xml",
+    "body": "<XmlBodyInput/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "xml-wrong-root",
+    "uri": "/xml",
+    "body": "<Wrong/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-malformed",
+    "uri": "/xml",
+    "body": "<XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-trailing",
+    "uri": "/xml",
+    "body": "<XmlBodyInput/>junk",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-second",
+    "uri": "/xml",
+    "body": "<XmlBodyInput/><other/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-declaration",
+    "uri": "/xml",
+    "body": "<?xml version=\"1.0\"?><XmlBodyInput/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-namespace",
+    "uri": "/xml",
+    "body": "<n:XmlBodyInput xmlns:n=\"urn:x\"><n:renamed>yes</n:renamed></n:XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-attribute",
+    "uri": "/xml",
+    "body": "<XmlBodyInput token=\"a&amp;b\"/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-empty-attribute",
+    "uri": "/xml",
+    "body": "<XmlBodyInput token=\"\"/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-attribute-as-element",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><token>x</token></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed>hello</renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-empty",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed/></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-wrong-name",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><text>wrong</text></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-duplicate",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed>a</renamed><renamed>b</renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-spaces",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed> a </renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-cdata",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed><![CDATA[a<b]]></renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-mixed",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed>a<unknown>b</unknown>c</renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-entity",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed>a&amp;&#x41;</renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-bad-entity",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed>&bogus;</renamed></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-string-nil",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><renamed xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:nil=\"true\"/></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-unknown",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><unknown><x>yes</x></unknown></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-list",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><list><item>a</item><item>b</item></list></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-list-wrong-item",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><list><member>a</member></list></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-list-empty",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><list/></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-list-empty-item",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><list><item/></list></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-list-duplicate",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><list><item>a</item></list><list><item>b</item></list></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-flat",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><flat>a</flat><renamed>x</renamed><flat>b</flat></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-flat-empty",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><flat/></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Key>k</Key><Value>v</Value></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-missing-value",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Key>k</Key></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-missing-key",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Value>v</Value></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-empty-value",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Key>k</Key><Value/></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-wrong-entry",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><other><Key>k</Key><Value>v</Value></other></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-duplicate",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Key>k</Key><Value>a</Value></entry><entry><Key>k</Key><Value>b</Value></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-map-duplicate-wrapper",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><map><entry><Key>a</Key><Value>a</Value></entry></map><map><entry><Key>b</Key><Value>b</Value></entry></map></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-flat-map",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><flatMap><key>k</key><value>v</value></flatMap></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-nested",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><nested><a>a</a><b>b</b></nested></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-nested-duplicate",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><nested><a>a</a></nested><nested><b>b</b></nested></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-union",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><choice><text>x</text></choice></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-union-empty",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><choice/></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-union-unknown",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><choice><unknown>x</unknown></choice></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-union-two",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><choice><text>x</text><integer>1</integer></choice></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-0",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer></integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-1",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer>0</integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-2",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer> 7 </integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-3",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer>1.0</integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-4",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer>+7</integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-integer-5",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><integer>2147483648</integer></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-boolean-0",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><boolean></boolean></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-boolean-1",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><boolean>true</boolean></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-boolean-2",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><boolean>false</boolean></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-boolean-3",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><boolean>True</boolean></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-boolean-4",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><boolean>1</boolean></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-timestamp-0",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><timestamp></timestamp></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-timestamp-1",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><timestamp>1970-01-01T00:00:00Z</timestamp></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-timestamp-2",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><timestamp>0</timestamp></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-timestamp-3",
+    "uri": "/xml",
+    "body": "<XmlBodyInput><timestamp>bad</timestamp></XmlBodyInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-payload-root-Envelope",
+    "uri": "/xml-payload",
+    "body": "<Envelope><a>x</a></Envelope>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-payload-root-XmlNested",
+    "uri": "/xml-payload",
+    "body": "<XmlNested><a>x</a></XmlNested>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-payload-root-value",
+    "uri": "/xml-payload",
+    "body": "<value><a>x</a></value>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-payload-root-Other",
+    "uri": "/xml-payload",
+    "body": "<Other><a>x</a></Other>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-empty",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>empty</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-empty-headers",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>empty-headers</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-zero",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>zero</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-quotes",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>quotes</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-invalid-public",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>invalid-public</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-invalid-secret",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>invalid-secret</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "xml-response-invalid-prefix-key",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>invalid-prefix-key</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-invalid-prefix-value",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>invalid-prefix-value</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-date",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>date</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-0",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-0</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-99",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-99</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-100",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-100</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-204",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-204</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-304",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-304</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-600",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-600</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-999",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-999</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-1000",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-1000</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code-65536",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code-65536</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-response-code--1",
+    "uri": "/response",
+    "body": "<ResponseInput><scenario>code--1</scenario></ResponseInput>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "response-media-prefix",
+    "uri": "/media-response",
+    "method": "GET",
+    "headers": [],
+    "body_hex": "",
+    "content_type": false,
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "modeled-default",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "3c4d6f64656c6564496e7075743e3c7363656e6172696f3e64656661756c743c2f7363656e6172696f3e3c2f4d6f64656c6564496e7075743e",
+    "content_type": "application/xml",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 409
+  },
+  {
+    "id": "modeled-override",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "3c4d6f64656c6564496e7075743e3c7363656e6172696f3e6f766572726964653c2f7363656e6172696f3e3c2f4d6f64656c6564496e7075743e",
+    "content_type": "application/xml",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "modeled-invalid-header",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "3c4d6f64656c6564496e7075743e3c7363656e6172696f3e696e76616c69642d6865616465723c2f7363656e6172696f3e3c2f4d6f64656c6564496e7075743e",
+    "content_type": "application/xml",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "modeled-headers",
+    "uri": "/modeled",
+    "method": "POST",
+    "headers": [],
+    "body_hex": "3c4d6f64656c6564496e7075743e3c7363656e6172696f3e686561646572733c2f7363656e6172696f3e3c2f4d6f64656c6564496e7075743e",
+    "content_type": "application/xml",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  }
+]

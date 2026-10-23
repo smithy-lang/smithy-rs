@@ -1,0 +1,69 @@
+C02: whitespace in plain string prefix-header values
+Validated 2026-10-14 against freshly generated legacy and schema servers.
+
+Source evidence
+  HttpBindingGenerator.generateDeserializePrefixHeaderFn uses
+  HttpHeaderValueParserGenerator.renderHeaderValueParser for map values.
+  Plain strings (including enums) use one_or_none_bytes, whose implementation
+  in aws-smithy-runtime-api/src/http/header_parse.rs calls str::trim.
+  Schema RestRequestDeserializer previously passed the raw UTF-8 value into
+  StringMapDeserializer without trimming it.
+
+Observable discrepancy
+  An x-meta-key header containing "  red  " reached the legacy handler as "red"
+  but reached the schema handler with the spaces intact. Unicode whitespace
+  behaved similarly. With an enum map value, " red " passed legacy validation
+  but schema returned 400 instead of invoking the handler.
+
+Fix
+  Trim borrowed plain string prefix-header values at the binding step. This
+  includes enum values and uses the same str::trim semantics as legacy.
+  The shared query-map reader is unchanged. Quotes, commas and interior spaces
+  remain intact. The change introduces no extra string allocations.
+
+Repeat from the repository root
+  python3 tools/schema-serde-compat/run_c02.py
+
+  The portable model is tools/schema-serde-compat/models/prefix-header-whitespace.smithy.
+  The regression can also run through :codegen-server:test with
+  --tests '*PrefixHeaderWhitespaceCompatibilityTest'.
+  The Python entry point uses the existing audit runtime snapshot helper to
+  compile without reading or restoring repository Markdown. Generated crates,
+  Cargo.lock files, source hashes, logs and comparison.json are saved under
+  tools/schema-serde-compat/.runs/C02-<UTC timestamp>/.
+
+Test contract
+  Generate fresh REST JSON and REST XML servers with schemaSerde=false, then
+  schemaSerde=true, using HTTP 1.x. Legacy must first pass 26 explicit controls
+  per protocol. Successful handlers echo their parsed input in a string payload.
+  Compare status, all response headers and exact body bytes for every request.
+  Logging and media-type decoding remain separate audit items.
+
+Coverage
+  Spaces, tabs, Unicode whitespace, Unicode text, zero-width spaces, empty and
+  absent values, interior whitespace, quotes and commas, mixed-case names,
+  multiple map entries, an empty suffix, duplicates, invalid UTF-8, and enums.
+  Each ordinary-string success also verifies that direct headers still trim,
+  while scalar queries and query-map values retain their whitespace.
+
+Direct results
+  Before: C02-20261014T061311.489156Z
+    Both legacy servers passed all controls.
+    18 of 26 comparisons differed per protocol (36 of 52 total).
+    The new runtime regression failed on "  red  ".
+  After: C02-20261014T061415.703470Z
+    All 52 HTTP comparisons passed with zero differences.
+    Both legacy result files were byte-identical before and after the fix.
+    All 26 schema request-binding unit tests passed, including C01's regression.
+    Scoped Kotlin formatting, rustfmt and whitespace checks passed.
+
+Files changed for this item (repository-relative)
+  MODIFIED rust-runtime/aws-smithy-http-server/src/schema/request_bindings.rs
+  ADDED codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/PrefixHeaderWhitespaceCompatibilityTest.kt
+  ADDED tools/schema-serde-compat/models/prefix-header-whitespace.smithy
+  ADDED tools/schema-serde-compat/run_c02.py
+  ADDED tools/schema-serde-compat/fixes/C02.txt
+  UPDATED tools/schema-serde-compat/ADDED_FILES.txt
+
+Historical audit findings/evidence are unchanged. This record documents C02's
+fix and its tested scope; it does not resolve the remaining audit items.

@@ -1,0 +1,45 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Services instantiated exclusively with freshly generated legacy SDKs.
+
+#[macro_use]
+mod handlers;
+
+pub mod kit {
+    pub type Body = http_body_util::Full<bytes::Bytes>;
+
+    pub fn from_bytes(bytes: &[u8]) -> Body {
+        http_body_util::Full::new(bytes::Bytes::copy_from_slice(bytes))
+    }
+}
+
+compat_service!(rest, compat_rest_server_sdk, ReviewRest, ReviewRestConfig, [::<Body, _, _, _>], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);
+compat_service!(awsjson, compat_awsjson_server_sdk, ReviewAwsJson, ReviewAwsJsonConfig, [::<Body, _, _, _>], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);
+compat_service!(cbor, compat_cbor_server_sdk, ReviewCbor, ReviewCborConfig, [::<Body, _, _, _>], aws_smithy_types::Blob::new(b"raw blob bytes".to_vec()), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);
+
+pub mod document {
+    use compat_document_server_sdk::input::NullDocumentInput;
+    use compat_document_server_sdk::output::NullDocumentOutput;
+    use compat_document_server_sdk::{ReviewDocument, ReviewDocumentConfig};
+
+    use super::kit::Body;
+
+    pub fn service() -> impl Clone
+           + tower::Service<
+        http::Request<Body>,
+        Response = http::Response<aws_smithy_http_server::body::BoxBody>,
+        Error = std::convert::Infallible,
+    > {
+        ReviewDocument::builder::<Body, _, _, _>(ReviewDocumentConfig::builder().build())
+            .null_document(|input: NullDocumentInput| async move {
+                NullDocumentOutput {
+                    kind: Some(format!("{:?}", input.doc)),
+                }
+            })
+            .build()
+            .expect("every operation has a handler")
+    }
+}

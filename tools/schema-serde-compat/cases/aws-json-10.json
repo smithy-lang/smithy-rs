@@ -1,0 +1,1962 @@
+[
+  {
+    "id": "body-empty",
+    "uri": "/",
+    "body": "",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-space",
+    "uri": "/",
+    "body": " ",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-object",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-null",
+    "uri": "/",
+    "body": "null",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-array",
+    "uri": "/",
+    "body": "[]",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-trailing",
+    "uri": "/",
+    "body": "{}junk",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-second",
+    "uri": "/",
+    "body": "{}{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-unknown",
+    "uri": "/",
+    "body": "{\"unknown\":{\"x\":[1,null,true]}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-unknown-bad",
+    "uri": "/",
+    "body": "{\"unknown\":[1,]}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-known-duplicate",
+    "uri": "/",
+    "body": "{\"text\":\"a\",\"text\":\"b\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-known-null",
+    "uri": "/",
+    "body": "{\"text\":\"a\",\"text\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-rename",
+    "uri": "/",
+    "body": "{\"original\":\"wrong\",\"renamed\":\"yes\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-default-null",
+    "uri": "/",
+    "body": "{\"defaulted\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/",
+    "body": "{\"nested\":{}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/",
+    "body": "{\"nested\":{\"required\":\"ok\"}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-union-empty",
+    "uri": "/",
+    "body": "{\"choice\":{}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-union-unknown",
+    "uri": "/",
+    "body": "{\"choice\":{\"unknown\":\"x\"}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-union-null",
+    "uri": "/",
+    "body": "{\"choice\":{\"text\":null}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-union-many",
+    "uri": "/",
+    "body": "{\"choice\":{\"text\":\"x\",\"integer\":1}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-list-null",
+    "uri": "/",
+    "body": "{\"list\":[\"a\",null,\"b\"]}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-sparse-list",
+    "uri": "/",
+    "body": "{\"sparseList\":[\"a\",null,\"b\"]}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-map-null",
+    "uri": "/",
+    "body": "{\"map\":{\"k\":null}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-sparse-map",
+    "uri": "/",
+    "body": "{\"sparseMap\":{\"k\":null}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-map-duplicate",
+    "uri": "/",
+    "body": "{\"map\":{\"k\":\"a\",\"k\":\"b\"}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-blob-bad",
+    "uri": "/",
+    "body": "{\"blob\":\"bad\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/",
+    "body": "{\"blob\":\"e30=\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-timestamp-string",
+    "uri": "/",
+    "body": "{\"timestamp\":\"1.5\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-timestamp-number",
+    "uri": "/",
+    "body": "{\"timestamp\":1.5}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-null",
+    "uri": "/",
+    "body": "{\"document\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-array",
+    "uri": "/",
+    "body": "{\"document\":[1,true,\"x\",null]}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-null",
+    "uri": "/",
+    "body": "{\"integer\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-0",
+    "uri": "/",
+    "body": "{\"integer\":0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer--1",
+    "uri": "/",
+    "body": "{\"integer\":-1}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-1.0",
+    "uri": "/",
+    "body": "{\"integer\":1.0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-1e0",
+    "uri": "/",
+    "body": "{\"integer\":1e0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-1",
+    "uri": "/",
+    "body": "{\"integer\":\"1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-NaN",
+    "uri": "/",
+    "body": "{\"integer\":\"NaN\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-Infinity",
+    "uri": "/",
+    "body": "{\"integer\":\"Infinity\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-1e400",
+    "uri": "/",
+    "body": "{\"integer\":1e400}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-true",
+    "uri": "/",
+    "body": "{\"integer\":true}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-null",
+    "uri": "/",
+    "body": "{\"long\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-0",
+    "uri": "/",
+    "body": "{\"long\":0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long--1",
+    "uri": "/",
+    "body": "{\"long\":-1}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-1.0",
+    "uri": "/",
+    "body": "{\"long\":1.0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-1e0",
+    "uri": "/",
+    "body": "{\"long\":1e0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-1",
+    "uri": "/",
+    "body": "{\"long\":\"1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-NaN",
+    "uri": "/",
+    "body": "{\"long\":\"NaN\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-Infinity",
+    "uri": "/",
+    "body": "{\"long\":\"Infinity\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-1e400",
+    "uri": "/",
+    "body": "{\"long\":1e400}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-long-true",
+    "uri": "/",
+    "body": "{\"long\":true}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-null",
+    "uri": "/",
+    "body": "{\"float\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-0",
+    "uri": "/",
+    "body": "{\"float\":0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float--1",
+    "uri": "/",
+    "body": "{\"float\":-1}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-1.0",
+    "uri": "/",
+    "body": "{\"float\":1.0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-1e0",
+    "uri": "/",
+    "body": "{\"float\":1e0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-1",
+    "uri": "/",
+    "body": "{\"float\":\"1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-NaN",
+    "uri": "/",
+    "body": "{\"float\":\"NaN\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-Infinity",
+    "uri": "/",
+    "body": "{\"float\":\"Infinity\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-1e400",
+    "uri": "/",
+    "body": "{\"float\":1e400}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-float-true",
+    "uri": "/",
+    "body": "{\"float\":true}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-null",
+    "uri": "/",
+    "body": "{\"double\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-0",
+    "uri": "/",
+    "body": "{\"double\":0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double--1",
+    "uri": "/",
+    "body": "{\"double\":-1}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-1.0",
+    "uri": "/",
+    "body": "{\"double\":1.0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-1e0",
+    "uri": "/",
+    "body": "{\"double\":1e0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-1",
+    "uri": "/",
+    "body": "{\"double\":\"1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-NaN",
+    "uri": "/",
+    "body": "{\"double\":\"NaN\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-Infinity",
+    "uri": "/",
+    "body": "{\"double\":\"Infinity\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-1e400",
+    "uri": "/",
+    "body": "{\"double\":1e400}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-double-true",
+    "uri": "/",
+    "body": "{\"double\":true}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-null",
+    "uri": "/",
+    "body": "{\"boolean\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-0",
+    "uri": "/",
+    "body": "{\"boolean\":0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean--1",
+    "uri": "/",
+    "body": "{\"boolean\":-1}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-1.0",
+    "uri": "/",
+    "body": "{\"boolean\":1.0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-1e0",
+    "uri": "/",
+    "body": "{\"boolean\":1e0}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-1",
+    "uri": "/",
+    "body": "{\"boolean\":\"1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-NaN",
+    "uri": "/",
+    "body": "{\"boolean\":\"NaN\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-Infinity",
+    "uri": "/",
+    "body": "{\"boolean\":\"Infinity\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-1e400",
+    "uri": "/",
+    "body": "{\"boolean\":1e400}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-boolean-true",
+    "uri": "/",
+    "body": "{\"boolean\":true}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/",
+    "body": "{\"scenario\": \"empty\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-empty-headers",
+    "uri": "/",
+    "body": "{\"scenario\": \"empty-headers\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/",
+    "body": "{\"scenario\": \"zero\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/",
+    "body": "{\"scenario\": \"quotes\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-invalid-public",
+    "uri": "/",
+    "body": "{\"scenario\": \"invalid-public\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-invalid-secret",
+    "uri": "/",
+    "body": "{\"scenario\": \"invalid-secret\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "response-invalid-prefix-key",
+    "uri": "/",
+    "body": "{\"scenario\": \"invalid-prefix-key\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-invalid-prefix-value",
+    "uri": "/",
+    "body": "{\"scenario\": \"invalid-prefix-value\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-date",
+    "uri": "/",
+    "body": "{\"scenario\": \"date\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-0",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-0\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-99",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-99\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-100",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-100\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-204",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-204\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-304",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-304\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-600",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-600\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-999",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-999\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-1000",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-1000\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code-65536",
+    "uri": "/",
+    "body": "{\"scenario\": \"code-65536\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-code--1",
+    "uri": "/",
+    "body": "{\"scenario\": \"code--1\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "content-type-none",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": false
+  },
+  {
+    "id": "content-type-wrong",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "text/plain"
+  },
+  {
+    "id": "content-type-charset",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "application/json; charset=utf-8"
+  },
+  {
+    "id": "content-type-bad",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "broken"
+  },
+  {
+    "id": "content-type-case",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderShapeParser",
+    "content_type": "Application/Json"
+  },
+  {
+    "id": "body-unknown-escape",
+    "uri": "/",
+    "body": "{\"unknown\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-known-escape",
+    "uri": "/",
+    "body": "{\"text\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-escape",
+    "uri": "/",
+    "body": "{\"document\":\"\\q\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-unknown-surrogate",
+    "uri": "/",
+    "body": "{\"unknown\":\"\\uD800\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-known-surrogate",
+    "uri": "/",
+    "body": "{\"text\":\"\\uD800\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-limited-short",
+    "uri": "/",
+    "body": "{\"limited\":\"x\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-limited-valid",
+    "uri": "/",
+    "body": "{\"limited\":\"yes\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-limited-long",
+    "uri": "/",
+    "body": "{\"limited\":\"abcde\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-unique-duplicate",
+    "uri": "/",
+    "body": "{\"unique\":[\"x\",\"x\"]}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-enum-valid",
+    "uri": "/",
+    "body": "{\"mode\":\"a\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-enum-invalid",
+    "uri": "/",
+    "body": "{\"mode\":\"other\"}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-int-enum-valid",
+    "uri": "/",
+    "body": "{\"intMode\":1}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-int-enum-invalid",
+    "uri": "/",
+    "body": "{\"intMode\":9}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-large-long",
+    "uri": "/",
+    "body": "{\"long\":9007199254740993.0}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-negative-overflow",
+    "uri": "/",
+    "body": "{\"double\":-1e400}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-underflow",
+    "uri": "/",
+    "body": "{\"double\":1e-400}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-default-duplicate-null",
+    "uri": "/",
+    "body": "{\"defaulted\":7,\"defaulted\":null}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-integer-duplicate-null",
+    "uri": "/",
+    "body": "{\"integer\":7,\"integer\":null}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-map-duplicate-null",
+    "uri": "/",
+    "body": "{\"map\":{\"k\":\"x\",\"k\":null}}",
+    "source": "JsonParserGenerator.deserializeNumber/deserializeMember; ServerSchemaDeserializeGenerator; constraint generators",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-application/json",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-*/*",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "*/*"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-application/*",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/*"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-text/plain",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "text/plain"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-application/json;q=0",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json;q=0"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-application/json, text/plain",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "application/json, text/plain"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "accept-not-a-mime",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "accept",
+        "not-a-mime"
+      ],
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "ServerHttpBoundProtocolGenerator.verifyAcceptHeader",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-63",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-64",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-65",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-127",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-128",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-document-depth-129",
+    "uri": "/",
+    "body": "{\"document\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+    "source": "StructuredDataParserGenerator.maxDepth; JsonDeserializer.enter_container",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "routing-target-0",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-target-1",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Other.Body"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-target-2",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Missing"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-target-3",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body.extra"
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-target-4",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        ""
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-target-5",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit."
+      ]
+    ],
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter; ServerAwsJsonProtocol"
+  },
+  {
+    "id": "routing-missing-target",
+    "uri": "/",
+    "body": "{}",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "AwsJsonRouter"
+  },
+  {
+    "id": "response-media-prefix",
+    "uri": "/",
+    "method": "POST",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.MediaResponse"
+      ]
+    ],
+    "body_hex": "",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "modeled-default",
+    "uri": "/",
+    "method": "POST",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Modeled"
+      ]
+    ],
+    "body_hex": "7b227363656e6172696f223a202264656661756c74227d",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "expected_legacy_status": 400
+  },
+  {
+    "id": "modeled-override",
+    "uri": "/",
+    "method": "POST",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Modeled"
+      ]
+    ],
+    "body_hex": "7b227363656e6172696f223a20226f76657272696465227d",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  },
+  {
+    "id": "modeled-invalid-header",
+    "uri": "/",
+    "method": "POST",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Modeled"
+      ]
+    ],
+    "body_hex": "7b227363656e6172696f223a2022696e76616c69642d686561646572227d",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator",
+    "forbidden_log_markers": [
+      "SECRET_HEADER"
+    ]
+  },
+  {
+    "id": "modeled-headers",
+    "uri": "/",
+    "method": "POST",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Modeled"
+      ]
+    ],
+    "body_hex": "7b227363656e6172696f223a202268656164657273227d",
+    "content_type": "application/x-amz-json-1.0",
+    "source": "HttpBindingGenerator.headerFmtFun; serverSerializeError; EventStreamUnmarshallerGenerator; ServerStreamingOperationGenerator"
+  }
+]

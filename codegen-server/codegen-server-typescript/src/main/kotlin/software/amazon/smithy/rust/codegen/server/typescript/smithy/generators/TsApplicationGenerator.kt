@@ -157,8 +157,8 @@ class TsApplicationGenerator(
         ) {
             rustTemplate(
                 """
-                let plugins = #{SmithyServer}::plugin::PluginPipeline::new();
-                let builder = crate::service::$serviceName::builder_with_plugins(plugins);
+                let config = crate::service::${serviceName}Config::builder().build();
+                let builder = crate::service::$serviceName::builder(config);
                 """,
                 *codegenScope,
             )

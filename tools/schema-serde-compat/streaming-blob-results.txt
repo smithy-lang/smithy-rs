@@ -1,0 +1,128 @@
+RPCv2 CBOR streaming blob implementation and verification (2026-10-14)
+
+Implemented:
+- ByteStream stays the server output type. Generated glue extracts it and passes
+  the modeled member schema (generation-time index, no runtime search) to the protocol.
+- Private server runtime OuterSerializer opens the map through write_struct and
+  invokes the existing generated serialize_members. MemberSerializer delegates
+  every value write to the existing configured CBOR codec, including nested values.
+- Prefix / Streaming / Suffix / Done body states emit definite chunks within an
+  indefinite byte string. No collection, no known encoded size, no Content-Length.
+  Pending propagates; empty chunks yield; errors terminate without closing markers.
+- Removed the generated async output collection, future alias and buffered helper.
+  Updated protocol implementations, wrappers, test doubles and checked-in example glue.
+- Incoming preparation/deserialization, event framing, client behavior, shared codec,
+  ShapeSerializer and legacy router interfaces were not changed by this task.
+
+Fresh legacy baseline (schemaSerde=false, HTTP 1.x):
+Command: python3 tools/schema-serde-compat/generate_streaming_blob_http1.py
+Evidence: .runs/streaming-blob-http1-20261014T201422.716528Z/
+Freshly generated and executed REST/CBOR response serializers, six success cases.
+REST: ByteStream; status 200; application/octet-stream; no content-length;
+      hello -> 68656c6c6f, empty -> empty, binary -> 00ff01.
+CBOR: Blob; status 200; application/cbor; smithy-protocol: rpc-v2-cbor;
+      hello -> bf64646174614568656c6c6fff (length 13),
+      empty -> bf646461746140ff (length 8),
+      binary -> bf64646174614300ff01ff (length 11).
+Baseline was reported before implementation edits. The agreed intentional difference
+is indefinite blob framing and asynchronous transfer: he/llo would encode as
+bf64646174615f426865436c6c6fffff, without content-length. Decoded values stay equal.
+These captures are generated HTTP response objects, not socket transfer captures.
+
+Final verification:
+- cargo test --quiet --manifest-path rust-runtime/aws-smithy-http-server/Cargo.toml --tests
+  PASS: 401 tests across 11 binaries (344 unit tests), including routing/protocols.
+- cargo test --quiet --manifest-path rust-runtime/aws-smithy-http-server/Cargo.toml --lib schema::request_bindings
+  PASS: 27 tests (also included in the above total).
+- cargo test --quiet --manifest-path rust-runtime/aws-smithy-http-server/Cargo.toml --lib schema::protocol::rpc_v2_cbor_streaming
+  PASS: 9 focused tests, including all write methods, codec errors, nested members,
+  delayed and empty streams, cancellation, errors before/after data, and prefix polling.
+- ./gradlew :codegen-server:test --tests '*CborLiveBlobTest'
+    --tests '*RpcV2CborStreamingBlobCompatibilityTest'
+    --tests '*ServerSchemaStreamingTest' --tests '*SchemaRoutingGeneratorTest' --console=plain
+  PASS: 16 Kotlin integration tests (1 + 2 + 4 + 9).
+  Generated live test proves ordinary title serialization and schema key fahad,
+  ByteStream typing in a shared REST/CBOR service, and prefix availability before
+  the stream is released. Explicit empty blob and omitted ordinary title checked.
+  Compatibility test: 36 CBOR cases and 6 REST cases for each of legacy, schema-only,
+  and shared-service schema; 84 pairwise comparisons total. Includes malformed and
+  missing inputs, Accept rejections and unchanged event-stream frame bytes.
+  Evidence: .runs/cbor-streaming-blob-14998746090499084508/{false,true,shared}.txt
+            .runs/rest-streaming-blob-1382910409414900189/{false,true,shared}.txt
+- cargo check --quiet --manifest-path examples/pokemon-service-server-sdk/Cargo.toml
+  PASS.
+- Targeted ktlintPreCommit formatting, rustfmt, git diff --check: PASS.
+
+Requested fresh comparison reruns:
+- python3 tools/schema-serde-compat/run_c01.py: PASS, 64 comparisons, zero differences.
+  .runs/C01-20261014T202048.254556Z/comparison.json
+- python3 tools/schema-serde-compat/run_c02.py: PASS, 52 comparisons, zero differences.
+  .runs/C02-20261014T202121.688125Z/comparison.json
+- python3 tools/schema-serde-compat/run_c03.py: PASS, 64 ordinary HTTP comparisons and
+  8 expected legacy-panic/schema-error comparisons, zero unexpected differences.
+  .runs/C03-20261014T202146.719721Z/comparison.json
+  IMPORTANT: The existing C03 runner differs from the supplied plan: it already
+  expects eight intentional panic-to-error changes. This task preserved that code
+  and its expectations, including the observed legacy all-empty prefix-header panic.
+
+Limitations and corrected test failures:
+- Current Smithy validation requires streaming blobs to be required/defaulted, and
+  the server symbol provider emits non-optional ByteStream even without validation.
+  An attempted optional generated fixture failed validation, then failed its Rust
+  Option<ByteStream> assumption. Replaced it with a valid required-member fixture.
+  Optional absence-versus-empty is covered in runtime tests; the optional generator
+  branch is retained but is not reached by the current symbol provider.
+- Initial all-write-method success test hit the codec's expected unsupported Document
+  error. Document and big-number writes now compare codec error behavior separately.
+  All final tests pass.
+- No generated client experiment was rerun or used as evidence. This does not fix
+  client-side extraction of CBOR blob members.
+- No commit, push, external message, folder deletion or unrelated compatibility fix.
+
+Exact source/document files changed by this task (relative to repository root):
+.changelog/rpcv2cbor-server-streaming-blobs.md
+codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerStreamingOperationGenerator.kt
+codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/customizations/ServerSchemaStreamingTest.kt
+codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/SchemaRoutingGeneratorTest.kt
+codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/CborLiveBlobTest.kt
+codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/RpcV2CborStreamingBlobCompatibilityTest.kt
+codegen-server/src/test/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/StreamingBlobHttp1GenerationTest.kt
+examples/pokemon-service-server-sdk/src/operation_shape.rs
+rust-runtime/aws-smithy-http-server/src/operation/shape.rs
+rust-runtime/aws-smithy-http-server/src/operation/upgrade.rs
+rust-runtime/aws-smithy-http-server/src/operation/upgrade/tests.rs
+rust-runtime/aws-smithy-http-server/src/schema/event_stream.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/aws_json.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/mod.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rest.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rest_json_1.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rest_xml.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc_v2_cbor.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/rpc_v2_cbor_streaming.rs
+rust-runtime/aws-smithy-http-server/src/schema/protocol/tests.rs
+rust-runtime/aws-smithy-http-server/src/schema/routing/test_helpers.rs
+rust-runtime/aws-smithy-http-server/tests/media_type_headers.rs
+rust-runtime/aws-smithy-http-server/tests/modeled_headers.rs
+rust-runtime/aws-smithy-http-server/tests/response_headers.rs
+rust-runtime/aws-smithy-http-server/tests/rpc_response_bindings.rs
+tools/schema-serde-compat/streaming-blob-results.txt
+
+Generated ignored build/evidence outputs also exist under build/, target/ and
+tools/schema-serde-compat/.runs/. Existing unrelated edits and untracked files remain.
+
+Follow-up: optional response body (2026-10-14)
+- serialize_streaming_response now accepts Option<BoxBody>. Its API documentation
+  explains absence versus a present empty stream and why the response owns the
+  stream separately from SerializableStruct.
+- Generated output glue passes presence to the protocol. No output-side use of
+  streaming_blob_is_document remains; input handling is unchanged.
+- CBOR None omits the blob via ordinary serialization. REST and event-stream None
+  retain the empty payload behavior. Implementations, wrappers, test doubles,
+  concrete callers and checked-in Pokemon glue use the updated API.
+- Updated absence test to call serialize_streaming_response directly and added
+  absent-versus-empty response-head/body checks for REST blobs and event streams.
+- Verification: 402 runtime tests in 11 binaries; 16 generated-server tests;
+  Pokemon SDK cargo check; targeted Kotlin formatting; git diff --check: all pass.
+- C01-C03 results above belong to the preceding streaming implementation; those
+  unrelated input suites were not rerun for this output-only API follow-up.
