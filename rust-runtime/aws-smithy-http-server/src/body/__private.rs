@@ -59,8 +59,8 @@ pub(crate) const DEFAULT_MAX_INITIAL_CAPACITY: NonZeroUsize = NonZeroUsize::new(
 pub struct CollectionConfig {
     /// Maximum body bytes; `None` disables the byte limit.
     limit: Option<NonZeroUsize>,
-    /// Number of ready frame polls before yielding.
-    frame_budget: NonZeroUsize,
+    /// Number of ready frame polls before yielding; `None` disables forced yielding.
+    frame_budget: Option<NonZeroUsize>,
     /// Cap on the initial buffer reservation; `None` starts without a reservation.
     initial_capacity: Option<NonZeroUsize>,
 }
@@ -76,8 +76,8 @@ impl CollectionConfig {
         self.limit
     }
 
-    /// Returns the number of ready frame polls before yielding.
-    pub fn frame_budget(&self) -> NonZeroUsize {
+    /// Returns the number of ready frame polls before yielding; `None` disables forced yielding.
+    pub fn frame_budget(&self) -> Option<NonZeroUsize> {
         self.frame_budget
     }
 
@@ -91,7 +91,7 @@ impl Default for CollectionConfig {
     fn default() -> Self {
         Self {
             limit: DEFAULT_LIMIT_SIZE,
-            frame_budget: DEFAULT_FRAME_BUDGET,
+            frame_budget: Some(DEFAULT_FRAME_BUDGET),
             initial_capacity: Some(DEFAULT_MAX_INITIAL_CAPACITY),
         }
     }
@@ -116,14 +116,14 @@ impl CollectionConfigBuilder {
     }
 
     /// Sets the number of ready frame polls before yielding.
-    pub fn frame_budget(mut self, frame_budget: NonZeroUsize) -> Self {
-        self.config.frame_budget = frame_budget;
-        self
+    pub fn frame_budget(self, frame_budget: NonZeroUsize) -> Self {
+        self.set_frame_budget(Some(frame_budget))
     }
 
-    /// Sets the frame poll budget, or uses the default with `None`.
-    pub fn set_frame_budget(self, frame_budget: Option<NonZeroUsize>) -> Self {
-        self.frame_budget(frame_budget.unwrap_or(DEFAULT_FRAME_BUDGET))
+    /// Sets the frame poll budget, or disables forced yielding with `None`.
+    pub fn set_frame_budget(mut self, frame_budget: Option<NonZeroUsize>) -> Self {
+        self.config.frame_budget = frame_budget;
+        self
     }
 
     /// Sets the initial buffer reservation cap.
@@ -152,7 +152,8 @@ impl CollectionConfigBuilder {
 ///
 /// `frame_budget` counts ready frame polls, including empty frames and trailers.
 /// A pending body poll resets the budget; exhausting it yields and wakes the task.
-/// Passing `None` uses no byte limit, a 32-frame budget, and a 32 KiB reservation cap.
+/// Setting the frame budget to `None` disables forced yielding.
+/// Passing `None` for `config` uses no byte limit, a 32-frame budget, and a 32 KiB reservation cap.
 pub async fn collect_body<B>(body: B, config: Option<CollectionConfig>) -> Result<Bytes, CollectBodyError<B::Error>>
 where
     B: HttpBody,
@@ -308,8 +309,11 @@ fn enforce_body_limit<E>(current_size: u64, limit: NonZeroUsize) -> Result<(), C
 // Body Poll Budget
 // ============================================================================
 
-/// Default number of consecutive ready body polls before a streaming request yields.
-pub(crate) const DEFAULT_STREAMING_FRAME_BUDGET: NonZeroUsize = DEFAULT_FRAME_BUDGET;
+#[derive(Debug)]
+struct FrameBudget {
+    frame_budget: NonZeroUsize,
+    remaining_budget: usize,
+}
 
 pin_project_lite::pin_project! {
     /// An HTTP body that yields after a bounded number of consecutive ready polls.
@@ -319,26 +323,29 @@ pin_project_lite::pin_project! {
     pub(crate) struct BudgetedBody<B> {
         #[pin]
         inner: B,
-        frame_budget: NonZeroUsize,
-        remaining_budget: usize,
+        budget: Option<FrameBudget>,
     }
 }
 
-/// Wraps a streaming request body with the default 32-poll budget.
-pub(crate) fn wrap_streaming_body<B: HttpBody>(body: B) -> BudgetedBody<B> {
-    wrap_body_with_frame_budget(body, DEFAULT_STREAMING_FRAME_BUDGET)
+/// Wraps a streaming request body with the configured poll budget.
+/// `None` disables forced yielding.
+pub(crate) fn wrap_streaming_body<B: HttpBody>(body: B, frame_budget: Option<NonZeroUsize>) -> BudgetedBody<B> {
+    wrap_body_with_frame_budget(body, frame_budget)
 }
 
-/// Wraps an HTTP body with a positive budget of consecutive ready frame polls.
+/// Wraps an HTTP body with an optional budget of consecutive ready frame polls.
 ///
 /// Empty data frames and trailers count toward the budget. An underlying pending poll
 /// resets it. Exhausting the budget yields without polling the inner body and wakes the
 /// task to resume. This bounds work between yields, not the stream's total bytes or duration.
-fn wrap_body_with_frame_budget<B: HttpBody>(body: B, frame_budget: NonZeroUsize) -> BudgetedBody<B> {
+/// `None` disables the budget and forwards polls without counting them.
+fn wrap_body_with_frame_budget<B: HttpBody>(body: B, frame_budget: Option<NonZeroUsize>) -> BudgetedBody<B> {
     BudgetedBody {
         inner: body,
-        frame_budget,
-        remaining_budget: frame_budget.get(),
+        budget: frame_budget.map(|frame_budget| FrameBudget {
+            frame_budget,
+            remaining_budget: frame_budget.get(),
+        }),
     }
 }
 
@@ -351,16 +358,19 @@ impl<B: HttpBody> HttpBody for BudgetedBody<B> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
-        if *this.remaining_budget == 0 {
-            *this.remaining_budget = this.frame_budget.get();
+        let Some(budget) = this.budget else {
+            return this.inner.poll_frame(cx);
+        };
+        if budget.remaining_budget == 0 {
+            budget.remaining_budget = budget.frame_budget.get();
             cx.waker().wake_by_ref();
             return std::task::Poll::Pending;
         }
 
-        *this.remaining_budget -= 1;
+        budget.remaining_budget -= 1;
         let result = this.inner.poll_frame(cx);
         if result.is_pending() {
-            *this.remaining_budget = this.frame_budget.get();
+            budget.remaining_budget = budget.frame_budget.get();
         }
         result
     }

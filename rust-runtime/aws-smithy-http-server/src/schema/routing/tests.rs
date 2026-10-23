@@ -578,6 +578,29 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
         },
     )))
 }
+
+#[test]
+fn routing_poll_budget_uses_the_largest_override_and_none_disables_it() {
+    let global = RequestBodyCollectionConfig::default().with_read_poll_budget(NonZeroUsize::new(3));
+    let mut config = crate::schema::ServiceRequestBodyConfig::default().with_global(global);
+    assert_eq!(config.for_operation(FIRST.shape_id()), global);
+    config.per_operation.insert(
+        FIRST.shape_id().to_string(),
+        RequestBodyCollectionConfig::default().with_read_poll_budget(NonZeroUsize::new(7)),
+    );
+    assert_eq!(config.for_routing().read_poll_budget, NonZeroUsize::new(7));
+    assert_eq!(
+        config.for_operation(FIRST.shape_id()).read_poll_budget,
+        NonZeroUsize::new(7)
+    );
+    assert_eq!(config.for_operation(SECOND.shape_id()), global);
+    config.per_operation.insert(
+        FIRST.shape_id().to_string(),
+        RequestBodyCollectionConfig::default().with_read_poll_budget(None),
+    );
+    assert_eq!(config.for_routing().read_poll_budget, None);
+}
+
 #[tokio::test(start_paused = true)]
 async fn collection_enforces_the_provisional_maximum_timeout() {
     let mut options = ProtocolOptions::default();
@@ -812,26 +835,39 @@ async fn ready_body_frames_yield_and_wake_before_collection_finishes() {
         }
     }
     for limit in [0, 1024] {
-        let reads = Arc::new(AtomicUsize::new(0));
-        let observed = reads.clone();
-        let frames = futures_util::stream::poll_fn(move |_| {
-            let index = observed.fetch_add(1, Ordering::SeqCst);
-            Poll::Ready(match index {
-                0 => Some(Ok::<_, Error>(Frame::data(Bytes::from_static(b"first\n")))),
-                1..=1000 => Some(Ok(Frame::data(Bytes::new()))),
-                _ => None,
-            })
-        });
-        let mut options = ProtocolOptions::default();
-        options.service_config.request_body.global = config(limit, 1000);
-        let mut app = service(options);
-        let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
-        let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
-        let waker = std::task::Waker::from(wakes.clone());
-        assert!(future.as_mut().poll(&mut Context::from_waker(&waker)).is_pending());
-        assert!((1..1000).contains(&reads.load(Ordering::SeqCst)));
-        assert!(wakes.0.load(Ordering::SeqCst) > 0, "yield must schedule another poll");
-        assert_eq!(future.await.unwrap().status(), StatusCode::OK);
+        for budget in [NonZeroUsize::new(32), NonZeroUsize::new(3), None] {
+            let reads = Arc::new(AtomicUsize::new(0));
+            let observed = reads.clone();
+            let frames = futures_util::stream::poll_fn(move |_| {
+                let index = observed.fetch_add(1, Ordering::SeqCst);
+                Poll::Ready(match index {
+                    0 => Some(Ok::<_, Error>(Frame::data(Bytes::from_static(b"first\n")))),
+                    1..=1000 => Some(Ok(Frame::data(Bytes::new()))),
+                    _ => None,
+                })
+            });
+            let mut options = ProtocolOptions::default();
+            options.service_config.request_body.global = config(limit, 1000).with_read_poll_budget(budget);
+            let mut app = service(options);
+            let mut future = Box::pin(app.call(Request::new(Body::new(http_body_util::StreamBody::new(frames)))));
+            let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
+            let waker = std::task::Waker::from(wakes.clone());
+            let first_poll = future.as_mut().poll(&mut Context::from_waker(&waker));
+            let response = if let Some(budget) = budget {
+                assert!(first_poll.is_pending());
+                assert_eq!(reads.load(Ordering::SeqCst), budget.get());
+                assert_eq!(wakes.0.load(Ordering::SeqCst), 1, "yield must schedule another poll");
+                future.await.unwrap()
+            } else {
+                assert_eq!(reads.load(Ordering::SeqCst), 1002);
+                assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
+                let Poll::Ready(response) = first_poll else {
+                    panic!("disabled budget must not force a yield");
+                };
+                response.unwrap()
+            };
+            assert_eq!(response.status(), StatusCode::OK);
+        }
     }
 }
 

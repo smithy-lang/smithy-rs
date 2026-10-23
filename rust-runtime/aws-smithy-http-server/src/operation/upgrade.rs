@@ -406,7 +406,7 @@ where
                 && (member.shape_type() == aws_smithy_schema::ShapeType::Union || directive != BodyDirective::Collect)
         });
         let (bytes, body) = if input_streams {
-            let body = crate::body::__private::wrap_streaming_body(body);
+            let body = crate::body::__private::wrap_streaming_body(body, config.unwrap_or_default().read_poll_budget);
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if directive == BodyDirective::Collect {
             // TODO: Support incremental CBOR blob decoding once the handler contract for

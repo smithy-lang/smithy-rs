@@ -99,7 +99,12 @@ fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
         }
     }
 
-    for budget in [None, NonZeroUsize::new(1), NonZeroUsize::new(7)] {
+    for budget in [
+        Some(DEFAULT_FRAME_BUDGET),
+        None,
+        NonZeroUsize::new(1),
+        NonZeroUsize::new(7),
+    ] {
         for limit in [0, 1024] {
             let polls = Arc::new(AtomicUsize::new(0));
             let observed = polls.clone();
@@ -119,7 +124,7 @@ fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
                     Some(
                         CollectionConfig::builder()
                             .set_limit(NonZeroUsize::new(limit))
-                            .frame_budget(budget.unwrap_or(DEFAULT_FRAME_BUDGET))
+                            .set_frame_budget(budget)
                             .build(),
                     ),
                 )
@@ -128,25 +133,40 @@ fn collection_yields_and_self_wakes_with_default_and_explicit_frame_budgets() {
             let wakes = Arc::new(WakeCount(AtomicUsize::new(0)));
             let waker = Waker::from(wakes.clone());
             let mut cx = Context::from_waker(&waker);
-            let expected_budget = budget.map(NonZeroUsize::get).unwrap_or(DEFAULT_FRAME_BUDGET.get());
+            let expected_budget = budget.map(NonZeroUsize::get);
             let mut yields = 0;
             loop {
                 match future.as_mut().poll(&mut cx) {
                     Poll::Pending => {
                         yields += 1;
-                        assert_eq!(polls.load(Ordering::SeqCst), yields * expected_budget);
+                        assert_eq!(
+                            polls.load(Ordering::SeqCst),
+                            yields * expected_budget.expect("budget enabled")
+                        );
                         assert_eq!(wakes.0.load(Ordering::SeqCst), yields);
                     }
                     Poll::Ready(result) => {
                         assert_eq!(result.unwrap(), "x");
                         assert_eq!(polls.load(Ordering::SeqCst), 132);
-                        assert_eq!(yields, 131 / expected_budget);
+                        assert_eq!(yields, expected_budget.map(|budget| 131 / budget).unwrap_or(0));
                         break;
                     }
                 }
             }
         }
     }
+}
+
+#[test]
+fn collection_poll_budget_defaults_to_32_and_none_disables_it() {
+    assert_eq!(CollectionConfig::default().frame_budget(), Some(DEFAULT_FRAME_BUDGET));
+    assert_eq!(
+        CollectionConfig::builder()
+            .set_frame_budget(None)
+            .build()
+            .frame_budget(),
+        None
+    );
 }
 
 #[test]

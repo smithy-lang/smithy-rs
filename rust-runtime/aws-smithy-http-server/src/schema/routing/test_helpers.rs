@@ -331,6 +331,7 @@ pub(super) fn config(bytes: usize, timeout_ms: u64) -> RequestBodyCollectionConf
     RequestBodyCollectionConfig {
         max_bytes: NonZeroUsize::new(bytes),
         read_timeout: Some(Duration::from_millis(timeout_ms)),
+        ..Default::default()
     }
 }
 pub(super) fn request(body: impl Into<Bytes>) -> Request<Body> {

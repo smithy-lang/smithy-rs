@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{wrap_body_with_frame_budget, wrap_streaming_body, DEFAULT_STREAMING_FRAME_BUDGET};
+use super::{wrap_body_with_frame_budget, wrap_streaming_body, DEFAULT_FRAME_BUDGET};
 use bytes::Bytes;
 use http_body::{Body, Frame};
 use http_body_util::{Full, StreamBody};
@@ -22,7 +22,13 @@ impl Wake for WakeCount {
 
 #[test]
 fn streaming_budget_yields_and_forwards_data_empty_frames_trailers_and_errors() {
-    for budget in [None, NonZeroUsize::new(1), NonZeroUsize::new(7)] {
+    for budget in [
+        Some(DEFAULT_FRAME_BUDGET),
+        None,
+        NonZeroUsize::new(1),
+        NonZeroUsize::new(7),
+        NonZeroUsize::new(usize::MAX),
+    ] {
         let polls = Arc::new(AtomicUsize::new(0));
         let observed = polls.clone();
         let frames = futures_util::stream::poll_fn(move |_| {
@@ -40,22 +46,22 @@ fn streaming_budget_yields_and_forwards_data_empty_frames_trailers_and_errors() 
             })
         });
         let inner = StreamBody::new(frames);
-        let body = match budget {
-            None => wrap_streaming_body(inner),
-            Some(budget) => wrap_body_with_frame_budget(inner, budget),
-        };
+        let body = wrap_streaming_body(inner, budget);
         let mut body = Box::pin(body);
         let wakes = Arc::new(WakeCount::default());
         let waker = Waker::from(wakes.clone());
         let mut cx = Context::from_waker(&waker);
-        let expected_budget = budget.unwrap_or(DEFAULT_STREAMING_FRAME_BUDGET).get();
+        let expected_budget = budget.map(NonZeroUsize::get);
         let mut yields = 0;
         let mut forwarded = 0;
         loop {
             match body.as_mut().poll_frame(&mut cx) {
                 Poll::Pending => {
                     yields += 1;
-                    assert_eq!(polls.load(Ordering::SeqCst), yields * expected_budget);
+                    assert_eq!(
+                        polls.load(Ordering::SeqCst),
+                        yields * expected_budget.expect("budget enabled")
+                    );
                     assert_eq!(wakes.0.load(Ordering::SeqCst), yields);
                 }
                 Poll::Ready(Some(frame)) => {
@@ -73,7 +79,7 @@ fn streaming_budget_yields_and_forwards_data_empty_frames_trailers_and_errors() 
         }
         assert_eq!(forwarded, 67);
         assert_eq!(polls.load(Ordering::SeqCst), 68);
-        assert_eq!(yields, 67 / expected_budget);
+        assert_eq!(yields, expected_budget.map(|budget| 67 / budget).unwrap_or(0));
     }
 }
 
@@ -93,7 +99,7 @@ fn underlying_pending_resets_streaming_budget_and_trailers_consume_it() {
             _ => Poll::Ready(None),
         }
     });
-    let body = wrap_body_with_frame_budget(StreamBody::new(frames), NonZeroUsize::new(3).unwrap());
+    let body = wrap_body_with_frame_budget(StreamBody::new(frames), NonZeroUsize::new(3));
     let mut body = Box::pin(body);
     let wakes = Arc::new(WakeCount::default());
     let waker = Waker::from(wakes.clone());
@@ -120,7 +126,7 @@ fn underlying_pending_resets_streaming_budget_and_trailers_consume_it() {
 async fn streaming_wrapper_preserves_size_hints_and_end_of_stream() {
     use http_body_util::BodyExt;
 
-    let mut body = wrap_streaming_body(Full::new(Bytes::from_static(b"payload")));
+    let mut body = wrap_streaming_body(Full::new(Bytes::from_static(b"payload")), Some(DEFAULT_FRAME_BUDGET));
     assert_eq!(body.size_hint().exact(), Some(7));
     assert!(!body.is_end_stream());
     assert_eq!(body.frame().await.unwrap().unwrap().into_data().unwrap(), "payload");
@@ -165,7 +171,7 @@ fn event_stream_receiver_yields_while_reading_an_incomplete_message() {
             _ => panic!("receiver should stop reading after the message"),
         }))))
     });
-    let body = SdkBody::from_body_1_x(wrap_streaming_body(StreamBody::new(frames)));
+    let body = SdkBody::from_body_1_x(wrap_streaming_body(StreamBody::new(frames), Some(DEFAULT_FRAME_BUDGET)));
     let mut receiver = Receiver::new(Unmarshaller, body);
     let mut recv = Box::pin(receiver.recv());
     let wakes = Arc::new(WakeCount::default());
