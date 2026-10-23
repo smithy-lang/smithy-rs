@@ -128,6 +128,10 @@ impl ErrorMetadata {
             .as_ref()
             .and_then(|extras| extras.get(key).map(|k| k.as_str()))
     }
+    /// Returns all additional information about the error if it's present.
+    pub fn extras(&self) -> Option<HashMap<&'static str, String>> {
+        self.extras
+    }
 
     /// Creates an `Error` builder.
     pub fn builder() -> Builder {
