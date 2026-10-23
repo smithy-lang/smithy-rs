@@ -110,7 +110,10 @@ def parse_param_directive(line: str, res: DocstringParserResult):
     parts = line.split(" ", maxsplit=2)
     if len(parts) != 3:
         raise ValueError(f"Invalid `:param` directive: `{line}` must be in `:param name T:` format")
-    name = parts[1]
+    # The code generator may emit Rust raw identifiers (e.g. `r#type` for a field
+    # named `type`, which is a reserved keyword in Rust). Those are not valid
+    # Python identifiers, so strip the `r#` prefix for the stubs.
+    name = parts[1].removeprefix("r#")
     ty = parts[2].rstrip(":")
     res.params.append((name, ty))
 
