@@ -189,3 +189,47 @@ impl<Protocol> IntoResponse<Protocol> for MetricsError {
         response
     }
 }
+
+#[cfg(not(any(
+    feature = "aws-smithy-http-server-065",
+    feature = "aws-smithy-legacy-http-server"
+)))]
+mod schema {
+    use super::MetricsError;
+    use aws_smithy_http_server::schema::HttpModeledError;
+    use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+    use aws_smithy_schema::{shape_id, Schema, ShapeType, StringTrait, TraitMap};
+    use std::sync::LazyLock;
+
+    static ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+        let mut traits = TraitMap::new();
+        traits.insert(Box::new(StringTrait::new(
+            shape_id!("smithy.api", "error"),
+            "server",
+        )));
+        traits
+    });
+
+    static METRICS_ERROR_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("aws.smithy.http.server.metrics", "MetricsError"),
+        ShapeType::Structure,
+        &[],
+    )
+    .with_traits(&ERROR_TRAITS);
+
+    impl SerializableStruct for MetricsError {
+        fn schema(&self) -> &Schema<'_> {
+            &METRICS_ERROR_SCHEMA
+        }
+
+        fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            Ok(())
+        }
+    }
+
+    impl HttpModeledError for MetricsError {
+        fn status_code(&self) -> u16 {
+            500
+        }
+    }
+}

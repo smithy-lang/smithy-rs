@@ -12,6 +12,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server", features = [
     "request-id",
 ] }
