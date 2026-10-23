@@ -247,7 +247,7 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
         logs.append(log)
         server_env = {**os.environ}
         if mode == "dial9":
-            server_env["BENCH_DIAL9_TRACE"] = str(dest / "server-trace.bin")
+            server_env["BENCH_DIAL9_TRACE"] = str(dest / f"server-trace-{side}.bin")
         server = subprocess.Popen(server_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1, env=server_env)
         ready = line(server)
         if not ready.startswith("READY:"):
@@ -365,7 +365,7 @@ def case(cache, dest, protocol, side, direction, kind, size, count, concurrency,
 
 def trace_artifacts(dest):
     # DiskBuffer treats the requested path as a prefix and seals numbered
-    # segments (server-trace.0.bin, ...), including its single_file preset.
+    # segments (server-trace-legacy.0.bin, ...), including its single_file preset.
     paths = sorted(dest.glob("server-trace*.bin"))
     if not paths or any(p.stat().st_size == 0 for p in paths):
         raise RuntimeError("Dial9 did not produce a complete trace")

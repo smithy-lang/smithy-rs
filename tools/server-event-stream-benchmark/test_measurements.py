@@ -35,19 +35,20 @@ def runtime_interval():
 
 class Measurements(unittest.TestCase):
     def test_dial9_retains_every_numbered_trace_segment(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp)
-            with self.assertRaises(RuntimeError):
-                trace_artifacts(dest)
-            (dest / "server-trace.0.bin").write_bytes(b"first")
-            (dest / "server-trace.1.bin").write_bytes(b"second")
-            result = trace_artifacts(dest)
-            self.assertEqual(result["bytes"], 11)
-            self.assertEqual(len(result["artifacts"]), 2)
-            self.assertEqual(len(result["artifacts"][0]["sha256"]), 64)
-            (dest / "server-trace.2.bin").touch()
-            with self.assertRaises(RuntimeError):
-                trace_artifacts(dest)
+        for side in ("legacy", "schema"):
+            with self.subTest(side=side), tempfile.TemporaryDirectory() as tmp:
+                dest = Path(tmp)
+                with self.assertRaises(RuntimeError):
+                    trace_artifacts(dest)
+                (dest / f"server-trace-{side}.0.bin").write_bytes(b"first")
+                (dest / f"server-trace-{side}.1.bin").write_bytes(b"second")
+                result = trace_artifacts(dest)
+                self.assertEqual(result["bytes"], 11)
+                self.assertEqual(len(result["artifacts"]), 2)
+                self.assertEqual(len(result["artifacts"][0]["sha256"]), 64)
+                (dest / f"server-trace-{side}.2.bin").touch()
+                with self.assertRaises(RuntimeError):
+                    trace_artifacts(dest)
 
     def test_latency_and_dial9_share_the_ordinary_client(self):
         cache = Path("/cache")

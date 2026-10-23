@@ -161,13 +161,75 @@ per poll, never held across an await. Runtime traces can also include warmup;
 benchmark request spans and timing histograms start at the measurement reset.
 CPU and memory sampling are not enabled by this mode.
 
-The runner sets `BENCH_DIAL9_TRACE` to each case's `server-trace.bin` prefix;
-Dial9 seals numbered files such as `server-trace.0.bin`. All segments stay
-on the benchmark host. After the client exits, the controller requests graceful
-server shutdown; the server drops Tokio workers and drains the recorder before
-exiting. A missing trace or failed shutdown fails the case. Artifact path, size
-and SHA-256 are saved in `result.json`. Diagnostic throughput is excluded from
-the paired throughput comparison.
+The runner sets `BENCH_DIAL9_TRACE` to each case's `server-trace-{side}.bin`
+prefix. Dial9 seals numbered files such as `server-trace-legacy.0.bin`
+(`schemaSerde: false`) or `server-trace-schema.0.bin` (`schemaSerde: true`).
+All segments stay on the benchmark host. After the client exits, the controller
+requests graceful server shutdown; the server drops Tokio workers and drains
+the recorder before exiting. A missing trace or failed shutdown fails the case.
+Artifact path, size and SHA-256 are saved in `result.json`. Diagnostic throughput
+is excluded from the paired throughput comparison.
+
+#### Generating and reading traces
+
+Run these commands from the repository root on your benchmark host:
+
+```sh
+python3 tools/server-event-stream-benchmark/prepare.py
+python3 tools/server-event-stream-benchmark/build.py --modes cpu timing dial9
+python3 tools/server-event-stream-benchmark/run.py \
+  --preset smoke --events-per-stream 1024 \
+  --diagnostics latency dial9 --no-profiles
+```
+
+The runner configures tracing and flushes it automatically on shutdown. A
+legacy Dial9 case produces:
+
+```text
+tools/server-event-stream-benchmark/artifacts/results/<run>/<case>/
+├── result.json
+└── server-trace-legacy.0.bin
+```
+
+Schema cases use `server-trace-schema.0.bin`. Additional numbered segments,
+when present, belong to the same case. Case numbers depend on the run; use
+`result.json` to identify its protocol, direction, event kind and variant.
+
+For latency distributions, read the run's `report.md`, or inspect an individual
+case. Replace `<run>` and `<case>` with the directory names from your run:
+
+```sh
+benchmark_case='tools/server-event-stream-benchmark/artifacts/results/<run>/<case>'
+jq '{side, protocol, direction, kind, mode, dial9}' "$benchmark_case/result.json"
+jq '.server_timing' "$benchmark_case/result.json"
+```
+
+To decode traces and analyze Tokio tasks and scheduling offline, install the
+pinned viewer and extract its analysis toolkit. The toolkit requires Node.js:
+
+```sh
+cargo install --quiet --locked dial9-viewer \
+  --version 0.5.5 --no-default-features
+dial9-viewer agents toolkit /tmp/dial9-toolkit
+node /tmp/dial9-toolkit/analyze.js "$benchmark_case"
+```
+
+The analyzer accepts either a case directory containing all its segments or
+an individual trace file:
+
+```sh
+node /tmp/dial9-toolkit/analyze.js "$benchmark_case/server-trace-legacy.0.bin"
+```
+
+Use `server-trace-schema.0.bin` for a schema case. The `server_request` span
+records these explicit wall-time fields:
+
+- `response_ready_ns`: response headers and body object are ready.
+- `first_frame_ready_ns`: the first serialized data frame is ready for Hyper.
+- `body_complete_ns`: the complete response body has been handed to Hyper.
+
+These fields measure elapsed time since service entry. A span's active
+segments cover only time inside service and body polls.
 
 ### Load models and why this is not stock wrk2
 
