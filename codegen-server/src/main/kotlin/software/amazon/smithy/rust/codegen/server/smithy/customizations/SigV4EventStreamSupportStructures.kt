@@ -100,7 +100,7 @@ object SigV4EventStreamSupportStructures {
                     fn fmt(&self, f: &mut #{Formatter}<'_>) -> #{fmt_Result} {
                         match self {
                             ExtractionError::InvalidPayload { error } => {
-                                write!(f, "invalid payload: {}", error)
+                                write!(f, "invalid payload: {error}")
                             }
                             ExtractionError::InvalidTimestamp => {
                                 write!(f, "invalid or missing timestamp header")

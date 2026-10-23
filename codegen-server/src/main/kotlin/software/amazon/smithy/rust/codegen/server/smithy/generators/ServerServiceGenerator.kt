@@ -772,7 +772,7 @@ class ServerServiceGenerator(
 
                         writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
                         for setter_name in self.operation_names2setter_methods.values() {
-                            writeln!(f, "- {}", setter_name)?;
+                            writeln!(f, "- {setter_name}")?;
                         }
                         Ok(())
                     }

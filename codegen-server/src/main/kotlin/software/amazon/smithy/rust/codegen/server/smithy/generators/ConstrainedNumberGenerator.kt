@@ -178,7 +178,7 @@ data class Range(val rangeTrait: RangeTrait) {
                 rust(
                     """
                     Self::Range(_) => crate::model::ValidationExceptionField {
-                        message: format!("${rangeTrait.validationErrorMessage()}", &path),
+                        message: format!("${rangeTrait.validationErrorMessage()}"),
                         path,
                     },
                     """,
