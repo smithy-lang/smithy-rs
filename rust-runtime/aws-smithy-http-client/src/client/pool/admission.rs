@@ -49,6 +49,10 @@ mod demand;
 mod h1;
 mod h2;
 mod order;
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod prop_tests;
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod test_util;
 
 use self::demand::{
     DemandAssignment, DemandAssignmentId, DemandAssignmentOutcome, DemandSchedule,

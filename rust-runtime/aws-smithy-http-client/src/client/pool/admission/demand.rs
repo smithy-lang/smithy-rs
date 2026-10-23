@@ -309,6 +309,68 @@ pub(super) struct PreparedCapacityDelivery {
     pub(super) permit: CapacityPermit,
 }
 
+/// Where one partition's demand currently resides in scheduling.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum DemandResidence {
+    Unscheduled,
+    Queued {
+        demand: DemandId,
+    },
+    Assigned {
+        assignment: DemandAssignment,
+        /// Whether the eligibility-group order selected the assignment.
+        from_group_order: bool,
+    },
+}
+
+/// Scheduling facts for one retained partition.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct DemandPartitionAudit {
+    pub(super) demand: DemandId,
+    pub(super) version: SnapshotVersion,
+    /// Protocol requirement while the latest snapshot is active.
+    pub(super) requirement: Option<ProtocolRequirement>,
+    /// Eligibility group named by the latest active snapshot.
+    pub(super) active_group: Option<EligibilityGroup>,
+    /// Eligibility group retained across an inactive replacement.
+    pub(super) retained_group: Option<EligibilityGroup>,
+    pub(super) residence: DemandResidence,
+}
+
+#[cfg(test)]
+impl DemandPartitionAudit {
+    pub(super) fn assignment(&self) -> Option<&DemandAssignment> {
+        match &self.residence {
+            DemandResidence::Assigned { assignment, .. } => Some(assignment),
+            _ => None,
+        }
+    }
+}
+
+/// Complete scheduling state reported for cross-structure checks.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct DemandAudit {
+    /// Every retained partition, sorted by identity.
+    pub(super) partitions: Vec<(PartitionId, DemandPartitionAudit)>,
+    /// Origin order from head to tail.
+    pub(super) origin_order: Vec<PartitionId>,
+    /// Each eligibility-group order from head to tail, sorted by group.
+    pub(super) group_orders: Vec<(EligibilityGroup, Vec<PartitionId>)>,
+}
+
+#[cfg(test)]
+impl DemandAudit {
+    pub(super) fn partition(&self, requester: &PartitionId) -> Option<&DemandPartitionAudit> {
+        self.partitions
+            .iter()
+            .find(|(candidate, _)| candidate == requester)
+            .map(|(_, audit)| audit)
+    }
+}
+
 impl DemandSchedule {
     /// Applies a complete snapshot and updates its cell's scheduling state.
     pub(super) fn apply_snapshot(&mut self, requester: PartitionId, snapshot: DemandSnapshot) {
@@ -784,6 +846,91 @@ impl DemandSchedule {
                 )
             })
             .count()
+    }
+
+    /// Reports scheduling facts for one retained partition.
+    #[cfg(test)]
+    pub(super) fn audit_partition(&self, requester: &PartitionId) -> Option<DemandPartitionAudit> {
+        let record = self.records.get(requester)?;
+        let (state, active_group) = match &record.latest.state {
+            DemandState::Active {
+                requirement,
+                eligibility_group,
+            } => (Some(*requirement), Some(eligibility_group.clone())),
+            DemandState::Inactive => (None, None),
+        };
+        let residence = match &record.schedule_state {
+            DemandScheduleState::Unscheduled => DemandResidence::Unscheduled,
+            DemandScheduleState::Queued { demand, .. } => {
+                DemandResidence::Queued { demand: *demand }
+            }
+            DemandScheduleState::PendingAssignment {
+                assignment,
+                selected_order,
+                ..
+            } => DemandResidence::Assigned {
+                assignment: assignment.clone(),
+                from_group_order: matches!(selected_order, DemandOrder::Group),
+            },
+        };
+        Some(DemandPartitionAudit {
+            demand: record.latest.id,
+            version: record.latest.version,
+            requirement: state,
+            active_group,
+            retained_group: record.eligibility_group.clone(),
+            residence,
+        })
+    }
+
+    /// Reports the complete scheduling state for cross-structure checks.
+    #[cfg(test)]
+    pub(super) fn audit(&self) -> DemandAudit {
+        let mut partitions: Vec<_> = self
+            .records
+            .keys()
+            .map(|requester| {
+                (
+                    *requester,
+                    self.audit_partition(requester)
+                        .expect("audited partition disappeared"),
+                )
+            })
+            .collect();
+        partitions.sort_by_key(|(requester, _)| *requester);
+        let mut origin_order = Vec::with_capacity(self.origin_order.len());
+        let mut current = self.origin_order.head();
+        while let Some(requester) = current {
+            origin_order.push(requester);
+            current = self
+                .records
+                .get(&requester)
+                .and_then(|record| record.schedule_state.links(DemandOrder::Origin))
+                .and_then(|links| links.next);
+        }
+        let mut group_orders: Vec<_> = self
+            .group_orders
+            .iter()
+            .map(|(group, order)| {
+                let mut members = Vec::with_capacity(order.len());
+                let mut current = order.head();
+                while let Some(requester) = current {
+                    members.push(requester);
+                    current = self
+                        .records
+                        .get(&requester)
+                        .and_then(|record| record.schedule_state.links(DemandOrder::Group))
+                        .and_then(|links| links.next);
+                }
+                (group.clone(), members)
+            })
+            .collect();
+        group_orders.sort();
+        DemandAudit {
+            partitions,
+            origin_order,
+            group_orders,
+        }
     }
 
     /// Checks residence, link, length, group, and assignment relationships.
