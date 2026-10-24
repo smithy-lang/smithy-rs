@@ -1,0 +1,29 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Parent": {
+      "type": "resource",
+      "identifiers": {
+        "p": {
+          "target": "smithy.api#String"
+        }
+      },
+      "resources": [
+        {
+          "target": "ex#Child"
+        }
+      ]
+    },
+    "ex#Child": {
+      "type": "resource",
+      "identifiers": {
+        "p": {
+          "target": "smithy.api#String"
+        },
+        "c": {
+          "target": "smithy.api#String"
+        }
+      }
+    }
+  }
+}

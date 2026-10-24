@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.10.1"
+version = "1.10.2"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -164,7 +164,7 @@ version = "1.2.0"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.61.5"
+version = "0.61.6"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.16.1"
+version = "1.16.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.19.1"
+version = "1.19.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api-macros"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
