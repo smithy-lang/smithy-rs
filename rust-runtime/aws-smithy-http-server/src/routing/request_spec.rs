@@ -4,6 +4,7 @@
  */
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use http::Request;
 use regex::Regex;
@@ -81,7 +82,9 @@ impl UriSpec {
 pub struct RequestSpec {
     method: http::Method,
     uri_spec: UriSpec,
-    uri_path_regex: Regex,
+    // `Arc` so clones share one regex and its match cache. `Regex::clone` starts with an empty
+    // cache, and the router is cloned per request, so a plain `Regex` would rebuild it every time.
+    uri_path_regex: Arc<Regex>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -121,7 +124,7 @@ impl From<&PathSpec> for Regex {
 
 impl RequestSpec {
     pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
-        let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
+        let uri_path_regex = Arc::new((&uri_spec.path_and_query.path_segments).into());
         RequestSpec {
             method,
             uri_spec,
@@ -281,6 +284,20 @@ mod tests {
             let re: Regex = (&case.0).into();
             assert_eq!(case.1, re.as_str());
         }
+    }
+
+    #[test]
+    fn cloned_request_spec_shares_regex() {
+        let spec = RequestSpec::from_parts(
+            Method::GET,
+            vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+            Vec::new(),
+        );
+        let cloned = spec.clone();
+
+        assert!(Arc::ptr_eq(&spec.uri_path_regex, &cloned.uri_path_regex));
+        assert_eq!(Match::Yes, cloned.matches(&req(&Method::GET, "/a/label", None)));
+        assert_eq!(Match::No, cloned.matches(&req(&Method::GET, "/b/label", None)));
     }
 
     #[test]
