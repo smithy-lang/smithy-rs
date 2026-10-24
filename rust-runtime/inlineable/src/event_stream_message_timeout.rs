@@ -152,6 +152,9 @@ pub(crate) fn wrap_with_message_timeout(body: SdkBody, timeout: Duration) -> Sdk
 
 /// Applies independent initial-read, event-completion, and idle deadlines.
 ///
+/// The generated caller supplies server runtime defaults for omitted settings.
+/// `None` and `Some(Duration::ZERO)` disable a deadline.
+///
 /// For RPC protocols, `reads_initial_message` skips the per-event deadline on the first
 /// frame, even when the initial deadline is disabled. REST streams have no initial read.
 pub(crate) fn wrap_with_event_stream_timeouts(
@@ -161,6 +164,9 @@ pub(crate) fn wrap_with_event_stream_timeouts(
     idle_timeout: Option<Duration>,
     reads_initial_message: bool,
 ) -> SdkBody {
+    let initial_timeout = initial_timeout.filter(|timeout| !timeout.is_zero());
+    let message_timeout = message_timeout.filter(|timeout| !timeout.is_zero());
+    let idle_timeout = idle_timeout.filter(|timeout| !timeout.is_zero());
     if message_timeout.is_none()
         && idle_timeout.is_none()
         && (!reads_initial_message || initial_timeout.is_none())
@@ -413,6 +419,22 @@ mod tests {
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use std::time::Duration;
+
+    #[test]
+    fn disabled_deadlines_preserve_body_without_a_timer_driver() {
+        for timeout in [None, Some(Duration::ZERO)] {
+            for reads_initial_message in [false, true] {
+                let body = wrap_with_event_stream_timeouts(
+                    SdkBody::from("payload"),
+                    timeout,
+                    timeout,
+                    timeout,
+                    reads_initial_message,
+                );
+                assert_eq!(body.bytes(), Some(b"payload".as_slice()));
+            }
+        }
+    }
 
     /// Encodes a minimal event stream frame with the given payload size: the 4-byte
     /// total length prefix followed by arbitrary bytes (the tracker only reads lengths).
@@ -887,7 +909,10 @@ mod tests {
         );
         body.frame().await.unwrap().unwrap();
         tokio::time::advance(Duration::from_millis(200)).await;
-        assert!(body.frame().await.is_none(), "clean EOF is not an idle timeout");
+        assert!(
+            body.frame().await.is_none(),
+            "clean EOF is not an idle timeout"
+        );
     }
 
     #[tokio::test(start_paused = true)]

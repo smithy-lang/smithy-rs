@@ -177,11 +177,11 @@ internal class RequestBodyMaxBytesTest {
 
     @Test
     fun `common requestBodyMaxBytes is read and takes precedence over the legacy codegen key`() {
-        check(settings().codegenConfig.requestBodyMaxBytes == 0L)
-        check(settings(common = "1024").codegenConfig.requestBodyMaxBytes == 1024L)
-        check(settings(legacy = "512").codegenConfig.requestBodyMaxBytes == 512L)
-        check(settings(common = "1024", legacy = "512").codegenConfig.requestBodyMaxBytes == 1024L)
-        check(settings(common = "0", legacy = "512").codegenConfig.requestBodyMaxBytes == 0L)
+        check(settings().requestBodyMaxBytes() == null)
+        check(settings(common = "1024").requestBodyMaxBytes() == 1024L)
+        check(settings(legacy = "512").requestBodyMaxBytes() == 512L)
+        check(settings(common = "1024", legacy = "512").requestBodyMaxBytes() == 1024L)
+        check(settings(common = "0", legacy = "512").requestBodyMaxBytes() == 0L)
     }
 
     @Test

@@ -159,19 +159,18 @@ class ServerServiceGenerator(
                         ""
                     }
 
-                val requestBodyReadTimeout =
-                    codegenContext.settings.requestBodyReadTimeouts.timeoutFor(operationShape.id)
                 val withRequestBodyReadTimeout =
                     writable {
-                        if (requestBodyReadTimeout != null) {
+                        if (operationShape.id !in codegenContext.settings.requestBodyReadTimeouts.streamingOperationIds) {
                             val operationId = operationShape.id.toString().replace("#", "##")
-                            rust(
+                            rustTemplate(
                                 """
                                 .with_request_body_read_timeout(
-                                    std::time::Duration::from_millis(${requestBodyReadTimeout.inWholeMilliseconds}u64),
+                                    #{RequestBodyConfig}.read_timeout.unwrap_or_default(),
                                     "$operationId",
                                 )
                                 """,
+                                "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
                             )
                         }
                     }

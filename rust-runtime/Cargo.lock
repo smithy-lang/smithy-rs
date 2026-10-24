@@ -582,6 +582,7 @@ dependencies = [
  "aws-smithy-http 0.64.3",
  "aws-smithy-json 0.65.0",
  "aws-smithy-runtime-api 1.19.1",
+ "aws-smithy-schema 1.1.0",
  "aws-smithy-types 1.9.0",
  "aws-smithy-xml 0.64.0",
  "bytes",
@@ -609,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "aws-smithy-http-server 0.65.10",
  "aws-smithy-http-server 0.69.0",
@@ -640,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics-macro"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -649,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.69.1"
+version = "0.70.0"
 dependencies = [
  "aws-smithy-http 0.64.3",
  "aws-smithy-json 0.65.0",
@@ -739,6 +740,7 @@ dependencies = [
  "aws-smithy-json 0.65.0",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.19.1",
+ "aws-smithy-schema 1.1.0",
  "aws-smithy-types 1.9.0",
  "aws-smithy-xml 0.64.0",
  "bytes",

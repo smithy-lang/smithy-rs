@@ -32,8 +32,12 @@ pub mod response;
 pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
+#[doc(hidden)]
+pub mod schema;
 pub mod serve;
 pub mod service;
+#[doc(hidden)]
+pub mod settings;
 pub mod shape_id;
 
 #[doc(inline)]

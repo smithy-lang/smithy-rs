@@ -20,7 +20,7 @@ use tracing::error;
 
 use crate::{
     body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,
-    runtime_error::InternalFailureException, service::ServiceShape,
+    runtime_error::InternalFailureException, service::ServiceShape, settings::RequestBodyReadTimeoutConfig,
 };
 
 use super::OperationShape;
@@ -50,20 +50,21 @@ impl<Extractors> UpgradePlugin<Extractors> {
         Self::default()
     }
 
-    /// Applies a deadline while the request body is read and the operation input is constructed.
-    ///
-    /// The deadline is removed before the operation handler is invoked.
+    /// Selects the runtime body-read default appropriate to the modeled operation.
     #[doc(hidden)]
-    pub fn with_request_body_read_timeout(mut self, timeout: Duration, operation: &'static str) -> Self {
-        self.request_body_read_timeout = Some(RequestBodyReadTimeoutConfig { timeout, operation });
+    pub fn with_default_request_body_read_timeout(mut self, payload: bool, operation: &'static str) -> Self {
+        self.request_body_read_timeout = RequestBodyReadTimeoutConfig::default_for_operation(payload, operation);
         self
     }
-}
 
-#[derive(Debug, Clone, Copy)]
-struct RequestBodyReadTimeoutConfig {
-    timeout: Duration,
-    operation: &'static str,
+    /// Applies a deadline while the request body is read and the operation input is constructed.
+    ///
+    /// The deadline is removed before the operation handler is invoked. Zero disables it.
+    #[doc(hidden)]
+    pub fn with_request_body_read_timeout(mut self, timeout: Duration, operation: &'static str) -> Self {
+        self.request_body_read_timeout = RequestBodyReadTimeoutConfig::new(timeout, operation);
+        self
+    }
 }
 
 impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for UpgradePlugin<Extractors>
@@ -119,6 +120,14 @@ struct RequestBodyReadTimeoutState {
 }
 
 impl RequestBodyReadTimeoutState {
+    fn is_expired(&mut self, cx: &mut Context<'_>) -> bool {
+        self.sleep.as_mut().is_some_and(|sleep| {
+            // The timer driver may not have delivered expiry yet, so also check
+            // the clock. Immediately ready inputs never allocate a timer.
+            tokio::time::Instant::now() >= sleep.deadline() || sleep.as_mut().poll(cx).is_ready()
+        })
+    }
+
     fn response(&self) -> http::Response<crate::body::BoxBody> {
         #[cfg(feature = "request-id")]
         if let Some(request_id) = self.request_id.as_deref() {
@@ -205,20 +214,25 @@ where
 
             let call = match this2 {
                 InnerProj::FromRequest { inner } => {
-                    let result = match inner.poll(cx) {
-                        Poll::Ready(result) => result,
-                        Poll::Pending => {
-                            if let Some(timeout) = this.request_body_read_timeout {
-                                let duration = timeout.timeout;
-                                let sleep = timeout
-                                    .sleep
-                                    .get_or_insert_with(|| Box::pin(tokio::time::sleep(duration)));
-                                if sleep.as_mut().poll(cx).is_ready() {
-                                    return Poll::Ready(Ok(timeout.response()));
-                                }
-                            }
-                            return Poll::Pending;
+                    if let Some(timeout) = this.request_body_read_timeout {
+                        if timeout.is_expired(cx) {
+                            return Poll::Ready(Ok(timeout.response()));
                         }
+                    }
+                    let result = inner.poll(cx);
+                    if let Some(timeout) = this.request_body_read_timeout {
+                        if result.is_pending() && timeout.sleep.is_none() {
+                            timeout.sleep = Some(Box::pin(tokio::time::sleep(timeout.timeout)));
+                        }
+                        // Input may become ready on the same poll that crosses an
+                        // armed deadline. Expiry must win before calling the handler.
+                        if timeout.is_expired(cx) {
+                            return Poll::Ready(Ok(timeout.response()));
+                        }
+                    }
+                    let result = match result {
+                        Poll::Ready(result) => result,
+                        Poll::Pending => return Poll::Pending,
                     };
                     *this.request_body_read_timeout = None;
                     match result {
@@ -329,5 +343,149 @@ where
     fn call(&mut self, _request: R) -> Self::Future {
         error!("the operation has not been set");
         std::future::ready(Ok(InternalFailureException.into_response()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use std::task::Waker;
+    use tokio::sync::oneshot;
+
+    struct TestProtocol;
+    struct TestInput;
+    type InputResult = Result<TestInput, StatusCode>;
+    type ResponseFuture = Pin<Box<dyn Future<Output = Result<http::Response<BoxBody>, Infallible>>>>;
+
+    impl IntoResponse<TestProtocol> for StatusCode {
+        fn into_response(self) -> http::Response<BoxBody> {
+            http::Response::builder()
+                .status(self)
+                .body(crate::body::empty())
+                .unwrap()
+        }
+    }
+
+    impl FromRequest<TestProtocol, oneshot::Receiver<InputResult>> for TestInput {
+        type Rejection = StatusCode;
+        type Future = Pin<Box<dyn Future<Output = InputResult> + Send>>;
+
+        fn from_request(request: http::Request<oneshot::Receiver<InputResult>>) -> Self::Future {
+            Box::pin(async { request.into_body().await.expect("input sender must remain alive") })
+        }
+    }
+
+    fn request(
+        timeout: Option<Duration>,
+        version: Version,
+        handler_delay: Option<Duration>,
+    ) -> (ResponseFuture, oneshot::Sender<InputResult>, Arc<AtomicUsize>) {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let handler_calls = calls.clone();
+        let mut upgrade = Upgrade::<TestProtocol, TestInput, _> {
+            _protocol: PhantomData,
+            _input: PhantomData,
+            inner: tower::service_fn(move |_input| {
+                handler_calls.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    if let Some(delay) = handler_delay {
+                        tokio::time::sleep(delay).await;
+                    }
+                    Ok::<_, Infallible>(StatusCode::OK)
+                }
+            }),
+            request_body_read_timeout: timeout.map(|timeout| RequestBodyReadTimeoutConfig {
+                timeout,
+                operation: "test#Operation",
+            }),
+        };
+        let (sender, receiver) = oneshot::channel();
+        let request = http::Request::builder().version(version).body(receiver).unwrap();
+        (Box::pin(upgrade.call(request)), sender, calls)
+    }
+
+    fn assert_pending(future: &mut ResponseFuture) {
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(future.as_mut().poll(&mut cx).is_pending());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn expired_deadline_rejects_ready_input() {
+        for version in [Version::HTTP_11, Version::HTTP_2] {
+            for succeeds in [true, false] {
+                let (mut response, sender, calls) = request(Some(Duration::from_millis(10)), version, None);
+                assert_pending(&mut response);
+                tokio::time::advance(Duration::from_millis(10)).await;
+                // The input is ready before the next poll, so expiry must win over
+                // both successful deserialization and an input rejection.
+                assert!(sender
+                    .send(if succeeds {
+                        Ok(TestInput)
+                    } else {
+                        Err(StatusCode::BAD_REQUEST)
+                    })
+                    .is_ok());
+                let response = response.await.unwrap();
+                assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+                assert_eq!(calls.load(Ordering::SeqCst), 0);
+                if version == Version::HTTP_11 {
+                    assert_eq!(response.headers()[header::CONNECTION], "close");
+                } else {
+                    assert!(!response.headers().contains_key(header::CONNECTION));
+                }
+            }
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn input_ready_before_deadline_reaches_handler() {
+        let (mut response, sender, calls) = request(Some(Duration::from_millis(10)), Version::HTTP_11, None);
+        assert_pending(&mut response);
+        tokio::time::advance(Duration::from_millis(9)).await;
+        assert!(sender.send(Ok(TestInput)).is_ok());
+        assert_eq!(response.await.unwrap().status(), StatusCode::OK);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn body_deadline_does_not_time_out_handler() {
+        let (mut response, sender, calls) = request(
+            Some(Duration::from_millis(10)),
+            Version::HTTP_11,
+            Some(Duration::from_millis(20)),
+        );
+        assert_pending(&mut response);
+        tokio::time::advance(Duration::from_millis(9)).await;
+        assert!(sender.send(Ok(TestInput)).is_ok());
+        assert_pending(&mut response);
+        tokio::time::advance(Duration::from_millis(100)).await;
+        assert_eq!(response.await.unwrap().status(), StatusCode::OK);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn disabled_deadline_allows_late_input() {
+        let (mut response, sender, calls) = request(None, Version::HTTP_11, None);
+        assert_pending(&mut response);
+        tokio::time::advance(Duration::from_secs(60)).await;
+        assert!(sender.send(Ok(TestInput)).is_ok());
+        assert_eq!(response.await.unwrap().status(), StatusCode::OK);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn immediately_ready_input_does_not_require_timer_driver() {
+        let (mut response, sender, calls) = request(Some(Duration::from_millis(10)), Version::HTTP_11, None);
+        assert!(sender.send(Ok(TestInput)).is_ok());
+        let mut cx = Context::from_waker(Waker::noop());
+        match response.as_mut().poll(&mut cx) {
+            Poll::Ready(Ok(response)) => assert_eq!(response.status(), StatusCode::OK),
+            _ => panic!("immediately ready input should complete without a timer driver"),
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

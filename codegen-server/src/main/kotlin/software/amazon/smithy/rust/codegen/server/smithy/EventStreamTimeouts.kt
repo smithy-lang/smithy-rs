@@ -10,11 +10,11 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import kotlin.time.Duration
 
-/** Independent RPC initial-message, per-event completion, and idle deadlines. */
+/** Independent deadline overrides: null inherits runtime policy; zero disables a deadline. */
 data class EventStreamTimeouts(
-    val initialMessageTimeout: Duration,
-    val messageCompletionTimeout: Duration,
-    val idleTimeout: Duration,
+    val initialMessageTimeout: Duration?,
+    val messageCompletionTimeout: Duration?,
+    val idleTimeout: Duration?,
     val perOperation: Map<ShapeId, OperationTimeouts>,
     val eventStreamInputOperationIds: Set<ShapeId>,
 ) {
@@ -22,41 +22,46 @@ data class EventStreamTimeouts(
 
     fun initialMessageTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.initialMessageTimeout ?: initialMessageTimeout).takeIf { it > Duration.ZERO }
+            perOperation[operationId]?.initialMessageTimeout ?: initialMessageTimeout
         } else {
             null
         }
 
     fun messageCompletionTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.messageCompletionTimeout ?: messageCompletionTimeout).takeIf { it > Duration.ZERO }
+            perOperation[operationId]?.messageCompletionTimeout ?: messageCompletionTimeout
         } else {
             null
         }
 
     fun idleTimeoutFor(operationId: ShapeId): Duration? =
         if (operationId in eventStreamInputOperationIds) {
-            (perOperation[operationId]?.idleTimeout ?: idleTimeout).takeIf { it > Duration.ZERO }
+            perOperation[operationId]?.idleTimeout ?: idleTimeout
         } else {
             null
         }
 
     companion object {
-        val DEFAULT_IDLE_TIMEOUT = Duration.ZERO
         const val CONFIG_PATH = "${ProtocolReadSettings.COMMON_PATH}.eventStreamTimeouts"
 
         fun fromCustomizationConfig(
             customizationConfig: ObjectNode?,
             requestBodyReadTimeouts: RequestBodyReadTimeouts,
+        ): EventStreamTimeouts =
+            fromProtocolSettings(ProtocolReadSettings.protocolSettings(customizationConfig), requestBodyReadTimeouts)
+
+        fun fromProtocolSettings(
+            protocolSettings: Map<String, ObjectNode>,
+            requestBodyReadTimeouts: RequestBodyReadTimeouts,
         ): EventStreamTimeouts {
             val eventStreamInputOperationIds = requestBodyReadTimeouts.eventStreamInputOperationIds
-            val (node, path) = ProtocolReadSettings.resolve(customizationConfig, "eventStreamTimeouts")
+            val (node, path) = ProtocolReadSettings.resolve(protocolSettings, "eventStreamTimeouts")
             val config = ProtocolReadSettings.expectObject(node, path)
             if (config == null) {
                 return EventStreamTimeouts(
-                    Duration.ZERO,
-                    Duration.ZERO,
-                    DEFAULT_IDLE_TIMEOUT,
+                    null,
+                    null,
+                    null,
                     emptyMap(),
                     eventStreamInputOperationIds,
                 )
@@ -88,9 +93,9 @@ data class EventStreamTimeouts(
                         )
                 }?.toMap().orEmpty()
             return EventStreamTimeouts(
-                duration(config, "initialMessage", path) ?: Duration.ZERO,
-                duration(config, "messageCompletion", path) ?: Duration.ZERO,
-                duration(config, "idle", path) ?: DEFAULT_IDLE_TIMEOUT,
+                duration(config, "initialMessage", path),
+                duration(config, "messageCompletion", path),
+                duration(config, "idle", path),
                 overrides,
                 eventStreamInputOperationIds,
             )

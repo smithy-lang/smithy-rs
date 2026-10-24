@@ -115,14 +115,14 @@ internal class EventStreamTimeoutsTest {
                 }
                 """,
             ).eventStreamTimeouts
-        check(timeouts.initialMessageTimeoutFor(publish) == null)
+        check(timeouts.initialMessageTimeoutFor(publish) == Duration.ZERO)
         check(timeouts.messageCompletionTimeoutFor(publish) == 5.seconds)
         val fallback =
             settings(
                 """{"initialMessage": "10s", "messageCompletion": "30s", "perOperation": {"test#PublishEvents": {"messageCompletion": 0}}}""",
             ).eventStreamTimeouts
         check(fallback.initialMessageTimeoutFor(publish) == 10.seconds)
-        check(fallback.messageCompletionTimeoutFor(publish) == null)
+        check(fallback.messageCompletionTimeoutFor(publish) == Duration.ZERO)
     }
 
     @Test
@@ -154,17 +154,17 @@ internal class EventStreamTimeoutsTest {
         check(global.idleTimeoutFor(publish) == 5.minutes)
         check(global.initialMessageTimeoutFor(publish) == null)
         check(global.messageCompletionTimeoutFor(publish) == null)
-        check(settings("""{"idle": 0}""").eventStreamTimeouts.idleTimeoutFor(publish) == null)
+        check(settings("""{"idle": 0}""").eventStreamTimeouts.idleTimeoutFor(publish) == Duration.ZERO)
         val disabled =
             settings(
                 """{"idle": "5m", "perOperation": {"test#PublishEvents": {"idle": 0}}}""",
             ).eventStreamTimeouts
-        check(disabled.idleTimeoutFor(publish) == null)
+        check(disabled.idleTimeoutFor(publish) == Duration.ZERO)
         val override =
             settings(
                 """{"perOperation": {"test#PublishEvents": {"idle": "10s"}}}""",
             ).eventStreamTimeouts
-        check(override.idleTimeout == Duration.ZERO)
+        check(override.idleTimeout == null)
         check(override.idleTimeoutFor(publish) == 10.seconds)
         val inherited =
             settings(
@@ -279,8 +279,8 @@ internal class EventStreamTimeoutsTest {
             check(protocolSerde.contains("wrap_with_event_stream_timeouts(")) {
                 "expected the generated deserializer to apply the event stream message timeout"
             }
-            check(protocolSerde.contains("::std::time::Duration::from_millis(45000u64)")) {
-                "expected the configured 45s timeout in the generated deserializer"
+            check(serviceConfigContents(generatedServer.path).contains("::std::time::Duration::from_millis(45000u64)")) {
+                "expected the configured 45s timeout in the generated service configuration"
             }
         }
     }
@@ -350,23 +350,42 @@ internal class EventStreamTimeoutsTest {
                 }
             }
         generatedServers.forEach { generatedServer ->
-            check(!protocolSerdeContents(generatedServer.path).contains("wrap_with_event_stream_timeouts(")) {
-                "event stream deadlines must be disabled by default"
+            check(protocolSerdeContents(generatedServer.path).contains("wrap_with_event_stream_timeouts(")) {
+                "omitted event stream deadlines must be resolved by the runtime"
             }
         }
     }
 
     @Test
-    fun `generated code omits the timeout wrapper when all deadlines are disabled`() {
+    fun `generated code preserves explicit disabled deadline overrides`() {
         val settings =
             objectNode(
                 """{"customizationConfig": {"protocols": {"common": {"eventStreamTimeouts": {"initialMessage": 0, "messageCompletion": 0, "idle": 0}}}}}""",
             )
-        val generatedServers = serverIntegrationTest(model(), IntegrationTestParams(additionalSettings = settings))
+        val generatedServers =
+            serverIntegrationTest(model(), IntegrationTestParams(additionalSettings = settings)) { _, rustCrate ->
+                rustCrate.testModule {
+                    tokioTest("shared_configuration_disables_all_event_deadlines") {
+                        rustTemplate(
+                            """
+                            let deadlines = crate::service_config::service_config().event_stream.global;
+                            assert_eq!(deadlines.initial_message, None);
+                            assert_eq!(deadlines.message_completion, None);
+                            assert_eq!(deadlines.idle, None);
+                            """,
+                        )
+                    }
+                }
+            }
         generatedServers.forEach { generatedServer ->
-            check(!protocolSerdeContents(generatedServer.path).contains("wrap_with_event_stream_timeouts("))
+            val protocolSerde = protocolSerdeContents(generatedServer.path)
+            check(protocolSerde.contains("wrap_with_event_stream_timeouts("))
+            check(serviceConfigContents(generatedServer.path).contains("::std::time::Duration::from_millis(0u64)"))
         }
     }
+
+    private fun serviceConfigContents(crateDir: java.nio.file.Path): String =
+        crateDir.resolve("src/service_config.rs").toFile().readText()
 
     private fun protocolSerdeContents(crateDir: java.nio.file.Path): String =
         crateDir.resolve("src/protocol_serde").toFile().walkTopDown()

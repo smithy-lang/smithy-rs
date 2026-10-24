@@ -103,8 +103,8 @@ fun serverTestRustSettings(
     customizationConfig: ObjectNode? = null,
     requestBodyReadTimeouts: RequestBodyReadTimeouts =
         RequestBodyReadTimeouts(
-            RequestBodyReadTimeouts.DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT,
-            RequestBodyReadTimeouts.DEFAULT_REQUEST_BODY_READ_TIMEOUT,
+            null,
+            null,
             emptyMap(),
             emptySet(),
             emptySet(),
@@ -122,8 +122,8 @@ fun serverTestRustSettings(
     license,
     examplesUri,
     minimumSupportedRustVersion,
-    customizationConfig,
-    requestBodyReadTimeouts,
+    customizationConfig = customizationConfig,
+    requestBodyReadTimeouts = requestBodyReadTimeouts,
 )
 
 fun serverTestCodegenContext(

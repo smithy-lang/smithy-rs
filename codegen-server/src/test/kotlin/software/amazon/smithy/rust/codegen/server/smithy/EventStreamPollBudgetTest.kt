@@ -41,9 +41,9 @@ internal class EventStreamPollBudgetTest {
         """.asSmithyModel()
 
     @Test
-    fun `poll budget defaults to 32 and accepts nonnegative integers`() {
-        check(config("{}").requestBodyReadPollBudget == 32)
-        check(settings("{}").requestBodyReadPollBudget == 32)
+    fun `omitted poll budget inherits runtime defaults and accepts nonnegative integers`() {
+        check(config("{}").requestBodyReadPollBudget == null)
+        check(settings("{}").requestBodyReadPollBudget == null)
         for (budget in listOf(0, 1, 32, 64, Int.MAX_VALUE)) {
             check(config("""{"requestBodyReadPollBudget": $budget}""").requestBodyReadPollBudget == budget)
         }

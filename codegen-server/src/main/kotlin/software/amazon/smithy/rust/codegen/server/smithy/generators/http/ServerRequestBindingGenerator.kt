@@ -26,9 +26,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
-import kotlin.time.Duration
 
 class ServerRequestBindingGenerator(
     val protocol: ServerProtocol,
@@ -85,25 +85,30 @@ class ServerEventStreamPollBudgetHttpBindingCustomization(val codegenContext: Se
         when (section) {
             is HttpBindingSection.WrapEventStreamRequestBody ->
                 writable {
-                    val budget = codegenContext.settings.requestBodyReadPollBudget
-                    if (budget > 0) {
-                        rustTemplate(
-                            "let ${section.bodyVariableName} = #{wrap_with_poll_budget}(${section.bodyVariableName}, ${budget}usize);",
-                            "wrap_with_poll_budget" to
-                                RuntimeType.forInlineDependency(
-                                    InlineDependency.forRustFile(
-                                        RustModule.private("event_stream_poll_budget"),
-                                        "/inlineable/src/event_stream_poll_budget.rs",
-                                        CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x"),
-                                        CargoDependency.Bytes,
-                                        CargoDependency.HttpBody1x,
-                                        CargoDependency.HttpBodyUtil01x.toDevDependency(),
-                                        CargoDependency.Tokio.toDevDependency(),
-                                        ServerCargoDependency.PinProjectLite,
-                                    ),
-                                ).resolve("wrap_with_poll_budget"),
-                        )
-                    }
+                    val budgetExpression =
+                        writable {
+                            rustTemplate(
+                                "#{RequestBodyConfig}.read_poll_budget.map_or(0, std::num::NonZeroUsize::get)",
+                                "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(section.operationShape.id),
+                            )
+                        }
+                    rustTemplate(
+                        "let ${section.bodyVariableName} = #{wrap_with_poll_budget}(${section.bodyVariableName}, #{budget});",
+                        "budget" to budgetExpression,
+                        "wrap_with_poll_budget" to
+                            RuntimeType.forInlineDependency(
+                                InlineDependency.forRustFile(
+                                    RustModule.private("event_stream_poll_budget"),
+                                    "/inlineable/src/event_stream_poll_budget.rs",
+                                    CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x"),
+                                    CargoDependency.Bytes,
+                                    CargoDependency.HttpBody1x,
+                                    CargoDependency.HttpBodyUtil01x.toDevDependency(),
+                                    CargoDependency.Tokio.toDevDependency(),
+                                    ServerCargoDependency.PinProjectLite,
+                                ),
+                            ).resolve("wrap_with_poll_budget"),
+                    )
                 }
             else -> emptySection
         }
@@ -143,7 +148,7 @@ class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUncons
  * deadline expires, mitigating slow-drip request attacks on event stream operations.
  *
  * The deadline is applied by wrapping the request body with the inlineable
- * `event_stream_message_timeout` module, keeping the runtime change local to the generated crate.
+ * `event_stream_message_timeout` module, with defaults supplied by the selected server runtime.
  */
 class ServerEventStreamMessageTimeoutHttpBindingCustomization(
     val codegenContext: ServerCodegenContext,
@@ -154,42 +159,22 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
         when (section) {
             is HttpBindingSection.WrapEventStreamRequestBody ->
                 writable {
-                    val timeouts = codegenContext.settings.eventStreamTimeouts
-                    val messageTimeout = timeouts.messageCompletionTimeoutFor(section.operationShape.id)
-                    val idleTimeout = timeouts.idleTimeoutFor(section.operationShape.id)
-                    val initialTimeout =
-                        if (readsInitialMessage) timeouts.initialMessageTimeoutFor(section.operationShape.id) else null
-                    if (messageTimeout != null || initialTimeout != null || idleTimeout != null) {
-                        fun duration(value: Duration?): Writable =
-                            writable {
-                                if (value == null) {
-                                    rustTemplate("#{None}", *RuntimeType.preludeScope)
-                                } else {
-                                    rustTemplate(
-                                        "#{Some}(#{Duration}::from_millis(${value.inWholeMilliseconds}u64))",
-                                        *RuntimeType.preludeScope,
-                                        "Duration" to RuntimeType.std.resolve("time::Duration"),
-                                    )
-                                }
-                            }
-                        rustTemplate(
-                            """
-                            let ${section.bodyVariableName} = #{wrap_with_event_stream_timeouts}(
-                                ${section.bodyVariableName},
-                                #{initialTimeout},
-                                #{messageTimeout},
-                                #{idleTimeout},
-                                $readsInitialMessage,
-                            );
-                            """,
-                            "initialTimeout" to duration(initialTimeout),
-                            "messageTimeout" to duration(messageTimeout),
-                            "idleTimeout" to duration(idleTimeout),
-                            "wrap_with_event_stream_timeouts" to
-                                eventStreamMessageTimeoutModule(codegenContext.runtimeConfig)
-                                    .resolve("wrap_with_event_stream_timeouts"),
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        let event_stream_timeouts = #{EventStreamConfig};
+                        let ${section.bodyVariableName} = #{wrap_with_event_stream_timeouts}(
+                            ${section.bodyVariableName},
+                            event_stream_timeouts.initial_message,
+                            event_stream_timeouts.message_completion,
+                            event_stream_timeouts.idle,
+                            $readsInitialMessage,
+                        );
+                        """,
+                        "EventStreamConfig" to ServerServiceConfigGenerator(codegenContext).eventStreamConfig(section.operationShape.id),
+                        "wrap_with_event_stream_timeouts" to
+                            eventStreamMessageTimeoutModule(codegenContext.runtimeConfig)
+                                .resolve("wrap_with_event_stream_timeouts"),
+                    )
                 }
             else -> emptySection
         }

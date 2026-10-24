@@ -8,13 +8,13 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.ShapeId
 import java.util.logging.Logger
 
 /** Request-read settings shared by all protocols served by the generated service. */
 internal object ProtocolReadSettings {
     const val COMMON_PATH = "customizationConfig.protocols.common"
     const val REQUEST_BODY_READ_POLL_BUDGET_KEY = "requestBodyReadPollBudget"
-    const val DEFAULT_REQUEST_BODY_READ_POLL_BUDGET = 32
 
     fun expectObject(
         node: Node?,
@@ -47,78 +47,73 @@ internal object ProtocolReadSettings {
         }
     }
 
-    /** Reads `customizationConfig.protocols.common.<key>`. */
-    fun resolve(
-        customizationConfig: ObjectNode?,
-        key: String,
-    ): Pair<Node?, String> {
-        val protocols =
-            expectObject(
-                customizationConfig?.getMember("protocols")?.orElse(null),
-                "customizationConfig.protocols",
-            )
-        val common = expectObject(protocols?.getMember("common")?.orElse(null), COMMON_PATH)
-        return common?.getMember(key)?.orElse(null) to "$COMMON_PATH.$key"
-    }
-
-    /**
-     * The common value takes precedence, including explicit zero or an empty timeout object.
-     * Legacy configuration is read only when the corresponding common key is absent.
-     */
-    fun resolve(
-        customizationConfig: ObjectNode?,
-        key: String,
-        legacyConfig: ObjectNode?,
-        legacyPath: String,
-    ): Pair<Node?, String> {
-        val (value, path) = resolve(customizationConfig, key)
-        val legacyValue = legacyConfig?.getMember(key)?.orElse(null)
-        if (value != null) {
-            if (legacyValue != null) {
-                Logger.getLogger("ServerRustSettings").warning(
-                    "Both `$legacyPath` and `$path` are set; using `$path`.",
-                )
+    /** Parse the protocol sections once, using the same shape-ID keys as decoupled routing. */
+    fun protocolSettings(customizationConfig: ObjectNode?): Map<String, ObjectNode> {
+        val protocolsPath = "customizationConfig.protocols"
+        val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), protocolsPath)
+        return protocols?.members?.entries?.associate { (key, value) ->
+            val protocolId = key.value
+            val path = "$protocolsPath.$protocolId"
+            if (protocolId != "common") {
+                val shapeId = runCatching { ShapeId.from(protocolId) }.getOrNull()
+                if (shapeId == null || shapeId.hasMember()) {
+                    throw CodegenException(
+                        "`$path` must use a full protocol shape ID without a member, " +
+                            "such as `aws.protocols#restJson1`, or the shared `common` key. " +
+                            "Protocol shorthand names are not supported.",
+                    )
+                }
             }
-            return value to path
-        }
-        return legacyValue to legacyPath
+            protocolId to expectObject(value, path)!!
+        }.orEmpty()
     }
 
-    /**
-     * Maximum buffered bytes for a non-streaming request body from the common protocol section,
-     * or `null` when the legacy `codegen.requestBodyMaxBytes` value (parsed separately, with its
-     * original validation) applies.
-     */
-    fun requestBodyMaxBytes(
+    /** Fold the legacy body-size setting into `common`, preserving common-value precedence. */
+    fun foldLegacyRequestBodyMaxBytes(
         customizationConfig: ObjectNode?,
-        legacyCodegenConfig: ObjectNode?,
-    ): Long? {
-        val key = ServerCodegenConfig.REQUEST_BODY_MAX_BYTES_CONFIG_KEY
-        val (value, path) = resolve(customizationConfig, key, legacyCodegenConfig, "codegen.$key")
-        if (path != "$COMMON_PATH.$key") {
-            return null
+        codegenConfig: ObjectNode?,
+    ): ObjectNode? {
+        val legacyValue = codegenConfig?.getMember("requestBodyMaxBytes")?.orElse(null) ?: return customizationConfig
+        val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), "customizationConfig.protocols") ?: ObjectNode.objectNode()
+        val common = expectObject(protocols.getMember("common").orElse(null), COMMON_PATH) ?: ObjectNode.objectNode()
+        if (common.containsMember("requestBodyMaxBytes")) {
+            Logger.getLogger("ServerRustSettings").warning(
+                "Both `codegen.requestBodyMaxBytes` and `$COMMON_PATH.requestBodyMaxBytes` are set; using the common value.",
+            )
+            return customizationConfig
         }
+        return (customizationConfig ?: ObjectNode.objectNode()).withMember(
+            "protocols",
+            protocols.withMember("common", common.withMember("requestBodyMaxBytes", legacyValue)),
+        )
+    }
+
+    /** Read a common setting from the normalized protocol map. */
+    fun resolve(
+        protocolSettings: Map<String, ObjectNode>,
+        key: String,
+    ): Pair<Node?, String> = protocolSettings["common"]?.getMember(key)?.orElse(null) to "$COMMON_PATH.$key"
+
+    fun requestBodyMaxBytes(protocolSettings: Map<String, ObjectNode>): Long? {
+        val (value, path) = resolve(protocolSettings, "requestBodyMaxBytes")
+        if (value == null) return null
         val errorMessage = "`$path` must be a non-negative integer that fits in a Long"
-        if (value == null || !value.isNumberNode) {
-            throw CodegenException(errorMessage)
-        }
+        if (!value.isNumberNode) throw CodegenException(errorMessage)
         val maxBytes =
             try {
                 value.expectNumberNode().value.toString().toBigDecimal().longValueExact()
             } catch (_: ArithmeticException) {
                 throw CodegenException(errorMessage)
             }
-        if (maxBytes < 0) {
-            throw CodegenException(errorMessage)
-        }
+        if (maxBytes < 0) throw CodegenException(errorMessage)
         return maxBytes
     }
 
-    /** Maximum consecutive ready HTTP body frames; zero disables forced yielding. */
-    fun requestBodyReadPollBudget(customizationConfig: ObjectNode?): Int {
-        val (value, path) = resolve(customizationConfig, REQUEST_BODY_READ_POLL_BUDGET_KEY)
+    /** Ready HTTP frame budget: null inherits runtime policy; zero disables yielding. */
+    fun requestBodyReadPollBudget(protocolSettings: Map<String, ObjectNode>): Int? {
+        val (value, path) = resolve(protocolSettings, REQUEST_BODY_READ_POLL_BUDGET_KEY)
         if (value == null) {
-            return DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
+            return null
         }
         val errorMessage =
             "`$path` must be an integer between 0 and ${Int.MAX_VALUE}; 0 disables forced yielding"

@@ -18,6 +18,7 @@ use bytes::Bytes;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+/// Applies the resolved polling budget; zero disables yielding.
 pub(crate) fn wrap_with_poll_budget(body: SdkBody, budget: usize) -> SdkBody {
     if budget == 0 {
         return body;

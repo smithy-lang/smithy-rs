@@ -1,0 +1,14 @@
+{
+  "protocols": {
+    "common": {
+      "requestBodyMaxBytes": 1024,
+      "requestBodyReadTimeouts": {
+        "defaultNonPayload": "5s",
+        "defaultPayload": "10s",
+        "perOperation": {
+          "integration.requestlimits#EchoWithOverride": "3s"
+        }
+      }
+    }
+  }
+}

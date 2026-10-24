@@ -136,8 +136,73 @@ internal class RequestBodyReadTimeoutTest {
     }
 
     @Test
-    fun `service compiles with default request read timeout`() {
-        serverIntegrationTest(model)
+    fun `runtime defaults enforce payload aware request read deadlines`() {
+        serverIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("runtime_defaults_enforce_payload_aware_request_read_deadlines") {
+                    rustTemplate(
+                        """
+                        use std::future::Future;
+                        use std::pin::Pin;
+                        use std::task::{Context, Poll, Waker};
+                        use #{Tower}::ServiceExt;
+
+                        struct PendingBody;
+                        impl #{HttpBody}::Body for PendingBody {
+                            type Data = #{Bytes};
+                            type Error = std::io::Error;
+                            fn poll_frame(
+                                self: Pin<&mut Self>, _cx: &mut Context<'_>,
+                            ) -> Poll<Option<Result<#{HttpBody}::Frame<Self::Data>, Self::Error>>> {
+                                Poll::Pending
+                            }
+                        }
+                        let config = crate::TestServiceConfig::builder().build();
+                        let app = crate::TestService::builder(config)
+                            .echo(|_input: crate::input::EchoInput| async {
+                                panic!("a stalled body must not reach the handler");
+                                ##[allow(unreachable_code)]
+                                #{Ok}::<_, crate::error::EchoError>(crate::output::EchoOutput { message: String::new() })
+                            })
+                            .upload(|_input: crate::input::UploadInput| async {
+                                panic!("a stalled payload must not reach the handler");
+                                ##[allow(unreachable_code)]
+                                crate::output::UploadOutput {}
+                            })
+                            .build_unchecked();
+                        #{Tokio}::time::pause();
+                        for (path, content_type, timeout_secs) in [
+                            ("/echo", "application/json", 300),
+                            ("/upload", "application/octet-stream", 3600),
+                        ] {
+                            let request = #{Http}::Request::builder()
+                                .method("POST").uri(path)
+                                .header("content-type", content_type)
+                                .body(#{SdkBody}::from_body_1_x(PendingBody)).unwrap();
+                            let mut response = Box::pin(app.clone().oneshot(request));
+                            let mut cx = Context::from_waker(Waker::noop());
+                            assert!(response.as_mut().poll(&mut cx).is_pending());
+                            #{Tokio}::time::advance(std::time::Duration::from_secs(timeout_secs - 1)).await;
+                            assert!(response.as_mut().poll(&mut cx).is_pending());
+                            #{Tokio}::time::advance(std::time::Duration::from_secs(1)).await;
+                            // Let the timer driver deliver expiry after advancing the clock.
+                            let response = #{Tokio}::time::timeout(std::time::Duration::from_secs(1), response)
+                                .await.expect("runtime deadline did not reject the stalled request")
+                                .unwrap();
+                            assert_eq!(response.status().as_u16(), 408);
+                        }
+                        """,
+                        "Tower" to RuntimeType.Tower,
+                        "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+                        "HttpBody" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBody1x.toType(),
+                        "Bytes" to RuntimeType.Bytes,
+                        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                        "Tokio" to RuntimeType.Tokio,
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            }
+        }
     }
 
     @Test
@@ -555,7 +620,7 @@ internal class RequestBodyReadTimeoutTest {
     }
 
     @Test
-    fun `default request read timeout uses payload aware defaults`() {
+    fun `omitted request read timeout inherits runtime defaults`() {
         val config =
             RequestBodyReadTimeouts.fromCustomizationConfig(
                 model,
@@ -563,9 +628,9 @@ internal class RequestBodyReadTimeoutTest {
                 null,
             )
 
-        check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
-        check(config.timeoutFor(ShapeId.from("test#Health")) == 5.minutes)
-        check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.hours)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
@@ -658,9 +723,9 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutFor(ShapeId.from("test#Echo")) == null)
-        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
-        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == Duration.ZERO)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == Duration.ZERO)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == Duration.ZERO)
     }
 
     @Test
@@ -691,7 +756,7 @@ internal class RequestBodyReadTimeoutTest {
                 customizationConfig,
             )
 
-        check(config.timeoutFor(ShapeId.from("test#Echo")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Echo")) == Duration.ZERO)
         check(config.timeoutFor(ShapeId.from("test#Health")) == 1.minutes)
         check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.minutes)
     }
@@ -725,8 +790,8 @@ internal class RequestBodyReadTimeoutTest {
             )
 
         check(config.timeoutFor(ShapeId.from("test#Echo")) == 5.minutes)
-        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
-        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == Duration.ZERO)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == Duration.ZERO)
     }
 
     @Test
@@ -756,8 +821,8 @@ internal class RequestBodyReadTimeoutTest {
             )
 
         check(config.timeoutFor(ShapeId.from("test#Echo")) == 7.minutes)
-        check(config.timeoutFor(ShapeId.from("test#Health")) == 5.minutes)
-        check(config.timeoutFor(ShapeId.from("test#Upload")) == 1.hours)
+        check(config.timeoutFor(ShapeId.from("test#Health")) == null)
+        check(config.timeoutFor(ShapeId.from("test#Upload")) == null)
     }
 
     @Test
@@ -876,7 +941,7 @@ internal class RequestBodyReadTimeoutTest {
                 ),
             )
         check(config.defaultNonPayloadTimeout == 9.seconds)
-        check(config.defaultPayloadTimeout == 1.hours)
+        check(config.defaultPayloadTimeout == null)
     }
 
     @Test

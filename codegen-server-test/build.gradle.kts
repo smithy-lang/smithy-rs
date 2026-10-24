@@ -150,10 +150,28 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests
+// A permanent service for automated and interactive request-body limit checks.
+val requestLimitsSettings = file("integration-tests/request-limits/settings.json")
+val requestLimitsCodegenTest = CodegenTest(
+    "integration.requestlimits#RequestLimitsService",
+    "request-limits-server-sdk",
+    imports = listOf("integration-tests/request-limits/model.smithy"),
+    extraCodegenConfig = "\"http-1x\": true",
+    extraConfig = ", \"customizationConfig\": " + requestLimitsSettings.readText(),
+)
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + requestLimitsCodegenTest
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+tasks.named("generateSmithyBuild") {
+    inputs.file(requestLimitsSettings)
+    inputs.property("requestLimitsSettings", requestLimitsSettings.readText())
+    inputs.property("modules", providers.gradleProperty("modules").orElse("all"))
+}
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+tasks.named("generateCargoWorkspace") {
+    inputs.property("modules", providers.gradleProperty("modules").orElse("all"))
+}
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
