@@ -59,22 +59,57 @@ internal class ServiceConfigSettingsTest {
     @Test
     fun `protocol map matches decoupled keys and folds legacy body configuration`() {
         val inherited = settings("{}", """{"requestBodyMaxBytes": 512}""")
-        check(inherited.protocolSettings()["common"]!!.getNumberMember("requestBodyMaxBytes").get().value.toLong() == 512L)
+        check(
+            inherited.protocolSettings()["common"]!!.expectObjectMember("request")
+                .expectObjectMember("body").expectNumberMember("maxBytes").value.toLong() == 512L,
+        )
         val explicit =
             settings(
-                """{"protocols":{"common":{"requestBodyMaxBytes":0},"aws.protocols#restJson1":{"customSetting":true}}}""",
+                """{"protocols":{"common":{"request":{"body":{"maxBytes":0}}},"aws.protocols#restJson1":{"customSetting":true}}}""",
                 """{"requestBodyMaxBytes":512}""",
             )
         check(explicit.requestBodyMaxBytes() == 0L)
         check(explicit.protocolSettings()["aws.protocols#restJson1"]!!.getBooleanMember("customSetting").get().value)
         val copied =
             explicit.copy(
-                customizationConfig = Node.parse("""{"protocols":{"common":{"requestBodyMaxBytes":2048}}}""").expectObjectNode(),
+                customizationConfig = Node.parse("""{"protocols":{"common":{"request":{"body":{"maxBytes":2048}}}}}""").expectObjectNode(),
             )
         check(copied.requestBodyMaxBytes() == 2048L)
         for (key in listOf("restJson1", "aws.protocols#restJson1${'$'}member")) {
             assertThrows<CodegenException> { settings("""{"protocols":{"$key":{}}}""") }
         }
+    }
+
+    @Test
+    fun `nested containers validate their full paths`() {
+        val cases =
+            mapOf(
+                """{"request":null}""" to "request",
+                """{"request":[]}""" to "request",
+                """{"request":{"header":false}}""" to "request.header",
+                """{"request":{"body":"invalid"}}""" to "request.body",
+                """{"request":{"body":{"readTimeouts":null}}}""" to "request.body.readTimeouts",
+                """{"request":{"body":{"readTimeouts":{"perOperation":[]}}}}""" to "request.body.readTimeouts.perOperation",
+                """{"request":{"body":{"eventStreamTimeouts":true}}}""" to "request.body.eventStreamTimeouts",
+                """{"request":{"body":{"eventStreamTimeouts":{"perOperation":[]}}}}""" to "request.body.eventStreamTimeouts.perOperation",
+            )
+        for ((common, path) in cases) {
+            val error = assertThrows<CodegenException> { settings("""{"protocols":{"common":$common}}""") }
+            check(error.message!!.contains("customizationConfig.protocols.common.$path")) { error.message.orEmpty() }
+        }
+    }
+
+    @Test
+    fun `unreleased flat common keys are not aliases for request settings`() {
+        val flat =
+            settings(
+                """{"protocols":{"common":{"headerReadTimeout":"1s","requestBodyMaxBytes":128,"requestBodyReadPollBudget":1,"requestBodyReadTimeouts":{"defaultNonPayload":"1s"},"eventStreamTimeouts":{"idle":"1s"}}}}""",
+            )
+        check(flat.headerReadTimeout == null)
+        check(flat.requestBodyMaxBytes() == null)
+        check(flat.requestBodyReadPollBudget() == null)
+        check(flat.requestBodyReadTimeouts.defaultNonPayloadTimeout == null)
+        check(flat.eventStreamTimeouts.idleTimeout == null)
     }
 
     @Test
@@ -87,6 +122,7 @@ internal class ServiceConfigSettingsTest {
                         use std::time::Duration;
                         use #{ShapeId};
                         let config = crate::service_config::service_config();
+                        assert_eq!(config.header_read_timeout, #{Some}(Duration::from_secs(60)));
                         assert!(std::ptr::eq(config, crate::service_config::service_config()));
                         let echo = config.request_body.for_operation(&ShapeId::from_parts("test##Echo", "test", "Echo"));
                         let upload = config.request_body.for_operation(&ShapeId::from_parts("test##Upload", "test", "Upload"));
@@ -102,6 +138,7 @@ internal class ServiceConfigSettingsTest {
                         assert_eq!(config.event_stream.global.message_completion, None);
                         assert_eq!(config.event_stream.global.idle, None);
                         """,
+                        *RuntimeType.preludeScope,
                         "ShapeId" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeId"),
                     )
                 }
@@ -118,15 +155,22 @@ internal class ServiceConfigSettingsTest {
                     Node.parse(
                         """
                         {"customizationConfig":{"protocols":{"common":{
-                            "requestBodyMaxBytes":128,
-                            "requestBodyReadPollBudget":0,
-                            "requestBodyReadTimeouts":{
-                                "defaultNonPayload":"1s", "defaultPayload":"2s",
-                                "perOperation":{"test#Echo":0,"test#Upload":"3s"}
-                            },
-                            "eventStreamTimeouts":{
-                                "initialMessage":"1s", "messageCompletion":"2s", "idle":"3s",
-                                "perOperation":{"test#PublishEvents":{"initialMessage":0,"messageCompletion":"4s"}}
+                            "request": {
+                                "header": {
+                                    "readTimeout":"10s"
+                                },
+                                "body": {
+                                    "maxBytes":128,
+                                    "readPollBudget":0,
+                                    "readTimeouts":{
+                                        "defaultNonPayload":"1s", "defaultPayload":"2s",
+                                        "perOperation":{"test#Echo":0,"test#Upload":"3s"}
+                                    },
+                                    "eventStreamTimeouts":{
+                                        "initialMessage":"1s", "messageCompletion":"2s", "idle":"3s",
+                                        "perOperation":{"test#PublishEvents":{"initialMessage":0,"messageCompletion":"4s"}}
+                                    }
+                                }
                             }
                         }}}}
                         """,
@@ -140,6 +184,7 @@ internal class ServiceConfigSettingsTest {
                         use std::time::Duration;
                         use #{ShapeId};
                         let config = crate::service_config::service_config();
+                        assert_eq!(config.header_read_timeout, #{Some}(Duration::from_secs(10)));
                         let echo = config.request_body.for_operation(&ShapeId::from_parts("test##Echo", "test", "Echo"));
                         let upload = config.request_body.for_operation(&ShapeId::from_parts("test##Upload", "test", "Upload"));
                         assert_eq!(config.request_body.global.read_timeout, Some(Duration::from_secs(1)));
@@ -154,6 +199,7 @@ internal class ServiceConfigSettingsTest {
                         assert_eq!(config.event_stream.global.initial_message, Some(Duration::from_secs(1)));
                         assert_eq!(config.event_stream.global.message_completion, Some(Duration::from_secs(2)));
                         """,
+                        *RuntimeType.preludeScope,
                         "ShapeId" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeId"),
                     )
                 }

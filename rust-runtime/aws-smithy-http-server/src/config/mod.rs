@@ -5,10 +5,10 @@
 
 //! Typed service configuration shared by generated and schema-based implementations.
 
-mod config;
+mod event_stream;
 mod request_body;
+mod service;
 
-pub use config::ServiceConfig;
-pub use request_body::{
-    EventStreamTimeoutConfig, RequestBodyCollectionConfig, ServiceEventStreamConfig, ServiceRequestBodyConfig,
-};
+pub use event_stream::{EventStreamTimeoutConfig, ServiceEventStreamConfig};
+pub use request_body::{RequestBodyCollectionConfig, ServiceRequestBodyConfig};
+pub use service::ServiceConfig;

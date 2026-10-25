@@ -42,7 +42,7 @@ data class EventStreamTimeouts(
         }
 
     companion object {
-        const val CONFIG_PATH = "${ProtocolReadSettings.COMMON_PATH}.eventStreamTimeouts"
+        const val CONFIG_PATH = "${ProtocolReadSettings.BODY_PATH}.eventStreamTimeouts"
 
         fun fromCustomizationConfig(
             customizationConfig: ObjectNode?,
@@ -55,7 +55,7 @@ data class EventStreamTimeouts(
             requestBodyReadTimeouts: RequestBodyReadTimeouts,
         ): EventStreamTimeouts {
             val eventStreamInputOperationIds = requestBodyReadTimeouts.eventStreamInputOperationIds
-            val (node, path) = ProtocolReadSettings.resolve(protocolSettings, "eventStreamTimeouts")
+            val (node, path) = ProtocolReadSettings.resolve(protocolSettings, "request", "body", "eventStreamTimeouts")
             val config = ProtocolReadSettings.expectObject(node, path)
             if (config == null) {
                 return EventStreamTimeouts(

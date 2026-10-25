@@ -133,26 +133,30 @@ internal class EventStreamTimeoutWireTest {
                 additionalSettings =
                     Node.parse(
                         """
-                            {
-                                "customizationConfig": {
-                                    "protocols": {
-                                        "common": {
-                                            "eventStreamTimeouts": {
-                                                "initialMessage": "300ms",
-                                                "messageCompletion": "200ms",
-                                                "idle": "1s",
-                                                "perOperation": {
-                                                    "test#PublishEvents": {"idle": "400ms"},
-                                                    "test#RetryEvents": {"idle": "400ms"},
-                                                    "test#NoIdleEvents": {"idle": 0},
-                                                    "test#NoInitialEvents": {"idle": "400ms"}
+                        {
+                            "customizationConfig": {
+                                "protocols": {
+                                    "common": {
+                                        "request": {
+                                            "body": {
+                                                "eventStreamTimeouts": {
+                                                    "initialMessage": "300ms",
+                                                    "messageCompletion": "200ms",
+                                                    "idle": "1s",
+                                                    "perOperation": {
+                                                        "test#PublishEvents": {"idle": "400ms"},
+                                                        "test#RetryEvents": {"idle": "400ms"},
+                                                        "test#NoIdleEvents": {"idle": 0},
+                                                        "test#NoInitialEvents": {"idle": "400ms"}
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                            """,
+                        }
+                        """,
                     ).expectObjectNode(),
                 command = { crate ->
                     // Build ordinary Cargo test binaries; defer execution so all three

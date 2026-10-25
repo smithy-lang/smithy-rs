@@ -70,8 +70,12 @@ internal class EventStreamTimeoutsTest {
                     "customizationConfig": {
                         "protocols": {
                             "common": {
-                                "eventStreamTimeouts": $global
-                                ${if (bodyTimeouts != null) ""","requestBodyReadTimeouts": $bodyTimeouts""" else ""}
+                                "request": {
+                                    "body": {
+                                        "eventStreamTimeouts": $global
+                                        ${if (bodyTimeouts != null) ""","readTimeouts": $bodyTimeouts""" else ""}
+                                    }
+                                }
                             }
                         }
                     }
@@ -196,7 +200,7 @@ internal class EventStreamTimeoutsTest {
             """{"perOperation": {"test#PublishEvents": "10s"}}""",
         )) {
             val error = assertThrows<CodegenException> { settings(json) }
-            check(error.message!!.contains("customizationConfig.protocols.common.eventStreamTimeouts"))
+            check(error.message!!.contains("customizationConfig.protocols.common.request.body.eventStreamTimeouts"))
         }
     }
 
@@ -213,7 +217,7 @@ internal class EventStreamTimeoutsTest {
                 IntegrationTestParams(
                     additionalSettings =
                         objectNode(
-                            """{"customizationConfig": {"protocols": {"common": {"eventStreamTimeouts": {"messageCompletion": "45s"}}}}}""",
+                            """{"customizationConfig": {"protocols": {"common": {"request":{"body":{"eventStreamTimeouts": {"messageCompletion": "45s"}}}}}}}""",
                         ),
                 ),
             ) { codegenContext, rustCrate ->
@@ -360,7 +364,7 @@ internal class EventStreamTimeoutsTest {
     fun `generated code preserves explicit disabled deadline overrides`() {
         val settings =
             objectNode(
-                """{"customizationConfig": {"protocols": {"common": {"eventStreamTimeouts": {"initialMessage": 0, "messageCompletion": 0, "idle": 0}}}}}""",
+                """{"customizationConfig": {"protocols": {"common": {"request":{"body":{"eventStreamTimeouts": {"initialMessage": 0, "messageCompletion": 0, "idle": 0}}}}}}}""",
             )
         val generatedServers =
             serverIntegrationTest(model(), IntegrationTestParams(additionalSettings = settings)) { _, rustCrate ->
@@ -405,12 +409,16 @@ internal class EventStreamTimeoutsTest {
                             "customizationConfig": {
                                 "protocols": {
                                     "common": {
-                                        "eventStreamTimeouts": {
-                                            "initialMessage": "500ms",
-                                            "messageCompletion": "20ms",
-                                            "idle": "5s",
-                                            "perOperation": {
-                                                "test#PublishEvents": {"idle": "2s"}
+                                        "request": {
+                                            "body": {
+                                                "eventStreamTimeouts": {
+                                                    "initialMessage": "500ms",
+                                                    "messageCompletion": "20ms",
+                                                    "idle": "5s",
+                                                    "perOperation": {
+                                                        "test#PublishEvents": {"idle": "2s"}
+                                                    }
+                                                }
                                             }
                                         }
                                     }

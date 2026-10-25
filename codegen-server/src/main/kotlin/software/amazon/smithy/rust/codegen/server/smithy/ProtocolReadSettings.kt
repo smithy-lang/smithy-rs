@@ -10,11 +10,14 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import java.util.logging.Logger
+import kotlin.time.Duration
 
 /** Request-read settings shared by all protocols served by the generated service. */
 internal object ProtocolReadSettings {
     const val COMMON_PATH = "customizationConfig.protocols.common"
-    const val REQUEST_BODY_READ_POLL_BUDGET_KEY = "requestBodyReadPollBudget"
+    const val REQUEST_PATH = "$COMMON_PATH.request"
+    const val HEADER_PATH = "$REQUEST_PATH.header"
+    const val BODY_PATH = "$REQUEST_PATH.body"
 
     fun expectObject(
         node: Node?,
@@ -64,11 +67,27 @@ internal object ProtocolReadSettings {
                     )
                 }
             }
-            protocolId to expectObject(value, path)!!
+            val section = expectObject(value, path)!!
+            if (protocolId == "common") {
+                validateRequestSections(section)
+            }
+            protocolId to section
         }.orEmpty()
     }
 
-    /** Fold the legacy body-size setting into `common`, preserving common-value precedence. */
+    private fun validateRequestSections(common: ObjectNode) {
+        warnUnknownKeys(common, setOf("request"), COMMON_PATH)
+        val request = expectObject(common.getMember("request").orElse(null), REQUEST_PATH) ?: return
+        warnUnknownKeys(request, setOf("header", "body"), REQUEST_PATH)
+        expectObject(request.getMember("header").orElse(null), HEADER_PATH)?.let {
+            warnUnknownKeys(it, setOf("readTimeout"), HEADER_PATH)
+        }
+        expectObject(request.getMember("body").orElse(null), BODY_PATH)?.let {
+            warnUnknownKeys(it, setOf("maxBytes", "readPollBudget", "readTimeouts", "eventStreamTimeouts"), BODY_PATH)
+        }
+    }
+
+    /** Fold the released legacy body-size setting into the nested request body configuration. */
     fun foldLegacyRequestBodyMaxBytes(
         customizationConfig: ObjectNode?,
         codegenConfig: ObjectNode?,
@@ -76,42 +95,83 @@ internal object ProtocolReadSettings {
         val legacyValue = codegenConfig?.getMember("requestBodyMaxBytes")?.orElse(null) ?: return customizationConfig
         val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), "customizationConfig.protocols") ?: ObjectNode.objectNode()
         val common = expectObject(protocols.getMember("common").orElse(null), COMMON_PATH) ?: ObjectNode.objectNode()
-        if (common.containsMember("requestBodyMaxBytes")) {
+        val request = expectObject(common.getMember("request").orElse(null), REQUEST_PATH) ?: ObjectNode.objectNode()
+        val body = expectObject(request.getMember("body").orElse(null), BODY_PATH) ?: ObjectNode.objectNode()
+        if (body.containsMember("maxBytes")) {
             Logger.getLogger("ServerRustSettings").warning(
-                "Both `codegen.requestBodyMaxBytes` and `$COMMON_PATH.requestBodyMaxBytes` are set; using the common value.",
+                "Both `codegen.requestBodyMaxBytes` and `$BODY_PATH.maxBytes` are set; using the nested value.",
             )
             return customizationConfig
         }
         return (customizationConfig ?: ObjectNode.objectNode()).withMember(
             "protocols",
-            protocols.withMember("common", common.withMember("requestBodyMaxBytes", legacyValue)),
+            protocols.withMember("common", common.withMember("request", request.withMember("body", body.withMember("maxBytes", legacyValue)))),
         )
     }
 
-    /** Read a common setting from the normalized protocol map. */
+    /** Read a nested common setting, retaining its full path for validation errors. */
     fun resolve(
         protocolSettings: Map<String, ObjectNode>,
-        key: String,
-    ): Pair<Node?, String> = protocolSettings["common"]?.getMember(key)?.orElse(null) to "$COMMON_PATH.$key"
+        vararg keys: String,
+    ): Pair<Node?, String> {
+        var node: Node? = protocolSettings["common"]
+        var path = COMMON_PATH
+        for (key in keys) {
+            node = expectObject(node, path)?.getMember(key)?.orElse(null)
+            path = "$path.$key"
+        }
+        return node to path
+    }
+
+    /** Null inherits the runtime default; zero explicitly disables the header deadline. */
+    fun headerReadTimeout(protocolSettings: Map<String, ObjectNode>): Duration? {
+        val (value, path) = resolve(protocolSettings, "request", "header", "readTimeout")
+        return value?.let { RequestBodyReadTimeouts.parseTimeout(it, path) }
+    }
 
     fun requestBodyMaxBytes(protocolSettings: Map<String, ObjectNode>): Long? {
-        val (value, path) = resolve(protocolSettings, "requestBodyMaxBytes")
+        val (value, path) = resolve(protocolSettings, "request", "body", "maxBytes")
         if (value == null) return null
-        val errorMessage = "`$path` must be a non-negative integer that fits in a Long"
-        if (!value.isNumberNode) throw CodegenException(errorMessage)
+        val errorMessage =
+            "`$path` must be a non-negative integer byte count or a whole-number size string with " +
+                "B, KB, MB, GB, TB, KiB, MiB, GiB, or TiB units, fitting in a Long"
         val maxBytes =
             try {
-                value.expectNumberNode().value.toString().toBigDecimal().longValueExact()
+                when {
+                    value.isNumberNode -> value.expectNumberNode().value.toString().toBigDecimal().longValueExact()
+                    value.isStringNode -> {
+                        val match = BYTE_SIZE_REGEX.matchEntire(value.expectStringNode().value.trim()) ?: throw CodegenException(errorMessage)
+                        val amount = match.groupValues[1].toBigInteger()
+                        amount.multiply(BYTE_SIZE_UNITS.getValue(match.groupValues[2]).toBigInteger()).longValueExact()
+                    }
+                    else -> throw CodegenException(errorMessage)
+                }
             } catch (_: ArithmeticException) {
+                throw CodegenException(errorMessage)
+            } catch (_: NumberFormatException) {
                 throw CodegenException(errorMessage)
             }
         if (maxBytes < 0) throw CodegenException(errorMessage)
         return maxBytes
     }
 
+    private val BYTE_SIZE_UNITS =
+        mapOf(
+            "B" to 1L,
+            "KB" to 1_000L,
+            "MB" to 1_000_000L,
+            "GB" to 1_000_000_000L,
+            "TB" to 1_000_000_000_000L,
+            "KiB" to 1_024L,
+            "MiB" to 1_048_576L,
+            "GiB" to 1_073_741_824L,
+            "TiB" to 1_099_511_627_776L,
+        )
+    private val BYTE_SIZE_REGEX = Regex("^([0-9]+)\\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$")
+
     /** Ready HTTP frame budget: null inherits runtime policy; zero disables yielding. */
     fun requestBodyReadPollBudget(protocolSettings: Map<String, ObjectNode>): Int? {
-        val (value, path) = resolve(protocolSettings, REQUEST_BODY_READ_POLL_BUDGET_KEY)
+        val (value, path) = resolve(protocolSettings, "request", "body", "readPollBudget")
         if (value == null) {
             return null
         }

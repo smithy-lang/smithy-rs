@@ -15,6 +15,7 @@
 pub(crate) mod macros;
 
 pub mod body;
+pub mod config;
 #[doc(hidden)]
 pub mod error;
 pub mod extension;
@@ -32,8 +33,6 @@ pub mod response;
 pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
-#[doc(hidden)]
-pub mod schema;
 pub mod serve;
 pub mod service;
 #[doc(hidden)]

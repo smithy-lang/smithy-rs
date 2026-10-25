@@ -143,7 +143,7 @@ class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUncons
 /**
  * A customization to apply a per-message completion deadline to the event stream request body
  * handed to the operation handler, configured via
- * `customizationConfig.protocols.common.eventStreamTimeouts`.
+ * `customizationConfig.protocols.common.request.body.eventStreamTimeouts`.
  * Once the first bytes of a message arrive, the complete message frame must arrive before the
  * deadline expires, mitigating slow-drip request attacks on event stream operations.
  *

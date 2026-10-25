@@ -11,6 +11,9 @@
 
 use std::time::Duration;
 
+/// Default request-head deadline, for legacy callers to apply to their Hyper builder.
+pub const DEFAULT_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Default body-read deadline for operations without an HTTP payload member.
 pub const DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 

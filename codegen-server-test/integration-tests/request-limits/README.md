@@ -4,6 +4,11 @@ This permanent REST JSON fixture exposes different request-body deadlines togeth
 with a 1 KiB buffered body limit. Automated tests launch the same executable on an
 available loopback port. The Pokémon example uses its original model and build commands.
 
+`settings.json` supplies the configuration under `protocols.common.request`.
+The body limit is the quoted size `"1 KiB"` at `request.body.maxBytes`;
+generation converts it to 1024 bytes. Integer byte counts are also accepted.
+`KB` and `MB` are decimal units; `KiB` and `MiB` are binary units.
+
 From this directory:
 
 ```sh
@@ -49,8 +54,14 @@ The byte limit is a service-wide setting, so these operations test both limits a
 timeouts together. Event-stream deadlines have separate existing integration tests;
 this fixture exercises non-streaming bodies.
 
-Transport settings are in `src/lib.rs`: a 10s header-read timeout, plus HTTP/2
-keep-alive pings every 10s with a 5s response deadline. The server supports HTTP/1
+The 10s header-read timeout is in `settings.json` under
+`protocols.common.request.header.readTimeout`, passed to codegen as `customizationConfig`.
+The generated `serve(listener, app.into_make_service())` applies it automatically;
+an explicit `.header_read_timeout(...)` call overrides it. Omitting the JSON setting
+keeps 1m, and numeric `0` or `"0s"` disables it.
+Body limits and deadlines are selected during SDK generation. Update
+`request.body` in `settings.json` and regenerate the SDK to change them.
+`src/lib.rs` configures HTTP/2 keep-alive pings every 10s with a 5s response deadline. The server supports HTTP/1
 and HTTP/2 and binds only to loopback. Header-read timeout protection for every
 request currently supports HTTP/1 only. For HTTP/2, the deadline covers only the
 first request head on the connection; later streams have no header-read deadline.
@@ -94,6 +105,6 @@ with socket.create_connection(("127.0.0.1", 13734), timeout=2) as sock:
 print(bytes(response).split(b"\r\n", 1)[0].decode(), time.monotonic() - started)
 ```
 
-`tests/request_limits.rs` checks all three body deadlines concurrently against one
+`tests/request_limits.rs` checks the JSON-configured header deadline, all three body deadlines concurrently against one
 server, successful requests at the byte limit, and `400` size rejections above the limit
 with both Content-Length and chunked framing. Each test cleans up its server process.

@@ -69,6 +69,26 @@ fn assert_status(response: &[u8], status: u16) {
 }
 
 #[tokio::test]
+async fn generated_serve_uses_json_header_deadline() {
+    let server = TestServer::start().await;
+    let mut stream = TcpStream::connect(server.addr).await.unwrap();
+    let started = Instant::now();
+    stream
+        .write_all(b"POST /echo HTTP/1.1\r\nHost: localhost\r\n")
+        .await
+        .unwrap();
+    let mut response = Vec::new();
+    timeout(Duration::from_secs(15), stream.read_to_end(&mut response))
+        .await
+        .expect("JSON header deadline should close the connection")
+        .unwrap();
+    let elapsed = started.elapsed();
+    assert!(elapsed >= Duration::from_millis(9750), "{elapsed:?}");
+    assert!(elapsed < Duration::from_secs(13), "{elapsed:?}");
+    assert!(response.is_empty() || response.starts_with(b"HTTP/1.1 408 "));
+}
+
+#[tokio::test]
 async fn default_override_and_payload_deadlines_coexist_on_one_server() {
     let server = TestServer::start().await;
     let check = |path: &'static str, seconds: u64| {

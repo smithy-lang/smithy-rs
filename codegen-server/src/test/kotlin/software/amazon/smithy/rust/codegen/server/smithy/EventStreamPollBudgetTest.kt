@@ -45,15 +45,15 @@ internal class EventStreamPollBudgetTest {
         check(config("{}").requestBodyReadPollBudget == null)
         check(settings("{}").requestBodyReadPollBudget == null)
         for (budget in listOf(0, 1, 32, 64, Int.MAX_VALUE)) {
-            check(config("""{"requestBodyReadPollBudget": $budget}""").requestBodyReadPollBudget == budget)
+            check(config("""{"readPollBudget": $budget}""").requestBodyReadPollBudget == budget)
         }
     }
 
     @Test
     fun `invalid poll budgets fail code generation`() {
         for (value in listOf("-1", "1.5", "2147483648", "9223372036854775808", "\"32\"", "true", "null")) {
-            val error = assertThrows<CodegenException> { config("""{"requestBodyReadPollBudget": $value}""") }
-            check(error.message!!.contains("customizationConfig.protocols.common.requestBodyReadPollBudget"))
+            val error = assertThrows<CodegenException> { config("""{"readPollBudget": $value}""") }
+            check(error.message!!.contains("customizationConfig.protocols.common.request.body.readPollBudget"))
         }
     }
 
@@ -70,8 +70,12 @@ internal class EventStreamPollBudgetTest {
                 "customizationConfig": {
                     "protocols": {
                         "common": {
-                            "requestBodyReadPollBudget": 3,
-                            "eventStreamTimeouts": {"messageCompletion": "30s"}
+                            "request": {
+                                "body": {
+                                    "readPollBudget": 3,
+                                    "eventStreamTimeouts": {"messageCompletion": "30s"}
+                                }
+                            }
                         }
                     }
                 }
@@ -85,7 +89,7 @@ internal class EventStreamPollBudgetTest {
     @Test
     fun `zero disables forced yielding in generated receiver`() {
         checkGeneratedBudget(
-            """{"customizationConfig": {"protocols": {"common": {"requestBodyReadPollBudget": 0}}}}""",
+            """{"customizationConfig": {"protocols": {"common": {"request":{"body":{"readPollBudget": 0}}}}}}""",
             64,
             false,
         )
@@ -97,8 +101,8 @@ internal class EventStreamPollBudgetTest {
             """{"protocols": null}""",
             """{"protocols": []}""",
             """{"protocols": {"common": true}}""",
-            """{"protocols": {"common": {"requestBodyReadTimeouts": null}}}""",
-            """{"protocols": {"common": {"requestBodyReadTimeouts": "30s"}}}""",
+            """{"protocols": {"common": {"request":{"body":{"readTimeouts": null}}}}}""",
+            """{"protocols": {"common": {"request":{"body":{"readTimeouts": "30s"}}}}}""",
         )) {
             val error = assertThrows<CodegenException> { settings("""{"customizationConfig": $json}""") }
             check(error.message!!.contains("customizationConfig.protocols"))
@@ -106,7 +110,7 @@ internal class EventStreamPollBudgetTest {
     }
 
     private fun config(json: String): ServerRustSettings =
-        settings("""{"customizationConfig": {"protocols": {"common": $json}}}""")
+        settings("""{"customizationConfig": {"protocols": {"common": {"request":{"body":$json}}}}}""")
 
     private fun settings(json: String): ServerRustSettings =
         ServerRustSettings.from(

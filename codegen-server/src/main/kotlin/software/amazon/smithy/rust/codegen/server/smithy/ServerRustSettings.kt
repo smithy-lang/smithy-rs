@@ -71,6 +71,7 @@ data class ServerRustSettings(
         customizationConfig,
     ) {
     private val parsedProtocolSettings by lazy { ProtocolReadSettings.protocolSettings(customizationConfig) }
+    val headerReadTimeout: Duration? by lazy { ProtocolReadSettings.headerReadTimeout(protocolSettings()) }
     val requestBodyReadPollBudget: Int? by lazy { ProtocolReadSettings.requestBodyReadPollBudget(protocolSettings()) }
     val eventStreamTimeouts by lazy {
         EventStreamTimeouts.fromProtocolSettings(protocolSettings(), requestBodyReadTimeouts)
@@ -128,6 +129,7 @@ data class ServerRustSettings(
                         protocolSettings,
                     ),
             ).also {
+                it.headerReadTimeout
                 it.requestBodyMaxBytes()
                 it.requestBodyReadPollBudget()
                 it.eventStreamTimeouts
@@ -154,7 +156,7 @@ data class RequestBodyReadTimeouts(
         }
 
     companion object {
-        private const val CONFIG_KEY = "requestBodyReadTimeouts"
+        private const val CONFIG_KEY = "readTimeouts"
         private const val DEFAULT_NON_PAYLOAD_KEY = "defaultNonPayload"
         private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
         private const val PER_OPERATION_KEY = "perOperation"
@@ -217,7 +219,7 @@ data class RequestBodyReadTimeouts(
             serviceId: ShapeId,
             protocolSettings: Map<String, ObjectNode>,
         ): RequestBodyReadTimeouts {
-            val (configNode, configPath) = ProtocolReadSettings.resolve(protocolSettings, CONFIG_KEY)
+            val (configNode, configPath) = ProtocolReadSettings.resolve(protocolSettings, "request", "body", CONFIG_KEY)
             val config = ProtocolReadSettings.expectObject(configNode, configPath)
             config?.let {
                 ProtocolReadSettings.warnUnknownKeys(
@@ -283,9 +285,10 @@ data class RequestBodyReadTimeouts(
                     .map { it.id }
                     .toSet()
             val perOperation =
-                config
-                    ?.getObjectMember(PER_OPERATION_KEY)
-                    ?.orElse(null)
+                ProtocolReadSettings.expectObject(
+                    config?.getMember(PER_OPERATION_KEY)?.orElse(null),
+                    "$configPath.$PER_OPERATION_KEY",
+                )
                     ?.members
                     ?.map { (key, value) ->
                         val operationId =
@@ -304,7 +307,7 @@ data class RequestBodyReadTimeouts(
                             )
                         }
                         // Streaming inputs have no whole-body read deadline. Event stream inputs are
-                        // configured via `eventStreamTimeouts.perOperation` instead.
+                        // configured via `request.body.eventStreamTimeouts.perOperation` instead.
                         if (operationId in streamingOperationIds) {
                             val hint =
                                 if (operationId in eventStreamInputOperationIds) {
@@ -345,7 +348,7 @@ data class RequestBodyReadTimeouts(
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
  *   values). Omitted settings inherit the runtime default. Configured with
- *   `customizationConfig.protocols.common.requestBodyMaxBytes`; the legacy
+ *   `customizationConfig.protocols.common.request.body.maxBytes`; the legacy
  *   `codegen.requestBodyMaxBytes` key is read when the common key is absent.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name

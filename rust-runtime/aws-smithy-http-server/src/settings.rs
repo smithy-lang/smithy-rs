@@ -63,7 +63,7 @@ impl RequestBodyReadTimeoutConfig {
 pub const DEFAULT_MAX_CONNECTIONS: usize = 16_384;
 
 /// Default timeout for receiving a complete request head.
-pub const DEFAULT_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
+pub const DEFAULT_HEADER_READ_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Default interval between HTTP/2 keep-alive pings.
 pub const DEFAULT_HTTP2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(20);

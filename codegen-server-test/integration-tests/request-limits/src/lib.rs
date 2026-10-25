@@ -50,7 +50,6 @@ pub async fn serve(
         .expect("all fixture handlers are registered");
 
     request_limits_server_sdk::serve(listener, app.into_make_service())
-        .header_read_timeout(Some(Duration::from_secs(10)))
         .configure_hyper(|mut builder| {
             builder
                 .http2()

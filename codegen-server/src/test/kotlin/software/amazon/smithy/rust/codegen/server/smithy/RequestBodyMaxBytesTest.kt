@@ -154,7 +154,7 @@ internal class RequestBodyMaxBytesTest {
         val codegen = if (legacy != null) ""","codegen": { "requestBodyMaxBytes": $legacy }""" else ""
         val customization =
             if (common != null) {
-                ""","customizationConfig": { "protocols": { "common": { "requestBodyMaxBytes": $common } } }"""
+                ""","customizationConfig": { "protocols": { "common": {"request":{"body":{"maxBytes": $common}}} } }"""
             } else {
                 ""
             }
@@ -189,8 +189,50 @@ internal class RequestBodyMaxBytesTest {
         for (invalid in listOf("-1", "1.5", "\"1024\"", "9223372036854775808")) {
             val error = assertThrows<CodegenException> { settings(common = invalid) }
             check(
-                error.message!!.contains("customizationConfig.protocols.common.requestBodyMaxBytes"),
+                error.message!!.contains("customizationConfig.protocols.common.request.body.maxBytes"),
             ) { "unexpected message for $invalid: ${error.message}" }
+        }
+    }
+
+    @Test
+    fun `byte size strings distinguish decimal and binary units and preserve zero`() {
+        val sizes =
+            mapOf(
+                "1 B" to 1L,
+                "100 KB" to 100_000L,
+                "100 MB" to 100_000_000L,
+                "1 GB" to 1_000_000_000L,
+                "1 TB" to 1_000_000_000_000L,
+                "100 KiB" to 102_400L,
+                "100 MiB" to 104_857_600L,
+                "1 GiB" to 1_073_741_824L,
+                "1 TiB" to 1_099_511_627_776L,
+                "100MB" to 100_000_000L,
+                " 100 MB " to 100_000_000L,
+                "0 B" to 0L,
+                "0 MB" to 0L,
+                "0 KiB" to 0L,
+                "9223372036854775807 B" to Long.MAX_VALUE,
+                "9223372036854775 KB" to 9_223_372_036_854_775_000L,
+            )
+        for ((size, bytes) in sizes) {
+            check(settings(common = "\"$size\"", legacy = "512").requestBodyMaxBytes() == bytes) { size }
+        }
+    }
+
+    @Test
+    fun `invalid size strings and multiplication overflow fail at the nested path`() {
+        for (invalid in listOf(
+            "", "1024", "-1 MB", "1.5 MB", "1 mb", "1 kb", "1 K", "1 PB",
+            "1MB extra", "NaN MB", "9223372036854775808 B",
+            "9223372036854776 KB", "8796093022208 MiB",
+            "999999999999999999999999999999999999999999 MB",
+        )) {
+            val error = assertThrows<CodegenException> { settings(common = "\"$invalid\"") }
+            check(error.message!!.contains("customizationConfig.protocols.common.request.body.maxBytes"))
+        }
+        for (invalid in listOf("true", "null", "{}", "[]")) {
+            assertThrows<CodegenException> { settings(common = invalid) }
         }
     }
 
@@ -206,7 +248,11 @@ internal class RequestBodyMaxBytesTest {
                             "customizationConfig": {
                                 "protocols": {
                                     "common": {
-                                        "requestBodyMaxBytes": 16
+                                        "request": {
+                                            "body": {
+                                                "maxBytes": "16 B"
+                                            }
+                                        }
                                     }
                                 }
                             }

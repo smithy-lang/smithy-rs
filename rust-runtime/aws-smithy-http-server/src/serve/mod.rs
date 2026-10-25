@@ -87,7 +87,7 @@
 //! `TokioIo<ConnLimiterIo<L::Io>>` as the IO type. [`IncomingStream`] continues
 //! to expose the listener's original IO type to the service factory.
 //!
-//! A 30-second header-read deadline starts when the connection task begins driving
+//! A one-minute header-read deadline starts when the connection task begins driving
 //! Hyper and ends when Hyper delivers the first complete request head to its service.
 //! It includes protocol negotiation and parsing for either HTTP version. Connection
 //! service creation, Tower readiness, request middleware, and body reads are excluded.
@@ -140,7 +140,7 @@
 //!
 //! | Timeout Type | What It Does | How to Configure |
 //! |--------------|--------------|------------------|
-//! | **Header Read** | Per-request protection currently supports HTTP/1 only; HTTP/2 covers only the connection's first request head | 30 s by default; override via [`.header_read_timeout()`](Serve::header_read_timeout) |
+//! | **Header Read** | Per-request protection currently supports HTTP/1 only; HTTP/2 covers only the connection's first request head | 1 minute by default; override via [`.header_read_timeout()`](Serve::header_read_timeout) |
 //! | **Request** | Time limit for processing one request | Tower's `TimeoutLayer` |
 //! | **Connection Duration** | Total connection lifetime limit | Custom accept loop with `tokio::time::timeout` |
 //! | **HTTP/2 Keep-Alive** | Idle timeout between HTTP/2 requests | 20 s ping interval by default; override via `.configure_hyper()` with `.http2().keep_alive_*()` |
@@ -467,7 +467,7 @@ where
 /// [`Serve::max_connections`] to configure the limit or
 /// [`Serve::disable_connection_limit`] to disable it.
 ///
-/// A 30-second deadline bounds the first request head for either HTTP version and
+/// A one-minute deadline bounds the first request head for either HTTP version and
 /// subsequent HTTP/1 header reads. Per-request header-read timeout protection is
 /// currently HTTP/1-only; later HTTP/2 streams have no header-read deadline. The
 /// default connection builder also applies a 20-second HTTP/2 keep-alive ping interval,
@@ -688,7 +688,7 @@ where
 
     /// Set the timeout for receiving a complete request head.
     ///
-    /// The default is 30 seconds. The first-request deadline starts when the
+    /// The default is one minute. The first-request deadline starts when the
     /// connection task begins driving Hyper, after `make_service` finishes. It
     /// includes protocol negotiation and header parsing and does not reset as
     /// bytes arrive. It ends before Tower readiness, middleware, or body reads.
@@ -851,7 +851,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
 
     /// Set the timeout for receiving a complete request head.
     ///
-    /// The default is 30 seconds. Pass `None` or `Some(Duration::ZERO)` to disable it.
+    /// The default is one minute. Pass `None` or `Some(Duration::ZERO)` to disable it.
     /// See [`Serve::header_read_timeout`] for details.
     pub fn header_read_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.serve = self.serve.header_read_timeout(timeout);

@@ -60,9 +60,14 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
         value: Duration?,
         payload: Boolean,
     ): Writable =
+        requiredTimeout(value, if (payload) "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT" else "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT")
+
+    private fun requiredTimeout(
+        value: Duration?,
+        defaultName: String,
+    ): Writable =
         writable {
             if (value == null) {
-                val defaultName = if (payload) "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT" else "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT"
                 rustTemplate("#{Some}(#{DefaultTimeout})", "DefaultTimeout" to runtime.resolve("settings::$defaultName"), *RuntimeType.preludeScope)
             } else if (value == Duration.ZERO) {
                 rustTemplate("#{None}", *RuntimeType.preludeScope)
@@ -126,26 +131,28 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
                 }
             rustTemplate(
                 """
-                pub(crate) fn service_config() -> &'static #{Runtime}::schema::ServiceConfig {
-                    static CONFIG: std::sync::OnceLock<#{Runtime}::schema::ServiceConfig> = std::sync::OnceLock::new();
+                pub(crate) fn service_config() -> &'static #{Runtime}::config::ServiceConfig {
+                    static CONFIG: std::sync::OnceLock<#{Runtime}::config::ServiceConfig> = std::sync::OnceLock::new();
                     CONFIG.get_or_init(|| {
-                        let global = #{Runtime}::schema::RequestBodyCollectionConfig::default()
+                        let global = #{Runtime}::config::RequestBodyCollectionConfig::default()
                             .with_read_timeout(#{GlobalBodyTimeout})#{BodyOptions};
-                        let event_global = #{Runtime}::schema::EventStreamTimeoutConfig::default()
+                        let event_global = #{Runtime}::config::EventStreamTimeoutConfig::default()
                             .with_initial_message(#{InitialTimeout})
                             .with_message_completion(#{CompletionTimeout})
                             .with_idle(#{IdleTimeout});
-                        #{Runtime}::schema::ServiceConfig::default()
-                            .with_request_body(#{Runtime}::schema::ServiceRequestBodyConfig::default()
+                        #{Runtime}::config::ServiceConfig::default()
+                            .with_header_read_timeout(#{HeaderTimeout})
+                            .with_request_body(#{Runtime}::config::ServiceRequestBodyConfig::default()
                                 .with_global(global)
                                 .with_per_operation(std::collections::HashMap::from([#{BodyOverrides}])))
-                            .with_event_stream(#{Runtime}::schema::ServiceEventStreamConfig::default()
+                            .with_event_stream(#{Runtime}::config::ServiceEventStreamConfig::default()
                                 .with_global(event_global)
                                 .with_per_operation(std::collections::HashMap::from([#{EventOverrides}])))
                     })
                 }
                 """,
                 *scope,
+                "HeaderTimeout" to requiredTimeout(settings.headerReadTimeout, "DEFAULT_HEADER_READ_TIMEOUT"),
                 "GlobalBodyTimeout" to bodyTimeout(bodyTimeouts.defaultNonPayloadTimeout, false),
                 "BodyOptions" to bodyOptions,
                 "BodyOverrides" to bodyOverrides,
