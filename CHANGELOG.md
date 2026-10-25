@@ -1,4 +1,18 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 21st, 2026
+==================
+**New this release:**
+- :tada: (all) Add an opt-in structure-prefix callback to schema-based CBOR serialization.
+    The callback receives the value's schema and can write fields before modeled
+    members, enabling RPC v2 CBOR error discriminators while retaining member names.
+
+    Add opt-in definite-length encoding for lists and maps with known lengths, plus
+    integer-list serialization that matches ordinary integer writes. ShapeSerializer
+    provides default length-aware methods that delegate to existing implementations,
+    so other codecs preserve their behavior.
+- :bug: (all, [smithy-rs#4924](https://github.com/smithy-lang/smithy-rs/issues/4924)) Enforce the event stream protocol's header value length limit when encoding messages. String and byte array header values longer than 32,767 bytes are now rejected instead of encoded. `aws_sigv4::event_stream::sign_message` now returns an error instead of panicking when a message cannot be encoded.
+
+
 October 20th, 2026
 ==================
 **New this release:**

@@ -1,0 +1,16 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Svc": {
+      "type": "service",
+      "operations": [
+        {
+          "target": "ex#S"
+        }
+      ]
+    },
+    "ex#S": {
+      "type": "structure"
+    }
+  }
+}
