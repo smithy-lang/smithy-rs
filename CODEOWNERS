@@ -34,6 +34,7 @@
 /rust-runtime/aws-smithy-eventstream/               @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-http/                      @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-json/                      @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-lang/                      @smithy-lang/smithy-rs-team
 /rust-runtime/aws-smithy-protocol-test/             @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-types/                     @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-types-convert/             @smithy-lang/smithy-rs-team @smithy-lang/smithy-rs-server

@@ -1,0 +1,13 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#R": {
+      "type": "resource",
+      "identifiers": {
+        "id": {
+          "target": "smithy.api#Integer"
+        }
+      }
+    }
+  }
+}

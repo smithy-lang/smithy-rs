@@ -1,0 +1,13 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#S": {
+      "type": "structure",
+      "members": {
+        "a": {
+          "target": "smithy.api#Unit"
+        }
+      }
+    }
+  }
+}
