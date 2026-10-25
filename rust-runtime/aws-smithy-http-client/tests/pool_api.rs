@@ -10,7 +10,7 @@
 use aws_smithy_http_client::pool::{self, ConnectionPool, DriverSpawner, Partition, PartitionId};
 
 #[test]
-fn callback_partitions_are_available_without_a_test_feature() {
+fn callback_partitions_are_available_without_test_util_feature() {
     let id = PartitionId::from_index(4);
     let spawner = DriverSpawner::from_fn(drop);
     let mut builder = ConnectionPool::builder().idle_timeout(None);
