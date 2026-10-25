@@ -9,18 +9,35 @@ breaking: true
 new_feature: true
 bug_fix: true
 ---
-Servers now bound slow and oversized clients by default: request body reads time out with `408` (`5m` for non-payload operations, `1h` for `@httpPayload`), `serve` caps concurrent connections at 16,384 and request headers at 30s, and event stream reads yield after 32 consecutive ready frames (`requestBodyReadPollBudget`). Event stream `initialMessage`, `messageCompletion`, and `idle` deadlines are opt-in. All settings live under `customizationConfig.protocols.common`, including `requestBodyMaxBytes`, which takes precedence over the legacy `codegen.requestBodyMaxBytes`. Body read deadlines require a tokio runtime with the time driver enabled.
+Servers now apply request-body read deadlines and yield while reading ready event-stream frames. The built-in `aws-smithy-http-server::serve` loop also limits concurrent connections and request-header reads. These defaults can change existing server behavior.
 
-Deadlines bound reads from the client, not handler execution. A body read or RPC `initialMessage` timeout rejects the request with `408` before the handler runs. When an event stream message starts arriving but does not complete within `messageCompletion`, or no message arrives within `idle`, the receiver's `recv()` returns an error whose source chain contains `event_stream_message_timeout::MessageTimeoutError` (`is_idle()` identifies idle expiry). The error is resumable and does not close the connection: call `recv()` again to grant one more timeout window, or propagate it to end the request. Retry only a bounded number of times; retrying indefinitely removes the protection.
+Configure generated servers in `smithy-build.json` under `customizationConfig.protocols.common`. These settings apply to both server runtimes:
 
-`Serve::header_read_timeout` configures the first-request header deadline for either HTTP version and Hyper's subsequent HTTP/1 header reads. The first deadline starts when the connection task begins polling Hyper, after service creation, and ends before Tower readiness or request middleware. There is no separate protocol-detection deadline or preface inspection. Later HTTP/2 streams are not covered by the first-request deadline. Passing `None` or `Some(Duration::ZERO)` disables both header deadlines.
+| Parameter relative to `customizationConfig.protocols.common` | Default | Behavior |
+| --- | --- | --- |
+| `requestBodyMaxBytes` | `0` (unlimited) | Maximum bytes buffered for a non-streaming request body. |
+| `requestBodyReadTimeouts.defaultNonPayload` | `"5m"` | Whole-body read deadline for non-streaming operations without an `@httpPayload` input member. |
+| `requestBodyReadTimeouts.defaultPayload` | `"1h"` | Whole-body read deadline for non-streaming operations with an `@httpPayload` input member. |
+| `requestBodyReadTimeouts.perOperation` | `{}` | Maps full operation shape IDs to duration overrides; omitted operations inherit the applicable body-read default. Streaming inputs do not support whole-body deadlines. |
+| `requestBodyReadPollBudget` | `32` | Consecutive ready event-stream HTTP body frames read before yielding to the executor. |
+| `eventStreamTimeouts.initialMessage` | Disabled | RPC event-stream initial-frame deadline, including the wait for its first bytes; REST streams have no initial read. |
+| `eventStreamTimeouts.messageCompletion` | Disabled | Deadline from an event frame's first bytes until the complete frame is read. |
+| `eventStreamTimeouts.idle` | Disabled | Deadline while waiting for the next event frame's first bytes. |
+| `eventStreamTimeouts.perOperation` | `{}` | Maps full event-stream input operation shape IDs to objects containing `initialMessage`, `messageCompletion`, and/or `idle`; omitted fields inherit the corresponding service setting. |
 
-`serve` exposes one Hyper automatic builder through `configure_hyper`. With both HTTP/1 and HTTP/2 enabled, it uses `serve_connection_with_upgrades`; with `http1_only()` or `http2_only()`, it uses `serve_connection` and rejects the other protocol before dispatch. HTTP/1-only upgrades require a custom serve loop. Upgraded connections retain their connection permits, and graceful shutdown drains requests on both serving paths.
+Timeout values accept duration strings with `ms`, `s`, `m`, or `h` units, such as `"250ms"` or `"10s"`. Numeric `0` disables a timeout. Set `requestBodyMaxBytes` or `requestBodyReadPollBudget` to `0` to disable that limit. The common `requestBodyMaxBytes` setting takes precedence over the supported legacy `codegen.requestBodyMaxBytes` setting. Omitted settings use runtime defaults, so a runtime update can change them without regenerating the service. Body and event-stream deadlines require a Tokio runtime with its time driver enabled.
 
-Request-read defaults are defined in the `settings` module of each server runtime: body deadlines are `5m`/`1h`, the event-stream poll budget is 32, event-stream deadlines are disabled, and the body size limit is unlimited. Codegen selects payload and streaming behavior and passes explicit overrides through. Omitted settings use the runtime defaults; explicit zero disables the corresponding limit. Updating the runtime can therefore update omitted defaults without regenerating the service.
+Configure transport limits through the Rust `serve` builder, separately from the JSON settings:
 
-Companion crates receive breaking version bumps alongside their runtime dependencies: server metrics and its macro move to `0.4.0` for server runtime `0.69`, and the Python server runtime moves to `0.70.0` for legacy server runtime `0.68`.
+| Builder option | Default | Override |
+| --- | --- | --- |
+| `.max_connections(max)` | `16_384` concurrent connections | `0` or `.disable_connection_limit()` disables the limit. |
+| `.header_read_timeout(timeout)` | `Some(Duration::from_secs(30))` | `None` or `Some(Duration::ZERO)` disables the deadline. |
+| `.configure_hyper(callback)` | HTTP/2 keep-alive ping interval and acknowledgment timeout are both `20s` | Supplies a custom Hyper builder, replacing its defaults; `.header_read_timeout(...)` still controls HTTP/1 header deadlines. |
+| `.with_graceful_shutdown(signal).with_shutdown_timeout(timeout)` | No shutdown timeout; waits indefinitely | Sets how long graceful shutdown waits for connections to finish. |
 
-Both server runtimes enforce an armed body-read deadline before accepting completed input. Input that becomes ready at or after expiry returns `408` without invoking the handler; handler execution remains outside the body-read deadline.
+Header deadlines cover the first request head for HTTP/1 and HTTP/2, and subsequent HTTP/1 request heads. Later HTTP/2 streams have no header deadline. With both protocols enabled, `serve` supports HTTP/1 upgrades; HTTP/1-only upgrades require a custom serve loop. Upgraded connections retain their connection permits.
 
-Kotlin normalizes shared request settings through `protocolSettings()`, folding the legacy body-size setting into the common section. Generated SDKs initialize one typed `ServiceConfig` containing `ServiceRequestBodyConfig`, `RequestBodyCollectionConfig`, and event-stream deadlines. These use the same configuration types and operation selection API as decoupled routing, so its runtime can consume the emitted settings without replacing the readers or generated configuration representation.
+A body-read or RPC initial-message timeout returns `408` before the handler runs, including when input becomes ready at or after expiry. Deadlines do not limit handler execution. Event-stream completion and idle timeouts surface from `recv()` with `event_stream_message_timeout::MessageTimeoutError` in the source chain. They are resumable: calling `recv()` again grants another timeout window without closing the connection. Bound retries to retain the protection.
+
+Server runtime versions move to `0.69.0` (`aws-smithy-http-server`) and `0.68.0` (`aws-smithy-legacy-http-server`); server metrics and its macro move to `0.4.0`, and the Python server runtime moves to `0.70.0`.
