@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-
 plugins {
     id("smithy-rs.kotlin-conventions")
     id("smithy-rs.publishing-conventions")
@@ -30,4 +28,31 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
+}
+
+// Embed the artifact version so generated schema crates can record it separately from the source commit.
+val generatedResourcesDir = layout.buildDirectory.dir("generated/resources")
+val generateServerCodegenVersion by tasks.registering {
+    val codegenVersion = project.version.toString()
+    inputs.property("codegenVersion", codegenVersion)
+    outputs.dir(generatedResourcesDir)
+    doLast {
+        val versionFile =
+            generatedResourcesDir.get()
+                .file("software/amazon/smithy/rust/codegen/server/smithy/codegen-release.txt").asFile
+        versionFile.parentFile.mkdirs()
+        versionFile.writeText(codegenVersion)
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(generatedResourcesDir)
+}
+
+tasks.processResources {
+    dependsOn(generateServerCodegenVersion)
+}
+
+tasks.named("sourcesJar").configure {
+    dependsOn(generateServerCodegenVersion)
 }
