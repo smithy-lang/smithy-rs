@@ -21,6 +21,7 @@
   - [Accessing Un-modelled Data](./server/from_parts.md)
   - [The Anatomy of a Service](./server/anatomy.md)
   - [Generating Common Service Code](./server/code_generation.md)
+  - [Upgrading to Schema-Driven Serde](./server/schema_serde_upgrade_guide.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)
@@ -69,5 +70,6 @@
   - [RFC-0044: Environment-defined service configuration](./rfcs/rfc0044_env_defined_service_config.md)
   - [RFC-0045: Configurable Serde](./rfcs/rfc0045_configurable_serde.md)
   - [RFC-0046: Server request metrics](./rfcs/rfc0046_server_request_metrics.md)
+  - [RFC-0047: Schema-driven server serde](./rfcs/rfc0047_server_schema_serde.md)
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
