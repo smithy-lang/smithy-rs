@@ -15,9 +15,7 @@ mod harness;
 use aws_smithy_http_server::{
     body::Body,
     request::FromParts,
-    response::{
-        IntoResponse, IntoResponseWithProtocol, IntoResponseWithRequest, Response, SchemaSerde,
-    },
+    response::{IntoResponse, Response},
     runtime_error::RuntimeError,
     schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1, RestXml, RpcV2Cbor, ServerProtocol},
 };
@@ -236,8 +234,7 @@ impl<P> IntoResponse<P> for ContextRejection {
     fn into_response(self) -> Response {
         panic!("schema upgrade fell back to the old method")
     }
-}
-impl IntoResponseWithProtocol for ContextRejection {
+
     fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
         Response::builder()
             .status(403)
@@ -425,7 +422,7 @@ async fn shared_serializer_matches_all_five_protocol_local_conversions() {
                     _ => unreachable!(),
                 };
                 let before: Response = IntoResponse::<$marker>::into_response(legacy);
-                let after: Response = IntoResponseWithProtocol::into_response_with_protocol(
+                let after: Response = IntoResponse::<$marker>::into_response_with_protocol(
                     shared_error(kind),
                     &$protocol,
                 );
@@ -546,7 +543,7 @@ async fn selected_framing_does_not_depend_on_protocol_tuple_order() {
     type Reversed = (RpcV2Cbor, RestJson1);
     fn accepts_tuple<P>()
     where
-        RuntimeError: IntoResponseWithRequest<P, SchemaSerde>,
+        RuntimeError: IntoResponse<P>,
     {
     }
     accepts_tuple::<Protocols>();
@@ -556,8 +553,12 @@ async fn selected_framing_does_not_depend_on_protocol_tuple_order() {
         &RpcV2Cbor::default() as &dyn ServerProtocol,
     ] {
         for kind in REJECTIONS {
-            let first = shared_error(kind).into_response_with_protocol(protocol);
-            let reversed = shared_error(kind).into_response_with_protocol(protocol);
+            let first = IntoResponse::<Protocols>::into_response_with_protocol(
+                shared_error(kind),
+                protocol,
+            );
+            let reversed =
+                IntoResponse::<Reversed>::into_response_with_protocol(shared_error(kind), protocol);
             assert_eq!(snapshot(first).await, snapshot(reversed).await);
         }
     }

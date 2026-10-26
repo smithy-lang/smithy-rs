@@ -24,9 +24,9 @@ use aws_smithy_http_server::{
     extension::ModeledErrorExtension,
     operation::OperationShape,
     plugin::{HttpMarker, Plugin},
-    response::{IntoResponse, IntoResponseWithRequest, Response},
+    response::{ErrorConverter, IntoResponse, Response},
     runtime_error::InternalFailureException,
-    service::ServiceShape,
+    service::{ServiceSerde, ServiceShape},
 };
 use harness::{observed_runtime_rejection, request, snapshot, Reply, Wire, MESSAGE};
 use http::Request;
@@ -41,14 +41,18 @@ struct RejectPlugin;
 
 impl HttpMarker for RejectPlugin {}
 
-impl<Ser, Op, S, SerdeMode> Plugin<Ser, Op, S, SerdeMode> for RejectPlugin
+// One plugin, one set of bounds: the service names its error converter through
+// `ServiceSerde::SerdeKind` (`GeneratedSerde<P>` or `SchemaSerde`), and the
+// middleware converts through it without knowing which serialization system is
+// in play.
+impl<Ser, Op, S> Plugin<Ser, Op, S> for RejectPlugin
 where
-    Ser: ServiceShape,
+    Ser: ServiceShape + ServiceSerde,
     Op: OperationShape,
-    Op::Error: MakeError + IntoResponseWithRequest<Ser::Protocol, SerdeMode>,
-    InternalFailureException: IntoResponseWithRequest<Ser::Protocol, SerdeMode>,
+    Op::Error: MakeError,
+    Ser::SerdeKind: ErrorConverter<Op::Error> + ErrorConverter<InternalFailureException>,
 {
-    type Output = RejectMiddleware<Ser::Protocol, Op::Error, S, SerdeMode>;
+    type Output = RejectMiddleware<Ser::SerdeKind, Op::Error, S>;
 
     fn apply(&self, inner: S) -> Self::Output {
         RejectMiddleware {
@@ -58,12 +62,12 @@ where
     }
 }
 
-struct RejectMiddleware<P, E, S, SerdeMode> {
+struct RejectMiddleware<Converter, E, S> {
     inner: S,
-    marker: PhantomData<fn() -> (P, E, SerdeMode)>,
+    marker: PhantomData<fn() -> (Converter, E)>,
 }
 
-impl<P, E, S: Clone, SerdeMode> Clone for RejectMiddleware<P, E, S, SerdeMode> {
+impl<Converter, E, S: Clone> Clone for RejectMiddleware<Converter, E, S> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -72,11 +76,11 @@ impl<P, E, S: Clone, SerdeMode> Clone for RejectMiddleware<P, E, S, SerdeMode> {
     }
 }
 
-impl<P, E, S, SerdeMode> Service<Request<Body>> for RejectMiddleware<P, E, S, SerdeMode>
+impl<Converter, E, S> Service<Request<Body>> for RejectMiddleware<Converter, E, S>
 where
     S: Service<Request<Body>, Response = Response, Error = Infallible>,
-    E: MakeError + IntoResponseWithRequest<P, SerdeMode>,
-    InternalFailureException: IntoResponseWithRequest<P, SerdeMode>,
+    E: MakeError,
+    Converter: ErrorConverter<E> + ErrorConverter<InternalFailureException>,
 {
     type Response = Response;
     type Error = Infallible;
@@ -88,9 +92,12 @@ where
 
     fn call(&mut self, request: Request<Body>) -> Self::Future {
         let response = if request.headers()["x-rejection"] == "internal" {
-            InternalFailureException.into_response_with_request(&request)
+            <Converter as ErrorConverter<InternalFailureException>>::convert(
+                InternalFailureException,
+                &request,
+            )
         } else {
-            E::make_error().into_response_with_request(&request)
+            <Converter as ErrorConverter<E>>::convert(E::make_error(), &request)
         };
         ready(Ok(response))
     }

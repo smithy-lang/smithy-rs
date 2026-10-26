@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
@@ -192,32 +193,13 @@ class ServerServiceGenerator(
         fieldName: String,
     ): Writable =
         writable {
-            val applyHttpPlugin =
-                writable {
-                    if (schemaSerde) {
-                        rustTemplate(
-                            """
-                            let svc = #{SmithyHttpServer}::plugin::Plugin::<
-                                $serviceName<L>,
-                                crate::operation_shape::${operationStructNames.getValue(operation)},
-                                _,
-                                #{SmithyHttpServer}::response::SchemaSerde,
-                            >::apply(&self.http_plugin, svc);
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rust("let svc = self.http_plugin.apply(svc);")
-                    }
-                }
             rustTemplate(
                 """
                 let svc = #{UpgradePlugin}::<UpgradeExtractors>::new().apply(svc);
-                #{ApplyHttpPlugin}
+                let svc = self.http_plugin.apply(svc);
                 self.${fieldName}_custom(svc)
                 """,
                 "UpgradePlugin" to upgradePlugin(operation),
-                "ApplyHttpPlugin" to applyHttpPlugin,
                 *codegenScope,
             )
         }
@@ -285,7 +267,7 @@ class ServerServiceGenerator(
                                     crate::operation_shape::$structName,
                                     ModelPl::Output
                                 >
-                            >::Output${if (schemaSerde) ", #{SmithyHttpServer}::response::SchemaSerde" else ""}
+                            >::Output
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
@@ -347,7 +329,7 @@ class ServerServiceGenerator(
                                     crate::operation_shape::$structName,
                                     ModelPl::Output
                                 >
-                            >::Output${if (schemaSerde) ", #{SmithyHttpServer}::response::SchemaSerde" else ""}
+                            >::Output
                         >,
 
                         HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
@@ -1172,6 +1154,33 @@ class ServerServiceGenerator(
                 "ServiceProtocol" to serviceProtocolType(),
                 *codegenScope,
             )
+            // `ServiceSerde` exists only in the HTTP 1.x runtime; the legacy HTTP 0.x
+            // middleware converts errors through `IntoResponse` directly.
+            if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                val serdeMode =
+                    if (schemaSerde) {
+                        writable {
+                            rustTemplate("#{SmithyHttpServer}::response::SchemaSerde<#{P}>", "P" to serviceProtocolType(), *codegenScope)
+                        }
+                    } else {
+                        writable {
+                            rustTemplate(
+                                "#{SmithyHttpServer}::response::GeneratedSerde<#{P}>",
+                                "P" to protocol.markerStruct(),
+                                *codegenScope,
+                            )
+                        }
+                    }
+                rustTemplate(
+                    """
+                    impl<S> #{SmithyHttpServer}::service::ServiceSerde for $serviceName<S> {
+                        type SerdeKind = #{SerdeMode};
+                    }
+                    """,
+                    "SerdeMode" to serdeMode,
+                    *codegenScope,
+                )
+            }
         }
 
     /**

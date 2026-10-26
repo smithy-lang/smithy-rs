@@ -58,7 +58,7 @@ class ServerPluginSerdeModeTest {
             crate.testModule {
                 rustTemplate(
                     """
-                    use #{Server}::response::IntoResponseWithRequest;
+                    use #{Server}::response::ErrorConverter;
                     use #{Server}::extension::OperationExtensionExt;
                     use #{Server}::instrumentation::InstrumentExt;
                     use #{Tower}::ServiceExt;
@@ -73,30 +73,29 @@ class ServerPluginSerdeModeTest {
 
                     struct RejectPlugin;
                     impl #{Server}::plugin::HttpMarker for RejectPlugin {}
-                    impl<Ser, Op, S, SerdeMode> #{Server}::plugin::Plugin<Ser, Op, S, SerdeMode> for RejectPlugin
+                    impl<Ser, Op, S> #{Server}::plugin::Plugin<Ser, Op, S> for RejectPlugin
                     where
-                        Ser: #{Server}::service::ServiceShape,
-                        #{Server}::runtime_error::InternalFailureException:
-                            IntoResponseWithRequest<Ser::Protocol, SerdeMode>,
+                        Ser: #{Server}::service::ServiceShape + #{Server}::service::ServiceSerde,
+                        Ser::SerdeKind: ErrorConverter<#{Server}::runtime_error::InternalFailureException>,
                     {
-                        type Output = Reject<Ser::Protocol, SerdeMode, S>;
+                        type Output = Reject<Ser::SerdeKind, S>;
                         fn apply(&self, inner: S) -> Self::Output {
                             Reject { inner, marker: ::std::marker::PhantomData }
                         }
                     }
 
-                    struct Reject<P, SerdeMode, S> {
+                    struct Reject<Converter, S> {
                         inner: S,
-                        marker: ::std::marker::PhantomData<fn() -> (P, SerdeMode)>,
+                        marker: ::std::marker::PhantomData<fn() -> Converter>,
                     }
-                    impl<P, SerdeMode, S: Clone> Clone for Reject<P, SerdeMode, S> {
+                    impl<Converter, S: Clone> Clone for Reject<Converter, S> {
                         fn clone(&self) -> Self {
                             Self { inner: self.inner.clone(), marker: ::std::marker::PhantomData }
                         }
                     }
-                    impl<P, SerdeMode, S, B> #{Tower}::Service<#{Http}::Request<B>> for Reject<P, SerdeMode, S>
+                    impl<Converter, S, B> #{Tower}::Service<#{Http}::Request<B>> for Reject<Converter, S>
                     where
-                        #{Server}::runtime_error::InternalFailureException: IntoResponseWithRequest<P, SerdeMode>,
+                        Converter: ErrorConverter<#{Server}::runtime_error::InternalFailureException>,
                     {
                         type Response = #{Server}::response::Response;
                         type Error = ::std::convert::Infallible;
@@ -106,7 +105,9 @@ class ServerPluginSerdeModeTest {
                         }
                         fn call(&mut self, request: #{Http}::Request<B>) -> Self::Future {
                             ::std::future::ready(#{Ok}(
-                                #{Server}::runtime_error::InternalFailureException.into_response_with_request(&request)
+                                <Converter as ErrorConverter<#{Server}::runtime_error::InternalFailureException>>::convert(
+                                    #{Server}::runtime_error::InternalFailureException, &request
+                                )
                             ))
                         }
                     }
@@ -117,7 +118,7 @@ class ServerPluginSerdeModeTest {
                     rustTemplate(
                         """
                         let plugins = #{Server}::plugin::HttpPlugins::new()
-                            .push_legacy(ExistingPlugin)
+                            .push(ExistingPlugin)
                             .insert_operation_extension()
                             .instrument()
                             .push(RejectPlugin);

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
@@ -14,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 import kotlin.io.path.readText
@@ -125,6 +127,99 @@ internal class ServerServiceGeneratorTest {
         }
     }
 
+    @Test
+    fun `service serde names the error converter for both serde modes`() {
+        val model =
+            """
+            namespace test
+            use aws.protocols#restJson1
+            @restJson1
+            service Simple { version: "1" operations: [Op] }
+            @http(method: "POST", uri: "/op")
+            operation Op { input := {} output := {} errors: [Boom] }
+            @error("client")
+            @httpError(409)
+            structure Boom { message: String }
+            """.asSmithyModel(smithyVersion = "2")
+
+        // Generated serde: `SerdeKind` is `GeneratedSerde` of the statically known protocol.
+        // The legacy HTTP 0.x runtime has no `ServiceSerde`, so only the HTTP 1.x crate implements it.
+        serverIntegrationTest(model) { context, rustCrate ->
+            if (context.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                rustCrate.testModule {
+                    // No actual tests: the identity functions prove the associated type at compile time.
+                    rustTemplate(
+                        """
+                        fn _generated_serde_mode(
+                            mode: <crate::Simple as #{Server}::service::ServiceSerde>::SerdeKind,
+                        ) -> #{Server}::response::GeneratedSerde<#{Server}::protocol::rest_json_1::RestJson1> {
+                            mode
+                        }
+
+                        /// The mode converts the service's errors without consulting the request.
+                        fn _generated_serde_mode_converts<B>(
+                            error: crate::error::OpError,
+                            request: &#{Http}::Request<B>,
+                        ) -> #{Server}::response::Response {
+                            <<crate::Simple as #{Server}::service::ServiceSerde>::SerdeKind as
+                                #{Server}::response::ErrorConverter<crate::error::OpError>>::convert(error, request)
+                        }
+                        """,
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Http" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("http"),
+                    )
+                }
+            }
+        }.forEach { generatedServer ->
+            val service = generatedServer.path.resolve("src/service.rs").readText()
+            if (generatedServer.httpVersion == HttpTestVersion.HTTP_1_X) {
+                assert(service.contains("service::ServiceSerde for Simple<S>")) { service }
+                assert(service.contains("type SerdeKind = ")) { service }
+                assert(service.contains("response::GeneratedSerde<")) { service }
+                assert(!service.contains("response::SchemaSerde")) { service }
+            } else {
+                assert(!service.contains("ServiceSerde")) { service }
+            }
+        }
+
+        // Schema serde: `SerdeKind` is `SchemaSerde`, converting through the protocol routed per request.
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
+            ),
+        ) { context, rustCrate ->
+            rustCrate.testModule {
+                rustTemplate(
+                    """
+                    fn _schema_serde_mode(
+                        mode: <crate::Simple as #{Server}::service::ServiceSerde>::SerdeKind,
+                    ) -> #{Server}::response::SchemaSerde<<crate::Simple as #{Server}::service::ServiceShape>::Protocol> {
+                        mode
+                    }
+
+                    /// The mode converts the service's errors through the request's routed protocol.
+                    fn _schema_serde_mode_converts<B>(
+                        error: crate::error::OpError,
+                        request: &#{Http}::Request<B>,
+                    ) -> #{Server}::response::Response {
+                        <<crate::Simple as #{Server}::service::ServiceSerde>::SerdeKind as
+                            #{Server}::response::ErrorConverter<crate::error::OpError>>::convert(error, request)
+                    }
+                    """,
+                    "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    "Http" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("http"),
+                )
+            }
+        }.forEach { generatedServer ->
+            val service = generatedServer.path.resolve("src/service.rs").readText()
+            assert(service.contains("service::ServiceSerde for Simple<S>")) { service }
+            assert(service.contains("type SerdeKind = ")) { service }
+            assert(service.contains("response::SchemaSerde")) { service }
+            assert(!service.contains("response::GeneratedSerde<")) { service }
+        }
+    }
+
     /**
      * See <https://github.com/smithy-lang/smithy-rs/issues/3177>.
      */
@@ -138,19 +233,19 @@ internal class ServerServiceGeneratorTest {
                     // No actual tests: we just want to check that this compiles.
                     rustTemplate(
                         """
-                    fn _build_service() -> crate::SimpleService {
-                        let config = crate::SimpleServiceConfig::builder().build();
-                        let service = crate::SimpleService::builder(config).build_unchecked();
+                        fn _build_service() -> crate::SimpleService {
+                            let config = crate::SimpleServiceConfig::builder().build();
+                            let service = crate::SimpleService::builder(config).build_unchecked();
 
-                        service.boxed()
-                    }
+                            service.boxed()
+                        }
 
-                    fn _protocol_is_rest_json(
-                        protocol: <crate::SimpleService as #{Server}::service::ServiceShape>::Protocol,
-                    ) -> #{Server}::protocol::rest_json_1::RestJson1 {
-                        protocol
-                    }
-                    """,
+                        fn _protocol_is_rest_json(
+                            protocol: <crate::SimpleService as #{Server}::service::ServiceShape>::Protocol,
+                        ) -> #{Server}::protocol::rest_json_1::RestJson1 {
+                            protocol
+                        }
+                        """,
                         "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     )
                 }

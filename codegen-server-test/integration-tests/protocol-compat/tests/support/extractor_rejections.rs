@@ -271,7 +271,7 @@ impl std::fmt::Display for CustomRejection {
     }
 }
 
-/// Legacy callers retain the complete custom HTTP response.
+/// The inherited contextual conversion preserves this complete custom response.
 impl<P> aws_smithy_http_server::response::IntoResponse<P> for CustomRejection {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
@@ -283,15 +283,6 @@ impl<P> aws_smithy_http_server::response::IntoResponse<P> for CustomRejection {
                 "service chose this response",
             ))
             .unwrap()
-    }
-}
-
-impl aws_smithy_http_server::response::IntoResponseWithProtocol for CustomRejection {
-    fn into_response_with_protocol(
-        self,
-        _: &dyn aws_smithy_http_server::schema::ServerProtocol,
-    ) -> http::Response<BoxBody> {
-        aws_smithy_http_server::response::IntoResponse::<()>::into_response(self)
     }
 }
 

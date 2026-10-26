@@ -146,6 +146,32 @@ open class ServerOperationErrorGenerator(
                     "Server" to server,
                 )
             }
+            writer.rustTemplate(
+                """
+                impl<P> #{IntoResponse}<P> for ${errorSymbol.name} {
+                    fn into_response(self) -> #{Response} {
+                        let mut response = #{Response}::new(#{Empty}());
+                        *response.status_mut() = #{Http}::StatusCode::from_u16(#{HttpModeledError}::status_code(&self))
+                            .expect("modeled error status is valid");
+                        response.extensions_mut().insert(#{ModeledErrorExtension}::new(
+                            #{InternHeaderName}(#{SerializableStruct}::schema(&self).shape_id().shape_name())));
+                        response
+                    }
+                    fn into_response_with_protocol(self, protocol: &dyn #{ServerProtocol}) -> #{Response} {
+                        protocol.serialize_error(&self)
+                    }
+                }
+                """,
+                "IntoResponse" to server.resolve("response::IntoResponse"),
+                "Response" to server.resolve("response::Response"),
+                "Empty" to server.resolve("body::empty"),
+                "Http" to RuntimeType.http(runtimeConfig),
+                "HttpModeledError" to server.resolve("schema::HttpModeledError"),
+                "ModeledErrorExtension" to server.resolve("extension::ModeledErrorExtension"),
+                "SerializableStruct" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerializableStruct"),
+                "ServerProtocol" to server.resolve("schema::ServerProtocol"),
+                "InternHeaderName" to RuntimeType.smithySchema(runtimeConfig).resolve("intern_header_name"),
+            )
         }
 
         for (error in errors) {

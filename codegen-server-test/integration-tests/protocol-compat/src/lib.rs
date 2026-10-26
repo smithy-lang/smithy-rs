@@ -22,24 +22,90 @@ pub mod kit {
     pub use compat_rest_server_sdk::server::body::Body;
 
     pub fn from_bytes(bytes: &[u8]) -> Body {
-        Body::new(http_body_util::Full::new(bytes::Bytes::copy_from_slice(bytes)))
+        Body::new(http_body_util::Full::new(bytes::Bytes::copy_from_slice(
+            bytes,
+        )))
     }
 }
 
-compat_service!(rest, compat_rest_server_sdk, ReviewRest, ReviewRestConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewRest);
-compat_service!(rest_cbor, compat_rest_cbor_server_sdk, ReviewRestCbor, ReviewRestCborConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewRestCbor);
-compat_service!(rest_awsjson, compat_rest_awsjson_server_sdk, ReviewRestAwsJson, ReviewRestAwsJsonConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewRestAwsJson);
-compat_service!(rest_xml, compat_rest_xml_server_sdk, ReviewRestXml, ReviewRestXmlConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewRestXml);
-compat_service!(awsjson, compat_awsjson_server_sdk, ReviewAwsJson, ReviewAwsJsonConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewAwsJson);
-compat_service!(awsjson_spec, compat_awsjson_spec_server_sdk, ReviewAwsJson, ReviewAwsJsonConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewAwsJson);
-compat_service!(cbor, compat_cbor_server_sdk, ReviewCbor, ReviewCborConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewCbor);
-compat_service!(all, compat_all_server_sdk, ReviewAll, ReviewAllConfig, [], aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"), ReviewAll);
+compat_service!(
+    rest,
+    compat_rest_server_sdk,
+    ReviewRest,
+    ReviewRestConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewRest
+);
+compat_service!(
+    rest_cbor,
+    compat_rest_cbor_server_sdk,
+    ReviewRestCbor,
+    ReviewRestCborConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewRestCbor
+);
+compat_service!(
+    rest_awsjson,
+    compat_rest_awsjson_server_sdk,
+    ReviewRestAwsJson,
+    ReviewRestAwsJsonConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewRestAwsJson
+);
+compat_service!(
+    rest_xml,
+    compat_rest_xml_server_sdk,
+    ReviewRestXml,
+    ReviewRestXmlConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewRestXml
+);
+compat_service!(
+    awsjson,
+    compat_awsjson_server_sdk,
+    ReviewAwsJson,
+    ReviewAwsJsonConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewAwsJson
+);
+compat_service!(
+    awsjson_spec,
+    compat_awsjson_spec_server_sdk,
+    ReviewAwsJson,
+    ReviewAwsJsonConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewAwsJson
+);
+compat_service!(
+    cbor,
+    compat_cbor_server_sdk,
+    ReviewCbor,
+    ReviewCborConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewCbor
+);
+compat_service!(
+    all,
+    compat_all_server_sdk,
+    ReviewAll,
+    ReviewAllConfig,
+    [],
+    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
+    ReviewAll
+);
 
 /// `ReviewDocument` serves restJson1 only: restXml has no document type.
 pub mod document {
+    pub use super::kit::Body;
     use compat_document_server_sdk::input::NullDocumentInput;
     use compat_document_server_sdk::output::NullDocumentOutput;
-    pub use super::kit::Body;
     pub use compat_document_server_sdk::{ReviewDocument, ReviewDocumentConfig};
 
     async fn null_document(input: NullDocumentInput) -> NullDocumentOutput {
@@ -63,9 +129,9 @@ compat_service!(legacy_awsjson, compat_awsjson_legacy_server_sdk, ReviewAwsJson,
 compat_service!(legacy_cbor, compat_cbor_legacy_server_sdk, ReviewCbor, ReviewCborConfig, [::<Body, _, _, _>], aws_smithy_types::Blob::new(b"raw blob bytes".to_vec()), impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible>);
 
 pub mod legacy_document {
+    pub use super::kit::Body;
     use compat_document_legacy_server_sdk::input::NullDocumentInput;
     use compat_document_legacy_server_sdk::output::NullDocumentOutput;
-    pub use super::kit::Body;
     pub use compat_document_legacy_server_sdk::{ReviewDocument, ReviewDocumentConfig};
 
     async fn null_document(input: NullDocumentInput) -> NullDocumentOutput {
@@ -74,7 +140,12 @@ pub mod legacy_document {
         }
     }
 
-    pub fn service() -> impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible> {
+    pub fn service() -> impl Clone
+           + tower::Service<
+        http::Request<Body>,
+        Response = http::Response<aws_smithy_http_server::body::BoxBody>,
+        Error = std::convert::Infallible,
+    > {
         ReviewDocument::builder::<Body, _, _, _>(ReviewDocumentConfig::builder().build())
             .null_document(null_document)
             .build()
@@ -85,9 +156,9 @@ pub mod legacy_document {
 /// A `ReviewRest` whose operation services sit behind a layer that discards request
 /// extensions, to exercise the upgrade layer's context-loss response.
 pub mod tampered {
+    use compat_rest_server_sdk::error::GetWidgetError;
     use compat_rest_server_sdk::input::{GetWidgetInput, PingInput};
     use compat_rest_server_sdk::output::{GetWidgetOutput, PingOutput};
-    use compat_rest_server_sdk::error::GetWidgetError;
     use compat_rest_server_sdk::{ReviewRest, ReviewRestConfig};
 
     use super::kit::Body;
@@ -103,14 +174,26 @@ pub mod tampered {
     }
 
     fn tamper(mut request: http::Request<Body>) -> http::Request<Body> {
-        if request.headers().get("x-tamper").and_then(|v| v.to_str().ok()) == Some("drop") {
+        if request
+            .headers()
+            .get("x-tamper")
+            .and_then(|v| v.to_str().ok())
+            == Some("drop")
+        {
             request.extensions_mut().clear();
         }
         request
     }
 
-    pub fn service() -> impl Clone + tower::Service<http::Request<Body>, Response = http::Response<aws_smithy_http_server::body::BoxBody>, Error = std::convert::Infallible> {
-        let layer = tower::util::MapRequestLayer::new(tamper as fn(http::Request<Body>) -> http::Request<Body>);
+    pub fn service() -> impl Clone
+           + tower::Service<
+        http::Request<Body>,
+        Response = http::Response<aws_smithy_http_server::body::BoxBody>,
+        Error = std::convert::Infallible,
+    > {
+        let layer = tower::util::MapRequestLayer::new(
+            tamper as fn(http::Request<Body>) -> http::Request<Body>,
+        );
         ReviewRest::builder(ReviewRestConfig::builder().layer(layer).build())
             .get_widget(get_widget)
             .ping(ping)
@@ -162,7 +245,10 @@ pub mod caller {
         }
     }
 
-    async fn get_widget(input: GetWidgetInput, caller: Caller) -> Result<GetWidgetOutput, GetWidgetError> {
+    async fn get_widget(
+        input: GetWidgetInput,
+        caller: Caller,
+    ) -> Result<GetWidgetOutput, GetWidgetError> {
         Ok(GetWidgetOutput {
             id: Some(format!("{}:{}", caller.0, input.id)),
         })
