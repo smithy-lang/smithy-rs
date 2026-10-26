@@ -4,16 +4,6 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[[bin]]
-name = "request-limits-server"
-path = "src/main.rs"
-
-[dependencies]
-request-limits-server-sdk = { workspace = true }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "io-util", "time", "sync"] }
-hyper-util = { version = "0.1", features = ["tokio", "http2"] }
-
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
 [dev-dependencies]
-tokio = { version = "1", features = ["process"] }
+request-limits-server-sdk = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "time"] }

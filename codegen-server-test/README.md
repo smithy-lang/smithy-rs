@@ -5,6 +5,6 @@ module. This module is analogous to the `codegen-client-test` one, but it's name
 `codegen-server-test` and it runs the `rust-server-codegen` Smithy build
 plugin instead.
 
-The permanent [request limits server](integration-tests/request-limits/README.md)
-provides automated and interactive checks for body size limits, default body-read
-deadlines, and per-operation overrides on the same server.
+The [request limits integration tests](integration-tests/request-limits/README.md)
+check header deadlines, body size limits, default body-read deadlines, and
+per-operation overrides against generated servers over TCP.

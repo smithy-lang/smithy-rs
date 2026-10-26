@@ -3,44 +3,43 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{net::SocketAddr, process::Stdio, time::Duration};
+use request_limits_server_sdk::{
+    error, input, output, RequestLimitsService, RequestLimitsServiceConfig,
+};
+use std::{net::SocketAddr, time::Duration};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
-    net::TcpStream,
-    process::{Child, Command},
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    task::JoinHandle,
     time::{timeout, Instant},
 };
 
-// Exercise the executable used for manual checks, including its readiness message.
 struct TestServer {
     addr: SocketAddr,
-    _child: Child,
+    task: JoinHandle<std::io::Result<()>>,
+}
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
 }
 
 impl TestServer {
     async fn start() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_request-limits-server"))
-            .args(["--port", "0"])
-            .stdout(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .expect("start request-limits fixture");
-        let mut stdout = BufReader::new(child.stdout.take().unwrap());
-        let mut line = String::new();
-        timeout(Duration::from_secs(10), stdout.read_line(&mut line))
-            .await
-            .expect("server startup deadline")
-            .expect("read readiness");
-        let port: u16 = line
-            .trim()
-            .strip_prefix("SERVER_READY:")
-            .expect("readiness message")
-            .parse()
-            .unwrap();
-        Self {
-            addr: ([127, 0, 0, 1], port).into(),
-            _child: child,
-        }
+        let config = RequestLimitsServiceConfig::builder().build();
+        let app = RequestLimitsService::builder(config)
+            .echo(echo)
+            .echo_with_override(echo_with_override)
+            .upload(upload)
+            .build()
+            .expect("all test handlers are registered");
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let task = tokio::spawn(async move {
+            request_limits_server_sdk::serve(listener, app.into_make_service()).await
+        });
+        Self { addr, task }
     }
 
     async fn request(&self, path: &str, framing: &str, body: &[u8]) -> Vec<u8> {
@@ -58,6 +57,22 @@ impl TestServer {
             .expect("read response");
         response
     }
+}
+
+async fn echo(input: input::EchoInput) -> Result<output::EchoOutput, error::EchoError> {
+    Ok(output::EchoOutput { note: input.note })
+}
+
+async fn echo_with_override(
+    input: input::EchoWithOverrideInput,
+) -> Result<output::EchoWithOverrideOutput, error::EchoWithOverrideError> {
+    Ok(output::EchoWithOverrideOutput { note: input.note })
+}
+
+async fn upload(input: input::UploadInput) -> Result<output::UploadOutput, error::UploadError> {
+    Ok(output::UploadOutput {
+        size: input.data.as_ref().len() as i64,
+    })
 }
 
 fn assert_status(response: &[u8], status: u16) {

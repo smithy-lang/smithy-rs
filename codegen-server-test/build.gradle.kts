@@ -150,7 +150,7 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
-// A permanent service for automated and interactive request-body limit checks.
+// A generated service for request-limit integration tests.
 val requestLimitsSettings = file("integration-tests/request-limits/settings.json")
 val requestLimitsCodegenTest = CodegenTest(
     "integration.requestlimits#RequestLimitsService",
