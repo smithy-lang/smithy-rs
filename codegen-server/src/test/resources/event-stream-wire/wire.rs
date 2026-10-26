@@ -19,15 +19,43 @@ use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, timeout, Instant};
+use tokio::time::{timeout, Instant};
 
-static HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
-static RESULTS: Mutex<Vec<(i32, String)>> = Mutex::new(Vec::new());
+// Each scenario owns its observations, so assertions cannot consume another
+// scenario's handler results.
+struct HandlerState {
+    calls: AtomicUsize,
+    results: Mutex<Vec<(i32, String)>>,
+    observations: mpsc::UnboundedSender<HandlerObservation>,
+    resume_retry: Notify,
+    finish: Notify,
+    hold_completion: bool,
+}
+
+#[derive(Debug, PartialEq)]
+enum HandlerObservation {
+    Entered,
+    Event(i32),
+    Timeout(&'static str, Duration),
+}
+
+struct WireServer {
+    addr: SocketAddr,
+    _task: AbortTask,
+    state: Arc<HandlerState>,
+    observations: mpsc::UnboundedReceiver<HandlerObservation>,
+}
+
+impl WireServer {
+    async fn observe(&mut self, expected: HandlerObservation) {
+        assert_eq!(self.observations.recv().await, Some(expected));
+    }
+}
 
 struct AbortTask<T = ()>(JoinHandle<T>);
 
@@ -43,8 +71,13 @@ async fn events(
         aws_smithy_http::event_stream::MessageStreamError,
     >,
     retry: bool,
+    state: Arc<HandlerState>,
 ) -> (i32, String) {
-    HANDLER_CALLS.fetch_add(1, Ordering::Release);
+    state.calls.fetch_add(1, Ordering::Release);
+    state
+        .observations
+        .send(HandlerObservation::Entered)
+        .unwrap();
     let mut count = 0;
     let mut retried = false;
     let outcome = loop {
@@ -52,6 +85,10 @@ async fn events(
             Ok(Some(event)) => {
                 assert_eq!(event.as_event().unwrap().data(), Some("hello"));
                 count += 1;
+                state
+                    .observations
+                    .send(HandlerObservation::Event(count))
+                    .unwrap();
             }
             Ok(None) => break if retried { "eof-after-timeout" } else { "eof" },
             Err(error) => {
@@ -64,8 +101,15 @@ async fn events(
                     MessageTimeoutError::MessageCompletion { .. } => "completion",
                     MessageTimeoutError::Idle { .. } => "idle",
                 };
+                state
+                    .observations
+                    .send(HandlerObservation::Timeout(outcome, error.timeout()))
+                    .unwrap();
                 if retry && !retried {
                     retried = true;
+                    // The test queues the remaining bytes before allowing another
+                    // recv, avoiding a race against a second real-time deadline.
+                    state.resume_retry.notified().await;
                     continue;
                 }
                 break outcome;
@@ -73,7 +117,10 @@ async fn events(
         }
     };
     let result = (count, outcome.to_owned());
-    RESULTS.lock().unwrap().push(result.clone());
+    state.results.lock().unwrap().push(result.clone());
+    if state.hold_completion {
+        state.finish.notified().await;
+    }
     result
 }
 
@@ -81,28 +128,76 @@ async fn health(_input: HealthInput) -> HealthOutput {
     HealthOutput {}
 }
 
-async fn start_server() -> (SocketAddr, AbortTask) {
+async fn start_server(hold_completion: bool) -> WireServer {
+    let (observations, receiver) = mpsc::unbounded_channel();
+    let state = Arc::new(HandlerState {
+        calls: AtomicUsize::new(0),
+        results: Mutex::new(Vec::new()),
+        observations,
+        resume_retry: Notify::new(),
+        finish: Notify::new(),
+        hold_completion,
+    });
     let config = crate::WireServiceConfig::builder().build();
     let app = crate::WireService::builder(config)
-        .publish_events(|input: PublishEventsInput| async move {
-            let (count, outcome) = events(input.events, false).await;
-            Ok::<_, crate::error::PublishEventsError>(PublishEventsOutput { count, outcome })
+        .publish_events({
+            let state = state.clone();
+            move |input: PublishEventsInput| {
+                let state = state.clone();
+                async move {
+                    let (count, outcome) = events(input.events, false, state).await;
+                    Ok::<_, crate::error::PublishEventsError>(PublishEventsOutput {
+                        count,
+                        outcome,
+                    })
+                }
+            }
         })
-        .retry_events(|input: RetryEventsInput| async move {
-            let (count, outcome) = events(input.events, true).await;
-            Ok::<_, crate::error::RetryEventsError>(RetryEventsOutput { count, outcome })
+        .retry_events({
+            let state = state.clone();
+            move |input: RetryEventsInput| {
+                let state = state.clone();
+                async move {
+                    let (count, outcome) = events(input.events, true, state).await;
+                    Ok::<_, crate::error::RetryEventsError>(RetryEventsOutput { count, outcome })
+                }
+            }
         })
-        .no_idle_events(|input: NoIdleEventsInput| async move {
-            let (count, outcome) = events(input.events, false).await;
-            Ok::<_, crate::error::NoIdleEventsError>(NoIdleEventsOutput { count, outcome })
+        .no_idle_events({
+            let state = state.clone();
+            move |input: NoIdleEventsInput| {
+                let state = state.clone();
+                async move {
+                    let (count, outcome) = events(input.events, false, state).await;
+                    Ok::<_, crate::error::NoIdleEventsError>(NoIdleEventsOutput { count, outcome })
+                }
+            }
         })
-        .global_idle_events(|input: GlobalIdleEventsInput| async move {
-            let (count, outcome) = events(input.events, false).await;
-            Ok::<_, crate::error::GlobalIdleEventsError>(GlobalIdleEventsOutput { count, outcome })
+        .global_idle_events({
+            let state = state.clone();
+            move |input: GlobalIdleEventsInput| {
+                let state = state.clone();
+                async move {
+                    let (count, outcome) = events(input.events, false, state).await;
+                    Ok::<_, crate::error::GlobalIdleEventsError>(GlobalIdleEventsOutput {
+                        count,
+                        outcome,
+                    })
+                }
+            }
         })
-        .no_initial_events(|input: NoInitialEventsInput| async move {
-            let (count, outcome) = events(input.events, false).await;
-            Ok::<_, crate::error::NoInitialEventsError>(NoInitialEventsOutput { count, outcome })
+        .no_initial_events({
+            let state = state.clone();
+            move |input: NoInitialEventsInput| {
+                let state = state.clone();
+                async move {
+                    let (count, outcome) = events(input.events, false, state).await;
+                    Ok::<_, crate::error::NoInitialEventsError>(NoInitialEventsOutput {
+                        count,
+                        outcome,
+                    })
+                }
+            }
         })
         .health(health)
         .build_unchecked();
@@ -115,7 +210,12 @@ async fn start_server() -> (SocketAddr, AbortTask) {
             .await
             .unwrap();
     }));
-    (addr, task)
+    WireServer {
+        addr,
+        _task: task,
+        state,
+        observations: receiver,
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -133,6 +233,45 @@ impl WireProtocol {
             Self::Json => "json",
             Self::Cbor => "cbor",
         }
+    }
+
+    fn response_outcome(self, body: &[u8]) -> (i32, String) {
+        if self != Self::Cbor {
+            let value: serde_json::Value = serde_json::from_slice(body).unwrap();
+            return (
+                value["count"].as_i64().unwrap().try_into().unwrap(),
+                value["outcome"].as_str().unwrap().to_owned(),
+            );
+        }
+        let mut decoder = aws_smithy_cbor::Decoder::new(body);
+        let length = decoder.map().unwrap();
+        let mut count = None;
+        let mut outcome = None;
+        let mut fields = 0;
+        loop {
+            if let Some(length) = length {
+                if fields == length {
+                    break;
+                }
+            } else if decoder.datatype().unwrap() == aws_smithy_cbor::data::Type::Break {
+                decoder.skip().unwrap();
+                break;
+            }
+            match decoder.str().unwrap().as_ref() {
+                "count" => {
+                    assert!(count.is_none(), "duplicate count");
+                    count = Some(decoder.integer().unwrap());
+                }
+                "outcome" => {
+                    assert!(outcome.is_none(), "duplicate outcome");
+                    outcome = Some(decoder.str().unwrap().into_owned());
+                }
+                field => panic!("unexpected response field: {field}"),
+            }
+            fields += 1;
+        }
+        assert_eq!(decoder.position(), body.len(), "trailing response bytes");
+        (count.unwrap(), outcome.unwrap())
     }
 
     fn frame(self, initial: bool) -> Bytes {
@@ -189,8 +328,10 @@ impl http_body_1x::Body for ChannelBody {
 
 struct WireClient {
     body: Option<mpsc::Sender<Bytes>>,
-    response: JoinHandle<http_1x::StatusCode>,
+    response: JoinHandle<(http_1x::StatusCode, Bytes)>,
     connection: AbortTask<Result<(), hyper::Error>>,
+    protocol: WireProtocol,
+    state: Arc<HandlerState>,
 }
 
 impl Drop for WireClient {
@@ -201,12 +342,12 @@ impl Drop for WireClient {
 
 impl WireClient {
     async fn connect(
-        addr: SocketAddr,
+        server: &WireServer,
         protocol: WireProtocol,
         operation: &str,
         streaming: bool,
     ) -> Self {
-        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let stream = tokio::net::TcpStream::connect(server.addr).await.unwrap();
         stream.set_nodelay(true).unwrap();
         let io = hyper_util::rt::TokioIo::new(stream);
         let (mut sender, connection) = hyper::client::conn::http1::handshake::<_, ChannelBody>(io)
@@ -249,13 +390,15 @@ impl WireClient {
         let response = tokio::spawn(async move {
             let response = sender.send_request(request).await.unwrap();
             let status = response.status();
-            response.into_body().collect().await.unwrap();
-            status
+            let body = response.into_body().collect().await.unwrap().to_bytes();
+            (status, body)
         });
         let client = Self {
             body: Some(body),
             response,
             connection,
+            protocol,
+            state: server.state.clone(),
         };
         if !streaming {
             client
@@ -284,7 +427,8 @@ impl WireClient {
     }
 
     async fn expect(mut self, outcome: Option<(&str, i32)>, rejection: bool) {
-        let status = (&mut self.response).await.unwrap();
+        self.state.finish.notify_one();
+        let (status, body) = (&mut self.response).await.unwrap();
         // The Hyper connection driver finishes only when the server closes TCP.
         if let Err(error) = (&mut self.connection.0).await.unwrap() {
             // A timeout response closes TCP while the request body is deliberately
@@ -302,32 +446,23 @@ impl WireClient {
                 "an initial-message timeout must be a retryable 408"
             );
             assert!(
-                RESULTS.lock().unwrap().is_empty(),
+                self.state.results.lock().unwrap().is_empty(),
                 "rejection invoked the handler"
             );
+            assert_eq!(self.state.calls.load(Ordering::Acquire), 0);
         } else {
             assert!(status.is_success(), "{status}");
             if let Some((outcome, count)) = outcome {
-                let results = std::mem::take(&mut *RESULTS.lock().unwrap());
+                let results = std::mem::take(&mut *self.state.results.lock().unwrap());
                 assert_eq!(results, vec![(count, outcome.to_owned())]);
+                assert_eq!(self.state.calls.load(Ordering::Acquire), 1);
+                assert_eq!(
+                    self.protocol.response_outcome(&body),
+                    (count, outcome.to_owned()),
+                    "serialized response must match the handler outcome",
+                );
             }
         }
-    }
-
-    async fn expect_after(
-        self,
-        start: Instant,
-        duration: Duration,
-        outcome: Option<(&str, i32)>,
-        rejection: bool,
-    ) {
-        self.expect(outcome, rejection).await;
-        let elapsed = start.elapsed();
-        assert!(
-            elapsed >= duration.saturating_sub(Duration::from_millis(80)),
-            "{elapsed:?}"
-        );
-        assert!(elapsed <= duration + Duration::from_secs(1), "{elapsed:?}");
     }
 
     async fn pending_for(&mut self, duration: Duration) {
@@ -338,147 +473,190 @@ impl WireClient {
     }
 }
 
-async fn wire_scenarios(protocol: WireProtocol) {
-    let (addr, _server) = start_server().await;
-    let start = Instant::now();
-    let ms = Duration::from_millis;
-    let mut passed = 0;
-    let mut pass = |name: &str| {
-        passed += 1;
-        println!("PASS {} {name}", protocol.name());
-    };
-    if protocol == WireProtocol::Cbor {
-        for partial in [false, true] {
-            let calls = HANDLER_CALLS.load(Ordering::Acquire);
-            let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-            let start = Instant::now();
-            if partial {
-                sleep(ms(200)).await;
+// Precise deadline boundaries and slow-drip schedules are covered by the
+// start_paused tests in event_stream_message_timeout.rs. TCP tests verify
+// propagation, serialization, and connection cleanup with real socket I/O.
+async fn wire_scenario(protocol: WireProtocol, name: &str) {
+    let mut server = start_server(
+        name == "idle_expiry_releases_connection_slot_and_server_still_serves_requests",
+    )
+    .await;
+    match name {
+        "initial_no_bytes_rejected_before_handler" | "initial_partial_rejected_before_handler" => {
+            let client = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            if name == "initial_partial_rejected_before_handler" {
                 client.send(protocol.frame(true).slice(..2)).await;
             }
-            client.expect_after(start, ms(300), None, true).await;
-            assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
-            pass(if partial {
-                "initial_partial_rejected_before_handler"
-            } else {
-                "initial_no_bytes_rejected_before_handler"
-            });
+            client.expect(None, true).await;
         }
+        "stream_only_RPC_missing_first_frame_rejected_before_handler"
+        | "stream_only_RPC_partial_first_frame_uses_initial_deadline" => {
+            let client = WireClient::connect(&server, protocol, "NoInitialEvents", true).await;
+            if name == "stream_only_RPC_partial_first_frame_uses_initial_deadline" {
+                client.send(protocol.frame(false).slice(..2)).await;
+            }
+            client.expect(None, true).await;
+        }
+        "stream_only_RPC_first_event_is_buffered_before_handler" => {
+            let mut client = WireClient::connect(&server, protocol, "NoInitialEvents", true).await;
+            assert_eq!(server.state.calls.load(Ordering::Acquire), 0);
+            client.send(protocol.frame(false)).await;
+            client.finish();
+            server.observe(HandlerObservation::Entered).await;
+            server.observe(HandlerObservation::Event(1)).await;
+            client.expect(Some(("eof", 1)), false).await;
+        }
+        "first_event_idle_error_reaches_handler" => {
+            let client = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            server
+                .observe(HandlerObservation::Timeout("idle", Duration::from_secs(1)))
+                .await;
+            client.expect(Some(("idle", 0)), false).await;
+        }
+        "idle_after_valid_event_reaches_handler_and_closes_TCP" => {
+            let client = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            client.send(protocol.frame(false)).await;
+            server.observe(HandlerObservation::Event(1)).await;
+            server
+                .observe(HandlerObservation::Timeout("idle", Duration::from_secs(1)))
+                .await;
+            client.expect(Some(("idle", 1)), false).await;
+        }
+        "partial_length_prefix_completion_error_reaches_handler" => {
+            let client = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            // Stop inside the four-byte length prefix. Exact slow-drip timing
+            // is exercised with paused time rather than client-side sleeps.
+            client.send(protocol.frame(false).slice(..3)).await;
+            server
+                .observe(HandlerObservation::Timeout(
+                    "completion",
+                    Duration::from_secs(1),
+                ))
+                .await;
+            client.expect(Some(("completion", 0)), false).await;
+        }
+        "complete_events_are_delivered_in_order" => {
+            let mut client = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            for count in 1..=3 {
+                client.send(protocol.frame(false)).await;
+                server.observe(HandlerObservation::Event(count)).await;
+            }
+            client.finish();
+            client.expect(Some(("eof", 3)), false).await;
+        }
+        "NoIdleEvents_remains_open_beyond_short_idle_override"
+        | "GlobalIdleEvents_remains_open_beyond_short_idle_override" => {
+            let operation = name.split('_').next().unwrap();
+            let mut client = WireClient::connect(&server, protocol, operation, true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            // The short override is 1s; the inherited deadline is 5s. Leave
+            // 3.5s of scheduling margin for the eventual frame and EOF.
+            client.pending_for(Duration::from_millis(1500)).await;
+            client.send(protocol.frame(false)).await;
+            client.finish();
+            client.expect(Some(("eof", 1)), false).await;
+        }
+        "inherited_global_idle_deadline_reaches_handler" => {
+            let client = WireClient::connect(&server, protocol, "GlobalIdleEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            server
+                .observe(HandlerObservation::Timeout("idle", Duration::from_secs(5)))
+                .await;
+            client.expect(Some(("idle", 0)), false).await;
+        }
+        "handler_can_retry_idle_and_receive_event"
+        | "handler_can_retry_completion_and_receive_event" => {
+            let partial = name == "handler_can_retry_completion_and_receive_event";
+            let mut client = WireClient::connect(&server, protocol, "RetryEvents", true).await;
+            client.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            let frame = protocol.frame(false);
+            if partial {
+                client.send(frame.slice(..2)).await;
+            }
+            server
+                .observe(HandlerObservation::Timeout(
+                    if partial { "completion" } else { "idle" },
+                    Duration::from_secs(1),
+                ))
+                .await;
+            // The handler has observed the actual timeout and is waiting for
+            // this signal. Queue the rest before giving recv a fresh window.
+            client
+                .send(if partial { frame.slice(2..) } else { frame })
+                .await;
+            client.finish();
+            server.state.resume_retry.notify_one();
+            server.observe(HandlerObservation::Event(1)).await;
+            client.expect(Some(("eof-after-timeout", 1)), false).await;
+        }
+        "idle_expiry_releases_connection_slot_and_server_still_serves_requests" => {
+            let first = WireClient::connect(&server, protocol, "PublishEvents", true).await;
+            first.initial(protocol).await;
+            server.observe(HandlerObservation::Entered).await;
+            server
+                .observe(HandlerObservation::Timeout("idle", Duration::from_secs(1)))
+                .await;
+            // This fixture holds the first handler after expiry until expect
+            // releases it, so it cannot finish while we check the queued request.
+            let mut second = WireClient::connect(&server, protocol, "Health", false).await;
+            second.finish();
+            second.pending_for(Duration::from_millis(100)).await;
+            first.expect(Some(("idle", 0)), false).await;
+            second.expect(None, false).await;
+        }
+        _ => panic!("unknown wire scenario: {name}"),
+    }
+}
+
+async fn wire_scenarios(protocol: WireProtocol) {
+    let start = Instant::now();
+    let mut scenarios = Vec::new();
+    if protocol == WireProtocol::Cbor {
+        scenarios.extend([
+            "initial_no_bytes_rejected_before_handler",
+            "initial_partial_rejected_before_handler",
+        ]);
     }
     if protocol != WireProtocol::Rest {
-        let calls = HANDLER_CALLS.load(Ordering::Acquire);
-        let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
-        let started = Instant::now();
-        client.expect_after(started, ms(300), None, true).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
-        pass("stream_only_RPC_missing_first_frame_rejected_before_handler");
-
-        let client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
-        let started = Instant::now();
-        client.send(protocol.frame(false).slice(..2)).await;
-        client.expect_after(started, ms(300), None, true).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
-        pass("stream_only_RPC_partial_first_frame_uses_initial_deadline");
-
-        let mut client = WireClient::connect(addr, protocol, "NoInitialEvents", true).await;
-        client.pending_for(ms(250)).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls);
-        client.send(protocol.frame(false)).await;
-        client.finish();
-        client.expect(Some(("eof", 1)), false).await;
-        assert_eq!(HANDLER_CALLS.load(Ordering::Acquire), calls + 1);
-        pass("stream_only_RPC_first_event_is_buffered_before_handler");
+        scenarios.extend([
+            "stream_only_RPC_missing_first_frame_rejected_before_handler",
+            "stream_only_RPC_partial_first_frame_uses_initial_deadline",
+            "stream_only_RPC_first_event_is_buffered_before_handler",
+        ]);
     }
-    let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-    let started = Instant::now();
-    client.initial(protocol).await;
-    client
-        .expect_after(started, ms(400), Some(("idle", 0)), false)
-        .await;
-    pass("first_event_idle_error_reaches_handler");
-
-    let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-    client.initial(protocol).await;
-    client.send(protocol.frame(false)).await;
-    client
-        .expect_after(Instant::now(), ms(400), Some(("idle", 1)), false)
-        .await;
-    pass("idle_after_valid_event_reaches_handler_and_closes_TCP");
-
-    let client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-    client.initial(protocol).await;
-    let frame = protocol.frame(false);
-    let started = Instant::now();
-    for offset in 0..3 {
-        client.send(frame.slice(offset..offset + 1)).await;
-        sleep(ms(60)).await;
+    scenarios.extend([
+        "first_event_idle_error_reaches_handler",
+        "idle_after_valid_event_reaches_handler_and_closes_TCP",
+        "partial_length_prefix_completion_error_reaches_handler",
+        "complete_events_are_delivered_in_order",
+        "NoIdleEvents_remains_open_beyond_short_idle_override",
+        "GlobalIdleEvents_remains_open_beyond_short_idle_override",
+        "inherited_global_idle_deadline_reaches_handler",
+        "handler_can_retry_idle_and_receive_event",
+        "handler_can_retry_completion_and_receive_event",
+        "idle_expiry_releases_connection_slot_and_server_still_serves_requests",
+    ]);
+    for name in &scenarios {
+        timeout(Duration::from_secs(15), wire_scenario(protocol, name))
+            .await
+            .unwrap_or_else(|_| {
+                panic!("{} {name} exceeded its 15-second watchdog", protocol.name())
+            });
+        println!("PASS {} {name}", protocol.name());
     }
-    client
-        .expect_after(started, ms(200), Some(("completion", 0)), false)
-        .await;
-    pass("slow_drip_completion_error_reaches_handler");
-
-    let mut client = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-    client.initial(protocol).await;
-    for _ in 0..3 {
-        client.send(protocol.frame(false)).await;
-        sleep(ms(250)).await;
-    }
-    client.finish();
-    client.expect(Some(("eof", 3)), false).await;
-    pass("timely_events_do_not_conflict_with_other_deadlines");
-
-    for operation in ["NoIdleEvents", "GlobalIdleEvents"] {
-        let mut client = WireClient::connect(addr, protocol, operation, true).await;
-        client.initial(protocol).await;
-        client.pending_for(ms(650)).await;
-        client.send(protocol.frame(false)).await;
-        client.finish();
-        client.expect(Some(("eof", 1)), false).await;
-        pass(&format!(
-            "{operation}_remains_open_beyond_short_idle_override"
-        ));
-    }
-    let client = WireClient::connect(addr, protocol, "GlobalIdleEvents", true).await;
-    let started = Instant::now();
-    client.initial(protocol).await;
-    client
-        .expect_after(started, ms(1000), Some(("idle", 0)), false)
-        .await;
-    pass("inherited_global_idle_deadline_reaches_handler");
-
-    for partial in [false, true] {
-        let mut client = WireClient::connect(addr, protocol, "RetryEvents", true).await;
-        client.initial(protocol).await;
-        let frame = protocol.frame(false);
-        if partial {
-            client.send(frame.slice(..2)).await;
-        }
-        client
-            .pending_for(ms(if partial { 300 } else { 600 }))
-            .await;
-        client
-            .send(if partial { frame.slice(2..) } else { frame })
-            .await;
-        client.finish();
-        client.expect(Some(("eof-after-timeout", 1)), false).await;
-        pass(if partial {
-            "handler_can_retry_completion_and_receive_event"
-        } else {
-            "handler_can_retry_idle_and_receive_event"
-        });
-    }
-    let first = WireClient::connect(addr, protocol, "PublishEvents", true).await;
-    first.initial(protocol).await;
-    sleep(ms(50)).await;
-    let mut second = WireClient::connect(addr, protocol, "Health", false).await;
-    second.finish();
-    second.pending_for(ms(100)).await;
-    first.expect(Some(("idle", 0)), false).await;
-    second.expect(None, false).await;
-    pass("idle_expiry_releases_connection_slot_and_server_still_serves_requests");
     assert_eq!(
-        passed,
+        scenarios.len(),
         match protocol {
             WireProtocol::Rest => 10,
             WireProtocol::Json => 13,
@@ -486,8 +664,9 @@ async fn wire_scenarios(protocol: WireProtocol) {
         }
     );
     println!(
-        "PASS {} all {passed} TCP scenarios in {:?}",
+        "PASS {} all {} TCP scenarios in {:?}",
         protocol.name(),
+        scenarios.len(),
         start.elapsed()
     );
 }
