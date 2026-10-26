@@ -170,6 +170,12 @@ impl<E: HttpModeledError> HttpModeledError for AuthorizeServiceError<E> {
     fn status_code(&self) -> u16 {
         self.error().status_code()
     }
+
+    fn operation_schema(
+        &self,
+    ) -> Option<&pokemon_service_server_sdk::server::schema::OperationSchema<'_>> {
+        self.error().operation_schema()
+    }
 }
 
 macro_rules! impl_service {
@@ -351,5 +357,91 @@ mod tests {
         assert_eq!(response.status(), http::StatusCode::UNAUTHORIZED);
         let bytes = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(bytes, r#"{"message":"inner \"message\""}"#);
+    }
+
+    #[tokio::test]
+    async fn wrapper_preserves_operation_context_and_error_content_type() {
+        use pokemon_service_server_sdk::server::schema::OperationSchema;
+
+        static EMPTY: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Empty"), ShapeType::Structure, &[]);
+        static TEXT: Schema<'static> = Schema::new_member(
+            shape_id!("test", "Text", "value"),
+            ShapeType::String,
+            "value",
+            0,
+        )
+        .with_http_payload();
+        static TEXT_OUTPUT: Schema<'static> =
+            Schema::new_struct(shape_id!("test", "Text"), ShapeType::Structure, &[&TEXT]);
+        static TEXT_OPERATION: OperationSchema<'static> = OperationSchema::new(
+            shape_id!("test", "TextOperation"),
+            &EMPTY,
+            &TEXT_OUTPUT,
+            &[],
+        );
+        static EMPTY_OPERATION: OperationSchema<'static> =
+            OperationSchema::new(shape_id!("test", "EmptyOperation"), &EMPTY, &EMPTY, &[]);
+
+        #[derive(Debug)]
+        struct OperationError {
+            inner: AuthorizeError,
+            operation: &'static OperationSchema<'static>,
+        }
+        impl std::fmt::Display for OperationError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                self.inner.fmt(f)
+            }
+        }
+        impl std::error::Error for OperationError {}
+        impl SerializableStruct for OperationError {
+            fn schema(&self) -> &Schema<'_> {
+                self.inner.schema()
+            }
+
+            fn serialize_members(
+                &self,
+                serializer: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                self.inner.serialize_members(serializer)
+            }
+        }
+        impl HttpModeledError for OperationError {
+            fn status_code(&self) -> u16 {
+                self.inner.status_code()
+            }
+
+            fn operation_schema(&self) -> Option<&OperationSchema<'_>> {
+                Some(self.operation)
+            }
+        }
+
+        let protocols: [Box<dyn ServerProtocol>; 2] =
+            [Box::new(RestJson1::default()), Box::new(RestXml::default())];
+        for protocol in protocols {
+            for operation in [&TEXT_OPERATION, &EMPTY_OPERATION] {
+                let inner = OperationError {
+                    inner: AuthorizeError {
+                        message: "inner error".into(),
+                    },
+                    operation,
+                };
+                let expected = protocol.serialize_error(&inner);
+                if std::ptr::eq(operation, &TEXT_OPERATION) {
+                    assert_eq!(expected.headers()["content-type"], "text/plain");
+                } else if protocol.protocol_id().as_str() == "aws.protocols#restXml" {
+                    assert!(!expected.headers().contains_key("content-type"));
+                }
+                let error = AuthorizeServiceError::InnerServiceError(inner);
+                let actual = protocol.serialize_error(&error);
+                assert_eq!(actual.status(), expected.status());
+                assert_eq!(actual.headers(), expected.headers());
+                assert_eq!(
+                    actual.into_body().collect().await.unwrap().to_bytes(),
+                    expected.into_body().collect().await.unwrap().to_bytes(),
+                );
+                assert!(std::ptr::eq(error.operation_schema().unwrap(), operation));
+            }
+        }
     }
 }
