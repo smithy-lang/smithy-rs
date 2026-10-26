@@ -431,7 +431,7 @@ where
             let body = crate::body::__private::wrap_streaming_body(body, config.unwrap_or_default().read_poll_budget);
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if directive == BodyDirective::Collect {
-            // TODO: Support incremental CBOR blob decoding once the handler contract for
+            // TODO(incremental CBOR blob decoding): Support streaming once the handler contract for
             // trailing fields and validation is settled. Collection preserves legacy timing.
             let config = config.ok_or_else(|| {
                 DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
