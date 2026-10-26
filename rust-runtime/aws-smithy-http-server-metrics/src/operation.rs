@@ -188,6 +188,17 @@ impl<Protocol> IntoResponse<Protocol> for MetricsError {
         *response.status_mut() = HttpStatusCode::INTERNAL_SERVER_ERROR;
         response
     }
+
+    #[cfg(not(any(
+        feature = "aws-smithy-http-server-065",
+        feature = "aws-smithy-legacy-http-server"
+    )))]
+    fn into_response_with_protocol(
+        self,
+        protocol: &dyn aws_smithy_http_server::schema::ServerProtocol,
+    ) -> HttpResponse {
+        protocol.serialize_error(&self)
+    }
 }
 
 #[cfg(not(any(

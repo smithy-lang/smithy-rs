@@ -9,7 +9,7 @@ use aws_smithy_http_server::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
         rpc_v2_cbor::RpcV2Cbor,
     },
-    response::{IntoResponse, IntoResponseWithProtocol, Response},
+    response::{IntoResponse, Response},
     runtime_error::InternalFailureException,
     schema::{protocol, HttpModeledError, ServerProtocol},
 };
@@ -69,7 +69,7 @@ impl HttpModeledError for Denied {
     }
 }
 
-// A downstream modeled error can retain its own static conversion alongside the contextual blanket.
+// A downstream modeled error explicitly overrides contextual conversion.
 impl IntoResponse<RestJson1> for Denied {
     fn into_response(self) -> Response {
         Response::builder()
@@ -78,10 +78,14 @@ impl IntoResponse<RestJson1> for Denied {
             .body(aws_smithy_http_server::body::to_boxed("custom denial"))
             .unwrap()
     }
+
+    fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
+        protocol.serialize_error(&self)
+    }
 }
 
 #[tokio::test]
-async fn modeled_error_blanket_uses_selected_protocol_and_coexists_with_static_conversion() {
+async fn modeled_error_override_uses_selected_protocol_and_coexists_with_static_conversion() {
     let protocols: Vec<Box<dyn ServerProtocol>> = vec![
         Box::<protocol::RestJson1>::default(),
         Box::<protocol::AwsJson1_0>::default(),
@@ -109,7 +113,7 @@ async fn modeled_error_blanket_uses_selected_protocol_and_coexists_with_static_c
 #[test]
 fn infallible_supports_both_response_traits() {
     fn assert_response<P, E: IntoResponse<P>>() {}
-    fn assert_contextual<E: IntoResponseWithProtocol>() {}
+    fn assert_contextual<E: IntoResponse<RestJson1>>() {}
     assert_response::<RestJson1, std::convert::Infallible>();
     assert_response::<(RestJson1, RpcV2Cbor), std::convert::Infallible>();
     assert_contextual::<std::convert::Infallible>();

@@ -77,43 +77,18 @@ fn internal_server_error() -> http::Response<BoxBody> {
     response
 }
 
-// These rejections deliberately return the same complete response under both serialization modes.
-macro_rules! missing_rejection_with_protocol {
-    ($($rejection:ty),+ $(,)?) => {
-        $(
-            impl crate::response::IntoResponseWithProtocol for $rejection {
-                fn into_response_with_protocol(
-                    self,
-                    _: &dyn crate::schema::ServerProtocol,
-                ) -> crate::response::Response {
-                    IntoResponse::<()>::into_response(self)
-                }
-            }
-        )+
-    };
-}
-
-missing_rejection_with_protocol!(extension::MissingExtension, connect_info::MissingConnectInfo);
-#[cfg(feature = "request-id")]
-missing_rejection_with_protocol!(request_id::MissingServerRequestId);
-#[cfg(feature = "aws-lambda")]
-missing_rejection_with_protocol!(
-    lambda::MissingContext,
-    lambda::MissingGatewayContextV1,
-    lambda::MissingGatewayContextV2,
-);
-
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
     /// The type of the extraction failures.
     ///
-    /// The consuming upgrade requires the appropriate response conversion: generated serde uses
-    /// [`IntoResponse<Protocol>`](IntoResponse), while schema serde uses
-    /// [`crate::response::IntoResponseWithProtocol`]. A [`crate::schema::HttpModeledError`] receives
-    /// the schema conversion automatically, without a protocol-specific response implementation.
-    /// Both upgrades require [`std::fmt::Display`] to log the rejection.
-    type Rejection;
+    /// Both serialization systems use this conversion contract. Generated serde calls
+    /// `into_response`; schema serde supplies the routed protocol to
+    /// `into_response_with_protocol`. Existing rejections inherit the latter's default.
+    /// Schema extractors can wrap an [`HttpModeledError`](crate::schema::HttpModeledError)
+    /// in [`ModeledRejection`](crate::response::ModeledRejection) to obtain this conversion
+    /// without implementing it themselves.
+    type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;

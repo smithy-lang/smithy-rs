@@ -10,7 +10,7 @@
 
 use aws_smithy_http_server::{
     extension::ModeledErrorExtension,
-    response::{IntoResponse, IntoResponseWithProtocol},
+    response::IntoResponse,
     schema::{
         protocol, MetadataRoutedProtocol, ProtocolBuildContext, ServerProtocol, ServiceSchema,
     },
@@ -48,9 +48,10 @@ async fn generated_serde_retains_the_legacy_empty_500() {
 }
 
 #[tokio::test]
-async fn modeled_error_blanket_frames_both_variants_as_rest_json() {
+async fn contextual_override_frames_both_variants_as_rest_json() {
     for error in errors() {
-        let response = error.into_response_with_protocol(&protocol::RestJson1::default());
+        let response =
+            IntoResponse::<()>::into_response_with_protocol(error, &protocol::RestJson1::default());
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(response.headers()["content-type"], "application/json");
         assert_eq!(response.headers()["x-amzn-errortype"], "MetricsError");
@@ -104,7 +105,7 @@ async fn aws_json_uses_protocol_discriminators_and_server_error_classification()
     ];
     for (protocol, content_type, body) in cases {
         for error in errors() {
-            let response = error.into_response_with_protocol(&*protocol);
+            let response = IntoResponse::<()>::into_response_with_protocol(error, &*protocol);
             assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
             assert_eq!(response.headers()["content-type"], content_type);
             assert_eq!(

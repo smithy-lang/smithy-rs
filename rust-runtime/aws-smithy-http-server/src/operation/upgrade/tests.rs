@@ -415,12 +415,12 @@ static MISSING_CALLER: Schema<'static> = Schema::new_struct(
     &[&MISSING_CALLER_MESSAGE],
 );
 
-// The schema and modeled-error contract are sufficient; neither response trait is implemented here.
+// Handwritten modeled rejections supply an explicit response conversion.
 #[derive(Debug, thiserror::Error)]
 #[error("caller identity is missing")]
-struct ModeledOnlyRejection;
+struct ModeledRejection;
 
-impl SerializableStruct for ModeledOnlyRejection {
+impl SerializableStruct for ModeledRejection {
     fn schema(&self) -> &Schema<'_> {
         &MISSING_CALLER
     }
@@ -433,23 +433,37 @@ impl SerializableStruct for ModeledOnlyRejection {
     }
 }
 
-impl HttpModeledError for ModeledOnlyRejection {
+impl HttpModeledError for ModeledRejection {
     fn status_code(&self) -> u16 {
         403
     }
 }
 
-struct ModeledOnlyCaller;
+impl<P> IntoResponse<P> for ModeledRejection {
+    fn into_response(self) -> crate::response::Response {
+        http::Response::builder()
+            .status(403)
+            .extension(crate::extension::ModeledErrorExtension::new("MissingCaller"))
+            .body(crate::body::empty())
+            .unwrap()
+    }
 
-impl<P> FromParts<P> for ModeledOnlyCaller {
-    type Rejection = ModeledOnlyRejection;
-
-    fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
-        Err(ModeledOnlyRejection)
+    fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> crate::response::Response {
+        protocol.serialize_error(&self)
     }
 }
 
-// Intentionally has no IntoResponse<P> implementation: schema extraction needs only the selected protocol.
+struct ModeledCaller;
+
+impl<P> FromParts<P> for ModeledCaller {
+    type Rejection = ModeledRejection;
+
+    fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        Err(ModeledRejection)
+    }
+}
+
+// A contextual rejection defines an explicit static fallback and overrides contextual framing.
 #[derive(Debug, thiserror::Error)]
 #[error("custom caller rejection")]
 struct ContextOnlyRejection;
@@ -457,7 +471,14 @@ struct ContextOnlyRejection;
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RejectionMarker;
 
-impl IntoResponseWithProtocol for ContextOnlyRejection {
+impl<P> IntoResponse<P> for ContextOnlyRejection {
+    fn into_response(self) -> crate::response::Response {
+        http::Response::builder()
+            .status(429)
+            .body(crate::body::to_boxed("custom caller rejection"))
+            .unwrap()
+    }
+
     fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> crate::response::Response {
         http::Response::builder()
             .status(http::StatusCode::TOO_MANY_REQUESTS)
@@ -478,6 +499,154 @@ impl<P> FromParts<P> for ContextOnlyCaller {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("caller rejected")]
+struct AdaptedModeledCallerError {
+    status: u16,
+}
+
+static CALLER_MESSAGE: Schema<'static> = Schema::new_member(
+    shape_id!("test", "CallerDenied", "message"),
+    ShapeType::String,
+    "message",
+    0,
+);
+static CALLER_ERROR: Schema<'static> = Schema::new_struct(
+    shape_id!("test", "CallerDenied"),
+    ShapeType::Structure,
+    &[&CALLER_MESSAGE],
+);
+
+impl SerializableStruct for AdaptedModeledCallerError {
+    fn schema(&self) -> &Schema<'_> {
+        &CALLER_ERROR
+    }
+
+    fn serialize_members(
+        &self,
+        serializer: &mut dyn aws_smithy_schema::serde::ShapeSerializer,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        serializer.write_string(&CALLER_MESSAGE, "caller rejected")
+    }
+}
+
+impl HttpModeledError for AdaptedModeledCallerError {
+    fn status_code(&self) -> u16 {
+        self.status
+    }
+}
+
+struct AdaptedModeledCaller;
+
+impl<P> FromParts<P> for AdaptedModeledCaller {
+    type Rejection = crate::response::ModeledRejection<AdaptedModeledCallerError>;
+
+    fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        Err(AdaptedModeledCallerError { status: 403 }.into())
+    }
+}
+
+#[tokio::test]
+async fn modeled_rejection_retains_the_generic_context_free_conversion_contract() {
+    fn generic_response<P, T: FromParts<P>>(error: T::Rejection) -> crate::response::Response {
+        error.into_response()
+    }
+
+    type Protocols = (
+        crate::protocol::rest_json_1::RestJson1,
+        crate::protocol::rpc_v2_cbor::RpcV2Cbor,
+    );
+    for (status, expected) in [(403, 403), (0, 500)] {
+        let response = generic_response::<Protocols, AdaptedModeledCaller>(AdaptedModeledCallerError { status }.into());
+        assert_eq!(response.status().as_u16(), expected);
+        assert!(response.headers().is_empty());
+        assert_eq!(
+            response
+                .extensions()
+                .get::<crate::extension::ModeledErrorExtension>()
+                .unwrap()
+                .to_string(),
+            "CallerDenied"
+        );
+        assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn modeled_tuple_rejections_use_the_selected_protocol_for_both_schema_upgrades() {
+    type Protocols = (
+        crate::protocol::rest_json_1::RestJson1,
+        crate::protocol::rpc_v2_cbor::RpcV2Cbor,
+    );
+    type Extractors = ((), AdaptedModeledCaller);
+
+    for protocol in [
+        SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
+        SharedServerProtocol::metadata_routed(crate::schema::protocol::RpcV2Cbor::default()),
+    ] {
+        for streaming in [false, true] {
+            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                    panic!("modeled extractor rejection must not poll the request body")
+                },
+            ));
+            let mut request = http::Request::new(body);
+            let operation = if streaming {
+                StreamingBlob::SCHEMA
+            } else {
+                NonStreaming::SCHEMA
+            };
+            SelectedOperation::new(protocol.clone(), operation, Default::default())
+                .insert_into(request.extensions_mut());
+            let response = if streaming {
+                DynStreamingUpgrade::<Protocols, StreamingBlob, Extractors, _> {
+                    inner: tower::service_fn(|_: ((), Extractors)| async {
+                        panic!("modeled extractor rejection must not invoke the streaming handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(())
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynUpgrade::<Protocols, NonStreaming, Extractors, _> {
+                    inner: tower::service_fn(|_: (EmptyShape, Extractors)| async {
+                        panic!("modeled extractor rejection must not invoke the handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(EmptyShape)
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            };
+            let expected = protocol.serialize_error(&AdaptedModeledCallerError { status: 403 });
+            assert_eq!(response.status(), http::StatusCode::FORBIDDEN);
+            assert_eq!(response.status(), expected.status());
+            assert_eq!(response.headers(), expected.headers());
+            assert_eq!(
+                response
+                    .extensions()
+                    .get::<crate::extension::ModeledErrorExtension>()
+                    .unwrap()
+                    .to_string(),
+                "CallerDenied"
+            );
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                expected.into_body().collect().await.unwrap().to_bytes()
+            );
+        }
+    }
+}
+
 async fn tuple_extractor_rejection<E>(protocol: SharedServerProtocol, streaming: bool) -> crate::response::Response
 where
     E: FromParts<(
@@ -485,7 +654,11 @@ where
             crate::protocol::rpc_v2_cbor::RpcV2Cbor,
         )> + Send
         + 'static,
-    E::Rejection: std::fmt::Display + IntoResponseWithProtocol,
+    E::Rejection: std::fmt::Display
+        + IntoResponse<(
+            crate::protocol::rest_json_1::RestJson1,
+            crate::protocol::rpc_v2_cbor::RpcV2Cbor,
+        )>,
 {
     use crate::protocol::{rest_json_1::RestJson1, rpc_v2_cbor::RpcV2Cbor};
     type Protocols = (RestJson1, RpcV2Cbor);
@@ -557,7 +730,7 @@ async fn contextual_only_tuple_rejections_preserve_custom_responses_without_poll
 }
 
 #[tokio::test]
-async fn modeled_only_tuple_rejections_use_the_selected_protocol_without_polling_the_body() {
+async fn modeled_tuple_rejections_use_the_selected_protocol_without_polling_the_body() {
     for (protocol, content_type) in [
         (
             SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
@@ -569,7 +742,7 @@ async fn modeled_only_tuple_rejections_use_the_selected_protocol_without_polling
         ),
     ] {
         for streaming in [false, true] {
-            let response = tuple_extractor_rejection::<ModeledOnlyCaller>(protocol.clone(), streaming).await;
+            let response = tuple_extractor_rejection::<ModeledCaller>(protocol.clone(), streaming).await;
             assert_eq!(response.status(), http::StatusCode::FORBIDDEN);
             assert_eq!(response.headers()["content-type"], content_type);
             assert_eq!(response.extensions().len(), 1);
@@ -581,7 +754,7 @@ async fn modeled_only_tuple_rejections_use_the_selected_protocol_without_polling
                     .as_deref(),
                 Some("MissingCaller")
             );
-            let expected = protocol.serialize_error(&ModeledOnlyRejection);
+            let expected = protocol.serialize_error(&ModeledRejection);
             assert_eq!(response.headers(), expected.headers());
             let body = response.into_body().collect().await.unwrap().to_bytes();
             assert_eq!(body, expected.into_body().collect().await.unwrap().to_bytes());

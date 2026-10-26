@@ -99,3 +99,20 @@ pub trait SchemaServiceShape: ServiceShape {
 pub trait ContainsOperation<Op>: ServiceShape {
     const VALUE: Self::Operations;
 }
+
+/// Names the error-conversion strategy of a generated service.
+///
+/// Every generated service implements this trait. [`SerdeKind`](Self::SerdeKind) is
+/// [`GeneratedSerde<Protocol>`](crate::response::GeneratedSerde) for generated-serde services,
+/// whose errors implement context-free [`IntoResponse`](crate::response::IntoResponse) for the
+/// statically known protocol, and [`SchemaSerde`](crate::response::SchemaSerde) for schema-serde
+/// services, whose errors are serialized by the protocol routing selected per request.
+///
+/// Middleware generic over the service bounds `Ser: ServiceSerde` and uses `Ser::SerdeKind` as an
+/// [`ErrorConverter`](crate::response::ErrorConverter) to turn operation errors into HTTP
+/// responses without a serde-mode parameter on the plugin.
+pub trait ServiceSerde {
+    /// Marker type implementing [`ErrorConverter`](crate::response::ErrorConverter) for this
+    /// service's error types.
+    type SerdeKind;
+}

@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{
-    extension::RuntimeErrorExtension,
-    response::{IntoResponse, IntoResponseWithProtocol},
-};
+use crate::{extension::RuntimeErrorExtension, response::IntoResponse};
 
 /// A _protocol-agnostic_ type representing an internal framework error. As of writing, this can only
 /// occur upon failure to extract an [`crate::extension::Extension`] from the request.
@@ -15,7 +12,7 @@ use crate::{
 /// [`crate::protocol::rest_json_1::runtime_error::RuntimeError::InternalFailure`] variant.
 ///
 /// Its response conversions support concrete protocol markers and tuples of two through ten
-/// protocols. Use [`IntoResponseWithProtocol::into_response_with_protocol`] to frame the
+/// protocols. Use [`IntoResponse::into_response_with_protocol`] to frame the
 /// response; a direct tuple conversion returns the shared [`RuntimeError`]'s empty 500 fallback.
 pub struct InternalFailureException;
 
@@ -24,7 +21,7 @@ pub const INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE: &str = "invalid
 /// A protocol-independent extractor rejection framed by the selected schema protocol.
 ///
 /// Use this error with `impl<P> FromParts<P>` extractors on single-protocol or multi-protocol
-/// services. Schema upgrades call [`IntoResponseWithProtocol::into_response_with_protocol`], which delegates
+/// services. Schema upgrades call [`IntoResponse::into_response_with_protocol`], which delegates
 /// to [`crate::schema::ServerProtocol::serialize_runtime_error`]. Existing protocol-specific
 /// runtime-error types and their conversions remain available for explicitly static framing.
 ///
@@ -93,17 +90,9 @@ impl<P> IntoResponse<P> for RuntimeError {
             .insert(RuntimeErrorExtension::new(self.name().to_owned()));
         response
     }
-}
 
-impl IntoResponseWithProtocol for RuntimeError {
     fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
         protocol.serialize_runtime_error(self)
-    }
-}
-
-impl IntoResponseWithProtocol for InternalFailureException {
-    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
-        protocol.serialize_runtime_error(self.into())
     }
 }
 
@@ -112,6 +101,10 @@ macro_rules! tuple_internal_failure {
         impl<$($protocol),+> IntoResponse<($($protocol,)+)> for InternalFailureException {
             fn into_response(self) -> crate::response::Response {
                 IntoResponse::<()>::into_response(RuntimeError::from(self))
+            }
+
+            fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+                protocol.serialize_runtime_error(self.into())
             }
 
         }
