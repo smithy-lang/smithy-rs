@@ -102,17 +102,36 @@ impl<P, Op, Extractors, S: Clone> Clone for DynUpgrade<P, Op, Extractors, S> {
     }
 }
 
+enum SelectedOperationError {
+    Missing,
+    Mismatched(SelectedOperation),
+}
+
+impl SelectedOperationError {
+    fn into_response(self) -> http::Response<BoxBody> {
+        match self {
+            Self::Missing => empty_internal_server_error(),
+            Self::Mismatched(selected) => IntoResponse::<()>::into_response_with_protocol(
+                crate::runtime_error::RuntimeError::from(InternalFailureException),
+                &**selected.protocol(),
+            ),
+        }
+    }
+}
+
 /// Reads the routed operation out of the request extensions and checks it is `Op`.
-pub(crate) fn selected_operation<Op: SchemaOperationShape>(extensions: &http::Extensions) -> Option<SelectedOperation> {
+fn selected_operation<Op: SchemaOperationShape>(
+    extensions: &http::Extensions,
+) -> Result<SelectedOperation, SelectedOperationError> {
     let Some(selected) = SelectedOperation::get_from_extensions(extensions).cloned() else {
-        error!("selected protocol operation missing from request extensions");
-        return None;
+        error!(operation = %Op::ID.absolute(), "selected protocol operation missing from request extensions");
+        return Err(SelectedOperationError::Missing);
     };
     if !std::ptr::eq(selected.operation(), Op::SCHEMA) {
-        error!("selected protocol operation is incompatible with the routed operation");
-        return None;
+        error!(operation = %Op::ID.absolute(), "selected protocol operation is incompatible with the routed operation");
+        return Err(SelectedOperationError::Mismatched(selected));
     }
-    Some(selected)
+    Ok(selected)
 }
 
 /// Converts the HTTP parts and body into the runtime-api request the protocols read.
@@ -151,15 +170,18 @@ where
         let service = std::mem::replace(&mut self.inner, clone);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
-            let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
-                error!(operation = %Op::ID.absolute(), "request reached DynUpgrade without a selected operation");
-                return Ok(empty_internal_server_error());
+            let selected = match selected_operation::<Op>(&parts.extensions) {
+                Ok(selected) => selected,
+                Err(error) => return Ok(error.into_response()),
             };
             let protocol = selected.protocol();
             let operation = selected.operation();
             if operation.input().members().iter().any(|member| member.streaming()) {
                 error!("streaming operation routed through DynUpgrade");
-                return Ok(empty_internal_server_error());
+                return Ok(IntoResponse::<P>::into_response_with_protocol(
+                    crate::runtime_error::RuntimeError::from(InternalFailureException),
+                    &**protocol,
+                ));
             }
             let extractors = match Extractors::from_parts(&mut parts) {
                 Ok(value) => value,
@@ -321,9 +343,9 @@ where
         let service = std::mem::replace(&mut self.inner, clone);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
-            let Some(selected) = selected_operation::<Op>(&parts.extensions) else {
-                error!(operation = %Op::ID.absolute(), "request reached the streaming upgrade without a selected operation");
-                return Ok(empty_internal_server_error());
+            let selected = match selected_operation::<Op>(&parts.extensions) {
+                Ok(selected) => selected,
+                Err(error) => return Ok(error.into_response()),
             };
             let protocol = selected.protocol();
             let operation = selected.operation();

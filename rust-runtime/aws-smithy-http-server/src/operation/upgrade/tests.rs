@@ -767,56 +767,141 @@ async fn modeled_tuple_rejections_use_the_selected_protocol_without_polling_the_
 
 #[tokio::test]
 async fn missing_or_mismatched_selection_rejects_before_reading_input_or_calling_handlers() {
-    for streaming in [false, true] {
-        for selection in [None, Some(InputOnly::SCHEMA)] {
-            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
-                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
-                    panic!("invalid routing context must not poll the request body")
-                },
-            ));
-            let mut request = http::Request::new(body);
-            if let Some(operation) = selection {
-                SelectedOperation::new(
-                    SharedServerProtocol::serde_only(HttpOnly::default()),
-                    operation,
-                    Default::default(),
-                )
-                .insert_into(request.extensions_mut());
+    for (protocol, content_type, expected_body) in internal_failure_protocols() {
+        for streaming in [false, true] {
+            for selection in [None, Some(InputOnly::SCHEMA)] {
+                let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                    |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                        panic!("invalid routing context must not poll the request body")
+                    },
+                ));
+                let mut request = http::Request::new(body);
+                if let Some(operation) = selection {
+                    SelectedOperation::new(protocol.clone(), operation, Default::default())
+                        .insert_into(request.extensions_mut());
+                }
+                let called = Arc::new(AtomicBool::new(false));
+                let handler_called = called.clone();
+                let response = if streaming {
+                    DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
+                        inner: tower::service_fn(move |_: ((), ())| {
+                            handler_called.store(true, Ordering::SeqCst);
+                            async { Ok::<_, Infallible>(()) }
+                        }),
+                        _protocol: PhantomData,
+                        _operation: PhantomData,
+                        _extractors: PhantomData,
+                    }
+                    .oneshot(request)
+                    .await
+                    .unwrap()
+                } else {
+                    DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
+                        inner: tower::service_fn(move |_: (EmptyShape, ())| {
+                            handler_called.store(true, Ordering::SeqCst);
+                            async { Ok::<_, Infallible>(EmptyShape) }
+                        }),
+                        _protocol: PhantomData,
+                        _operation: PhantomData,
+                        _extractors: PhantomData,
+                    }
+                    .oneshot(request)
+                    .await
+                    .unwrap()
+                };
+                if selection.is_some() {
+                    assert_protocol_internal_failure(response, content_type, expected_body).await;
+                } else {
+                    assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+                    assert!(response.headers().is_empty());
+                    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+                }
+                assert!(!called.load(Ordering::SeqCst));
             }
-            let called = Arc::new(AtomicBool::new(false));
-            let handler_called = called.clone();
-            let response = if streaming {
-                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
-                    inner: tower::service_fn(move |_: ((), ())| {
-                        handler_called.store(true, Ordering::SeqCst);
-                        async { Ok::<_, Infallible>(()) }
-                    }),
-                    _protocol: PhantomData,
-                    _operation: PhantomData,
-                    _extractors: PhantomData,
-                }
-                .oneshot(request)
-                .await
-                .unwrap()
-            } else {
-                DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
-                    inner: tower::service_fn(move |_: (EmptyShape, ())| {
-                        handler_called.store(true, Ordering::SeqCst);
-                        async { Ok::<_, Infallible>(EmptyShape) }
-                    }),
-                    _protocol: PhantomData,
-                    _operation: PhantomData,
-                    _extractors: PhantomData,
-                }
-                .oneshot(request)
-                .await
-                .unwrap()
-            };
-            assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
-            assert!(response.headers().is_empty());
-            assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
-            assert!(!called.load(Ordering::SeqCst));
         }
+    }
+}
+
+fn internal_failure_protocols() -> [(SharedServerProtocol, &'static str, &'static [u8]); 3] {
+    [
+        (
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
+            "application/json",
+            b"{}",
+        ),
+        (
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+            "application/xml",
+            b"{}",
+        ),
+        (
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RpcV2Cbor::default()),
+            "application/cbor",
+            &[0xa0],
+        ),
+    ]
+}
+
+async fn assert_protocol_internal_failure(
+    response: crate::response::Response,
+    content_type: &str,
+    expected_body: &[u8],
+) {
+    assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.headers()["content-type"], content_type);
+    assert_eq!(
+        response
+            .extensions()
+            .get::<crate::extension::RuntimeErrorExtension>()
+            .map(|error| error.to_string())
+            .as_deref(),
+        Some("InternalFailureException")
+    );
+    if content_type == "application/json" {
+        assert_eq!(response.headers()["x-amzn-errortype"], "InternalFailureException");
+    }
+    assert_eq!(
+        response.into_body().collect().await.unwrap().to_bytes().as_ref(),
+        expected_body
+    );
+}
+
+#[tokio::test]
+async fn streaming_input_in_non_streaming_upgrade_uses_the_selected_protocol_without_reading_the_body() {
+    struct MisroutedStreamingInput;
+
+    impl OperationShape for MisroutedStreamingInput {
+        const ID: crate::shape_id::ShapeId = InputOnly::ID;
+        type Input = EmptyShape;
+        type Output = EmptyShape;
+        type Error = Infallible;
+    }
+
+    impl SchemaOperationShape for MisroutedStreamingInput {
+        const SCHEMA: &'static OperationSchema<'static> = InputOnly::SCHEMA;
+    }
+
+    for (protocol, content_type, expected_body) in internal_failure_protocols() {
+        let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+            |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                panic!("misrouted streaming input must not poll the request body")
+            },
+        ));
+        let mut request = http::Request::new(body);
+        SelectedOperation::new(protocol, MisroutedStreamingInput::SCHEMA, Default::default())
+            .insert_into(request.extensions_mut());
+        let upgrade = DynUpgrade::<crate::protocol::rest_json_1::RestJson1, MisroutedStreamingInput, (), _> {
+            inner: tower::service_fn(|_: (EmptyShape, ())| async {
+                panic!("misrouted streaming input must not invoke the handler");
+                #[allow(unreachable_code)]
+                Ok::<_, Infallible>(EmptyShape)
+            }),
+            _protocol: PhantomData,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+        };
+        let response = upgrade.oneshot(request).await.unwrap();
+        assert_protocol_internal_failure(response, content_type, expected_body).await;
     }
 }
 
