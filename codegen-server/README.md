@@ -74,6 +74,35 @@ pointing to `customizationConfig.protocols.common.request.body.maxBytes`.
 The old key remains supported when the nested setting is absent. If both are
 present, the nested value takes precedence.
 
+## Event-stream deadlines
+
+The three `request.body.eventStreamTimeouts` settings cover separate read phases:
+
+| Setting | RPC event streams | REST event streams |
+| --- | --- | --- |
+| `initialMessage` | Bounds reading the entire first frame before invoking the handler, including waiting for its first bytes. | Does not apply. |
+| `messageCompletion` | Bounds each frame after the first, from its first bytes until the complete frame is read. | Bounds every frame from its first bytes until the complete frame is read. |
+| `idle` | Bounds waiting for the next frame's first bytes after the first frame completes. | Bounds waiting for the first frame's bytes and for each subsequent frame's first bytes. |
+
+The first RPC frame can be an `initial-request` message carrying non-stream
+input fields or an ordinary event for an operation with only an event-stream
+input. Both are read before invoking the handler and use only `initialMessage`.
+Its deadline starts before waiting for bytes and does not reset as bytes arrive.
+
+If `initialMessage` is disabled, the first RPC frame has no event-stream read
+deadline, even when `messageCompletion` or `idle` is enabled. Neither setting
+provides a fallback for this phase. Configure a nonzero `initialMessage` for RPC
+operations to bound senders that withhold bytes or send an incomplete first
+frame. Request-header deadlines end before body reads, and whole-body deadlines
+do not apply to streaming inputs.
+
+All three event-stream deadlines are disabled by default. Numeric `0` or a
+zero-duration string disables the corresponding deadline; omitted operation
+fields inherit the service setting. After the first RPC frame, or for any REST
+frame, completion and idle timeouts surface as resumable errors from the
+handler's `recv()` call. An initial-message timeout rejects the request with
+HTTP `408` before the handler runs.
+
 ## Request-header deadline
 
 With `codegen.http-1x: true`, the generated

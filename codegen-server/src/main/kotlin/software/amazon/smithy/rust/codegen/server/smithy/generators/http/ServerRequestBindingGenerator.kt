@@ -146,6 +146,9 @@ class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUncons
  * `customizationConfig.protocols.common.request.body.eventStreamTimeouts`.
  * Once the first bytes of a message arrive, the complete message frame must arrive before the
  * deadline expires, mitigating slow-drip request attacks on event stream operations.
+ * For RPC protocols, this completion deadline applies only after the first frame.
+ * The first frame uses only the initial-message deadline, including for stream-only inputs.
+ * Disabling that deadline leaves the first RPC frame without an event-stream read deadline.
  *
  * The deadline is applied by wrapping the request body with the inlineable
  * `event_stream_message_timeout` module, with defaults supplied by the selected server runtime.
@@ -203,6 +206,13 @@ class ServerEventStreamMessageTimeoutHttpBindingCustomization(
 
                             RPC initial reads have a separate deadline starting before their first bytes
                             arrive. Initial-message timeouts are request rejections before the handler runs.
+                            The first RPC frame may be an `initial-request` message or an ordinary event
+                            for a stream-only input. Only the initial-message deadline covers this frame.
+                            If it is disabled, the first frame has no event-stream read deadline even when
+                            completion or idle deadlines are enabled. Configure a nonzero
+                            `request.body.eventStreamTimeouts.initialMessage` to bound incomplete first
+                            frames. Completion and idle deadlines apply after the first RPC frame;
+                            REST streams have no initial read and apply them from the first event.
                             A separate idle deadline bounds waiting between complete messages and the
                             next message's first bytes. `MessageTimeoutError::is_idle()` identifies it.
                             All event stream deadlines are disabled by default.

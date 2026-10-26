@@ -129,11 +129,22 @@ impl ServiceRequestBodyConfig {
 }
 
 /// Independent event-stream read deadlines. `None` disables a deadline.
+///
+/// The first RPC frame is read before invoking the handler, including when it is
+/// an ordinary event from a stream-only input. Only `initial_message` bounds this
+/// read. If it is disabled, neither `message_completion` nor `idle` provides a
+/// fallback, so the first RPC frame has no event-stream read deadline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct EventStreamTimeoutConfig {
+    /// Bounds the entire first RPC frame, including waiting for its first bytes.
+    /// Does not apply to REST streams.
     pub initial_message: Option<Duration>,
+    /// Bounds reading a frame from its first bytes until completion. Applies to
+    /// every REST frame and to RPC frames after the first.
     pub message_completion: Option<Duration>,
+    /// Bounds waiting for a frame's first bytes. Applies before the first REST
+    /// frame and between frames, after the first RPC frame completes.
     pub idle: Option<Duration>,
 }
 

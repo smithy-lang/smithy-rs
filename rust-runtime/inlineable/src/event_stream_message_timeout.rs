@@ -14,6 +14,11 @@
 //! RPC initial reads use a separate deadline, armed before waiting for any bytes and
 //! kept until the first frame completes. The per-event deadline starts only after
 //! that frame. Initial, completion, and idle deadlines reuse the same timer.
+//! The first RPC frame may be an `initial-request` message or an ordinary event
+//! from a stream-only input; both are read before invoking the handler.
+//! If the initial deadline is disabled, the first RPC frame has no event-stream
+//! read deadline. Completion and idle deadlines do not provide a fallback.
+//! Configure a nonzero initial deadline to bound an incomplete first RPC frame.
 //!
 //! Message boundaries are tracked from the frame's 4-byte big-endian `total_length` prelude
 //! field, which is the first field of every event stream message. Malformed lengths are left
