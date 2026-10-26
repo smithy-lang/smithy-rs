@@ -1,6 +1,6 @@
 ---
 applies_to: ["server"]
-authors: ["fahadzub"]
+authors: ["drganjoo"]
 references: ["smithy-rs#4894", "smithy-rs#4906"]
 breaking: true
 new_feature: true

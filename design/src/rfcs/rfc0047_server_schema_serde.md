@@ -109,7 +109,7 @@ and route aliases execute in Rust without SDK regeneration. The generated
 `request_body_config` setter already supports body-policy replacement;
 general protocol overrides remain to be exposed.
 
-`customizationConfig.protocols.common.requestBodyReadPollBudget` sets the maximum
+`customizationConfig.protocols.common.request.body.readPollBudget` sets the maximum
 number of consecutive ready HTTP body frames before a schema server yields. The
 same budget applies to routing-body reads, complete-body collection, streaming
 blobs, and event-stream inputs, including initial-message reads. It defaults to
@@ -125,7 +125,7 @@ Before an operation is known, routing uses the largest configured budget, with
 `None` disabling forced yielding. Empty data frames and trailers count toward the
 budget, and an underlying `Pending` resets it. This controls scheduling
 opportunities, not bytes, events, or the duration of an individual body poll.
-Generated serde servers leave the common protocol settings unparsed.
+Generated serde servers retain their existing frame-polling behavior.
 
 Move `alwaysSendEventStreamInitialResponse` from generated glue into runtime
 service policy. Keep generation choices—`schemaSerde`, HTTP version, constrained

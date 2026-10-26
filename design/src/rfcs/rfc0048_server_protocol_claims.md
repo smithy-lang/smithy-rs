@@ -137,26 +137,25 @@ selects from the supplied operation targets. A protocol that needs body bytes
 instead implements `BodyRoutedProtocol` and registers with `body_routed`.
 Both kinds implement `ServerProtocol` for serde and error framing.
 
-A codegen decorator contributes a reference through
+A codegen decorator contributes a registry's `RuntimeType` through
 `ServerCodegenDecorator.protocolRegistries`. This example assumes the runtime
 crate is a sibling of the generated SDK:
 
 ```kotlin
 override fun protocolRegistries(
     codegenContext: ServerCodegenContext,
-): List<Writable> {
+): List<RuntimeType> {
     val registry = CargoDependency(
         name = "example-server-protocols",
         location = Local("../"),
     ).toType().resolve("PROTOCOLS")
-    return listOf(writable {
-        rustTemplate("&#{Registry}", "Registry" to registry)
-    })
+    return listOf(registry)
 }
 ```
 
-Using the dependency's `RuntimeType` also adds the runtime crate to the generated
-`Cargo.toml`. Contributions from multiple decorators are combined. The service
+The generator emits a Rust reference to each registry. Using the dependency's
+`RuntimeType` also adds the runtime crate to the generated `Cargo.toml`.
+Contributions from multiple decorators are combined. The service
 model must declare `example.protocols#legacyRpc`, and codegen must recognize the
 protocol trait; the registry hook supplies its runtime implementation.
 
