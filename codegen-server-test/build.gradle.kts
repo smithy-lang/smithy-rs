@@ -151,21 +151,43 @@ val customCodegenTests = "custom-test-models".let { customModels ->
 }
 
 // A generated service for request-limit integration tests.
-val requestLimitsSettings = file("integration-tests/request-limits/settings.json")
-val requestLimitsCodegenTest = CodegenTest(
-    "integration.requestlimits#RequestLimitsService",
-    "request-limits-server-sdk",
-    imports = listOf("integration-tests/request-limits/model.smithy"),
-    extraCodegenConfig = "\"http-1x\": true",
-    extraConfig = ", \"customizationConfig\": " + requestLimitsSettings.readText(),
-)
+val requestLimitsCodegenTest =
+    CodegenTest(
+        "integration.requestlimits#RequestLimitsService",
+        "request-limits-server-sdk",
+        imports = listOf("integration-tests/request-limits/model.smithy"),
+        extraCodegenConfig = "\"http-1x\": true",
+        extraConfig =
+            """
+            , "customizationConfig": {
+                "protocols": {
+                    "common": {
+                        "request": {
+                            "header": {
+                                "readTimeout": "10s"
+                            },
+                            "body": {
+                                "maxBytes": "1 KiB",
+                                "readTimeouts": {
+                                    "defaultNonPayload": "5s",
+                                    "defaultPayload": "10s",
+                                    "perOperation": {
+                                        "integration.requestlimits#EchoWithOverride": "3s"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            """.trimIndent(),
+    )
 
 val allCodegenTests = commonCodegenTests + customCodegenTests + requestLimitsCodegenTest
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 tasks.named("generateSmithyBuild") {
-    inputs.file(requestLimitsSettings)
-    inputs.property("requestLimitsSettings", requestLimitsSettings.readText())
+    inputs.property("requestLimitsConfig", requestLimitsCodegenTest.extraConfig.orEmpty())
     inputs.property("modules", providers.gradleProperty("modules").orElse("all"))
 }
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
