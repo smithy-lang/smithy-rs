@@ -79,7 +79,8 @@ internal class HeaderReadTimeoutTest {
                 customizationConfig =
                     Node.parse("""{"protocols":{"aws.protocols#restJson1":{"request":{"header":{"readTimeout":"1s"}}}}}""").expectObjectNode(),
             )
-        check(protocolOnly.headerReadTimeout == null)
+        val error = assertThrows<CodegenException> { protocolOnly.headerReadTimeout }
+        check(error.message!!.contains("customizationConfig.protocols.aws.protocols#restJson1"))
     }
 
     @ParameterizedTest

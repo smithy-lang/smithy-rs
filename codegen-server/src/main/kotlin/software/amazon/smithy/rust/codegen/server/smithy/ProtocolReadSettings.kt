@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.ShapeId
 import java.util.logging.Logger
 import kotlin.time.Duration
 
@@ -50,7 +49,7 @@ internal object ProtocolReadSettings {
         }
     }
 
-    /** Parse the protocol sections once, using the same shape-ID keys as decoupled routing. */
+    /** Parse shared settings, rejecting per-protocol sections until they are supported. */
     fun protocolSettings(customizationConfig: ObjectNode?): Map<String, ObjectNode> {
         val protocolsPath = "customizationConfig.protocols"
         val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), protocolsPath)
@@ -58,19 +57,13 @@ internal object ProtocolReadSettings {
             val protocolId = key.value
             val path = "$protocolsPath.$protocolId"
             if (protocolId != "common") {
-                val shapeId = runCatching { ShapeId.from(protocolId) }.getOrNull()
-                if (shapeId == null || shapeId.hasMember()) {
-                    throw CodegenException(
-                        "`$path` must use a full protocol shape ID without a member, " +
-                            "such as `aws.protocols#restJson1`, or the shared `common` key. " +
-                            "Protocol shorthand names are not supported.",
-                    )
-                }
+                throw CodegenException(
+                    "`$path` is not supported in this version. " +
+                        "Per-protocol configuration is not yet supported; use `$COMMON_PATH` instead.",
+                )
             }
             val section = expectObject(value, path)!!
-            if (protocolId == "common") {
-                validateRequestSections(section)
-            }
+            validateRequestSections(section)
             protocolId to section
         }.orEmpty()
     }

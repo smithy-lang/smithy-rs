@@ -8,6 +8,8 @@ Server-side Smithy code generator
 
 Set request-read settings in the `rust-server-codegen` plugin configuration in
 `smithy-build-template.json`, under `customizationConfig.protocols.common.request`.
+Only the `common` section is supported in this version. Per-protocol sections
+such as `customizationConfig.protocols.aws.protocols#restJson1` fail generation.
 For example:
 
 ```json
