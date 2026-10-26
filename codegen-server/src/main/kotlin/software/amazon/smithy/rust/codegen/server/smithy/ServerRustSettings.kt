@@ -348,8 +348,8 @@ data class RequestBodyReadTimeouts(
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
  *   values). Omitted settings inherit the runtime default. Configured with
- *   `customizationConfig.protocols.common.request.body.maxBytes`; the legacy
- *   `codegen.requestBodyMaxBytes` key is read when the common key is absent.
+ *   `customizationConfig.protocols.common.request.body.maxBytes`; the deprecated
+ *   `codegen.requestBodyMaxBytes` key emits a warning and is read when the nested key is absent.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
  *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character

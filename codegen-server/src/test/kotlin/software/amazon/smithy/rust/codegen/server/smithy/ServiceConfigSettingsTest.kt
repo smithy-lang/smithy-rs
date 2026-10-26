@@ -16,6 +16,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import java.util.logging.Handler
+import java.util.logging.Level
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 
 internal class ServiceConfigSettingsTest {
     private val model =
@@ -55,6 +59,53 @@ internal class ServiceConfigSettingsTest {
             """,
         ).expectObjectNode(),
     )
+
+    @Test
+    fun `legacy body limit warns with migration path while preserving fallback and precedence`() {
+        val logger = Logger.getLogger("ServerRustSettings")
+        val warnings = mutableListOf<String>()
+        val testThread = Thread.currentThread()
+        val handler =
+            object : Handler() {
+                override fun publish(record: LogRecord) {
+                    if (Thread.currentThread() == testThread && record.level == Level.WARNING) {
+                        warnings.add(record.message)
+                    }
+                }
+
+                override fun flush() = Unit
+
+                override fun close() = Unit
+            }
+        logger.addHandler(handler)
+        try {
+            for (legacy in listOf(0L, 512L)) {
+                warnings.clear()
+                val inherited = settings("{}", """{"requestBodyMaxBytes":$legacy}""")
+                check(inherited.requestBodyMaxBytes() == legacy)
+                inherited.protocolSettings()
+                inherited.requestBodyMaxBytes()
+                val warning = warnings.single()
+                check(warning.contains("`codegen.requestBodyMaxBytes` is deprecated"))
+                check(warning.contains("`customizationConfig.protocols.common.request.body.maxBytes`"))
+            }
+
+            warnings.clear()
+            val nested = """{"protocols":{"common":{"request":{"body":{"maxBytes":0}}}}}"""
+            check(settings(nested, """{"requestBodyMaxBytes":512}""").requestBodyMaxBytes() == 0L)
+            check(warnings.count { it.contains("deprecated") } == 1)
+            check(warnings.any { it.contains("Both `codegen.requestBodyMaxBytes`") && it.contains("using the nested value") })
+
+            warnings.clear()
+            check(settings(nested).requestBodyMaxBytes() == 0L)
+            check(warnings.isEmpty())
+            settings("{}")
+            check(warnings.isEmpty())
+        } finally {
+            logger.removeHandler(handler)
+            handler.close()
+        }
+    }
 
     @Test
     fun `protocol map matches decoupled keys and folds legacy body configuration`() {

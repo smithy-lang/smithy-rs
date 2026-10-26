@@ -93,6 +93,9 @@ internal object ProtocolReadSettings {
         codegenConfig: ObjectNode?,
     ): ObjectNode? {
         val legacyValue = codegenConfig?.getMember("requestBodyMaxBytes")?.orElse(null) ?: return customizationConfig
+        Logger.getLogger("ServerRustSettings").warning(
+            "`codegen.requestBodyMaxBytes` is deprecated; use `$BODY_PATH.maxBytes` instead.",
+        )
         val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), "customizationConfig.protocols") ?: ObjectNode.objectNode()
         val common = expectObject(protocols.getMember("common").orElse(null), COMMON_PATH) ?: ObjectNode.objectNode()
         val request = expectObject(common.getMember("request").orElse(null), REQUEST_PATH) ?: ObjectNode.objectNode()

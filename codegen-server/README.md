@@ -67,6 +67,11 @@ generation. Generated Rust uses `Option<NonZeroUsize>`, so the count must also
 fit the Rust target's `usize`. Size strings are parsed by Kotlin during
 generation; the runtime receives byte counts.
 
+`codegen.requestBodyMaxBytes` is deprecated and emits a generation warning
+pointing to `customizationConfig.protocols.common.request.body.maxBytes`.
+The old key remains supported when the nested setting is absent. If both are
+present, the nested value takes precedence.
+
 ## Request-header deadline
 
 With `codegen.http-1x: true`, the generated
