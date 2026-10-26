@@ -71,6 +71,7 @@
 )]
 
 pub mod diagnostic;
+pub mod endpoint_rules;
 pub mod knowledge;
 pub mod node;
 pub mod prelude;
