@@ -568,6 +568,11 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
             .iter()
             .any(|m| m.event_header().is_none() && m.event_payload().is_none())
         {
+            // Header-bearing events without an explicit payload can carry no document.
+            // Keep the decoded headers and leave ordinary members unset, as generated serde does.
+            if self.message.payload().is_empty() {
+                return Ok(());
+            }
             // Generated unmarshallers parse the whole implicit payload structure after
             // applying event headers. Body copies therefore overwrite header values and
             // undergo the same type validation as ordinary document members.
@@ -1997,7 +2002,38 @@ mod tests {
 
     #[test]
     fn absent_implicit_members_do_not_form_a_payload_document() {
-        let protocol = json_protocol();
+        for protocol in [
+            json_protocol(),
+            cbor_protocol(),
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+        ] {
+            for name in [None, Some("ann".to_owned())] {
+                for extra in [None, Some("omitted".to_owned())] {
+                    let message = marshall(
+                        &protocol,
+                        TestEvents::AllHeaders(AllHeaders {
+                            name: name.clone(),
+                            extra,
+                            ..Default::default()
+                        }),
+                    );
+                    assert!(message.payload().is_empty());
+                    assert_eq!(string_header(&message, ":content-type"), None);
+                    match unmarshall(&protocol, &message).unwrap() {
+                        UnmarshalledMessage::Event(TestEvents::AllHeaders(parsed)) => {
+                            assert_eq!(parsed.name, name);
+                            assert_eq!(parsed.extra, None);
+                        }
+                        other => panic!("unexpected result: {other:?}"),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn implicit_xml_payloads_still_validate_headers_and_nonempty_documents() {
+        let protocol = SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default());
         let message = marshall(
             &protocol,
             TestEvents::AllHeaders(AllHeaders {
@@ -2005,15 +2041,23 @@ mod tests {
                 ..Default::default()
             }),
         );
-        assert!(message.payload().is_empty());
-        assert_eq!(string_header(&message, ":content-type"), None);
-        match unmarshall(&protocol, &message).unwrap() {
-            UnmarshalledMessage::Event(TestEvents::AllHeaders(parsed)) => {
-                assert_eq!(parsed.name.as_deref(), Some("ann"));
-                assert_eq!(parsed.extra, None);
-            }
-            other => panic!("unexpected result: {other:?}"),
+        for payload in [b" ".as_slice(), b"<", b"not XML"] {
+            let malformed = Message::new_from_parts(message.headers().to_vec(), Bytes::copy_from_slice(payload));
+            assert!(unmarshall(&protocol, &malformed).is_err());
         }
+        let headers = message
+            .headers()
+            .iter()
+            .map(|header| {
+                if header.name().as_str() == "name" {
+                    Header::new("name", HeaderValue::Int32(42))
+                } else {
+                    header.clone()
+                }
+            })
+            .collect();
+        let invalid_header = Message::new_from_parts(headers, Bytes::new());
+        assert!(unmarshall(&protocol, &invalid_header).is_err());
     }
 
     #[test]
