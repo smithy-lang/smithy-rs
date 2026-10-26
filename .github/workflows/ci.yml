@@ -511,6 +511,7 @@ jobs:
       # We always exclude `aws-smithy-http-server-python`, `aws-smithy-http-server-typescript`, and `aws-smithy-experimental` since they are experimental.
       # We exclude `aws-smithy-http-client` due to FIPS related feature flags and aws-lc-fips target support
       # We exclude `aws-smithy-wasm` because it is only meant to build for WASM targets
+      # We exclude `aws-smithy-lang` from tests (it is still built) because its endpoint compiler parity tests are too slow under emulation
       matrix:
         include:
         - target: i686-unknown-linux-gnu
@@ -520,7 +521,7 @@ jobs:
           test_smithy_rs_features: --all-features
           test_aws_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm --exclude aws-smithy-lang
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
@@ -528,7 +529,7 @@ jobs:
           test_smithy_rs_features: ''
           test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro  --exclude aws-smithy-wasm
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro  --exclude aws-smithy-wasm --exclude aws-smithy-lang
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
@@ -536,7 +537,7 @@ jobs:
           test_smithy_rs_features: ''
           test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm --exclude aws-smithy-lang
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
