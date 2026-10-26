@@ -21,15 +21,15 @@ The three tests verify:
 - Bodies of 1024 bytes succeed and bodies of 1025 bytes return HTTP 400,
   with both Content-Length and chunked framing.
 
-Run from this directory:
+Run from the repository root:
 
 ```sh
-make test
+./gradlew :codegen-server-test:assemble --quiet
+cargo test --quiet --manifest-path codegen-server-test/integration-tests/Cargo.toml -p request-limits
 ```
 
-This generates the SDKs required by the integration-test workspace and runs
-`cargo test --quiet -p request-limits`. After generation, that Cargo command
-can also be run directly from `integration-tests/`.
+The Gradle command generates the SDKs required by the integration-test workspace.
+After generation, only the Cargo command is needed to rerun these tests.
 
 The normal server integration-test task includes this package. Regenerate the
 SDK after changing the Smithy model or JSON settings. Event-stream deadlines
