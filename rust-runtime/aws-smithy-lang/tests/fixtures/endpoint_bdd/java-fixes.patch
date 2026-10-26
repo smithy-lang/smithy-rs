@@ -1,0 +1,299 @@
+--- a/software/amazon/smithy/rulesengine/logic/cfg/CoalesceTransform.java
++++ b/software/amazon/smithy/rulesengine/logic/cfg/CoalesceTransform.java
+@@ -13,17 +13,28 @@
+ import java.util.Set;
+ import java.util.logging.Level;
+ import java.util.logging.Logger;
++import software.amazon.smithy.rulesengine.language.Endpoint;
+ import software.amazon.smithy.rulesengine.language.EndpointRuleSet;
++import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType;
+ import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType;
+ import software.amazon.smithy.rulesengine.language.evaluation.type.RecordType;
+ import software.amazon.smithy.rulesengine.language.evaluation.type.Type;
+ import software.amazon.smithy.rulesengine.language.syntax.Identifier;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.BooleanEquals;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.LibraryFunction;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.StringEquals;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Substring;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.RecordLiteral;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.StringLiteral;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.TupleLiteral;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.Condition;
++import software.amazon.smithy.rulesengine.language.syntax.rule.EndpointRule;
++import software.amazon.smithy.rulesengine.language.syntax.rule.ErrorRule;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.Rule;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.TreeRule;
+
+@@ -72,6 +83,9 @@
+                 localVarUsage.merge(ref, 1, Integer::sum);
+             }
+         }
++        // FIX: a binding used by the rule's result or a nested rule is not used only by the next
++        // condition, so inlining it would leave those references unbound.
++        countResultReferences(rule, localVarUsage);
+
+         Set<Condition> eliminatedConditions = new HashSet<>();
+         List<Condition> transformedConditions = transformConditions(
+@@ -127,6 +141,38 @@
+         return result;
+     }
+
++    // FIX: counts references from a rule's result, and from every condition and result of its
++    // nested rules.
++    private static void countResultReferences(Rule rule, Map<String, Integer> usage) {
++        if (rule instanceof TreeRule) {
++            for (Rule nested : ((TreeRule) rule).getRules()) {
++                for (Condition condition : nested.getConditions()) {
++                    count(condition.getFunction(), usage);
++                }
++                countResultReferences(nested, usage);
++            }
++        } else if (rule instanceof EndpointRule) {
++            Endpoint endpoint = ((EndpointRule) rule).getEndpoint();
++            count(endpoint.getUrl(), usage);
++            for (List<Expression> values : endpoint.getHeaders().values()) {
++                for (Expression value : values) {
++                    count(value, usage);
++                }
++            }
++            for (Literal value : endpoint.getProperties().values()) {
++                count(value, usage);
++            }
++        } else if (rule instanceof ErrorRule) {
++            count(((ErrorRule) rule).getError(), usage);
++        }
++    }
++
++    private static void count(Expression expression, Map<String, Integer> usage) {
++        for (String ref : expression.getReferences()) {
++            usage.merge(ref, 1, Integer::sum);
++        }
++    }
++
+     private boolean canCoalesce(String var, Condition bind, Condition use, Map<String, Integer> localVarUsage) {
+         if (!use.getFunction().getReferences().contains(var)) {
+             return false;
+@@ -155,9 +201,58 @@
+             return false;
+         }
+
++        // FIX: coalescing into a template writes the coalesce expression into the template text.
++        if (inTemplate(use.getFunction(), var)) {
++            return false;
++        }
++
++        // FIX: a binding fails when its value is empty or false. Coalescing replaces that value
++        // with the zero value, so it is only sound if the use then fails too.
++        if ((type instanceof OptionalType || innerType instanceof BooleanType)
++                && !failsForZero(use.getFunction(), var, innerType.getZeroValue().get())) {
++            return false;
++        }
++
+         return true;
+     }
+
++    // FIX: whether `use` is false or empty when `var` is `zero` ("" or false), whatever other
++    // references hold.
++    private static boolean failsForZero(LibraryFunction use, String var, Literal zero) {
++        List<Expression> args = use.getArguments();
++        if (use instanceof StringEquals || use instanceof BooleanEquals) {
++            for (int i = 0; i < 2; i++) {
++                Expression other = args.get(1 - i);
++                if (isRef(args.get(i), var) && other instanceof Literal
++                        && (!(other instanceof StringLiteral) || ((StringLiteral) other).value().isStatic())
++                        && !other.toString().equals(zero.toString())) {
++                    return true;
++                }
++            }
++            return false;
++        }
++        // A substring of "" is always empty: the stop index must be positive and at most 0.
++        return use instanceof Substring && isRef(args.get(0), var);
++    }
++
++    // FIX: whether a template within `expression` references `var`.
++    private static boolean inTemplate(Expression expression, String var) {
++        if (expression instanceof StringLiteral) {
++            return expression.getReferences().contains(var);
++        } else if (expression instanceof TupleLiteral) {
++            return ((TupleLiteral) expression).members().stream().anyMatch(m -> inTemplate(m, var));
++        } else if (expression instanceof RecordLiteral) {
++            return ((RecordLiteral) expression).members().values().stream().anyMatch(m -> inTemplate(m, var));
++        } else if (expression instanceof LibraryFunction) {
++            return ((LibraryFunction) expression).getArguments().stream().anyMatch(a -> inTemplate(a, var));
++        }
++        return false;
++    }
++
++    private static boolean isRef(Expression expression, String var) {
++        return expression instanceof Reference && ((Reference) expression).getName().toString().equals(var);
++    }
++
+     private Condition createCoalescedCondition(Condition bind, Condition use, String var) {
+         LibraryFunction bindExpr = bind.getFunction();
+         LibraryFunction useExpr = use.getFunction();
+--- a/software/amazon/smithy/rulesengine/logic/cfg/VariableConsolidationTransform.java
++++ b/software/amazon/smithy/rulesengine/logic/cfg/VariableConsolidationTransform.java
+@@ -4,14 +4,19 @@
+  */
+ package software.amazon.smithy.rulesengine.logic.cfg;
+
++import java.util.AbstractMap;
++import java.util.ArrayList;
+ import java.util.Collections;
+ import java.util.HashMap;
+ import java.util.HashSet;
+ import java.util.IdentityHashMap;
++import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.logging.Logger;
++import software.amazon.smithy.model.SourceException;
+ import software.amazon.smithy.rulesengine.language.EndpointRuleSet;
++import software.amazon.smithy.rulesengine.language.error.RuleError;
+ import software.amazon.smithy.rulesengine.language.syntax.Identifier;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression;
+ import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference;
+@@ -43,6 +48,7 @@
+  * @see DeadStoreEliminationTransform
+  */
+ final class VariableConsolidationTransform extends TreeMapper {
++
+     private static final Logger LOGGER = Logger.getLogger(VariableConsolidationTransform.class.getName());
+
+     // Global map of canonical expressions to their first variable name seen
+@@ -50,6 +56,8 @@
+
+     // Maps old variable names to new canonical names for rewriting references
+     private final Map<String, String> variableRenameMap = new HashMap<>();
++    // FIX: each eliminated binding's name and the parent binding it was renamed to.
++    private final List<Map.Entry<String, String>> eliminatedRenames = new ArrayList<>();
+
+     // Tracks conditions to eliminate (using identity for exact instance matching)
+     private final Set<Condition> conditionsToEliminate = Collections.newSetFromMap(new IdentityHashMap<>());
+@@ -80,7 +88,21 @@
+                 t.skippedDueToShadowing));
+
+         // Pass 3: Transform using TreeMapper
+-        return t.endpointRuleSet(ruleSet);
++        // FIX: renaming can assign a name already in scope, which fails type checking. Rather
++        // than fail, keep the input: consolidation is an optimization.
++        // FIX: variableRenameMap is keyed by name across the whole rule set, so a later rename
++        // can replace the one an eliminated binding's references need. They would then refer to
++        // another binding, or to none.
++        for (Map.Entry<String, String> renamed : t.eliminatedRenames) {
++            if (!renamed.getValue().equals(t.variableRenameMap.get(renamed.getKey()))) {
++                return ruleSet;
++            }
++        }
++        try {
++            return t.endpointRuleSet(ruleSet);
++        } catch (RuleError | SourceException e) {
++            return ruleSet;
++        }
+     }
+
+     private void collectDefinitions(Rule rule) {
+@@ -117,6 +139,7 @@
+             String parentVar = parentBindings.get(canonical);
+             if (parentVar != null) {
+                 variableRenameMap.put(varName, parentVar);
++                eliminatedRenames.add(new AbstractMap.SimpleEntry<>(varName, parentVar));
+                 conditionsToEliminate.add(condition);
+                 eliminatedCount++;
+                 LOGGER.fine(() -> String.format("Eliminating redundant binding: '%s' -> '%s' for: %s",
+--- a/software/amazon/smithy/rulesengine/traits/EndpointBddTrait.java
++++ b/software/amazon/smithy/rulesengine/traits/EndpointBddTrait.java
+@@ -12,6 +12,7 @@
+ import java.nio.ByteOrder;
+ import java.util.ArrayList;
+ import java.util.Base64;
++import java.util.HashSet;
+ import java.util.List;
+ import java.util.Set;
+ import java.util.function.Function;
+@@ -22,11 +23,18 @@
+ import software.amazon.smithy.model.traits.AbstractTrait;
+ import software.amazon.smithy.model.traits.AbstractTraitBuilder;
+ import software.amazon.smithy.model.traits.Trait;
++import software.amazon.smithy.rulesengine.language.Endpoint;
+ import software.amazon.smithy.rulesengine.language.RulesVersion;
+ import software.amazon.smithy.rulesengine.language.evaluation.Scope;
+ import software.amazon.smithy.rulesengine.language.evaluation.type.Type;
+ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet;
++import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.Condition;
++import software.amazon.smithy.rulesengine.language.syntax.rule.EndpointRule;
++import software.amazon.smithy.rulesengine.language.syntax.rule.ErrorRule;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.NoMatchRule;
+ import software.amazon.smithy.rulesengine.language.syntax.rule.Rule;
+ import software.amazon.smithy.rulesengine.logic.bdd.Bdd;
+@@ -108,6 +116,33 @@
+      *
+      * @return a new trait with unreferenced conditions removed, or this trait if none were removed
+      */
++    // FIX: whether a condition is isSet(ref) for a reference in `needed`.
++    private static boolean provesSet(Condition condition, Set<String> needed) {
++        if (!(condition.getFunction() instanceof IsSet)) {
++            return false;
++        }
++        Expression argument = condition.getFunction().getArguments().get(0);
++        return argument instanceof Reference && needed.contains(((Reference) argument).getName().toString());
++    }
++
++    // FIX: the references of an endpoint or error result.
++    private static void addResultReferences(Rule result, Set<String> needed) {
++        if (result instanceof EndpointRule) {
++            Endpoint endpoint = ((EndpointRule) result).getEndpoint();
++            needed.addAll(endpoint.getUrl().getReferences());
++            for (List<Expression> values : endpoint.getHeaders().values()) {
++                for (Expression value : values) {
++                    needed.addAll(value.getReferences());
++                }
++            }
++            for (Literal value : endpoint.getProperties().values()) {
++                needed.addAll(value.getReferences());
++            }
++        } else if (result instanceof ErrorRule) {
++            needed.addAll(((ErrorRule) result).getError().getReferences());
++        }
++    }
++
+     public EndpointBddTrait removeUnreferencedConditions() {
+         // Find which conditions are actually referenced
+         int[] refCount = new int[conditions.size()];
+@@ -118,6 +153,26 @@
+             }
+         }
+
++        // FIX: keep an unreferenced condition that a result or a later kept condition still relies
++        // on to type-check: one whose assignment it uses, or an isSet that proves a reference it
++        // uses is set. Such a result is unreachable, but the trait must still type-check.
++        // Conditions only rely on earlier conditions, so one backward pass finds them all.
++        Set<String> needed = new HashSet<>();
++        for (Rule result : results) {
++            addResultReferences(result, needed);
++        }
++        for (int i = conditions.size() - 1; i >= 0; i--) {
++            Condition condition = conditions.get(i);
++            if (refCount[i] == 0 && (condition.getResult().isPresent()
++                    && needed.contains(condition.getResult().get().toString())
++                    || provesSet(condition, needed))) {
++                refCount[i]++;
++            }
++            if (refCount[i] > 0) {
++                needed.addAll(condition.getFunction().getReferences());
++            }
++        }
++
+         // Build mapping from old to new indices
+         int[] oldToNew = new int[conditions.size()];
+         List<Condition> newConditions = new ArrayList<>();

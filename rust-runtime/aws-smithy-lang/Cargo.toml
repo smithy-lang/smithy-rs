@@ -1,6 +1,9 @@
 [package]
 name = "aws-smithy-lang"
 version = "0.1.0"
+# Still working out exactly where this crate will live, what its name will be, etc.
+# avoiding publishing for now
+publish = false
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Load, build, inspect, validate, traverse, and serialize Smithy 2.0 models."
 edition = "2021"
@@ -8,14 +11,27 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
+[features]
+# Builds runtime `aws-smithy-schema` schemas from a `Model`. See `runtime_schema` module docs.
+# Optional so that model tooling (loading, validating, inspecting) does not depend on the
+# Smithy runtime: enabling it adds `aws-smithy-schema` and, through it,
+# `aws-smithy-runtime-api`, `aws-smithy-types`, `http`, and `tokio`.
+# Also in the future the aws-smithy-lang crate might live in another repo and this
+# functionality might end up in a bridge crate.
+runtime-schema = ["dep:aws-smithy-schema"]
+
 [dependencies]
+aws-smithy-schema = { path = "../aws-smithy-schema", optional = true }
+base64-simd = "0.8.0"
 indexmap = "2.14.2"
+rustc-hash = "2.1.3"
 serde = "1.0.229"
 serde_json = { version = "1.0.146", features = ["float_roundtrip"] }
 
 [dev-dependencies]
 # Only used to check that errors compose with `SdkError::construction_failure` and
-# `DisplayErrorContext`; the library itself has no Smithy runtime dependency.
+# `DisplayErrorContext`; without `runtime-schema`, the library has no Smithy runtime
+# dependency.
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 criterion = "0.8.2"

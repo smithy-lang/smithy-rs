@@ -197,3 +197,35 @@ counting characters for columns, because each lookup rescanned its line from the
 which is quadratic for long lines such as S3's documentation. Columns on ASCII lines are now
 byte differences, and other lines resume from the previous lookup; `parse/idl/s3` went from
 177 ms to 55 ms in the same benchmark.
+
+## Runtime schemas
+
+Requires `--features runtime-schema`:
+
+```bash
+taskset -c 2 cargo bench --features runtime-schema --bench model -- '^schema/' --warm-up-time 1 --measurement-time 3 --noplot
+```
+
+- `schema/all`: `RuntimeSchemaSet::try_from(&model)`, every data shape and
+  operation.
+- `schema/service`: `RuntimeSchemaSet::builder(&model).for_service(..)`, with the
+  model's knowledge index already built.
+- `schema/service_cold_knowledge`: the same on a freshly parsed model, so it
+  includes building the knowledge index that service selection uses.
+- `schema/operation_lookup`: `RuntimeSchemaSet::operation` plus reading the input
+  schema.
+
+Same machine and fixture commit as above, crate commit `052d4dddc` plus the
+uncommitted `runtime_schema` module:
+
+| Model | `schema/all` | `schema/service` | `schema/service_cold_knowledge` | `schema/operation_lookup` |
+| ----- | -----------: | ---------------: | ------------------------------: | ------------------------: |
+| SQS   |      0.13 ms |          0.15 ms |                         0.41 ms |                     42 ns |
+| S3    |      1.27 ms |          1.38 ms |                         2.51 ms |                     40 ns |
+| EC2   |      8.73 ms |          9.21 ms |                        19.23 ms |                     44 ns |
+
+Building schemas costs about 5–8% of parsing the same model. Service selection
+first computed effective errors with `OperationKnowledge::errors_in`, which
+walks the service's containment graph once per operation; EC2's 769 operations
+made `schema/service` 27.3 ms. Deriving the same errors from the service's
+common errors and each operation's own errors brought it to 9.2 ms.

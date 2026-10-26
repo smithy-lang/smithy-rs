@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Parse, write, traversal, and knowledge-index benchmarks for SQS, S3, and EC2.
+//! Parse, write, traversal, knowledge-index, and runtime schema benchmarks for SQS, S3, and
+//! EC2.
 //! See `benches/README.md` for methodology and the recorded baseline.
 
 use aws_smithy_lang::traversal::Walker;
@@ -217,5 +218,79 @@ fn ids_and_traits(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench, ids_and_traits);
+/// Runtime schema construction and lookup. Requires `--features runtime-schema`.
+#[cfg(feature = "runtime-schema")]
+fn runtime_schemas(c: &mut Criterion) {
+    use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+
+    let models: Vec<_> = MODELS
+        .iter()
+        .map(|name| (*name, Model::from_json_slice(name, &read(name)).unwrap()))
+        .collect();
+
+    let mut group = c.benchmark_group("schema/all");
+    for (name, model) in &models {
+        group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
+            b.iter(|| RuntimeSchemaSet::try_from(black_box(model)).unwrap())
+        });
+    }
+    group.finish();
+
+    // Service selection uses the knowledge index; measure it warm and, separately, cold.
+    let mut group = c.benchmark_group("schema/service");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap().id().clone();
+        model.knowledge().relationships();
+        group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
+            b.iter(|| {
+                RuntimeSchemaSet::builder(black_box(model))
+                    .for_service(&service)
+                    .build()
+                    .unwrap()
+            })
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("schema/service_cold_knowledge");
+    for name in MODELS {
+        let bytes = read(name);
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter_batched(
+                || Model::from_json_slice(name, &bytes).unwrap(),
+                |model| {
+                    let service = model.services().next().unwrap().id().clone();
+                    let set = RuntimeSchemaSet::builder(&model)
+                        .for_service(&service)
+                        .build()
+                        .unwrap();
+                    (set, model)
+                },
+                BatchSize::LargeInput,
+            )
+        });
+    }
+    group.finish();
+
+    let mut group = c.benchmark_group("schema/operation_lookup");
+    for (name, model) in &models {
+        let set = RuntimeSchemaSet::try_from(model).unwrap();
+        let operation = model.operations().next().unwrap().id().clone();
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter(|| {
+                set.operation(black_box(&operation))
+                    .unwrap()
+                    .input()
+                    .members()
+                    .len()
+            })
+        });
+    }
+    group.finish();
+}
+
+#[cfg(not(feature = "runtime-schema"))]
+fn runtime_schemas(_: &mut Criterion) {}
+
+criterion_group!(benches, bench, ids_and_traits, runtime_schemas);
 criterion_main!(benches);

@@ -95,10 +95,15 @@
 )]
 
 pub mod diagnostic;
+pub mod endpoint_rules;
 pub mod knowledge;
 pub mod node;
 pub mod prelude;
 pub mod relationships;
+// This might live elsewhere in the future (some kind of bridge crate?), here now for convenience
+#[cfg(feature = "runtime-schema")]
+#[cfg_attr(docsrs, doc(cfg(feature = "runtime-schema")))]
+pub mod runtime_schema;
 pub mod shape;
 pub mod traits;
 pub mod traversal;
