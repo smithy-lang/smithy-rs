@@ -30,7 +30,6 @@ pub mod request;
 #[doc(hidden)]
 pub mod response;
 pub mod routing;
-#[doc(hidden)]
 pub mod runtime_error;
 pub mod schema;
 pub mod serve;
