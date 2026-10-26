@@ -1,441 +1,581 @@
 # Upgrading a Server to Schema-Driven Serde
 
-This guide lists the source changes a service needs when it turns on `codegen.schemaSerde: true`.
-Each entry describes what breaks or changes, how you notice it, and what to change.
+This guide covers enabling schema serde, adding protocols, and upgrading extractors
+and middleware. In the examples, `sdk` means your generated server SDK crate.
+Names such as `CallerInfo`, `authenticate`, and `map_stream_error` stand for your
+application's types and helpers.
 
-Generated serde retains its existing response conversions. Runtime upgrades and adding
-protocols can still require dependency and protocol-bound changes independently of serde mode.
+`schemaSerde: false` uses **generated serde**, which emits protocol serializers
+and deserializers. `schemaSerde: true` uses **schema serde**, where the runtime
+serializes typed values through their schemas and member walkers. Schema serde
+supports single-protocol and multi-protocol services.
 
-This guide calls `schemaSerde: false` **generated serde** and `schemaSerde: true`
-**schema serde**. Generated serde emits protocol serializers and deserializers;
-schema serde uses runtime schema walkers. Serde mode is separate from HTTP version
-selection: `aws-smithy-legacy-http-server` is the HTTP 0.x runtime, while
-`aws-smithy-http-server` supports both serde modes over HTTP 1.x.
+This guide describes the updated HTTP 1.x runtime and generator, including
+`response::ModeledRejection`. Generated serde retains its existing response
+conversions. Runtime upgrades and adding protocols can require dependency and
+protocol-bound changes independently of serde mode.
 
-## RPC v2 CBOR streaming blob inputs
+## 1. Upgrade the runtime and regenerate your server SDK
 
-Schema serde preserves `@streaming` on blob shapes, so RPC v2 CBOR handlers receive
-`ByteStream` fields where generated serde CBOR codegen generated `Blob` fields. To access all
-bytes in a handler, use `input.data.collect().await?.into_bytes()` instead of
-`input.data.as_ref()`.
+Schema serde uses HTTP 1.x. Align your application and middleware with
+`aws-smithy-http-server`, HTTP 1.x, and Tower 0.5. The HTTP 0.x runtime,
+`aws-smithy-legacy-http-server`, retains its generated-serde API.
 
-For CBOR requests, the server collects the complete document under the configured
-body limit and timeout, decodes the blob and other fields with the existing codec,
-and validates the input before invoking the handler. The handler's `ByteStream`
-contains the decoded blob bytes, including when fields follow the blob in the
-document. It does not contain CBOR framing. Nullable blob members that are absent
-are represented by an empty `ByteStream` in the shared non-optional Rust field.
+Put these settings inside your existing server codegen plugin configuration:
 
-REST streaming blob uploads still pass the live body to the same handler after
-decoding and validating HTTP-bound metadata. Incremental CBOR input decoding is
-deferred until the handler contract for trailing fields and validation is settled.
+```json
+{
+  "codegen": {
+    "http-1x": true,
+    "schemaSerde": true
+  }
+}
+```
 
-## The service's protocol type
+Use `"codegen"` as the configuration key. Regenerate the SDK with the updated
+generator, then rebuild its consumers. Schema serde enables HTTP 1.x when the
+HTTP setting is omitted; explicitly setting `"http-1x": false` is invalid.
 
-**What changes.** `ServiceShape::Protocol` names the protocols the service serves. For a service
-with one protocol it is that protocol, as before (`RestJson1`, `RpcV2Cbor`, ...). For a service with
-several protocols it is a tuple of them, for example `(RestJson1, RpcV2Cbor)`.
-
-**How you notice.** Code that is generic over the service's protocol keeps compiling. Code written
-for one protocol (a plugin, an extractor, an `IntoResponse` impl) stops compiling when it is used
-with a multi-protocol service, instead of silently not applying.
-
-## FromParts for multiprotocol
-
-Request-part extractors resolve against the service's protocol type. An extractor implemented
-only for `RestJson1` works on a restJson1 service, but does not satisfy the handler's bounds when
-the service serves several protocols, such as `(RestJson1, RpcV2Cbor)`. The builder call that
-registers a handler taking the extractor then fails to compile with an unsatisfied `FromParts`
-bound.
-
-For example, a single-protocol caller-info extractor may use the restJson1 runtime error:
+Code that constructs a protocol marker as a unit struct changes to:
 
 ```rust
-use http::request::Parts;
+let protocol = RestJson1::default();
+```
+
+For request-specific serialization, use the routed protocol instance. It carries
+both the request's selected protocol and that instance's configuration.
+`P::default()` cannot replace this selection: a protocol tuple is not a
+`ServerProtocol`, and a concrete default can lose configured behavior.
+
+## 2. Declare the protocols your service supports
+
+For example, add both protocol traits to your existing service:
+
+```smithy
+use aws.protocols#restJson1
+use smithy.protocols#rpcv2Cbor
+
+@restJson1
+@rpcv2Cbor
+service MyService {
+    version: "2026-01-01"
+    operations: [GetThing]
+}
+```
+
+Register each operation handler once:
+
+```rust
+let config = sdk::MyServiceConfig::builder().build();
+
+let service = sdk::MyService::builder(config)
+    .get_thing(get_thing)
+    .build()?;
+```
+
+Routing selects the protocol for each request. Your handler receives the same
+modeled Rust input and returns the same modeled Rust output regardless of which
+protocol served the request.
+
+Most handler signatures can remain unchanged. The CBOR streaming exception is
+covered in [step 9](#9-review-streaming-handlers-and-compatibility-settings).
+
+## 3. Treat the service's protocol type as its supported protocol set
+
+The generated associated type changes with the service:
+
+| Service | `ServiceShape::Protocol` |
+| --- | --- |
+| REST JSON only | `RestJson1` |
+| REST JSON and CBOR | `(RestJson1, RpcV2Cbor)` |
+
+Review code that explicitly requires `RestJson1`, including extractors, plugins,
+and response implementations. A concrete-protocol implementation can still
+compile on its own while failing the bounds when attached to a multi-protocol
+service.
+
+Two separate implementations of `FromParts<RestJson1>` and
+`FromParts<RpcV2Cbor>` do not satisfy `FromParts<(RestJson1, RpcV2Cbor)>`.
+A generic implementation usually handles both service configurations.
+
+## 4. Make request-part extractors generic and choose their rejection
+
+Your old extractor might look like:
+
+```rust
 use sdk::server::{
-    protocol::rest_json_1::{runtime_error::RuntimeError, RestJson1},
+    protocol::rest_json_1::RestJson1,
     request::FromParts,
 };
 
 impl FromParts<RestJson1> for CallerInfo {
-    type Rejection = RuntimeError;
+    type Rejection =
+        sdk::server::protocol::rest_json_1::runtime_error::RuntimeError;
 
-    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
-    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        extract_caller_info_from_parts(parts).ok_or_else(|| {
-            tracing::warn!("Rejecting request: caller identity could not be resolved");
-            RuntimeError::Validation("Caller identity could not be resolved".to_string())
-        })
-    }
+    // Existing extraction logic.
 }
 ```
 
-Change both the implementation to `impl<P> FromParts<P>` and the error import to the shared
-`sdk::server::runtime_error::RuntimeError` so the extractor works with any protocol:
+For a protocol-independent extractor returning a framework error, change both
+the trait implementation and the rejection type:
 
 ```rust
 use http::request::Parts;
-use sdk::server::{request::FromParts, runtime_error::RuntimeError};
+use sdk::server::{
+    request::FromParts,
+    runtime_error::RuntimeError,
+};
 
 impl<P> FromParts<P> for CallerInfo {
-    type Rejection = sdk::server::runtime_error::RuntimeError;
+    type Rejection = RuntimeError;
 
-    #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
         extract_caller_info_from_parts(parts).ok_or_else(|| {
-            tracing::warn!("Rejecting request: caller identity could not be resolved");
-            RuntimeError::Validation("Caller identity could not be resolved".to_string())
+            RuntimeError::Validation(
+                "Caller identity could not be resolved".to_owned(),
+            )
         })
     }
 }
 ```
 
-Here, `sdk` is your generated service SDK crate. The examples use your existing `CallerInfo`
-and `extract_caller_info_from_parts` helper; identity extraction and logging stay the same.
-The shared runtime error implements `IntoResponse<P>` for every `P`, including protocol tuples.
-Making the extractor generic while keeping the protocol-specific error is insufficient, because
-that error's response conversion only supports its original protocol.
+Making only `FromParts` generic is insufficient if its rejection still implements
+response conversion for just one concrete protocol. The shared `RuntimeError`
+implements `IntoResponse<P>` for every `P`, including protocol tuples. The schema
+pipeline passes the selected protocol to its contextual conversion method.
 
-Schema upgrades call `IntoResponse<P>::into_response_with_protocol`, passing the protocol
-selected for the request. The shared error uses that protocol to frame the rejection. Existing
-custom rejections keep their `IntoResponse<P>` implementation: the contextual method defaults
-to `into_response()` and preserves the complete custom response. Override the contextual method
-when framing depends on the selected protocol.
-
-## `IntoResponse<RestJson1>` implementations on your own types
-
-**What changes.** `impl IntoResponse<RestJson1> for MyError` (or for `AwsJson1_0`, `RestXml`, and so
-on) still compiles. Its inherited contextual method returns the same complete response.
-Custom implementations can override `into_response_with_protocol` for request-specific framing.
-Handler errors are serialized
-through the generated operation error types, so a custom `IntoResponse` impl is only used where your
-code calls it directly, or as the rejection of a `FromParts` extractor (see above), for example:
+The original associated-type guarantee remains intact:
 
 ```rust
-let response = IntoResponse::<RestJson1>::into_response(err);
+FromParts<P>::Rejection: IntoResponse<P>
 ```
 
-**How you notice.** A concrete-protocol implementation does not satisfy a multi-protocol
-service's tuple bound. A schema extractor rejection with a matching implementation keeps its
-complete custom response through the default contextual method.
+Existing generic callers relying on that bound need no additional constraint.
 
-**What to change.** Search your code for `impl IntoResponse<` on protocol marker types and check
-each one:
+### Your own modeled rejection
 
-* Direct conversions and matching extractor rejection implementations keep working. Make
-  protocol-independent rejections generic over `P` before using them with a protocol tuple.
-* Middleware converting schema-generated operation errors should use the selected protocol
-  through the converter below. Handler errors continue to use the operation's modeled serializer.
+If your extractor returns a modeled error, use the runtime wrapper instead:
 
-## HTTP middleware that returns errors
+```rust
+use http::request::Parts;
+use sdk::server::{
+    request::FromParts,
+    response::ModeledRejection,
+};
 
-**What changes.** Middleware such as an authentication plugin used to require
-`Op::Error: IntoResponse<P>` and `InternalFailureException: IntoResponse<P>` to return early
-when authentication or request-body collection fails. Those bounds continue to compile because
-schema-generated errors implement `IntoResponse<P>`. Calling the context-free method on a schema
-error returns an empty response with its semantic status and modeled-error extension; it cannot
-reproduce protocol framing without the routed protocol. Use `ServiceSerde`/`ErrorConverter`
-dispatch (see [Runtime support for one middleware API](#runtime-support-for-one-middleware-api))
-to convert through the service's selected serialization system. The generated
-service names its converter, and one middleware implementation converts errors for both
-serialization systems without a serde-mode parameter.
+impl<P> FromParts<P> for CallerInfo {
+    type Rejection = ModeledRejection<MyError>;
 
-**How you notice.** Existing conversion bounds keep compiling, including protocol tuple bounds.
-Calling `into_response()` on a schema-generated modeled error returns an empty response rather
-than the protocol's serialized error body. `Ser::SerdeKind: ErrorConverter<...>` selects the
-appropriate conversion for both SDK kinds.
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        // Your function returns Result<CallerInfo, MyError>.
+        authenticate(parts).map_err(Into::into)
+    }
+}
+```
 
-**What to change.** Bound the plugin on `Ser: ServiceSerde` and convert through `Ser::SerdeKind`.
-Schema-specific middleware can alternatively use shared `runtime_error::RuntimeError` for
-framework failures and require `Op::Error: schema::HttpModeledError` to serialize mapped
-authentication errors directly, as the following helpers illustrate.
+`MyError` implements `SerializableStruct` and `HttpModeledError`.
+`SerializableStruct` supplies the schema and walks the value's fields; schema
+metadata alone cannot read a Rust value. `HttpModeledError` supplies the modeled
+HTTP status and optional operation context. Smithy-generated modeled errors
+already implement these contracts. Handwritten errors supply them without
+naming any concrete protocol.
 
-### One implementation for single- and multi-protocol schema services
+`ModeledRejection<E>` supplies `IntoResponse<P>` for every `P`. You write no
+response-conversion implementation. Both ordinary and streaming schema upgrades
+explicitly call `into_response_with_protocol` with the selected protocol.
+The tuple rejection wrappers forward that call to the failing extractor:
 
-The distinction is schema versus generated serde serialization, not single versus multiple protocols.
-With `schemaSerde: true`, routing supplies `SelectedOperation` for single-protocol services too.
-The same middleware implementation can remain generic over `P`, require
-`Op::Error: HttpModeledError`, and use the selected protocol for both kinds of service:
+```text
+Router selects protocol
+    → FromParts::from_parts returns Err(ModeledRejection(error))
+    → Schema upgrade calls into_response_with_protocol(selected_protocol)
+    → Wrapper calls selected_protocol.serialize_error(&error)
+```
 
-| Service configuration | Middleware error serialization |
-| --- | --- |
-| Schema, single protocol (`P = RestJson1`, for example) | Selected protocol's `serialize_runtime_error` and `serialize_error`. |
-| Schema, multiple protocols (`P = (RestJson1, RpcV2Cbor)`, for example) | The same calls, using the protocol selected for each request. |
-| Generated serde, schema serde disabled | Existing `IntoResponse<P>` conversions for its concrete protocol marker. |
+`error.into()` and `ModeledRejection::new(error)` construct the wrapper.
+`into_inner()` returns the wrapped error. Its `Display` delegates to the error,
+preserving diagnostics in runtime logs.
 
-No single-protocol schema fallback or tuple-specific implementation is needed. Even when `P`
-is a concrete marker, the schema middleware obtains framing from the request's selected handle.
+Existing generic callers can still invoke the wrapper's `into_response()`.
+That static fallback returns the modeled status and `ModeledErrorExtension` with
+an empty body and no protocol-specific headers; invalid statuses become `500`.
+Use this adapter for schema serde, where the upgrade supplies the selected
+protocol. A generated-serde upgrade calls its static method and receives that
+fallback.
 
-The following helpers illustrate the two conversions:
+### Required and optional extensions
+
+Keep the existing extraction semantics. A missing required `Extension<T>`
+produces `MissingExtension`, whose generic response is an empty `500`.
+`Option<Extension<T>>` allows the handler to run with `None`. Custom extractors
+can continue delegating required fields with `?`.
+
+Do not replace a validation or modeled authentication error with
+`MissingExtension`; that changes its HTTP semantics. Existing connection-info,
+request-ID, and metrics rejections retain their custom response behavior.
+
+## 5. Keep existing custom responses; override contextual conversion when needed
+
+An existing rejection that deliberately returns a complete HTTP response can
+remain unchanged:
+
+```rust
+use sdk::server::response::{IntoResponse, Response};
+
+impl<P> IntoResponse<P> for MissingCaller {
+    fn into_response(self) -> Response {
+        http::Response::builder()
+            .status(401)
+            .header("x-caller-error", "missing")
+            .body(sdk::server::body::to_boxed("missing caller"))
+            .unwrap()
+    }
+}
+```
+
+The new trait method defaults to:
+
+```rust
+fn into_response_with_protocol(
+    self,
+    _protocol: &dyn ServerProtocol,
+) -> Response
+where
+    Self: Sized,
+{
+    self.into_response()
+}
+```
+
+Schema serde therefore preserves that rejection's status, headers, body, and
+extensions. Tuple rejection wrappers forward the contextual method to the
+failing extractor. An implementation for one concrete protocol still needs to
+be made generic before use with a protocol tuple.
+
+If you maintain a conversion implementation whose response must follow the
+selected protocol's encoding, override the new method. For an error implementing
+`HttpModeledError`, that override can be:
+
+```rust
+fn into_response_with_protocol(
+    self,
+    protocol: &dyn sdk::server::schema::ServerProtocol,
+) -> Response {
+    protocol.serialize_error(&self)
+}
+```
+
+Keep or define its context-free `into_response()` behavior too. For a new modeled
+extractor rejection, prefer `ModeledRejection<MyError>` from step 4; the runtime
+supplies both methods.
+
+There is no blanket `IntoResponse<P>` implementation for every
+`HttpModeledError`: it would conflict with existing types implementing both
+traits. The runtime-owned wrapper supplies the bridge while preserving those
+implementations.
+
+The shared `RuntimeError` also supplies both methods. Its contextual method calls
+`serialize_runtime_error`, preserving each protocol's existing runtime-error
+framing. Its static fallback has an empty body, a `RuntimeErrorExtension`, and
+the semantic status: `400` for validation or serialization, `500` for internal
+failure, `406` for not acceptable, and `415` for unsupported media type.
+Existing protocol-local runtime errors retain their established conversions.
+Do not reinterpret a runtime validation error as a modeled constraint violation.
+
+## 6. Continue returning modeled errors from operation handlers
+
+Keep returning your generated operation error enum:
+
+```rust
+async fn get_thing(
+    input: sdk::input::GetThingInput,
+) -> Result<sdk::output::GetThingOutput, sdk::error::GetThingError> {
+    // Existing business logic.
+}
+```
+
+The selected protocol serializes the modeled error, including its modeled status
+and bindings. Schema handler execution uses `HttpModeledError` directly; it does
+not require the handler to choose a protocol or wrap its operation error in
+`ModeledRejection`.
+
+Authentication middleware should likewise retain the modeled operation error
+returned by `config.map_error(err)`. Converting it into a runtime validation error
+would change its HTTP status, bindings, and response body.
+
+The current generator also emits response implementations for schema-generated
+modeled error structures and operation error enums. Direct context-free calls:
+
+```rust
+IntoResponse::<P>::into_response(schema_generated_error)
+```
+
+return an empty response with the modeled status and error extension. To obtain
+protocol framing, use the service's converter or supply the selected protocol
+to the contextual method. The direct fallback is not the handler's serialization
+path.
+
+## 7. Use the service's converter in middleware supporting both serde modes
+
+The updated AWS auth middleware tested with this runtime retains its application
+entry point:
+
+```rust
+let plugins = HttpPlugins::new()
+    .authenticate(authenticator, config);
+```
+
+That implementation already performs the required dispatch. Check that your
+dependency includes this updated implementation; an older package may still
+call `into_response()` directly.
+
+If you maintain middleware yourself, import the runtime contracts:
 
 ```rust
 use sdk::server::{
-    response::{IntoResponse, Response},
-    runtime_error::RuntimeError,
-    schema::{HttpModeledError, SharedServerProtocol},
+    operation::OperationShape,
+    response::ErrorConverter,
+    runtime_error::InternalFailureException,
+    service::{ServiceSerde, ServiceShape},
 };
-
-fn runtime_failure(protocol: Option<&SharedServerProtocol>, error: RuntimeError) -> Response {
-    match protocol {
-        Some(protocol) => protocol.serialize_runtime_error(error),
-        None => IntoResponse::<()>::into_response(error),
-    }
-}
-
-fn authentication_failure<E: HttpModeledError>(
-    protocol: &SharedServerProtocol,
-    error: E,
-) -> Response {
-    protocol.serialize_error(&error)
-}
 ```
 
-At the start of the plugin's request handling, capture the handle with
-`let protocol = SharedServerProtocol::get_from_request(&request).cloned();` before consuming
-the request or moving it into an async task. For body-collection failure, pass
-`RuntimeError::InternalFailure(sdk::server::error::Error::new(err))` to `runtime_failure`. For
-authentication failure, pass the modeled operation error returned by `config.map_error(err)`
-to `authentication_failure` with the selected handle. `serialize_runtime_error` is equivalent
-to the shared error's `into_response_with_protocol` override and does not require naming `P`.
-Keep authentication errors modeled; converting them to runtime validation errors changes their
-status, bindings, and response body.
+Add these bounds to the plugin implementation:
 
-Schema routing stores the selection in a private request-extension carrier before invoking the
-selected operation's route, including its HTTP plugins. `SelectedOperation` is the public
-read-only view. Per-operation middleware reads it with:
+```rust
+Ser: ServiceShape + ServiceSerde,
+Op: OperationShape,
+
+Ser::SerdeKind:
+    ErrorConverter<Op::Error>
+    + ErrorConverter<InternalFailureException>,
+```
+
+Thread `Ser::SerdeKind` into the middleware service as its `Converter` type.
+`ServiceSerde` is implemented by the regenerated HTTP 1.x service and supplies
+the converter marker. The `Plugin<Ser, Op, S>` trait retains its three parameters;
+applications do not choose a serde mode.
+
+Replace direct error conversion:
+
+```rust
+IntoResponse::<P>::into_response(config.map_error(err))
+```
+
+with:
+
+```rust
+<Converter as ErrorConverter<Op::Error>>::convert(
+    config.map_error(err),
+    &request,
+)
+```
+
+Convert framework failures through the same marker:
+
+```rust
+<Converter as ErrorConverter<InternalFailureException>>::convert(
+    InternalFailureException,
+    &request,
+)
+```
+
+The generated service selects the converter:
+
+| Service mode | `ServiceSerde::SerdeKind` | Conversion in this checkout |
+| --- | --- | --- |
+| Generated serde | `GeneratedSerde<P>` | Calls the error's `into_response()`. |
+| Schema serde | `SchemaSerde<P>` | Reads `SelectedOperation` and calls the error's `into_response_with_protocol(...)`. |
+
+This works for single-protocol and multi-protocol schema services. The current
+converters both require the error's `IntoResponse<P>` implementation; generated
+operation errors, framework failures, and `Infallible` satisfy their bounds.
+For a handwritten modeled error, a `ModeledRejection<E>` value also satisfies
+the current converter contract.
+
+Compilation alone does not establish correct framing. Old middleware bounds can
+compile against schema-generated errors while a direct `into_response()` call
+still produces the empty fallback. Verify actual HTTP responses.
+
+Schema-only middleware can instead require `Op::Error: HttpModeledError` and
+call the selected protocol's `serialize_error(&mapped_error)` directly.
+Framework failures use `serialize_runtime_error`. The service converter is the
+shared API when one middleware implementation supports both serde modes.
+
+`ServiceSerde` exists in the updated HTTP 1.x runtime. Libraries also supporting
+the HTTP 0.x runtime or older generators need to retain their implementation for
+those older APIs.
+
+## 8. Preserve routing context when middleware handles requests
+
+Per-operation HTTP middleware can read the selection:
 
 ```rust
 use sdk::server::schema::SelectedOperation;
 
-let selected = SelectedOperation::get_from_request(&request).unwrap();
-let operation = selected.operation();
-let protocol = selected.protocol();
-```
-
-`FromParts` extractors read the same selection from their request parts:
-
-```rust
-let selected = SelectedOperation::get_from_extensions(&parts.extensions).unwrap();
-```
-
-`SharedServerProtocol::get_from_request` remains the convenience accessor when only the
-protocol is needed. Direct `extensions.get::<SelectedOperation>()` calls do not read the
-private carrier. Inserting or removing a public `SelectedOperation` value does not alter the
-authoritative selection. Middleware cannot replace the selected operation, protocol, or
-body limits; protocol replacement through `with_protocol` is no longer supported.
-
-Middleware wrapping the whole router runs before selection, so the accessors return `None`
-there. Routing rejections do not reach per-operation plugins. Middleware that forwards
-requests must preserve their extensions, including when reconstructing a request.
-Clearing or replacing all extensions discards the private carrier. The schema upgrade and
-missing-handler fallback then return an empty `500` with no headers, without polling the
-request body or invoking the handler. A body-routed protocol may already have collected
-the input before middleware runs. This fallback intentionally differs from generated serde services,
-which do not depend on request selection metadata: registered handlers still process requests,
-and missing handlers return their protocol's internal-failure response. Missing selection in
-a schema per-operation plugin indicates a wiring failure; handle it explicitly rather than
-guessing a protocol from the tuple.
-
-The shared runtime error's context-free fallback returns an empty body, its semantic status,
-and a `RuntimeErrorExtension`, without protocol headers. It can provide a defensive response
-when selection is missing, but it cannot preserve a modeled authentication error's framing.
-
-### Future work: routing context held by upgrade services
-
-To support middleware that discards extensions, a future design could build an upgrade stack
-for each supported protocol-and-operation pair. Each upgrade would hold its immutable protocol,
-operation, and body-limit context in service state. The router would select that stack, while
-request extensions would provide the selection for middleware visibility. Tower services could
-continue accepting `Request<B>`; the context would not need to become part of the request type.
-
-The current router shares one operation route across protocols, and generated code constructs
-the upgrade and applies HTTP plugins when a handler is registered. Binding context to upgrade
-services would require deferring that construction until the selected protocol's context is
-available. Before adopting this design, evaluate middleware state sharing, stack construction
-and allocation costs, and parity for success, error, streaming, and missing-handler responses
-when extensions are discarded. This is follow-up work; the current middleware contract requires
-preserving extensions.
-
-### Runtime support for one middleware API
-
-A middleware library keeps one public entry point, such as
-`plugins.authenticate(client, config)`, for generated serde, single-protocol schema, and
-multi-protocol schema services. Callers never choose a serialization mode; the generated service
-does, through one trait and one associated type:
-
-```rust
-// service.rs — implemented by every generated HTTP 1.x service.
-pub trait ServiceSerde {
-    type SerdeKind; // GeneratedSerde<Protocol> or SchemaSerde<Protocol>
+if let Some(selected) = SelectedOperation::get_from_request(&request) {
+    let protocol = selected.protocol();
+    let operation = selected.operation();
+    // Inspect metadata or serialize with this protocol.
 }
-
-// response.rs — the two converter markers, with exactly two implementations.
-pub struct GeneratedSerde<P>(PhantomData<P>);
-pub struct SchemaSerde<P = ()>(PhantomData<P>);
-
-pub trait ErrorConverter<E> {
-    fn convert<B>(error: E, request: &http::Request<B>) -> Response;
-}
-
-impl<P, E: IntoResponse<P>> ErrorConverter<E> for GeneratedSerde<P> { /* context-free */ }
-impl<P, E: IntoResponse<P>> ErrorConverter<E> for SchemaSerde<P> { /* via SelectedOperation */ }
 ```
 
-Codegen emits `impl<S> ServiceSerde for MyService<S> { type SerdeKind = GeneratedSerde<RestJson1>; }`
-for generated serde, or `type SerdeKind = SchemaSerde<ServiceProtocol>;` for schema serde. Middleware generic over the
-service replaces its old `Op::Error: IntoResponse<Ser::Protocol>` and
-`InternalFailureException: IntoResponse<Ser::Protocol>` bounds with:
+Extractors read the same selection through:
 
 ```rust
-impl<Ser, Op, S> Plugin<Ser, Op, S> for AuthenticatePlugin
-where
-    Ser: ServiceShape + ServiceSerde,
-    Ser::SerdeKind: ErrorConverter<Op::Error> + ErrorConverter<InternalFailureException>,
-    /* ... */
+SelectedOperation::get_from_extensions(&parts.extensions)
 ```
 
-threading `Ser::SerdeKind` into its tower service as a phantom type parameter, and converting with
-`<Converter as ErrorConverter<Op::Error>>::convert(error, &request)`. The `Plugin` trait keeps
-its three parameters; dispatch rides on the service's associated type, and the two
-`ErrorConverter` implementations live on disjoint marker types, so no blanket overlap arises.
-`GeneratedSerde<P>` ignores the request (the protocol is the type); `SchemaSerde` reads the
-`SelectedOperation` from the request extensions and answers an empty `500` if middleware
-discarded them. On a body-collection failure, rebuild the request from its parts before
-converting, so the extensions remain readable.
+`SharedServerProtocol::get_from_request(&request)` remains a convenience accessor
+when only the protocol is needed. Clone the protocol handle before consuming
+the request or moving it into an asynchronous task.
 
-`ServiceSerde` exists only in the updated HTTP 1.x runtime; the HTTP 0.2 runtime and SDKs from
-older code generators keep the context-free `IntoResponse<P>` middleware path. A middleware
-library that must support both needs implementations for these different runtime APIs.
-
-`Infallible` implements `IntoResponse<P>` for every `P`, so error-free operations satisfy either converter.
-
-## Extractor rejections through the selected protocol
-
-The runtime API and regression tests are implemented. The Pokemon example will demonstrate
-the API in a later change.
-
-An extractor can reject a request before the operation handler runs. A service-owned rejection
-may deliberately return a custom HTTP response. A runtime-owned error such as
-`RuntimeError::Validation("Caller identity could not be resolved".to_string())` is instead
-framed by the protocol that routing selected for that request. Both behaviors must work in
-single-protocol and multi-protocol schema services.
-
-### Response conversion contract
-
-Both serialization systems use the existing response trait:
+Preserve request extensions when forwarding or rebuilding requests. For example,
+auth middleware retains the original parts after body collection:
 
 ```rust
-use aws_smithy_http_server::{response::Response, schema::ServerProtocol};
+let (parts, body) = request.into_parts();
+// Collect the body, producing `collected_body`.
+let request = http::Request::from_parts(parts, collected_body);
+```
 
-pub trait IntoResponse<Protocol> {
-    fn into_response(self) -> Response;
+On a collection failure, rebuild a request from the original parts before calling
+the converter, even if its replacement body is `()`. The extensions remain
+available to frame the failure.
 
-    fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response
-    where
-        Self: Sized,
-    {
-        self.into_response()
+Middleware surrounding the entire router runs before selection, so its accessor
+can return `None`. Routing rejections do not reach per-operation plugins.
+Missing selection inside a schema operation's middleware indicates a wiring
+problem: the schema converter logs and returns an empty `500` with a runtime-error
+extension. Guessing a protocol from the tuple loses the actual selection.
+
+The authoritative selection lives in a private extension carrier.
+`SelectedOperation` is a read-only view: direct
+`extensions.get::<SelectedOperation>()` does not access the carrier, and inserting
+a public `SelectedOperation` does not replace the routed context. Use the
+accessors above.
+
+Clearing extensions removes the selection. Schema upgrades and missing-handler
+fallbacks then return an empty `500` before polling the body or invoking the
+handler. A body-routed protocol may already have buffered the request before
+middleware runs.
+
+## 9. Review streaming handlers and compatibility settings
+
+### RPC v2 CBOR streaming blobs
+
+For RPC v2 CBOR streaming blob inputs, schema serde exposes `ByteStream` where
+generated serde previously exposed `Blob`. Replace direct blob access with stream
+collection, mapping collection failures into your operation error:
+
+```rust
+let bytes = input.data
+    .collect()
+    .await
+    .map_err(map_stream_error)?
+    .into_bytes();
+```
+
+CBOR input is still buffered and decoded before the handler runs, under the
+configured body limit and timeout. The `ByteStream` contains decoded blob bytes,
+including when other fields follow the blob; it does not contain CBOR framing.
+An absent nullable CBOR streaming blob becomes an empty stream.
+
+REST streaming uploads continue passing the live body to the handler after HTTP
+metadata validation. Extractor rejections in either schema upgrade path skip the
+handler and do not poll the live body.
+
+### Buffered body limits
+
+Put body limits alongside `"codegen"` in the server plugin configuration:
+
+```json
+{
+  "customizationConfig": {
+    "protocols": {
+      "common": {
+        "request": {
+          "body": {
+            "maxBytes": 1048576
+          }
+        }
+      }
     }
+  }
 }
 ```
 
-`FromParts<P>::Rejection: IntoResponse<P>` retains its existing bound, so external generic
-callers can still convert a rejection without adding another constraint. Generated serde calls
-`into_response`; schema serde calls `into_response_with_protocol` with the validated selection.
-The `any_rejections::Two` through `Eight` wrappers forward both methods to the rejected variant.
+This replaces the deprecated `codegen.requestBodyMaxBytes` setting. If both are
+present, the nested setting takes precedence. An explicit zero disables the byte
+limit; omission retains the runtime configuration's default.
 
-Existing custom rejections inherit the contextual method and preserve their complete HTTP
-response, including status, headers, body, and extensions. Contextual rejections override the new
-method and define an explicit context-free fallback. The shared `RuntimeError` already provides
-such a fallback. Schema-generated modeled error structs and operation error enums receive
-explicit `IntoResponse<P>` implementations. There is no blanket over all `HttpModeledError`
-implementors, because it would overlap downstream static conversions. A handwritten modeled
-error implements the conversion itself when used as an extractor rejection or middleware error.
+### AWS JSON operation targets
 
-A multiprotocol service uses its protocol tuple as `P`; extractors and their rejections intended
-for either service configuration should implement the traits generically over `P`. Direct
-contextual calls on a generic implementation may need an explicit protocol type, for example
-`IntoResponse::<()>::into_response_with_protocol(error, protocol)`.
+Check operation targets during the runtime upgrade. An operation modeled as
+`getFoo` routes as `Service.getFoo`. To retain acceptance of `Service.GetFoo`,
+enable `capitalizeRoutes` in the corresponding AWS JSON protocol settings:
 
-### Shared runtime error
+```json
+{
+  "customizationConfig": {
+    "protocols": {
+      "aws.protocols#awsJson1_1": {
+        "capitalizeRoutes": true
+      }
+    }
+  }
+}
+```
 
-The new protocol-neutral `aws_smithy_http_server::runtime_error::RuntimeError` is also
-available through the generated SDK's existing `server` re-export. Its semantic variants cover
-`Validation(String)`, `Serialization(crate::Error)`, `InternalFailure(crate::Error)`,
-`NotAcceptable`, and `UnsupportedMediaType`. It implements `Display`, `IntoResponse<P>` for
-every `P` (including protocol tuples).
+Use `aws.protocols#awsJson1_0` for AWS JSON 1.0. The setting adds the capitalized
+alias; the modeled operation name remains accepted. Preserve your existing
+protocol compatibility settings when comparing generated and schema serde.
 
-Its contextual conversion method delegates to the
-`ServerProtocol::serialize_runtime_error` method. Built-in protocols render the shared error
-using their corresponding existing protocol-specific runtime-error conversion, including response
-extensions and existing wire quirks. An extractor's `Validation` must retain runtime-validation
-semantics; do not reinterpret it as a modeled constraint violation through
-`DeserializeError::ConstraintViolation`.
+## 10. Register custom protocols and verify actual HTTP behavior
 
-Keep existing protocol-specific `RuntimeError` types, imports, variants, and direct
-`IntoResponse<RestJson1>` (etc.) conversions compatible. They remain explicitly protocol-specific.
-Switching an extractor to the shared error requires an explicit import change.
-See [FromParts for multiprotocol](#fromparts-for-multiprotocol) for the complete before-and-after
-example using the generated SDK's re-export. Extraction remains independent of the protocol;
-the runtime handles rejection framing.
+A custom or internal protocol needs a schema runtime implementation and codegen
+registration. Its existing generated-serde implementation alone does not provide
+schema routing support. The schema implementation supplies routing and
+serialization, including modeled-error and runtime-error framing.
 
-The new shared error's direct `into_response()` has no selected-protocol context. Define its
-fallback: an empty response with the semantic HTTP status (400 for validation or
-serialization, 500 for internal failure, 406 for not acceptable, 415 for unsupported media type),
-no protocol-specific headers, and a `RuntimeErrorExtension` carrying the error name. This fallback
-is for the new shared type only. Schema upgrades must use the context-aware method; callers needing
-protocol framing outside an upgrade must supply a protocol to that method. Existing protocol-local
-error conversions retain their established responses.
+The service model declares the protocol trait, and codegen recognizes that trait.
+Its decorator contributes the runtime `ProtocolRegistry` through
+`ServerCodegenDecorator.protocolRegistries`. The runtime validates protocol
+registrations, ordering, settings, and bindings during service construction.
+See [Adding a protocol registry](../rfcs/rfc0048_server_protocol_claims.md#adding-a-protocol-registry)
+for runtime and decorator examples.
 
-Custom `ServerProtocol` implementations must add the required `serialize_runtime_error` method
-to supply their framing for the shared error. The registered external-protocol regression test
-exercises this method through routing into a generated operation's upgrade.
+This applies to protocols such as Coral. Internal package tests establish source
+compatibility with the extended response trait; serving a particular custom
+protocol through schema routing requires its own end-to-end verification.
+The auth middleware checks established concrete SDK builder compatibility and
+its local tests; they did not execute authentication against an external service.
 
-### Existing custom and built-in rejections
+Before rollout, exercise every supported protocol against the regenerated service:
 
-A service-owned rejection keeps its `IntoResponse<P>` implementation and inherits the
-contextual default when the same complete response applies to every protocol. Override the new
-method for request-specific framing. An implementation for one concrete protocol still needs
-migration before use with a protocol tuple.
+- Successful operations and modeled errors.
+- Authentication failures and extractor rejections, including `ModeledRejection`.
+- Required and optional extensions.
+- Streaming operations and body-collection failures.
+- Status, headers, exact body bytes, and instrumentation extensions.
+- Alternating protocols across requests to detect stale selection.
 
-`MissingExtension` implements `IntoResponse<P>` generically and returns an empty 500. The default
-contextual method preserves that behavior. Delegating a required field to `Extension<T>` can
-propagate this rejection with `?`; `Option<Extension<T>>` swallows a missing-extension rejection
-and returns `None`. A custom generic extractor bundling these fields continues to work unchanged.
-Changing a validation failure to `MissingExtension` would change its HTTP semantics and is not a
-substitute for adopting the shared runtime error. Preserve the existing generic responses of
-missing connection-info, request-ID, and metrics extractors as well.
+Compare existing protocols against a generated-serde baseline with the same
+model, inputs, and configuration. Preserve established wire behavior and
+compatibility settings.
 
-### Compatibility verification and regression tests
-
-Before editing behavior-changing runtime or codegen implementation, generate and run a focused
-generated serde service with schema serde disabled. Use the same model, protocol, configuration, and inputs
-for the schema comparison. Record observed status, headers, exact body bytes, and relevant response
-extensions for extractor success and rejection, including streaming operations. Report the baseline
-and proposed differences before implementation; any difference from generated serde requires explicit user
-direction. Source inspection is not a substitute for that reproduction.
-
-Tests must exercise generated services and actual upgrade paths, not only direct trait calls:
-
-| Case | Required assertions |
+| Case | What to verify |
 | --- | --- |
-| Single-protocol generated serde extractor and custom rejection | Existing `FromParts<RestJson1>` and `IntoResponse<RestJson1>` compile unchanged; schema response matches the recorded generated serde response. |
-| Shared runtime error on each single protocol | Each variant matches the corresponding generated serde protocol-local runtime error's status, headers, body bytes, and response extensions. |
-| One multi-protocol service, generic extractor, shared validation error | Requests selecting restJson1 and rpcv2Cbor receive their respective generated serde runtime-validation framing; the selected protocol controls conversion. |
-| Repeated requests selecting different protocols | Selection does not leak across requests or depend on protocol tuple ordering. |
-| Multiple extractors | Failure at different tuple positions forwards the selected protocol through `any_rejections`; cover every generated wrapper arity from two through eight. |
-| Existing custom response | A type implementing only the old conversion keeps its chosen status, custom headers, exact body, and response extensions on both protocols. |
-| Custom context-aware rejection | Its override receives the selected protocol; its old conversion is not used by the schema upgrade. |
-| Required and optional extensions | Required absence keeps the empty 500; optional absence reaches the handler with `None`. |
-| Successful extraction | Handler receives the extracted value and runs once; every rejection skips the handler. |
-| Streaming operations | Run shared and custom rejection cases through `DynStreamingUpgrade`; extraction failure must not poll the live request body. |
-| Direct conversions | Old protocol-local conversions remain compatible; the new shared error's context-free fallback is pinned separately. |
-| Custom protocol implementation | Its serializer is invoked for the shared error through routing, including a protocol registration supplied by the service. |
+| Existing custom response | Status, headers, body, and extensions stay unchanged through the contextual default. |
+| Shared runtime rejection | Each variant matches its established protocol-local framing. |
+| Modeled extractor rejection | The wrapper reaches the selected serializer through ordinary and streaming upgrades. |
+| Multiple extractors | Tuple rejection wrappers forward contextual conversion from each failing position. |
+| Required and optional extensions | Required absence retains the empty `500`; optional absence reaches the handler with `None`. |
+| Rejected extraction | The handler is skipped; a live body is not polled by the upgrade. |
+| Direct static conversion | New shared-error and modeled-wrapper fallbacks are checked separately from protocol framing. |
+| Custom protocol | Its serializers are invoked through routing and a generated operation's upgrade. |
 
-Keep generated serde observations explicit in comparison tests. Do not rewrite expectations to fit a new
-serializer. In particular, assert the existing protocol behavior even when content types or body
-bytes look surprising; wire-format cleanup is a separate compatibility decision.
-
-A later change will update the multi-protocol Pokemon example to
-show a generic custom extractor using the shared runtime error and a service-owned rejection using
-the preserved default conversion. The example change is deferred.
+The runtime regression tests cover the modeled wrapper's static fallback and
+JSON/CBOR contextual conversion through both schema upgrade paths. The
+[response-conversion compatibility decision](../rfcs/rfc0048_server_protocol_claims.md#response-conversion-and-source-compatibility)
+explains why the existing `FromParts` bound and `IntoResponse` trait are retained.

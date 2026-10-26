@@ -43,8 +43,13 @@ typed output → generated member writer → binding splitter/codec → HTTP res
 
 Request-part extractors use `FromParts<P>`, where `P` is `ServiceShape::Protocol`:
 the concrete protocol for single-protocol services, or a tuple of protocols for
-multiprotocol services. Typed handler signatures remain the same.
-Protocol selection and routing-body replay are defined in
+multiprotocol services. The rejection retains its `IntoResponse<P>` bound; schema
+upgrades call the trait's defaulted `into_response_with_protocol` method with the
+routed protocol. The [response conversion compatibility decision](rfc0048_server_protocol_claims.md#response-conversion-and-source-compatibility)
+explains why we extend the existing trait rather than introduce a separate
+`IntoResponseWithProtocol` contract now.
+
+Typed handler signatures remain the same. Protocol selection and routing-body replay are defined in
 [Server protocol claims and multiprotocol dispatch](rfc0048_server_protocol_claims.md).
 
 Deserialization

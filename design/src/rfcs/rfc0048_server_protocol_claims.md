@@ -15,6 +15,76 @@ has one typed handler shared by all protocols. Runtime protocol implementations
 identify requests, select operations, deserialize inputs, and serialize responses
 and errors. Protocol-specific routing and serde stay in runtime crates.
 
+## Response conversion and source compatibility
+
+Schema serde needs to convert errors using the protocol instance selected for each
+request. A service's protocol marker or tuple describes the protocols it serves;
+it does not identify which protocol served this request or carry that instance's
+configuration.
+
+We considered a separate `IntoResponseWithProtocol` trait for this contextual
+conversion, leaving `IntoResponse<P>` for generated serde. That split would let
+schema-only rejections implement contextual conversion without defining a static
+fallback. However, removing the existing `FromParts<P>::Rejection:
+IntoResponse<P>` bound would break downstream generic code that relies on the
+associated-type guarantee:
+
+```rust
+fn rejection_response<P, T: FromParts<P>>(error: T::Rejection) -> Response {
+    error.into_response()
+}
+```
+
+Requiring the new trait in addition to the existing bound would also require
+existing custom rejections to implement another trait before they could be used
+with schema serde.
+
+We therefore retain `IntoResponse<P>` and the rejection bound, and extend the
+existing trait with a default method:
+
+```rust
+fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response
+where
+    Self: Sized,
+{
+    self.into_response()
+}
+```
+
+Existing implementations that supply only `into_response` remain valid. Their
+contextual default preserves the complete custom response, including status,
+headers, body, and extensions. Errors needing selected-protocol framing override
+the new method. Rejection wrappers forward both methods. Multi-protocol services
+use their protocol tuple as `P`; protocol-independent extractors and rejections
+implement the corresponding traits generically.
+
+Generated serde continues calling `into_response`. Schema upgrades call
+`into_response_with_protocol` with the routed protocol instance. Middleware uses
+`ServiceSerde::SerdeKind` through `ErrorConverter` to choose the same conversion
+on behalf of the service. This preserves the existing middleware converter API.
+
+The tradeoff is that contextual errors must also define a context-free response.
+For schema-generated modeled errors, that fallback is an empty response with the
+modeled status and `ModeledErrorExtension`; the contextual override serializes the
+modeled error through the selected protocol. Old middleware that calls the static
+method directly still compiles, but must use the converter or contextual method
+to obtain schema protocol framing. Handwritten modeled errors can be used as
+extractor rejections through `response::ModeledRejection<E>`. The wrapper
+implements `IntoResponse<P>` for every `P`, including protocol tuples, and
+serializes its `HttpModeledError` through the selected protocol. Extractor authors
+declare `type Rejection = ModeledRejection<MyError>` and return `error.into()`;
+they need no response-conversion implementation. The wrapper's context-free
+fallback returns the modeled status and error extension with an empty body.
+A blanket implementation over `HttpModeledError` itself would overlap downstream
+conversion implementations.
+
+`IntoResponseWithProtocol` remains an option for a future breaking API change.
+Such a change would need an explicit rejection contract, migration instructions
+for generic consumers and custom extractors, and a compatibility adapter for
+existing static conversions. It could then separate contextual conversion from
+the requirement to provide a static fallback. This RFC keeps the existing
+conversion contract for the current migration.
+
 ## Service construction
 
 Generated SDKs emit canonical `ServiceSchema`/`OperationSchema` descriptors and
