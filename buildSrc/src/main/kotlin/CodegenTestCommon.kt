@@ -262,6 +262,8 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        inputs.property("modules", listOfNotNull(properties.get("modules")))
+        inputs.property("codegenTests", allCodegenTests.toString())
         // Declare Smithy model files as inputs so task reruns when they change
         allCodegenTests.flatMap { it.imports }.forEach {
             val resolvedPath = project.projectDir.resolve(it)
@@ -304,6 +306,8 @@ fun Project.registerGenerateCargoWorkspaceTask(
         description = "generate Cargo.toml workspace file"
         val path = project.layout.buildDirectory.file("$workingDirUnderBuildDir/Cargo.toml")
         outputs.file(path)
+        inputs.property("modules", listOfNotNull(properties.get("modules")))
+        inputs.property("codegenTests", allCodegenTests.toString())
         doFirst {
             path.get().asFile.writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
         }

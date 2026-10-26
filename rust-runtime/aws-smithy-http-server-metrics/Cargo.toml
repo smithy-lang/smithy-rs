@@ -12,6 +12,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server", features = [
     "request-id",
 ] }
@@ -29,7 +30,7 @@ metrique-util = { version = "0.1.9", features = ["metrics-pool"] }
 metrique-writer = "0.1.29"
 pin-project-lite = "0.2.14"
 thiserror = "2"
-tower = "0.4.13"
+tower = "0.5"
 tracing = "0.1.44"
 
 # Optional dependencies for aws-smithy-http-server 0.65 support
@@ -53,7 +54,7 @@ tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "net", "
 hyper-util = { version = "0.1.16", features = ["client", "client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
 bytes = "1"
-tower = "0.4.13"
+tower = "0.5"
 
 [features]
 aws-smithy-http-server-065 = [

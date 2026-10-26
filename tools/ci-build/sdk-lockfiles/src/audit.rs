@@ -240,6 +240,15 @@ fn audit_runtime_lockfile_covered_by_sdk_lockfile<'a>(
     suspect_dependencies
 }
 
+fn warn_unused_false_positives(
+    false_positives: &HashSet<SuspectDependency>,
+    suspect_dependencies: &HashSet<SuspectDependency>,
+) {
+    for fp in false_positives.difference(suspect_dependencies) {
+        tracing::warn!("{fp:?} may potentially be removed from `false-positives.txt`");
+    }
+}
+
 fn lockfile_for(
     smithy_rs_root: PathBuf,
     relative_path_to_lockfile: &str,
@@ -300,9 +309,7 @@ pub(super) fn audit(args: AuditArgs) -> Result<()> {
     }
 
     // Warn about false-positive entries that are no longer needed
-    for fp in FALSE_POSITIVES.difference(&all_suspect_dependencies) {
-        tracing::warn!("{fp:?} may potentially be removed from `false-positives.txt`");
-    }
+    warn_unused_false_positives(&FALSE_POSITIVES, &all_suspect_dependencies);
 
     if crates_to_report.is_empty() {
         println!("SUCCESS");
@@ -657,12 +664,13 @@ checksum = "b6bf43b791c5b9e34c3d182969b4abb522f9343702850a2e57f460d00d09b4b3"
             package_with_name("pin-project"),
         ));
 
-        assert!(audit_runtime_lockfile_covered_by_sdk_lockfile(
+        let suspect_dependencies = audit_runtime_lockfile_covered_by_sdk_lockfile(
             &runtime_lockfile,
             &sdk_dependency_set,
-            Some(&false_positives),
-        )
-        .is_empty());
+            None,
+        );
+        assert!(suspect_dependencies.is_empty());
+        warn_unused_false_positives(&false_positives, &suspect_dependencies);
 
         assert!(logs_contain("may potentially be removed from"));
     }

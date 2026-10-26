@@ -78,7 +78,7 @@ class RequestSerializerGenerator(
     private val httpBindingIndex by lazy { HttpBindingIndex.of(codegenContext.model) }
 
     /**
-     * Schema-serde mirror of the legacy `RequestBindingGenerator` validation
+     * Schema-serde mirror of the generated serde `RequestBindingGenerator` validation
      * for required @httpQuery and @httpLabel members.
      *
      * The schema-serde path bypasses `RequestBindingGenerator`, but the
@@ -98,7 +98,7 @@ class RequestSerializerGenerator(
      * return type via the existing `From<BuildError> for BoxError` conversion.
      *
      * Header bindings (`@httpHeader`, `@httpPrefixHeaders`, `@httpQueryParams`)
-     * are intentionally not validated here — neither does the legacy path.
+     * are intentionally not validated here — neither does the generated serde path.
      */
     private fun validateRequiredHttpBindings(operationShape: OperationShape): Writable =
         writable {
@@ -187,7 +187,7 @@ class RequestSerializerGenerator(
         )
     }
 
-    /** Legacy path: old codegen only, no schema-based serialization. */
+    /** Generated serde path: emit per-shape serialization code. */
     private fun renderLegacy(
         writer: RustWriter,
         operationShape: OperationShape,

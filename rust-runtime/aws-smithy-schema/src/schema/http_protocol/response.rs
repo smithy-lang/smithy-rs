@@ -45,7 +45,7 @@ pub(crate) fn non_utf8_policy(cfg: &ConfigBag) -> NonUtf8HeaderHandling {
 /// The policy only matters once a bound header has failed to parse *and* holds an unreadable
 /// value, which almost never happens. A [`ConfigBag`] load walks every layer, and doing it up
 /// front was a measurable share of a small response, so the production path keeps the bag and
-/// reads it only at that point — the same order the generated legacy parser used.
+/// reads it only at that point — the same order the generated serde parser used.
 #[derive(Clone)]
 pub(crate) enum NonUtf8Policy<'a> {
     /// Already known, so no bag needs to be kept.
@@ -1775,7 +1775,7 @@ mod tests {
     fn a_structured_payload_root_is_chosen_by_the_consumer_not_the_composite() {
         // The composite positions the codec at the body root and hands the consumer the *member*
         // schema; the schema the codec actually sees as its root is whichever one the generated
-        // arm forwards. The legacy generated arm forwards the target's schema
+        // arm forwards. The generated serde arm forwards the target's schema
         // (`Target::deserialize(deser)`), so member-level `@xmlName` is not consulted for the
         // payload root — in either path. This pins that the composite does not change it.
         let h = headers(&[]);

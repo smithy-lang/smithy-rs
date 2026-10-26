@@ -22,7 +22,7 @@
 //! therefore compile and run only while that protocol is enabled (it currently
 //! is not, the allowlist being empty, so they are **disabled**).
 //!
-//! Note these tests would still *compile* on the legacy path — they reference
+//! Note these tests would still *compile* on the generated serde path — they reference
 //! only ordinary generated types — but the registry-backed `Error::source()`
 //! enrichment they assert does not exist there, so they would fail rather than
 //! fail to build.

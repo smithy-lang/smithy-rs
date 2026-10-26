@@ -37,7 +37,7 @@ struct ErrorBody<'a> {
 /// Walks the top-level keys of a JSON object body looking for `code`,
 /// `__type`, and `message` / `Message` / `errorMessage`.
 ///
-/// Per the legacy `inlineable/src/json_errors.rs` behavior:
+/// Per the generated serde `inlineable/src/json_errors.rs` behavior:
 /// - If both `code` and `__type` are present, `code` wins.
 /// - Unknown keys are skipped.
 /// - An empty body or non-object root is acceptable — both fields stay `None`.
@@ -126,7 +126,7 @@ pub(crate) fn parse_error_envelope_metadata(
     let ErrorBody { code, message } = parse_error_body(payload)?;
 
     let mut builder = ErrorMetadata::builder();
-    // Header takes precedence over body. Matches the legacy
+    // Header takes precedence over body. Matches the generated serde
     // `inlineable/src/json_errors.rs::parse_error_metadata` behavior.
     if let Some(code) = headers
         .get("x-amzn-errortype")
@@ -140,7 +140,7 @@ pub(crate) fn parse_error_envelope_metadata(
     }
     // `@awsQueryCompatible` services emit `X-Amzn-Query-Error: <code>;<type>`
     // and the awsQueryError code (the part before `;`) is the dispatch key
-    // baked into generated code. Per the legacy
+    // baked into generated code. Per the generated serde
     // `codegen-core/.../AwsQueryCompatible.kt` wrapper, this header overrides
     // any body-derived code and adds the AWS error type as the `type` extra.
     //
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn query_compat_header_overrides_body_code() {
-        // Legacy `AwsQueryCompatible.kt` wrapper behavior: when
+        // Generated serde `AwsQueryCompatible.kt` wrapper behavior: when
         // X-Amzn-Query-Error is present, its code overrides the body code,
         // and the AWS error type lands in the `type` custom field.
         let resp = response(

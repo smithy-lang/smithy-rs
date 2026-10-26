@@ -95,6 +95,8 @@ class RustServerCodegenTsPlugin : SmithyBuildPlugin {
             .let { TsStreamingShapeMetadataProvider(it) }
             // Derive `Eq` and `Hash` if possible.
             .let { DeriveEqAndHashSymbolMetadataProvider(it) }
+            // NAPI supplies its own `Copy` implementation for enums.
+            .let { TsNapiEnumMetadataProvider(it) }
             // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
             // be the name of an operation input
             .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }

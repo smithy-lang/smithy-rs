@@ -20,6 +20,12 @@ Each of these components are meant to be usable independently:
 2. The `lexicon.json` can be used outside of this project to seed a fuzzer from a Smithy model.
 3. The fuzz driver can be used on other fuzz targets.
 
+When target results disagree, the driver replays each target up to ten times.
+Targets whose replay differs from their original result are excluded from comparisons
+for that input. Disagreements between the remaining stable targets still produce a
+crash, even when the first target is unstable. Recognized compatibility regressions
+remain failures; their labels are diagnostic only.
+
 ### Setup
 First, you'll need to generate the 1 (or more) versions of a smithy-rs server to test against. The best way to do this is by using the smithy CLI. **This process is fully automated with the `aws-smithy-fuzz setup-smithy`. The following docs are in place in case you want to alter the behavior.**
 
@@ -69,7 +75,7 @@ For each of these, use the smithy CLI to generate a server implementation using 
             "plugins": {
                 "rust-server-codegen": {
                     "runtimeConfig": {
-                        "relativePath": "/Users/rcoh/code/smithy-rs/rust-runtime"
+                        "relativePath": "./rust-runtime"
                     },
                     "codegen": {},
                     // PICK YOUR SERVICE
@@ -109,7 +115,7 @@ The easiest way to use `fuzzgen` is with the Smithy CLI:
         "fuzz-harness": {
           "service": "aws.protocoltests.restjson#RestJson",
           "runtimeConfig": {
-            "relativePath": "/Users/rcoh/code/smithy-rs/rust-runtime"
+            "relativePath": "./rust-runtime"
           },
           "targetCrates": [
             {
@@ -148,7 +154,7 @@ The fuzz session should start (although AFL may prompt you to run some configura
 
 You should see something like this:
 ```
-   AFL ++4.21c {default} (/Users/rcoh/.cargo/bin/aws-smithy-fuzz) [explore]
+   AFL ++4.21c {default} (aws-smithy-fuzz) [explore]
 ┌─ process timing ────────────────────────────────────┬─ overall results ────┐
 │        run time : 0 days, 0 hrs, 36 min, 18 sec     │  cycles done : 78    │
 │   last new find : 0 days, 0 hrs, 0 min, 17 sec      │ corpus count : 1714  │

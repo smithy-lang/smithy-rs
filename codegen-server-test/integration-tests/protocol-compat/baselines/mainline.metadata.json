@@ -1,0 +1,13 @@
+{
+  "commit": "06c62da902fba6059ab34d0dc3d570907560cd3a",
+  "http-1x": true,
+  "inputs": {
+    "codegen-server-test/integration-tests/protocol-compat/models/protocol-compat-operations.smithy": "d5303842aa2e93dc8340ad85a02ad1d3de2f999d1608bf7be1478d1701ddbcfa",
+    "codegen-server-test/integration-tests/protocol-compat/models/protocol-compat-services.smithy": "67100e7aab1ed54410f363f7f83d9d62cbe698cc0b24caa302b264f807552ae6",
+    "codegen-server-test/integration-tests/protocol-compat/src/handlers.rs": "343ca56968e4da649aa9603e5b047d08a24f58986a5c2b3583d60bb6b0ebbe63",
+    "codegen-server-test/integration-tests/protocol-compat/tests/support/mod.rs": "246f64d0d3637a399c0653bc7b1752202f35c9cf4159253f26ab4c0108d24a1c",
+    "codegen-server-test/integration-tests/protocol-compat/tests/support/scenarios.rs": "81193b2baa848f21179b9d5e6accfba7ce1d781d7012b04bd39dc83e49564543"
+  },
+  "scenario_count": 75,
+  "schemaSerde": false
+}

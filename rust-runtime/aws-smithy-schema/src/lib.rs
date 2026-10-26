@@ -1330,6 +1330,13 @@ mod test {
     }
 
     #[test]
+    fn test_streaming_accessor() {
+        let plain = Schema::new(shape_id!("test", "Blob"), ShapeType::Blob);
+        assert!(!plain.streaming());
+        assert!(plain.with_streaming().streaming());
+    }
+
+    #[test]
     fn test_shape_type_simple() {
         assert!(ShapeType::String.is_simple());
         assert!(ShapeType::Integer.is_simple());

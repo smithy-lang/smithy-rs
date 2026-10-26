@@ -79,6 +79,12 @@ interface ServerProtocol : Protocol {
         requestSpecModule: RuntimeType,
     ): Writable
 
+    /** Additional keys accepted alongside the operation's primary routing key. */
+    fun additionalRouterRequestSpecAliases(
+        operationShape: OperationShape,
+        serviceName: String,
+    ): List<Writable> = emptyList()
+
     /**
      * Returns the Rust type of the `RequestSpec` for an operation.
      */
@@ -192,7 +198,24 @@ class ServerAwsJsonProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust(""""$serviceName.$operationName"""")
+        rust("$serviceName.${operationShape.id.name}".dq())
+    }
+
+    override fun additionalRouterRequestSpecAliases(
+        operationShape: OperationShape,
+        serviceName: String,
+    ): List<Writable> {
+        val protocolId =
+            when (version) {
+                AwsJsonVersion.Json10 -> "aws.protocols#awsJson1_0"
+                AwsJsonVersion.Json11 -> "aws.protocols#awsJson1_1"
+            }
+        if (!serverCodegenContext.settings.awsJsonCapitalizeRoutes(protocolId)) {
+            return emptyList()
+        }
+        val name = operationShape.id.name
+        val alias = name.replaceFirstChar { it.uppercase() }
+        return if (alias == name) emptyList() else listOf(writable { rust("$serviceName.$alias".dq()) })
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
@@ -394,11 +417,11 @@ class ServerRpcV2CborProtocol(
      *
      * See https://github.com/smithy-lang/smithy-rs/issues/4731.
      */
-    fun additionalRouterRequestSpecAliases(
+    override fun additionalRouterRequestSpecAliases(
         operationShape: OperationShape,
         serviceName: String,
     ): List<Writable> {
-        if (!serverCodegenContext.settings.codegenConfig.rpcV2CborAddCapitalizedRoute) {
+        if (!serverCodegenContext.settings.rpcV2CborCapitalizeRoutes()) {
             return emptyList()
         }
         val verbatimOperationName = operationShape.id.name

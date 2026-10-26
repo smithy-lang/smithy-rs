@@ -1,0 +1,9 @@
+// Compiles the generator test from MP_FUZZ_TEST_SRC into `:fuzzgen`'s tests, so the baseline checkout can
+// run it without the file being copied into its source tree.
+allprojects {
+    if (name == "fuzzgen") {
+        afterEvaluate { p ->
+            p.extensions.getByName("kotlin").sourceSets.getByName("test").kotlin.srcDir(System.getenv("MP_FUZZ_TEST_SRC"))
+        }
+    }
+}

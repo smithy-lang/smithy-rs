@@ -10,6 +10,36 @@
 
 Protocol files: `codegen-{core,server}/.../protocols/`
 
+## Schema Server PR Checkouts
+
+The combined development checkout is `~/decoupled/smithy-rs-fable-clean-multi`.
+The separate PR checkouts live under `~/smithy-rs-prs/`:
+
+- **`schema-server-runtime/`** — Schema server runtime changes, including
+  `rust-runtime/aws-smithy-http-server/`.
+- **`schema-server-codegen/`** — Server codegen changes, generated-code tests,
+  examples, and codegen documentation.
+
+These are separate checkouts. Editing the combined checkout does not update the
+PR checkouts automatically. When the user asks to copy changes to the PR folder,
+apply the relevant edits in the corresponding checkout and report which
+checkout was updated.
+
+Before copying, inspect the destination's Git status and diff. Copy only the
+requested changes; preserve other pending work. When a runtime API is renamed,
+also check the codegen PR for generated callers and update matching calls.
+Check Rustdoc and Markdown examples for old names.
+
+The codegen PR checkout may contain an older runtime than the runtime PR
+checkout. Validate changes together in the combined checkout, and distinguish
+those results from checks run in each PR checkout. Report missing prerequisite
+APIs if they prevent a PR checkout from building.
+
+When committing PR changes, commit in the appropriate PR checkout and stage
+only the intended files or hunks. Do not include unrelated pending changes.
+If a caller edit is embedded in a larger uncommitted implementation, report
+that dependency rather than committing the entire implementation implicitly.
+
 ## Protocol Tests
 
 Protocol tests validate that generated code correctly implements Smithy protocols (like restJson1, awsJson1_1, etc.).
@@ -211,12 +241,11 @@ gh workflow run "Invoke Canary as Maintainer" --repo smithy-lang/smithy-rs \
 
 **Before implementing changes:**
 
-1. **Research existing work** - Check related PRs/issues first
-2. **Build and examine generated code** - `./gradlew codegen-server-test:assemble --quiet`
-3. **Generated code location** - `codegen-server-test/build/smithyprojections/codegen-server-test/`
-4. **Key generated files** - `src/protocol_serde/shape_*.rs`, `src/event_stream_serde.rs`
-5. **Look for patterns** - Client vs server codegen often mirrors each other
-6. **Identify minimal change** - Understand current behavior before modifying codegen
+1. **Build and examine generated code** - `./gradlew codegen-server-test:assemble --quiet`
+2. **Generated code location** - `codegen-server-test/build/smithyprojections/codegen-server-test/`
+3. **Key generated files** - `src/protocol_serde/shape_*.rs`, `src/event_stream_serde.rs`
+4. **Look for patterns** - Client vs server codegen often mirrors each other
+5. **Identify minimal change** - Understand current behavior before modifying codegen
 
 **Single Protocol Development:**
 

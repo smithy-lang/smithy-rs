@@ -1,0 +1,240 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.server.smithy.customizations
+
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.io.path.readText
+
+/**
+ * Generates schema-serde service, operation, shape, and error descriptors and exercises them in
+ * Rust. It checks HTTP traits, served protocols, operation inputs and outputs, modeled error status
+ * codes, and references to the correct static shape schemas. Source checks verify that enabling
+ * schema serde uses schema routing, while disabling it retains legacy serde and emits no schemas.
+ */
+internal class ServerSchemaDecoratorTest {
+    private val model =
+        """
+        ${'$'}version: "2"
+        namespace com.aws.example.schema
+
+        use aws.protocols#restJson1
+
+        @restJson1
+        service SchemaService {
+            version: "2024-08-29"
+            operations: [Echo, Ping]
+        }
+
+        @http(uri: "/echo/{name}", method: "POST", code: 201)
+        operation Echo {
+            input := {
+                @required
+                @httpLabel
+                name: String
+                nested: Nested
+                kind: Kind
+                choice: Choice
+            }
+            output := {
+                nested: Nested
+            }
+            errors: [BadThing]
+        }
+
+        @http(uri: "/ping", method: "GET")
+        operation Ping {}
+
+        structure Nested {
+            message: String
+            tags: StringList
+        }
+
+        list StringList {
+            member: String
+        }
+
+        enum Kind {
+            A
+            B
+        }
+
+        union Choice {
+            text: String
+            nested: Nested
+        }
+
+        @error("client")
+        @httpError(400)
+        structure BadThing {
+            message: String
+        }
+        """.asSmithyModel()
+
+    private val schemaSerdeParams =
+        IntegrationTestParams(
+            additionalSettings =
+                ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
+        )
+
+    @Test
+    fun `descriptors expose the service, its operations and their shapes`() {
+        val servers =
+            serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
+                rustCrate.testModule {
+                    unitTest("erased_values_report_their_own_schema") {
+                        rustTemplate(
+                            """
+                            fn assert_schema(value: &dyn #{SerializableStruct}, schema: &#{Schema}<'_>) {
+                                assert!(::std::ptr::eq(value.schema(), schema));
+                            }
+                            let nested = crate::model::Nested { message: None, tags: None };
+                            assert_schema(&nested, crate::model::Nested::SCHEMA);
+                            let choice = crate::model::Choice::Nested(nested);
+                            assert_schema(&choice, crate::model::Choice::SCHEMA);
+                            let error = crate::error::BadThing { message: None };
+                            assert_schema(&error, crate::error::BadThing::SCHEMA);
+                            """,
+                            "SerializableStruct" to RuntimeType.smithySchema(context.runtimeConfig).resolve("serde::SerializableStruct"),
+                            "Schema" to RuntimeType.smithySchema(context.runtimeConfig).resolve("Schema"),
+                        )
+                    }
+                    // The descriptors belong to the schema router, which only HTTP 1.x services use.
+                    if (context.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                        unitTest("operation_error_reports_the_active_variant_schema") {
+                            rustTemplate(
+                                """
+                                let error = crate::error::EchoError::BadThing(crate::error::BadThing { message: None });
+                                let erased: &dyn #{SerializableStruct} = &error;
+                                assert!(::std::ptr::eq(erased.schema(), crate::error::BadThing::SCHEMA));
+                                let http_error: &dyn #{HttpModeledError} = &error;
+                                assert!(::std::ptr::eq(http_error.schema(), erased.schema()));
+                                """,
+                                "SerializableStruct" to RuntimeType.smithySchema(context.runtimeConfig).resolve("serde::SerializableStruct"),
+                                "HttpModeledError" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("schema::HttpModeledError"),
+                            )
+                        }
+                        unitTest("operation_descriptor_reports_the_modeled_http_binding") {
+                            rust(
+                                """
+                                let echo = &crate::schema::operations::OPERATION_4563686F;
+                                assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
+                                let http = echo.http().expect("`@http` recorded on the operation input");
+                                assert_eq!(http.method(), "POST");
+                                assert_eq!(http.uri(), "/echo/{name}");
+                                assert_eq!(http.code(), 201);
+                                assert!(std::ptr::eq(echo.input(), crate::input::EchoInput::SCHEMA));
+                                assert!(std::ptr::eq(echo.output(), crate::output::EchoOutput::SCHEMA));
+                                // The modeled error plus the `ValidationException` the server attaches for the constrained input.
+                                assert_eq!(echo.errors().len(), 2);
+                                assert!(std::ptr::eq(echo.errors()[0], crate::error::BadThing::SCHEMA));
+                                assert!(std::ptr::eq(echo.errors()[1], crate::error::ValidationException::SCHEMA));
+                                """,
+                            )
+                        }
+                        unitTest("service_descriptor_lists_protocols_and_operations") {
+                            rust(
+                                """
+                                let service = &crate::schema::service::SCHEMA_SERVICE;
+                                assert_eq!(service.shape_id().as_str(), "com.aws.example.schema##SchemaService");
+                                assert_eq!(service.version(), Some("2024-08-29"));
+                                let protocols: Vec<_> = service.protocols().iter().map(|id| id.as_str()).collect();
+                                assert_eq!(protocols, ["aws.protocols##restJson1"]);
+                                assert_eq!(service.operations().len(), 2);
+                                let ping = service
+                                    .operation(&::aws_smithy_schema::shape_id!("com.aws.example.schema", "Ping"))
+                                    .expect("bound operation");
+                                assert_eq!(ping.http().map(|http| http.uri()), Some("/ping"));
+                                assert!(ping.errors().is_empty());
+                                """,
+                            )
+                        }
+                    }
+                    unitTest("shape_schemas_sit_next_to_their_types") {
+                        rustTemplate(
+                            """
+                            use #{ShapeType};
+                            // Operation schemas retain their modeled shape IDs.
+                            assert_eq!(crate::input::EchoInput::SCHEMA.shape_id().as_str(), "com.aws.example.schema##EchoInput");
+                            assert_eq!(crate::model::Nested::SCHEMA.shape_type(), ShapeType::Structure);
+                            assert_eq!(crate::model::Nested::SCHEMA.members().len(), 2);
+                            assert_eq!(crate::model::Choice::SCHEMA.shape_type(), ShapeType::Union);
+                            assert_eq!(crate::error::BadThing::SCHEMA.shape_type(), ShapeType::Structure);
+                            assert!(crate::error::BadThing::SCHEMA.traits().unwrap().contains_fqn("smithy.api##error"));
+                            """,
+                            *preludeScope,
+                            "ShapeType" to RuntimeType.smithySchema(context.runtimeConfig).resolve("ShapeType"),
+                        )
+                    }
+                }
+            }
+        servers.forEach { server ->
+            val src = server.path.resolve("src")
+            src.resolve("protocol_serde").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_0_X)
+            src.resolve("schema").toFile().exists() shouldBe (server.httpVersion == HttpTestVersion.HTTP_1_X)
+            if (server.httpVersion == HttpTestVersion.HTTP_1_X) {
+                val service = src.resolve("service.rs").readText()
+                service shouldContain "from_operation_handler_bindings_with_options"
+                service shouldNotContain "request_specs"
+                service shouldNotContain "RestRouter"
+                service shouldNotContain "SchemaRoute::new"
+                src.toFile().walkTopDown().filter { it.isFile }.forEach {
+                    it.readText() shouldNotContain "protocol_serde"
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `error schemas preserve explicit httpError status codes`() {
+        serverIntegrationTest(model, schemaSerdeParams) { context, rustCrate ->
+            rustCrate.testModule {
+                unitTest("http_error_status") {
+                    rustTemplate(
+                        """
+                        let schema = crate::error::BadThing::SCHEMA;
+                        assert!(schema.http().is_none());
+                        let traits = schema.traits().expect("error traits should be recorded");
+                        assert!(traits.contains_fqn("smithy.api##error"));
+                        assert!(traits.contains_fqn("smithy.api##httpError"));
+                        let http_error = #{HttpErrorTrait}::from_schema(schema)
+                            .expect("should preserve typed @httpError");
+                        assert_eq!(http_error.code(), 400);
+                        """,
+                        "HttpErrorTrait" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType().resolve("schema::traits::HttpErrorTrait"),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `nothing is generated while the setting is off`() {
+        val servers = serverIntegrationTest(model, testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X))
+        servers.forEach { server ->
+            val src = server.path.resolve("src")
+            src.resolve("schema").toFile().exists() shouldBe false
+            src.resolve("protocol_serde").toFile().exists() shouldBe true
+            src.resolve("input.rs").readText() shouldNotContain "SCHEMA"
+        }
+    }
+}

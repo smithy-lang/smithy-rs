@@ -77,11 +77,54 @@ fn internal_server_error() -> http::Response<BoxBody> {
     response
 }
 
+// These rejections deliberately return the same complete response under both serialization modes.
+macro_rules! missing_rejection_with_protocol {
+    ($($rejection:ty),+ $(,)?) => {
+        $(
+            impl crate::response::IntoResponseWithProtocol for $rejection {
+                fn into_response_with_protocol(
+                    self,
+                    _: &dyn crate::schema::ServerProtocol,
+                ) -> crate::response::Response {
+                    IntoResponse::<()>::into_response(self)
+                }
+            }
+        )+
+    };
+}
+
+missing_rejection_with_protocol!(extension::MissingExtension, connect_info::MissingConnectInfo);
+#[cfg(feature = "request-id")]
+missing_rejection_with_protocol!(request_id::MissingServerRequestId);
+#[cfg(feature = "aws-lambda")]
+missing_rejection_with_protocol!(
+    lambda::MissingContext,
+    lambda::MissingGatewayContextV1,
+    lambda::MissingGatewayContextV2,
+);
+
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol>;
+    ///
+    /// This associated type deliberately carries no bound: how a rejection becomes an HTTP
+    /// response depends on the serialization system of the service the extractor is attached
+    /// to, which this trait cannot know. The requirement is enforced where the rejection must
+    /// actually become a response — at handler registration, by the pipeline consuming it:
+    ///
+    /// - generated serde requires [`IntoResponse<Protocol>`](IntoResponse) (the context-free
+    ///   conversion for the statically known protocol), through the handler
+    ///   [`FromRequest`] implementations and the operation upgrade;
+    /// - schema serde requires [`IntoResponseWithProtocol`](crate::response::IntoResponseWithProtocol)
+    ///   (conversion through the protocol routed for each request), through the schema
+    ///   `DynUpgrade` bounds.
+    ///
+    /// Registering a handler whose extractor rejection lacks the conversion its service needs
+    /// is a compile error at the builder method, exactly where extractor mistakes already
+    /// surface. An extractor shared between both systems implements both traits; an
+    /// infallible extractor (`Rejection = Infallible`) satisfies both for free.
+    type Rejection;
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
@@ -164,7 +207,7 @@ where
     T1: FromRequest<P, B>,
     T2: FromParts<P>,
     T1::Rejection: std::fmt::Display,
-    T2::Rejection: std::fmt::Display,
+    T2::Rejection: std::fmt::Display + IntoResponse<P>,
 {
     type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
     type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;

@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
+        let router: RpcV2CborRouter<_> = [("Service.Operation", ())].into_iter().collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.

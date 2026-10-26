@@ -13,7 +13,10 @@ rust-version = "1.94.1"
 # the `http::HeaderName` cached on each `@httpHeader` member. Tests also rely on it for
 # `TryFrom<http::HeaderMap> for Headers`, the only way to build a `Headers` holding a value
 # that is not valid UTF-8.
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = [
+  "client",
+  "http-1x",
+] }
 aws-smithy-types = { path = "../aws-smithy-types", default-features = false }
 http = "1.3.1"
 

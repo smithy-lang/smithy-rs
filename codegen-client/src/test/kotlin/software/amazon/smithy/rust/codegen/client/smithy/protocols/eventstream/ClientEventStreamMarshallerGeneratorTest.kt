@@ -370,7 +370,7 @@ data class RpcEventStreamTestCase(
  * (un)marshaller for the given codegen context. For clients using schema-serde
  * exclusively (see [SchemaSerdeAllowlist.usesSchemaSerdeExclusively]) the
  * expression passes a `SharedClientProtocol` to `::new`; for all other clients
- * it returns the legacy stateless `::new()` call.
+ * it returns the generated serde stateless `::new()` call.
  *
  * @param typePath the Rust path to the (un)marshaller type, e.g.
  *   `"crate::event_stream_serde::TestStreamUnmarshaller"`.

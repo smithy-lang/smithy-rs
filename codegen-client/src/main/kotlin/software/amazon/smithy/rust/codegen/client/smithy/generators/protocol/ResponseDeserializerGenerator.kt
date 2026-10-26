@@ -122,7 +122,7 @@ class ResponseDeserializerGenerator(
         } else if (schemaExclusive && isEventStream) {
             deserializeStreamingEventStreamSchema(operationShape, customizations)
         } else {
-            // Non-schema-exclusive: use legacy parser
+            // Non-schema-exclusive: use generated serde parser
             deserializeStreamingLegacy(operationShape, customizations)
         }
     }
@@ -325,7 +325,7 @@ class ResponseDeserializerGenerator(
         )
     }
 
-    /** Legacy path for streaming responses (event streams and non-schema-exclusive). */
+    /** Generated serde path for streaming responses (event streams and non-schema-exclusive). */
     private fun RustWriter.deserializeStreamingLegacy(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
@@ -431,7 +431,7 @@ class ResponseDeserializerGenerator(
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             // Load body and headers BEFORE BeforeParseResponse so customizations
             // (e.g., S3's `body_is_error` check that detects errors returned with
-            // HTTP 200) can inspect them. The legacy non-streaming path also
+            // HTTP 200) can inspect them. The generated serde non-streaming path also
             // loads `body` before firing this hook.
             ##[allow(unused_variables)]
             let body = response.body().bytes().expect("body loaded");
@@ -531,7 +531,7 @@ class ResponseDeserializerGenerator(
         // `deserialize_error_response` are trait methods on the protocol, so
         // the protocol must be in scope before extracting the metadata
         // builder. The `parseHttpErrorMetadata` free-function call and the
-        // protocol-specific `errorBodyContents` shim that the legacy schema
+        // protocol-specific `errorBodyContents` shim that the previous schema
         // path used are eliminated.
         rustTemplate(
             """
@@ -681,7 +681,7 @@ class ResponseDeserializerGenerator(
         }
     }
 
-    /** Legacy path: old codegen only, no schema-based deserialization. */
+    /** Generated serde path: emit per-shape deserialization code. */
     private fun RustWriter.deserializeNonStreamingLegacy(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,

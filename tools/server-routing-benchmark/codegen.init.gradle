@@ -1,0 +1,13 @@
+gradle.projectsEvaluated {
+    def p = gradle.rootProject.findProject(':codegen-server')
+    if (p == null) return
+    def cli = p.configurations.create('routingBenchmarkCli')
+    def catalog = p.extensions.getByType(org.gradle.api.artifacts.VersionCatalogsExtension).named('libs')
+    p.dependencies.add(cli.name, catalog.findLibrary('smithy-cli').get())
+    p.tasks.register('generateRoutingBenchmark', JavaExec) {
+        classpath = p.sourceSets.main.runtimeClasspath + cli
+        mainClass.set('software.amazon.smithy.cli.SmithyCli')
+        args 'build', '--discover', '--config', System.getenv('ROUTING_BENCH_CONFIG'), '--output', System.getenv('ROUTING_BENCH_OUTPUT')
+        maxHeapSize = '2g'
+    }
+}

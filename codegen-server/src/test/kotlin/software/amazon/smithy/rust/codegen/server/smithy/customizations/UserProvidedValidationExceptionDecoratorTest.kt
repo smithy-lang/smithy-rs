@@ -15,6 +15,8 @@ import software.amazon.smithy.framework.rust.ValidationMessageTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -311,6 +313,35 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     @Test
     fun `code compiles with custom validation exception`() {
         serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.Default)
+            .forEach { assertValidationExceptionConversion(it.path, false) }
+    }
+
+    @Test
+    fun `code compiles with custom validation exception and schema serde disabled`() {
+        serverIntegrationTest(
+            completeTestModel,
+            IntegrationTestParams(
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
+                cargoCommand = "cargo test --quiet --lib --tests",
+            ),
+            testCoverage = HttpTestType.Default,
+        ).forEach { assertValidationExceptionConversion(it.path, false) }
+    }
+
+    @Test
+    fun `schema serde omits legacy custom validation rejection serializers`() {
+        val servers =
+            serverIntegrationTest(
+                completeTestModel,
+                IntegrationTestParams(
+                    additionalSettings = ServerAdditionalSettings.builder().schemaSerde().withHttp1x().toObjectNode(),
+                ),
+                testCoverage = HttpTestType.Default,
+            )
+        servers.forEach {
+            check(!it.path.resolve("src/protocol_serde").toFile().exists())
+            assertValidationExceptionConversion(it.path, true)
+        }
     }
 
     private val completeTestModelWithOptionals =
@@ -384,6 +415,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     @Test
     fun `code compiles with custom validation exception using optionals`() {
         serverIntegrationTest(completeTestModelWithOptionals, testCoverage = HttpTestType.Default)
+            .forEach { assertValidationExceptionConversion(it.path, false) }
     }
 
     private val completeTestModelWithImplicitNamesWithoutFieldMessage =

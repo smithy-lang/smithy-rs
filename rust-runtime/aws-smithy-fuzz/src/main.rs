@@ -16,6 +16,8 @@ use std::process::{Child, Command, Stdio};
 use std::time::SystemTime;
 use std::{env, fs};
 
+mod semantic;
+
 use clap::{Parser, Subcommand};
 use tera::{Context, Tera};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -55,6 +57,28 @@ enum Commands {
     /// This exists to facilitate invoking a cdylib that may panic without crashing the main
     /// process
     InvokeTestCase(InvokeArgs),
+
+    /// Serve a fuzz target shared library over live HTTP
+    ///
+    /// Loads the cdylib and forwards each HTTP/1.1 request to its generated service, returning
+    /// the service's response on the wire. `GET /__ab/build` returns the build-info JSON supplied
+    /// at launch, before any protocol routing, so a launcher can verify which build is listening.
+    Serve(ServeArgs),
+}
+
+#[derive(Parser)]
+struct ServeArgs {
+    /// Path to the compiled fuzz target shared library
+    #[arg(short, long)]
+    shared_library_path: PathBuf,
+
+    /// Address to bind, e.g. 127.0.0.1:18020
+    #[arg(short, long)]
+    address: String,
+
+    /// Path to the build-info JSON served at GET /__ab/build
+    #[arg(short, long)]
+    build_info: PathBuf,
 }
 
 #[derive(Parser)]
@@ -178,6 +202,9 @@ struct Lexicon {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct FuzzConfig {
+    /// Fixed protocol identity for isolated A/B campaigns; absent for general fuzzing.
+    #[serde(default)]
+    protocol: Option<String>,
     seed: PathBuf,
     targets: Vec<Target>,
     afl_input_dir: PathBuf,
@@ -211,6 +238,155 @@ fn main() {
             test_case,
             shared_library_path,
         }) => invoke_testcase(test_case, shared_library_path),
+        Commands::Serve(args) => serve(args),
+    }
+}
+
+fn serve(args: ServeArgs) {
+    use std::io::{Read, Write};
+
+    let build_info = fs::read_to_string(&args.build_info).expect("could not read build-info file");
+    let _: Value = serde_json::from_str(&build_info).expect("build-info is not valid JSON");
+    let target = FuzzTarget::from_path(&args.shared_library_path);
+    let listener =
+        std::net::TcpListener::bind(&args.address).expect("could not bind the requested address");
+    println!("listening on {}", args.address);
+
+    fn write_response(
+        stream: &mut std::net::TcpStream,
+        status: u16,
+        headers: &[(String, String)],
+        body: &[u8],
+    ) {
+        let mut out = format!("HTTP/1.1 {status} \r\n");
+        for (name, value) in headers {
+            // The in-process response model stores single-line header values; a stray CR/LF
+            // would corrupt the wire framing, so surface it instead of splitting the header.
+            if value.contains(['\r', '\n']) || name.contains(['\r', '\n']) {
+                let msg = "response header contains line breaks";
+                let error = format!(
+                    "HTTP/1.1 502 \r\nx-ab-serve-error: {msg}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n"
+                );
+                let _ = stream.write_all(error.as_bytes());
+                return;
+            }
+            out.push_str(&format!("{name}: {value}\r\n"));
+        }
+        out.push_str(&format!(
+            "content-length: {}\r\nconnection: close\r\n\r\n",
+            body.len()
+        ));
+        let _ = stream.write_all(out.as_bytes());
+        let _ = stream.write_all(body);
+    }
+
+    // One request per connection, handled sequentially: the fuzz target serializes requests
+    // internally and the comparison driver needs deterministic ordering, not throughput.
+    for stream in listener.incoming() {
+        let mut stream = match stream {
+            Ok(stream) => stream,
+            Err(_) => continue,
+        };
+        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
+
+        // Read until the end of the header block.
+        let mut buffer = Vec::new();
+        let mut chunk = [0u8; 8192];
+        let header_end = loop {
+            if let Some(pos) = buffer.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+            match stream.read(&mut chunk) {
+                Ok(0) => break usize::MAX,
+                Ok(n) => buffer.extend_from_slice(&chunk[..n]),
+                Err(_) => break usize::MAX,
+            }
+        };
+        if header_end == usize::MAX {
+            continue;
+        }
+        let head = String::from_utf8_lossy(&buffer[..header_end]).into_owned();
+        let mut lines = head.split("\r\n");
+        let request_line = lines.next().unwrap_or("");
+        let mut parts = request_line.split_whitespace();
+        let (method, uri) = match (parts.next(), parts.next()) {
+            (Some(method), Some(uri)) => (method.to_owned(), uri.to_owned()),
+            _ => {
+                write_response(&mut stream, 400, &[], b"malformed request line");
+                continue;
+            }
+        };
+        let mut headers: HashMap<String, Vec<String>> = HashMap::new();
+        for line in lines {
+            if let Some((name, value)) = line.split_once(':') {
+                headers
+                    .entry(name.trim().to_ascii_lowercase())
+                    .or_default()
+                    .push(value.trim().to_owned());
+            }
+        }
+
+        let header_value = |name: &str| headers.get(name).and_then(|v| v.first()).cloned();
+        if header_value("transfer-encoding").is_some() {
+            write_response(&mut stream, 501, &[], b"chunked bodies are not supported");
+            continue;
+        }
+        if header_value("expect").as_deref() == Some("100-continue") {
+            let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
+        }
+        let content_length: usize = header_value("content-length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let mut body = buffer[header_end..].to_vec();
+        while body.len() < content_length {
+            match stream.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(n) => body.extend_from_slice(&chunk[..n]),
+                Err(_) => break,
+            }
+        }
+        if body.len() < content_length {
+            write_response(&mut stream, 400, &[], b"body shorter than content-length");
+            continue;
+        }
+        body.truncate(content_length);
+
+        if method == "GET" && uri == "/__ab/build" {
+            write_response(
+                &mut stream,
+                200,
+                &[("content-type".to_owned(), "application/json".to_owned())],
+                build_info.as_bytes(),
+            );
+            continue;
+        }
+
+        let request = HttpRequest {
+            uri,
+            method,
+            headers,
+            trailers: HashMap::new(),
+            body,
+        };
+        let result = target.invoke(&request);
+        let headers: Vec<(String, String)> = result
+            .response
+            .headers
+            .iter()
+            .filter(|(name, _)| {
+                !matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    "content-length" | "connection"
+                )
+            })
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect();
+        write_response(
+            &mut stream,
+            result.response.status,
+            &headers,
+            &result.response.body,
+        );
     }
 }
 
@@ -441,9 +617,24 @@ fn force_load_libraries(libraries: &[Target]) -> Vec<FuzzTarget> {
 /// it ensures everything is set up properly, then it invokes AFL, passing through
 /// all the relevant flags. AFL is actually going to come right back in here—(but with `enter_fuzzing_loop`)
 /// set to true. In that case, we just prepare to start actually fuzzing the targets.
+fn configure_protocol(config: &FuzzConfig) {
+    if let Some(protocol) = &config.protocol {
+        if let Ok(inherited) = std::env::var("SMITHY_FUZZ_PROTOCOL") {
+            assert_eq!(
+                &inherited, protocol,
+                "campaign protocol does not match its configuration"
+            );
+        }
+        // Validate before launching workers; subprocesses inherit the fixed identity.
+        aws_smithy_fuzz::pin_protocol(&mut HttpRequest::default(), protocol);
+        std::env::set_var("SMITHY_FUZZ_PROTOCOL", protocol);
+    }
+}
+
 fn fuzz(args: FuzzArgs) {
     let config = fs::read_to_string(&args.config_path).unwrap();
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
+    configure_protocol(&config);
     if args.enter_fuzzing_loop {
         let libraries = force_load_libraries(&config.targets);
         enter_fuzz_loop(libraries, None)
@@ -558,6 +749,7 @@ fn initialize(
     let afl_output_dir = Path::new("afl-output");
 
     let mut config = FuzzConfig {
+        protocol: None,
         seed: lexicon,
         targets,
         afl_input_dir: afl_input_dir.into(),
@@ -629,6 +821,7 @@ fn replay(
 ) {
     let config = fs::read_to_string(config_path).unwrap();
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
+    configure_protocol(&config);
     let crashes = if let Some(path) = invoke_only {
         vec![path.into()]
     } else {
@@ -642,12 +835,24 @@ fn replay(
         eprintln!("{}", crash.display());
         let data = fs::read(&crash).unwrap();
         let http_request = HttpRequest::from_unknown_bytes(&data);
+        let comparison_request = http_request.as_ref().map(|request| {
+            let mut request = request.clone();
+            aws_smithy_fuzz::normalize_request(&mut request);
+            request
+        });
+        let mut baseline = None;
         let mut results: HashMap<String, CrashResult> = HashMap::new();
         #[derive(Debug, Serialize)]
         #[serde(tag = "type")]
         enum CrashResult {
-            Panic { message: String },
-            FuzzResult { result: String },
+            Panic {
+                message: String,
+            },
+            FuzzResult {
+                result: String,
+                #[serde(skip_serializing_if = "Option::is_none")]
+                expected_divergence: Option<&'static str>,
+            },
         }
 
         impl Display for CrashResult {
@@ -660,12 +865,21 @@ fn replay(
                         }
                         Ok(())
                     }
-                    CrashResult::FuzzResult { result } => f.pad(result),
+                    CrashResult::FuzzResult {
+                        result,
+                        expected_divergence,
+                    } => {
+                        f.pad(result)?;
+                        if let Some(reason) = expected_divergence {
+                            write!(f, "\nRecognized compatibility regression: {reason}")?;
+                        }
+                        Ok(())
+                    }
                 }
             }
         }
 
-        for library in &config.targets {
+        for (index, library) in config.targets.iter().enumerate() {
             let result = Command::new(env::current_exe().unwrap())
                 .arg("invoke-test-case")
                 .arg("--shared-library-path")
@@ -675,9 +889,21 @@ fn replay(
                 .output()
                 .unwrap();
             let result = match serde_json::from_slice::<FuzzResult>(&result.stdout) {
-                Ok(result) => CrashResult::FuzzResult {
-                    result: format!("{:?}", result),
-                },
+                Ok(result) => {
+                    let expected_divergence = comparison_request
+                        .as_ref()
+                        .zip(baseline.as_ref())
+                        .and_then(|(request, baseline)| {
+                            semantic::expected_compatibility_divergence(request, baseline, &result)
+                        });
+                    if index == 0 {
+                        baseline = Some(result.clone());
+                    }
+                    CrashResult::FuzzResult {
+                        result: format!("{:?}", result),
+                        expected_divergence,
+                    }
+                }
                 Err(_err) => CrashResult::Panic {
                     message: String::from_utf8_lossy(&result.stderr).to_string(),
                 },
@@ -729,6 +955,9 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
         let http_request = HttpRequest::from_unknown_bytes(data);
         if let Some(request) = http_request {
             if request.into_http_request_04x().is_some() {
+                // Compare the same campaign-normalized request that both libraries receive.
+                let mut comparison_request = request.clone();
+                aws_smithy_fuzz::normalize_request(&mut comparison_request);
                 let mut results = vec![];
                 for library in &libraries {
                     results.push(library.invoke_bytes(data));
@@ -746,29 +975,89 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
                     )
                     .unwrap();
                 });
-                for result in &results {
-                    if result.response != results[0].response {
-                        if check_for_nondeterminism(data, &libraries) {
-                            break;
-                        }
-                        panic!("inconsistent results: {:#?}", results);
+                let comparison =
+                    compare_stable_results(&results, |index| libraries[index].invoke_bytes(data));
+                if !comparison.unstable_targets.is_empty() {
+                    eprintln!(
+                        "skipping comparisons for nondeterministic targets: {:?}",
+                        comparison.unstable_targets
+                    );
+                    if let Some(log) = &mut log {
+                        writeln!(
+                            log,
+                            "skipping comparisons for nondeterministic targets: {:?}",
+                            comparison.unstable_targets
+                        )
+                        .unwrap();
                     }
+                }
+                if let Some((baseline, candidate)) = comparison.mismatch {
+                    // Compatibility labels assume the first target is the legacy baseline.
+                    if baseline == 0 {
+                        if let Some(reason) = semantic::expected_compatibility_divergence(
+                            &comparison_request,
+                            &results[baseline],
+                            &results[candidate],
+                        ) {
+                            if let Some(log) = &mut log {
+                                writeln!(log, "recognized compatibility regression: {reason}")
+                                    .unwrap();
+                            }
+                        }
+                    }
+                    panic!(
+                        "inconsistent results between targets {baseline} and {candidate}: {:#?}",
+                        results
+                    );
                 }
             }
         }
     });
 }
 
-fn check_for_nondeterminism(data: &[u8], libraries: &[FuzzTarget]) -> bool {
-    for lib in libraries {
-        let sample = (0..10)
-            .map(|_idx| lib.invoke_bytes(&data))
-            .collect::<Vec<_>>();
-        if sample.iter().any(|result| result != &sample[0]) {
-            return true;
-        }
+#[derive(Debug, Default, PartialEq, Eq)]
+struct TargetComparison {
+    mismatch: Option<(usize, usize)>,
+    unstable_targets: Vec<usize>,
+}
+
+/// Replay only mismatching inputs, excluding unstable targets without hiding stable disagreements.
+fn compare_stable_results(
+    results: &[FuzzResult],
+    mut replay: impl FnMut(usize) -> FuzzResult,
+) -> TargetComparison {
+    let mut comparison = TargetComparison::default();
+    let Some(first) = results.first() else {
+        return comparison;
+    };
+    if results
+        .iter()
+        .all(|result| semantic::results_agree(first, result))
+    {
+        return comparison;
     }
-    return false;
+
+    let stable_targets: Vec<_> = results
+        .iter()
+        .enumerate()
+        .filter_map(|(index, original)| {
+            // Include the original observation: a transient mismatch can disappear on every replay.
+            if (0..10).all(|_| replay(index) == *original) {
+                Some(index)
+            } else {
+                comparison.unstable_targets.push(index);
+                None
+            }
+        })
+        .collect();
+    if let Some(&baseline) = stable_targets.first() {
+        comparison.mismatch = stable_targets
+            .iter()
+            .copied()
+            .find(|&index| !semantic::results_agree(&results[baseline], &results[index]))
+            .map(|candidate| (baseline, candidate));
+    }
+    comparison
 }
 
 /// Converts a JSON formatted seed to the format expected by AFL
@@ -924,8 +1213,97 @@ mod test {
     use std::{env::temp_dir, path::PathBuf};
 
     use crate::{
-        generate_smithy_build_for_target, generate_smithy_build_json_for_fuzzer, SetupSmithyArgs,
+        compare_stable_results, generate_smithy_build_for_target,
+        generate_smithy_build_json_for_fuzzer, SetupSmithyArgs, TargetComparison,
     };
+    use aws_smithy_fuzz::{FuzzResult, HttpResponse};
+
+    fn response(status: u16) -> FuzzResult {
+        FuzzResult {
+            response: HttpResponse {
+                status,
+                ..Default::default()
+            },
+            input: None,
+        }
+    }
+
+    #[test]
+    fn agreeing_targets_do_not_need_replays() {
+        let results = [response(200), response(200)];
+        assert_eq!(
+            compare_stable_results(&results, |_| panic!("unexpected replay")),
+            TargetComparison::default()
+        );
+    }
+
+    #[test]
+    fn nondeterministic_candidate_is_skipped() {
+        let results = [response(200), response(201)];
+        let mut calls = [0; 2];
+        let comparison = compare_stable_results(&results, |index| {
+            calls[index] += 1;
+            if index == 1 && calls[index] == 2 {
+                response(202)
+            } else {
+                results[index].clone()
+            }
+        });
+        assert_eq!(comparison.mismatch, None);
+        assert_eq!(comparison.unstable_targets, vec![1]);
+    }
+
+    #[test]
+    fn original_observation_is_included_in_the_stability_check() {
+        let results = [response(200), response(201)];
+        let comparison = compare_stable_results(&results, |_| response(200));
+        assert_eq!(comparison.mismatch, None);
+        assert_eq!(comparison.unstable_targets, vec![1]);
+    }
+
+    #[test]
+    fn deterministic_mismatch_is_reported() {
+        let results = [response(200), response(201)];
+        let comparison = compare_stable_results(&results, |index| results[index].clone());
+        assert_eq!(comparison.mismatch, Some((0, 1)));
+        assert!(comparison.unstable_targets.is_empty());
+    }
+
+    #[test]
+    fn unrelated_unstable_target_does_not_hide_a_stable_mismatch() {
+        let results = [response(200), response(201), response(202)];
+        let comparison = compare_stable_results(&results, |index| {
+            if index == 2 {
+                response(503)
+            } else {
+                results[index].clone()
+            }
+        });
+        assert_eq!(comparison.mismatch, Some((0, 1)));
+        assert_eq!(comparison.unstable_targets, vec![2]);
+    }
+
+    #[test]
+    fn unstable_baseline_does_not_hide_a_mismatch_between_other_targets() {
+        let results = [response(200), response(201), response(202)];
+        let comparison = compare_stable_results(&results, |index| {
+            if index == 0 {
+                response(503)
+            } else {
+                results[index].clone()
+            }
+        });
+        assert_eq!(comparison.mismatch, Some((1, 2)));
+        assert_eq!(comparison.unstable_targets, vec![0]);
+    }
+
+    #[test]
+    fn all_unstable_targets_are_skipped() {
+        let results = [response(200), response(201)];
+        let comparison = compare_stable_results(&results, |_| response(503));
+        assert_eq!(comparison.mismatch, None);
+        assert_eq!(comparison.unstable_targets, vec![0, 1]);
+    }
 
     #[test]
     fn does_this_work() {

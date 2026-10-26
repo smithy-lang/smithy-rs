@@ -42,7 +42,7 @@ private fun eventStreamWithInitialRequest(
 
     val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
     val parser = protocol.structuredDataSerializer().operationInputSerializer(params.operationShape)
-    // Legacy path requires the structured serializer to be available.
+    // Generated serde path requires the structured serializer to be available.
     if (!useSchemaSerde && parser == null) return null
 
     val smithyHttp = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
@@ -131,10 +131,10 @@ private fun messageStreamAdaptor(
 }
 
 /**
- * Renders an event stream request body directly, without going through the legacy
+ * Renders an event stream request body directly, without going through the generated serde
  * [HttpBoundProtocolPayloadGenerator]/[ProtocolPayloadGenerator] plumbing. Used by
  * the schema-serde [RequestSerializerGenerator] path so the event stream branch
- * does not depend on the legacy `bodyGenerator` parameter.
+ * does not depend on the generated serde `bodyGenerator` parameter.
  */
 fun renderClientEventStreamBody(
     writer: software.amazon.smithy.rust.codegen.core.rustlang.RustWriter,
@@ -193,7 +193,7 @@ fun renderClientEventStreamBody(
     renderEventStreamBodyInline(writer, codegenContext, protocol, params)
 }
 
-/** Shared event-stream-body emission used by both the legacy lambda and the schema-serde helper. */
+/** Shared event-stream-body emission used by both the generated serde lambda and the schema-serde helper. */
 private fun renderEventStreamBodyInline(
     writer: software.amazon.smithy.rust.codegen.core.rustlang.RustWriter,
     codegenContext: ClientCodegenContext,

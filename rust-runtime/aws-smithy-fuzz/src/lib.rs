@@ -18,8 +18,10 @@ use std::pin::pin;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 use tower::ServiceExt;
+mod protocol;
 mod types;
 pub use lazy_static;
+pub use protocol::{canonicalize_header_order, normalize_request, pin_protocol};
 pub use types::{Body, FuzzResult, HttpRequest, HttpResponse};
 
 #[macro_export]
@@ -66,6 +68,15 @@ impl FuzzTarget {
     }
 
     pub fn invoke_bytes(&self, input: &[u8]) -> FuzzResult {
+        // The driver applies the same campaign identity to both shared libraries,
+        // including direct invocation and replay. The baseline crate is untouched.
+        // Header order is canonicalized too, so both targets append header values identically.
+        // Bytes that do not decode as a request reach the target unchanged.
+        let normalized = HttpRequest::from_unknown_bytes(input).map(|mut request| {
+            normalize_request(&mut request);
+            request.as_bytes()
+        });
+        let input = normalized.as_deref().unwrap_or(input);
         let buffer = unsafe { (self.0)(input.as_ptr(), input.len()) };
         let data = buffer.destroy_into_vec();
         FuzzResult::from_bytes(&data)

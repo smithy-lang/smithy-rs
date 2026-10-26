@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
@@ -26,7 +27,17 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
-    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+
+    /** Shared Tower dependency for generated serde, schema serde, and server decorators. */
+    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
+
+    /**
+     * Both serde modes use the same Tower version so middleware works with either mode.
+     * Retains the context-taking API for existing callers.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun tower(codegenContext: CodegenContext): CargoDependency = Tower
+
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))

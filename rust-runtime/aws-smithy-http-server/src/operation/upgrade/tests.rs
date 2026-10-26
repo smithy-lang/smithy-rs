@@ -1,0 +1,794 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+use super::*;
+use crate::schema::OperationSchema;
+use crate::schema::{HttpModeledError, ServerProtocol, SharedServerProtocol};
+use aws_smithy_schema::serde::ShapeDeserializer;
+use aws_smithy_schema::{shape_id, Schema, ShapeType};
+use bytes::Bytes;
+use http_body_util::BodyExt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+mod logging;
+
+#[tokio::test]
+async fn schema_missing_failure_without_context_returns_empty_internal_error() {
+    let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, crate::Error>>> {
+            panic!("missing-handler fallback must not poll the request body")
+        },
+    )));
+    let response = SchemaMissingFailure.call(http::Request::new(body)).await.unwrap();
+    assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(response.headers().is_empty());
+    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+}
+
+/// A perfectly usable HTTP protocol that deliberately has no event-stream capability.
+#[derive(Debug, Default)]
+struct HttpOnly {
+    expected_extension: Option<std::sync::Weak<String>>,
+    collect: bool,
+}
+
+impl ServerProtocol for HttpOnly {
+    fn serialize_runtime_error(&self, error: crate::runtime_error::RuntimeError) -> crate::response::Response {
+        panic!("unexpected extractor runtime error: {error}")
+    }
+
+    fn protocol_id(&self) -> &'static aws_smithy_schema::ShapeId<'static> {
+        static ID: aws_smithy_schema::ShapeId<'static> = shape_id!("test", "httpOnly");
+        &ID
+    }
+    fn request_body_requirement(&self, _: &crate::schema::OperationSchema<'_>) -> BodyDirective {
+        if self.collect {
+            BodyDirective::Collect
+        } else {
+            BodyDirective::Skip
+        }
+    }
+    fn deserialize_request<'a>(
+        &'a self,
+        _: &Schema<'_>,
+        request: &'a aws_smithy_runtime_api::http::Request<bytes::Bytes>,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, DeserializeError> {
+        if let Some(extension) = &self.expected_extension {
+            assert_eq!(extension.upgrade().as_deref().map(String::as_str), Some("preserved"));
+            assert_eq!(request.method(), "PATCH");
+            assert_eq!(request.uri(), "/metadata?key=value");
+            assert_eq!(request.headers().get("x-test"), Some("header"));
+            assert_eq!(
+                request.body().as_ref(),
+                if self.collect { b"payload".as_slice() } else { b"" }
+            );
+        }
+        Ok(Box::new(crate::schema::request_bindings::EmptyStructDeserializer))
+    }
+    fn serialize_response(&self, _: &Schema<'_>, _: &dyn SerializableStruct) -> http::Response<BoxBody> {
+        http::Response::new(crate::body::empty())
+    }
+    fn serialize_streaming_response(
+        &self,
+        _: &Schema<'_>,
+        _: &dyn SerializableStruct,
+        _streaming_member: &Schema<'_>,
+        body: Option<BoxBody>,
+    ) -> http::Response<BoxBody> {
+        http::Response::new(body.unwrap_or_else(crate::body::empty))
+    }
+    fn serialize_error(&self, _: &dyn HttpModeledError) -> http::Response<BoxBody> {
+        panic!("unexpected error")
+    }
+    fn serialize_rejection(&self, err: DeserializeError) -> http::Response<BoxBody> {
+        // Invariant violations are framed by the protocol as internal failures.
+        if let DeserializeError::InternalFailure(_) = err {
+            let mut response = http::Response::new(crate::body::empty());
+            *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+            return response;
+        }
+        panic!("unexpected rejection: {err}")
+    }
+}
+
+static EMPTY: Schema<'static> = Schema::new_struct(shape_id!("test", "Empty"), ShapeType::Structure, &[]);
+static EVENT: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Events", "events"), ShapeType::Union, "events", 0).with_streaming();
+static EVENTS: Schema<'static> = Schema::new_struct(shape_id!("test", "Events"), ShapeType::Structure, &[&EVENT]);
+static BLOB: Schema<'static> =
+    Schema::new_member(shape_id!("test", "Blob", "blob"), ShapeType::Blob, "blob", 0).with_streaming();
+static BLOBS: Schema<'static> = Schema::new_struct(shape_id!("test", "Blob"), ShapeType::Structure, &[&BLOB]);
+
+macro_rules! operation {
+    ($name:ident, $input:ident, $output:ident) => {
+        struct $name;
+        impl OperationShape for $name {
+            const ID: crate::shape_id::ShapeId = crate::shape_id::ShapeId::new("test#Operation", "test", "Operation");
+            type Input = ();
+            type Output = ();
+            type Error = Infallible;
+        }
+        impl SchemaOperationShape for $name {
+            const SCHEMA: &'static OperationSchema<'static> = {
+                static SCHEMA: OperationSchema<'static> =
+                    OperationSchema::new(shape_id!("test", "Operation"), &$input, &$output, &[]);
+                &SCHEMA
+            };
+        }
+        impl StreamingOperationShape for $name {
+            fn deserialize_streaming_input(
+                request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+                _: SharedServerProtocol,
+            ) -> crate::operation::StreamingInputFuture<()> {
+                if let Some(decoded) = request.extension::<Arc<AtomicBool>>() {
+                    decoded.store(true, Ordering::SeqCst);
+                }
+                Box::pin(async { Ok(()) })
+            }
+            fn serialize_streaming_output(_: (), _: &SharedServerProtocol) -> http::Response<BoxBody> {
+                http::Response::new(crate::body::empty())
+            }
+        }
+    };
+}
+operation!(InputOnly, EVENTS, EMPTY);
+operation!(OutputOnly, EMPTY, EVENTS);
+operation!(Duplex, EVENTS, EVENTS);
+operation!(StreamingBlob, BLOBS, BLOBS);
+operation!(BlobInputOnly, BLOBS, EMPTY);
+operation!(BlobOutputOnly, EMPTY, BLOBS);
+operation!(Ordinary, EMPTY, EMPTY);
+
+async fn check<Op: StreamingOperationShape<Input = (), Output = ()>>(expected: http::StatusCode) {
+    check_protocol::<Op>(expected, SharedServerProtocol::serde_only(HttpOnly::default())).await;
+}
+
+async fn check_protocol<Op: StreamingOperationShape<Input = (), Output = ()>>(
+    expected: http::StatusCode,
+    protocol: SharedServerProtocol,
+) {
+    let polled = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
+    let decoded = Arc::new(AtomicBool::new(false));
+    let body_polled = polled.clone();
+    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(move |_| {
+        body_polled.store(true, Ordering::SeqCst);
+        Poll::Ready(Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::new()))))
+    }));
+    let mut request = http::Request::new(body);
+    SelectedOperation::new(protocol, Op::SCHEMA, Default::default()).insert_into(request.extensions_mut());
+    request.extensions_mut().insert(decoded.clone());
+    let handler_called = called.clone();
+    let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Op, (), _> {
+        inner: tower::service_fn(move |_: ((), ())| {
+            handler_called.store(true, Ordering::SeqCst);
+            async { Ok::<_, Infallible>(()) }
+        }),
+        _protocol: PhantomData,
+        _operation: PhantomData,
+        _extractors: PhantomData,
+    };
+    let response = upgrade.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), expected);
+    if expected == http::StatusCode::INTERNAL_SERVER_ERROR || expected == http::StatusCode::NOT_IMPLEMENTED {
+        assert!(response.headers().is_empty());
+    }
+    assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+    assert!(!polled.load(Ordering::SeqCst), "body must remain live and unpolled");
+    assert_eq!(called.load(Ordering::SeqCst), expected == http::StatusCode::OK);
+    assert_eq!(decoded.load(Ordering::SeqCst), expected == http::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn unsupported_event_directions_reject_before_polling_or_calling_handler() {
+    check::<InputOnly>(http::StatusCode::NOT_IMPLEMENTED).await;
+    check::<OutputOnly>(http::StatusCode::NOT_IMPLEMENTED).await;
+    check::<Duplex>(http::StatusCode::NOT_IMPLEMENTED).await;
+}
+
+#[tokio::test]
+async fn http_and_streaming_blobs_need_no_event_capability() {
+    check::<Ordinary>(http::StatusCode::OK).await;
+    check::<StreamingBlob>(http::StatusCode::OK).await;
+}
+
+#[tokio::test]
+async fn cbor_outputs_events_and_ordinary_inputs_remain_supported() {
+    use crate::schema::protocol::RpcV2Cbor;
+    let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
+    check_protocol::<BlobOutputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<Ordinary>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<InputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<OutputOnly>(http::StatusCode::OK, protocol.clone()).await;
+    check_protocol::<Duplex>(http::StatusCode::OK, protocol).await;
+}
+
+#[tokio::test]
+async fn rest_streaming_blob_inputs_remain_supported() {
+    use crate::schema::protocol::{RestJson1, RestXml};
+    for protocol in [
+        SharedServerProtocol::metadata_routed(RestJson1::default()),
+        SharedServerProtocol::metadata_routed(RestXml::default()),
+    ] {
+        check_protocol::<BlobInputOnly>(http::StatusCode::OK, protocol.clone()).await;
+        check_protocol::<StreamingBlob>(http::StatusCode::OK, protocol).await;
+    }
+}
+
+#[tokio::test]
+async fn cbor_blob_inputs_collect_before_decoding_and_count_document_framing_in_the_limit() {
+    use crate::config::RequestBodyCollectionConfig;
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionError};
+    use std::num::NonZeroUsize;
+
+    let wire = Bytes::from_static(b"\xa1\x64blob\x41x");
+    for limit in [wire.len(), wire.len() - 1] {
+        let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
+        let mut request = http::Request::builder()
+            .header("content-type", "application/cbor")
+            .body(crate::body::RequestBody::from(wire.clone()))
+            .unwrap();
+        SelectedOperation::new(
+            protocol.clone(),
+            BlobInputOnly::SCHEMA,
+            RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(limit)),
+        )
+        .insert_into(request.extensions_mut());
+        let request = aws_smithy_runtime_api::http::Request::try_from(request).unwrap();
+        let decoded = Arc::new(AtomicBool::new(false));
+        let observed = decoded.clone();
+        let result = deserialize_streaming_request(
+            BlobInputOnly::SCHEMA,
+            request,
+            protocol,
+            move |deserializer, body, _| {
+                observed.store(true, Ordering::SeqCst);
+                assert_eq!(body.bytes(), Some(b"".as_slice()), "collected inputs have no live body");
+                let mut blob = Bytes::new();
+                let result = deserializer.read_struct(&BLOBS, &mut |member, deserializer| {
+                    blob = deserializer.read_blob(member)?.into_bytes();
+                    Ok(())
+                });
+                Box::pin(async move {
+                    result?;
+                    Ok(blob)
+                })
+            },
+        )
+        .await;
+        if limit == wire.len() {
+            assert_eq!(result.unwrap(), "x");
+            assert!(decoded.load(Ordering::SeqCst));
+        } else {
+            assert!(matches!(
+                result,
+                Err(DeserializeError::BodyCollection(
+                    RequestBodyCollectionError::BodyLimitExceeded(_)
+                ))
+            ));
+            assert!(!decoded.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[tokio::test]
+async fn cbor_blob_input_timeout_precedes_decoding() {
+    use crate::config::RequestBodyCollectionConfig;
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionError};
+    use std::time::Duration;
+
+    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> { Poll::Pending },
+    ));
+    let protocol = SharedServerProtocol::metadata_routed(RpcV2Cbor::default());
+    let mut request = http::Request::builder()
+        .header("content-type", "application/cbor")
+        .body(crate::body::RequestBody::new(body))
+        .unwrap();
+    SelectedOperation::new(
+        protocol.clone(),
+        BlobInputOnly::SCHEMA,
+        RequestBodyCollectionConfig::default().with_read_timeout(Some(Duration::from_millis(10))),
+    )
+    .insert_into(request.extensions_mut());
+    let request = aws_smithy_runtime_api::http::Request::try_from(request).unwrap();
+    let result = deserialize_streaming_request::<(), _>(BlobInputOnly::SCHEMA, request, protocol, |_, _, _| {
+        panic!("timed out input must not be decoded")
+    })
+    .await;
+    assert!(matches!(
+        result,
+        Err(DeserializeError::BodyCollection(
+            RequestBodyCollectionError::Timeout { .. }
+        ))
+    ));
+}
+
+#[test]
+fn streaming_upgrade_budgets_body_reads_by_the_handler() {
+    use std::sync::atomic::AtomicUsize;
+
+    struct StreamingInput;
+    impl OperationShape for StreamingInput {
+        const ID: crate::shape_id::ShapeId = StreamingBlob::ID;
+        type Input = SdkBody;
+        type Output = ();
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for StreamingInput {
+        const SCHEMA: &'static OperationSchema<'static> = StreamingBlob::SCHEMA;
+    }
+    impl StreamingOperationShape for StreamingInput {
+        fn deserialize_streaming_input(
+            request: aws_smithy_runtime_api::http::Request<crate::body::RequestBody>,
+            protocol: SharedServerProtocol,
+        ) -> crate::operation::StreamingInputFuture<SdkBody> {
+            deserialize_streaming_request(Self::SCHEMA, request, protocol, |_, body, _| {
+                Box::pin(async move { Ok(body) })
+            })
+        }
+        fn serialize_streaming_output(_: (), _: &SharedServerProtocol) -> http::Response<BoxBody> {
+            http::Response::new(crate::body::empty())
+        }
+    }
+
+    let polls = Arc::new(AtomicUsize::new(0));
+    let observed = polls.clone();
+    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(move |_| {
+        let index = observed.fetch_add(1, Ordering::SeqCst);
+        Poll::Ready(match index {
+            0 => Some(Ok::<_, Infallible>(http_body::Frame::data(Bytes::from_static(
+                b"payload",
+            )))),
+            1..=64 => Some(Ok(http_body::Frame::data(Bytes::new()))),
+            _ => None,
+        })
+    }));
+    let mut request = http::Request::new(body);
+    SelectedOperation::new(
+        SharedServerProtocol::serde_only(HttpOnly::default()),
+        StreamingInput::SCHEMA,
+        Default::default(),
+    )
+    .insert_into(request.extensions_mut());
+    let upgrade = DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, StreamingInput, (), _> {
+        inner: tower::service_fn(|(body, _): (SdkBody, ())| async move {
+            assert_eq!(body.collect().await.unwrap().to_bytes(), "payload");
+            Ok::<_, Infallible>(())
+        }),
+        _protocol: PhantomData,
+        _operation: PhantomData,
+        _extractors: PhantomData,
+    };
+    let mut response = Box::pin(upgrade.oneshot(request));
+    let mut cx = Context::from_waker(std::task::Waker::noop());
+    for expected_polls in [32, 64] {
+        assert!(response.as_mut().poll(&mut cx).is_pending());
+        assert_eq!(polls.load(Ordering::SeqCst), expected_polls);
+    }
+    let Poll::Ready(Ok(response)) = response.as_mut().poll(&mut cx) else {
+        panic!("handler should finish reading after the two budget yields");
+    };
+    assert_eq!(response.status(), http::StatusCode::OK);
+}
+
+struct EmptyShape;
+impl DeserializableShape for EmptyShape {
+    fn deserialize(deserializer: &mut dyn ShapeDeserializer) -> Result<Self, DeserializeError> {
+        deserializer.read_struct(&EMPTY, &mut |_, _| Ok(()))?;
+        Ok(Self)
+    }
+}
+impl SerializableStruct for EmptyShape {
+    fn schema(&self) -> &Schema<'_> {
+        &EMPTY
+    }
+
+    fn serialize_members(
+        &self,
+        _: &mut dyn aws_smithy_schema::serde::ShapeSerializer,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        Ok(())
+    }
+}
+struct NonStreaming;
+impl OperationShape for NonStreaming {
+    const ID: crate::shape_id::ShapeId = Ordinary::ID;
+    type Input = EmptyShape;
+    type Output = EmptyShape;
+    type Error = Infallible;
+}
+impl SchemaOperationShape for NonStreaming {
+    const SCHEMA: &'static OperationSchema<'static> = Ordinary::SCHEMA;
+}
+
+// Intentionally has no IntoResponse<P> implementation: schema extraction needs only the selected protocol.
+#[derive(Debug, thiserror::Error)]
+#[error("custom caller rejection")]
+struct ContextOnlyRejection;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RejectionMarker;
+
+impl IntoResponseWithProtocol for ContextOnlyRejection {
+    fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> crate::response::Response {
+        http::Response::builder()
+            .status(http::StatusCode::TOO_MANY_REQUESTS)
+            .header("x-selected-protocol", protocol.protocol_id().to_string())
+            .extension(RejectionMarker)
+            .body(crate::body::to_boxed("custom caller rejection"))
+            .unwrap()
+    }
+}
+
+struct ContextOnlyCaller;
+
+impl<P> FromParts<P> for ContextOnlyCaller {
+    type Rejection = ContextOnlyRejection;
+
+    fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        Err(ContextOnlyRejection)
+    }
+}
+
+#[tokio::test]
+async fn contextual_only_tuple_rejections_preserve_custom_responses_without_polling_the_body() {
+    use crate::protocol::{rest_json_1::RestJson1, rpc_v2_cbor::RpcV2Cbor};
+    type Protocols = (RestJson1, RpcV2Cbor);
+    type Extractors = ((), ContextOnlyCaller);
+
+    for protocol in [
+        SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
+        SharedServerProtocol::metadata_routed(crate::schema::protocol::RpcV2Cbor::default()),
+    ] {
+        for streaming in [false, true] {
+            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                    panic!("extractor rejection must not poll the request body")
+                },
+            ));
+            let mut request = http::Request::new(body);
+            let operation = if streaming {
+                StreamingBlob::SCHEMA
+            } else {
+                NonStreaming::SCHEMA
+            };
+            SelectedOperation::new(protocol.clone(), operation, Default::default())
+                .insert_into(request.extensions_mut());
+            let response = if streaming {
+                DynStreamingUpgrade::<Protocols, StreamingBlob, Extractors, _> {
+                    inner: tower::service_fn(|_: ((), Extractors)| async {
+                        panic!("extractor rejection must not invoke the streaming handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(())
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynUpgrade::<Protocols, NonStreaming, Extractors, _> {
+                    inner: tower::service_fn(|_: (EmptyShape, Extractors)| async {
+                        panic!("extractor rejection must not invoke the handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(EmptyShape)
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            };
+            assert_eq!(response.status(), http::StatusCode::TOO_MANY_REQUESTS);
+            assert_eq!(response.headers().len(), 1);
+            assert_eq!(
+                response.headers()["x-selected-protocol"],
+                protocol.protocol_id().to_string()
+            );
+            assert_eq!(response.extensions().get::<RejectionMarker>(), Some(&RejectionMarker));
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "custom caller rejection"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn missing_or_mismatched_selection_rejects_before_reading_input_or_calling_handlers() {
+    for streaming in [false, true] {
+        for selection in [None, Some(InputOnly::SCHEMA)] {
+            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                    panic!("invalid routing context must not poll the request body")
+                },
+            ));
+            let mut request = http::Request::new(body);
+            if let Some(operation) = selection {
+                SelectedOperation::new(
+                    SharedServerProtocol::serde_only(HttpOnly::default()),
+                    operation,
+                    Default::default(),
+                )
+                .insert_into(request.extensions_mut());
+            }
+            let called = Arc::new(AtomicBool::new(false));
+            let handler_called = called.clone();
+            let response = if streaming {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
+                    inner: tower::service_fn(move |_: ((), ())| {
+                        handler_called.store(true, Ordering::SeqCst);
+                        async { Ok::<_, Infallible>(()) }
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
+                    inner: tower::service_fn(move |_: (EmptyShape, ())| {
+                        handler_called.store(true, Ordering::SeqCst);
+                        async { Ok::<_, Infallible>(EmptyShape) }
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            };
+            assert_eq!(response.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
+            assert!(response.headers().is_empty());
+            assert!(response.into_body().collect().await.unwrap().to_bytes().is_empty());
+            assert!(!called.load(Ordering::SeqCst));
+        }
+    }
+}
+
+#[test]
+fn selection_accessors_preserve_the_private_carrier_through_http_conversion() {
+    use crate::config::RequestBodyCollectionConfig;
+    use std::num::NonZeroUsize;
+
+    let mut request = http::Request::new(());
+    SelectedOperation::new(
+        SharedServerProtocol::serde_only(HttpOnly::default()),
+        Ordinary::SCHEMA,
+        RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(1)),
+    )
+    .insert_into(request.extensions_mut());
+    let selected = SelectedOperation::get_from_request(&request).unwrap();
+    assert!(std::ptr::eq(
+        selected,
+        SelectedOperation::get_from_extensions(request.extensions()).unwrap()
+    ));
+    assert!(std::ptr::eq(selected.operation(), Ordinary::SCHEMA));
+    // The public view is not the extension key, even when a detached view is inserted.
+    let detached = SelectedOperation::new(
+        selected.protocol().clone(),
+        InputOnly::SCHEMA,
+        RequestBodyCollectionConfig::default(),
+    );
+    request.extensions_mut().insert(detached);
+    assert!(std::ptr::eq(
+        SelectedOperation::get_from_request(&request).unwrap().operation(),
+        Ordinary::SCHEMA
+    ));
+    let request = aws_smithy_runtime_api::http::Request::try_from(request)
+        .unwrap()
+        .map(|_| Bytes::new());
+    let selected = SelectedOperation::get_from_runtime_request(&request).unwrap();
+    assert!(std::ptr::eq(selected.operation(), Ordinary::SCHEMA));
+    assert_eq!(selected.request_body_config().max_bytes, NonZeroUsize::new(1));
+}
+
+#[tokio::test]
+async fn sole_rest_health_checks_distinguish_absent_and_modeled_empty_inputs() {
+    use crate::schema::routing::MultiProtocolRoutingServiceBuilder;
+    use crate::schema::ServiceSchema;
+    use aws_smithy_schema::traits::HttpTrait;
+
+    static NO_INPUT: Schema<'static> = Schema::new_struct(shape_id!("test", "NoInput"), ShapeType::Structure, &[])
+        .with_http(HttpTrait::new("GET", "/ping", Some(200)));
+    static MODELED_INPUT: Schema<'static> =
+        Schema::new_struct(shape_id!("test", "ModeledInput"), ShapeType::Structure, &[])
+            .with_original_name("ModeledInput")
+            .with_http(HttpTrait::new("GET", "/ping", Some(200)));
+    operation!(Health, NO_INPUT, EMPTY);
+    operation!(ModeledHealth, MODELED_INPUT, EMPTY);
+
+    fn app<Op>(
+        schema: &'static ServiceSchema<'static>,
+        called: Arc<AtomicBool>,
+    ) -> crate::schema::routing::MultiProtocolRoutingService
+    where
+        Op: SchemaOperationShape<Input = EmptyShape, Output = EmptyShape, Error = Infallible> + Send + Sync + 'static,
+    {
+        let upgrade = DynUpgrade::<crate::protocol::rest_json_1::RestJson1, Op, (), _> {
+            _protocol: PhantomData,
+            _operation: PhantomData,
+            _extractors: PhantomData,
+            inner: tower::service_fn(move |_: (EmptyShape, ())| {
+                called.store(true, Ordering::SeqCst);
+                async { Ok::<_, Infallible>(EmptyShape) }
+            }),
+        };
+        MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings(
+            schema,
+            [],
+            [(Op::SCHEMA, crate::routing::SyncRoute::new(upgrade))],
+        )
+        .build()
+        .unwrap()
+    }
+
+    // The fixtures use EmptyShape as their serde representation while retaining the
+    // operation's modeled-input metadata on the descriptor passed to the protocol.
+    struct HealthSerde;
+    impl OperationShape for HealthSerde {
+        const ID: crate::shape_id::ShapeId = Health::ID;
+        type Input = EmptyShape;
+        type Output = EmptyShape;
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for HealthSerde {
+        const SCHEMA: &'static OperationSchema<'static> = Health::SCHEMA;
+    }
+    struct ModeledHealthSerde;
+    impl OperationShape for ModeledHealthSerde {
+        const ID: crate::shape_id::ShapeId = ModeledHealth::ID;
+        type Input = EmptyShape;
+        type Output = EmptyShape;
+        type Error = Infallible;
+    }
+    impl SchemaOperationShape for ModeledHealthSerde {
+        const SCHEMA: &'static OperationSchema<'static> = ModeledHealth::SCHEMA;
+    }
+    static JSON: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restJson1")],
+        &[Health::SCHEMA],
+    );
+    static XML: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restXml")],
+        &[Health::SCHEMA],
+    );
+    static MODELED_JSON: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restJson1")],
+        &[ModeledHealth::SCHEMA],
+    );
+    static MODELED_XML: ServiceSchema<'static> = ServiceSchema::new(
+        shape_id!("test", "HealthService"),
+        None,
+        &[shape_id!("aws.protocols", "restXml")],
+        &[ModeledHealth::SCHEMA],
+    );
+    for (schema, modeled) in [
+        (&JSON, false),
+        (&XML, false),
+        (&MODELED_JSON, true),
+        (&MODELED_XML, true),
+    ] {
+        for content_type in [
+            None,
+            Some("application/json"),
+            Some("application/xml"),
+            Some("text/plain"),
+        ] {
+            let called = Arc::new(AtomicBool::new(false));
+            let service = if modeled {
+                app::<ModeledHealthSerde>(schema, called.clone())
+            } else {
+                app::<HealthSerde>(schema, called.clone())
+            };
+            let mut request = http::Request::builder().method("GET").uri("/ping");
+            if let Some(content_type) = content_type {
+                request = request.header("content-type", content_type);
+            }
+            let body = crate::body::Body::new(http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, std::io::Error>>> {
+                    panic!("a health check must not poll its body")
+                },
+            )));
+            let response = service.oneshot(request.body(body).unwrap()).await.unwrap();
+            let expected = if modeled || content_type.is_none() {
+                http::StatusCode::OK
+            } else {
+                http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+            };
+            assert_eq!(response.status(), expected);
+            assert_eq!(called.load(Ordering::SeqCst), expected == http::StatusCode::OK);
+        }
+    }
+}
+
+#[tokio::test]
+async fn schema_upgrades_preserve_request_metadata() {
+    for (streaming_upgrade, streaming_input, collect) in [
+        (false, false, false),
+        (false, false, true),
+        (true, false, false),
+        (true, false, true),
+        (true, true, false),
+    ] {
+        let extension = Arc::new(String::from("preserved"));
+        let weak = Arc::downgrade(&extension);
+        let protocol = HttpOnly {
+            expected_extension: Some(weak.clone()),
+            collect,
+        };
+        let mut request = http::Request::builder()
+            .method("PATCH")
+            .uri("/metadata?key=value")
+            .header("x-test", "header")
+            .body(http_body_util::Full::new(Bytes::from_static(b"payload")))
+            .unwrap();
+        request.extensions_mut().insert(extension);
+        SelectedOperation::new(
+            SharedServerProtocol::serde_only(protocol),
+            if streaming_input {
+                StreamingBlob::SCHEMA
+            } else {
+                Ordinary::SCHEMA
+            },
+            Default::default(),
+        )
+        .insert_into(request.extensions_mut());
+        let response = if streaming_upgrade {
+            let service = tower::service_fn(|_: ((), ())| async { Ok::<_, Infallible>(()) });
+            if streaming_input {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, StreamingBlob, (), _> {
+                    inner: service,
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynStreamingUpgrade::<crate::protocol::rest_json_1::RestJson1, Ordinary, (), _> {
+                    inner: service,
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            }
+        } else {
+            DynUpgrade::<crate::protocol::rest_json_1::RestJson1, NonStreaming, (), _> {
+                inner: tower::service_fn(|_: (EmptyShape, ())| async { Ok::<_, Infallible>(EmptyShape) }),
+                _protocol: PhantomData,
+                _operation: PhantomData,
+                _extractors: PhantomData,
+            }
+            .oneshot(request)
+            .await
+            .unwrap()
+        };
+        assert_eq!(response.status(), http::StatusCode::OK);
+        assert!(
+            weak.upgrade().is_none(),
+            "extension is released when the request finishes"
+        );
+    }
+}

@@ -170,6 +170,13 @@ impl Chunk {
 /// extension, so untouched schemas cost one word plus the cell's state.
 pub(crate) struct ExtensionStorage(OnceLock<Box<Chunk>>);
 
+impl Clone for ExtensionStorage {
+    fn clone(&self) -> Self {
+        // A cloned schema may receive different traits, so derived data must be recomputed.
+        Self::new()
+    }
+}
+
 impl ExtensionStorage {
     pub(crate) const fn new() -> Self {
         Self(OnceLock::new())

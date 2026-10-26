@@ -102,6 +102,19 @@ pub fn base_url(port: u16) -> String {
 pub fn client(port: u16) -> Client {
     let config = Config::builder()
         .endpoint_url(format!("http://{DEFAULT_ADDRESS}:{port}"))
+        // URI-only requests also need the protocol's identifying Content-Type. Preserve
+        // payload-specific headers, including application/vnd.amazon.eventstream.
+        .interceptor(
+            aws_smithy_runtime::client::interceptors::MutateRequestInterceptor::new(
+                |request: &mut pokemon_service_client::config::http::HttpRequest| {
+                    if !request.headers().contains_key("content-type") {
+                        request
+                            .headers_mut()
+                            .insert("content-type", "application/json");
+                    }
+                },
+            ),
+        )
         .build();
     Client::from_conf(config)
 }
