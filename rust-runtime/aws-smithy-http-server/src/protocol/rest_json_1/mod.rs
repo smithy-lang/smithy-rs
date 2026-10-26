@@ -6,6 +6,8 @@
 pub mod rejection;
 pub mod router;
 pub mod runtime_error;
-
-/// [AWS restJson1](https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html) protocol.
-pub struct RestJson1;
+/// The `restJson1` protocol.
+///
+/// The same type is used as the protocol type parameter of legacy generated servers and, with
+/// `codegen.schemaSerde`, as the schema-driven protocol implementation.
+pub use crate::schema::protocol::RestJson1;

@@ -11,6 +11,9 @@
 //!
 //! We generate an implementation on this for every service struct (exported from the root of the generated crate).
 //!
+//! Schema-generated services also implement [`SchemaServiceShape`], connecting the typed service to its
+//! shared [`ServiceSchema`](crate::schema::ServiceSchema) descriptor.
+//!
 //! As stated in the [operation module documentation](crate::operation) we also generate marker structs for
 //! [`OperationShape`](crate::operation::OperationShape), these are coupled to the `S: ServiceShape` via the [`ContainsOperation`] trait.
 //!
@@ -82,6 +85,15 @@ pub trait ServiceShape {
 
     /// An enumeration of all operations contained in this service.
     type Operations;
+}
+
+/// Connects a typed service to its shared schema descriptor.
+///
+/// Schema-generated services implement this trait in addition to [`ServiceShape`].
+/// The descriptor contains the service's identity, version, protocols, and operation schemas.
+pub trait SchemaServiceShape: ServiceShape {
+    /// The shared descriptor for this service.
+    const SCHEMA: &'static crate::schema::ServiceSchema<'static>;
 }
 
 pub trait ContainsOperation<Op>: ServiceShape {
