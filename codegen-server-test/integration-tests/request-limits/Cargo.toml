@@ -1,0 +1,9 @@
+[package]
+name = "request-limits"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+request-limits-server-sdk = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "io-util", "time"] }

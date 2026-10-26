@@ -75,6 +75,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerEventStreamMessageTimeoutHttpBindingCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -797,47 +799,28 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val expectedRequestContentType =
                 httpBindingResolver.requestContentType(operationShape)!!
 
-            // Generate body collection code. When `requestBodyMaxBytes` is > 0, we call the
-            // `collect_body_limited` helper exposed by both the HTTP 1.x (`aws-smithy-http-server`)
-            // and HTTP 0.x (`aws-smithy-legacy-http-server`) runtime crates. That helper caps the
-            // amount of data a single request can buffer in memory — this prevents denial-of-service
-            // attacks in which a client streams an unbounded `Transfer-Encoding: chunked` body.
-            //
-            // If the limit is exceeded the helper returns a `BodyLimitExceeded` error that bubbles
-            // up as `RequestRejection::BufferHttpBodyBytes` and surfaces to the client as
-            // `400 Bad Request` (plus the server drops the connection).
-            //
-            // Services that legitimately need to accept larger payloads can raise the limit via
-            // the `requestBodyMaxBytes` codegen setting. Setting it to `0` disables the check
-            // entirely (not recommended).
-            val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
-            if (requestBodyMaxBytes > 0L) {
-                rustTemplate(
-                    """
-                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
-                        #{Ok}(bytes) => bytes,
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
-                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
-                        }
-                    };
-                    """,
-                    *codegenScope,
-                )
-            } else if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
-                rustTemplate(
-                    """
-                    let bytes = {
-                        use #{HttpBodyUtil}::BodyExt;
-                        body.collect().await?.to_bytes()
-                    };
-                    """,
-                    *codegenScope,
-                    "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
-                )
-            } else {
-                rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
-            }
+            // Resolve an omitted size limit from the runtime policy. Explicit zero
+            // remains unlimited, and positive overrides reject oversized bodies.
+            val bodyLimit =
+                writable {
+                    rustTemplate(
+                        "#{RequestBodyConfig}.max_bytes.map_or(0, std::num::NonZeroUsize::get)",
+                        "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
+                    )
+                }
+            rustTemplate(
+                """
+                let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, #{BodyLimit}).await {
+                    #{Ok}(bytes) => bytes,
+                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                        return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                    }
+                };
+                """,
+                "BodyLimit" to bodyLimit,
+                *codegenScope,
+            )
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
             // operation input; we simply parse it as empty operation input.
             // This behavior applies to all protocols. This might seem like a bug, but it isn't. There's protocol tests
@@ -980,6 +963,25 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             val readInitialRequest =
                                 writable {
                                     if (httpBindingResolver.isRpcProtocol()) {
+                                        // An expired initial-message deadline surfaces through
+                                        // `try_recv_initial` as a body error whose source chain
+                                        // contains `MessageTimeoutError`. Reject it as a retryable
+                                        // `408 Request Timeout` instead of a validation failure.
+                                        val mapTimeoutError =
+                                            writable {
+                                                rustTemplate(
+                                                    """
+                                                    if #{MessageTimeoutError}::find_in_chain(&ev_error).is_some() {
+                                                        return #{RequestRejection}::RequestTimeout;
+                                                    }
+                                                    """,
+                                                    "MessageTimeoutError" to
+                                                        ServerEventStreamMessageTimeoutHttpBindingCustomization
+                                                            .eventStreamMessageTimeoutModule(runtimeConfig)
+                                                            .resolve("MessageTimeoutError"),
+                                                    *codegenScope,
+                                                )
+                                            }
                                         rustTemplate(
                                             """
                                             let mut receiver = receiver;
@@ -987,10 +989,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 .try_recv_initial(#{InitialMessageType}::Request)
                                                 .await
                                                 .map_err(
-                                                    |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                        #{AllowUselessConversion}
-                                                        format!("{ev_error}").into()
-                                                    )
+                                                    |ev_error| {
+                                                        #{mapTimeoutError}
+                                                        #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                    }
                                                 )? {
                                                 #{parseInitialRequest}
                                             }
@@ -1000,6 +1005,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 RuntimeType.smithyHttp(runtimeConfig)
                                                     .resolve("event_stream::InitialMessageType"),
                                             "parseInitialRequest" to parseInitialRequest,
+                                            "mapTimeoutError" to mapTimeoutError,
                                             "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                             *codegenScope,
                                         )
@@ -1069,60 +1075,32 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         }
                                     }
                             }
-                        // Generate body collection code. See the long comment in
-                        // `serverRenderShapeParser` for why we wrap the body in a size-limited
-                        // reader (same reasoning applies here).
-                        val payloadRequestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
-                        if (payloadRequestBodyMaxBytes > 0L) {
-                            rustTemplate(
-                                """
-                                {
-                                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
-                                        #{Ok}(bytes) => bytes,
-                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
-                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
-                                        }
-                                    };
-                                    #{VerifyRequestContentTypeHeader:W}
-                                    #{Deserializer}(&bytes)?
-                                }
-                                """,
-                                "Deserializer" to deserializer,
-                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                                *codegenScope,
-                            )
-                        } else if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
-                            rustTemplate(
-                                """
-                                {
-                                    let bytes = {
-                                        use #{HttpBodyUtil}::BodyExt;
-                                        body.collect().await?.to_bytes()
-                                    };
-                                    #{VerifyRequestContentTypeHeader:W}
-                                    #{Deserializer}(&bytes)?
-                                }
-                                """,
-                                "Deserializer" to deserializer,
-                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                                *codegenScope,
-                                "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
-                            )
-                        } else {
-                            rustTemplate(
-                                """
-                                {
-                                    let bytes = #{Hyper}::body::to_bytes(body).await?;
-                                    #{VerifyRequestContentTypeHeader:W}
-                                    #{Deserializer}(&bytes)?
-                                }
-                                """,
-                                "Deserializer" to deserializer,
-                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                                *codegenScope,
-                            )
-                        }
+                        val bodyLimit =
+                            writable {
+                                rustTemplate(
+                                    "#{RequestBodyConfig}.max_bytes.map_or(0, std::num::NonZeroUsize::get)",
+                                    "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
+                                )
+                            }
+                        rustTemplate(
+                            """
+                            {
+                                let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, #{BodyLimit}).await {
+                                    #{Ok}(bytes) => bytes,
+                                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                        return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                                    }
+                                };
+                                #{VerifyRequestContentTypeHeader:W}
+                                #{Deserializer}(&bytes)?
+                            }
+                            """,
+                            "BodyLimit" to bodyLimit,
+                            "Deserializer" to deserializer,
+                            "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                            *codegenScope,
+                        )
                     }
                 }
             }
