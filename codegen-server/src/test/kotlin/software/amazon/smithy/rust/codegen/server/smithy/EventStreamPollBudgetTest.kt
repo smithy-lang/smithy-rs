@@ -96,6 +96,84 @@ internal class EventStreamPollBudgetTest {
     }
 
     @Test
+    fun `generated receiver reports clean EOF after idle expiry at a budget boundary`() {
+        for (budget in listOf(1, 32)) {
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    additionalSettings =
+                        Node.parse(
+                            """
+                            {"customizationConfig": {"protocols": {"common": {"request": {"body": {
+                                "readPollBudget": $budget,
+                                "eventStreamTimeouts": {"idle": "100ms"}
+                            }}}}}}
+                            """,
+                        ).expectObjectNode(),
+                ),
+            ) { codegenContext, rustCrate ->
+                rustCrate.testModule {
+                    tokioTest("clean_eof_after_idle_expiry_at_budget_boundary") {
+                        rustTemplate(
+                            """
+                            use #{SmithyHttpServer}::request::FromRequest;
+                            use #{SmithyTypes}::event_stream::{Header, HeaderValue, Message};
+                            use std::pin::Pin;
+                            use std::task::{Context, Poll};
+                            use std::time::Duration;
+
+                            struct ReadyEvents { remaining: usize, frame: #{Bytes} }
+                            impl #{Body1x}::Body for ReadyEvents {
+                                type Data = #{Bytes};
+                                type Error = std::convert::Infallible;
+                                fn poll_frame(
+                                    mut self: Pin<&mut Self>,
+                                    _cx: &mut Context<'_>,
+                                ) -> Poll<#{Option}<#{Result}<#{Body1x}::Frame<#{Bytes}>, Self::Error>>> {
+                                    if self.remaining == 0 {
+                                        return Poll::Ready(#{None});
+                                    }
+                                    self.remaining -= 1;
+                                    Poll::Ready(#{Some}(#{Ok}(#{Body1x}::Frame::data(self.frame.clone()))))
+                                }
+                                // Use Body's default is_end_stream(): EOF must be polled.
+                            }
+                            tokio::time::pause();
+                            let message = Message::new(#{Bytes}::from_static(b"{\"data\":\"hello\"}"))
+                                .add_header(Header::new(":message-type", HeaderValue::String("event".into())))
+                                .add_header(Header::new(":event-type", HeaderValue::String("event".into())))
+                                .add_header(Header::new(":content-type", HeaderValue::String("application/json".into())));
+                            let mut frame = #{Vec}::new();
+                            #{EventStream}::frame::write_message_to(&message, &mut frame).unwrap();
+                            let request = #{Http}::Request::builder()
+                                .uri("/publish").method("POST")
+                                .header("Content-Type", "application/vnd.amazon.eventstream")
+                                .body(#{SdkBody}::from_body_1_x(ReadyEvents {
+                                    remaining: $budget, frame: frame.into(),
+                                })).unwrap();
+                            let mut input = crate::input::PublishEventsInput::from_request(request).await.unwrap();
+                            for _ in 0..$budget {
+                                assert!(input.events.recv().await.unwrap().is_some());
+                            }
+                            tokio::time::advance(Duration::from_millis(200)).await;
+                            assert!(input.events.recv().await.expect("clean EOF must not time out").is_none());
+                            """,
+                            *RuntimeType.preludeScope,
+                            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+                            "SmithyTypes" to RuntimeType.smithyTypes(codegenContext.runtimeConfig),
+                            "EventStream" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig),
+                            "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+                            "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                            "Body1x" to CargoDependency.HttpBody1x.toType(),
+                            "Bytes" to RuntimeType.Bytes,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
     fun `malformed common protocol configuration is rejected`() {
         for (json in listOf(
             """{"protocols": null}""",
@@ -201,7 +279,7 @@ internal class EventStreamPollBudgetTest {
                     )
                 }
                 if (withTimeout) {
-                    tokioTest("expired_timeout_precedes_a_forced_yield") {
+                    tokioTest("expired_timeout_precedes_data_after_a_forced_yield") {
                         rustTemplate(
                             """
                             use #{Body1x}::Body;
@@ -221,20 +299,21 @@ internal class EventStreamPollBudgetTest {
                                 }
                             }
                             tokio::time::pause();
-                            let body = crate::event_stream_poll_budget::wrap_with_poll_budget(
-                                #{SdkBody}::from_body_1_x(ReadyPartial), 1,
+                            let body = crate::event_stream_message_timeout::wrap_with_message_timeout(
+                                #{SdkBody}::from_body_1_x(ReadyPartial), std::time::Duration::from_millis(100),
                             );
-                            let mut body = crate::event_stream_message_timeout::wrap_with_message_timeout(
-                                body, std::time::Duration::from_millis(100),
+                            let mut body = crate::event_stream_poll_budget::wrap_with_poll_budget(
+                                body, 1,
                             );
                             let mut cx = Context::from_waker(Waker::noop());
                             assert!(matches!(Pin::new(&mut body).poll_frame(&mut cx), Poll::Ready(#{Some}(#{Ok}(_)))));
                             tokio::time::advance(std::time::Duration::from_millis(100)).await;
+                            assert!(Pin::new(&mut body).poll_frame(&mut cx).is_pending());
                             match Pin::new(&mut body).poll_frame(&mut cx) {
                                 Poll::Ready(#{Some}(#{Err}(err))) => {
                                     assert!(crate::event_stream_message_timeout::MessageTimeoutError::find_in_chain(err.as_ref()).is_some());
                                 }
-                                other => panic!("expired timeout must precede budget yield: {other:?}"),
+                                other => panic!("expired timeout must precede data after budget yield: {other:?}"),
                             }
                             """,
                             *RuntimeType.preludeScope,

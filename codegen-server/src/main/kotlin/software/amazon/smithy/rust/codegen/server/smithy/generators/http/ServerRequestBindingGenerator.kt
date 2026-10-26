@@ -48,11 +48,11 @@ class ServerRequestBindingGenerator(
                 ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUnconstrainedMapHttpBindingCustomization(
                     codegenContext,
                 ),
-                ServerEventStreamPollBudgetHttpBindingCustomization(codegenContext),
                 ServerEventStreamMessageTimeoutHttpBindingCustomization(
                     codegenContext,
                     protocol.httpBindingResolver.isRpcProtocol(),
                 ),
+                ServerEventStreamPollBudgetHttpBindingCustomization(codegenContext),
             ) + additionalHttpBindingCustomizations,
         )
 
@@ -76,8 +76,8 @@ class ServerRequestBindingGenerator(
 
 /**
  * Yields after a bounded number of ready event-stream body frames, independently of
- * whether message timeouts are enabled. This runs before the timeout customization so
- * expiration is checked outside the polling-budget wrapper.
+ * whether message timeouts are enabled. This runs after the timeout customization so
+ * forced yields cannot interfere with the timeout body's idle-expiry EOF probe.
  */
 class ServerEventStreamPollBudgetHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
