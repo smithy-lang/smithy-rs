@@ -29,6 +29,8 @@ object ServerCargoDependency {
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
+    val TokioTime: CargoDependency =
+        CargoDependency("tokio", CratesIo("1.23.1"), features = setOf("time"))
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
 
     /**

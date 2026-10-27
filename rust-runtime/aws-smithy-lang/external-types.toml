@@ -1,0 +1,4 @@
+allowed_external_types = [
+    # Exposed only by the optional `runtime-schema` feature.
+    "aws_smithy_schema::Schema",
+]
