@@ -1,0 +1,623 @@
+{
+    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "outcomes": {
+        "danger/focused_unresolved_metadata_id": {
+            "accepted": true,
+            "errors": [],
+            "dangers": [
+                "SyntacticShapeIdTarget"
+            ]
+        },
+        "danger/spec_unquoted_trait_value": {
+            "accepted": true,
+            "errors": [],
+            "dangers": [
+                "SyntacticShapeIdTarget"
+            ]
+        },
+        "invalid/missing_elided_identifier": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "missing_elided_identifier.smithy",
+                "line": 9,
+                "column": 5,
+                "message": "Member target was elided, but no bound resource or mixin contained a matching identifier or member name."
+            }
+        },
+        "invalid/spec_invalid_shape": {
+            "accepted": false,
+            "errors": [
+                "Target.UnresolvedShape"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "spec_invalid_shape.smithy",
+                "line": 6,
+                "column": 5,
+                "message": "member shape targets an unresolved shape `smithy.example#InvalidShape`"
+            }
+        },
+        "invalid/syntax_comma_ends_statement": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_comma_ends_statement.smithy",
+                "line": 2,
+                "column": 13,
+                "message": "Syntax error at line 2, column 13: Expected a line break, but found COMMA(',')"
+            }
+        },
+        "invalid/syntax_control_after_namespace": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_control_after_namespace.smithy",
+                "line": 2,
+                "column": 1,
+                "message": "Syntax error at line 2, column 1: Expected IDENTIFIER but found DOLLAR('$')"
+            }
+        },
+        "invalid/syntax_duplicate_control": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_duplicate_control.smithy",
+                "line": 2,
+                "column": 11,
+                "message": "Syntax error at line 2, column 11: Duplicate control statement `version`"
+            }
+        },
+        "invalid/syntax_duplicate_member": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_duplicate_member.smithy",
+                "line": 6,
+                "column": 5,
+                "message": "Syntax error at line 6, column 5: Duplicate member of `ex#S`: 'a'"
+            }
+        },
+        "invalid/syntax_duplicate_metadata_key": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_duplicate_metadata_key.smithy",
+                "line": 2,
+                "column": 21,
+                "message": "Duplicate member: 'x'"
+            }
+        },
+        "invalid/syntax_duplicate_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_duplicate_shape.smithy",
+                "line": 4,
+                "column": 1,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/syntax_duplicate_shape.smithy [5, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/syntax_duplicate_shape.smithy [4, 1]`. Left is integer, right is string; Left has trait smithy.api#box"
+            }
+        },
+        "invalid/syntax_empty_enum": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_empty_enum.smithy",
+                "line": 4,
+                "column": 1,
+                "message": "enum must have at least one entry"
+            }
+        },
+        "invalid/syntax_empty_mixins": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_empty_mixins.smithy",
+                "line": 4,
+                "column": 19,
+                "message": "Syntax error at line 4, column 19: Expected IDENTIFIER but found RBRACKET(']')"
+            }
+        },
+        "invalid/syntax_enum_value_without_break": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_enum_value_without_break.smithy",
+                "line": 4,
+                "column": 21,
+                "message": "Syntax error at line 4, column 21: Expected a line break, but found IDENTIFIER('C')"
+            }
+        },
+        "invalid/syntax_for_on_simple_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_for_on_simple_shape.smithy",
+                "line": 6,
+                "column": 10,
+                "message": "Syntax error at line 6, column 10: Expected a line break, but found IDENTIFIER('for')"
+            }
+        },
+        "invalid/syntax_hyphenated_key": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_hyphenated_key.smithy",
+                "line": 3,
+                "column": 11,
+                "message": "Syntax error at line 3, column 11: Invalid number '-': '-' must be followed by a digit"
+            }
+        },
+        "invalid/syntax_invalid_escape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_invalid_escape.smithy",
+                "line": 2,
+                "column": 16,
+                "message": "Syntax error at line 2, column 16: Error parsing quoted string: Invalid escape found in string: `\\q`"
+            }
+        },
+        "invalid/syntax_missing_exponent_digits": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_missing_exponent_digits.smithy",
+                "line": 2,
+                "column": 14,
+                "message": "Syntax error at line 2, column 14: Invalid number '1e': 'e', '+', and '-' must be followed by a digit"
+            }
+        },
+        "invalid/syntax_missing_line_break": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_missing_line_break.smithy",
+                "line": 4,
+                "column": 10,
+                "message": "Syntax error at line 4, column 10: Expected a line break, but found IDENTIFIER('string')"
+            }
+        },
+        "invalid/syntax_missing_member_colon": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_missing_member_colon.smithy",
+                "line": 6,
+                "column": 7,
+                "message": "Syntax error at line 6, column 7: Expected COLON(':') but found IDENTIFIER('String')"
+            }
+        },
+        "invalid/syntax_missing_namespace": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_missing_namespace.smithy",
+                "line": 2,
+                "column": 1,
+                "message": "Syntax error at line 2, column 1: Expected a namespace definition but found IDENTIFIER('string')"
+            }
+        },
+        "invalid/syntax_set_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_set_shape.smithy",
+                "line": 4,
+                "column": 1,
+                "message": "set shapes cannot be used in Smithy version 2.0"
+            }
+        },
+        "invalid/syntax_structure_without_body": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_structure_without_body.smithy",
+                "line": 5,
+                "column": 1,
+                "message": "Syntax error at line 5, column 1: Expected LBRACE('{') but found EOF"
+            }
+        },
+        "invalid/syntax_text_block_same_line": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_text_block_same_line.smithy",
+                "line": 2,
+                "column": 16,
+                "message": "Syntax error at line 2, column 16: Error parsing text block: Text block must start with a new line"
+            }
+        },
+        "invalid/syntax_text_block_space_only": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_text_block_space_only.smithy",
+                "line": 2,
+                "column": 16,
+                "message": "Syntax error at line 2, column 16: Error parsing text block: Text block must start with a new line"
+            }
+        },
+        "invalid/syntax_text_block_unterminated": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_text_block_unterminated.smithy",
+                "line": 2,
+                "column": 16,
+                "message": "Syntax error at line 2, column 16: Error parsing text block: Syntax error at line 4, column 1: Expected: '\"', but found '[EOF]'"
+            }
+        },
+        "invalid/syntax_unclosed_structure": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_unclosed_structure.smithy",
+                "line": 6,
+                "column": 1,
+                "message": "Syntax error at line 6, column 1: Expected RBRACE('}') but found EOF"
+            }
+        },
+        "invalid/syntax_unknown_shape_type": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_unknown_shape_type.smithy",
+                "line": 4,
+                "column": 1,
+                "message": "Syntax error at line 4, column 1: Unknown shape type: strang"
+            }
+        },
+        "invalid/syntax_use_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_use_conflict.smithy",
+                "line": 6,
+                "column": 8,
+                "message": "Shape name `S` conflicts with imported shape `other#S`"
+            }
+        },
+        "invalid/syntax_use_member": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_use_member.smithy",
+                "line": 4,
+                "column": 5,
+                "message": "Use statements cannot use members"
+            }
+        },
+        "invalid/unsupported_version": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "unsupported_version.smithy",
+                "line": 1,
+                "column": 16,
+                "message": "Syntax error at line 1, column 16: Unsupported Smithy version number: 3.0"
+            }
+        },
+        "unsupported/spec_apply": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/spec_apply_block": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/spec_inline_mixins": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/spec_mixin_elision": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/spec_mixins": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/strict_leading_zero": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/version_1": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_commas_and_whitespace": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_comments": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_crlf": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_entities": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_forward_refs": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_inline_io": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_keyword_identifiers": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_no_version": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_numbers": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_omitted_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_syntactic_ids": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_target_elision": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_unknown_control": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_comments": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_documentation": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_enum": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_enum_value_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_enum_values": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_inline_io": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_inline_io_expanded": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_inline_io_suffix": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_int_enum": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_int_enum_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_lists": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_maps": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_metadata": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_node_values": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_omitted_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_overview": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_relative_resolution": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_resource": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_service": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_simple_shapes": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_string_escapes": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_structures": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_syntactic_list": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_target_elision": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_text_blocks": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_union": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_use": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        }
+    }
+}

@@ -775,19 +775,23 @@ fn serde_json_arbitrary_precision() -> bool {
 /// [`Number`] with the same representation the default build would have produced: exact
 /// `i64`/`u64` integers where they fit, otherwise a finite `f64`.
 fn parse_number_text<E: de::Error>(text: &str) -> Result<Number, E> {
+    number_from_text(text).ok_or_else(|| E::custom("number out of range"))
+}
+
+/// The representation policy shared by every model input: exact `i64`/`u64` integers where
+/// they fit, otherwise a finite `f64`. `text` must already match the JSON number grammar.
+/// Returns `None` when the value is not finite.
+pub(crate) fn number_from_text(text: &str) -> Option<Number> {
     let is_integer = !text.contains(['.', 'e', 'E']);
     if is_integer {
         if let Ok(value) = text.parse::<u64>() {
-            return Ok(Number::from(value));
+            return Some(Number::from(value));
         }
         if let Ok(value) = text.parse::<i64>() {
-            return Ok(Number::from(value));
+            return Some(Number::from(value));
         }
     }
-    text.parse::<f64>()
-        .ok()
-        .and_then(Number::from_f64)
-        .ok_or_else(|| E::custom("number out of range"))
+    text.parse::<f64>().ok().and_then(Number::from_f64)
 }
 
 /// Shared state for one parse: limits, the first structural abort reason, and the input used

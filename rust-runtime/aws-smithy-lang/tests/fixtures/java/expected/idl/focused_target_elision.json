@@ -1,0 +1,101 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#CrossNamespace": {
+            "type": "structure",
+            "members": {
+                "otherId": {
+                    "target": "other#OtherId"
+                }
+            }
+        },
+        "ex#GetWidget": {
+            "type": "operation",
+            "input": {
+                "target": "ex#GetWidgetInput"
+            },
+            "output": {
+                "target": "ex#GetWidgetOutput"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#GetWidgetInput": {
+            "type": "structure",
+            "members": {
+                "widgetId": {
+                    "target": "ex#WidgetId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "region": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#GetWidgetOutput": {
+            "type": "structure",
+            "members": {
+                "widgetId": {
+                    "target": "ex#WidgetId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "region": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "label": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#Widget": {
+            "type": "resource",
+            "identifiers": {
+                "widgetId": {
+                    "target": "ex#WidgetId"
+                },
+                "region": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "properties": {
+                "label": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "read": {
+                "target": "ex#GetWidget"
+            }
+        },
+        "ex#WidgetId": {
+            "type": "string"
+        },
+        "other#OtherId": {
+            "type": "string"
+        },
+        "other#OtherResource": {
+            "type": "resource",
+            "identifiers": {
+                "otherId": {
+                    "target": "other#OtherId"
+                }
+            }
+        }
+    }
+}
