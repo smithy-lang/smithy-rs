@@ -49,8 +49,8 @@
 //! without retrying it. Recognition is cached for the request. Claims already made from
 //! the head retain their priority, including a body router's `Claimed` result.
 //!
-//! If a single body router declines, its protocol renders an unknown-operation error.
-//! If every protocol in a multi-protocol service declines, the response is:
+//! If every protocol declines and none supplies a deferred rejection, the service
+//! returns its protocol-neutral response, including for a single-protocol service:
 //! `404` with the XML body `<UnknownOperationException/>` followed by a newline and no
 //! `Content-Type` header.
 
