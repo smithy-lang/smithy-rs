@@ -1,0 +1,10 @@
+# Example changelog entry, Markdown with YAML front matter
+# ---
+# applies_to: ["client", "server", "aws-sdk-rust"] # "aws-sdk-rust" here duplicates this entry into release notes in `aws-sdk-rust`
+# authors: ["rcoh"]
+# references: ["smithy-rs#920"]
+# breaking: false
+# new_feature: false
+# bug_fix: false
+# ---
+# Fix typos in module documentation for generated crates

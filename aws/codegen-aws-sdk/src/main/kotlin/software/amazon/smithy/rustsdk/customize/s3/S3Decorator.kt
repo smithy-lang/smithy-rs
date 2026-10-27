@@ -154,7 +154,7 @@ class S3Decorator : ClientCodegenDecorator {
 
                             is OperationSection.PopulateErrorMetadataExtras -> {
                                 // S3 HEAD responses have no body to carry an error code, so a 404
-                                // with an empty body maps to `NotFound`. The generated serde codegen path
+                                // with an empty body maps to `NotFound`. The legacy codegen path
                                 // applies this in `S3ProtocolOverride::parseHttpErrorMetadata`,
                                 // but the schema-serde path resolves error metadata via the
                                 // runtime `parse_error_metadata` and never calls that override, so
