@@ -40,7 +40,6 @@ allprojects {
 tasks.register("clean")
 
 // Register custom tasks for Maven Central publishing
-tasks.register<tasks.VerifyCodegenVersionBump>("verifyCodegenVersionBump")
 tasks.register<tasks.CheckMavenCentralPublishingNeeded>("checkMavenCentralPublishingNeeded")
 
 jreleaser {
