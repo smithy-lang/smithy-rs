@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.68.0"
+version = "0.69.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -20,6 +20,7 @@ request-id = ["dep:uuid"]
 aws-lambda = ["dep:lambda_http"]
 
 [dependencies]
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
@@ -68,6 +69,7 @@ uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"
+tokio = { version = "1.49.0", features = ["test-util"] }
 hyper-util = { version = "0.1", features = [
     "tokio",
     "client",

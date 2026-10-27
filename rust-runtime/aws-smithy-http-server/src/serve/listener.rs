@@ -91,11 +91,13 @@ pub trait ListenerExt: Listener + Sized {
     /// limit concurrent in-flight requests, but does not limit connections
     /// that are idle or in the process of sending request headers.
     ///
+    /// Limits above [`Semaphore::MAX_PERMITS`] are clamped to that value.
+    ///
     /// [`tower::limit::concurrency`]: https://docs.rs/tower/latest/tower/limit/concurrency/
     fn limit_connections(self, limit: usize) -> ConnLimiter<Self> {
         ConnLimiter {
             listener: self,
-            sem: Arc::new(Semaphore::new(limit)),
+            sem: Arc::new(Semaphore::new(limit.min(Semaphore::MAX_PERMITS))),
         }
     }
 
@@ -109,7 +111,7 @@ pub trait ListenerExt: Listener + Sized {
     /// use tracing::trace;
     ///
     /// # async {
-    /// let listener = TcpListener::bind("0.0.0.0:3000")
+    /// let listener = TcpListener::bind("127.0.0.1:3000")
     ///     .await
     ///     .unwrap()
     ///     .tap_io(|tcp_stream| {
@@ -128,6 +130,39 @@ pub trait ListenerExt: Listener + Sized {
 }
 
 impl<L: Listener> ListenerExt for L {}
+
+#[derive(Debug)]
+pub(super) struct ConnectionLimit {
+    sem: Arc<Semaphore>,
+    max: usize,
+}
+
+impl ConnectionLimit {
+    pub(super) fn new(max: usize) -> Self {
+        // Tokio panics above MAX_PERMITS, so clamp rather than crashing when a
+        // user spells "unlimited" as usize::MAX.
+        let max = max.min(Semaphore::MAX_PERMITS);
+        tracing::debug!(max_connections = max, "connection limit enabled");
+        Self {
+            sem: Arc::new(Semaphore::new(max)),
+            max,
+        }
+    }
+
+    pub(super) async fn acquire(&self) -> OwnedSemaphorePermit {
+        if self.sem.available_permits() == 0 {
+            tracing::warn!(
+                max_connections = self.max,
+                "connection limit reached, waiting before accepting a new connection"
+            );
+        }
+        self.sem
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore should never be closed")
+    }
+}
 
 /// Return type of [`ListenerExt::limit_connections`].
 ///
@@ -150,7 +185,7 @@ impl<T: Listener> Listener for ConnLimiter<T> {
             .await
             .expect("semaphore should never be closed");
         let (io, addr) = self.listener.accept().await;
-        (ConnLimiterIo { io, permit }, addr)
+        (ConnLimiterIo::new(io, Some(permit)), addr)
     }
 
     fn local_addr(&self) -> tokio::io::Result<Self::Addr> {
@@ -161,16 +196,24 @@ impl<T: Listener> Listener for ConnLimiter<T> {
 pin_project! {
     /// A connection counted by [`ConnLimiter`].
     ///
-    /// See [`ListenerExt::limit_connections`] for details.
+    /// Also used by [`super::serve`] to retain connection permits across HTTP
+    /// upgrades.
+    ///
+    /// The permit is released when this IO object is dropped.
     #[derive(Debug)]
     pub struct ConnLimiterIo<T> {
         #[pin]
         io: T,
-        permit: OwnedSemaphorePermit,
+        permit: Option<OwnedSemaphorePermit>,
     }
 }
 
-// Simply forward implementation to `io` field.
+impl<T> ConnLimiterIo<T> {
+    pub(super) fn new(io: T, permit: Option<OwnedSemaphorePermit>) -> Self {
+        Self { io, permit }
+    }
+}
+
 impl<T: AsyncRead> AsyncRead for ConnLimiterIo<T> {
     fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<io::Result<()>> {
         self.project().io.poll_read(cx, buf)
