@@ -6,6 +6,6 @@
 pub mod router;
 /// The `awsJson1_0` protocol.
 ///
-/// The same type is used as the protocol type parameter of legacy generated servers and, with
+/// The same type is used as the protocol type parameter of generated serde servers and, with
 /// `codegen.schemaSerde`, as the schema-driven protocol implementation.
 pub use crate::schema::protocol::AwsJson1_0;

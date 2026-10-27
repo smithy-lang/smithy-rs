@@ -7,9 +7,10 @@
 
 use super::*;
 use crate::body::{Body, BoxBody};
+use crate::config::RequestBodyCollectionConfig;
 use crate::response::Response;
 use crate::routing::SyncRoute;
-use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig, ServerProtocol};
+use crate::schema::{DeserializeError, HttpModeledError, ServerProtocol};
 use crate::schema::{
     OperationSchema, ProtocolOrder, ProtocolRegistration, ProtocolRegistry, SelectedOperation, ServiceSchema,
 };

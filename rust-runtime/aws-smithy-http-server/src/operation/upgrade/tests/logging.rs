@@ -124,6 +124,86 @@ async fn malformed_cbor_logs_the_parse_diagnostic_without_reaching_the_handler()
     );
 }
 
+static BIG_NUMBER: Schema<'static> = Schema::new_member(
+    shape_id!("test", "BigNumberInput", "value"),
+    ShapeType::BigDecimal,
+    "value",
+    0,
+)
+.with_http_query("value")
+.with_sensitive();
+static BIG_NUMBER_INPUT: Schema<'static> = Schema::new_struct(
+    shape_id!("test", "BigNumberInput"),
+    ShapeType::Structure,
+    &[&BIG_NUMBER],
+)
+.with_http(aws_smithy_schema::traits::HttpTrait::new("GET", "/", Some(200)));
+
+struct BigNumberInput;
+
+impl DeserializableShape for BigNumberInput {
+    fn deserialize(deserializer: &mut dyn ShapeDeserializer) -> Result<Self, DeserializeError> {
+        deserializer.read_struct(&BIG_NUMBER_INPUT, &mut |member, value| {
+            value.read_big_decimal(member)?;
+            Ok(())
+        })?;
+        Ok(Self)
+    }
+}
+
+struct BigNumberOperation;
+
+impl OperationShape for BigNumberOperation {
+    const ID: crate::shape_id::ShapeId = Ordinary::ID;
+    type Input = BigNumberInput;
+    type Output = EmptyShape;
+    type Error = Infallible;
+}
+
+impl SchemaOperationShape for BigNumberOperation {
+    const SCHEMA: &'static OperationSchema<'static> = {
+        static SCHEMA: OperationSchema<'static> =
+            OperationSchema::new(shape_id!("test", "Operation"), &BIG_NUMBER_INPUT, &EMPTY, &[]);
+        &SCHEMA
+    };
+}
+
+#[tokio::test]
+async fn big_number_rejections_do_not_include_request_values_in_logs_or_responses() {
+    const INVALID_VALUE: &str = "private-account-number-invalid";
+    let mut request = http::Request::builder()
+        .uri(format!("/?value={INVALID_VALUE}"))
+        .body(http_body_util::Empty::<Bytes>::new())
+        .unwrap();
+    SelectedOperation::new(
+        SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
+        BigNumberOperation::SCHEMA,
+        Default::default(),
+    )
+    .insert_into(request.extensions_mut());
+    let upgrade = DynUpgrade::<crate::protocol::rest_json_1::RestJson1, BigNumberOperation, (), _> {
+        inner: tower::service_fn(|_: (BigNumberInput, ())| async {
+            panic!("malformed input must not reach the handler");
+            #[allow(unreachable_code)]
+            Ok::<_, Infallible>(EmptyShape)
+        }),
+        _protocol: PhantomData,
+        _operation: PhantomData,
+        _extractors: PhantomData,
+    };
+    let (response, logs) = capture(upgrade.oneshot(request)).await;
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+    assert_diagnostic(
+        &logs,
+        "DEBUG",
+        "failed to deserialize request into operation's input",
+        "invalid big decimal",
+    );
+    assert!(!logs.contains(INVALID_VALUE), "{logs}");
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert!(!String::from_utf8_lossy(&body).contains(INVALID_VALUE));
+}
+
 struct RejectedStreaming;
 
 impl OperationShape for RejectedStreaming {

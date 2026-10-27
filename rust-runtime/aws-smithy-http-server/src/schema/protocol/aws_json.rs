@@ -26,9 +26,10 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 
 /// Stateful schema-driven AWS JSON 1.0 protocol implementation.
 #[derive(Debug)]
-/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Defaults to skipping escape validation in discarded strings.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
-/// to skip escape validation, matching legacy smithy-rs servers.
+/// to validate escape syntax without decoding Unicode escapes.
+/// UTF-8, unescaped control characters, and structural syntax remain checked in either mode.
 ///
 /// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
 /// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members
@@ -63,9 +64,10 @@ impl AwsJson1_0 {
 
 /// Stateful schema-driven AWS JSON 1.1 protocol implementation.
 #[derive(Debug)]
-/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Defaults to skipping escape validation in discarded strings.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
-/// to skip escape validation, matching legacy smithy-rs servers.
+/// to validate escape syntax without decoding Unicode escapes.
+/// UTF-8, unescaped control characters, and structural syntax remain checked in either mode.
 ///
 /// `responseBindings` defaults to `"historical"`, which keeps what smithy-rs awsJson servers have
 /// always sent: the operation's `@http(code)`, `@httpError` statuses and `@httpHeader` members

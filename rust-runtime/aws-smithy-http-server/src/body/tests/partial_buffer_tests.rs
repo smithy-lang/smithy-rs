@@ -170,7 +170,7 @@ async fn partial_buffer_complete_collection_reads_the_tail_and_enforces_the_tota
             Body::from_bytes(Bytes::from_static(b"tail")),
         )
     };
-    let mut config = crate::schema::RequestBodyCollectionConfig::default();
+    let mut config = crate::config::RequestBodyCollectionConfig::default();
     assert_eq!(
         crate::schema::collect_request_body(body(), &config).await.unwrap(),
         "pretail"

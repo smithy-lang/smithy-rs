@@ -479,7 +479,7 @@ fn modeled_buffered_lengths_are_preserved_without_validation() {
 fn modeled_length_collisions_match_legacy_generated_header_assembly() {
     for protocol in rest_protocols() {
         for (prefix, explicit) in [("6", "6"), ("6", "006"), ("1", "0"), ("invalid", "-1")] {
-            // Legacy HttpBindingGenerator appends modeled bindings, then
+            // Generated serde HttpBindingGenerator appends modeled bindings, then
             // ServerHttpBoundProtocolGenerator adds payload.len() only if absent.
             let builder = http::Response::builder()
                 .header(http::header::CONTENT_LENGTH, prefix)

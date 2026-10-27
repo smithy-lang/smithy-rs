@@ -84,7 +84,7 @@ where
 /// Upgrade service for a non-streaming schema operation.
 ///
 /// The body is collected under the operation's
-/// [`RequestBodyCollectionConfig`](crate::schema::RequestBodyCollectionConfig), carried by
+/// [`RequestBodyCollectionConfig`](crate::config::RequestBodyCollectionConfig), carried by
 /// [`SelectedOperation`], when the selected protocol asks for it, the input is read through the erased protocol handle from the request
 /// extensions, and the output or error is serialized through the same handle.
 pub struct DynUpgrade<P, Op, Extractors, S> {
@@ -436,7 +436,7 @@ where
             (bytes::Bytes::new(), SdkBody::from_body_1_x(body))
         } else if directive == BodyDirective::Collect {
             // TODO(incremental CBOR blob decoding): Support streaming once the handler contract for
-            // trailing fields and validation is settled. Collection preserves legacy timing.
+            // trailing fields and validation is settled. Collection preserves generated serde timing.
             let config = config.ok_or_else(|| {
                 DeserializeError::InternalFailure(crate::Error::new(std::io::Error::other(
                     "selected operation missing while preparing collected input",

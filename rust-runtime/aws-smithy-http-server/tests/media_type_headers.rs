@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Media-typed list headers retain legacy base64 encoding and round-trip through request bindings.
+//! Media-typed list headers retain generated serde base64 encoding and round-trip through request bindings.
 
 use aws_smithy_http_server::body::empty;
 use aws_smithy_http_server::schema::protocol::{RestJson1, RestXml};

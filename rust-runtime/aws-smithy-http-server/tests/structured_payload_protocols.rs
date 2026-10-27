@@ -5,7 +5,7 @@
 
 //! Regression for PR #4894 discussion_r4254993789: serializers pass the payload member schema;
 //! REST framing obtains target metadata from the nested value's own schema.
-//! The matching generated legacy fixture is `ServerSchemaRpcPayloadTest`.
+//! The matching generated serde fixture is `ServerSchemaRpcPayloadTest`.
 
 use aws_smithy_cbor::{data::Type, Decoder};
 use aws_smithy_http_server::schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1, RestXml, RpcV2Cbor};
@@ -247,7 +247,7 @@ async fn shared_structured_payloads_preserve_rpc_documents_and_rest_framing() {
                         };
                         assert_eq!(body.as_ref(), expected.as_bytes(), "{name} {kind} present={present}");
                     }
-                    // Generated legacy REST JSON writes {} for an unset structure
+                    // Generated serde REST JSON writes {} for an unset structure
                     // payload, and an empty body for an unset union payload.
                     "restJson1" if !present && kind == "union" => assert!(body.is_empty()),
                     _ => {

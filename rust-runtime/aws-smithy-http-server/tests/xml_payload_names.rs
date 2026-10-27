@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! XML payload roots follow legacy member/target naming precedence without losing target metadata.
+//! XML payload roots follow generated serde member/target naming precedence without losing target metadata.
 
 use aws_smithy_http_server::schema::protocol::{RestJson1, RestXml};
 use aws_smithy_http_server::schema::{HttpModeledError, ServerProtocol};
@@ -138,7 +138,7 @@ static ERROR_TRAITS: std::sync::LazyLock<aws_smithy_schema::TraitMap> = std::syn
     traits
 });
 
-/// Legacy restXml servers write a modeled error as `<Error>` with its unbound members and drop an
+/// Generated serde restXml servers write a modeled error as `<Error>` with its unbound members and drop an
 /// `@httpPayload` member (mainline's generated `ser_*_error` never touches it), so neither the
 /// payload nor its `@xmlName` reaches the wire.
 #[tokio::test]

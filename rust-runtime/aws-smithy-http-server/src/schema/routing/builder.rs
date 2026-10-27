@@ -639,7 +639,7 @@ mod tests {
             .registries([registry(), registry()])
             .operation_handler_bindings([binding(&FIRST), binding(&FIRST)])
             .options(
-                ProtocolOptions::default().with_request_body(crate::schema::ServiceRequestBodyConfig {
+                ProtocolOptions::default().with_request_body(crate::config::ServiceRequestBodyConfig {
                     per_operation: [("test#unknown".to_owned(), config(1, 1))].into(),
                     ..Default::default()
                 }),

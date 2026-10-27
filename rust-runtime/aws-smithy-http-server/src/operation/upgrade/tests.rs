@@ -220,7 +220,8 @@ async fn rest_streaming_blob_inputs_remain_supported() {
 
 #[tokio::test]
 async fn cbor_blob_inputs_collect_before_decoding_and_count_document_framing_in_the_limit() {
-    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionConfig, RequestBodyCollectionError};
+    use crate::config::RequestBodyCollectionConfig;
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionError};
     use std::num::NonZeroUsize;
 
     let wire = Bytes::from_static(b"\xa1\x64blob\x41x");
@@ -275,7 +276,8 @@ async fn cbor_blob_inputs_collect_before_decoding_and_count_document_framing_in_
 
 #[tokio::test]
 async fn cbor_blob_input_timeout_precedes_decoding() {
-    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionConfig, RequestBodyCollectionError};
+    use crate::config::RequestBodyCollectionConfig;
+    use crate::schema::{protocol::RpcV2Cbor, RequestBodyCollectionError};
     use std::time::Duration;
 
     let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
@@ -403,66 +405,6 @@ impl SchemaOperationShape for NonStreaming {
     const SCHEMA: &'static OperationSchema<'static> = Ordinary::SCHEMA;
 }
 
-static MISSING_CALLER_MESSAGE: Schema<'static> = Schema::new_member(
-    shape_id!("test", "MissingCaller", "message"),
-    ShapeType::String,
-    "message",
-    0,
-);
-static MISSING_CALLER: Schema<'static> = Schema::new_struct(
-    shape_id!("test", "MissingCaller"),
-    ShapeType::Structure,
-    &[&MISSING_CALLER_MESSAGE],
-);
-
-// Handwritten modeled rejections supply an explicit response conversion.
-#[derive(Debug, thiserror::Error)]
-#[error("caller identity is missing")]
-struct ModeledRejection;
-
-impl SerializableStruct for ModeledRejection {
-    fn schema(&self) -> &Schema<'_> {
-        &MISSING_CALLER
-    }
-
-    fn serialize_members(
-        &self,
-        serializer: &mut dyn aws_smithy_schema::serde::ShapeSerializer,
-    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
-        serializer.write_string(&MISSING_CALLER_MESSAGE, "caller identity is missing")
-    }
-}
-
-impl HttpModeledError for ModeledRejection {
-    fn status_code(&self) -> u16 {
-        403
-    }
-}
-
-impl<P> IntoResponse<P> for ModeledRejection {
-    fn into_response(self) -> crate::response::Response {
-        http::Response::builder()
-            .status(403)
-            .extension(crate::extension::ModeledErrorExtension::new("MissingCaller"))
-            .body(crate::body::empty())
-            .unwrap()
-    }
-
-    fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> crate::response::Response {
-        protocol.serialize_error(&self)
-    }
-}
-
-struct ModeledCaller;
-
-impl<P> FromParts<P> for ModeledCaller {
-    type Rejection = ModeledRejection;
-
-    fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
-        Err(ModeledRejection)
-    }
-}
-
 // A contextual rejection defines an explicit static fallback and overrides contextual framing.
 #[derive(Debug, thiserror::Error)]
 #[error("custom caller rejection")]
@@ -501,7 +443,7 @@ impl<P> FromParts<P> for ContextOnlyCaller {
 
 #[derive(Debug, thiserror::Error)]
 #[error("caller rejected")]
-struct AdaptedModeledCallerError {
+struct ModeledCallerError {
     status: u16,
 }
 
@@ -517,7 +459,7 @@ static CALLER_ERROR: Schema<'static> = Schema::new_struct(
     &[&CALLER_MESSAGE],
 );
 
-impl SerializableStruct for AdaptedModeledCallerError {
+impl SerializableStruct for ModeledCallerError {
     fn schema(&self) -> &Schema<'_> {
         &CALLER_ERROR
     }
@@ -530,19 +472,19 @@ impl SerializableStruct for AdaptedModeledCallerError {
     }
 }
 
-impl HttpModeledError for AdaptedModeledCallerError {
+impl HttpModeledError for ModeledCallerError {
     fn status_code(&self) -> u16 {
         self.status
     }
 }
 
-struct AdaptedModeledCaller;
+struct ModeledCaller;
 
-impl<P> FromParts<P> for AdaptedModeledCaller {
-    type Rejection = crate::response::ModeledRejection<AdaptedModeledCallerError>;
+impl<P> FromParts<P> for ModeledCaller {
+    type Rejection = crate::response::ModeledRejection<ModeledCallerError>;
 
     fn from_parts(_: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
-        Err(AdaptedModeledCallerError { status: 403 }.into())
+        Err(ModeledCallerError { status: 403 }.into())
     }
 }
 
@@ -557,7 +499,7 @@ async fn modeled_rejection_retains_the_generic_context_free_conversion_contract(
         crate::protocol::rpc_v2_cbor::RpcV2Cbor,
     );
     for (status, expected) in [(403, 403), (0, 500)] {
-        let response = generic_response::<Protocols, AdaptedModeledCaller>(AdaptedModeledCallerError { status }.into());
+        let response = generic_response::<Protocols, ModeledCaller>(ModeledCallerError { status }.into());
         assert_eq!(response.status().as_u16(), expected);
         assert!(response.headers().is_empty());
         assert_eq!(
@@ -578,7 +520,7 @@ async fn modeled_tuple_rejections_use_the_selected_protocol_for_both_schema_upgr
         crate::protocol::rest_json_1::RestJson1,
         crate::protocol::rpc_v2_cbor::RpcV2Cbor,
     );
-    type Extractors = ((), AdaptedModeledCaller);
+    type Extractors = ((), ModeledCaller);
 
     for protocol in [
         SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
@@ -627,7 +569,7 @@ async fn modeled_tuple_rejections_use_the_selected_protocol_for_both_schema_upgr
                 .await
                 .unwrap()
             };
-            let expected = protocol.serialize_error(&AdaptedModeledCallerError { status: 403 });
+            let expected = protocol.serialize_error(&ModeledCallerError { status: 403 });
             assert_eq!(response.status(), http::StatusCode::FORBIDDEN);
             assert_eq!(response.status(), expected.status());
             assert_eq!(response.headers(), expected.headers());
@@ -647,73 +589,59 @@ async fn modeled_tuple_rejections_use_the_selected_protocol_for_both_schema_upgr
     }
 }
 
-async fn tuple_extractor_rejection<E>(protocol: SharedServerProtocol, streaming: bool) -> crate::response::Response
-where
-    E: FromParts<(
-            crate::protocol::rest_json_1::RestJson1,
-            crate::protocol::rpc_v2_cbor::RpcV2Cbor,
-        )> + Send
-        + 'static,
-    E::Rejection: std::fmt::Display
-        + IntoResponse<(
-            crate::protocol::rest_json_1::RestJson1,
-            crate::protocol::rpc_v2_cbor::RpcV2Cbor,
-        )>,
-{
-    use crate::protocol::{rest_json_1::RestJson1, rpc_v2_cbor::RpcV2Cbor};
-    type Protocols = (RestJson1, RpcV2Cbor);
-
-    let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
-        |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
-            panic!("extractor rejection must not poll the request body")
-        },
-    ));
-    let mut request = http::Request::new(body);
-    let operation = if streaming {
-        StreamingBlob::SCHEMA
-    } else {
-        NonStreaming::SCHEMA
-    };
-    SelectedOperation::new(protocol, operation, Default::default()).insert_into(request.extensions_mut());
-    if streaming {
-        DynStreamingUpgrade::<Protocols, StreamingBlob, ((), E), _> {
-            inner: tower::service_fn(|_: ((), ((), E))| async {
-                panic!("extractor rejection must not invoke the streaming handler");
-                #[allow(unreachable_code)]
-                Ok::<_, Infallible>(())
-            }),
-            _protocol: PhantomData,
-            _operation: PhantomData,
-            _extractors: PhantomData,
-        }
-        .oneshot(request)
-        .await
-        .unwrap()
-    } else {
-        DynUpgrade::<Protocols, NonStreaming, ((), E), _> {
-            inner: tower::service_fn(|_: (EmptyShape, ((), E))| async {
-                panic!("extractor rejection must not invoke the handler");
-                #[allow(unreachable_code)]
-                Ok::<_, Infallible>(EmptyShape)
-            }),
-            _protocol: PhantomData,
-            _operation: PhantomData,
-            _extractors: PhantomData,
-        }
-        .oneshot(request)
-        .await
-        .unwrap()
-    }
-}
-
 #[tokio::test]
 async fn contextual_only_tuple_rejections_preserve_custom_responses_without_polling_the_body() {
+    use crate::protocol::{rest_json_1::RestJson1, rpc_v2_cbor::RpcV2Cbor};
+    type Protocols = (RestJson1, RpcV2Cbor);
+    type Extractors = ((), ContextOnlyCaller);
+
     for protocol in [
         SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
         SharedServerProtocol::metadata_routed(crate::schema::protocol::RpcV2Cbor::default()),
     ] {
         for streaming in [false, true] {
-            let response = tuple_extractor_rejection::<ContextOnlyCaller>(protocol.clone(), streaming).await;
+            let body = http_body_util::StreamBody::new(futures_util::stream::poll_fn(
+                |_| -> Poll<Option<Result<http_body::Frame<Bytes>, Infallible>>> {
+                    panic!("extractor rejection must not poll the request body")
+                },
+            ));
+            let mut request = http::Request::new(body);
+            let operation = if streaming {
+                StreamingBlob::SCHEMA
+            } else {
+                NonStreaming::SCHEMA
+            };
+            SelectedOperation::new(protocol.clone(), operation, Default::default())
+                .insert_into(request.extensions_mut());
+            let response = if streaming {
+                DynStreamingUpgrade::<Protocols, StreamingBlob, Extractors, _> {
+                    inner: tower::service_fn(|_: ((), Extractors)| async {
+                        panic!("extractor rejection must not invoke the streaming handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(())
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            } else {
+                DynUpgrade::<Protocols, NonStreaming, Extractors, _> {
+                    inner: tower::service_fn(|_: (EmptyShape, Extractors)| async {
+                        panic!("extractor rejection must not invoke the handler");
+                        #[allow(unreachable_code)]
+                        Ok::<_, Infallible>(EmptyShape)
+                    }),
+                    _protocol: PhantomData,
+                    _operation: PhantomData,
+                    _extractors: PhantomData,
+                }
+                .oneshot(request)
+                .await
+                .unwrap()
+            };
             assert_eq!(response.status(), http::StatusCode::TOO_MANY_REQUESTS);
             assert_eq!(response.headers().len(), 1);
             assert_eq!(
@@ -725,42 +653,6 @@ async fn contextual_only_tuple_rejections_preserve_custom_responses_without_poll
                 response.into_body().collect().await.unwrap().to_bytes(),
                 "custom caller rejection"
             );
-        }
-    }
-}
-
-#[tokio::test]
-async fn modeled_tuple_rejections_use_the_selected_protocol_without_polling_the_body() {
-    for (protocol, content_type) in [
-        (
-            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestJson1::default()),
-            "application/json",
-        ),
-        (
-            SharedServerProtocol::metadata_routed(crate::schema::protocol::RpcV2Cbor::default()),
-            "application/cbor",
-        ),
-    ] {
-        for streaming in [false, true] {
-            let response = tuple_extractor_rejection::<ModeledCaller>(protocol.clone(), streaming).await;
-            assert_eq!(response.status(), http::StatusCode::FORBIDDEN);
-            assert_eq!(response.headers()["content-type"], content_type);
-            assert_eq!(response.extensions().len(), 1);
-            assert_eq!(
-                response
-                    .extensions()
-                    .get::<crate::extension::ModeledErrorExtension>()
-                    .map(|error| error.to_string())
-                    .as_deref(),
-                Some("MissingCaller")
-            );
-            let expected = protocol.serialize_error(&ModeledRejection);
-            assert_eq!(response.headers(), expected.headers());
-            let body = response.into_body().collect().await.unwrap().to_bytes();
-            assert_eq!(body, expected.into_body().collect().await.unwrap().to_bytes());
-            if content_type == "application/json" {
-                assert_eq!(body.as_ref(), br#"{"message":"caller identity is missing"}"#);
-            }
         }
     }
 }
@@ -907,7 +799,7 @@ async fn streaming_input_in_non_streaming_upgrade_uses_the_selected_protocol_wit
 
 #[test]
 fn selection_accessors_preserve_the_private_carrier_through_http_conversion() {
-    use crate::schema::RequestBodyCollectionConfig;
+    use crate::config::RequestBodyCollectionConfig;
     use std::num::NonZeroUsize;
 
     let mut request = http::Request::new(());

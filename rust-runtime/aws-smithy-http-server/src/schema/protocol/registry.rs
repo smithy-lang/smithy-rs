@@ -33,8 +33,9 @@
 
 use aws_smithy_types::Document;
 
+use crate::config::ServiceConfig;
 use crate::schema::routing::RouterBuildError;
-use crate::schema::{ServiceConfig, ServiceSchema};
+use crate::schema::ServiceSchema;
 
 use super::{BodyRoutedProtocol, MetadataRoutedProtocol, SharedServerProtocol};
 
@@ -249,11 +250,25 @@ impl ProtocolRegistry {
     ///
     /// Returns `Ok(None)` when this registry does not register `protocol_id` or the schema does not declare
     /// it. Factory failures and registered-ID mismatches return `Err`.
-    /// Used by generated protocol tests, which exercise one protocol in isolation.
+    /// Use [`Self::resolve_id_with_settings`] to supply a protocol's configuration.
     pub fn resolve_id(
         &self,
         service_schema: &'static ServiceSchema<'static>,
         protocol_id: &str,
+    ) -> Result<Option<SharedServerProtocol>, RouterBuildError> {
+        self.resolve_id_with_settings(service_schema, protocol_id, None)
+    }
+
+    /// Builds one declared protocol with its own settings document.
+    ///
+    /// Generated response tests pass the protocol's section from `customizationConfig.protocols`
+    /// so serialization uses the same options as the generated service builder.
+    /// Availability checks and factory errors behave as in [`Self::resolve_id`].
+    pub fn resolve_id_with_settings(
+        &self,
+        service_schema: &'static ServiceSchema<'static>,
+        protocol_id: &str,
+        settings: Option<&Document>,
     ) -> Result<Option<SharedServerProtocol>, RouterBuildError> {
         let declared = service_schema
             .protocols()
@@ -265,7 +280,7 @@ impl ProtocolRegistry {
         self.registrations
             .iter()
             .find(|registration| registration.protocol_id() == protocol_id)
-            .map(|registration| registration.build(&ProtocolBuildContext::new(service_schema)))
+            .map(|registration| registration.build(&ProtocolBuildContext::new(service_schema).with_settings(settings)))
             .transpose()
     }
 }
@@ -330,6 +345,17 @@ mod tests {
             .resolve_id(&REST_JSON_1_SERVICE, "aws.protocols#restXml")
             .expect("unavailable protocol is not a build error")
             .is_none());
+    }
+
+    #[test]
+    fn resolution_passes_settings_to_the_selected_factory() {
+        static AWS_JSON_SERVICE: ServiceSchema<'static> =
+            ServiceSchema::new(SERVICE_ID, None, &[shape_id!("aws.protocols", "awsJson1_0")], &[]);
+        let settings = crate::schema::settings::parse_settings_json(br#"{"responseBindings":"invalid"}"#);
+        let err = ProtocolRegistry::BUILTIN
+            .resolve_id_with_settings(&AWS_JSON_SERVICE, "aws.protocols#awsJson1_0", Some(&settings))
+            .expect_err("AWS JSON must validate the supplied settings");
+        assert!(matches!(err, RouterBuildError::Configuration(message) if message.contains("responseBindings")));
     }
 
     #[test]

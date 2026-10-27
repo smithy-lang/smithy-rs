@@ -98,7 +98,7 @@ pub enum InitialResponsePolicy {
 /// `initial-response` frame when `initial_response` is [`InitialResponsePolicy::Send`].
 ///
 /// Protocols that carry non-stream members in initial messages serialize those members into
-/// the frame. HTTP-bound protocols use their unset payload instead, matching legacy servers.
+/// the frame. HTTP-bound protocols use their unset payload instead, matching generated serde servers.
 ///
 /// `output_schema` and `output` describe the non-stream members; the streaming member must
 /// already have been moved out of `output` into `events`.
@@ -352,16 +352,26 @@ impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller
             .event_stream_framing()
             .ok_or_else(|| Error::unmarshalling(NO_EVENT_STREAM_SUPPORT))?;
         let response_headers = expect_fns::parse_response_headers(message)?;
-        let frame = EventFrame { message, capability };
-        match response_headers.message_type.as_str() {
-            "event" => {
+        let kind = match response_headers.message_type.as_str() {
+            "event" => FrameKind::Event,
+            "exception" => FrameKind::Exception,
+            value => return Err(Error::unmarshalling(format!("unrecognized :message-type: {value}"))),
+        };
+        let frame = EventFrame {
+            message,
+            capability,
+            kind,
+            content_type: response_headers.content_type,
+        };
+        match kind {
+            FrameKind::Event => {
                 let event_type = response_headers.smithy_type.as_str();
                 match T::deserialize_event(event_type, &frame)? {
                     Some(event) => Ok(UnmarshalledMessage::Event(event)),
                     None => Err(Error::unmarshalling(format!("unrecognized :event-type: {event_type}"))),
                 }
             }
-            "exception" => {
+            FrameKind::Exception => {
                 let exception_type = response_headers.smithy_type.as_str();
                 match T::deserialize_error(exception_type, &frame)? {
                     Some(error) => Ok(UnmarshalledMessage::Error(error)),
@@ -370,7 +380,6 @@ impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller
                     ))),
                 }
             }
-            value => Err(Error::unmarshalling(format!("unrecognized :message-type: {value}"))),
         }
     }
 }
@@ -379,12 +388,33 @@ impl<T: DeserializableEventStream> UnmarshallMessage for SchemaEventUnmarshaller
 pub struct EventFrame<'a> {
     message: &'a Message,
     capability: EventStreamFraming<'a>,
+    kind: FrameKind,
+    content_type: Option<&'a StrBytes>,
 }
 
 impl<'a> EventFrame<'a> {
     /// Creates a frame view over `message`.
+    ///
+    /// Protocol header lookups select the last occurrence, as in generated serde.
+    /// [`SchemaEventUnmarshaller`] also validates the protocol headers before dispatching.
     pub fn new(message: &'a Message, capability: EventStreamFraming<'a>) -> Self {
-        Self { message, capability }
+        let last_string_header = |name: &str| {
+            message
+                .headers()
+                .iter()
+                .rfind(|header| header.name().as_str() == name)
+                .and_then(|header| header.value().as_string().ok())
+        };
+        let kind = match last_string_header(":message-type").map(StrBytes::as_str) {
+            Some("exception") => FrameKind::Exception,
+            _ => FrameKind::Event,
+        };
+        Self {
+            message,
+            capability,
+            kind,
+            content_type: last_string_header(":content-type"),
+        }
     }
 
     /// Returns a [`ShapeDeserializer`] that reads an event struct from this frame, routing
@@ -393,6 +423,8 @@ impl<'a> EventFrame<'a> {
         EventFrameDeserializer {
             message: self.message,
             capability: self.capability,
+            kind: self.kind,
+            content_type: self.content_type,
         }
     }
 }
@@ -405,30 +437,13 @@ impl<'a> EventFrame<'a> {
 pub struct EventFrameDeserializer<'a> {
     message: &'a Message,
     capability: EventStreamFraming<'a>,
+    kind: FrameKind,
+    content_type: Option<&'a StrBytes>,
 }
 
 impl EventFrameDeserializer<'_> {
-    fn content_type(&self) -> Option<&str> {
-        self.message
-            .headers()
-            .iter()
-            .find(|header| header.name().as_str() == ":content-type")
-            .and_then(|header| header.value().as_string().ok())
-            .map(|value| value.as_str())
-    }
-
-    fn is_exception(&self) -> bool {
-        self.message.headers().iter().any(|header| {
-            header.name().as_str() == ":message-type"
-                && header
-                    .value()
-                    .as_string()
-                    .is_ok_and(|value| value.as_str() == "exception")
-        })
-    }
-
     fn check_content_type(&self, expected: &str) -> Result<(), SerdeError> {
-        let content_type = self.content_type().unwrap_or_default();
+        let content_type = self.content_type.map(StrBytes::as_str).unwrap_or_default();
         if content_type != expected {
             return Err(SerdeError::custom(format!(
                 "expected :content-type to be '{expected}', but was '{content_type}'"
@@ -438,7 +453,7 @@ impl EventFrameDeserializer<'_> {
     }
 }
 
-/// Returns the `<Error>` element of a REST XML error envelope, with the rules of the legacy
+/// Returns the `<Error>` element of a REST XML error envelope, with the rules of the generated serde
 /// `rest_xml_wrapped_errors::error_scope`: the root must be `<ErrorResponse>`, and its first
 /// `<Error>` child holds the error members.
 fn wrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
@@ -454,7 +469,7 @@ fn wrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
         .ok_or_else(|| SerdeError::custom("no error found inside of ErrorResponse"))
 }
 
-/// Checks a `@restXml(noErrorWrapping: true)` error, with the rules of the legacy
+/// Checks a `@restXml(noErrorWrapping: true)` error, with the rules of the generated serde
 /// `rest_xml_unwrapped_errors::error_scope`: the root must be `<Error>`.
 fn unwrapped_xml_error_element(payload: &[u8]) -> Result<&[u8], SerdeError> {
     let mut document =
@@ -491,8 +506,12 @@ impl ShapeDeserializer for EventFrameDeserializer<'_> {
         if members.is_empty() {
             return Ok(());
         }
-        if let Some(codec) = self.capability.xml_exception_codec.filter(|_| self.is_exception()) {
-            // Like legacy restXml servers: an empty payload is an error with no members set, and
+        if let Some(codec) = self
+            .capability
+            .xml_exception_codec
+            .filter(|_| matches!(self.kind, FrameKind::Exception))
+        {
+            // Like generated serde restXml servers: an empty payload is an error with no members set, and
             // anything else must be the configured error envelope.
             let payload = &self.message.payload()[..];
             if payload.is_empty() {
@@ -804,7 +823,7 @@ fn build_frame(
             push_content_type(&mut headers, Some(member.shape_type()))?;
             Ok(Message::new_from_parts(headers, payload.unwrap_or_default()))
         }
-        // Legacy marshallers emit an empty payload whenever headers are modeled and
+        // Generated serde marshallers emit an empty payload whenever headers are modeled and
         // there is no explicit payload, even if ordinary members are also present.
         None => Ok(Message::new_from_parts(headers, Bytes::new())),
     }
@@ -1838,7 +1857,7 @@ mod tests {
         let message = marshall(&protocol, TestEvents::AllHeaders(event));
 
         let names: Vec<_> = message.headers().iter().map(|h| h.name().as_str()).collect();
-        // Without an explicit payload, ordinary members are omitted by legacy marshallers.
+        // Without an explicit payload, ordinary members are omitted by generated serde marshallers.
         assert_eq!(
             names,
             [
@@ -1945,7 +1964,7 @@ mod tests {
             assert_eq!(string_header(&message, "header"), Some("ann"));
             assert_eq!(string_header(&message, ":content-type"), None);
             assert!(message.payload().is_empty());
-            // Received implicit payloads still parse as the legacy unmarshaller does.
+            // Received implicit payloads still parse as the generated serde unmarshaller does.
             let message = Message::new_from_parts(message.headers().to_vec(), Bytes::copy_from_slice(expected));
             let mut values = [None, None];
             EventFrame::new(&message, capability)
@@ -2269,7 +2288,7 @@ mod tests {
         }
     }
 
-    /// Legacy restXml servers read a received exception frame through
+    /// Generated serde restXml servers read a received exception frame through
     /// `rest_xml_wrapped_errors::error_scope`: the error members sit in the `<Error>` child of an
     /// `<ErrorResponse>` root, and an empty payload is an error with no members set.
     #[test]
@@ -2316,7 +2335,7 @@ mod tests {
             .contains("no error found inside of ErrorResponse"));
     }
 
-    /// With `@restXml(noErrorWrapping: true)`, legacy servers read a received exception frame
+    /// With `@restXml(noErrorWrapping: true)`, generated serde servers read a received exception frame
     /// through `rest_xml_unwrapped_errors::error_scope`: the error members sit in an `<Error>`
     /// root. The setting comes from the protocol trait codegen records on the service schema.
     #[test]
@@ -2370,6 +2389,184 @@ mod tests {
         assert!(decoded(b"<BoomError><message>failed</message></BoomError>")
             .unwrap_err()
             .contains("expected error as root"));
+    }
+
+    #[test]
+    fn duplicate_message_types_share_dispatch_and_xml_payload_kind() {
+        let protocol = SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default());
+        for payload in [
+            "",
+            "hello",
+            "<ErrorResponse><Error><value>hello</value></Error></ErrorResponse>",
+        ] {
+            let message = Message::new_from_parts(
+                vec![
+                    Header::new(":message-type", HeaderValue::String("exception".into())),
+                    Header::new(":message-type", HeaderValue::String("event".into())),
+                    Header::new(":event-type", HeaderValue::String("text".into())),
+                    Header::new(":content-type", HeaderValue::String("text/plain".into())),
+                ],
+                Bytes::copy_from_slice(payload.as_bytes()),
+            );
+            let expected = TextEvent {
+                value: Some(payload.to_owned()),
+            };
+            match unmarshall(&protocol, &message).unwrap() {
+                UnmarshalledMessage::Event(TestEvents::Text(event)) => assert_eq!(event, expected),
+                other => panic!("expected a text event, got {other:?}"),
+            }
+            let frame = EventFrame::new(&message, protocol.event_stream_framing().unwrap());
+            assert_eq!(TextEvent::deserialize(&mut frame.deserializer()).unwrap(), expected);
+        }
+
+        let message = Message::new_from_parts(
+            vec![
+                Header::new(":message-type", HeaderValue::String("event".into())),
+                Header::new(":message-type", HeaderValue::String("exception".into())),
+                Header::new(":exception-type", HeaderValue::String("boom".into())),
+            ],
+            Bytes::from_static(b"<ErrorResponse><Error><message>failed</message></Error></ErrorResponse>"),
+        );
+        match unmarshall(&protocol, &message).unwrap() {
+            UnmarshalledMessage::Error(TestEventsError::Boom(error)) => {
+                assert_eq!(error.message.as_deref(), Some("failed"));
+            }
+            other => panic!("expected an exception, got {other:?}"),
+        }
+        let frame = EventFrame::new(&message, protocol.event_stream_framing().unwrap());
+        assert_eq!(
+            BoomError::deserialize(&mut frame.deserializer())
+                .unwrap()
+                .message
+                .as_deref(),
+            Some("failed")
+        );
+    }
+
+    #[test]
+    fn duplicate_content_types_validate_the_last_value() {
+        for protocol in [
+            json_protocol(),
+            cbor_protocol(),
+            SharedServerProtocol::metadata_routed(crate::schema::protocol::RestXml::default()),
+        ] {
+            for event in [
+                TestEvents::Text(TextEvent {
+                    value: Some("hello".to_owned()),
+                }),
+                TestEvents::Bin(BinEvent {
+                    value: Some(Blob::new(b"hello")),
+                }),
+            ] {
+                let original = marshall(&protocol, event);
+                for incorrect in [HeaderValue::String("application/json".into()), HeaderValue::Int32(123)] {
+                    for incorrect_is_last in [false, true] {
+                        let mut headers = original.headers().to_vec();
+                        let duplicate = Header::new(":content-type", incorrect.clone());
+                        if incorrect_is_last {
+                            headers.push(duplicate);
+                        } else {
+                            headers.insert(0, duplicate);
+                        }
+                        let message = Message::new_from_parts(headers, original.payload().clone());
+                        let result = unmarshall(&protocol, &message);
+                        if incorrect_is_last {
+                            assert!(result.is_err(), "the final content type must be validated");
+                        } else {
+                            let parsed = match result.unwrap() {
+                                UnmarshalledMessage::Event(event) => event,
+                                other => panic!("expected an event, got {other:?}"),
+                            };
+                            let baseline = match unmarshall(&protocol, &original).unwrap() {
+                                UnmarshalledMessage::Event(event) => event,
+                                other => panic!("expected an event, got {other:?}"),
+                            };
+                            assert_eq!(parsed, baseline);
+                        }
+                        // Direct frame views use the same last-header selection for MIME checks.
+                        let frame = EventFrame::new(&message, protocol.event_stream_framing().unwrap());
+                        let result = match string_header(&original, ":event-type").unwrap() {
+                            "text" => TextEvent::deserialize(&mut frame.deserializer()).map(|_| ()),
+                            "bin" => BinEvent::deserialize(&mut frame.deserializer()).map(|_| ()),
+                            _ => unreachable!(),
+                        };
+                        assert_eq!(result.is_err(), incorrect_is_last);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn duplicate_protocol_type_headers_validate_only_the_selected_value() {
+        let protocol = json_protocol();
+        for (name, selected, message_type) in [
+            (":message-type", "event", "event"),
+            (":event-type", "text", "event"),
+            (":exception-type", "boom", "exception"),
+        ] {
+            for incorrect_is_last in [false, true] {
+                let mut headers = vec![
+                    Header::new(":message-type", HeaderValue::String(message_type.into())),
+                    Header::new(":event-type", HeaderValue::String("text".into())),
+                    Header::new(":exception-type", HeaderValue::String("boom".into())),
+                    Header::new(":content-type", HeaderValue::String("text/plain".into())),
+                ];
+                headers.retain(|header| header.name().as_str() != name);
+                let mut duplicates = vec![
+                    Header::new(name, HeaderValue::Int32(123)),
+                    Header::new(name, HeaderValue::String(selected.into())),
+                ];
+                if incorrect_is_last {
+                    duplicates.reverse();
+                }
+                headers.extend(duplicates);
+                let payload = if message_type == "event" {
+                    Bytes::from_static(b"hello")
+                } else {
+                    Bytes::from_static(br#"{"message":"failed"}"#)
+                };
+                let message = Message::new_from_parts(headers, payload);
+                let result = unmarshall(&protocol, &message);
+                if incorrect_is_last {
+                    assert!(result.unwrap_err().to_string().contains(name));
+                } else {
+                    match result.unwrap() {
+                        UnmarshalledMessage::Event(TestEvents::Text(event)) => {
+                            assert_eq!(event.value.as_deref(), Some("hello"));
+                        }
+                        UnmarshalledMessage::Error(TestEventsError::Boom(error)) => {
+                            assert_eq!(error.message.as_deref(), Some("failed"));
+                        }
+                        other => panic!("unexpected result: {other:?}"),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn duplicate_modeled_headers_validate_every_value_before_overwriting() {
+        let protocol = json_protocol();
+        let headers = vec![
+            Header::new(":message-type", HeaderValue::String("event".into())),
+            Header::new(":event-type", HeaderValue::String("allHeaders".into())),
+            Header::new("name", HeaderValue::String("first".into())),
+            Header::new("name", HeaderValue::String("last".into())),
+        ];
+        let message = Message::new_from_parts(headers.clone(), Bytes::new());
+        match unmarshall(&protocol, &message).unwrap() {
+            UnmarshalledMessage::Event(TestEvents::AllHeaders(event)) => {
+                assert_eq!(event.name.as_deref(), Some("last"));
+            }
+            other => panic!("expected an event, got {other:?}"),
+        }
+        for index in [2, 3] {
+            let mut headers = headers.clone();
+            headers[index] = Header::new("name", HeaderValue::Int32(123));
+            let message = Message::new_from_parts(headers, Bytes::new());
+            assert!(unmarshall(&protocol, &message).is_err());
+        }
     }
 
     #[test]
@@ -2764,7 +2961,7 @@ mod tests {
 
     #[tokio::test]
     async fn response_body_rest_initial_response_frames_match_legacy() {
-        // Observed with generated legacy servers and alwaysSendEventStreamInitialResponse=true:
+        // Observed with generated serde servers and alwaysSendEventStreamInitialResponse=true:
         // REST JSON sends {}, REST XML sends zero bytes, and HTTP-bound output members stay out.
         for (protocol, media_type, payload) in [
             (json_protocol(), "application/json", &b"{}"[..]),

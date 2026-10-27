@@ -232,7 +232,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         ));
                     }
                     if trim_string_values {
-                        // Match legacy one_or_none_bytes for plain strings and enums.
+                        // Match generated serde one_or_none_bytes for plain strings and enums.
                         // Normalize here so the shared map reader preserves query whitespace.
                         for value in &mut values {
                             *value = value.trim();
@@ -242,7 +242,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                         entries.push((suffix, values));
                     }
                 }
-                // Always set, even with no matching header: legacy servers yield `Some({})`.
+                // Always set, even with no matching header: generated serde servers yield `Some({})`.
                 let mut deser = StringMapDeserializer::new(entries);
                 consumer(member, &mut deser)?;
             } else if member.http_payload().is_some() {
@@ -268,7 +268,7 @@ impl<C: Codec> ShapeDeserializer for RestRequestDeserializer<'_, C> {
                             let mut deser = self.codec.create_deserializer(self.body);
                             // The generated member consumer reads `null` as unset, which is right
                             // for a body member but not for a whole structure/union payload:
-                            // legacy rejects it. A `null` document payload stays a value.
+                            // generated serde rejects it. A `null` document payload stays a value.
                             if matches!(member.shape_type(), ShapeType::Structure | ShapeType::Union) && deser.is_null()
                             {
                                 return Err(SerdeError::invalid_input("expected payload member value"));
@@ -381,7 +381,7 @@ pub(crate) fn parse_query_pairs(query: Option<&str>) -> Vec<(Cow<'_, str>, Cow<'
 // URI label extraction
 // ============================================================================
 
-/// The value a `@httpLabel` member reads from its raw path segment. Like legacy
+/// The value a `@httpLabel` member reads from its raw path segment. Like generated serde
 /// (`ServerHttpBoundProtocolGenerator.generateParseStrFn`), string (and enum) and timestamp labels
 /// are percent-decoded, while number and boolean labels are parsed from the raw segment, so
 /// `%37` is not the integer 7.
@@ -395,7 +395,7 @@ pub(crate) fn label_value(member: &Schema<'_>, raw: &str) -> Result<String, Serd
 /// Extracts `@httpLabel` values from `path` by matching it against the
 /// `@http` URI `template` (path portion only — any query-literal portion of
 /// the template is ignored). Values are returned raw, as they appear in the path: the reader
-/// percent-decodes them only for members that legacy decodes (see [`label_value`]).
+/// percent-decodes them only for members that generated serde decodes (see [`label_value`]).
 ///
 /// This is a re-match: the router has already accepted the request, so a
 /// mismatch here indicates a schema/routing inconsistency and is an error.
@@ -414,7 +414,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
     let template_segs: Vec<Seg<'t>> = template_path
         .strip_prefix('/')
         .unwrap_or(template_path)
-        // Match Smithy's UriPattern.segments, which the legacy generated parser uses.
+        // Match Smithy's UriPattern.segments, which the generated serde parser uses.
         // Only normalize the template: trailing request slashes belong to greedy labels.
         .trim_end_matches('/')
         .split('/')
@@ -498,7 +498,7 @@ pub(crate) fn extract_labels<'t>(template: &'t str, path: &str) -> Result<Vec<(&
 
 /// Parses a primitive from its wire text as-is. Header values arrive already
 /// trimmed by the header tokenizer; label and query values are parsed untrimmed,
-/// matching the legacy `parse_smithy_primitive(&value)` on the decoded segment.
+/// matching the generated serde `parse_smithy_primitive(&value)` on the decoded segment.
 fn parse_primitive<T: aws_smithy_types::primitive::Parse>(value: &str, what: &str) -> Result<T, SerdeError> {
     T::parse_smithy_primitive(value).map_err(|err| SerdeError::invalid_input(format!("invalid {what}: {err}")))
 }
@@ -615,13 +615,13 @@ impl ShapeDeserializer for DecodedValuesDeserializer<'_> {
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigInteger::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+        BigInteger::from_str(v).map_err(|_| SerdeError::invalid_input("invalid big integer"))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         let v = self.current()?;
-        BigDecimal::from_str(v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+        BigDecimal::from_str(v).map_err(|_| SerdeError::invalid_input("invalid big decimal"))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -897,7 +897,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
-        BigInteger::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {v}")))
+        BigInteger::from_str(&v).map_err(|_| SerdeError::invalid_input("invalid big integer"))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
@@ -906,7 +906,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
             Some(_) => self.next_text()?,
             None => self.single_value()?.trim().to_string(),
         };
-        BigDecimal::from_str(&v).map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {v}")))
+        BigDecimal::from_str(&v).map_err(|_| SerdeError::invalid_input("invalid big decimal"))
     }
 
     fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -914,7 +914,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
         let media_typed = schema.media_type().is_some() || self.member.media_type().is_some();
         let raw = match self.list_size {
             Some(_) => self.next_text()?,
-            // Like legacy, a scalar `@mediaType` string is tokenized as a list
+            // Like generated serde, a scalar `@mediaType` string is tokenized as a list
             // (`read_many_from_str`: quote-aware, so `"eyJ..."` is unquoted) and
             // must be exactly one item.
             None if media_typed => {
@@ -987,7 +987,7 @@ impl ShapeDeserializer for HeaderValuesDeserializer<'_> {
 // Prefix headers and query-params maps
 // ============================================================================
 
-/// Reads media-typed prefix headers one entry at a time, preserving legacy parsing order.
+/// Reads media-typed prefix headers one entry at a time, preserving generated serde parsing order.
 /// Uses the header reader for tokenization, base64 decoding, UTF-8 and cardinality.
 struct MediaHeaderMapDeserializer<'a> {
     headers: &'a Headers,
@@ -1014,7 +1014,7 @@ impl ShapeDeserializer for MediaHeaderMapDeserializer<'_> {
             // instance contributes no token, but a quoted empty string contributes one.
             let mut value =
                 HeaderValuesDeserializer::try_new_bytes(self.headers.get_all_bytes(full_name), self.value_schema)?
-                    // Reject an all-empty value set instead of reproducing the legacy panic.
+                    // Reject an all-empty value set instead of reproducing the generated serde panic.
                     .ok_or_else(|| SerdeError::invalid_input("expected one item but found 0"))?;
             consumer(suffix.to_owned(), &mut value)?;
         }
@@ -1321,7 +1321,7 @@ mod tests {
         assert!(percent_decode("%FF").is_err());
 
         // Query pairs decode in order with form-urlencoded semantics, exactly
-        // as legacy generated deserializers do: a key without `=` gets "",
+        // as generated serde deserializers do: a key without `=` gets "",
         // `+` decodes to a space, and invalid UTF-8 decodes lossily instead
         // of rejecting the request.
         assert_eq!(
@@ -1868,7 +1868,7 @@ mod tests {
     .with_http(HttpTrait::new("GET", "/hp", Some(200)));
 
     /// Which header-bound members get set, and to how many list items / map entries (or the
-    /// string value). Legacy leaves a list or `@mediaType` header with no tokens unset, and
+    /// string value). Generated serde leaves a list or `@mediaType` header with no tokens unset, and
     /// always sets `@httpPrefixHeaders` (possibly empty).
     fn header_presence(headers: &[(&'static str, &str)]) -> Vec<(String, String)> {
         let codec = json_codec();
@@ -1993,7 +1993,7 @@ mod tests {
         Ok(set)
     }
 
-    /// Legacy rejects a structure/union `@httpPayload` whose body is `null` ("expected payload
+    /// Generated serde rejects a structure/union `@httpPayload` whose body is `null` ("expected payload
     /// member value"); a `null` document payload is a value, and an empty body leaves it unset.
     #[test]
     fn null_struct_payload_is_rejected_like_legacy() {
@@ -2012,7 +2012,7 @@ mod tests {
         }
     }
 
-    /// Legacy percent-decodes string and timestamp labels but parses number and boolean labels
+    /// Generated serde percent-decodes string and timestamp labels but parses number and boolean labels
     /// from the raw segment: `/pets/%37` is the name "7", but `%37` is not the age 7.
     #[test]
     fn only_string_and_timestamp_labels_are_percent_decoded() {
@@ -2049,6 +2049,56 @@ mod tests {
         member: &'a Schema<'a>,
     ) -> Result<HeaderValuesDeserializer<'a>, SerdeError> {
         header_values(values, member)?.ok_or_else(|| SerdeError::invalid_input("header is unset"))
+    }
+
+    #[test]
+    fn big_number_rejections_do_not_include_request_values() {
+        const INVALID_VALUE: &str = "private-account-number-invalid";
+        let read = |deser: &mut dyn ShapeDeserializer, member: &Schema<'_>| match member.shape_type() {
+            ShapeType::BigInteger => deser.read_big_integer(member).map(|_| ()),
+            ShapeType::BigDecimal => deser.read_big_decimal(member).map(|_| ()),
+            _ => unreachable!(),
+        };
+        let check = |err: SerdeError| {
+            let display = err.to_string();
+            assert!(display.contains("invalid big"), "{display}");
+            assert!(!display.contains(INVALID_VALUE), "{display}");
+            let debug = format!("{err:?}");
+            assert!(!debug.contains(INVALID_VALUE), "{debug}");
+        };
+        for shape_type in [ShapeType::BigInteger, ShapeType::BigDecimal] {
+            for sensitive in [false, true] {
+                let member = Schema::new_member(
+                    ShapeId::from_parts("test#BigNumberInput$value", "test", "BigNumberInput"),
+                    shape_type,
+                    "value",
+                    0,
+                );
+                let member = if sensitive { member.with_sensitive() } else { member };
+                for location in [BindingLocation::Label, BindingLocation::Query] {
+                    let mut deser = DecodedValuesDeserializer::new(vec![INVALID_VALUE.into()], &member, location);
+                    check(read(&mut deser, &member).unwrap_err());
+                }
+                let mut deser = header_deserializer(vec![INVALID_VALUE], &member).unwrap();
+                check(read(&mut deser, &member).unwrap_err());
+
+                let list = Schema::new_member(
+                    ShapeId::from_parts("test#BigNumberInput$values", "test", "BigNumberInput"),
+                    ShapeType::List,
+                    "values",
+                    1,
+                )
+                .with_list_member(&member);
+                let mut query = DecodedValuesDeserializer::new(
+                    vec!["1".into(), INVALID_VALUE.into()],
+                    &list,
+                    BindingLocation::Query,
+                );
+                check(query.read_list(&list, &mut |d| read(d, &member)).unwrap_err());
+                let mut header = header_deserializer(vec!["1", INVALID_VALUE], &list).unwrap();
+                check(header.read_list(&list, &mut |d| read(d, &member)).unwrap_err());
+            }
+        }
     }
 
     #[test]
@@ -2179,7 +2229,7 @@ mod tests {
         assert_eq!(dates, [DateTime::from_secs(7), DateTime::from_secs(8)]);
     }
 
-    /// A scalar `@mediaType` header is tokenized like legacy's `read_many_from_str`: a quoted
+    /// A scalar `@mediaType` header is tokenized like generated serde's `read_many_from_str`: a quoted
     /// value is unquoted before base64 decoding, and more than one item is rejected.
     #[test]
     fn media_type_header_is_tokenized_like_legacy() {
@@ -2211,7 +2261,7 @@ mod tests {
 
     #[test]
     fn label_and_query_primitives_are_not_trimmed() {
-        // Legacy parses the percent-decoded segment as-is: " 1" is an error, not 1.
+        // Generated serde parses the percent-decoded segment as-is: " 1" is an error, not 1.
         for location in [BindingLocation::Label, BindingLocation::Query] {
             for value in [" 1", "1 ", "\t1"] {
                 let mut deser = DecodedValuesDeserializer::new(vec![value.into()], &AGE_MEMBER, location);
@@ -2224,7 +2274,7 @@ mod tests {
 
     #[test]
     fn header_primitives_are_still_trimmed() {
-        // Headers keep legacy `read_many` semantics: surrounding whitespace is ignored.
+        // Headers keep generated serde `read_many` semantics: surrounding whitespace is ignored.
         for values in [vec![" 7 "], vec!["\t7"], vec![" 7, 8 "]] {
             let mut deser = header_deserializer(values, &TAGS_MEMBER).unwrap();
             let mut seen = vec![];

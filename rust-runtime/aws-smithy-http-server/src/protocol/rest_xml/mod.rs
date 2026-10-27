@@ -8,6 +8,6 @@ pub mod router;
 pub mod runtime_error;
 /// The `restXml` protocol.
 ///
-/// The same type is used as the protocol type parameter of legacy generated servers and, with
+/// The same type is used as the protocol type parameter of generated serde servers and, with
 /// `codegen.schemaSerde`, as the schema-driven protocol implementation.
 pub use crate::schema::protocol::RestXml;

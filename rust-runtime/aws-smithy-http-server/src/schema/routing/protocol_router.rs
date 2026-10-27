@@ -5,9 +5,10 @@
 
 //! Protocol router interfaces, route claims, and supporting construction types.
 
+use crate::config::ServiceConfig;
 use crate::schema::routing::RoutingError;
-use crate::schema::{OperationSchema, ServiceConfig, ServiceSchema};
-use crate::{error::BoxError, schema::ServiceRequestBodyConfig};
+use crate::schema::{OperationSchema, ServiceSchema};
+use crate::{config::ServiceRequestBodyConfig, error::BoxError};
 use aws_smithy_schema::ShapeId;
 use aws_smithy_types::Document;
 use bytes::Bytes;

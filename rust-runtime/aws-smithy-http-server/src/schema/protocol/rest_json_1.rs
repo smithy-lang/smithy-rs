@@ -19,9 +19,10 @@ use super::{BodyDirective, EventStreamFraming, MetadataRoutedProtocol, ServerPro
 
 /// Stateful schema-driven restJson1 protocol implementation.
 #[derive(Debug)]
-/// Defaults to validating escape syntax in skipped strings without decoding Unicode.
+/// Defaults to skipping escape validation in discarded strings.
 /// Set `customizationConfig.protocols` for this protocol to `{"validateSkippedValues":true}`
-/// to skip escape validation, matching legacy smithy-rs servers.
+/// to validate escape syntax without decoding Unicode escapes.
+/// UTF-8, unescaped control characters, and structural syntax remain checked in either mode.
 pub struct RestJson1 {
     pub(crate) inner: crate::schema::protocol::rest::RestProtocol<aws_smithy_json::codec::JsonCodec>,
 }
@@ -155,7 +156,7 @@ impl ServerProtocol for RestJson1 {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
-        // Legacy uses the operation output's default, even for a modeled error body.
+        // Generated serde uses the operation output's default, even for a modeled error body.
         let content_type = match error.operation_schema() {
             Some(operation) => self.inner.response_content_type(operation.output()),
             None => Some(CONTENT_TYPE),

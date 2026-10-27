@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod config;
+use crate::config::RequestBodyCollectionConfig;
+
 mod deserialize;
 pub mod event_stream;
 mod modeled_error;
@@ -16,7 +17,6 @@ pub mod settings;
 mod timestamp;
 pub mod traits;
 
-pub use config::ServiceConfig;
 pub use deserialize::{DeserializableShape, DeserializeError};
 pub use event_stream::InitialResponsePolicy;
 pub use modeled_error::HttpModeledError;
@@ -24,8 +24,7 @@ pub(crate) use protocol::body_collection_rejection;
 pub use protocol::{
     collect_request_body, BodyDirective, BodyRoutedProtocol, EventStreamFraming, MetadataRoutedProtocol,
     ProtocolBuildContext, ProtocolFactory, ProtocolOrder, ProtocolRegistration, ProtocolRegistry,
-    RequestBodyCollectionConfig, RequestBodyCollectionError, ServerProtocol, ServiceRequestBodyConfig,
-    SharedServerProtocol,
+    RequestBodyCollectionError, ServerProtocol, SharedServerProtocol,
 };
 
 pub use service::{OperationSchema, ServiceSchema};

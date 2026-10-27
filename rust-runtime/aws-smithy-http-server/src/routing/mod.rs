@@ -190,7 +190,6 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        tracing::debug!("inside routing service call");
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.
             Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),

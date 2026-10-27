@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Sensitive values must not reach logs on codec serialization failures.
+//! Serialization failures respect the configured sensitive logging mode.
 
 use aws_smithy_http_server::schema::protocol::{AwsJson1_0, AwsJson1_1, RestJson1};
 use aws_smithy_http_server::schema::ServerProtocol;
@@ -46,7 +46,7 @@ impl SerializableStruct for Secret {
 }
 
 #[test]
-fn sensitive_body_values_are_not_logged_on_serialization_failure() {
+fn serialization_failures_respect_sensitive_logging_mode() {
     let protocols: [&dyn ServerProtocol; 3] = [&RestJson1::default(), &AwsJson1_0::default(), &AwsJson1_1::default()];
     for protocol in protocols {
         let writer = LogWriter::default();
@@ -63,12 +63,16 @@ fn sensitive_body_values_are_not_logged_on_serialization_failure() {
             .lines()
             .find(|line| line.contains("failed to serialize response"))
             .expect("serialization failure must produce a log event");
-        assert!(event.contains("error={redacted}"));
-        assert!(
-            !log.contains("987654321"),
-            "{}: status {} leaked sensitive value into log: {log}",
-            protocol.protocol_id(),
-            response.status()
-        );
+        if cfg!(feature = "unredacted-logging") {
+            assert!(event.contains("serialization failed for secret +000987654321"));
+        } else {
+            assert!(event.contains("error={redacted}"));
+            assert!(
+                !log.contains("987654321"),
+                "{}: status {} leaked sensitive value into log: {log}",
+                protocol.protocol_id(),
+                response.status()
+            );
+        }
     }
 }

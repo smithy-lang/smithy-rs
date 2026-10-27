@@ -73,7 +73,7 @@ collecting the whole response or parsing it again. Preflight independently check
 headers, raw binary payloads, event equality, modeled exceptions, initial metadata,
 CRCs, event count, and end of stream.
 
-This measures the schema event-stream runtime only. It does not compare legacy serde,
-route requests, invoke handlers, or use sockets. For the generated legacy/schema
+This measures the schema event-stream runtime only. It does not compare generated serde,
+route requests, invoke handlers, or use sockets. For the generated serde/schema serde
 server comparison, use
 [`codegen-server-test/benchmarks/event-stream`](../../../../../codegen-server-test/benchmarks/event-stream/README.md).

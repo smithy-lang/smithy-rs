@@ -5,11 +5,12 @@
 use super::test_helpers::*;
 use super::*;
 use crate::body::{Body, BoxBody};
+use crate::config::RequestBodyCollectionConfig;
 use crate::error::Error;
 use crate::protocol::rpc_v2_cbor::SMITHY_PROTOCOL_HEADER;
 use crate::response::Response;
 use crate::routing::SyncRoute;
-use crate::schema::{DeserializeError, HttpModeledError, RequestBodyCollectionConfig};
+use crate::schema::{DeserializeError, HttpModeledError};
 use crate::schema::{OperationSchema, ProtocolOrder, SelectedOperation, ServiceSchema};
 use aws_smithy_schema::{shape_id, traits::HttpTrait, Schema, ShapeType};
 use bytes::Bytes;
@@ -28,7 +29,7 @@ use std::time::Duration;
 use tower::{Service, ServiceExt};
 
 fn strict_context(targets: &[OperationTarget]) -> RouterBuildContext<'_> {
-    static CONFIG: std::sync::LazyLock<crate::schema::ServiceConfig> = std::sync::LazyLock::new(Default::default);
+    static CONFIG: std::sync::LazyLock<crate::config::ServiceConfig> = std::sync::LazyLock::new(Default::default);
     RouterBuildContext {
         service: &REST_JSON_AND_RPC_V2_CBOR,
         targets,
@@ -208,7 +209,7 @@ async fn sole_cbor_claims_serialize_native_header_rejections() {
         let expected = IntoResponse::<RpcV2Cbor>::into_response(native_error);
         let native: RoutingError = legacy.match_route(&request).unwrap_err().into();
         assert_eq!(error.kind(), native.kind());
-        // Generated legacy services return 404 with only content-type and an empty body.
+        // Generated serde services return 404 with only content-type and an empty body.
         assert_eq!(expected.status(), StatusCode::NOT_FOUND);
         assert_eq!(expected.headers().len(), 1);
         assert_eq!(expected.headers()["content-type"], "application/cbor");
@@ -437,7 +438,7 @@ async fn body_selects_index_and_preserves_payload_and_trailers() {
     );
 }
 
-/// The legacy router enums classify onto the three standard kinds; in particular the rpcv2
+/// The generated serde router enums classify onto the three standard kinds; in particular the rpcv2
 /// wire-format errors split — a missing or unsupported `smithy-protocol` header means the
 /// request never identified the protocol, while an
 /// invalid value on an rpcv2-shaped header is a framing violation.
@@ -582,7 +583,7 @@ fn delayed_body(delay: Duration, bytes: &'static [u8]) -> Body {
 #[test]
 fn routing_poll_budget_uses_the_largest_override_and_none_disables_it() {
     let global = RequestBodyCollectionConfig::default().with_read_poll_budget(NonZeroUsize::new(3));
-    let mut config = crate::schema::ServiceRequestBodyConfig::default().with_global(global);
+    let mut config = crate::config::ServiceRequestBodyConfig::default().with_global(global);
     assert_eq!(config.for_operation(FIRST.shape_id()), global);
     config.per_operation.insert(
         FIRST.shape_id().to_string(),
@@ -765,8 +766,8 @@ async fn typed_request_body_limits_and_overrides_are_applied() {
     let oversized = || request(format!("first\n{}", "x".repeat(100)));
     let options = || {
         ProtocolOptions::default().with_service_config(
-            crate::schema::ServiceConfig::default().with_request_body(
-                crate::schema::ServiceRequestBodyConfig::default()
+            crate::config::ServiceConfig::default().with_request_body(
+                crate::config::ServiceRequestBodyConfig::default()
                     .with_global(RequestBodyCollectionConfig::default().with_max_bytes(NonZeroUsize::new(8))),
             ),
         )
@@ -777,7 +778,7 @@ async fn typed_request_body_limits_and_overrides_are_applied() {
         .contains("exceeded the configured maximum"));
 
     // Replacing the configuration with its default explicitly allows any body size.
-    let unlimited = options().with_request_body(crate::schema::ServiceRequestBodyConfig::default());
+    let unlimited = options().with_request_body(crate::config::ServiceRequestBodyConfig::default());
     let response = service(unlimited).oneshot(oversized()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -1632,7 +1633,7 @@ mod multi_protocol {
         }
     }
 
-    /// Built-in protocols preserve the legacy routing status, headers, and empty bodies.
+    /// Built-in protocols preserve the generated serde routing status, headers, and empty bodies.
     #[tokio::test]
     async fn routing_rejections_preserve_legacy_responses() {
         // restJson1 alone matched `/first` by URI but not by method: MethodNotAllowedException,
@@ -1829,7 +1830,7 @@ mod multi_protocol {
                 .build()
                 .unwrap();
                 for method in ["GET", "PUT", "DELETE", "HEAD", "OPTIONS"] {
-                    // The method is checked before the path, as in the legacy router.
+                    // The method is checked before the path, as in the generated serde router.
                     for path in [
                         "/service/Service/operation/first",
                         "/service/Service/operation/unknown",
@@ -2867,6 +2868,49 @@ mod multi_protocol {
             response.headers().contains_key("x-amzn-errortype"),
             "protocol-framed, not the unclaimed fallback"
         );
+    }
+}
+
+#[test]
+fn rest_router_defers_routing_rejections_for_configured_content_type_aliases() {
+    let targets = [OperationTarget::new(0, &FIRST)];
+    for aliases in [&["text/xml"][..], &[][..]] {
+        let router = rest_router(&strict_context(&targets), "application/xml", aliases).unwrap();
+        for (method, path, expected) in [
+            ("POST", "/unknown", RoutingErrorKind::UnknownOperation),
+            ("GET", "/first", RoutingErrorKind::MethodNotAllowed),
+        ] {
+            for content_type in [
+                Some("application/xml"),
+                Some("application/xml; charset=utf-8"),
+                Some("text/xml"),
+                Some("text/xml; charset=utf-8"),
+                Some("application/json"),
+                Some("invalid"),
+                None,
+            ] {
+                let mut request = Request::builder().method(method).uri(path);
+                if let Some(content_type) = content_type {
+                    request = request.header("content-type", content_type);
+                }
+                let claim = router.claim(&request.body(()).unwrap());
+                match content_type {
+                    Some("application/xml" | "application/xml; charset=utf-8") => {
+                        let RouteClaim::DeferredRejection(error) = claim else {
+                            panic!("{method} {path} with {content_type:?} must defer a rejection");
+                        };
+                        assert_eq!(error.kind(), expected);
+                    }
+                    Some("text/xml" | "text/xml; charset=utf-8") if !aliases.is_empty() => {
+                        let RouteClaim::DeferredRejection(error) = claim else {
+                            panic!("{method} {path} with {content_type:?} must defer a rejection");
+                        };
+                        assert_eq!(error.kind(), expected);
+                    }
+                    _ => assert!(matches!(claim, RouteClaim::NoClaim)),
+                }
+            }
+        }
     }
 }
 

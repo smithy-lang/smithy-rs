@@ -100,6 +100,7 @@ pub fn rest_router(
         service_schema: ctx.service,
         router: crate::protocol::rest::router::RestRouter::from_iter(entries),
         codec_content_type,
+        codec_aliases,
         operations,
     })
 }
@@ -125,6 +126,7 @@ struct RestProtocolRouter {
     service_schema: &'static ServiceSchema<'static>,
     router: crate::protocol::rest::router::RestRouter<OperationTarget>,
     codec_content_type: &'static str,
+    codec_aliases: &'static [&'static str],
     operations: RoutingTable<RestOperationMetadata>,
 }
 
@@ -192,7 +194,10 @@ impl MetadataProtocolRouter for RestProtocolRouter {
                     RouteClaim::DeferredClaim(target)
                 }
             }
-            Err(error) if content_type_is(request, self.codec_content_type) => {
+            Err(error)
+                if content_type_is(request, self.codec_content_type)
+                    || self.codec_aliases.iter().any(|alias| content_type_is(request, alias)) =>
+            {
                 RouteClaim::DeferredRejection(error.into())
             }
             Ok(_) | Err(_) => RouteClaim::NoClaim,
@@ -270,7 +275,8 @@ fn admits(expected: &ClaimContentType, request: &Request<()>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{OperationSchema, ServiceConfig};
+    use crate::config::ServiceConfig;
+    use crate::schema::OperationSchema;
     use aws_smithy_schema::{shape_id, traits::HttpTrait, AnnotationTrait, TraitMap};
     use std::sync::LazyLock;
 

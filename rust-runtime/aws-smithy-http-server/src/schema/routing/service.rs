@@ -6,13 +6,14 @@
 //! The multi-protocol routing service: dispatch state, the claim walk, and its futures.
 
 use super::MultiProtocolRoutingServiceBuilder;
+use crate::config::RequestBodyCollectionConfig;
 use crate::routing::SyncRoute;
 use crate::schema::routing::RoutingError;
 use crate::schema::{OperationSchema, ServiceSchema};
 use crate::{
     body::BoxBody,
     error::BoxError,
-    schema::{RequestBodyCollectionConfig, SelectedOperation, SharedServerProtocol},
+    schema::{SelectedOperation, SharedServerProtocol},
 };
 use bytes::Bytes;
 use http::{Request, Response};
@@ -107,6 +108,7 @@ impl fmt::Debug for MultiProtocolRoutingService {
 /// the fixed XML body `<UnknownOperationException/>\n` and no `Content-Type` header,
 /// regardless of the protocols the service serves.
 fn unclaimed() -> Response<BoxBody> {
+    tracing::debug!(error = "no protocol claimed the request", "failed to route");
     Response::builder()
         .status(http::StatusCode::NOT_FOUND)
         .body(crate::body::to_boxed("<UnknownOperationException/>\n"))
@@ -195,7 +197,14 @@ impl MultiProtocolRoutingService {
 
     /// Frames a routing error with the rejecting protocol's serialization.
     fn reject(&self, protocol: usize, error: RoutingError) -> Response<BoxBody> {
-        self.state.protocols[protocol].protocol.serialize_routing_error(&error)
+        let protocol = &self.state.protocols[protocol].protocol;
+        tracing::debug!(
+            %error,
+            source = ?std::error::Error::source(&error),
+            protocol = %protocol.protocol_id(),
+            "failed to route"
+        );
+        protocol.serialize_routing_error(&error)
     }
 }
 

@@ -59,7 +59,7 @@ pub(crate) fn payload_member<'s>(schema: &'s Schema<'s>) -> Option<&'s Schema<'s
 ///
 /// A `@httpPayload` member fixes the expected type: `@mediaType` when present, `text/plain` for
 /// strings, the codec's type for structures and documents, and no check for a blob without a media
-/// type or for a streaming payload (the legacy server checks neither). Modeled inputs with no
+/// type or for a streaming payload (the generated serde server checks neither). Modeled inputs with no
 /// members ignore the header because there is no body to deserialize. Operations without a
 /// modeled input instead require the header to be absent, including on empty bodies.
 /// Otherwise the codec's type is expected when any member is bound to the body.

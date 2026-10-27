@@ -40,7 +40,6 @@ mod rpc_v2_cbor_streaming;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::time::Duration;
 
@@ -51,7 +50,8 @@ use aws_smithy_schema::{Schema, ShapeId};
 use bytes::Bytes;
 
 use crate::body::BoxBody;
-use crate::body::__private::{CollectBodyError, CollectBodyFuture, CollectionConfig, HttpBody, DEFAULT_FRAME_BUDGET};
+use crate::body::__private::{CollectBodyError, CollectBodyFuture, CollectionConfig, HttpBody};
+use crate::config::RequestBodyCollectionConfig;
 use crate::response::Response;
 use crate::schema::routing::RouterBuildError;
 use crate::schema::OperationSchema;
@@ -243,13 +243,13 @@ pub struct EventStreamFraming<'a> {
     /// Initial-response payload when non-stream members travel in HTTP bindings instead.
     ///
     /// Used when [`initial_messages_in_frames`](Self::initial_messages_in_frames) is false.
-    /// Legacy REST JSON sends `{}`; REST XML sends zero bytes.
+    /// Generated serde REST JSON sends `{}`; REST XML sends zero bytes.
     pub unset_initial_response_payload: &'static [u8],
     /// Optional body discriminator for modeled exception frames.
     pub exception_discriminator: Option<discriminator::BodyDiscriminator>,
     /// Whether HTTP-bound exception members are excluded from the frame payload.
     pub exception_http_bindings: bool,
-    /// Codec for received exception frames that carry a REST XML error envelope, as legacy
+    /// Codec for received exception frames that carry a REST XML error envelope, as generated serde
     /// restXml servers expect. The codec reads the `<Error>` element without validating its
     /// root name.
     pub xml_exception_codec: Option<&'a dyn DynCodec>,
@@ -406,7 +406,7 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// response, so this never fails outward.
     ///
     /// Built-in protocols add the buffered body's byte count as `Content-Length` only when
-    /// no modeled value is present. Matching legacy generated responses, modeled values take
+    /// no modeled value is present. Matching generated serde responses, modeled values take
     /// precedence without length-specific validation or normalization.
     fn serialize_response(&self, output: &Schema<'_>, value: &dyn SerializableStruct) -> Response;
 
@@ -423,7 +423,7 @@ pub trait ServerProtocol: Send + Sync + std::fmt::Debug + 'static {
     /// The body is passed separately because `serialize_members` omits streaming members
     /// and the response must own their streams.
     ///
-    /// Built-in protocols do not infer a length or collect the stream. Matching legacy generated
+    /// Built-in protocols do not infer a length or collect the stream. Matching generated serde
     /// responses, modeled `Content-Length` values are preserved without length-specific validation
     /// or normalization.
     fn serialize_streaming_response(
@@ -528,101 +528,12 @@ pub trait BodyRoutedProtocol: ServerProtocol + Sized {
 }
 
 /// Converts a body collection failure into the protocol's rejection response, retaining
-/// legacy wire behavior: the failure surfaces as an ordinary request-deserialization error.
+/// generated serde wire behavior: the failure surfaces as an ordinary request-deserialization error.
 pub(crate) fn body_collection_rejection(
     protocol: &dyn ServerProtocol,
     error: RequestBodyCollectionError<crate::Error>,
 ) -> Response {
     protocol.serialize_rejection(error.into())
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct RequestBodyCollectionConfig {
-    pub max_bytes: Option<NonZeroUsize>,
-    pub read_timeout: Option<Duration>,
-    /// Consecutive ready HTTP body frame polls before yielding, for collection and streaming.
-    /// Defaults to 32; `None` disables forced yielding.
-    pub read_poll_budget: Option<NonZeroUsize>,
-}
-
-impl Default for RequestBodyCollectionConfig {
-    fn default() -> Self {
-        Self {
-            max_bytes: None,
-            read_timeout: None,
-            read_poll_budget: Some(DEFAULT_FRAME_BUDGET),
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-#[non_exhaustive]
-pub struct ServiceRequestBodyConfig {
-    pub global: RequestBodyCollectionConfig,
-    pub per_operation: HashMap<String, RequestBodyCollectionConfig>,
-}
-
-impl RequestBodyCollectionConfig {
-    /// Sets the byte limit; `None` allows any size.
-    pub fn with_max_bytes(mut self, max_bytes: Option<NonZeroUsize>) -> Self {
-        self.max_bytes = max_bytes;
-        self
-    }
-
-    /// Sets the read timeout; `None` disables it.
-    pub fn with_read_timeout(mut self, read_timeout: Option<Duration>) -> Self {
-        self.read_timeout = read_timeout;
-        self
-    }
-
-    /// Sets the frame poll budget for collection and streaming; `None` disables forced yielding.
-    pub fn with_read_poll_budget(mut self, read_poll_budget: Option<NonZeroUsize>) -> Self {
-        self.read_poll_budget = read_poll_budget;
-        self
-    }
-}
-
-impl ServiceRequestBodyConfig {
-    /// Sets the default body-read allowances.
-    pub fn with_global(mut self, global: RequestBodyCollectionConfig) -> Self {
-        self.global = global;
-        self
-    }
-
-    /// Sets operation overrides, keyed by operation shape ID.
-    pub fn with_per_operation(mut self, per_operation: HashMap<String, RequestBodyCollectionConfig>) -> Self {
-        self.per_operation = per_operation;
-        self
-    }
-
-    /// Computes the provisional allowance before the operation is known.
-    /// An absent operation override inherits `global`; an unlimited field dominates the maximum.
-    pub fn for_routing(&self) -> RequestBodyCollectionConfig {
-        let mut maximum = self.global;
-        for config in self.per_operation.values() {
-            maximum.max_bytes = match (maximum.max_bytes, config.max_bytes) {
-                (Some(left), Some(right)) => Some(left.max(right)),
-                _ => None,
-            };
-            maximum.read_timeout = match (maximum.read_timeout, config.read_timeout) {
-                (Some(left), Some(right)) => Some(left.max(right)),
-                _ => None,
-            };
-            maximum.read_poll_budget = match (maximum.read_poll_budget, config.read_poll_budget) {
-                (Some(left), Some(right)) => Some(left.max(right)),
-                _ => None,
-            };
-        }
-        maximum
-    }
-
-    pub fn for_operation(&self, operation: &ShapeId<'_>) -> RequestBodyCollectionConfig {
-        self.per_operation
-            .get(operation.as_str())
-            .copied()
-            .unwrap_or(self.global)
-    }
 }
 
 #[derive(Debug)]

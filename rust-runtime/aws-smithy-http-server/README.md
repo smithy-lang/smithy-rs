@@ -2,6 +2,14 @@
 
 Server libraries for smithy-rs generated servers.
 
+## Shared configuration
+
+`aws_smithy_http_server::config` exposes `ServiceConfig`, `ServiceRequestBodyConfig`,
+and `RequestBodyCollectionConfig`. Schema routing consumes these shared types;
+protocol and serialization implementations remain under `schema`.
+Configuration is exposed only through `config`. This module extraction preserves
+the existing defaults and behavior.
+
 ## Event-stream runtime benchmarks
 
 `cargo bench --quiet --bench event_streams` measures schema event serialization,
