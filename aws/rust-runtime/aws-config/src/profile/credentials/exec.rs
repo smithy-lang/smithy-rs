@@ -48,14 +48,30 @@ impl AssumeRoleProvider {
         let session_name = &self.session_name.as_ref().cloned().unwrap_or_else(|| {
             sts::util::default_session_name("assume-role-from-profile", self.time_source.now())
         });
-        let assume_role_output = client
+        let assume_role_output = match client
             .assume_role()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)
             .send()
             .await
-            .map_err(CredentialsError::provider_error)?;
+        {
+            Ok(output) => output,
+            Err(err) => {
+                let non_recoverable = match err.as_service_error() {
+                    Some(service_err) => {
+                        tracing::warn!(error = %aws_smithy_types::error::display::DisplayErrorContext(service_err), "STS refused to grant assume role");
+                        sts::util::assume_role_error_is_non_recoverable(service_err)
+                    }
+                    None => false,
+                };
+                return if non_recoverable {
+                    Err(CredentialsError::non_recoverable(err))
+                } else {
+                    Err(CredentialsError::provider_error(err))
+                };
+            }
+        };
         sts::util::into_credentials(
             assume_role_output.credentials,
             assume_role_output.assumed_role_user,
