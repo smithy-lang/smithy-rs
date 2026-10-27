@@ -46,8 +46,10 @@ pub enum RuntimeError {
     /// An extractor rejected the request with a validation reason.
     ///
     /// This is a runtime validation response, distinct from a modeled constraint violation.
-    /// Each protocol preserves its existing treatment of the reason, including protocols that
-    /// discard it or return its raw bytes.
+    /// Each protocol frames the reason in its response format, or discards it where its
+    /// existing runtime validation response omits the message.
+    /// This variant does not carry a modeled error shape. Custom modeled validation errors
+    /// retain their schema through [`crate::schema::DeserializeError::ConstraintViolation`].
     #[error("validation failure: {0}")]
     Validation(String),
 }
@@ -121,8 +123,8 @@ tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8);
 tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8, P9);
 tuple_internal_failure!(P1, P2, P3, P4, P5, P6, P7, P8, P9, P10);
 
-// Reuse each protocol's established response conversion, including its wire quirks. CBOR's
-// validation variant stores raw bytes; the other protocols store the reason as a string.
+// Reuse each string-based protocol's established response conversion, including its wire quirks.
+// CBOR's conversion separately encodes the reason into its pre-serialized validation body.
 macro_rules! protocol_runtime_error {
     ($error:ty) => {
         impl From<RuntimeError> for $error {
@@ -141,4 +143,3 @@ macro_rules! protocol_runtime_error {
 protocol_runtime_error!(crate::protocol::rest_json_1::runtime_error::RuntimeError);
 protocol_runtime_error!(crate::protocol::aws_json::runtime_error::RuntimeError);
 protocol_runtime_error!(crate::protocol::rest_xml::runtime_error::RuntimeError);
-protocol_runtime_error!(crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError);

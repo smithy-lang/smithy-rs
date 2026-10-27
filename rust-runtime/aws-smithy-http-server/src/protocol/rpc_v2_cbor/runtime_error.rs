@@ -26,6 +26,8 @@ pub enum RuntimeError {
     #[error("unsupported media type: request does not contain the expected `Content-Type` header value")]
     UnsupportedMediaType,
     /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
+    ///
+    /// Contains a pre-serialized CBOR error body, rather than a plain validation message.
     #[error(
         "validation failure: operation input contains data that does not adhere to the modeled constraints: {0:?}"
     )]
@@ -56,6 +58,28 @@ impl RuntimeError {
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
             Self::RequestTimeout => StatusCode::REQUEST_TIMEOUT,
+        }
+    }
+}
+
+impl From<crate::runtime_error::RuntimeError> for RuntimeError {
+    fn from(error: crate::runtime_error::RuntimeError) -> Self {
+        use crate::runtime_error::RuntimeError as SharedRuntimeError;
+
+        match error {
+            SharedRuntimeError::Serialization(error) => Self::Serialization(error),
+            SharedRuntimeError::InternalFailure(error) => Self::InternalFailure(error),
+            SharedRuntimeError::NotAcceptable => Self::NotAcceptable,
+            SharedRuntimeError::UnsupportedMediaType => Self::UnsupportedMediaType,
+            SharedRuntimeError::Validation(reason) => {
+                // This variant carries a serialized error body, whereas the shared error
+                // carries a plain message with no modeled shape identity. Preserve the
+                // runtime response's omission of `__type`; custom modeled validation errors
+                // are serialized separately using their own schema.
+                let mut encoder = aws_smithy_cbor::encode::Encoder::new(Vec::new());
+                encoder.map(1).str("message").str(&reason);
+                Self::Validation(encoder.into_writer())
+            }
         }
     }
 }

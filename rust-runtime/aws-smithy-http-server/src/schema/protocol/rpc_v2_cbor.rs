@@ -243,11 +243,12 @@ impl ServerProtocol for RpcV2Cbor {
     /// header). A constraint violation serializes the modeled validation error, `__type` first,
     /// full shape ID, but through the response engine directly rather than
     /// [`Self::serialize_error`]: rejection responses must NOT carry the `smithy-protocol`
-    /// header, which is reserved for handler-returned responses.
+    /// header, which is reserved for handler-returned responses. An invalid initial request
+    /// frame uses the shared validation error's CBOR encoding.
     fn serialize_rejection(&self, err: DeserializeError) -> Response {
         match err {
             DeserializeError::InitialRequestFrame(reason) => {
-                IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Validation(reason.into_bytes()))
+                self.serialize_runtime_error(crate::runtime_error::RuntimeError::Validation(reason))
             }
             DeserializeError::Serde(err) => {
                 IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::Serialization(crate::Error::new(err)))

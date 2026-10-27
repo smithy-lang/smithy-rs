@@ -1131,6 +1131,50 @@ async fn rpc_v2_cbor_rejections_collapse_to_a_400_without_the_protocol_header() 
 }
 
 #[tokio::test]
+async fn rpc_v2_cbor_encodes_shared_validation_reasons() {
+    use crate::extension::RuntimeErrorExtension;
+    use crate::response::IntoResponse;
+    use crate::runtime_error::RuntimeError;
+
+    for reason in ["bad input", "", "invalid \"value\"\n雪"] {
+        let response =
+            IntoResponse::<()>::into_response_with_protocol(RuntimeError::Validation(reason.to_owned()), &*RPC_V2_CBOR);
+        assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
+        assert_eq!(
+            **response.extensions().get::<RuntimeErrorExtension>().unwrap(),
+            "ValidationException"
+        );
+        let bytes = body_bytes(response).await;
+        let mut decoder = aws_smithy_cbor::decode::Decoder::new(&bytes);
+        assert_eq!(decoder.map().unwrap(), Some(1));
+        assert_eq!(decoder.str().unwrap(), "message");
+        assert_eq!(decoder.str().unwrap(), reason);
+        assert_eq!(decoder.position(), bytes.len());
+
+        let frame_response = RPC_V2_CBOR.serialize_rejection(DeserializeError::InitialRequestFrame(reason.to_owned()));
+        assert_eq!(frame_response.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(body_bytes(frame_response).await, bytes);
+    }
+}
+
+#[tokio::test]
+async fn rpc_v2_cbor_preserves_pre_serialized_validation_bodies() {
+    use crate::protocol::rpc_v2_cbor::rejection::RequestRejection;
+    use crate::protocol::rpc_v2_cbor::runtime_error::RuntimeError;
+    use crate::response::IntoResponse;
+
+    // Generated serde carries the custom modeled error's already serialized type and fields.
+    let payload = body_bytes(RPC_V2_CBOR.serialize_error(&Boom)).await.to_vec();
+    let response = IntoResponse::<crate::protocol::rpc_v2_cbor::RpcV2Cbor>::into_response(RuntimeError::from(
+        RequestRejection::ConstraintViolation(payload.clone()),
+    ));
+    assert_eq!(response.status(), http::StatusCode::BAD_REQUEST);
+    assert_eq!(response.headers().get("content-type").unwrap(), "application/cbor");
+    assert_eq!(body_bytes(response).await.as_ref(), payload.as_slice());
+}
+
+#[tokio::test]
 async fn constraint_violations_answer_with_the_modeled_error() {
     use crate::extension::{ModeledErrorExtension, RuntimeErrorExtension};
 
@@ -1171,9 +1215,21 @@ async fn rpc_v2_cbor_constraint_violations_have_no_protocol_header() {
         "ValidationException"
     );
     let bytes = body_bytes(response).await;
-    let type_pos = bytes.windows(6).position(|w| w == b"__type").expect("__type present");
-    let msg_pos = bytes.windows(7).position(|w| w == b"message").expect("message present");
-    assert!(type_pos < msg_pos, "__type must be the first map entry");
+    let mut decoder = aws_smithy_cbor::decode::Decoder::new(&bytes);
+    let count = decoder.map().unwrap();
+    if let Some(count) = count {
+        assert_eq!(count, 3);
+    }
+    assert_eq!(decoder.str().unwrap(), "__type");
+    assert_eq!(decoder.str().unwrap(), "test#Boom");
+    assert_eq!(decoder.str().unwrap(), "message");
+    assert_eq!(decoder.str().unwrap(), "boom happened");
+    assert_eq!(decoder.str().unwrap(), "tag");
+    assert_eq!(decoder.str().unwrap(), "tagged");
+    if count.is_none() {
+        decoder.skip().unwrap();
+    }
+    assert_eq!(decoder.position(), bytes.len());
 }
 
 #[tokio::test]
