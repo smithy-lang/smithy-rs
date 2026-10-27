@@ -81,7 +81,7 @@ fn sigv4a_resolves_only_patched_bigints() {
             .collect::<Result<_, _>>()
             .expect("review prerelease cryptographic dependencies explicitly");
         assert_eq!(parts.len(), 3);
-        if (parts[0], parts[1], parts[2]) < (0, 7, 6) {
+        if (parts[0], parts[1], parts[2]) < (0, 7, 10) {
             affected.push(version);
         }
     }
