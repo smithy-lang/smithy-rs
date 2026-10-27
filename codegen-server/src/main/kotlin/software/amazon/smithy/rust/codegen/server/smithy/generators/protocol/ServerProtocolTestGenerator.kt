@@ -853,7 +853,7 @@ class ServerProtocolTestGenerator(
                 testCase.body.get(),
                 testCase.bodyMediaType.orNull(),
                 checkContentLength =
-                    (testCase.headers.keys + testCase.requireHeaders).any {
+                    schemaSerde && (testCase.headers.keys + testCase.requireHeaders).any {
                         it.equals("content-length", ignoreCase = true)
                     },
             )
