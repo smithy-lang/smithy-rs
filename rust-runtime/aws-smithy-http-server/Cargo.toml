@@ -34,7 +34,7 @@ aws-smithy-types = { path = "../aws-smithy-types", features = [
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 
 bytes = "1.11.1"
-form_urlencoded = "1"
+form_urlencoded = "1.2.1"
 futures-util = { version = "0.3.29", default-features = false }
 
 http = "1.3.1"
@@ -62,7 +62,7 @@ rustc-hash = "2.1.3"
 serde_urlencoded = "0.7"
 thiserror = "2"
 tokio = { version = "1.49.0", features = ["full"] }
-tower = { version = "0.5", features = [
+tower = { version = "0.5.2", features = [
     "util",
     "make",
 ], default-features = false }
@@ -89,7 +89,7 @@ hyper-util = { version = "0.1", features = [
     "http2",
 ] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
-tower = { version = "0.5", features = ["util", "make", "limit"] }
+tower = { version = "0.5.2", features = ["util", "make", "limit"] }
 tower-http = { version = "0.6", features = ["timeout"] }
 
 [[bench]]
