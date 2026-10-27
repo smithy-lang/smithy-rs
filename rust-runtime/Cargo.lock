@@ -376,7 +376,7 @@ name = "aws-smithy-cbor"
 version = "0.64.1"
 dependencies = [
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "bigdecimal",
  "criterion 0.8.2",
@@ -576,14 +576,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.69.0"
+version = "0.69.1"
 dependencies = [
  "aws-smithy-cbor 0.64.1",
  "aws-smithy-eventstream",
  "aws-smithy-http 0.64.3",
  "aws-smithy-json 0.65.1",
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "aws-smithy-xml 0.64.1",
  "bytes",
@@ -616,13 +616,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "aws-smithy-http-server 0.65.10",
- "aws-smithy-http-server 0.69.0",
+ "aws-smithy-http-server 0.69.1",
  "aws-smithy-http-server-metrics-macro",
  "aws-smithy-legacy-http-server",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "bytes",
  "futures",
  "http 0.2.12",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics-macro"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -708,7 +708,7 @@ name = "aws-smithy-json"
 version = "0.65.1"
 dependencies = [
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "criterion 0.8.2",
  "proptest",
@@ -720,7 +720,7 @@ name = "aws-smithy-lang"
 version = "0.1.0"
 dependencies = [
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "base64-simd",
  "criterion 0.8.2",
@@ -763,7 +763,7 @@ dependencies = [
  "aws-smithy-json 0.65.1",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "aws-smithy-xml 0.64.1",
  "bytes",
@@ -845,7 +845,7 @@ name = "aws-smithy-query"
 version = "0.64.0"
 dependencies = [
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "aws-smithy-xml 0.64.1",
  "criterion 0.5.1",
@@ -862,7 +862,7 @@ dependencies = [
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "bytes",
  "fastrand 2.5.0",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "aws-smithy-runtime-api 1.19.2",
  "aws-smithy-types 1.9.1",
@@ -1053,7 +1053,7 @@ version = "0.64.1"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "base64 0.13.1",
  "criterion 0.8.2",
@@ -2633,7 +2633,7 @@ dependencies = [
  "aws-smithy-json 0.65.1",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.19.2",
- "aws-smithy-schema 1.1.0",
+ "aws-smithy-schema 1.1.2",
  "aws-smithy-types 1.9.1",
  "aws-smithy-xml 0.64.1",
  "bytes",

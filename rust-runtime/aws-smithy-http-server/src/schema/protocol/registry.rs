@@ -20,9 +20,9 @@
 //!
 //! A protocol registers as the routing kind it implements:
 //! [`ProtocolRegistration::metadata_routed`] for a
-//! [`MetadataRoutedProtocol`](super::MetadataRoutedProtocol),
+//! [`MetadataRoutedProtocol`],
 //! [`ProtocolRegistration::body_routed`] for a
-//! [`BodyRoutedProtocol`](super::BodyRoutedProtocol).
+//! [`BodyRoutedProtocol`].
 //!
 //! A service declaring several protocols is served by all of them. The claim order is decided
 //! only by [`ProtocolOrder`] constraints, resolved over every registered protocol — including
@@ -135,7 +135,7 @@ impl ProtocolRegistration {
     /// `P` is built only for services whose schema declares `protocol_id`, and must answer the
     /// same ID from [`protocol_id`](super::ServerProtocol::protocol_id). The routing service
     /// hands `P` only the service's non-streaming operations; see
-    /// [`BodyRoutedProtocol`](super::BodyRoutedProtocol).
+    /// [`BodyRoutedProtocol`].
     pub const fn body_routed<P: BodyRoutedProtocol>(protocol_id: &'static str) -> Self {
         Self {
             protocol_id,
