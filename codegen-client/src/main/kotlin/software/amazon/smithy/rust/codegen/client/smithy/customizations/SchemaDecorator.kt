@@ -59,13 +59,10 @@ object SchemaSerdeAllowlist {
     private val allowedServiceNamespaces: Set<String> =
         setOf(
             // awsJson1_1 phased rollout
-            // Phase 1 — Canary
             "com.amazonaws.ssm",
-            // Phase 2 — 10-100 customers
             "com.amazonaws.servicediscovery",
             "com.amazonaws.globalaccelerator",
             "com.amazonaws.appstream",
-            "com.amazonaws.marketplaceentitlementservice",
             "com.amazonaws.route53domains",
             "com.amazonaws.comprehend",
             "com.amazonaws.iotsecuretunneling",
@@ -86,6 +83,29 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.codepipeline",
             "com.amazonaws.ecrpublic",
             "com.amazonaws.lightsail",
+            // Phase 4 — 100-1,000 customers
+            "com.amazonaws.fsx",
+            "com.amazonaws.codebuild",
+            "com.amazonaws.firehose",
+            "com.amazonaws.workspaces",
+            "com.amazonaws.acmpca",
+            "com.amazonaws.transfer",
+            "com.amazonaws.cloudhsmv2",
+            "com.amazonaws.acm",
+            "com.amazonaws.kinesis",
+            "com.amazonaws.route53resolver",
+            "com.amazonaws.ecs",
+            "com.amazonaws.cognitoidentityprovider",
+            // awsJson1_0 phased rollout
+            // Phase 1 — Canary
+            "com.amazonaws.swf",
+            // rpcv2Cbor phased rollout
+            // Phase 1 — Canary. Also has awsJson1_1; codegen prefers rpcv2Cbor when a model
+            // carries both protocol traits.
+            "com.amazonaws.marketplaceentitlementservice",
+            // restJson1 phased rollout
+            // Phase 1 — Canary
+            "com.amazonaws.wisdom",
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
@@ -93,10 +113,10 @@ object SchemaSerdeAllowlist {
             "smithy.rust.codegen.test.multiprotocol",
             // Test model namespaces, listed explicitly until protocols are fully enabled.
             // restJson1
-            // "aws.protocoltests.restjson",  // RestJson, RestJsonExtras
-            // "com.amazonaws.ebs",
-            // "com.amazonaws.simple",
-            // "com.amazonaws.bignumbers",
+            "aws.protocoltests.restjson",
+            "com.amazonaws.ebs",
+            "com.amazonaws.simple",
+            "com.amazonaws.bignumbers",
             // awsJson1_0 / awsJson1_1
             "aws.protocoltests.json10",
             // restXml
@@ -104,16 +124,16 @@ object SchemaSerdeAllowlist {
             // "aws.protocoltests.restxml.xmlns",
             // "aws.protocoltests.restxmlunwrapped",
             // rpcv2Cbor
-            // "smithy.protocoltests.rpcv2Cbor",  // RpcV2Protocol, RpcV2CborService
-            // "aws.protocoltests.rpcv2cbor",  // Query- and NonQueryCompatibleRpcV2Protocol
+            "smithy.protocoltests.rpcv2Cbor",
+            "aws.protocoltests.rpcv2cbor",
             // naming obstacle courses (protocol-independent codegen coverage)
             // "crate",
             // "casing",
             // "naming_obs_structs",
             // Namespaces holding services on more than one protocol — uncommenting enables all
             // of them, not just the one being rolled out:
-            // "aws.protocoltests.misc",  // MiscService restJson1, QueryCompatService awsJson1_0
-            // "com.aws.example",  // two PokemonService shapes, restJson1 and awsJson1_0
+            "aws.protocoltests.misc",
+            "com.aws.example",
             // "aws.protocoltests.json",  // TestService awsJson1_1, RequiredValueJson awsJson1_0, RequiredValueXml restXml
         )
 

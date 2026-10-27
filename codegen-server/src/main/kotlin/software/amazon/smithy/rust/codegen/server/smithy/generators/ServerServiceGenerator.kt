@@ -195,11 +195,26 @@ class ServerServiceGenerator(
         writable {
             rustTemplate(
                 """
-                let svc = #{UpgradePlugin}::<UpgradeExtractors>::new().apply(svc);
+                let svc = #{UpgradePlugin}::<UpgradeExtractors>::new()#{WithRequestBodyReadTimeout}.apply(svc);
                 let svc = self.http_plugin.apply(svc);
                 self.${fieldName}_custom(svc)
                 """,
                 "UpgradePlugin" to upgradePlugin(operation),
+                "WithRequestBodyReadTimeout" to
+                    writable {
+                        if (!schemaSerde && operation.id !in codegenContext.settings.requestBodyReadTimeouts.streamingOperationIds) {
+                            val operationId = operation.id.toString().replace("#", "##")
+                            rustTemplate(
+                                """
+                            .with_request_body_read_timeout(
+                                #{RequestBodyConfig}.read_timeout.unwrap_or_default(),
+                                "$operationId",
+                            )
+                            """,
+                                "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operation.id),
+                            )
+                        }
+                    },
                 *codegenScope,
             )
         }
@@ -218,6 +233,7 @@ class ServerServiceGenerator(
                     } else {
                         ""
                     }
+
                 rustTemplate(
                     """
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -463,7 +479,6 @@ class ServerServiceGenerator(
                             let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
                             #{PatternInitializations:W}
-
 
                             #{Router}::from_iter([#{RoutesArrayElements:W}])
                         };
@@ -730,7 +745,6 @@ class ServerServiceGenerator(
                             #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                         }
 
-
                         /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
                         pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                             #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
@@ -912,7 +926,7 @@ class ServerServiceGenerator(
     private fun schemaServiceStruct(): Writable =
         writable {
             // Protocol sections use shape IDs and are parsed once into Documents. The common
-            // body limit is emitted directly into the typed request body configuration.
+            // body settings are emitted directly into the typed request body configuration.
             val protocolSettings =
                 codegenContext.settings.protocolSettings()
                     .filterKeys { it != ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY }
@@ -967,10 +981,7 @@ class ServerServiceGenerator(
                     }
                     fn routing_options() -> #{SmithyHttpServer}::schema::routing::ProtocolOptions {
                         #{SmithyHttpServer}::schema::routing::ProtocolOptions::default()
-                            .with_service_config(#{SmithyHttpServer}::schema::ServiceConfig::default()
-                                .with_request_body(#{SmithyHttpServer}::schema::ServiceRequestBodyConfig::default()
-                                    .with_global(#{SmithyHttpServer}::schema::RequestBodyCollectionConfig::default()
-                                        .with_max_bytes(::std::num::NonZeroUsize::new(${codegenContext.settings.requestBodyMaxBytes()}usize)))))
+                            .with_service_config(#{ServiceConfig}().clone())
                             .with_protocol_settings(::std::collections::HashMap::from([#{ProtocolSettings}]))
                     }
                     ##[deprecated(since = "0.57.0", note = "use builder with a service configuration")]
@@ -990,11 +1001,12 @@ class ServerServiceGenerator(
                     }
                 }
                 impl<L, HttpPl, ModelPl> $builderName<L, HttpPl, ModelPl> {
-                    /// Replaces the global and per-operation body collection configuration.
+                    /// Replaces the global and per-operation request body configuration.
                     ///
-                    /// Replaces the default from `customizationConfig.protocols.common.requestBodyMaxBytes`.
+                    /// Replaces the defaults from `customizationConfig.protocols.common`, including
+                    /// `customizationConfig.protocols.common.request.body.maxBytes` and `readPollBudget`.
                     /// A configuration that sets no global byte limit allows any body size.
-                    pub fn request_body_config(mut self, config: #{SmithyHttpServer}::schema::ServiceRequestBodyConfig) -> Self {
+                    pub fn request_body_config(mut self, config: #{SmithyHttpServer}::config::ServiceRequestBodyConfig) -> Self {
                         self.routing_options.service_config.request_body = config;
                         self
                     }
@@ -1050,6 +1062,7 @@ class ServerServiceGenerator(
                 """,
                 *codegenScope, "Fields1" to notSetFields(), "Fields2" to notSetFields(),
                 "ProtocolSettings" to protocolSettings,
+                "ServiceConfig" to ServerServiceConfigGenerator(codegenContext).serviceConfig(),
             )
         }
 

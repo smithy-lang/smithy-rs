@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -15,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -99,7 +101,7 @@ open class ServerRootGenerator(
                         //!     .expect("unable to parse the server bind address and port");
                         //! #{Hyper0}::Server::bind(&bind).serve(server).await.unwrap();
                         //! ## }
-                        //! 
+                        //!
                         //! ```
                         """,
                         "Hyper0" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
@@ -414,12 +416,44 @@ open class ServerRootGenerator(
             """,
         )
 
-        // Re-export serve function for HTTP 1.x
+        // Preserve the runtime API while applying the SDK's typed transport configuration.
         if (codegenContext.settings.runtimeConfig.httpVersion == HttpVersion.Http1x) {
-            rustWriter.rust(
+            val runtimeConfig = codegenContext.runtimeConfig
+            rustWriter.rustTemplate(
                 """
-                pub use crate::server::serve::serve;
+                /// Serve this SDK's service with its configured request-head deadline.
+                ///
+                /// `customizationConfig.protocols.common.request.header.readTimeout` defaults to one minute.
+                /// Zero disables it. The deadline covers the first request head for HTTP/1 and
+                /// HTTP/2, and later HTTP/1 heads. Later HTTP/2 streams are not covered.
+                /// Body reads, middleware, and time waiting for server events are not bounded.
+                /// A subsequent [`header_read_timeout`](#{Server}::serve::Serve::header_read_timeout)
+                /// call overrides the generated setting, including when disabling it.
+                pub fn serve<L, M, S, B>(listener: L, make_service: M) -> #{Server}::serve::Serve<L, M, S, B>
+                where
+                    L: #{Server}::serve::Listener,
+                    B: #{HttpBody}::Body + #{Send} + 'static,
+                    B::Data: #{Send},
+                    B::Error: #{Into}<#{Box}<dyn #{StdError} + #{Send} + #{Sync}>>,
+                    S: #{Tower}::Service<#{Http}::Request<#{Hyper}::body::Incoming>,
+                        Response = #{Http}::Response<B>, Error = #{Infallible}> + #{Clone} + #{Send} + 'static,
+                    S::Future: #{Send},
+                    M: for<'a> #{Tower}::Service<#{Server}::serve::IncomingStream<'a, L>,
+                        Error = #{Infallible}, Response = S>,
+                {
+                    #{Server}::serve::serve(listener, make_service)
+                        .header_read_timeout(#{ServiceConfig}().header_read_timeout)
+                }
                 """,
+                *RuntimeType.preludeScope,
+                "Server" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+                "HttpBody" to RuntimeType.httpBody(runtimeConfig),
+                "Http" to RuntimeType.http(runtimeConfig),
+                "Hyper" to CargoDependency.hyper(runtimeConfig).toType(),
+                "Tower" to ServerCargoDependency.Tower.toType(),
+                "StdError" to RuntimeType.std.resolve("error::Error"),
+                "Infallible" to RuntimeType.std.resolve("convert::Infallible"),
+                "ServiceConfig" to ServerServiceConfigGenerator(codegenContext).serviceConfig(),
             )
         }
     }

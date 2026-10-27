@@ -534,10 +534,51 @@ val compatibilityClientTests =
         )
     }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests + compatibilityClientTests
+
+// A generated service for request-limit integration tests.
+val requestLimitsCodegenTest =
+    CodegenTest(
+        "integration.requestlimits#RequestLimitsService",
+        "request-limits-server-sdk",
+        imports = listOf("integration-tests/request-limits/model.smithy"),
+        extraCodegenConfig = "\"http-1x\": true",
+        extraConfig =
+            """
+            , "customizationConfig": {
+                "protocols": {
+                    "common": {
+                        "request": {
+                            "header": {
+                                "readTimeout": "10s"
+                            },
+                            "body": {
+                                "maxBytes": "1 KiB",
+                                "readTimeouts": {
+                                    "defaultNonPayload": "5s",
+                                    "defaultPayload": "10s",
+                                    "perOperation": {
+                                        "integration.requestlimits#EchoWithOverride": "3s"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            """.trimIndent(),
+    )
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests + compatibilityClientTests + requestLimitsCodegenTest
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
+tasks.named("generateSmithyBuild") {
+    inputs.property("requestLimitsConfig", requestLimitsCodegenTest.extraConfig.orEmpty())
+    inputs.property("modules", providers.gradleProperty("modules").orElse("all"))
+}
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
+tasks.named("generateCargoWorkspace") {
+    inputs.property("modules", providers.gradleProperty("modules").orElse("all"))
+}
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", properties.get("smithy.runtime.mode") ?: "orchestrator")

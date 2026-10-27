@@ -13,6 +13,10 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import java.util.logging.Handler
+import java.util.logging.Level
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 
 /**
  * Checks how server configuration is parsed before generating Rust. It covers schemaSerde and
@@ -120,82 +124,141 @@ internal class ServerRustSettingsTest {
         settings("").rpcV2CborCapitalizeRoutes() shouldBe false
     }
 
-    @Test
-    fun `requestBodyMaxBytes is read from the common protocols section`() {
-        schemaSettings("").requestBodyMaxBytes() shouldBe 0L
-        schemaSettings("", """{ "protocols": { "common": { "otherSetting": 1 } } }""").requestBodyMaxBytes() shouldBe 0L
-        schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": 2048 } } }""").requestBodyMaxBytes() shouldBe 2048L
-    }
+    private fun bodySettings(value: String): String = """{"protocols":{"common":{"request":{"body":$value}}}}"""
 
     @Test
-    fun `legacy request body limit is copied into customization config`() {
-        for (customization in listOf(null, "{}", """{ "protocols": {} }""")) {
-            val settings = schemaSettings(""""requestBodyMaxBytes": 1024""", customization)
-            settings.requestBodyMaxBytes() shouldBe 1024L
-            settings.customizationConfig shouldBe
-                Node.parse("""{ "protocols": { "common": { "requestBodyMaxBytes": 1024 } } }""").expectObjectNode()
-        }
-    }
-
-    @Test
-    fun `copying the legacy limit preserves other customization settings`() {
-        val settings =
-            schemaSettings(
-                """"requestBodyMaxBytes": 1024""",
-                """{ "example": true, "protocols": { "common": { "otherSetting": 1 }, "example#protocol": { "enabled": true } } }""",
-            )
-        settings.requestBodyMaxBytes() shouldBe 1024L
-        settings.customizationConfig shouldBe
-            Node.parse(
-                """{ "example": true, "protocols": { "common": { "otherSetting": 1, "requestBodyMaxBytes": 1024 }, "example#protocol": { "enabled": true } } }""",
-            ).expectObjectNode()
-    }
-
-    @Test
-    fun `explicit common body limit takes precedence over the legacy setting including zero`() {
-        for (limit in listOf(0, 2048)) {
-            val customization = """{ "protocols": { "common": { "requestBodyMaxBytes": $limit } } }"""
-            val settings = schemaSettings(""""requestBodyMaxBytes": 1024""", customization)
-            settings.requestBodyMaxBytes() shouldBe limit.toLong()
-            settings.customizationConfig shouldBe Node.parse(customization).expectObjectNode()
-        }
-    }
-
-    @Test
-    fun `invalid legacy body limits are rejected when copied`() {
-        for (value in listOf("-1", "1.5", "9223372036854775808", "true", "null", "\"8\"")) {
-            shouldThrow<Exception> {
-                schemaSettings(""""requestBodyMaxBytes": $value""")
+    fun `nested request body limits are read in both serde modes`() {
+        for (schemaSerde in listOf(false, true)) {
+            val codegen = "\"schemaSerde\":$schemaSerde"
+            settings(codegen).requestBodyMaxBytes() shouldBe null
+            for ((value, expected) in listOf("0" to 0L, "2048" to 2048L, "\"2 KiB\"" to 2048L, "\"2 KB\"" to 2000L)) {
+                settings(codegen, bodySettings("""{"maxBytes":$value}""")).requestBodyMaxBytes() shouldBe expected
             }
         }
     }
 
     @Test
-    fun `invalid explicit common limit is not replaced by the legacy setting`() {
-        shouldThrow<Exception> {
-            schemaSettings(
-                """"requestBodyMaxBytes": 1024""",
-                """{ "protocols": { "common": { "requestBodyMaxBytes": null } } }""",
-            )
+    fun `request body poll budget defaults to 32 and zero becomes null`() {
+        schemaSettings("").requestBodyReadPollBudget() shouldBe 32
+        for (budget in listOf(0, 1, 7, Int.MAX_VALUE)) {
+            schemaSettings("", bodySettings("""{"readPollBudget":$budget}"""))
+                .requestBodyReadPollBudget() shouldBe budget.takeIf { it > 0 }
         }
     }
 
     @Test
-    fun `negative requestBodyMaxBytes is rejected when settings are loaded`() {
-        shouldThrow<IllegalArgumentException> {
-            schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": -1 } } }""")
-        }
-    }
-
-    @Test
-    fun `invalid request body limits are rejected during codegen`() {
-        for (value in listOf("1.5", "9223372036854775808", "true", "null", "\"8\"")) {
-            shouldThrow<Exception> {
-                schemaSettings("", """{ "protocols": { "common": { "requestBodyMaxBytes": $value } } }""")
+    fun `invalid common request settings fail in both serde modes`() {
+        for (schemaSerde in listOf(false, true)) {
+            val codegen = "\"schemaSerde\":$schemaSerde"
+            for (value in listOf("-1", "1.5", "2147483648", "9223372036854775808", "true", "null", "\"32\"", "{}", "[]")) {
+                val error =
+                    shouldThrow<CodegenException> {
+                        settings(codegen, bodySettings("""{"readPollBudget":$value}"""))
+                    }
+                error.message shouldContain "customizationConfig.protocols.common.request.body.readPollBudget"
+            }
+            for (value in listOf("-1", "1.5", "9223372036854775808", "true", "null", "\"8\"", "\"1.5 MB\"", "\"2 PB\"")) {
+                val error =
+                    shouldThrow<CodegenException> {
+                        settings(codegen, bodySettings("""{"maxBytes":$value}"""))
+                    }
+                error.message shouldContain "customizationConfig.protocols.common.request.body.maxBytes"
+            }
+            for (customization in listOf(
+                """{"protocols":7}""",
+                """{"protocols":{"common":null}}""",
+                """{"protocols":{"common":{"request":[]}}}""",
+                bodySettings("false"),
+            )) {
+                shouldThrow<CodegenException> { settings(codegen, customization) }
             }
         }
-        shouldThrow<Exception> {
-            schemaSettings("", """{ "protocols": { "common": "not an object" } }""")
+    }
+
+    @Test
+    fun `legacy limit folds into nested settings and preserves other customization`() {
+        for (schemaSerde in listOf(false, true)) {
+            val loaded =
+                settings(
+                    "\"schemaSerde\":$schemaSerde,\"requestBodyMaxBytes\":1024",
+                    """{"example":true,"protocols":{"example#protocol":{"enabled":true}}}""",
+                )
+            loaded.requestBodyMaxBytes() shouldBe 1024L
+            loaded.customizationConfig shouldBe
+                Node.parse(
+                    """{"example":true,"protocols":{"example#protocol":{"enabled":true},"common":{"request":{"body":{"maxBytes":1024}}}}}""",
+                ).expectObjectNode()
+        }
+    }
+
+    @Test
+    fun `nested body limit takes precedence over legacy setting including zero`() {
+        for (schemaSerde in listOf(false, true)) {
+            for (limit in listOf(0, 2048)) {
+                val customization = bodySettings("""{"maxBytes":$limit}""")
+                val loaded = settings("\"schemaSerde\":$schemaSerde,\"requestBodyMaxBytes\":1024", customization)
+                loaded.requestBodyMaxBytes() shouldBe limit.toLong()
+                loaded.customizationConfig shouldBe Node.parse(customization).expectObjectNode()
+            }
+            shouldThrow<CodegenException> {
+                settings("\"schemaSerde\":$schemaSerde,\"requestBodyMaxBytes\":1024", bodySettings("""{"maxBytes":null}"""))
+            }
+        }
+    }
+
+    @Test
+    fun `invalid legacy body limits fail in both serde modes`() {
+        for (schemaSerde in listOf(false, true)) {
+            for (value in listOf("-1", "1.5", "9223372036854775808", "true", "null", "\"8\"")) {
+                shouldThrow<Exception> { settings("\"schemaSerde\":$schemaSerde,\"requestBodyMaxBytes\":$value") }
+            }
+        }
+    }
+
+    @Test
+    fun `legacy limit emits one deprecation warning and nested conflicts explain precedence`() {
+        val logger = Logger.getLogger("ServerRustSettings")
+        val warnings = mutableListOf<String>()
+        val testThread = Thread.currentThread()
+        val handler =
+            object : Handler() {
+                override fun publish(record: LogRecord) {
+                    if (Thread.currentThread() == testThread && record.level == Level.WARNING) warnings.add(record.message)
+                }
+
+                override fun flush() = Unit
+
+                override fun close() = Unit
+            }
+        logger.addHandler(handler)
+        try {
+            for (schemaSerde in listOf(false, true)) {
+                val codegen = "\"schemaSerde\":$schemaSerde"
+                for (legacy in listOf(0L, 512L)) {
+                    warnings.clear()
+                    val loaded = settings("$codegen,\"requestBodyMaxBytes\":$legacy")
+                    loaded.requestBodyMaxBytes() shouldBe legacy
+                    loaded.protocolSettings()
+                    loaded.requestBodyMaxBytes()
+                    warnings.single() shouldContain "`codegen.requestBodyMaxBytes` is deprecated"
+                    warnings.single() shouldContain "customizationConfig.protocols.common.request.body.maxBytes"
+                }
+                warnings.clear()
+                settings("$codegen,\"requestBodyMaxBytes\":512", bodySettings("""{"maxBytes":0}"""))
+                    .requestBodyMaxBytes() shouldBe 0L
+                warnings.count { it.contains("deprecated") } shouldBe 1
+                warnings.any { it.contains("using the nested value") } shouldBe true
+                warnings.clear()
+                settings(codegen, bodySettings("""{"maxBytes":0}"""))
+                settings(codegen)
+                warnings shouldBe emptyList()
+                settings(codegen, """{"protocols":{"common":{"requestBodyMaxBytes":128}}}""")
+                    .requestBodyMaxBytes() shouldBe null
+                warnings.single() shouldContain "Unknown setting(s)"
+            }
+        } finally {
+            logger.removeHandler(handler)
+            handler.close()
         }
     }
 
@@ -204,15 +267,15 @@ internal class ServerRustSettingsTest {
         val sections =
             schemaSettings(
                 "",
-                """{ "protocols": { "com.example#customProtocol": { "anything": { "nested": 1 } } } }""",
+                """{ "protocols": { "example.protocols#customRpc": { "anything": { "nested": 1 } } } }""",
             ).protocolSettings()
-        sections.keys shouldBe setOf("com.example#customProtocol")
-        sections.getValue("com.example#customProtocol") shouldBe
+        sections.keys shouldBe setOf("example.protocols#customRpc")
+        sections.getValue("example.protocols#customRpc") shouldBe
             Node.parse("""{ "anything": { "nested": 1 } }""").expectObjectNode()
     }
 
     @Test
-    fun `full IDs for built in and custom protocols are preserved only on the schema path`() {
+    fun `full IDs for built in and custom protocols are preserved in both modes`() {
         val ids =
             listOf(
                 "aws.protocols#awsJson1_0",
@@ -220,7 +283,7 @@ internal class ServerRustSettingsTest {
                 "aws.protocols#restJson1",
                 "aws.protocols#restXml",
                 ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID,
-                "com.example#customProtocol",
+                "example.protocols#customRpc",
                 ServerRustSettings.COMMON_PROTOCOL_SETTINGS_KEY,
             )
         val sections = ids.joinToString(",") { """"$it": {"extension": true}""" }
@@ -230,10 +293,6 @@ internal class ServerRustSettingsTest {
                     """"schemaSerde": $schemaSerde""",
                     """{"protocols": {$sections}}""",
                 ).protocolSettings()
-            if (!schemaSerde) {
-                parsed shouldBe emptyMap()
-                continue
-            }
             parsed.keys shouldBe ids.toSet()
             parsed.values.forEach {
                 it shouldBe Node.parse("""{"extension": true}""").expectObjectNode()
@@ -242,7 +301,7 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
-    fun `protocol shorthand and invalid shape IDs are rejected only on the schema path`() {
+    fun `protocol shorthand and invalid shape IDs are rejected in both modes`() {
         val invalidIds =
             listOf(
                 "awsJson1_0",
@@ -257,10 +316,6 @@ internal class ServerRustSettingsTest {
             )
         for (schemaSerde in listOf(false, true)) {
             for (id in invalidIds) {
-                if (!schemaSerde) {
-                    settings("\"schemaSerde\": false", """{"protocols":{"$id":{}}}""").protocolSettings() shouldBe emptyMap()
-                    continue
-                }
                 val error =
                     shouldThrow<CodegenException> {
                         settings(
@@ -315,17 +370,11 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
-    fun `legacy settings ignore unrelated protocol sections and preserve fractional limits`() {
-        for (http1x in listOf(false, true)) {
-            for (protocols in listOf("7", "{\"unrelated\":true}", "{\"awsJson1_0\":{\"responseBindings\":\"typo\"}}")) {
-                val custom = """{"protocols":$protocols}"""
-                val loaded = settings(""""http-1x":$http1x,"requestBodyMaxBytes":3.5""", custom)
-                loaded.requestBodyMaxBytes() shouldBe 3L
-                loaded.customizationConfig shouldBe Node.parse(custom).expectObjectNode()
-                loaded.protocolSettings() shouldBe emptyMap()
-            }
-        }
-        val error = shouldThrow<IllegalArgumentException> { settings(""""requestBodyMaxBytes":-1""") }
-        error.message shouldBe "`requestBodyMaxBytes` must be non-negative, got -1"
+    fun `generated serde preserves historical response bindings while retaining protocol sections`() {
+        val loaded = settings("", """{"protocols":{"aws.protocols#awsJson1_0":{"responseBindings":"smithy-specs"}}}""")
+        loaded.protocolSettings().keys shouldBe setOf("aws.protocols#awsJson1_0")
+        loaded.protocolResponseSettings.responseBindings(
+            software.amazon.smithy.model.shapes.ShapeId.from("aws.protocols#awsJson1_0"),
+        ) shouldBe AwsJsonResponseBindings.HISTORICAL
     }
 }

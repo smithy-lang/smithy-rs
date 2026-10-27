@@ -77,6 +77,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceConfigGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerEventStreamMessageTimeoutHttpBindingCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -785,36 +787,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    /** Preserve the released body collection API on both generated HTTP serde paths. */
-    private fun RustWriter.renderBodyCollection(maxBytes: Long) {
-        when {
-            maxBytes > 0L ->
-                rustTemplate(
-                    """
-                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${maxBytes}usize).await {
-                        #{Ok}(bytes) => bytes,
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
-                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
-                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
-                        }
-                    };
-                    """,
-                    *codegenScope,
-                )
-            runtimeConfig.httpVersion == HttpVersion.Http1x ->
-                rustTemplate(
-                    """
-                    let bytes = {
-                        use #{http_body_util}::BodyExt;
-                        body.collect().await?.to_bytes()
-                    };
-                    """,
-                    *codegenScope,
-                )
-            else -> rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
-        }
-    }
-
     private fun RustWriter.serverRenderShapeParser(
         operationShape: OperationShape,
         inputShape: StructureShape,
@@ -849,21 +821,28 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val expectedRequestContentType =
                 httpBindingResolver.requestContentType(operationShape)!!
 
-            // Generate body collection code. When `requestBodyMaxBytes` is > 0, we use
-            // the released `collect_body_limited` helper on both HTTP versions.
-            // These helpers cap the
-            // amount of data a single request can buffer in memory — this prevents denial-of-service
-            // attacks in which a client streams an unbounded `Transfer-Encoding: chunked` body.
-            //
-            // If the limit is exceeded the helper returns a `BodyLimitExceeded` error that bubbles
-            // up as `RequestRejection::BufferHttpBodyBytes` and surfaces to the client as
-            // `400 Bad Request` (plus the server drops the connection).
-            //
-            // Services that legitimately need to accept larger payloads can raise the limit via
-            // `codegen.requestBodyMaxBytes` for generated serde. The schema runtime reads
-            // `customizationConfig.protocols.common.requestBodyMaxBytes` separately.
-            // Setting the limit to `0` disables the check entirely (not recommended).
-            renderBodyCollection(codegenContext.settings.requestBodyMaxBytes())
+            // Resolve an omitted size limit from the runtime policy. Explicit zero
+            // remains unlimited, and positive overrides reject oversized bodies.
+            val bodyLimit =
+                writable {
+                    rustTemplate(
+                        "#{RequestBodyConfig}.max_bytes.map_or(0, std::num::NonZeroUsize::get)",
+                        "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
+                    )
+                }
+            rustTemplate(
+                """
+                let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, #{BodyLimit}).await {
+                    #{Ok}(bytes) => bytes,
+                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                        return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                    }
+                };
+                """,
+                "BodyLimit" to bodyLimit,
+                *codegenScope,
+            )
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
             // operation input; we simply parse it as empty operation input.
             // This behavior applies to all protocols. This might seem like a bug, but it isn't. There's protocol tests
@@ -1006,6 +985,25 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             val readInitialRequest =
                                 writable {
                                     if (httpBindingResolver.isRpcProtocol()) {
+                                        // An expired initial-message deadline surfaces through
+                                        // `try_recv_initial` as a body error whose source chain
+                                        // contains `MessageTimeoutError`. Reject it as a retryable
+                                        // `408 Request Timeout` instead of a validation failure.
+                                        val mapTimeoutError =
+                                            writable {
+                                                rustTemplate(
+                                                    """
+                                                    if #{MessageTimeoutError}::find_in_chain(&ev_error).is_some() {
+                                                        return #{RequestRejection}::RequestTimeout;
+                                                    }
+                                                    """,
+                                                    "MessageTimeoutError" to
+                                                        ServerEventStreamMessageTimeoutHttpBindingCustomization
+                                                            .eventStreamMessageTimeoutModule(runtimeConfig)
+                                                            .resolve("MessageTimeoutError"),
+                                                    *codegenScope,
+                                                )
+                                            }
                                         rustTemplate(
                                             """
                                             let mut receiver = receiver;
@@ -1013,10 +1011,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 .try_recv_initial(#{InitialMessageType}::Request)
                                                 .await
                                                 .map_err(
-                                                    |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                        #{AllowUselessConversion}
-                                                        format!("{ev_error}").into()
-                                                    )
+                                                    |ev_error| {
+                                                        #{mapTimeoutError}
+                                                        #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                    }
                                                 )? {
                                                 #{parseInitialRequest}
                                             }
@@ -1026,6 +1027,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                                 RuntimeType.smithyHttp(runtimeConfig)
                                                     .resolve("event_stream::InitialMessageType"),
                                             "parseInitialRequest" to parseInitialRequest,
+                                            "mapTimeoutError" to mapTimeoutError,
                                             "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                             *codegenScope,
                                         )
@@ -1095,21 +1097,32 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         }
                                     }
                             }
-                        // Generate body collection code. See the long comment in
-                        // `serverRenderShapeParser` for why we wrap the body in a size-limited
-                        // reader (same reasoning applies here).
-                        withBlock("{", "}") {
-                            renderBodyCollection(codegenContext.settings.requestBodyMaxBytes())
-                            rustTemplate(
-                                """
-                                #{VerifyRequestContentTypeHeader}
+                        val bodyLimit =
+                            writable {
+                                rustTemplate(
+                                    "#{RequestBodyConfig}.max_bytes.map_or(0, std::num::NonZeroUsize::get)",
+                                    "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
+                                )
+                            }
+                        rustTemplate(
+                            """
+                            {
+                                let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, #{BodyLimit}).await {
+                                    #{Ok}(bytes) => bytes,
+                                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                                    #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                        return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                                    }
+                                };
+                                #{VerifyRequestContentTypeHeader:W}
                                 #{Deserializer}(&bytes)?
-                                """,
-                                "Deserializer" to deserializer,
-                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                                *codegenScope,
-                            )
-                        }
+                            }
+                            """,
+                            "BodyLimit" to bodyLimit,
+                            "Deserializer" to deserializer,
+                            "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                            *codegenScope,
+                        )
                     }
                 }
             }
