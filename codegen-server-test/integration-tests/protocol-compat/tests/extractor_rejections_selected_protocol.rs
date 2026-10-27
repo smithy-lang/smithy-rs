@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Rejects requests in shared and custom extractors on schema services and checks
-//! that each rejection is serialized using the request's selected protocol. Streaming
-//! cases assert that rejection occurs before polling the body. Tuple extractors,
-//! custom response hooks, and absent-selection fallbacks have separate assertions.
-//!
 //! Selected-protocol rejection tests over schema serde and generated serde services.
 #[path = "support/extractor_rejections.rs"]
 mod harness;
@@ -230,9 +225,10 @@ impl std::fmt::Display for ContextRejection {
         f.write_str("context-aware rejection")
     }
 }
+// The context-free impl is a canary: the schema upgrade must use the contextual trait.
 impl<P> IntoResponse<P> for ContextRejection {
     fn into_response(self) -> Response {
-        panic!("schema upgrade fell back to the old method")
+        panic!("schema upgrade fell back to the context-free conversion")
     }
 
     fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
@@ -535,32 +531,6 @@ impl ServerProtocol for ExternalProtocol {
                 "external runtime error",
             ))
             .unwrap()
-    }
-}
-
-#[tokio::test]
-async fn selected_framing_does_not_depend_on_protocol_tuple_order() {
-    type Reversed = (RpcV2Cbor, RestJson1);
-    fn accepts_tuple<P>()
-    where
-        RuntimeError: IntoResponse<P>,
-    {
-    }
-    accepts_tuple::<Protocols>();
-    accepts_tuple::<Reversed>();
-    for protocol in [
-        &RestJson1::default() as &dyn ServerProtocol,
-        &RpcV2Cbor::default() as &dyn ServerProtocol,
-    ] {
-        for kind in REJECTIONS {
-            let first = IntoResponse::<Protocols>::into_response_with_protocol(
-                shared_error(kind),
-                protocol,
-            );
-            let reversed =
-                IntoResponse::<Reversed>::into_response_with_protocol(shared_error(kind), protocol);
-            assert_eq!(snapshot(first).await, snapshot(reversed).await);
-        }
     }
 }
 

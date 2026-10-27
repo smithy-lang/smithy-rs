@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! Duplex stall probe: client and server hyper HTTP/2 endpoints over an in-memory
 //! byte stream, but on SEPARATE runtimes/threads, with a paced streaming request
 //! body. Reproduces cross-thread wakeup latency absent from the Criterion bench.

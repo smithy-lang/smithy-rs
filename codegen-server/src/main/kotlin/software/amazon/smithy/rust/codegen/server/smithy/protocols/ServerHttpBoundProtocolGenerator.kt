@@ -22,7 +22,6 @@ import software.amazon.smithy.model.traits.HttpErrorTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
-import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -48,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -140,9 +138,8 @@ class ServerHttpBoundProtocolGenerator(
 class ServerHttpBoundProtocolPayloadGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
-) : ProtocolPayloadGenerator {
-    private val delegate =
-        HttpBoundProtocolPayloadGenerator(
+) :
+    ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
             codegenContext,
             protocol,
             HttpMessageType.RESPONSE,
@@ -168,21 +165,6 @@ class ServerHttpBoundProtocolPayloadGenerator(
                 )
             },
         )
-
-    override fun payloadMetadata(
-        operationShape: OperationShape,
-        additionalPayloadContext: AdditionalPayloadContext,
-    ): ProtocolPayloadGenerator.PayloadMetadata = delegate.payloadMetadata(operationShape, additionalPayloadContext)
-
-    override fun generatePayload(
-        writer: RustWriter,
-        shapeName: String,
-        operationShape: OperationShape,
-        additionalPayloadContext: AdditionalPayloadContext,
-    ) {
-        delegate.generatePayload(writer, shapeName, operationShape, additionalPayloadContext)
-    }
-}
 
 /*
  * Generate all operation input parsers and output serializers for streaming and
@@ -692,11 +674,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         val bindingGenerator =
             ServerResponseBindingGenerator(protocol, codegenContext, operationShape)
-        // Fresh mainline reproduction at 9267f0e25: CBOR error header serialization
-        // fails with E0277 because BuildError cannot convert into ResponseRejection.
-        // CBOR operation bindings are already body-only; use that rule for errors too.
-        val skipErrorHeaders = errorShape != null && codegenContext.protocol == Rpcv2CborTrait.ID
-        val addHeadersFn = if (skipErrorHeaders) null else bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
+        val addHeadersFn = bindingGenerator.generateAddHeadersFn(errorShape ?: operationShape)
         if (addHeadersFn != null) {
             // Notice that we need to borrow the output only for output shapes but not for error shapes.
             val outputOwnedOrBorrowed = if (errorShape == null) "&output" else "output"

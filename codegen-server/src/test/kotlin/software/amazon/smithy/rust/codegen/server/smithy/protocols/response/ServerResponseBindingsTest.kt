@@ -78,7 +78,7 @@ internal class ServerResponseBindingsTest {
     ) {
         val root = Path.of("..").toAbsolutePath().normalize()
         val model =
-            Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/response-bindings-$protocol.smithy"))
+            Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/response-bindings-$protocol.smithy"))
                 .asSmithyModel(smithyVersion = "2")
         val settings =
             ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().toBuilder()

@@ -275,6 +275,53 @@ impl Fixture {
         }
     }
 
+    /// Returns independently encoded event messages, excluding CBOR initial metadata.
+    /// Frame decoding and CRC verification happen before serde-only measurement.
+    pub fn event_messages(&self) -> Vec<Message> {
+        assert!(self.case.direction != Direction::Download);
+        self.chunks
+            .iter()
+            .skip(usize::from(self.case.protocol == Protocol::RpcV2Cbor))
+            .map(|bytes| read_message_from(&bytes[..]).expect("valid fixture frame"))
+            .collect()
+    }
+
+    /// Checks one event's complete modeled payload and event headers outside timing.
+    pub fn validate_event(&self, sequence: usize, message: &Message) {
+        assert_eq!(string_header(message, ":message-type"), "event");
+        assert_eq!(string_header(message, ":event-type"), self.case.kind.name());
+        assert_eq!(
+            header(message, "sequence").as_int64().unwrap(),
+            sequence as i64
+        );
+        match self.case.kind {
+            Kind::Binary => {
+                assert_eq!(
+                    string_header(message, ":content-type"),
+                    "application/octet-stream"
+                );
+                assert_eq!(
+                    message.payload(),
+                    &vec![(sequence % 251) as u8; self.case.size]
+                );
+            }
+            Kind::Structured => {
+                assert_eq!(
+                    string_header(message, ":content-type"),
+                    if self.case.protocol == Protocol::RestJson {
+                        "application/json"
+                    } else {
+                        "application/cbor"
+                    }
+                );
+                assert_eq!(
+                    decode_document(self.case.protocol, message.payload()),
+                    structured(self.case.size)
+                );
+            }
+        }
+    }
+
     /// Decoding and deep payload checks run before timing, never in Criterion's measured drain.
     pub async fn validate(&self, server: Server) {
         let response = server.oneshot(self.request()).await.unwrap();
@@ -333,38 +380,7 @@ impl Fixture {
             start + self.case.count + usize::from(self.fail)
         );
         for (sequence, message) in messages[start..start + self.case.count].iter().enumerate() {
-            assert_eq!(string_header(message, ":message-type"), "event");
-            assert_eq!(string_header(message, ":event-type"), self.case.kind.name());
-            assert_eq!(
-                header(message, "sequence").as_int64().unwrap(),
-                sequence as i64
-            );
-            match self.case.kind {
-                Kind::Binary => {
-                    assert_eq!(
-                        string_header(message, ":content-type"),
-                        "application/octet-stream"
-                    );
-                    assert_eq!(
-                        message.payload(),
-                        &vec![(sequence % 251) as u8; self.case.size]
-                    );
-                }
-                Kind::Structured => {
-                    assert_eq!(
-                        string_header(message, ":content-type"),
-                        if self.case.protocol == Protocol::RestJson {
-                            "application/json"
-                        } else {
-                            "application/cbor"
-                        }
-                    );
-                    assert_eq!(
-                        decode_document(self.case.protocol, message.payload()),
-                        structured(self.case.size)
-                    );
-                }
-            }
+            self.validate_event(sequence, message);
         }
         if self.fail {
             let error = messages.last().unwrap();

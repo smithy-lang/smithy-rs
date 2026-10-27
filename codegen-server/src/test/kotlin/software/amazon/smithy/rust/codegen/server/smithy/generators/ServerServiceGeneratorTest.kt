@@ -233,19 +233,19 @@ internal class ServerServiceGeneratorTest {
                     // No actual tests: we just want to check that this compiles.
                     rustTemplate(
                         """
-                        fn _build_service() -> crate::SimpleService {
-                            let config = crate::SimpleServiceConfig::builder().build();
-                            let service = crate::SimpleService::builder(config).build_unchecked();
+                    fn _build_service() -> crate::SimpleService {
+                        let config = crate::SimpleServiceConfig::builder().build();
+                        let service = crate::SimpleService::builder(config).build_unchecked();
 
-                            service.boxed()
-                        }
+                        service.boxed()
+                    }
 
-                        fn _protocol_is_rest_json(
-                            protocol: <crate::SimpleService as #{Server}::service::ServiceShape>::Protocol,
-                        ) -> #{Server}::protocol::rest_json_1::RestJson1 {
-                            protocol
-                        }
-                        """,
+                    fn _protocol_is_rest_json(
+                        protocol: <crate::SimpleService as #{Server}::service::ServiceShape>::Protocol,
+                    ) -> #{Server}::protocol::rest_json_1::RestJson1 {
+                        protocol
+                    }
+                    """,
                         "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                     )
                 }

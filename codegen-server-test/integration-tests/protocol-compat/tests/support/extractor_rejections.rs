@@ -3,10 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Provides protocol-specific requests, response snapshots, and failing extractors
-//! for the rejection suites. It records reference runtime errors and checks custom
-//! rejection responses so the tests compare actual HTTP behavior with shared fixtures.
-//!
 #![allow(dead_code)]
 
 use aws_smithy_http_server::{

@@ -19,7 +19,7 @@ macro_rules! generated_server {
             use super::*;
             use ::$sdk::{error, input, model, output, BenchmarkService, BenchmarkServiceConfig};
 
-            fn event(case: Case, sequence: usize) -> model::Events {
+            pub(crate) fn event(case: Case, sequence: usize) -> model::Events {
                 match case.kind {
                     Kind::Binary => model::Events::Binary(
                         model::BinaryEvent::builder()

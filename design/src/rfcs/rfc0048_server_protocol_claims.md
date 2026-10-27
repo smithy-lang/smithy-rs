@@ -102,9 +102,11 @@ The generated builder passes four inputs to `MultiProtocolRoutingServiceBuilder`
 At `.build()`, the runtime resolves declared protocols against
 `ProtocolRegistry::BUILTIN` and the additional registries, validates precedence
 and bindings, and creates each served protocol and its router. Router construction
-receives `ClaimMode::SoleProtocol` when exactly one protocol is served, or
-`ClaimMode::Strict` when several are served. Protocol factories
-receive shared configuration and their own
+receives `RouterBuildContext`, whose `service_protocols()` method exposes the
+service's declared protocol IDs. Built-in routers use the protocol count to
+choose native operation routing for a single-protocol service or protocol
+identification for a multiprotocol service. Protocol factories receive shared
+configuration and their own
 `customizationConfig.protocols.<shape ID>` section. Registered protocols that the
 service does not declare participate in precedence validation but are not served.
 
@@ -320,8 +322,8 @@ claim, dispatch the first deferred claim in precedence order. If no deferred
 claim exists, emit the first deferred rejection through its originating protocol.
 If neither exists, return `404`, body `<UnknownOperationException/>\n`, no
 `Content-Type`.
-The dispatch contract applies in both claim modes; routers use the mode to decide
-how to identify requests.
+The dispatch contract applies to both single-protocol and multiprotocol services.
+Routers decide how to identify requests using the service's protocol list.
 
 `DeferredClaim` offers a known operation without committing ownership, allowing
 a later protocol with a definite identification to take precedence. Body routers
@@ -334,34 +336,35 @@ Once a protocol returns
 `Claimed`, subsequent routing, input validation, or deserialization failures
 cannot cause dispatch to try another protocol.
 
-## Claim modes and compatibility
+## Protocol count and compatibility
 
-`ClaimMode` distinguishes operation routing within a known protocol from
-arbitration between protocols. The builder selects the mode from the number of
-resolved, served protocols, not the number of registry entries. It passes the
-mode through `RouterBuildContext`; it is not a user-selectable compatibility flag.
+`RouterBuildContext::service_protocols()` returns the protocols served by the
+service in schema order, excluding registered protocols that the service does
+not declare. Built-in metadata routers use this list's length to distinguish
+native operation routing from arbitration between protocols.
 
-| Mode | Built-in metadata router behavior |
+| Served protocols | Built-in metadata router behavior |
 | --- | --- |
-| `SoleProtocol` | Use native operation routing. A successful match returns `ClaimedWithRoute`; a routing failure returns `DeferredRejection`, which the sole protocol frames. |
-| `Strict` | Require protocol identification before claiming. A request may be declined or deferred so another protocol can own it. |
+| One | Use native operation routing. A successful match returns `ClaimedWithRoute`; a routing failure returns `DeferredRejection`, which the sole protocol frames. |
+| Several | Require protocol identification before claiming. A request may be declined or deferred so another protocol can own it. |
 
-In `SoleProtocol`, REST and AWS JSON leave `Content-Type` validation to request
-deserialization. This preserves body-sensitive acceptance rules: for example, a
+With one served protocol, REST and AWS JSON leave `Content-Type` validation to
+request deserialization. This preserves body-sensitive acceptance rules: for example, a
 REST GET with no body can reach its handler without `Content-Type`, while a
 nonempty document with an incompatible media type can still fail deserialization.
 RPCv2 CBOR uses native routing and header validation, retaining missing or
 unsupported protocol-header errors instead of declining ownership.
 
-Adding a second served protocol switches all its routers to `Strict`. Requests
-previously accepted without identification metadata may then reach another
-protocol or remain unclaimed. This behavior change is part of enabling protocol
-arbitration and must be tested explicitly.
+Adding a second served protocol makes the built-in routers apply protocol
+identification. Requests previously accepted without identification metadata may
+then reach another protocol or remain unclaimed. This behavior change is part of
+enabling protocol arbitration and must be tested explicitly.
 
-The routing service still invokes `claim` in either mode. Custom metadata and
-body routers receive the mode but remain responsible for their claim behavior;
-`SoleProtocol` does not force them to accept every request. Body collection and
-streaming exclusions remain the same in both modes.
+The routing service invokes `claim` regardless of protocol count. Custom metadata
+and body routers can inspect `service_protocols()` during construction and remain
+responsible for their claim behavior; a single-protocol service does not force
+them to accept every request. Body collection and streaming exclusions apply
+regardless of protocol count.
 
 ## Strict identification
 

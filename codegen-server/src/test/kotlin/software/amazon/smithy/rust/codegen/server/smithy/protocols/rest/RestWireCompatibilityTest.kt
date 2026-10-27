@@ -36,7 +36,7 @@ import kotlin.io.path.readText
 
 /** Models also run as standalone protocol tests in codegen-server-test, in both serde modes. */
 private fun restWireModel(name: String): Model =
-    Files.readString(Path.of("..", "codegen-server-test", "schema-serde-compat", "protocol-tests", "$name.smithy")).asSmithyModel()
+    Files.readString(Path.of("..", "codegen-server-test", "custom-test-models", "$name.smithy")).asSmithyModel()
 
 /**
  * Reads request cases from the Smithy body-binding protocol fixtures and sends them through

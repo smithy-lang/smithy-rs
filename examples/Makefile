@@ -1,15 +1,15 @@
 SRC_DIR := $(shell git rev-parse --show-toplevel)
 CUR_DIR := $(shell pwd)
 GRADLE := $(SRC_DIR)/gradlew
-SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
+SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-schema-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
-SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-server-sdk/rust-server-codegen
+SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-server-schema-sdk/rust-server-codegen
 CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen
 
 all: codegen
 
 codegen:
-	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' :codegen-client-test:assemble :codegen-server-test:assemble
+	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-schema-sdk,pokemon-service-client' :codegen-client-test:assemble :codegen-server-test:assemble
 	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST)
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/
@@ -39,10 +39,6 @@ lambda_invoke:
 	cargo lambda invoke pokemon-service-lambda --data-file pokemon-service/tests/fixtures/example-apigw-request.json
 
 distclean: clean
-	$(GRADLE) --project-dir $(SRC_DIR) :codegen-client-test:clean :codegen-server-test:clean
 	rm -rf $(SERVER_SDK_DST) $(CLIENT_SDK_DST) Cargo.lock
-	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' \
-		:codegen-client-test:generateSmithyBuild --rerun :codegen-server-test:generateSmithyBuild --rerun \
-		:codegen-client-test:smithyBuild --rerun :codegen-server-test:smithyBuild --rerun
 
 .PHONY: all codegen build run clippy test doc-open clean distclean lambda_watch lambda_invoke

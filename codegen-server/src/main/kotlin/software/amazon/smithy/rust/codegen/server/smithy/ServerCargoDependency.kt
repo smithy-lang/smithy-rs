@@ -27,22 +27,21 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
-    private val legacyTower = CargoDependency("tower", CratesIo("0.4"))
-    private val schemaTower = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
+
+    /** Preserve the Tower dependency used by existing generated servers and decorators. */
+    val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    private val schemaTower: CargoDependency = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
 
     /**
-     * Tower 0.4 dependency retained for compatibility with existing server decorators.
-     * Use [tower] to select the dependency for the codegen context.
-     */
-    val Tower: CargoDependency = legacyTower
-
-    /**
-     * Generated HTTP serde uses Tower 0.4; schema HTTP serde uses Tower 0.5.
-     * Preserve the existing dependency declaration; both runtimes enable Tower 0.4's
-     * utilities transitively for existing generated servers.
+     * Schema routing uses Tower 0.5's Sync service utilities. Generated serde retains
+     * the mainline Tower 0.4 declaration, including its transitive runtime features.
      */
     fun tower(codegenContext: CodegenContext): CargoDependency =
-        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) schemaTower else legacyTower
+        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) {
+            schemaTower
+        } else {
+            Tower
+        }
 
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)

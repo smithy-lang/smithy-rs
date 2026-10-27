@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -338,11 +339,11 @@ class SchemaRoutingGeneratorTest {
                         use #{Tower}::ServiceExt;
                         for before in [false, true] {
                             for allowed in [false, true] {
-                                let body_config = #{Server}::schema::ServiceRequestBodyConfig::default()
-                                    .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                                let body_config = #{Server}::config::ServiceRequestBodyConfig::default()
+                                    .with_global(#{Server}::config::RequestBodyCollectionConfig::default()
                                         .with_max_bytes(::std::num::NonZeroUsize::new(1)))
                                     .with_per_operation(if allowed {
-                                        [("test##Ping".to_owned(), #{Server}::schema::RequestBodyCollectionConfig::default())].into()
+                                        [("test##Ping".to_owned(), #{Server}::config::RequestBodyCollectionConfig::default())].into()
                                     } else { ::std::collections::HashMap::new() });
                                 let builder = crate::Example::builder(crate::ExampleConfig::builder().build());
                                 let builder = if before { builder.request_body_config(body_config.clone()) } else { builder };
@@ -384,7 +385,7 @@ class SchemaRoutingGeneratorTest {
                         let service = crate::Example::builder(config).ping_service(#{Tower}::service_fn(|input: crate::input::PingInput| async move {
                             assert_eq!(input.message.as_deref(), #{Some}("replacement"));
                             #{Ok}::<_, ::std::convert::Infallible>(crate::output::PingOutput {})
-                        })).request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default()).build_unchecked();
+                        })).request_body_config(#{Server}::config::ServiceRequestBodyConfig::default()).build_unchecked();
                         let request = #{Http}::Request::builder().method("POST").uri("/ping").header("content-type", "application/json")
                             .body(#{Server}::body::Body::from_bytes("invalid original json".into())).unwrap();
                         assert_eq!(service.oneshot(request).await.unwrap().status(), 200);
@@ -404,8 +405,8 @@ class SchemaRoutingGeneratorTest {
                                 request
                             }).service(inner)
                         });
-                        let limit = #{Server}::schema::ServiceRequestBodyConfig::default()
-                            .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                        let limit = #{Server}::config::ServiceRequestBodyConfig::default()
+                            .with_global(#{Server}::config::RequestBodyCollectionConfig::default()
                                 .with_max_bytes(::std::num::NonZeroUsize::new(1)));
                         let config = crate::ExampleConfig::builder().http_plugin(#{Server}::plugin::LayerPlugin(layer)).build();
                         let service = crate::Example::builder(config)
@@ -738,10 +739,10 @@ class SchemaRoutingGeneratorTest {
                                 ObjectNode.builder().withMember("capitalizeRoutes", true).build(),
                             )
                             // Codegen translates this into typed body configuration for every protocol.
-                            .withMember("common", ObjectNode.builder().withMember("requestBodyMaxBytes", 64).build())
+                            .withMember("common", Node.parse("""{"request":{"body":{"maxBytes":64}}}""").expectObjectNode())
                             // An unrelated protocol's section passes through without being consulted.
                             .withMember(
-                                "com.example#customProtocol",
+                                "example.protocols#customRpc",
                                 ObjectNode.builder().withMember("anything", "opaque").build(),
                             )
                             .build(),
@@ -805,17 +806,17 @@ class SchemaRoutingGeneratorTest {
                         assert_eq!(limited.oneshot(request()).await.unwrap().status(), 400);
                         // Replacing the body configuration can explicitly remove the generated limit.
                         let unlimited = builder()
-                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default())
+                            .request_body_config(#{Server}::config::ServiceRequestBodyConfig::default())
                             .build()
                             .unwrap();
                         assert_eq!(unlimited.oneshot(request()).await.unwrap().status(), 200);
                         // An operation override lifts the limit, so the payload itself is acceptable.
                         let lifted = builder()
-                            .request_body_config(#{Server}::schema::ServiceRequestBodyConfig::default()
-                                .with_global(#{Server}::schema::RequestBodyCollectionConfig::default()
+                            .request_body_config(#{Server}::config::ServiceRequestBodyConfig::default()
+                                .with_global(#{Server}::config::RequestBodyCollectionConfig::default()
                                     .with_max_bytes(::std::num::NonZeroUsize::new(64)))
                                 .with_per_operation(
-                                [("test##getFoo".to_owned(), #{Server}::schema::RequestBodyCollectionConfig::default())].into(),
+                                [("test##getFoo".to_owned(), #{Server}::config::RequestBodyCollectionConfig::default())].into(),
                             ))
                             .build()
                             .unwrap();

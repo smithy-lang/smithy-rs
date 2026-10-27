@@ -3,13 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Uses one generated schema client to select each supported protocol at runtime
-//! and call one multi-protocol server over sockets. It checks successful operations,
-//! modeled and validation errors, and supported streaming calls. The detailed notes
-//! below explain which ambiguous REST XML requests are excluded.
+//! Selects protocols at runtime on generated schema clients and calls one
+//! multi-protocol server over sockets. It checks successful operations, modeled
+//! and validation errors, and supported streaming calls.
 //!
-//! One generated schema client selects each protocol at runtime and calls the same server
-//! implementation over real sockets.
+//! The generated serializers still determine whether to retain a request body and
+//! whether to send and receive event-stream initial frames. Choose an SDK whose
+//! generated serializer supports the request shape:
+//!
+//! - REST-generated SDKs cover REST calls and CBOR non-streaming calls.
+//! - AWS JSON empty requests use an SDK generated for the other AWS JSON version,
+//!   so runtime selection changes the protocol while preserving the required body.
+//! - RPC streams use the CBOR-generated SDK, whose initial-frame handling also
+//!   supports AWS JSON selected at runtime.
+//!
+//! `one_sdk_selects_all_protocols_against_one_server` separately verifies that the
+//! same REST-generated SDK can select all five protocols for a structured request.
 
 //! When selecting restXml, the client makes fewer calls:
 //!
@@ -25,11 +34,11 @@
 //!
 //! `Ping` has no input over restXml either; restJson1 answers it, and the empty output reads the same.
 
-/// Calls made with every runtime-selected protocol: a request carrying every kind of binding, and empty input and output.
+/// A request carrying every kind of binding, and empty input and output.
 macro_rules! core_suite {
-    ($module:ident, $protocol:expr) => {
+    ($module:ident, $sdk:ident, $protocol:expr) => {
         mod $module {
-            use multi_protocol_client::{Client, Config};
+            use $sdk::{Client, Config};
 
             async fn client() -> Client {
                 let address = protocol_compat::multi::start_server().await;
@@ -79,12 +88,12 @@ macro_rules! core_suite {
 
 /// Modeled and validation errors, and event streams in both directions.
 macro_rules! error_and_stream_suite {
-    ($module:ident, $protocol:expr) => {
+    ($module:ident, $sdk:ident, $protocol:expr) => {
         mod $module {
-            use multi_protocol_client::operation::greet::GreetError;
-            use multi_protocol_client::types::error::EventsError;
-            use multi_protocol_client::types::{Events, Note};
-            use multi_protocol_client::{Client, Config};
+            use $sdk::operation::greet::GreetError;
+            use $sdk::types::error::EventsError;
+            use $sdk::types::{Events, Note};
+            use $sdk::{Client, Config};
 
             async fn client() -> Client {
                 let address = protocol_compat::multi::start_server().await;
@@ -172,9 +181,14 @@ macro_rules! error_and_stream_suite {
 }
 
 mod rpcv2_cbor {
-    core_suite!(core, aws_smithy_cbor::protocol::RpcV2CborProtocol::new());
+    core_suite!(
+        core,
+        multi_protocol_client,
+        aws_smithy_cbor::protocol::RpcV2CborProtocol::new()
+    );
     error_and_stream_suite!(
         errors_and_streams,
+        multi_protocol_client_rpcv2cbor,
         aws_smithy_cbor::protocol::RpcV2CborProtocol::new()
     );
 }
@@ -182,10 +196,12 @@ mod rpcv2_cbor {
 mod aws_json_1_0 {
     core_suite!(
         core,
+        multi_protocol_client_awsjson11,
         aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0()
     );
     error_and_stream_suite!(
         errors_and_streams,
+        multi_protocol_client_rpcv2cbor,
         aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0()
     );
 }
@@ -193,10 +209,12 @@ mod aws_json_1_0 {
 mod aws_json_1_1 {
     core_suite!(
         core,
+        multi_protocol_client_awsjson10,
         aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1()
     );
     error_and_stream_suite!(
         errors_and_streams,
+        multi_protocol_client_rpcv2cbor,
         aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1()
     );
 }
@@ -204,10 +222,12 @@ mod aws_json_1_1 {
 mod rest_json_1 {
     core_suite!(
         core,
+        multi_protocol_client,
         aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new()
     );
     error_and_stream_suite!(
         errors_and_streams,
+        multi_protocol_client,
         aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new()
     );
 
@@ -236,6 +256,7 @@ mod rest_json_1 {
 mod rest_xml {
     core_suite!(
         core,
+        multi_protocol_client,
         aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol::new()
     );
 }

@@ -8,11 +8,11 @@ Cross-protocol behavior tests over generated servers, in two styles:
 
 - Behavior pinning: shared handlers mounted on generated services covering each
   protocol combination, schemaSerde on and off, driven by raw HTTP requests
-  (`claim_order`, `routing`, `rpc_bindings`, `payloads`, `extractors`,
-  `upgrade_failures`, `logging`, `api_surface`).
+  (`routing`, `logging`, `api_surface`). Routing also covers protocol claim order and lost operation context.
+  Extractor and middleware rejection suites pin protocol framing and streaming behavior.
 - Round trips: one server serving every built-in protocol (`src/multi.rs`),
   called over real sockets by a generated client per protocol (`clients`) and
-  by one schema client selecting protocols at runtime (`runtime_protocol_clients`).
+  by schema clients selecting protocols at runtime (`runtime_protocol_clients`).
   Raw protocol requests exercise the same service (`wire`).
 
 The service shares one set of handlers across AWS JSON 1.0/1.1, REST JSON, REST XML and RPCv2 CBOR.
@@ -21,14 +21,22 @@ The service shares one set of handlers across AWS JSON 1.0/1.1, REST JSON, REST 
 
 The suites moved from `examples/multi-protocol` retain their assertions, including
 Unit versus explicit empty structures, modeled errors, validation, and streams.
-The runtime client suite also selects all five protocols against one listening server.
-It uses the same generated `multi-protocol-client` SDK for every protocol, selecting
-the protocol through `Config::builder().protocol(...)` or `set_protocol(...)`.
+The runtime client suite selects all five protocols through
+`Config::builder().protocol(...)` or `set_protocol(...)`. Its structured-request
+matrix uses the same REST-generated `multi-protocol-client` SDK and one listening
+server for every protocol.
+
+Empty requests and RPC streams use SDKs whose generated serializers support those
+request shapes. AWS JSON empty requests use the SDK generated for the opposite
+AWS JSON version; RPC event streams use the CBOR-generated SDK, including when
+selecting AWS JSON at runtime. This preserves runtime protocol-switch coverage
+without assuming that the REST-generated serializer can supply RPC request bodies
+or event-stream initial frames. All 33 runtime-client tests retain their success,
+error, and stream-content assertions.
+
 `make test` includes this suite; `make test-runtime-client` generates its dependencies
 and runs only the runtime client suite.
-A fresh run before the move recorded 23 passing and 10 failing runtime client tests,
-plus seven passing wire tests. The existing client failures remain visible; they concern
-AWS JSON empty-input routing and RPC event-stream initial data. Run these targets alone with:
+Run the runtime-client and wire targets alone with:
 
 ```sh
 cargo test --quiet -p protocol-compat --test runtime_protocol_clients --test wire --no-fail-fast
@@ -36,7 +44,7 @@ cargo test --quiet -p protocol-compat --test runtime_protocol_clients --test wir
 
 The runnable client showcase remains in `examples/multi-protocol`.
 
-The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-server-test/custom-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. `:codegen-server-test:assemble` generates both server and client crates under `codegen-server-test/build/smithyprojections/codegen-server-test/` before the integration Gradle task runs the workspace.
+The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-server-test/custom-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. The server integration Gradle task generates both server and client crates before running the workspace.
 
 The server model in `codegen-server-test/custom-test-models/multi-protocol-compat/multi-protocol-server.smithy` imports the shared operations and the server extras. The extras include ordinary structure/union payloads with distinct member/target XML names, response status/header/prefix bindings, nested collections and union variants, blobs and timestamps, populated modeled errors, generated builder defaults, and absent/empty/null sparse values. JSON-only fuzz and coverage profiles additionally include DocumentValues; this operation is outside the all-five-protocol server. The generated clients retain their original operation sets; the added server operations are exercised by the wire tests.
 
@@ -46,25 +54,17 @@ Native protocol tests assert the declared wire contract. A/B tests compare indep
 
 Earlier investigation records are in `validation/multi-protocol-enrichment/` and `validation/multi-protocol-example/report.md`. Those records predate the subsequent document-null and XML union-list fixes.
 
-## Reproducing the generated serde baseline
+## Generated SDK parity
 
-`make mainline-baseline` records the shared scenarios against freshly generated
-generated serde servers with HTTP 1.x and `schemaSerde: false`. It exports the pinned
-merge-base commit `06c62da902fba6059ab34d0dc3d570907560cd3a` into a temporary
-directory and uses that source for both codegen and runtime. Models, handlers,
-and scenarios are copied from this suite; pending runtime or codegen changes
-cannot enter the oracle.
+`legacy_parity` sends the same shared request scenarios to the existing SDK pairs
+generated from the same models with `schemaSerde: false` and `schemaSerde: true`.
+It compares status, headers, and bodies directly, canonicalizing JSON object
+member order while retaining exact CBOR encoding checks.
 
-The recorder updates `baselines/mainline.json` only after generation and all
-scenario replays succeed. It also writes `baselines/mainline.metadata.json`
-with the source commit, settings, and input hashes. Generated code and build
-logs remain in the printed temporary evidence directory. Python 3.12 or newer
-is required.
-
-To compare another local upstream commit, use
-`make mainline-baseline MAINLINE_REF=<commit>`. Review the resulting baseline
-diff before changing divergence pins; recording a baseline does not authorize
-changing compatibility expectations.
+The only explicit differences are JSON number normalization for REST JSON and
+AWS JSON 1.0, and the definite versus indefinite byte-string encoding of a CBOR
+streaming blob. Those cases assert both SDKs' bodies and content lengths, then
+require their remaining headers to match.
 
 ## Selected-protocol extractor rejection tests
 
@@ -104,3 +104,33 @@ cargo test --quiet -p protocol-compat --test extractor_rejections_selected_proto
 
 The Pokemon example is deferred. Existing protocol-specific error responses are compared against
 the recorded generated serde expectations; the new shared error's context-free fallback is tested separately.
+
+
+## CI and coverage ownership
+
+The `check-server-codegen-integration-tests` job in `.github/workflows/ci.yml`
+runs `tools/ci-scripts/check-server-codegen-integration-tests`, which invokes
+`./gradlew codegen-server-test:test`. Its `cargoTestIntegration` task generates
+the fixtures and runs `cargo nextest run --no-tests=pass` in the integration
+workspace. `protocol-compat` is a workspace member, so all its test targets run
+in that job, including client round trips, direct generated-SDK parity,
+and selected-protocol extractor and middleware rejections. The task also runs
+the workspace doctests through `cargoTestIntegrationDoctests`.
+
+The retained Kotlin checks run in the separate
+`check-server-codegen-unit-tests` CI job, which invokes
+`./gradlew codegen-server:test`.
+
+Overlapping checks live in the following suites; these replacements exercise
+generated services rather than only inspecting generated source.
+
+| Behavior | Retained coverage |
+| --- | --- |
+| RPC response status/header bindings and historical/specification settings | Kotlin `ServerResponseBindingsTest`; direct on/off comparison in `legacy_parity` |
+| Structured RPC payload member keys | Kotlin `ServerSchemaRpcPayloadTest`; `wire` and `legacy_parity` |
+| Missing selected-operation context | `routing` covers registered handlers; Kotlin `MissingHandlerContextCompatibilityTest` covers missing handlers |
+| Existing protocol-specific extractor API | `api_surface` |
+| Streaming blob response content type | `wire` |
+
+The client round trips and selected-protocol rejection suites retain their
+existing assertions.

@@ -18,4 +18,4 @@ aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
 aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
 aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
-multi-protocol-client = { path = "../../codegen-server-test/build/smithyprojections/codegen-server-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }

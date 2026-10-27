@@ -198,13 +198,22 @@ class ServerAwsJsonProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust("$serviceName.${operationShape.id.name}".dq())
+        val routeName =
+            if (serverCodegenContext.usesSchemaHttpSerde) {
+                operationShape.id.name
+            } else {
+                operationName
+            }
+        rust("$serviceName.$routeName".dq())
     }
 
     override fun additionalRouterRequestSpecAliases(
         operationShape: OperationShape,
         serviceName: String,
     ): List<Writable> {
+        if (!serverCodegenContext.usesSchemaHttpSerde) {
+            return emptyList()
+        }
         val protocolId =
             when (version) {
                 AwsJsonVersion.Json10 -> "aws.protocols#awsJson1_0"

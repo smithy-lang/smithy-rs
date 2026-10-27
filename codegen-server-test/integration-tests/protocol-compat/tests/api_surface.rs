@@ -5,9 +5,13 @@
 
 //! Checks generated Rust API compatibility: operation IDs use the server crate's
 //! ShapeId type, and a schema service supports adding a layer after construction
-//! and boxing the service. Compilation and a successful request exercise those APIs.
+//! and boxing the service. Protocol-specific extractors retain their accepted and
+//! rejected responses. Compilation and HTTP requests exercise those APIs.
 //!
 //! Review finding: `ShapeId` exists in both `aws-smithy-http-server` and `aws-smithy-schema`.
+pub use protocol_compat::kit::{from_bytes, Body};
+mod support;
+
 use std::any::TypeId;
 
 use aws_smithy_http_server::operation::OperationShape;
@@ -48,4 +52,29 @@ async fn schema_service_supports_post_build_layer_and_boxed() {
         .unwrap();
     let response: http::Response<BoxBody> = boxed.oneshot(request).await.expect("infallible");
     assert_eq!(response.status(), 200);
+}
+
+/// A sole-protocol service's protocol type is that protocol, so a `FromParts<RestJson1>` extractor
+/// keeps working and its `IntoResponse<RestJson1>` rejection is what the client receives.
+#[tokio::test]
+async fn sole_protocol_service_accepts_protocol_specific_extractors() {
+    use support::{rest, send};
+    let ok = send(
+        protocol_compat::caller::service(),
+        rest("GET", "/widgets/1", &[("x-caller", "alice")], b""),
+    )
+    .await;
+    assert_eq!(
+        (ok.status, ok.text().as_str()),
+        (200, r#"{"id":"alice:1"}"#)
+    );
+
+    let rejected = send(
+        protocol_compat::caller::service(),
+        rest("GET", "/widgets/1", &[], b""),
+    )
+    .await;
+    assert_eq!(rejected.status, 401);
+    assert_eq!(rejected.header("x-amzn-errortype"), Some("MissingCaller"));
+    assert_eq!(rejected.text(), r#"{"message":"missing x-caller"}"#);
 }

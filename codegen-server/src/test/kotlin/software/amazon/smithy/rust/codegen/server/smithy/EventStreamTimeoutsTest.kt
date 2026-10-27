@@ -447,7 +447,7 @@ internal class EventStreamTimeoutsTest {
                     "SmithyTypes" to RuntimeType.smithyTypes(codegenContext.runtimeConfig),
                     "EventStream" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig),
                     "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                 )
             rustCrate.testModule {
                 rustTemplate(

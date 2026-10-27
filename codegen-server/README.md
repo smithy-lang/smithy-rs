@@ -13,18 +13,21 @@ HTTP version selection is separate from the serde mode. HTTP 0.x uses
 `aws-smithy-legacy-http-server`; HTTP 1.x uses `aws-smithy-http-server` and supports both
 serde modes. Reserve "legacy runtime" for the HTTP 0.x crate.
 
-## Request-read configuration
+Generated serde servers retain Tower 0.4; schema serde servers use Tower 0.5.
+HTTP 1.x servers can use `aws-smithy-http-server-metrics` with either serde mode.
 
-Set request-read settings in the `rust-server-codegen` plugin configuration in
-`smithy-build-template.json`, under `customizationConfig.protocols.common.request`.
-Request-read settings use the shared `common` section in either serde mode.
-Schema protocol sections use full Smithy protocol shape IDs. For example:
+## Shared runtime configuration
+
+Schema service builders emit typed request-body settings through
+`aws_smithy_http_server::config::{ServiceConfig, ServiceRequestBodyConfig,
+RequestBodyCollectionConfig}`. Routing and serialization remain under `schema`;
+configuration is exposed only through `config`.
+
+Both serde modes read shared request settings from
+`customizationConfig.protocols.common.request`:
 
 ```json
 {
-  "codegen": {
-    "http-1x": true
-  },
   "customizationConfig": {
     "protocols": {
       "common": {
@@ -176,14 +179,14 @@ independently for each protocol in the `rust-server-codegen` plugin settings:
 
 Servers generated without `schemaSerde` always behave as `"historical"` for response bindings.
 REST JSON/XML apply REST response bindings and RPC v2 CBOR
-ignores them, whatever this setting says. With `schemaSerde: true`, protocol settings must use full protocol shape IDs,
-including custom protocols (for example, `com.example#customProtocol`). The shared `common` section is
+ignores them, whatever this setting says. In both serde modes, protocol settings must use full protocol shape IDs,
+including custom protocols (for example, `example.protocols#customRpc`). The shared `common` section is
 the only exception. Shorthand keys such as `awsJson1_0` or `restJson1` are rejected during settings
-loading. This validation does not apply to generated serde servers.
+loading. Unknown common request-setting keys emit a warning.
 
-AWS JSON routing uses the modeled operation name: `getFoo` routes with
+Schema-serde AWS JSON routing uses the modeled operation name: `getFoo` routes with
 `X-Amz-Target: Example.getFoo`. Set `"capitalizeRoutes": true` in the
 `aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` protocol section to also
 accept `Example.GetFoo`. Both spellings coexist when enabled; the default is
-`false`. This option is honored in both serde modes. Generated serde reads this
-routing option without applying other schema-only protocol settings.
+`false`. Generated serde retains its historical generated operation name
+(`Example.GetFoo`).

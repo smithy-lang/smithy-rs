@@ -1,6 +1,6 @@
 ---
 applies_to: ["server"]
-authors: ["drganjoo"]
+authors: ["fahadzub"]
 references: ["smithy-rs#4894", "smithy-rs#4906"]
 breaking: true
 new_feature: true
@@ -15,8 +15,9 @@ changes when upgrading:
 - Protocol types such as `RestJson1` now carry configuration. Replace unit-struct
   construction with `RestJson1::default()`. For request-specific serialization,
   use the protocol selected by routing so its configuration is preserved.
-- The HTTP 1.x server runtime uses Tower 0.5. Update application dependencies
-  and middleware that use Tower utility types to Tower 0.5.
+- Schema-serde servers use Tower 0.5. When enabling schema serde, update application
+  dependencies and middleware that use Tower utility types to Tower 0.5.
+  Generated-serde SDKs retain Tower 0.4.
   `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro` 0.4.0
   target server 0.69; upgrade the server and metrics crates together.
 - Schema serde calls `IntoResponse<P>::into_response_with_protocol` to frame
@@ -26,11 +27,17 @@ changes when upgrading:
   framing. Generated-serde callers continue using `into_response`. Use
   `response::ModeledRejection<E>` for modeled extractor errors and the shared
   `runtime_error::RuntimeError` for framework errors.
-- AWS JSON routing uses the modeled operation name in both serde modes:
+- Schema-serde AWS JSON routing uses the modeled operation name:
   `getFoo` uses `X-Amz-Target: Service.getFoo`. To also accept the former generated
   spelling `Service.GetFoo`, set `capitalizeRoutes: true` in the
   `aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` section of
-  `customizationConfig.protocols`.
+  `customizationConfig.protocols`. Generated serde retains its historical
+  generated operation name (`Service.GetFoo`).
+- RPC v2 CBOR with schema serde ignores `@httpHeader` and `@httpPrefixHeaders`
+  response bindings, as required by the protocol. These members remain in the CBOR
+  document body. Applications that relied on these bindings to produce response
+  headers must migrate to reading the corresponding body members. `@httpError`
+  still controls modeled-error status codes.
 - Schema-serde RPC v2 CBOR streaming blob inputs use `ByteStream` instead of
   `Blob`. The CBOR document is collected and decoded before the handler is
   invoked; the stream contains the decoded blob bytes.

@@ -13,7 +13,7 @@ serde (`schemaSerde: false`) over HTTP 1.x with `aws-smithy-http-server`.
 
 `make codegen` uses the repository's Gradle server-codegen tasks, just like
 `examples/multi-protocol`. Six generated SDKs are dependencies of this standalone
-Cargo workspace. No Python, generated SDK client, or listening socket is involved. The default
+Cargo workspace. The timed loops use no generated SDK client or listening socket. The default
 transport calls Tower directly; an optional Hyper mode exercises HTTP/2 over an
 in-memory byte stream. Both generate all services from this checkout.
 
@@ -22,13 +22,20 @@ cd codegen-server-test/benchmarks/event-stream
 make test
 make bench TRANSPORT=tower       # direct service calls (default)
 make bench TRANSPORT=hyper-memory # HTTP/2 over an in-memory byte stream
+make bench MODE=serde             # direct event serialization/deserialization
 make bench PRESET=medium         # add the multiprotocol server
 make bench PRESET=full           # all payload/count combinations
 ```
 
-`make test` generates the SDKs, checks actual wire behavior, and runs all 144
-Criterion cases once with `--test`. `make bench` regenerates the SDKs and defaults
-to `small`. Presets change the matrix, retaining the same measurement duration:
+`make codegen` also runs `expose_serde.py`, which adds a hidden benchmark-only
+re-export of the existing event marshaller/unmarshaller types to the six
+generated benchmark SDKs. This preparation requires Python 3; the timed
+benchmarks are entirely Rust.
+
+`make test` generates the SDKs, checks actual wire and direct serde behavior,
+and runs all 144 server cases plus all 96 serde cases once with `--test`.
+`make bench` regenerates the SDKs and defaults
+to `small`. Server-mode presets change the matrix, retaining the same measurement duration:
 
 | Preset | Implementations | Workloads | Cases | Approximate time |
 | --- | --- | --- | ---: | ---: |
@@ -36,7 +43,7 @@ to `small`. Presets change the matrix, retaining the same measurement duration:
 | `medium` | Add multiprotocol schema | 1 KiB × 64 events | 36 | 42 minutes |
 | `full` | All three | All four payload/count points | 144 | 2 hours 48 minutes |
 
-All presets include both protocols, all three operations and both event types.
+All server-mode presets include both protocols, all three operations and both event types.
 Times include ten-second warmup and sixty-second measurement per case, excluding
 build and analysis. Criterion may extend measurement to obtain sufficient samples.
 Pass a Criterion filter or timing options through `BENCH_ARGS`:
@@ -79,7 +86,7 @@ and thirty samples. Criterion can extend a measurement to obtain sufficient
 samples. There are 144 benchmarks in the full suite, so allow several hours.
 CLI options can override these defaults for an explicitly labeled diagnostic run.
 
-## What is measured
+## Server mode measurement
 
 Each timed iteration sends one `http::Request`, then polls its response body
 through end of stream. `TRANSPORT=tower` uses the generated Tower service
@@ -123,8 +130,10 @@ Criterion reports time per complete request and events/second. Echo counts one
 decoded-and-encoded event, not two. Compare `legacy` against `schema` to assess the
 serde paths; compare `schema` against `multi-schema` to assess the enabled-protocol
 configuration. Protocol routing construction and service initialization are not
-included. This suite does not measure HTTP parsing, HTTP/2 flow control, sockets,
-client work, network latency, concurrent requests, or real duplex backpressure.
+included. Tower mode excludes HTTP parsing and HTTP/2 flow control; the
+in-memory Hyper mode includes HTTP/2 framing and flow control. Neither mode uses
+sockets, a generated SDK client, concurrent timed requests, or real network
+duplex backpressure.
 
 The workload points are:
 
@@ -134,6 +143,56 @@ The workload points are:
 | 1,024 | 64 |
 | 1,024 | 1,024 |
 | 65,536 | 16 |
+
+## Serde-only mode
+
+`MODE=serde` measures the actual generated SDK's event marshaller and
+unmarshaller directly, with the same protocols, modeled payloads and variants
+as the server mode:
+
+- `serialize`: `MarshallMessage::marshall`, from an owned modeled event to a
+  `Message` containing event headers and serialized payload.
+- `deserialize`: `UnmarshallMessage::unmarshall`, from a prebuilt `Message` to
+  the modeled event.
+
+This measures event serde, including header mapping and payload allocations.
+It excludes HTTP services, routing, handlers, async/Tokio polling, stream
+adapters, binary frame encoding/decoding and CRC computation. CBOR
+initial-request/initial-response metadata and modeled stream errors are outside
+this mode's matrix.
+
+Model inputs, independent pre-encoded message fixtures, codec construction and
+validation are outside timing. Serialization input clones and output-vector
+capacity are also prepared outside timing. Codecs are reused and primed by
+validation. Criterion's `iter_batched_ref` keeps output destruction outside the
+measurement; consuming the owned input inside the marshaller remains part of
+the serde call. The timed loop invokes concrete generated types rather than a
+benchmark trait-object wrapper.
+
+Each iteration processes the selected event count and reports time per batch
+plus events/second. `small` has 16 cases, `medium` has 24, and `full` has 96.
+Warmup, measurement duration and sample count match server mode. Benchmark
+names begin with `serde/`, keeping result histories separate from Tower and
+Hyper measurements. `TRANSPORT` applies only to server mode.
+
+```sh
+cd codegen-server-test/benchmarks/event-stream
+make bench MODE=serde PRESET=small
+make bench MODE=serde EVENT_COUNT=256 BENCH_ARGS=rpc-v2-cbor
+```
+
+After `make codegen`, Cargo can run directly without regeneration:
+
+```sh
+BENCH_MODE=serde BENCH_PRESET=small cargo bench --quiet --bench event_streams -- \
+  'serde/rest-json/serialize/structured'
+BENCH_MODE=serde BENCH_PRESET=full cargo bench --quiet --bench event_streams -- --test
+```
+
+Preflight checks every event's headers and complete modeled payload against
+independently encoded fixtures, then checks deserialization of both those
+fixtures and the marshaller's output. Legacy, schema and multiprotocol schema
+must pass the same checks before timing.
 
 ## Correctness and results
 

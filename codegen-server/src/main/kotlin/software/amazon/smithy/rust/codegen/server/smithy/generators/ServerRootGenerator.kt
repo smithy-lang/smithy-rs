@@ -450,7 +450,7 @@ open class ServerRootGenerator(
                 "HttpBody" to RuntimeType.httpBody(runtimeConfig),
                 "Http" to RuntimeType.http(runtimeConfig),
                 "Hyper" to CargoDependency.hyper(runtimeConfig).toType(),
-                "Tower" to ServerCargoDependency.Tower.toType(),
+                "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                 "StdError" to RuntimeType.std.resolve("error::Error"),
                 "Infallible" to RuntimeType.std.resolve("convert::Infallible"),
                 "ServiceConfig" to ServerServiceConfigGenerator(codegenContext).serviceConfig(),

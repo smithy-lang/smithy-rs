@@ -9,6 +9,7 @@
 //!
 //! Generated server event streams exercised entirely in process.
 mod fixtures;
+pub mod serde;
 mod services;
 
 use aws_smithy_http_server::body::{Body, BoxBody};

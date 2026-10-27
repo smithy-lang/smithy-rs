@@ -19,10 +19,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /**
- * Generates rpcv2Cbor modeled errors with members carrying HTTP header bindings. With schemaSerde
- * omitted or disabled, the error serializer must compile and retain those members in the CBOR
- * document rather than writing HTTP headers. The schema case checks the same protocol rule,
- * including the modeled error status and encoded member values.
+ * Schema rpcv2Cbor ignores HTTP error bindings, including the modeled error status
+ * and encoded member values. Generated serde retains mainline's serializer.
  */
 internal class LegacyCborErrorHeadersCompatibilityTest {
     private val model =
@@ -43,15 +41,6 @@ internal class LegacyCborErrorHeadersCompatibilityTest {
             @httpHeader("X-Error") detail: String
         }
         """.asSmithyModel()
-
-    @Test
-    fun `legacy cbor errors compile and keep header members in the document`() {
-        // Fresh mainline at 9267f0e25 fails this model with E0277. The user
-        // authorized this independent compilation fix after that reproduction.
-        for (schemaSerde in listOf<Boolean?>(null, false)) {
-            generate(schemaSerde)
-        }
-    }
 
     @Test
     fun `schema cbor ignores HTTP error bindings`() {

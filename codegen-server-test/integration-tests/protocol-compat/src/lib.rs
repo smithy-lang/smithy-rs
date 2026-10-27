@@ -17,7 +17,7 @@ mod handlers;
 
 pub mod multi;
 
-/// Request-body construction shared with the mainline recorder, whose body type differs.
+/// Request-body construction shared by generated serde and schema serde services.
 pub mod kit {
     pub use compat_rest_server_sdk::server::body::Body;
 
@@ -67,15 +67,6 @@ compat_service!(
 compat_service!(
     awsjson,
     compat_awsjson_server_sdk,
-    ReviewAwsJson,
-    ReviewAwsJsonConfig,
-    [],
-    aws_smithy_types::byte_stream::ByteStream::from_static(b"raw blob bytes"),
-    ReviewAwsJson
-);
-compat_service!(
-    awsjson_spec,
-    compat_awsjson_spec_server_sdk,
     ReviewAwsJson,
     ReviewAwsJsonConfig,
     [],

@@ -27,8 +27,8 @@ async fn plugin_layers_are_executed_in_registration_order() {
     let output = Arc::new(Mutex::new(Vec::new()));
 
     let http_plugins = HttpPlugins::new()
-        .push_legacy(SentinelPlugin::new("first", output.clone()))
-        .push_legacy(SentinelPlugin::new("second", output.clone()));
+        .push(SentinelPlugin::new("first", output.clone()))
+        .push(SentinelPlugin::new("second", output.clone()));
     let config = PokemonServiceConfig::builder()
         .http_plugin(http_plugins)
         .build();

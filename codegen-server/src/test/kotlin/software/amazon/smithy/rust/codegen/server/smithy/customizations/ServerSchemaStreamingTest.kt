@@ -101,44 +101,44 @@ internal class ServerSchemaStreamingTest {
             """
         }}
 
-                structure ImplicitEvent {
-                    @eventHeader
-                    from: String
-                    value: Kind
-                }
+            structure ImplicitEvent {
+                @eventHeader
+                from: String
+                value: Kind
+            }
 
-                @streaming
-                union ChatEvents {
-                    implicit: ImplicitEvent
-                    message: ChatMessage
-                    bye: Bye
-                    text: TextEvent
-                    binary: BinaryEvent
-                    checked: CheckedEvent
-                    failure: StreamFailure
-                }
+            @streaming
+            union ChatEvents {
+                implicit: ImplicitEvent
+                message: ChatMessage
+                bye: Bye
+                text: TextEvent
+                binary: BinaryEvent
+                checked: CheckedEvent
+                failure: StreamFailure
+            }
 
-                structure ChatMessage {
-                    @eventHeader
-                    from: String
-                    @eventPayload
-                    body: MessageBody
-                }
+            structure ChatMessage {
+                @eventHeader
+                from: String
+                @eventPayload
+                body: MessageBody
+            }
 
-                structure MessageBody {
-                    text: String
-                }
+            structure MessageBody {
+                text: String
+            }
 
-                structure Bye {}
-                structure TextEvent { @eventPayload value: String }
-                structure BinaryEvent { @eventPayload value: Blob }
-                structure CheckedEvent { @eventPayload value: CheckedBody }
-                structure CheckedBody { value: Kind }
-                enum Kind {
-                    VALID = "valid"
-                }
-                @error("server")
-                structure StreamFailure { message: String }
+            structure Bye {}
+            structure TextEvent { @eventPayload value: String }
+            structure BinaryEvent { @eventPayload value: Blob }
+            structure CheckedEvent { @eventPayload value: CheckedBody }
+            structure CheckedBody { value: Kind }
+            enum Kind {
+                VALID = "valid"
+            }
+            @error("server")
+            structure StreamFailure { message: String }
             """
     }
 
@@ -412,59 +412,59 @@ internal class ServerSchemaStreamingTest {
         val uploadUri = if (rpc) "/service/ChatService/operation/Upload" else "/upload"
         val downloadUri = if (rpc) "/service/ChatService/operation/Download" else "/download"
         return """
-            use #{SmithyHttpServer}::schema::SharedServerProtocol;
-            let protocol = if $rpc {
-                SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2Cbor::default())
-            } else {
-                SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1::default())
-            };
-            let config = crate::service::ChatServiceConfig::builder().build();
-            let service = crate::service::ChatService::builder(config)
-                .upload(|mut input: crate::input::UploadInput| async move {
-                    let mut count = 0;
-                    while input.events.recv().await.unwrap().is_some() { count += 1; }
-                    #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput { count: #{Some}(count) })
+        use #{SmithyHttpServer}::schema::SharedServerProtocol;
+        let protocol = if $rpc {
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RpcV2Cbor::default())
+        } else {
+            SharedServerProtocol::metadata_routed(#{SmithyHttpServer}::schema::protocol::RestJson1::default())
+        };
+        let config = crate::service::ChatServiceConfig::builder().build();
+        let service = crate::service::ChatService::builder(config)
+            .upload(|mut input: crate::input::UploadInput| async move {
+                let mut count = 0;
+                while input.events.recv().await.unwrap().is_some() { count += 1; }
+                #{Ok}::<_, crate::error::UploadError>(crate::output::UploadOutput { count: #{Some}(count) })
+            })
+            .download(|_: crate::input::DownloadInput| async move {
+                #{Ok}::<_, crate::error::DownloadError>(crate::output::DownloadOutput {
+                    events: #{FuturesUtil}::stream::iter([#{Ok}(crate::model::ChatEvents::Bye(crate::model::Bye {}))]).into(),
                 })
-                .download(|_: crate::input::DownloadInput| async move {
-                    #{Ok}::<_, crate::error::DownloadError>(crate::output::DownloadOutput {
-                        events: #{FuturesUtil}::stream::iter([#{Ok}(crate::model::ChatEvents::Bye(crate::model::Bye {}))]).into(),
-                    })
-                }).build_unchecked();
-            $requestFrames
-            // RPC must preserve a first ordinary event when there is no initial request frame.
-            for (bytes, count) in [(body, 2), (#{Vec}::new(), 0)] {
-                let request = #{Http}::Request::builder().method("POST").uri("$uploadUri")
-                    .header("smithy-protocol", "rpc-v2-cbor")
-                    .header("content-type", "application/vnd.amazon.eventstream")
-                    .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(bytes)))).unwrap();
-                let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
-                assert_eq!(response.status(), #{Http}::StatusCode::OK);
-                use #{HttpBodyUtil}::BodyExt;
-                let bytes = response.into_body().collect().await.unwrap().to_bytes();
-                if $rpc {
-                    let mut decoder = #{Cbor}::Decoder::new(&bytes);
-                    decoder.map().unwrap();
-                    assert_eq!(decoder.str().unwrap(), "count");
-                    assert_eq!(decoder.integer().unwrap(), count);
-                } else {
-                    assert_eq!(std::str::from_utf8(&bytes).unwrap(), format!("{{\"count\":{count}}}"));
-                }
-            }
-            let request = #{Http}::Request::builder().method("POST").uri("$downloadUri")
+            }).build_unchecked();
+        $requestFrames
+        // RPC must preserve a first ordinary event when there is no initial request frame.
+        for (bytes, count) in [(body, 2), (#{Vec}::new(), 0)] {
+            let request = #{Http}::Request::builder().method("POST").uri("$uploadUri")
                 .header("smithy-protocol", "rpc-v2-cbor")
-                .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::new()))).unwrap();
-            let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
+                .header("content-type", "application/vnd.amazon.eventstream")
+                .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(bytes)))).unwrap();
+            let response = #{Tower}::ServiceExt::oneshot(service.clone(), request).await.unwrap();
             assert_eq!(response.status(), #{Http}::StatusCode::OK);
             use #{HttpBodyUtil}::BodyExt;
-            let mut bytes = response.into_body().collect().await.unwrap().to_bytes();
-            let mut kinds = #{Vec}::new();
-            while !bytes.is_empty() {
-                let frame = #{SmithyEventStream}::frame::read_message_from(&mut bytes).unwrap();
-                kinds.push(frame.headers().iter().find(|h| h.name().as_str() == ":event-type").unwrap()
-                    .value().as_string().unwrap().as_str().to_owned());
+            let bytes = response.into_body().collect().await.unwrap().to_bytes();
+            if $rpc {
+                let mut decoder = #{Cbor}::Decoder::new(&bytes);
+                decoder.map().unwrap();
+                assert_eq!(decoder.str().unwrap(), "count");
+                assert_eq!(decoder.integer().unwrap(), count);
+            } else {
+                assert_eq!(std::str::from_utf8(&bytes).unwrap(), format!("{{\"count\":{count}}}"));
             }
-            assert_eq!(kinds.last().map(#{String}::as_str), #{Some}("bye"));
-            assert!(kinds.len() <= 2);
+        }
+        let request = #{Http}::Request::builder().method("POST").uri("$downloadUri")
+            .header("smithy-protocol", "rpc-v2-cbor")
+            .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::new()))).unwrap();
+        let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
+        assert_eq!(response.status(), #{Http}::StatusCode::OK);
+        use #{HttpBodyUtil}::BodyExt;
+        let mut bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let mut kinds = #{Vec}::new();
+        while !bytes.is_empty() {
+            let frame = #{SmithyEventStream}::frame::read_message_from(&mut bytes).unwrap();
+            kinds.push(frame.headers().iter().find(|h| h.name().as_str() == ":event-type").unwrap()
+                .value().as_string().unwrap().as_str().to_owned());
+        }
+        assert_eq!(kinds.last().map(#{String}::as_str), #{Some}("bye"));
+        assert!(kinds.len() <= 2);
         """
     }
 
@@ -508,40 +508,40 @@ internal class ServerSchemaStreamingTest {
                     tokioTest("streaming_blob_is_preserved") {
                         rustTemplate(
                             """
-                            let config = crate::service::ChatServiceConfig::builder().build();
-                            let service = crate::service::ChatService::builder(config)
-                                .blob_echo(|input: crate::input::BlobEchoInput| async move {
-                                    #{Ok}::<_, crate::error::BlobEchoError>(crate::output::BlobEchoOutput { data: input.data })
-                                }).build_unchecked();
-                            let request = #{Http}::Request::builder().method("POST").uri("/blob")
-                                .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from_static(b"raw blob")))).unwrap();
-                            let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
-                            assert_eq!(response.status(), #{Http}::StatusCode::OK);
-                            use #{HttpBodyUtil}::BodyExt;
-                            assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), b"raw blob".as_slice());
-                            """,
+                        let config = crate::service::ChatServiceConfig::builder().build();
+                        let service = crate::service::ChatService::builder(config)
+                            .blob_echo(|input: crate::input::BlobEchoInput| async move {
+                                #{Ok}::<_, crate::error::BlobEchoError>(crate::output::BlobEchoOutput { data: input.data })
+                            }).build_unchecked();
+                        let request = #{Http}::Request::builder().method("POST").uri("/blob")
+                            .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from_static(b"raw blob")))).unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
+                        assert_eq!(response.status(), #{Http}::StatusCode::OK);
+                        use #{HttpBodyUtil}::BodyExt;
+                        assert_eq!(response.into_body().collect().await.unwrap().to_bytes(), b"raw blob".as_slice());
+                        """,
                             *scope(codegenContext),
                         )
                     }
                     tokioTest("chat_over_rest_json_1") {
                         rustTemplate(
                             """
-                            let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
-                            $echoService
-                            $requestFrames
-                            let request = #{Http}::Request::builder()
-                                .method("POST")
-                                .uri("/chat/lobby")
-                                .header("x-nick", "ann")
-                                .header("content-type", "application/vnd.amazon.eventstream")
-                                .header("accept", "application/vnd.amazon.eventstream")
-                                .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(body))))
-                                .unwrap();
-                            let response = #{Tower}::ServiceExt::oneshot(service, request).await.expect("infallible");
-                            $responseFrames
-                            assert_eq!(parts.headers.get("x-topic").unwrap(), "lobby/ann");
-                            $echoedEvents
-                            """,
+                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
+                        $echoService
+                        $requestFrames
+                        let request = #{Http}::Request::builder()
+                            .method("POST")
+                            .uri("/chat/lobby")
+                            .header("x-nick", "ann")
+                            .header("content-type", "application/vnd.amazon.eventstream")
+                            .header("accept", "application/vnd.amazon.eventstream")
+                            .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(body))))
+                            .unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(service, request).await.expect("infallible");
+                        $responseFrames
+                        assert_eq!(parts.headers.get("x-topic").unwrap(), "lobby/ann");
+                        $echoedEvents
+                        """,
                             *scope(codegenContext),
                             "Protocol" to
                                 ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
@@ -707,67 +707,67 @@ internal class ServerSchemaStreamingTest {
                     tokioTest("chat_over_rpcv2_cbor") {
                         rustTemplate(
                             """
-                            let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
-                            $echoService
-                            // The non-stream input members travel in the `initial-request` frame, encoded by the
-                            // protocol's payload codec.
-                            let mut body = #{Vec}::new();
-                            {
-                                use #{SmithyTypes}::event_stream::{Header, HeaderValue, Message};
-                                let payload = {
-                                    let mut encoder = #{Cbor}::Encoder::new(#{Vec}::new());
-                                    // A known event-stream member is ignored, but its entire CBOR value
-                                    // must be consumed before reading the ordinary initial-frame members.
-                                    encoder.begin_map().str("events").begin_map().str("ignored").begin_array().str("decoy").end().end()
-                                        .str("room").str("lobby").str("nick").str("ann").end();
-                                    encoder.into_writer()
-                                };
-                                let headers = vec![
-                                    Header::new(":message-type", HeaderValue::String("event".into())),
-                                    Header::new(":event-type", HeaderValue::String("initial-request".into())),
-                                    Header::new(":content-type", HeaderValue::String("application/cbor".into())),
-                                ];
-                                let message = Message::new_from_parts(headers, #{Bytes}::from(payload));
-                                #{SmithyEventStream}::frame::write_message_to(&message, &mut body).expect("writes");
-                            }
-                            let events = {
-                                $requestFrames
-                                body
+                        let protocol = #{SmithyHttpServer}::schema::SharedServerProtocol::metadata_routed(#{Protocol}::default());
+                        $echoService
+                        // The non-stream input members travel in the `initial-request` frame, encoded by the
+                        // protocol's payload codec.
+                        let mut body = #{Vec}::new();
+                        {
+                            use #{SmithyTypes}::event_stream::{Header, HeaderValue, Message};
+                            let payload = {
+                                let mut encoder = #{Cbor}::Encoder::new(#{Vec}::new());
+                                // A known event-stream member is ignored, but its entire CBOR value
+                                // must be consumed before reading the ordinary initial-frame members.
+                                encoder.begin_map().str("events").begin_map().str("ignored").begin_array().str("decoy").end().end()
+                                    .str("room").str("lobby").str("nick").str("ann").end();
+                                encoder.into_writer()
                             };
-                            body.extend_from_slice(&events);
-                            let request = #{Http}::Request::builder()
-                                .method("POST")
-                                .uri("/service/ChatService/operation/Chat")
-                                .header("smithy-protocol", "rpc-v2-cbor")
-                                .header("content-type", "application/vnd.amazon.eventstream")
-                                .header("accept", "application/vnd.amazon.eventstream")
-                                .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(body))))
-                                .unwrap();
-                            let response = #{Tower}::ServiceExt::oneshot(service, request).await.expect("infallible");
-                            $responseFrames
-                            assert_eq!(parts.headers.get("smithy-protocol").unwrap(), "rpc-v2-cbor");
-                            // The `initial-response` frame carries the non-stream output members through the
-                            // protocol's payload codec.
-                            assert_eq!(initial, $sendInitial);
-                            if $sendInitial {
-                            let initial = receiver
-                                .try_recv_initial(#{SmithyHttp}::event_stream::InitialMessageType::Response)
-                                .await
-                                .expect("a frame")
-                                .expect("an initial-response frame");
-                            let content_type = initial
-                                .headers()
-                                .iter()
-                                .find(|header| header.name().as_str() == ":content-type")
-                                .map(|header| header.value().as_string().unwrap().as_str().to_owned());
-                            assert_eq!(content_type.as_deref(), #{Some}("application/cbor"));
-                            let mut decoder = #{Cbor}::Decoder::new(initial.payload());
-                            decoder.map().unwrap();
-                            assert_eq!(decoder.str().unwrap(), "topic");
-                            assert_eq!(decoder.str().unwrap(), "lobby/ann");
-                            }
-                            $echoedEvents
-                            """,
+                            let headers = vec![
+                                Header::new(":message-type", HeaderValue::String("event".into())),
+                                Header::new(":event-type", HeaderValue::String("initial-request".into())),
+                                Header::new(":content-type", HeaderValue::String("application/cbor".into())),
+                            ];
+                            let message = Message::new_from_parts(headers, #{Bytes}::from(payload));
+                            #{SmithyEventStream}::frame::write_message_to(&message, &mut body).expect("writes");
+                        }
+                        let events = {
+                            $requestFrames
+                            body
+                        };
+                        body.extend_from_slice(&events);
+                        let request = #{Http}::Request::builder()
+                            .method("POST")
+                            .uri("/service/ChatService/operation/Chat")
+                            .header("smithy-protocol", "rpc-v2-cbor")
+                            .header("content-type", "application/vnd.amazon.eventstream")
+                            .header("accept", "application/vnd.amazon.eventstream")
+                            .body(#{SmithyHttpServer}::body::boxed_sync(#{HttpBodyUtil}::Full::new(#{Bytes}::from(body))))
+                            .unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(service, request).await.expect("infallible");
+                        $responseFrames
+                        assert_eq!(parts.headers.get("smithy-protocol").unwrap(), "rpc-v2-cbor");
+                        // The `initial-response` frame carries the non-stream output members through the
+                        // protocol's payload codec.
+                        assert_eq!(initial, $sendInitial);
+                        if $sendInitial {
+                        let initial = receiver
+                            .try_recv_initial(#{SmithyHttp}::event_stream::InitialMessageType::Response)
+                            .await
+                            .expect("a frame")
+                            .expect("an initial-response frame");
+                        let content_type = initial
+                            .headers()
+                            .iter()
+                            .find(|header| header.name().as_str() == ":content-type")
+                            .map(|header| header.value().as_string().unwrap().as_str().to_owned());
+                        assert_eq!(content_type.as_deref(), #{Some}("application/cbor"));
+                        let mut decoder = #{Cbor}::Decoder::new(initial.payload());
+                        decoder.map().unwrap();
+                        assert_eq!(decoder.str().unwrap(), "topic");
+                        assert_eq!(decoder.str().unwrap(), "lobby/ann");
+                        }
+                        $echoedEvents
+                        """,
                             *scope(codegenContext),
                             "Cbor" to CargoDependency.smithyCbor(codegenContext.runtimeConfig).toType(),
                             "Protocol" to

@@ -41,11 +41,12 @@ python3 tools/server-event-stream-benchmark/remote.py \
 ```
 
 `prepare.py` accepts `--current` and `--cache`. It never updates Git. Both servers
-and the common client come from `--current` by default. To compare releases:
+and the common client come from `--current` by default. Set `BASELINE_CHECKOUT`
+to the reference checkout location before comparing releases:
 
 ```sh
 python3 tools/server-event-stream-benchmark/prepare.py \
-  --comparison release --baseline ~/smithy-rs-latest \
+  --comparison release --baseline "$BASELINE_CHECKOUT" \
   --legacy-release release-2026-09-30.2 --cache /tmp/event-stream-release-cache
 ```
 

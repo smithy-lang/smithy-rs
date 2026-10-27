@@ -21,7 +21,6 @@ compat-rest-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-se
 compat-rest-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-awsjson-server-sdk/rust-server-codegen" }
 compat-rest-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-xml-server-sdk/rust-server-codegen" }
 compat-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-server-sdk/rust-server-codegen" }
-compat-awsjson-spec-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-spec-server-sdk/rust-server-codegen" }
 compat-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-cbor-server-sdk/rust-server-codegen" }
 compat-all-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-all-server-sdk/rust-server-codegen" }
 compat-rest-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-legacy-server-sdk/rust-server-codegen" }
@@ -50,12 +49,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
 futures-util = "0.3"
-multi-protocol-client = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-rpcv2cbor = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-awsjson10 = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-awsjson11 = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-restjson = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
-multi-protocol-client-restxml = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-rpcv2cbor = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson10 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson11 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restjson = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restxml = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }

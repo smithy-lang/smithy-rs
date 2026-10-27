@@ -18,7 +18,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
-/** Identical wire requests must select the same operation in both serde modes. */
+/** Schema routing follows protocol names; generated serde preserves historical routing. */
 class SchemaRoutingCompatibilityTest {
     @Test
     fun `REST query literals retain modeled plus and percent characters`() {
@@ -42,14 +42,14 @@ class SchemaRoutingCompatibilityTest {
     }
 
     @Test
-    fun `AWS JSON modeled names always route and capitalized aliases are opt in`() {
+    fun `AWS JSON preserves generated routes and schema aliases are opt in`() {
         for (protocol in listOf("awsJson1_0", "awsJson1_1")) {
             for (capitalizeRoutes in listOf(null, false, true)) {
                 checkRouting(
                     protocol,
                     "/literal",
                     """
-                    for (target, status) in [("Example.getFoo", 200), ("Example.GetFoo", ${if (capitalizeRoutes == true) 200 else 404})] {
+                    for (target, status) in [("Example.getFoo", VERBATIM_STATUS), ("Example.GetFoo", CAPITALIZED_STATUS)] {
                         let request = #{Http}::Request::post("/")
                             .header("x-amz-target", target)
                             .header("content-type", "${if (protocol == "awsJson1_0") "application/x-amz-json-1.0" else "application/x-amz-json-1.1"}")
@@ -102,6 +102,24 @@ class SchemaRoutingCompatibilityTest {
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
+                val modeAssertions =
+                    assertions
+                        .replace(
+                            "VERBATIM_STATUS",
+                            if (schemaSerde) {
+                                "200"
+                            } else {
+                                "404"
+                            },
+                        )
+                        .replace(
+                            "CAPITALIZED_STATUS",
+                            if (!schemaSerde || capitalizeRoutes == true) {
+                                "200"
+                            } else {
+                                "404"
+                            },
+                        )
                 crate.testModule {
                     tokioTest("routing_compatibility") {
                         rustTemplate(
@@ -110,7 +128,7 @@ class SchemaRoutingCompatibilityTest {
                             let app = crate::Example::builder(crate::ExampleConfig::builder().build())
                                 .get_foo(|_: crate::input::GetFooInput| async { crate::output::GetFooOutput {} })
                                 .build().unwrap();
-                            $assertions
+                            $modeAssertions
                             """,
                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
                             "Http" to RuntimeType.http(context.runtimeConfig),

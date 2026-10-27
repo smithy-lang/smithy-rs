@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Defines deterministic handlers shared by the compatibility services and mainline
-//! recorder. Their outputs expose bindings, payloads, labels, and errors so the same
+//! Defines deterministic handlers shared by generated serde and schema serde services.
+//! Their outputs expose bindings, payloads, labels, and errors so the same
 //! request scenario can be compared across generated implementations.
 //!
-//! The handler macro shared with the `protocol-compat-mainline` recorder.
+//! The handler macro shared by generated serde and schema serde services.
 
 macro_rules! compat_service {
     ($module:ident, $krate:ident, $service:ident, $config:ident, [$($builder_args:tt)*], $download:expr, $ret:ty) => {

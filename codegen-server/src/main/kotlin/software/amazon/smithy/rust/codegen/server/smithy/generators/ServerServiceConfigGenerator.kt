@@ -125,7 +125,7 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
                     settings.requestBodyMaxBytes()?.let {
                         rustTemplate(".with_max_bytes(#{NonZeroUsize}::new(${it}usize))", "NonZeroUsize" to RuntimeType.std.resolve("num::NonZeroUsize"))
                     }
-                    settings.requestBodyReadPollBudget()?.let {
+                    settings.requestBodyReadPollBudget?.let {
                         rustTemplate(".with_read_poll_budget(#{NonZeroUsize}::new(${it}usize))", "NonZeroUsize" to RuntimeType.std.resolve("num::NonZeroUsize"))
                     }
                 }

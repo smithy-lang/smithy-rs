@@ -31,7 +31,7 @@ internal class ModeledErrorContentTypeCompatibilityTest {
     @Test
     fun `modeled error content type follows the operation output`() {
         val root = Path.of("..").toAbsolutePath().normalize()
-        val model = Files.readString(root.resolve("codegen-server-test/schema-serde-compat/models/error-content-type.smithy")).asSmithyModel()
+        val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/error-content-type.smithy")).asSmithyModel()
         val run =
             Files.createTempDirectory("C05-")
         val protocols =

@@ -11,7 +11,6 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
-import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
@@ -21,15 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * For a runtime type that is used in the client, or in both the client and the server, use [RuntimeType] directly.
  */
 object ServerRuntimeType {
-    /** Internal body helpers used by generated code, selected for the runtime's HTTP version. */
-    fun codegenBody(runtimeConfig: RuntimeConfig) =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve(
-            when (runtimeConfig.httpVersion) {
-                HttpVersion.Http0x -> "body"
-                HttpVersion.Http1x -> "body::__private"
-            },
-        )
-
     fun router(runtimeConfig: RuntimeConfig) =
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
 

@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Measures generated-server event-stream processing for REST JSON and rpcv2Cbor,
-//! comparing legacy serde, schema serde, and shared-protocol services. Each selected
-//! workload builds real frames, drives the configured in-process transport, and
-//! consumes the response; supporting wire tests validate the benchmark fixtures.
+//! Measures complete generated-server processing or direct event serde for REST
+//! JSON and rpcv2Cbor, comparing legacy, schema and shared-protocol services.
+//! Server mode consumes complete responses; serde mode calls actual generated
+//! marshallers/unmarshallers using validated fixtures and excludes HTTP and CRCs.
 //!
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
 use event_stream_benchmark::{
     drain, hyper_in_memory, server, Case, Direction, Fixture, Implementation, Kind, Protocol,
 };
 use std::{hint::black_box, time::Duration};
+
+#[path = "support/serde.rs"]
+mod serde;
 
 enum Preset {
     Small,
@@ -64,6 +67,40 @@ impl Preset {
 
 fn event_streams(criterion: &mut Criterion) {
     let preset = Preset::from_env();
+    let mode = std::env::var("BENCH_MODE").unwrap_or_else(|_| "server".into());
+    assert!(
+        matches!(mode.as_str(), "server" | "serde"),
+        "BENCH_MODE must be server or serde"
+    );
+    if mode == "serde" {
+        for protocol in Protocol::ALL {
+            for operation in ["serialize", "deserialize"] {
+                for kind in Kind::ALL {
+                    let mut group = criterion.benchmark_group(format!(
+                        "serde/{}/{}/{}",
+                        protocol.name(),
+                        operation,
+                        kind.name()
+                    ));
+                    for (size, count) in preset.workloads() {
+                        let case = Case {
+                            protocol,
+                            direction: Direction::Upload,
+                            kind,
+                            size,
+                            count,
+                        };
+                        group.throughput(Throughput::Elements(count as u64));
+                        for &implementation in preset.implementations() {
+                            serde::bench(&mut group, implementation, operation, case);
+                        }
+                    }
+                    group.finish();
+                }
+            }
+        }
+        return;
+    }
     let transport = std::env::var("BENCH_TRANSPORT").unwrap_or_else(|_| "tower".into());
     assert!(
         matches!(transport.as_str(), "tower" | "hyper-memory"),

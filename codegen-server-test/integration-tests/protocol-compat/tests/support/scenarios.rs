@@ -4,12 +4,9 @@
  */
 
 //! Defines the common REST, AWS JSON, CBOR, and document request scenarios replayed
-//! by the mainline recorder and branch compatibility tests. Response snapshots
-//! canonicalize values so every implementation is compared using the same inputs
-//! and representation.
-//!
-//! Scenarios replayed against every implementation of the review services (mainline, branch generated serde
-//! twin, schemaSerde). Shared by `protocol-compat` and the `protocol-compat-mainline` recorder.
+//! against SDKs generated with schemaSerde disabled and enabled. Response snapshots
+//! canonicalize values so both implementations use the same inputs and representation.
+
 use super::*;
 use http::Request;
 use serde_json::json;

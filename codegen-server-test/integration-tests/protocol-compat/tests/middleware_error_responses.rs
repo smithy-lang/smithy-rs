@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Uses one middleware abstraction to produce runtime and modeled errors for legacy
-//! and schema services. It compares the responses with handler-generated errors and
-//! checks that schema middleware uses the selected protocol and preserves modeled
-//! error extensions for each request.
-//!
 //! The same middleware bounds accept generated serde errors and schema modeled errors.
 #[path = "support/extractor_rejections.rs"]
 mod harness;

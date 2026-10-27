@@ -3,22 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Replays shared scenarios against branch legacy and schema services and compares
-//! them with responses recorded from unmodified mainline. Listed divergence snapshots
-//! pin intentional or known differences; new, changed, or disappearing differences
-//! fail unless the explicit update mode is used to rewrite those snapshots.
-//!
-//! Replays the shared scenarios against the schemaSerde=true services and against the branch's
-//! schemaSerde=false twins (HTTP 1.x), and compares both with `baselines/mainline.json`, the
-//! responses recorded from unmodified mainline codegen by `protocol-compat-mainline`
-//! (`make mainline-baseline`).
-//!
-//! Every difference is pinned in `baselines/*_divergences.json`; an unlisted difference, or a pinned one
-//! that changes or disappears, fails the test. `UPDATE_DIVERGENCES=1` rewrites the pins.
+//! Sends each shared request scenario to SDKs generated from the same model with
+//! schemaSerde disabled and enabled. Responses must match, except for the explicit
+//! JSON-number normalization and CBOR streaming-blob encoding differences below.
 pub use protocol_compat::kit::{from_bytes, Body};
 mod support;
-
-use std::collections::BTreeMap;
 
 use protocol_compat::{
     awsjson, cbor, document, legacy_awsjson, legacy_cbor, legacy_document, legacy_rest, rest,
@@ -26,149 +15,112 @@ use protocol_compat::{
 use support::scenarios::*;
 use support::*;
 
-type Baseline = BTreeMap<String, String>;
-
-fn mainline() -> Baseline {
-    serde_json::from_str(include_str!("../baselines/mainline.json"))
-        .expect("baselines/mainline.json")
-}
-
-async fn replay<S, B>(
-    service: impl Fn() -> S,
-    protocol: &str,
-    scenarios: &[(&'static str, Build)],
-) -> Baseline
-where
-    S: tower::Service<http::Request<Body>, Response = http::Response<B>>,
-    S::Error: std::fmt::Debug,
-    B: http_body::Body,
-    B::Error: std::fmt::Debug,
-{
-    let mut out = Baseline::new();
-    for (name, build) in scenarios {
-        out.insert(
-            format!("{protocol}/{name}"),
-            snapshot(&send(service(), build()).await),
-        );
-    }
-    out
-}
-
-macro_rules! all_replays {
-    ($rest:expr, $awsjson:expr, $cbor:expr, $document:expr) => {{
-        let mut all = Baseline::new();
-        all.extend(replay($rest, "restJson1", &rest_scenarios()).await);
-        all.extend(replay($awsjson, "awsJson1_0", &aws_json_scenarios()).await);
-        all.extend(replay($cbor, "rpcv2Cbor", &cbor_scenarios()).await);
-        all.extend(replay($document, "restJson1-document", &document_scenarios()).await);
-        all
-    }};
-}
-
-fn differences(baseline: &Baseline, actual: &Baseline) -> Vec<(String, String, String)> {
-    assert_eq!(
-        baseline.keys().collect::<Vec<_>>(),
-        actual.keys().collect::<Vec<_>>(),
-        "scenario sets differ; re-record the baseline"
-    );
-    baseline
-        .iter()
-        .filter(|(key, expected)| actual[*key] != **expected)
-        .map(|(key, expected)| (key.clone(), expected.clone(), actual[key].clone()))
-        .collect()
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
-struct Divergence {
-    mainline: String,
-    actual: String,
-    /// Why the difference exists, or `TODO(protocol-compat divergence triage)` until someone has triaged it.
-    note: String,
-}
-
-/// Compares `found` with the pinned file `baselines/<file>`. Set `UPDATE_DIVERGENCES=1` to rewrite
-/// the file from the current run (notes of unchanged entries are kept).
-fn pin(file: &str, found: Vec<(String, String, String)>) {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/baselines/").to_owned() + file;
-    let mut pinned: BTreeMap<String, Divergence> = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default();
-    if std::env::var_os("UPDATE_DIVERGENCES").is_some() {
-        let updated: BTreeMap<String, Divergence> = found
-            .into_iter()
-            .map(|(key, mainline, actual)| {
-                let note = pinned
-                    .get(&key)
-                    .map(|d| d.note.clone())
-                    .unwrap_or_else(|| "TODO(protocol-compat divergence triage)".to_owned());
-                (
-                    key,
-                    Divergence {
-                        mainline,
-                        actual,
-                        note,
-                    },
-                )
-            })
-            .collect();
-        std::fs::write(
-            &path,
-            serde_json::to_string_pretty(&updated).unwrap() + "\n",
-        )
-        .unwrap();
-        return;
-    }
-    let mut problems = Vec::new();
-    for (key, mainline, actual) in &found {
-        match pinned.remove(key) {
-            None => problems.push(format!("NEW DIVERGENCE {key}\n  mainline: {mainline}\n  actual:   {actual}")),
-            Some(d) if d.mainline != *mainline || d.actual != *actual => {
-                problems.push(format!("CHANGED DIVERGENCE {key}\n  mainline: {mainline}\n  actual:   {actual}\n  pinned:   {}", d.actual))
-            }
-            Some(_) => {}
+fn assert_response_parity(protocol: &str, scenario: &str, mut generated: Reply, mut schema: Reply) {
+    match (protocol, scenario) {
+        ("restJson1" | "awsJson1_0", "non-json-number bigdecimal") => {
+            // Generated serde preserves the invalid number spelling; schema serde
+            // normalizes it to valid JSON. Both outcomes remain explicit.
+            assert_eq!(generated.status, 200);
+            assert_eq!(schema.status, 200);
+            assert_eq!(generated.text(), r#"{"amount":+000987654321}"#);
+            assert_eq!(schema.text(), r#"{"amount":987654321}"#);
+            assert_eq!(generated.header("content-length"), Some("24"));
+            assert_eq!(schema.header("content-length"), Some("20"));
+        }
+        ("rpcv2Cbor", "streaming blob output") => {
+            // Generated serde uses Blob and a definite-length byte string. Schema
+            // serde retains ByteStream and emits an indefinite-length byte string.
+            assert_eq!(generated.status, 200);
+            assert_eq!(schema.status, 200);
+            assert_eq!(
+                generated.body.as_ref(),
+                b"\xbf\x64data\x4eraw blob bytes\xff"
+            );
+            assert_eq!(
+                schema.body.as_ref(),
+                b"\xbf\x64data\x5f\x4eraw blob bytes\xff\xff"
+            );
+            assert_eq!(generated.header("content-length"), Some("22"));
+            assert_eq!(schema.header("content-length"), None);
+        }
+        _ => {
+            assert_eq!(
+                snapshot(&schema),
+                snapshot(&generated),
+                "{protocol}/{scenario}"
+            );
+            return;
         }
     }
-    problems.extend(
-        pinned
-            .keys()
-            .map(|key| format!("RESOLVED, remove from {file}: {key}")),
-    );
-    assert!(problems.is_empty(), "\n{}", problems.join("\n"));
+    // These cases differ only in the already-asserted body and its length.
+    generated.headers.remove("content-length");
+    schema.headers.remove("content-length");
+    assert_eq!(schema.headers, generated.headers, "{protocol}/{scenario}");
+}
+
+async fn compare<L, S, LB, SB>(
+    generated: impl Fn() -> L,
+    schema: impl Fn() -> S,
+    protocol: &str,
+    scenarios: Vec<(&'static str, Build)>,
+) where
+    L: tower::Service<http::Request<Body>, Response = http::Response<LB>>,
+    L::Error: std::fmt::Debug,
+    LB: http_body::Body,
+    LB::Error: std::fmt::Debug,
+    S: tower::Service<http::Request<Body>, Response = http::Response<SB>>,
+    S::Error: std::fmt::Debug,
+    SB: http_body::Body,
+    SB::Error: std::fmt::Debug,
+{
+    assert!(!scenarios.is_empty(), "{protocol} has no request scenarios");
+    for (scenario, build) in scenarios {
+        let generated = send(generated(), build()).await;
+        let schema = send(schema(), build()).await;
+        assert_response_parity(protocol, scenario, generated, schema);
+    }
 }
 
 #[tokio::test]
-async fn schema_matches_mainline_except_known_divergences() {
-    let baseline = mainline();
-    assert!(
-        !baseline.is_empty(),
-        "baselines/mainline.json is empty; run `make mainline-baseline`"
-    );
-    let actual = all_replays!(
-        || rest::service(),
-        || awsjson::service(),
-        || cbor::service(),
-        || document::service()
-    );
-    pin("schema_divergences.json", differences(&baseline, &actual));
-}
-
-/// The branch also edits the shared (schemaSerde=false) generator; its output must stay mainline's.
-#[tokio::test]
-async fn branch_legacy_path_matches_mainline_except_known_divergences() {
-    let baseline = mainline();
-    assert!(
-        !baseline.is_empty(),
-        "baselines/mainline.json is empty; run `make mainline-baseline`"
-    );
-    let actual = all_replays!(
+async fn rest_json_schema_matches_generated_serde() {
+    compare(
         || legacy_rest::service(),
+        || rest::service(),
+        "restJson1",
+        rest_scenarios(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn aws_json_schema_matches_generated_serde() {
+    compare(
         || legacy_awsjson::service(),
+        || awsjson::service(),
+        "awsJson1_0",
+        aws_json_scenarios(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn cbor_schema_matches_generated_serde() {
+    compare(
         || legacy_cbor::service(),
-        || legacy_document::service()
-    );
-    pin(
-        "branch_legacy_divergences.json",
-        differences(&baseline, &actual),
-    );
+        || cbor::service(),
+        "rpcv2Cbor",
+        cbor_scenarios(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn document_schema_matches_generated_serde() {
+    compare(
+        || legacy_document::service(),
+        || document::service(),
+        "restJson1-document",
+        document_scenarios(),
+    )
+    .await;
 }

@@ -14,7 +14,9 @@
 use bytes::Bytes;
 use http::{HeaderMap, Request};
 use http_body_util::BodyExt;
-use multi_protocol_server_sdk::server::body::Body;
+pub use multi_protocol_server_sdk::server::body::Body;
+pub use protocol_compat::kit::from_bytes;
+mod support;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
@@ -581,4 +583,34 @@ async fn sparse_outputs_distinguish_absent_empty_and_null_entries() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn rpcv2_cbor_streaming_blob_output_is_not_labelled_event_stream() {
+    use protocol_compat::{awsjson, cbor, rest};
+    use support::{aws_json, cbor, rest, send};
+    let r = send(rest::service(), rest("GET", "/download", &[], b"")).await;
+    assert_eq!(
+        (r.header("content-type"), r.text().as_str()),
+        (Some("application/octet-stream"), "raw blob bytes")
+    );
+    let r = send(
+        cbor::service(),
+        cbor("ReviewCbor", "DownloadBlob", &json!({})),
+    )
+    .await;
+    assert_eq!(
+        r.header("content-type"),
+        Some("application/cbor"),
+        "never labelled as an event stream"
+    );
+    let r = send(
+        awsjson::service(),
+        aws_json("1.0", "ReviewAwsJson", "DownloadBlob", "{}"),
+    )
+    .await;
+    assert_ne!(
+        r.header("content-type"),
+        Some("application/vnd.amazon.eventstream")
+    );
 }

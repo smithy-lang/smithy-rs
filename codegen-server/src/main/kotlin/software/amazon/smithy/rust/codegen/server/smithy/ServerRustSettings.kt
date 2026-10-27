@@ -119,7 +119,7 @@ data class ServerRustSettings(
         protocolSettings()[RPC_V2_CBOR_PROTOCOL_ID]
             ?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false) ?: false
 
-    /** AWS JSON keeps modeled routing names and optionally adds capitalized aliases in either serde mode. */
+    /** Schema AWS JSON keeps modeled routing names and optionally adds capitalized aliases. */
     fun awsJsonCapitalizeRoutes(protocolId: String): Boolean =
         protocolSettings()[protocolId]?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false) ?: false
 

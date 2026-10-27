@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
@@ -19,7 +20,6 @@ import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseBodyDefi
 import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseDefinition
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -46,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR_EXTRAS
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -72,7 +72,7 @@ class ServerProtocolTestGenerator(
     /** Whether the service serves several protocols, each generating its own tests for [operationShape]. */
     private val multiProtocol: Boolean = false,
 ) : ProtocolTestGenerator() {
-    private val protocolTestsModuleSuffix: String =
+    override val protocolTestsModuleSuffix: String =
         if (multiProtocol) "_${codegenContext.protocol.name.toSnakeCase()}" else ""
 
     /** Whether the generated service runs the schema-driven request and response path. */
@@ -345,85 +345,8 @@ class ServerProtocolTestGenerator(
             "decode_body_data" to protocolTestHelpers.resolve("decode_body_data"),
         )
 
-    private val assertions = ServerProtocolTestAssertions(protocolTestHelpers)
-
-    /** Render server tests with independent modules for each served protocol. */
-    internal fun renderServerTests(writer: RustWriter) {
-        val tests =
-            allMatchingTestCases().flatMap { fixBrokenTestCase(it) }.filter {
-                when {
-                    generateOnly.isNotEmpty() -> it.id in generateOnly
-                    else -> it.protocol == codegenContext.protocol && it.id !in disabledTests
-                }
-            }
-        if (tests.isEmpty()) return
-        val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name.toSnakeCase()
-        val module =
-            RustModule.inlineTests(
-                "${operationName}_test$protocolTestsModuleSuffix",
-                additionalAttributes = listOf(Attribute(Attribute.allow("unreachable_code", "unused_variables"))),
-            )
-        writer.withInlineModule(module, null) { renderAllTestCases(tests) }
-    }
-
-    private fun findBrokenTest(test: TestCase): BrokenTest? =
-        brokenTests.find {
-            (test is TestCase.RequestTest && it is BrokenTest.RequestTest && test.id == it.id) ||
-                (test is TestCase.ResponseTest && it is BrokenTest.ResponseTest && test.id == it.id) ||
-                (test is TestCase.MalformedRequestTest && it is BrokenTest.MalformedRequestTest && test.id == it.id)
-        }
-
-    private fun fixBrokenTestCase(it: TestCase): List<TestCase> =
-        if (findBrokenTest(it) == null) {
-            listOf(it)
-        } else {
-            logger.info("Fixing ${it.kind} test case ${it.id}")
-
-            assert(findBrokenTest(it) != null)
-
-            val brokenTest = findBrokenTest(it)!!
-            var fixed = brokenTest.fixIt(it)
-
-            val intro = "The hotfix function for broken test case ${it.kind} ${it.id}"
-            val moreInfo =
-                """This test case was identified to be broken in at least these Smithy versions: [${brokenTest.inAtLeast.joinToString()}].
-                |We are tracking things here: [${brokenTest.trackedIn.joinToString()}].
-                """.trimMargin()
-
-            // Something must change...
-            if (it == fixed) {
-                PANIC(
-                    """$intro did not make any modifications. It is likely that the test case was
-                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix
-                    |function, as the test is no longer broken.
-                    |$moreInfo
-                    """.trimMargin(),
-                )
-            }
-
-            // ... but the hotfix function is not allowed to change the test case kind...
-            if (it.kind != fixed.kind) {
-                PANIC(
-                    """$intro changed the test case kind. This is not allowed.
-                    |$moreInfo
-                    """.trimMargin(),
-                )
-            }
-
-            // ... nor its id.
-            if (it.id != fixed.id) {
-                PANIC(
-                    """$intro changed the test case id. This is not allowed.
-                    |$moreInfo
-                    """.trimMargin(),
-                )
-            }
-
-            // The latter is because we're going to generate the fixed version with an identifiable suffix.
-            fixed = fixed.suffixIdWith("_hotfixed")
-
-            listOf(it, fixed)
-        }
+    /** Resolve helpers through the protocol-test support crate selected for the server's HTTP version. */
+    override fun protocolTestHelper(name: String): RuntimeType = protocolTestHelpers.resolve(name)
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         for (it in allTests) {
@@ -507,7 +430,7 @@ class ServerProtocolTestGenerator(
         }
         val outputIsStreaming = operationShape.outputShape(model).hasStreamingMember(model)
         if (schemaSerde) {
-            // Response fixtures serialize through an erased built-in protocol with default options.
+            // Response fixtures use the same per-protocol settings as the generated service builder.
             // Request fixtures exercise the generated service builder and its routing configuration.
             val serialize =
                 if (shape.hasTrait<ErrorTrait>()) {
@@ -534,15 +457,35 @@ class ServerProtocolTestGenerator(
                 }
             val serviceSchema =
                 "crate::schema::service::${ServerServiceSchemaGenerator.serviceSchemaConstName(codegenContext.serviceShape)}"
+            val settings =
+                (codegenContext as ServerCodegenContext).settings.protocolSettings()[codegenContext.protocol.toString()]
+            val protocolSettings =
+                writable {
+                    if (settings == null) {
+                        rustTemplate("let protocol_settings = #{None};", *preludeScope)
+                    } else {
+                        val json = Node.printJson(settings).dq().replace("#", "##")
+                        rustTemplate(
+                            """
+                            let settings = #{SmithyHttpServer}::schema::settings::parse_settings_json($json.as_bytes());
+                            let protocol_settings = #{Some}(&settings);
+                            """,
+                            *codegenScope,
+                            *preludeScope,
+                        )
+                    }
+                }
             rustTemplate(
                 """
+                #{ProtocolSettings}
                 let protocol = #{SmithyHttpServer}::schema::ProtocolRegistry::BUILTIN
-                    .resolve_id(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()})
+                    .resolve_id_with_settings(&$serviceSchema, ${codegenContext.protocol.toString().replace("#", "##").dq()}, protocol_settings)
                     .expect("protocol construction failed")
                     .expect("no protocol registered for the protocol under test");
                 let http_response = #{Serialize:W};
                 """,
                 *codegenScope,
+                "ProtocolSettings" to protocolSettings,
                 "Serialize" to serialize,
             )
         } else {
@@ -877,9 +820,25 @@ class ServerProtocolTestGenerator(
         testCase: HttpResponseTestCase,
     ) {
         checkStatusCode(rustWriter, testCase.code)
-        assertions.checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
-        assertions.checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
-        assertions.checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
+        val forbidAdditionalHeaders =
+            testCase.vendorParams.getMember("forbidAdditionalHeaders").map {
+                if (!it.isBooleanNode) {
+                    throw CodegenException(
+                        "HTTP response protocol test `${testCase.id}` vendorParams.forbidAdditionalHeaders must be a boolean",
+                    )
+                }
+                it.expectBooleanNode().value
+            }.orElse(false)
+        if (forbidAdditionalHeaders) {
+            checkNoAdditionalHeaders(
+                rustWriter,
+                "http_response.headers()",
+                testCase.headers.keys + testCase.requireHeaders,
+            )
+        }
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -889,7 +848,15 @@ class ServerProtocolTestGenerator(
 
         // If no request body is defined, then no assertions are made about the body of the message.
         if (testCase.body.isPresent) {
-            checkBody(rustWriter, testCase.body.get(), testCase.bodyMediaType.orNull())
+            checkBody(
+                rustWriter,
+                testCase.body.get(),
+                testCase.bodyMediaType.orNull(),
+                checkContentLength =
+                    (testCase.headers.keys + testCase.requireHeaders).any {
+                        it.equals("content-length", ignoreCase = true)
+                    },
+            )
         }
     }
 
@@ -898,7 +865,7 @@ class ServerProtocolTestGenerator(
         testCase: HttpMalformedResponseDefinition,
     ) {
         checkStatusCode(rustWriter, testCase.code)
-        assertions.checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -980,8 +947,25 @@ class ServerProtocolTestGenerator(
         rustWriter: RustWriter,
         body: String,
         mediaType: String?,
+        checkContentLength: Boolean = false,
     ) {
+        if (checkContentLength) {
+            rustWriter.rust(
+                """
+                let declared_content_length = http_response.headers().get("content-length")
+                    .expect("expected content-length header")
+                    .to_str().expect("content-length must be text")
+                    .parse::<usize>().expect("content-length must be an unsigned integer");
+                """,
+            )
+        }
         httpBodyToBytes().invoke(rustWriter)
+        if (checkContentLength) {
+            rustWriter.rustTemplate(
+                "#{AssertEq}(declared_content_length, body.len(), \"content-length must match the response body size\");",
+                *codegenScope,
+            )
+        }
         if (body == "") {
             rustWriter.rustTemplate(
                 """
@@ -989,9 +973,16 @@ class ServerProtocolTestGenerator(
                 #{AssertEq}(&body, &#{Bytes}::new());
                 """,
                 *codegenScope,
+                // Preserve the spelling emitted by mainline's generated protocol tests.
+                "Bytes" to
+                    if (schemaSerde) {
+                        RuntimeType.Bytes
+                    } else {
+                        RuntimeType("bytes::Bytes", CargoDependency.Bytes)
+                    },
             )
         } else {
-            assertions.assertOk(rustWriter) {
+            assertOk(rustWriter) {
                 rust(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
@@ -1021,9 +1012,7 @@ class ServerProtocolTestGenerator(
 
 /** Preserve decorator replacement generators while using the server's default rendering path. */
 internal fun ProtocolTestGenerator.renderServerTests(writer: RustWriter) {
-    if (this is ServerProtocolTestGenerator) {
-        renderServerTests(writer)
-    } else if ((codegenContext as? ServerCodegenContext)?.servedProtocols.orEmpty().size > 1) {
+    if (this !is ServerProtocolTestGenerator && (codegenContext as? ServerCodegenContext)?.servedProtocols.orEmpty().size > 1) {
         // Replacement generators retain their own rendering contract, including the
         // core renderer's operation-only module names. Scope those modules by protocol.
         val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name.toSnakeCase()
@@ -1033,5 +1022,26 @@ internal fun ProtocolTestGenerator.renderServerTests(writer: RustWriter) {
         writer.withInlineModule(module, null) { generator.render(this) }
     } else {
         render(writer)
+    }
+}
+
+/** Restricts header names without changing their ordinary value or presence assertions. */
+internal fun checkNoAdditionalHeaders(
+    rustWriter: RustWriter,
+    actualExpression: String,
+    allowedHeaders: Collection<String>,
+) {
+    rustWriter.withBlock("let allowed_headers: &[&str] = &[", "];") {
+        rust(allowedHeaders.distinct().joinToString(",") { it.dq() })
+    }
+    rustWriter.withBlock("for name in $actualExpression.keys() {", "}") {
+        rust(
+            """
+            assert!(
+                allowed_headers.iter().any(|allowed| name.as_str().eq_ignore_ascii_case(allowed)),
+                "unexpected response header: {}", name,
+            );
+            """,
+        )
     }
 }

@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.64.1"
+version = "0.64.2"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -144,6 +144,7 @@ name = "aws-smithy-http-server"
 version = "0.69.0"
 dependencies = [
  "aws-smithy-cbor",
+ "aws-smithy-eventstream",
  "aws-smithy-http",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
@@ -151,6 +152,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http 1.4.0",
  "http-body 1.0.1",
@@ -159,12 +161,15 @@ dependencies = [
  "hyper-util",
  "mime",
  "nom",
+ "percent-encoding",
  "pin-project-lite",
  "regex",
+ "rustc-hash",
  "serde_urlencoded",
  "thiserror",
  "tokio",
  "tower 0.4.13",
+ "tower 0.5.3",
  "tower-http 0.6.8",
  "tracing",
  "uuid",
@@ -300,7 +305,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -507,7 +512,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -542,22 +547,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
-]
-
-[[package]]
-name = "compat-awsjson-spec-server-sdk"
-version = "0.0.1"
-dependencies = [
- "aws-smithy-http",
- "aws-smithy-http-server",
- "aws-smithy-runtime-api",
- "aws-smithy-schema",
- "aws-smithy-types",
- "http 1.4.0",
- "http-body 1.0.1",
- "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -592,7 +582,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -627,7 +617,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -660,7 +650,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -675,7 +665,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -690,7 +680,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -727,7 +717,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -742,7 +732,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -779,7 +769,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -1516,9 +1506,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "minicbor"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c12b4033ffaa92fbf9df03df38d19324f52bad130dd223f811734a8006dd2d69"
+checksum = "e7244eafd1e09e7c4e33043881997aa6ab6dffff3ed2cee3395a278980481d6e"
 dependencies = [
  "half",
 ]
@@ -1668,7 +1658,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -1888,7 +1878,6 @@ dependencies = [
  "compat-all-server-sdk",
  "compat-awsjson-legacy-server-sdk",
  "compat-awsjson-server-sdk",
- "compat-awsjson-spec-server-sdk",
  "compat-awsjson11-legacy-server-sdk",
  "compat-awsjson11-server-sdk",
  "compat-cbor-legacy-server-sdk",
@@ -2179,7 +2168,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -2197,7 +2186,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "tower 0.4.13",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -2230,6 +2219,12 @@ dependencies = [
  "syn 2.0.117",
  "unicode-ident",
 ]
+
+[[package]]
+name = "rustc-hash"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
 name = "rustc_version"
@@ -2408,7 +2403,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.8",
+ "syn 3.0.9",
 ]
 
 [[package]]
@@ -2518,9 +2513,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.8"
+version = "3.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01016da373cd8f7ef12624f796309f5c31ba8d646dd08856c02cd741d823c622"
+checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2756,6 +2751,7 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
@@ -2994,7 +2990,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.8",
+ "syn 3.0.9",
  "wasm-bindgen-shared",
 ]
 

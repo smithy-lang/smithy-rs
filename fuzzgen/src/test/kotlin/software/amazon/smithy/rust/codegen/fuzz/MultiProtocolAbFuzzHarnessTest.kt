@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
-import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -370,11 +369,21 @@ class MultiProtocolAbFuzzHarnessTest {
         // Canonical server service includes Upload even when RPC client declarations omit it.
         // Hash the exact text used for assembly, even if another task edits fixtures concurrently.
         val sources =
-            listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy", file).distinct()
+            listOf(
+                "multi-protocol-server.smithy",
+                "multi-protocol-common.smithy",
+                "multi-protocol-awsjson-responses-historical.smithy",
+                file,
+            ).distinct()
                 .map { it to modelFile(it).readText() }
         val canonicalSources =
             sources.filter {
-                it.first in listOf("multi-protocol-server.smithy", "multi-protocol-common.smithy")
+                it.first in
+                    listOf(
+                        "multi-protocol-server.smithy",
+                        "multi-protocol-common.smithy",
+                        "multi-protocol-awsjson-responses-historical.smithy",
+                    )
             }
         return project("multiprotocol", assemble(*canonicalSources.toTypedArray()), served, sources)
     }
@@ -408,13 +417,16 @@ class MultiProtocolAbFuzzHarnessTest {
         service: String,
         dest: File,
     ): File {
-        val settings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(sideSchemaSerde)
+        // Node-built settings: this file also compiles against the baseline checkout,
+        // whose ServerAdditionalSettings lacks the schemaSerde builder method.
+        val codegen = Node.objectNodeBuilder().withMember("http-1x", true)
+        codegen.withMember("schemaSerde", sideSchemaSerde)
         val servers =
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
                     service = service,
-                    additionalSettings = settings.toObjectNode(),
+                    additionalSettings = Node.objectNode().withMember("codegen", codegen.build()),
                     command = { dir -> println("generated $dir") },
                 ),
                 testCoverage = HttpTestType.Default,
@@ -568,6 +580,8 @@ class MultiProtocolAbFuzzHarnessTest {
             assemble(
                 protocol.multiProtocolFile to modelFile(protocol.multiProtocolFile).readText(),
                 "multi-protocol-common.smithy" to modelFile("multi-protocol-common.smithy").readText(),
+                "multi-protocol-awsjson-responses-historical.smithy" to
+                    modelFile("multi-protocol-awsjson-responses-historical.smithy").readText(),
             )
         val serviceId = ShapeId.from(serviceOf("multiprotocol"))
         return ModelTransformer.create().mapShapes(canonical) { shape ->
@@ -596,7 +610,7 @@ class MultiProtocolAbFuzzHarnessTest {
                             model,
                             IntegrationTestParams(
                                 service = serviceOf("multiprotocol"),
-                                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
+                                additionalSettings = Node.parse("""{"codegen":{"schemaSerde":false}}""").expectObjectNode(),
                                 command = { dir -> println("generated original Publish at $dir") },
                             ),
                             testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
@@ -636,7 +650,7 @@ class MultiProtocolAbFuzzHarnessTest {
                         model,
                         IntegrationTestParams(
                             service = serviceOf("multiprotocol"),
-                            additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
+                            additionalSettings = Node.parse("""{"codegen":{"schemaSerde":$schemaSerde}}""").expectObjectNode(),
                             cargoCommand = "cargo test --quiet --lib --tests --offline",
                         ),
                         testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
