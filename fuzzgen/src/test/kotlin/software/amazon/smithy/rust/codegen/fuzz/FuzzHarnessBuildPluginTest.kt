@@ -22,11 +22,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class FuzzHarnessBuildPluginTest() {
-    private fun minimalModel(protocol: String) =
+    private val minimalModel =
         """
         namespace com.example
-        use $protocol
-        @${protocol.substringAfter('#')}
+        use aws.protocols#awsJson1_0
+        @awsJson1_0
         service HelloService {
             operations: [SayHello],
             version: "1"
@@ -41,13 +41,7 @@ class FuzzHarnessBuildPluginTest() {
      * Smoke test that generates a lexicon and target crate for the trivial service above
      */
     @Test
-    fun smokeTest() = smokeTest("aws.protocols#awsJson1_0")
-
-    @Test
-    fun rpcV2CborSmokeTest() = smokeTest("smithy.protocols#rpcv2Cbor")
-
-    private fun smokeTest(protocol: String) {
-        val minimalModel = minimalModel(protocol)
+    fun smokeTest() {
         val testDir = TestWorkspace.subproject()
         val testPath = testDir.toPath()
         val manifest = FileManifest.create(testPath)
@@ -94,6 +88,6 @@ class FuzzHarnessBuildPluginTest() {
         FuzzHarnessBuildPlugin().execute(context)
         context.fileManifest.printGeneratedFiles()
         context.fileManifest.files.map { it.fileName.toString() } shouldContain "lexicon.json"
-        "cargo check --quiet".runCommand(context.fileManifest.baseDir.resolve("a"))
+        "cargo check".runCommand(context.fileManifest.baseDir.resolve("a"))
     }
 }

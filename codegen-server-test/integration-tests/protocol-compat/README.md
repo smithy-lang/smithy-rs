@@ -50,7 +50,7 @@ The server model in `codegen-server-test/custom-test-models/multi-protocol-compa
 
 The `scenario` input selects populated, absent, empty, default, override or error responses where applicable. REST carries it in `x-scenario`; RPC carries it as an ordinary body member. Tagged response fixtures drive the fuzz handlers, and request fixtures seed these selectors.
 
-Native protocol tests assert the declared wire contract. A/B tests compare independently generated serde and schema servers using the same model and inputs. The generic fuzz model has explicit reductions: see `tools/multi-protocol-ab-fuzz/README.md` and the generated model-projection manifests. A passing reduced-model comparison does not establish coverage for excluded operations or members.
+Native protocol tests assert the declared wire contract. A/B tests compare independently generated serde and schema servers using the same model and inputs. A passing reduced-model comparison does not establish coverage for excluded operations or members.
 
 Earlier investigation records are in `validation/multi-protocol-enrichment/` and `validation/multi-protocol-example/report.md`. Those records predate the subsequent document-null and XML union-list fixes.
 
