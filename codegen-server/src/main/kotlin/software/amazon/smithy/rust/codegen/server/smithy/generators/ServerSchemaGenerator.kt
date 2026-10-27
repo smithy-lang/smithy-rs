@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
+import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -985,9 +986,11 @@ class ServerSchemaGenerator(
                     *codegenScope,
                 )
             } else if (stringValue != null) {
+                // Emit the quoted value literally, including any hashes or named-template syntax.
                 rustTemplate(
-                    """map.insert(#{Box}::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
+                    """map.insert(#{Box}::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{stringValue})));""",
                     *codegenScope,
+                    "stringValue" to writable { raw(stringValue.dq()) },
                 )
             } else {
                 // Render the trait's structured value as a structured `Document`
