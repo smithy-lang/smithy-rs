@@ -5,9 +5,9 @@
 
 //! Allocation counts for modeled-error and RPC output serialization.
 //!
-//! Run with `--nocapture` to see per-call allocation counts and bytes. The assertions are
-//! deliberately loose sanity bounds; the printed numbers are the measurement, compared
-//! before and after the response-plan caching change.
+//! Run with `cargo bench --quiet -p aws-smithy-http-server --bench serialization_allocations`
+//! from `rust-runtime` to compare per-call allocation counts and requested bytes for
+//! protocols initialized with service schemas and default-constructed protocols.
 
 use aws_smithy_http_server::schema::protocol::{AwsJson1_1, RestJson1};
 use aws_smithy_http_server::schema::{
@@ -17,18 +17,18 @@ use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::traits::HttpTrait;
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::LazyLock;
 
 struct CountingAllocator;
 
-static ALLOCATIONS: AtomicU64 = AtomicU64::new(0);
-static ALLOCATED_BYTES: AtomicU64 = AtomicU64::new(0);
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+static ALLOCATED_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(layout.size() as u64, Ordering::Relaxed);
+        ALLOCATED_BYTES.fetch_add(layout.size(), Ordering::Relaxed);
         System.alloc(layout)
     }
 
@@ -38,7 +38,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(new_size as u64, Ordering::Relaxed);
+        ALLOCATED_BYTES.fetch_add(new_size, Ordering::Relaxed);
         System.realloc(ptr, layout, new_size)
     }
 }
@@ -47,7 +47,7 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 /// Allocation count and byte total across `calls` invocations of `f`, averaged per call.
-fn measure(calls: u64, mut f: impl FnMut()) -> (u64, u64) {
+fn measure(calls: usize, mut f: impl FnMut()) -> (usize, usize) {
     // Warm up any lazily initialized state so it is not attributed to the measurement.
     f();
     let allocations = ALLOCATIONS.load(Ordering::Relaxed);
@@ -173,14 +173,13 @@ static OPERATION: OperationSchema<'static> =
 static OPERATIONS: [&OperationSchema<'static>; 1] = [&OPERATION];
 static SERVICE: ServiceSchema<'static> = ServiceSchema::new(shape_id!("bench", "Service"), None, &[], &OPERATIONS);
 
-#[test]
-fn serialization_allocation_counts() {
+fn main() {
     let ctx = ProtocolBuildContext::new(&SERVICE);
     let rest_json = RestJson1::from_build_context(&ctx).unwrap();
     let aws_json = AwsJson1_1::from_build_context(&ctx).unwrap();
 
     let calls = 1000;
-    let cases: [(&str, (u64, u64)); 4] = [
+    let cases: [(&str, (usize, usize)); 4] = [
         (
             "rest_json_1 serialize_error (header bindings)",
             measure(calls, || {
@@ -210,7 +209,7 @@ fn serialization_allocation_counts() {
     // always serializes a document and does not prepare REST binding plans.
     let rest_json_uncached = RestJson1::default();
     let aws_json_uncached = AwsJson1_1::default();
-    let uncached: [(&str, (u64, u64)); 4] = [
+    let uncached: [(&str, (usize, usize)); 4] = [
         (
             "rest_json_1 serialize_error (uncached plan)",
             measure(calls, || {
@@ -236,12 +235,8 @@ fn serialization_allocation_counts() {
             }),
         ),
     ];
-    let cases: Vec<(&str, (u64, u64))> = cases.into_iter().chain(uncached).collect();
+    let cases: Vec<(&str, (usize, usize))> = cases.into_iter().chain(uncached).collect();
     for (name, (allocations, bytes)) in &cases {
         eprintln!("{name}: {allocations} allocations, {bytes} bytes per call");
-    }
-    // Loose sanity bounds; the printed numbers are the real measurement.
-    for (name, (allocations, _)) in &cases {
-        assert!(*allocations < 500, "{name}: unexpectedly many allocations");
     }
 }
