@@ -24,7 +24,7 @@ impl AwsJsonProtocolRouter {
     fn matching_target(&self, request: &Request<()>) -> Option<OperationTarget> {
         // Match the operation before admitting the event-stream media type. It must
         // not make ordinary or output-only streaming operations claim this request.
-        if request.method() != http::Method::POST || request.uri().path() != "/" {
+        if request.method() != http::Method::POST || request.uri() != "/" {
             return None;
         }
         let target = self.router.match_target(request)?;
@@ -74,6 +74,7 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
 /// framed by whichever protocol registers the router.
 /// As the sole protocol, claims use native full-URI, method, and target validation,
 /// leaving Content-Type validation to request deserialization.
+/// In either mode, claims use the native full-URI root check.
 /// Routing always accepts the modeled operation name. The `capitalizeRoutes` protocol
 /// setting additionally accepts a name with its first character uppercased.
 #[doc(hidden)]

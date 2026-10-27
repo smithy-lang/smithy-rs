@@ -1588,13 +1588,6 @@ mod multi_protocol {
                     .header("x-amz-target", "Service.second"),
                 "aws.protocols#awsJson1_1 second ",
             ),
-            // awsJson identifies on the path; a query string some clients add is ignored.
-            (
-                post("/?times=2")
-                    .header("content-type", "application/x-amz-json-1.0")
-                    .header("x-amz-target", "Service.first"),
-                "aws.protocols#awsJson1_0 first ",
-            ),
             (
                 post("/first").header("content-type", "application/json; charset=utf-8"),
                 "aws.protocols#restJson1 first ",
@@ -1608,6 +1601,35 @@ mod multi_protocol {
         ];
         for (request, expected) in cases {
             assert_eq!(send(&app, request, "").await, (StatusCode::OK, expected.to_owned()));
+        }
+    }
+
+    #[tokio::test]
+    async fn aws_json_uri_validation_matches_single_protocol_routing() {
+        let multi = app(&BUILTINS, []);
+        for (schema, content_type) in [
+            (&AWS_JSON_10, "application/x-amz-json-1.0"),
+            (&AWS_JSON_11, "application/x-amz-json-1.1"),
+        ] {
+            let single = app(schema, []);
+            for (uri, status) in [
+                ("/?times=2", StatusCode::NOT_FOUND),
+                ("/?foo=bar&baz=qux", StatusCode::NOT_FOUND),
+                ("/", StatusCode::OK),
+                ("/?", StatusCode::OK),
+            ] {
+                let request = || {
+                    post(uri)
+                        .header("content-type", content_type)
+                        .header("x-amz-target", "Service.first")
+                        .body(Body::empty())
+                        .unwrap()
+                };
+                let expected = single.clone().oneshot(request()).await.unwrap();
+                assert_eq!(expected.status(), status, "{uri}");
+                let actual = multi.clone().oneshot(request()).await.unwrap();
+                assert_wire_response(actual, expected).await;
+            }
         }
     }
 
@@ -2309,7 +2331,7 @@ mod multi_protocol {
             assert_eq!(app.state.metadata_routers.as_deref(), Some(&[1][..]));
             let response = app
                 .oneshot(
-                    post("/?ignored=true")
+                    post("/")
                         .header("content-type", content_type)
                         .header("x-amz-target", "Service.first")
                         .body(untouchable_body())
