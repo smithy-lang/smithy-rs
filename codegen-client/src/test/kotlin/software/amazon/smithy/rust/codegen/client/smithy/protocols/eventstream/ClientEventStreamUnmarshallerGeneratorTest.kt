@@ -96,7 +96,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
     /**
      * The same cases on the schema-serde path. The fixture models live in `namespace test`, which
-     * only reaches generated serde codegen, so they are moved into the schema-exclusive test namespace here.
+     * only reaches legacy codegen, so they are moved into the schema-exclusive test namespace here.
      *
      * This is the guard that RPC initial-response members still come from the first event frame
      * after event-stream outputs started populating members from the selected protocol's response

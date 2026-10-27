@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 class BigNumberPrecisionTest {
     /**
      * Emits the Rust body for a JSON round-trip test, selecting between the
-     * generated serde `protocol_serde::shape_*` path and the schema-serde path based on
+     * legacy `protocol_serde::shape_*` path and the schema-serde path based on
      * whether `SchemaSerdeAllowlist.usesSchemaSerdeExclusively` is true for
      * the generated service. The two paths produce identically-named locals
      * (`serialized: String`, `output: TestOpOutput`) so the surrounding
@@ -250,7 +250,7 @@ class BigNumberPrecisionTest {
                         """,
                     )
                 } else {
-                    // Generated serde XML codegen path: use the per-shape serde
+                    // Legacy XML codegen path: use the per-shape serde
                     // helpers under `protocol_serde::shape_test_op`.
                     rawRust(
                         """

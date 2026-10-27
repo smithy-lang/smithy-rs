@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
  * than failing the call (https://smithy.io/2.0/spec/aggregate-types.html#client-error-correction).
  *
  * The buffered success path builds the output through `builderInstantiator().finalizeBuilder`, the
- * same canonical `correct_*_errors` function the generated serde path uses, instead of the defaults that
+ * same canonical `correct_*_errors` function the legacy path uses, instead of the defaults that
  * `SchemaGenerator` applies inside `Foo::deserialize`. The two are not equivalent: `SchemaGenerator`
  * has no default for an enum-shaped member, so before this path existed a response omitting a
  * `@required` enum failed to build. `correct_*_errors` parses an unknown variant instead. This test
