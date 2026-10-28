@@ -19,7 +19,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -27,9 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
-import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.meta
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -39,12 +36,15 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import java.util.logging.Logger
 
 /**
- * Replaces symbols in nested shapes with TypeScript runtime wrappers.
+ * Symbol visitor  allowing that recursively replace symbols in nested shapes.
  *
  * Input / output / error structures can refer to complex types like the ones implemented inside
  * `aws_smithy_types` (a good example is `aws_smithy_types::Blob`).
- * This symbol provider uses wrappers from `aws_smithy_http_server_typescript::types`
- * to expose those values through NAPI with an idiomatic TypeScript / Rust API.
+ * `aws_smithy_http_server_typescript::types` wraps those types that do not implement directly the
+ * `napi` trait and cannot be shared safely with Typescript, providing an idiomatic Typescript / Rust API.
+ *
+ * This symbol provider ensures types not implementing `pyo3::PyClass` are swapped with their wrappers from
+ * `aws_smithy_http_server_typescript::types`.
  */
 class TsServerSymbolVisitor(
     settings: ServerRustSettings,
@@ -137,18 +137,4 @@ class TsStreamingShapeMetadataProvider(private val base: RustSymbolProvider) : S
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
 
     override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
-}
-
-/**
- * The `napi` attribute implements `Copy` for named enums, so they must not also derive it.
- */
-class TsNapiEnumMetadataProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
-    override fun toSymbol(shape: Shape): Symbol {
-        val symbol = base.toSymbol(shape)
-        return if (shape is StringShape && shape.hasTrait<EnumTrait>()) {
-            symbol.toBuilder().meta(symbol.expectRustMetadata().withoutDerives(RuntimeType.Copy)).build()
-        } else {
-            symbol
-        }
-    }
 }
