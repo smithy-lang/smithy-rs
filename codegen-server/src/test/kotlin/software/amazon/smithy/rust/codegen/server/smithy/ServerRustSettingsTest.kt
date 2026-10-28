@@ -143,6 +143,26 @@ internal class ServerRustSettingsTest {
     }
 
     @Test
+    fun `protocol-specific header timeouts fail eagerly in both serde modes`() {
+        for (schemaSerde in listOf(false, true)) {
+            for (value in listOf("\"1s\"", "0", "null")) {
+                val error =
+                    shouldThrow<CodegenException> {
+                        settings(
+                            "\"schemaSerde\":$schemaSerde",
+                            """{"protocols":{
+                                "common":{"request":{"header":{"readTimeout":"10s"}}},
+                                "aws.protocols#restJson1":{"request":{"header":{"readTimeout":$value}}}
+                            }}""",
+                        )
+                    }
+                error.message shouldContain "customizationConfig.protocols.aws.protocols#restJson1.request.header.readTimeout"
+                error.message shouldContain "Use `customizationConfig.protocols.common.request.header.readTimeout` instead."
+            }
+        }
+    }
+
+    @Test
     fun `request body poll budget defaults to 32 and zero becomes null`() {
         schemaSettings("").requestBodyReadPollBudget() shouldBe 32
         for (budget in listOf(0, 1, 7, Int.MAX_VALUE)) {

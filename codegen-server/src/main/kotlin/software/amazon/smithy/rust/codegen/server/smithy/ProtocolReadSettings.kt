@@ -73,9 +73,26 @@ internal object ProtocolReadSettings {
             val section = expectObject(value, path)!!
             if (protocolId == "common" && validateRequest) {
                 validateRequestSections(section)
+            } else if (protocolId != "common") {
+                validateProtocolHeaderSettings(section, path)
             }
             protocolId to section
         }.orEmpty()
+    }
+
+    private fun validateProtocolHeaderSettings(
+        section: ObjectNode,
+        path: String,
+    ) {
+        val request = expectObject(section.getMember("request").orElse(null), "$path.request") ?: return
+        val header = expectObject(request.getMember("header").orElse(null), "$path.request.header") ?: return
+        if (header.containsMember("readTimeout")) {
+            throw CodegenException(
+                "`$path.request.header.readTimeout` cannot be configured per protocol because " +
+                    "the header deadline starts before the request protocol is identified. " +
+                    "Use `$HEADER_PATH.readTimeout` instead.",
+            )
+        }
     }
 
     private fun validateRequestSections(common: ObjectNode) {

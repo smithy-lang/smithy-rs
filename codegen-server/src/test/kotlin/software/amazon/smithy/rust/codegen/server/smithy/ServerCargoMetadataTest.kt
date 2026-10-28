@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import com.moandjiezana.toml.Toml
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
@@ -23,10 +24,10 @@ import java.lang.reflect.Modifier
 
 /**
  * Checks the Cargo.toml metadata emitted for generated servers: the codegen commit and release,
- * served protocol IDs, explicitly supplied non-default codegen settings, and customization values.
- * It parses the generated TOML and verifies that nested values retain their types, defaults are
- * omitted, and legacy servers retain their baseline metadata. Reflection checks that the recorded
- * setting defaults cover all server settings and agree with their constructor defaults.
+ * served protocol IDs, and allowlisted non-default SDK API and compatibility settings.
+ * It parses the generated TOML and verifies that operational and arbitrary customization settings
+ * are omitted, route aliases are normalized, and legacy servers retain their baseline metadata.
+ * Reflection checks that the accepted configuration defaults agree with constructor defaults.
  */
 internal class ServerCargoMetadataTest {
     private fun manifest(manifestCustomizations: ManifestCustomizations): Toml {
@@ -122,7 +123,7 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `configured flags are recorded and nested customization values keep their types`() {
+    fun `only allowlisted codegen and protocol settings are recorded`() {
         val metadata =
             metadata(
                 """,
@@ -141,12 +142,9 @@ internal class ServerCargoMetadataTest {
         codegen.getBoolean("http-1x") shouldBe true
         codegen.getBoolean("addValidationExceptionToConstrainedOperations") shouldBe false
         codegen.contains("debugMode") shouldBe false
-        codegen.toMap().size shouldBe 4
+        codegen.toMap().size shouldBe 3
         val protocols = metadata.protocolTables()
-        protocols.containsKey(ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID) shouldBe false
-        protocols["common"] shouldBe mapOf("request" to mapOf("body" to mapOf("maxBytes" to 4096L)))
-        protocols["aws.protocols#restXml"] shouldBe mapOf("acceptTextXml" to true)
-        protocols["example#custom"] shouldBe mapOf("nested" to mapOf("enabled" to true, "limit" to 3L, "names" to listOf("one", "two")))
+        protocols shouldBe mapOf("aws.protocols#restXml" to mapOf("acceptTextXml" to true))
     }
 
     @Test
@@ -166,23 +164,80 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `explicit protocol defaults are omitted without dropping unknown settings`() {
+    fun `SDK API and generated compatibility choices are recorded`() {
+        val metadata =
+            metadata(
+                """, "codegen": {
+                "schemaSerde": true, "http-1x": true,
+                "publicConstrainedTypes": false, "ignoreUnsupportedConstraints": true,
+                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse": "test#ValidationException",
+                "addValidationExceptionToConstrainedOperations": false,
+                "alwaysSendEventStreamInitialResponse": true, "allowMissingUnionVariant": true
+            }""",
+            )
+        metadata.getTable("codegen").toMap() shouldBe
+            mapOf(
+                "schemaSerde" to true,
+                "http-1x" to true,
+                "publicConstrainedTypes" to false,
+                "ignoreUnsupportedConstraints" to true,
+                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to "test#ValidationException",
+                "addValidationExceptionToConstrainedOperations" to false,
+                "alwaysSendEventStreamInitialResponse" to true,
+                "allowMissingUnionVariant" to true,
+            )
+    }
+
+    @Test
+    fun `explicit protocol defaults and unknown settings are omitted`() {
         val metadata =
             metadata(
                 """, "codegen": {"schemaSerde": true}, "customizationConfig": {"protocols": {
                 "aws.protocols#restXml": {"strictCollectionElementNames": true, "validateDocument": false, "acceptTextXml": false},
                 "aws.protocols#restJson1": {"validateSkippedValues": false},
-                "aws.protocols#awsJson1_0": {"validateSkippedValues": false},
-                "aws.protocols#awsJson1_1": {"validateSkippedValues": false},
-                "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false, "extension": false},
+                "aws.protocols#awsJson1_0": {"validateSkippedValues": false, "capitalizeRoutes": false, "responseBindings": "historical"},
+                "aws.protocols#awsJson1_1": {"validateSkippedValues": false, "capitalizeRoutes": false, "responseBindings": "historical"},
+                "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false, "methodNotAllowedAsNotFound": false, "extension": false},
                 "example#custom": {"legacyMode": false}
+            }}""",
+            )
+        metadata.contains("customizationConfig") shouldBe false
+    }
+
+    @Test
+    fun `non-default compatibility settings are recorded for each served protocol`() {
+        val metadata =
+            metadata(
+                """, "codegen": {"schemaSerde": true}, "customizationConfig": {"protocols": {
+                "aws.protocols#restXml": {"strictCollectionElementNames": false, "validateDocument": true, "acceptTextXml": true},
+                "aws.protocols#restJson1": {"validateSkippedValues": true},
+                "aws.protocols#awsJson1_0": {"validateSkippedValues": true, "capitalizeRoutes": true, "responseBindings": "smithy-specs"},
+                "aws.protocols#awsJson1_1": {"validateSkippedValues": true, "capitalizeRoutes": true, "responseBindings": "smithy-specs"},
+                "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": true, "methodNotAllowedAsNotFound": true}
             }}""",
             )
         metadata.protocolTables() shouldBe
             mapOf(
-                ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID to mapOf("extension" to false),
-                "example#custom" to mapOf("legacyMode" to false),
+                "aws.protocols#restXml" to mapOf("strictCollectionElementNames" to false, "validateDocument" to true, "acceptTextXml" to true),
+                "aws.protocols#restJson1" to mapOf("validateSkippedValues" to true),
+                "aws.protocols#awsJson1_0" to mapOf("validateSkippedValues" to true, "capitalizeRoutes" to true, "responseBindings" to "smithy-specs"),
+                "aws.protocols#awsJson1_1" to mapOf("validateSkippedValues" to true, "capitalizeRoutes" to true, "responseBindings" to "smithy-specs"),
+                ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID to mapOf("capitalizeRoutes" to true, "methodNotAllowedAsNotFound" to true),
             )
+    }
+
+    @Test
+    fun `settings for unserved protocols are omitted`() {
+        val metadata =
+            metadata(
+                """, "customizationConfig": {"protocols": {
+                "aws.protocols#restJson1": {"validateSkippedValues": true},
+                "aws.protocols#restXml": {"acceptTextXml": true},
+                "smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": true}
+            }}""",
+                servedProtocols = listOf("aws.protocols#restJson1"),
+            )
+        metadata.protocolTables() shouldBe mapOf("aws.protocols#restJson1" to mapOf("validateSkippedValues" to true))
     }
 
     @Test
@@ -191,9 +246,21 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `metadata records the legacy route flag folded into customization settings`() {
+    fun `metadata records the normalized legacy route flag once`() {
         val metadata = metadata(""", "codegen": {"schemaSerde": true, "rpcV2CborAddCapitalizedRoute": true}""")
         metadata.protocolTables()[ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID] shouldBe mapOf("capitalizeRoutes" to true)
+        metadata.contains("codegen.rpcV2CborAddCapitalizedRoute") shouldBe false
+    }
+
+    @Test
+    fun `explicit protocol route setting overrides the legacy flag in metadata`() {
+        val metadata =
+            metadata(
+                """, "codegen": {"schemaSerde": true, "rpcV2CborAddCapitalizedRoute": true},
+                "customizationConfig": {"protocols": {"smithy.protocols#rpcv2Cbor": {"capitalizeRoutes": false}}}""",
+            )
+        metadata.contains("codegen.rpcV2CborAddCapitalizedRoute") shouldBe false
+        metadata.contains("customizationConfig") shouldBe false
     }
 
     @Test
@@ -215,7 +282,7 @@ internal class ServerCargoMetadataTest {
                 testCoverage = HttpTestType.Default,
             ).single()
         val metadata = Toml().read(server.path.resolve("Cargo.toml").toFile()).getTable("package.metadata")
-        metadata.getLong("customizationConfig.protocols.common.request.body.maxBytes") shouldBe 1024L
+        metadata.contains("customizationConfig") shouldBe false
         metadata.getBoolean("codegen.schemaSerde") shouldBe true
         metadata.getBoolean("codegen.http-1x") shouldBe true
         metadata.getList<String>("smithy.protocol") shouldBe listOf("aws.protocols#restJson1")
@@ -224,7 +291,7 @@ internal class ServerCargoMetadataTest {
         metadata.contains("codegen.debugMode") shouldBe false
         metadata.contains("codegen.formatTimeoutSeconds") shouldBe false
         metadata.getBoolean("codegen.publicConstrainedTypes") shouldBe false
-        metadata.getBoolean("customizationConfig.example.enabled") shouldBe true
+        server.path.resolve("src/service_config.rs").toFile().readText() shouldContain "NonZeroUsize::new(1024usize)"
     }
 
     @Test
@@ -271,7 +338,7 @@ internal class ServerCargoMetadataTest {
     }
 
     @Test
-    fun `inherited and nullable settings are recorded`() {
+    fun `nullable codegen compatibility settings are recorded`() {
         val metadata =
             metadata(
                 """, "codegen": {
@@ -282,7 +349,6 @@ internal class ServerCargoMetadataTest {
             )
         metadata.getTable("codegen").toMap() shouldBe
             mapOf(
-                "formatTimeoutSeconds" to 60L,
                 "addValidationExceptionToConstrainedOperations" to false,
                 "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to "test#ValidationException",
             )
@@ -291,10 +357,45 @@ internal class ServerCargoMetadataTest {
     @Test
     fun `metadata records supplied values rather than programmatic overrides`() {
         val metadata =
-            metadata(""", "codegen": {"debugMode": true}""") {
-                it.copy(debugMode = false, schemaSerde = true)
+            metadata(""", "codegen": {"publicConstrainedTypes": false}""") {
+                it.copy(publicConstrainedTypes = true, schemaSerde = true)
             }
-        metadata.getTable("codegen").toMap() shouldBe mapOf("debugMode" to true)
+        metadata.getTable("codegen").toMap() shouldBe mapOf("publicConstrainedTypes" to false)
+    }
+
+    @Test
+    fun `body limits are omitted regardless of their value`() {
+        metadata().contains("codegen.requestBodyMaxBytes") shouldBe false
+        for (value in listOf(0, 4096)) {
+            val metadata = metadata(""", "codegen": {"requestBodyMaxBytes": $value}""")
+            metadata.contains("codegen") shouldBe false
+            metadata.contains("customizationConfig") shouldBe false
+        }
+    }
+
+    @Test
+    fun `operational settings tooling and arbitrary customizations are omitted`() {
+        val metadata =
+            metadata(
+                """, "codegen": {"schemaSerde": true, "formatTimeoutSeconds": 60, "debugMode": true},
+                "customizationConfig": {
+                    "example": {"values": [null]},
+                    "protocols": {
+                        "common": {"request": {
+                            "header": {"readTimeout": "1s"},
+                            "body": {
+                                "maxBytes": "4 KiB", "readPollBudget": 8,
+                                "readTimeouts": {"defaultNonPayload": "2s", "defaultPayload": "3s", "perOperation": {"test#Ping": "4s"}},
+                                "eventStreamTimeouts": {"initialMessage": "1s", "messageCompletion": "2s", "idle": "3s"}
+                            }
+                        }},
+                        "aws.protocols#restJson1": {"extension": {"values": [null]}},
+                        "example#custom": {"enabled": true}
+                    }
+                }""",
+            )
+        metadata.getTable("codegen").toMap() shouldBe mapOf("schemaSerde" to true)
+        metadata.contains("customizationConfig") shouldBe false
     }
 
     @Test
@@ -338,13 +439,6 @@ internal class ServerCargoMetadataTest {
                 it
             }
         metadata.contains("codegen") shouldBe false
-    }
-
-    @Test
-    fun `numerically equivalent defaults are omitted`() {
-        for (value in listOf("20", "20.0", "2e1")) {
-            metadata(""", "codegen": {"formatTimeoutSeconds": $value}""").contains("codegen") shouldBe false
-        }
     }
 
     @Test

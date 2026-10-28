@@ -37,38 +37,74 @@ internal fun serverCodegenVersionMetadata(): ManifestCustomizations =
             ),
     )
 
+/** SDK API and compatibility choices recorded in Cargo metadata, independently of accepted configuration keys. */
+private val CODEGEN_METADATA_KEYS =
+    setOf(
+        ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY,
+        ServerCodegenConfig.HTTP_1X_CONFIG_KEY,
+        "publicConstrainedTypes",
+        "ignoreUnsupportedConstraints",
+        "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
+        "addValidationExceptionToConstrainedOperations",
+        "alwaysSendEventStreamInitialResponse",
+        "allowMissingUnionVariant",
+    )
+
+/** Per-protocol metadata allowlists and their defaults. Operational settings are intentionally excluded. */
+private val PROTOCOL_METADATA_DEFAULTS =
+    mapOf(
+        "aws.protocols#restJson1" to mapOf("validateSkippedValues" to false),
+        "aws.protocols#restXml" to
+            mapOf(
+                "strictCollectionElementNames" to true,
+                "validateDocument" to false,
+                "acceptTextXml" to false,
+            ),
+        "aws.protocols#awsJson1_0" to
+            mapOf(
+                ServerRustSettings.CAPITALIZE_ROUTES_KEY to false,
+                "responseBindings" to AwsJsonResponseBindings.HISTORICAL.setting,
+                "validateSkippedValues" to false,
+            ),
+        "aws.protocols#awsJson1_1" to
+            mapOf(
+                ServerRustSettings.CAPITALIZE_ROUTES_KEY to false,
+                "responseBindings" to AwsJsonResponseBindings.HISTORICAL.setting,
+                "validateSkippedValues" to false,
+            ),
+        ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID to
+            mapOf(
+                ServerRustSettings.CAPITALIZE_ROUTES_KEY to false,
+                "methodNotAllowedAsNotFound" to false,
+            ),
+    )
+
 /**
- * Records supplied schema-generation settings that differ from their defaults using their smithy-build.json names.
+ * Records allowlisted SDK API and compatibility settings that differ from their defaults.
  * Nullable settings default to automatic: an explicit false is still a non-default override.
+ * Route aliases use normalized protocol settings after applying legacy flags and precedence.
+ * Timeouts, resource limits, tooling settings, and arbitrary customization values are omitted.
  */
 internal fun ServerRustSettings.manifestSettingsMetadata(
     servedProtocols: Collection<ShapeId>,
     codegenSettings: ObjectNode,
 ): ManifestCustomizations {
-    val codegen = ServerCodegenConfig.nonDefaultSettings(codegenSettings).metadataMap()
-    // Runtime extensions own their defaults. Only remove defaults known to built-in protocols.
-    val protocolDefaults =
+    val codegen = ServerCodegenConfig.nonDefaultSettings(codegenSettings).metadataMap(CODEGEN_METADATA_KEYS)
+    val settings = protocolSettings()
+    val protocols =
         servedProtocols.mapNotNull { protocol ->
-            when (protocol.toString()) {
-                ServerRustSettings.RPC_V2_CBOR_PROTOCOL_ID -> protocol.toString() to mapOf(ServerRustSettings.CAPITALIZE_ROUTES_KEY to false)
-                "aws.protocols#restXml" -> protocol.toString() to mapOf("strictCollectionElementNames" to true, "validateDocument" to false, "acceptTextXml" to false)
-                "aws.protocols#restJson1", "aws.protocols#awsJson1_0", "aws.protocols#awsJson1_1" -> protocol.toString() to mapOf("validateSkippedValues" to false)
-                else -> null
+            val id = protocol.toString()
+            val defaults = PROTOCOL_METADATA_DEFAULTS[id] ?: return@mapNotNull null
+            val values =
+                settings[id]?.metadataMap(defaults.keys)
+                    ?.filter { (key, value) -> value != defaults[key] }
+                    .orEmpty()
+            if (values.isEmpty()) {
+                null
+            } else {
+                id to values
             }
         }.toMap()
-    val protocols =
-        protocolSettings().mapValues { (protocol, section) ->
-            section.metadataMap().filter { (key, value) -> value != protocolDefaults[protocol]?.get(key) }
-        }.filterValues { it.isNotEmpty() }
-    val customization =
-        (customizationConfig?.metadataMap().orEmpty() - ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY) +
-            (
-                if (protocols.isEmpty()) {
-                    emptyMap()
-                } else {
-                    mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols)
-                }
-            )
     val metadata =
         buildMap {
             // Schema server crates can serve several protocols, so replace the
@@ -77,8 +113,8 @@ internal fun ServerRustSettings.manifestSettingsMetadata(
             if (codegen.isNotEmpty()) {
                 put("codegen", codegen)
             }
-            if (customization.isNotEmpty()) {
-                put("customizationConfig", customization)
+            if (protocols.isNotEmpty()) {
+                put("customizationConfig", mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols))
             }
         }
     return mapOf("package" to mapOf("metadata" to metadata))
@@ -98,5 +134,7 @@ private fun Node.metadataValue(): Any? =
         else -> null
     }
 
-private fun ObjectNode.metadataMap(): Map<String, Any?> =
-    members.entries.mapNotNull { (key, value) -> value.metadataValue()?.let { key.value to it } }.toMap()
+private fun ObjectNode.metadataMap(allowedKeys: Set<String>? = null): Map<String, Any?> =
+    members.entries
+        .filter { (key, _) -> allowedKeys == null || key.value in allowedKeys }
+        .mapNotNull { (key, value) -> value.metadataValue()?.let { key.value to it } }.toMap()

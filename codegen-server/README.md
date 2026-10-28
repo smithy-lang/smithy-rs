@@ -16,6 +16,20 @@ serde modes. Reserve "legacy runtime" for the HTTP 0.x crate.
 Generated serde servers retain Tower 0.4; schema serde servers use Tower 0.5.
 HTTP 1.x servers can use `aws-smithy-http-server-metrics` with either serde mode.
 
+## Generated SDK metadata
+
+Schema serde SDKs record the generator commit and release and the served protocol IDs
+in `Cargo.toml`. Configuration metadata uses explicit allowlists in
+`ServerCargoMetadata.kt`: only non-default SDK API and protocol compatibility choices
+are included. Protocol settings are recorded only for served protocols, and the
+deprecated CBOR route flag is normalized to `capitalizeRoutes` with configuration
+precedence applied.
+
+Timeouts, body-size limits, polling budgets, formatting and debug settings, and
+arbitrary customization values are excluded. These settings remain supported;
+operational settings are available in the generated configuration and can be
+overridden at runtime.
+
 ## Shared runtime configuration
 
 Schema service builders emit typed request-body settings through
@@ -182,7 +196,10 @@ REST JSON/XML apply REST response bindings and RPC v2 CBOR
 ignores them, whatever this setting says. In both serde modes, protocol settings must use full protocol shape IDs,
 including custom protocols (for example, `example.protocols#customRpc`). The shared `common` section is
 the only exception. Shorthand keys such as `awsJson1_0` or `restJson1` are rejected during settings
-loading. Unknown common request-setting keys emit a warning.
+loading. Header read timeouts must be configured under
+`customizationConfig.protocols.common.request.header.readTimeout`; setting them in a
+protocol-specific section is rejected because the deadline starts before the request
+protocol is identified. Unknown common request-setting keys emit a warning.
 
 Schema-serde AWS JSON routing uses the modeled operation name: `getFoo` routes with
 `X-Amz-Target: Example.getFoo`. Set `"capitalizeRoutes": true` in the

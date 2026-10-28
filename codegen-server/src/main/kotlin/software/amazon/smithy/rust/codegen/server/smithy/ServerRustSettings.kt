@@ -171,7 +171,12 @@ data class ServerRustSettings(
             // Use the http1x field from ServerCodegenConfig to set RuntimeConfig httpVersion
             // This must be done because RuntimeConfig is created in CoreRustSettings.from()
             // before we have access to the http-1x flag
-            val httpVersion = if (serverCodegenConfig.http1x) HttpVersion.Http1x else HttpVersion.Http0x
+            val httpVersion =
+                if (serverCodegenConfig.http1x) {
+                    HttpVersion.Http1x
+                } else {
+                    HttpVersion.Http0x
+                }
             val runtimeConfig = coreRustSettings.runtimeConfig.copy(httpVersion = httpVersion)
 
             val customizationConfig =
@@ -529,7 +534,7 @@ data class ServerCodegenConfig(
                 }
         }
 
-        // One inventory for configuration validation and supplied settings metadata.
+        // Accepted configuration keys and constructor defaults. Cargo metadata selects a separate subset.
         private val KNOWN_CONFIG_KEYS: Map<String, ConfigDefault<*>> =
             mapOf(
                 "formatTimeoutSeconds" to ConfigDefault(DEFAULT_FORMAT_TIMEOUT_SECONDS),
@@ -540,7 +545,7 @@ data class ServerCodegenConfig(
                 "addValidationExceptionToConstrainedOperations" to ConfigDefault<Boolean?>(null),
                 "alwaysSendEventStreamInitialResponse" to ConfigDefault(DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE),
                 "allowMissingUnionVariant" to ConfigDefault(DEFAULT_ALLOW_MISSING_UNION_VARIANT),
-                "requestBodyMaxBytes" to ConfigDefault(0L),
+                "requestBodyMaxBytes" to ConfigDefault<Long?>(null),
                 HTTP_1X_CONFIG_KEY to ConfigDefault(DEFAULT_HTTP_1X),
                 RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to ConfigDefault(DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE),
                 SCHEMA_SERDE_CONFIG_KEY to ConfigDefault(DEFAULT_SCHEMA_SERDE),
