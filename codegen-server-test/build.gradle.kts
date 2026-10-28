@@ -298,10 +298,22 @@ val commonCodegenTests =
                     imports = listOf("integration-tests/protocol-compat/models/protocol-compat-cbor-errors.smithy"),
                     extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
                 ),
+                // Legacy codegen emits non-compiling header serialization for header-bound error
+                // members on rpcv2Cbor, so this projection strips the trait the way a customer
+                // would have to. Schema serde handles the trait, so its twin above keeps it.
                 CodegenTest(
                     "com.example.review#ReviewCborErrors",
                     "compat-cbor-errors-legacy-server-sdk",
                     imports = listOf("integration-tests/protocol-compat/models/protocol-compat-cbor-errors.smithy"),
+                    // Scope the projection to this service before stripping, because
+                    // `excludeTraits` applies to the whole assembled model, including the
+                    // dependency protocol-test models, whose validation relies on the trait.
+                    transforms =
+                        listOf(
+                            ModelTransform("includeServices", mapOf("services" to listOf("com.example.review#ReviewCborErrors"))),
+                            ModelTransform("removeUnusedShapes"),
+                            ModelTransform("excludeTraits", mapOf("traits" to listOf("smithy.api#httpHeader"))),
+                        ),
                     extraCodegenConfig = """"http-1x": true, "schemaSerde": false""",
                 ),
                 CodegenTest(
