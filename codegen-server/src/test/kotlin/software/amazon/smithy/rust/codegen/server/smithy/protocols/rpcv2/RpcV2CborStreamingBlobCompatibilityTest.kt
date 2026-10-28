@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSetting
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
@@ -76,7 +77,12 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
-                    cargoCommand = "cargo test --quiet --lib --tests",
+                    command = { testDir ->
+                        "cargo test --quiet --lib --tests".runCommand(testDir)
+                        if (schemaSerde) {
+                            "cargo clippy --quiet --lib -- -D clippy::manual_map".runCommand(testDir)
+                        }
+                    },
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->

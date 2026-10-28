@@ -323,10 +323,7 @@ class ServerStreamingOperationGenerator(
             rustTemplate(
                 """
                 let mut output = output;
-                let body = match #{take} {
-                    #{Some}(streaming) => #{Some}(#{body:W}),
-                    #{None} => #{None},
-                };
+                #{serializeBody:W}
                 protocol.serialize_streaming_response(
                     <Self as #{SchemaOperationShape}>::SCHEMA.output(),
                     &output,
@@ -336,8 +333,29 @@ class ServerStreamingOperationGenerator(
                 """,
                 *codegenScope,
                 "Output" to symbolProvider.toSymbol(outputShape),
-                "body" to body,
-                "take" to take,
+                "serializeBody" to
+                    writable {
+                        if (streamingMember.isEventStream(model)) {
+                            // Event stream setup can return an error response from the enclosing function.
+                            rustTemplate(
+                                """
+                                let body = match #{take} {
+                                    #{Some}(streaming) => #{Some}(#{body:W}),
+                                    #{None} => #{None},
+                                };
+                                """,
+                                *codegenScope,
+                                "body" to body,
+                                "take" to take,
+                            )
+                        } else {
+                            rustTemplate(
+                                "let body = #{take}.map(|streaming| #{body:W});",
+                                "body" to body,
+                                "take" to take,
+                            )
+                        }
+                    },
             )
         }
     }
