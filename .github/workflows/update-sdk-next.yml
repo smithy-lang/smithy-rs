@@ -17,12 +17,31 @@ on:
         type: string
         default: main
 
+# OIDC permissions needed to assume the release-ops role in AWS.
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   update-next:
     name: Update `next`
     runs-on: ubuntu-latest
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
+        role-session-name: GitHubActions-UpdateSdkNext
+        aws-region: us-west-2
+    - name: Fetch aws-sdk-rust PAT from Secrets Manager
+      id: secrets
+      run: |
+        token=$(aws secretsmanager get-secret-value \
+          --secret-id prod/aws-rust-sdk-team/github/pat/aws-sdk-rust \
+          --query SecretString --output text)
+        echo "::add-mask::$token"
+        echo "AWS_SDK_RUST_PAT=$token" >> "$GITHUB_OUTPUT"
     - name: Check out `smithy-rs`
       uses: actions/checkout@v4
       with:
@@ -35,7 +54,7 @@ jobs:
         repository: awslabs/aws-sdk-rust
         ref: main
         path: aws-sdk-rust
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        token: ${{ steps.secrets.outputs.AWS_SDK_RUST_PAT }}
     - name: Set up JDK
       uses: actions/setup-java@v4
       with:
