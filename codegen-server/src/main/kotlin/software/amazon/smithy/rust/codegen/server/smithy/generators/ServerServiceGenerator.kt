@@ -158,6 +158,23 @@ class ServerServiceGenerator(
                     } else {
                         ""
                     }
+
+                val withRequestBodyReadTimeout =
+                    writable {
+                        if (operationShape.id !in codegenContext.settings.requestBodyReadTimeouts.streamingOperationIds) {
+                            val operationId = operationShape.id.toString().replace("#", "##")
+                            rustTemplate(
+                                """
+                                .with_request_body_read_timeout(
+                                    #{RequestBodyConfig}.read_timeout.unwrap_or_default(),
+                                    "$operationId",
+                                )
+                                """,
+                                "RequestBodyConfig" to ServerServiceConfigGenerator(codegenContext).requestBodyConfig(operationShape.id),
+                            )
+                        }
+                    }
+
                 rustTemplate(
                     """
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -218,7 +235,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()#{WithRequestBodyReadTimeout:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -282,7 +299,7 @@ class ServerServiceGenerator(
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new()#{WithRequestBodyReadTimeout:W}.apply(svc);
                         let svc = self.http_plugin.apply(svc);
                         self.${fieldName}_custom(svc)
                     }
@@ -298,6 +315,7 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
+                    "WithRequestBodyReadTimeout" to withRequestBodyReadTimeout,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
