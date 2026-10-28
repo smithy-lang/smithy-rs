@@ -479,6 +479,8 @@ val customCodegenTests =
     }
 
 // Server-only Criterion comparisons use the same model and HTTP types on both serde paths.
+// The benchmark Makefile selects these through the `modules` property; the models carry no
+// protocol tests and their codegen paths are covered elsewhere, so CI skips generating them.
 val eventStreamBenchmarkTests =
     listOf("rest-json", "rpc-v2-cbor").flatMap { protocol ->
         listOf(false, true).map { schemaSerde ->
@@ -604,7 +606,15 @@ val requestLimitsCodegenTest =
             """.trimIndent(),
     )
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + eventStreamBenchmarkTests + compatibilityProtocolTests + requestLimitsCodegenTest
+val benchmarkModulesRequested = properties.get("modules")?.contains("event-stream-bench") ?: false
+
+val allCodegenTests =
+    commonCodegenTests + customCodegenTests + compatibilityProtocolTests + requestLimitsCodegenTest +
+        if (benchmarkModulesRequested) {
+            eventStreamBenchmarkTests
+        } else {
+            emptyList()
+        }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 tasks.named("generateSmithyBuild") {
