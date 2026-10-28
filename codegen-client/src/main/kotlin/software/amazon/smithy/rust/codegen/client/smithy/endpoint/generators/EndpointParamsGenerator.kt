@@ -124,6 +124,9 @@ class EndpointParamsGenerator(
 
         fun getterName(parameterName: String) = "get_${memberName(parameterName)}"
 
+        /** Private `ParamsBuilder` method that builds `Params` without the validators run by `build()` */
+        const val BUILD_WITHOUT_VALIDATORS = "build_without_validators"
+
         fun paramsError(): RuntimeType =
             RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Config.endpoint) {
                 rust(
@@ -285,7 +288,16 @@ class EndpointParamsGenerator(
                         rust("#W;", validator)
                     }
                 }
+                rust("self.$BUILD_WITHOUT_VALIDATORS()")
+            }
 
+            docs("Consume this builder, creating [`Params`] without the validators run by `build()`.")
+            rustBlockTemplate(
+                "fn $BUILD_WITHOUT_VALIDATORS(self) -> #{Result}<#{Params}, #{ParamsError}>",
+                *preludeScope,
+                "Params" to paramsStruct(),
+                "ParamsError" to paramsError(),
+            ) {
                 val params =
                     writable {
                         Attribute.AllowClippyUnnecessaryLazyEvaluations.render(this)
