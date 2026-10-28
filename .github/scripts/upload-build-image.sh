@@ -29,7 +29,9 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Tagging image as: ${ECR_IMAGE}"
-${OCI_EXE} tag ${ECR_REPOSITORY}:latest ${ECR_IMAGE}
+# Publish the base image before acquire-build-image adds the runner-specific user.
+# Publishing the derived build image would accumulate layers on every CI run.
+${OCI_EXE} tag "smithy-rs-base-image:${TAG_NAME}" "${ECR_IMAGE}"
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to tag the image"
