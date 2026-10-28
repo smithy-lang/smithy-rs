@@ -93,7 +93,14 @@ internal class ServerSchemaXmlMetadataTest {
 
         val snapshots = Files.createTempDirectory("smithy-xml-metadata-parity")
         for (schemaSerde in listOf(false, true)) {
-            val snapshot = snapshots.resolve("${if (schemaSerde) "schema" else "legacy"}.txt")
+            val snapshot =
+                snapshots.resolve(
+                    "${if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }}.txt",
+                )
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
@@ -217,7 +224,11 @@ internal class ServerSchemaXmlMetadataTest {
                 use aws.protocols#restJson1
                 use aws.protocols#restXml
                 @restJson1
-                ${if (xml) "@restXml" else ""}
+                ${if (xml) {
+                    "@restXml"
+                } else {
+                    ""
+                }}
                 service Example { version: "1", operations: [Upload, Other] }
                 @http(method: "POST", uri: "/upload")
                 operation Upload {

@@ -33,7 +33,12 @@ internal class InitialEventStreamFrameCompatibilityTest {
     fun `malformed initial frames match legacy validation rejections`() {
         val run = Files.createTempDirectory("initial-frame-parity-")
         for (protocol in listOf("awsJson1_0", "awsJson1_1", "rpcv2Cbor")) {
-            val namespace = if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"
+            val namespace =
+                if (protocol == "rpcv2Cbor") {
+                    "smithy.protocols"
+                } else {
+                    "aws.protocols"
+                }
             val responseMediaType =
                 when (protocol) {
                     "awsJson1_0" -> "application/x-amz-json-1.0"
@@ -52,7 +57,12 @@ internal class InitialEventStreamFrameCompatibilityTest {
                 structure Note { text: String }
                 """.asSmithyModel()
             for (schemaSerde in listOf(false, true)) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val observations = run.resolve("$protocol-$mode.txt")
                 serverIntegrationTest(
                     model,
@@ -64,7 +74,12 @@ internal class InitialEventStreamFrameCompatibilityTest {
                 ) { context, crate ->
                     val operation = context.model.expectShape(ShapeId.from("test.initialframe#Read"), OperationShape::class.java)
                     val output = "crate::output::ReadOutput::builder().build()"
-                    val returned = if (operation.errors.isEmpty()) output else "Ok::<_, crate::error::ReadError>($output)"
+                    val returned =
+                        if (operation.errors.isEmpty()) {
+                            output
+                        } else {
+                            "Ok::<_, crate::error::ReadError>($output)"
+                        }
                     crate.testModule {
                         tokioTest("malformed_initial_frames") {
                             rustTemplate(
@@ -75,8 +90,16 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                 let message = #{Types}::event_stream::Message::new_from_parts(vec![
                                     #{Types}::event_stream::Header::new(":message-type", #{Types}::event_stream::HeaderValue::String("event".into())),
                                     #{Types}::event_stream::Header::new(":event-type", #{Types}::event_stream::HeaderValue::String("initial-request".into())),
-                                    #{Types}::event_stream::Header::new(":content-type", #{Types}::event_stream::HeaderValue::String("${if (protocol == "rpcv2Cbor") "application/cbor" else "application/json"}".into())),
-                                ], ${if (protocol == "rpcv2Cbor") "b\"\\xbf\\xff\".as_slice()" else "b\"{}\".as_slice()"});
+                                    #{Types}::event_stream::Header::new(":content-type", #{Types}::event_stream::HeaderValue::String("${if (protocol == "rpcv2Cbor") {
+                                    "application/cbor"
+                                } else {
+                                    "application/json"
+                                }}".into())),
+                                ], ${if (protocol == "rpcv2Cbor") {
+                                    "b\"\\xbf\\xff\".as_slice()"
+                                } else {
+                                    "b\"{}\".as_slice()"
+                                }});
                                 let mut valid = #{Vec}::new();
                                 #{EventStream}::frame::write_message_to(&message, &mut valid).unwrap();
                                 let mut bad_header = valid.clone(); bad_header[8] ^= 1;
@@ -87,9 +110,17 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                     ("truncated-prelude", valid[..8].to_vec()),
                                     ("truncated-message", valid[..valid.len() - 1].to_vec()),
                                 ] {
-                                    let request = #{Http}::Request::post(${if (protocol == "rpcv2Cbor") "\"/service/Frames/operation/Read\"" else "\"/\""})
+                                    let request = #{Http}::Request::post(${if (protocol == "rpcv2Cbor") {
+                                    "\"/service/Frames/operation/Read\""
+                                } else {
+                                    "\"/\""
+                                }})
                                         .header("content-type", "application/vnd.amazon.eventstream")
-                                        ${if (protocol == "rpcv2Cbor") ".header(\"smithy-protocol\", \"rpc-v2-cbor\")" else ".header(\"x-amz-target\", \"Frames.Read\")"}
+                                        ${if (protocol == "rpcv2Cbor") {
+                                    ".header(\"smithy-protocol\", \"rpc-v2-cbor\")"
+                                } else {
+                                    ".header(\"x-amz-target\", \"Frames.Read\")"
+                                }}
                                         .body(#{RequestBody}).unwrap();
                                     let response = #{Tower}::ServiceExt::oneshot(app.clone(), request).await.unwrap();
                                     let status = response.status().as_u16();

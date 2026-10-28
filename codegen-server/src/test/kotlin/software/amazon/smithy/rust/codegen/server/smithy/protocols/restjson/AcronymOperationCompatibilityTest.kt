@@ -52,7 +52,14 @@ internal class AcronymOperationCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     cargoCommand = "cargo test --quiet -- --nocapture",
                 ),
                 testCoverage = HttpTestType.Default,

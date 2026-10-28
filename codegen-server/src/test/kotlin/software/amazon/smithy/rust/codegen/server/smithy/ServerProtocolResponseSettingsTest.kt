@@ -34,7 +34,12 @@ internal class ServerProtocolResponseSettingsTest {
     @Test
     fun `protocol flags are independent and unrelated protocol settings are preserved`() {
         for (spec in listOf("awsJson1_0", "awsJson1_1")) {
-            val other = if (spec == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
+            val other =
+                if (spec == "awsJson1_0") {
+                    "awsJson1_1"
+                } else {
+                    "awsJson1_0"
+                }
             val settings =
                 settings(
                     """{"protocols":{"aws.protocols#$spec":{"responseBindings":"smithy-specs"},"aws.protocols#$other":{"responseBindings":"historical"},"common":{"otherSetting":1},"aws.protocols#restJson1":{"responseBindings":"smithy-specs"}}}""",

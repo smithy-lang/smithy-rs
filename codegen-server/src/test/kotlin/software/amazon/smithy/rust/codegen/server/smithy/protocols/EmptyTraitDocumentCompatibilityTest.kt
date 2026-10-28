@@ -56,7 +56,14 @@ internal class EmptyTraitDocumentCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     // Override inherited RUSTFLAGS so a caller's lint bypass cannot weaken this regression.
                     command = { path -> "cargo test --quiet --lib".runWithWarnings(path) },
                 ),

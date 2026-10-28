@@ -48,7 +48,12 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                         "Json11ErrorContentType" -> "application/x-amz-json-1.1"
                         else -> "application/cbor"
                     }
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val streamHandler =
                     if (isRest) {
                         """

@@ -204,7 +204,11 @@ val commonCodegenTests =
         ).flatMap {
             val versions = it.bothHttpVersions()
             // Each schema protocol fixture already has a generated-serde HTTP 0.x counterpart.
-            if (it.module.endsWith("_schema")) versions.filterNot { version -> version.module.endsWith("-http0x") } else versions
+            if (it.module.endsWith("_schema")) {
+                versions.filterNot { version -> version.module.endsWith("-http0x") }
+            } else {
+                versions
+            }
         }.map {
             if (it.module.endsWith("-http0x")) {
                 // Generated serde projections must disable schema serde, which otherwise enables HTTP 1.x.
@@ -227,14 +231,26 @@ val commonCodegenTests =
                 *listOf("historical", "specs").map { mode ->
                     CodegenTest(
                         "smithy.rust.codegen.test.multiprotocol#MultiProtocolService",
-                        "multi-protocol-server-sdk${if (mode == "specs") "-specs" else ""}",
+                        "multi-protocol-server-sdk${if (mode == "specs") {
+                            "-specs"
+                        } else {
+                            ""
+                        }}",
                         imports =
                             listOf(
                                 "custom-test-models/multi-protocol-compat/multi-protocol-common.smithy",
                                 "custom-test-models/multi-protocol-compat/multi-protocol-server.smithy",
                                 "custom-test-models/multi-protocol-compat/multi-protocol-awsjson-responses-$mode.smithy",
                             ),
-                        extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "${if (mode == "specs") "smithy-specs" else "historical"}"}, "aws.protocols#awsJson1_1": {"responseBindings": "${if (mode == "specs") "smithy-specs" else "historical"}"}}}""",
+                        extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "${if (mode == "specs") {
+                            "smithy-specs"
+                        } else {
+                            "historical"
+                        }}"}, "aws.protocols#awsJson1_1": {"responseBindings": "${if (mode == "specs") {
+                            "smithy-specs"
+                        } else {
+                            "historical"
+                        }}"}}}""",
                         extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
                     )
                 }.toTypedArray(),
@@ -249,7 +265,15 @@ val commonCodegenTests =
                                 "custom-test-models/multi-protocol-compat/multi-protocol-document-server.smithy",
                                 "custom-test-models/multi-protocol-compat/multi-protocol-awsjson-responses-$mode.smithy",
                             ),
-                        extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "${if (mode == "specs") "smithy-specs" else "historical"}"}, "aws.protocols#awsJson1_1": {"responseBindings": "${if (mode == "specs") "smithy-specs" else "historical"}"}}}""",
+                        extraConfig = """, "customizationConfig": {"protocols": {"aws.protocols#awsJson1_0": {"responseBindings": "${if (mode == "specs") {
+                            "smithy-specs"
+                        } else {
+                            "historical"
+                        }}"}, "aws.protocols#awsJson1_1": {"responseBindings": "${if (mode == "specs") {
+                            "smithy-specs"
+                        } else {
+                            "historical"
+                        }}"}}}""",
                         extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
                     )
                 }.toTypedArray(),
@@ -460,7 +484,11 @@ val eventStreamBenchmarkTests =
         listOf(false, true).map { schemaSerde ->
             CodegenTest(
                 "benchmark.eventstream#BenchmarkService",
-                "event-stream-bench-$protocol-${if (schemaSerde) "schema" else "legacy"}",
+                "event-stream-bench-$protocol-${if (schemaSerde) {
+                    "schema"
+                } else {
+                    "legacy"
+                }}",
                 imports =
                     listOf(
                         "benchmarks/event-stream/model/common.smithy",
@@ -507,7 +535,11 @@ val compatibilityProtocolTests =
             listOf(false, true).map { schemaSerde ->
                 CodegenTest(
                     service,
-                    "compat-$model-${if (schemaSerde) "schema" else "generated"}",
+                    "compat-$model-${if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "generated"
+                    }}",
                     imports = listOf("custom-test-models/$model.smithy"),
                     extraCodegenConfig = """"http-1x": true, "schemaSerde": $schemaSerde""",
                 )
@@ -519,7 +551,11 @@ val compatibilityProtocolTests =
                 val test =
                     CodegenTest(
                         "test#Example",
-                        "compat-rpc-response-bindings-$protocol-${if (schemaSerde) "schema" else "generated"}",
+                        "compat-rpc-response-bindings-$protocol-${if (schemaSerde) {
+                            "schema"
+                        } else {
+                            "generated"
+                        }}",
                         imports =
                             listOf(
                                 "custom-test-models/server-response-test-options.smithy",

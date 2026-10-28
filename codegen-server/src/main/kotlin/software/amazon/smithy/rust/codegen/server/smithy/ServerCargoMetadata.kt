@@ -62,14 +62,24 @@ internal fun ServerRustSettings.manifestSettingsMetadata(
         }.filterValues { it.isNotEmpty() }
     val customization =
         (customizationConfig?.metadataMap().orEmpty() - ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY) +
-            (if (protocols.isEmpty()) emptyMap() else mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols))
+            (
+                if (protocols.isEmpty()) {
+                    emptyMap()
+                } else {
+                    mapOf(ServerRustSettings.PROTOCOLS_CUSTOMIZATION_KEY to protocols)
+                }
+            )
     val metadata =
         buildMap {
             // Schema server crates can serve several protocols, so replace the
             // core generator's single-protocol scalar with the served protocol array.
             put("smithy", mapOf("protocol" to servedProtocols.map(ShapeId::toString)))
-            if (codegen.isNotEmpty()) put("codegen", codegen)
-            if (customization.isNotEmpty()) put("customizationConfig", customization)
+            if (codegen.isNotEmpty()) {
+                put("codegen", codegen)
+            }
+            if (customization.isNotEmpty()) {
+                put("customizationConfig", customization)
+            }
         }
     return mapOf("package" to mapOf("metadata" to metadata))
 }

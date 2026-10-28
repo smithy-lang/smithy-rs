@@ -161,10 +161,14 @@ class ServerInstantiator(
             }
         }
         // Parenthesize negative literals so conversion applies to the signed value.
-        if (convert && shape is NumberShape) writer.rust("(")
+        if (convert && shape is NumberShape) {
+            writer.rust("(")
+        }
         super.render(writer, shape, data, headers, ctx)
         if (convert) {
-            if (shape is NumberShape) writer.rust(")")
+            if (shape is NumberShape) {
+                writer.rust(")")
+            }
             writer.rust(""".try_into().expect("this is only used in tests")""")
         }
     }
@@ -253,7 +257,11 @@ class ServerInstantiator(
                     withBlock("${symbolProvider.toMemberName(member)}:", ",") {
                         if (model.expectShape(member.target) is DocumentShape) {
                             val customized = customWritable.generate(member)
-                            if (customized != null) customized(this) else rustTemplate("#{None}", *RuntimeType.preludeScope)
+                            if (customized != null) {
+                                customized(this)
+                            } else {
+                                rustTemplate("#{None}", *RuntimeType.preludeScope)
+                            }
                         } else {
                             render(this, member, Node.nullNode(), mapOf(), ctx)
                         }
@@ -267,7 +275,9 @@ class ServerInstantiator(
             writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
             members(writer)
             writer.rust(".build()")
-            if (builderKindBehavior.hasFallibleBuilder(shape)) writer.rust(".unwrap()")
+            if (builderKindBehavior.hasFallibleBuilder(shape)) {
+                writer.rust(".unwrap()")
+            }
         }
     }
 

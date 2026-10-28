@@ -83,10 +83,18 @@ internal class NonSchemaBodyCollectionTest {
                     val expected =
                         """
                         structured_under: 200 [("content-length", "16"), ("content-type", "application/json")] {"message":"ok"}
-                        structured_over: ${if (maxBytes > 0) rejection else """200 [("content-length", "35"), ("content-type", "application/json")] {"message":"a much longer message"}"""}
+                        structured_over: ${if (maxBytes > 0) {
+                            rejection
+                        } else {
+                            """200 [("content-length", "35"), ("content-type", "application/json")] {"message":"a much longer message"}"""
+                        }}
                         structured_read_error: $rejection
                         payload_under: 200 [("content-length", "10"), ("content-type", "application/json")] {"size":2}
-                        payload_over: ${if (maxBytes > 0) rejection else """200 [("content-length", "11"), ("content-type", "application/json")] {"size":34}"""}
+                        payload_over: ${if (maxBytes > 0) {
+                            rejection
+                        } else {
+                            """200 [("content-length", "11"), ("content-type", "application/json")] {"size":34}"""
+                        }}
                         payload_read_error: $rejection
                         streaming_over: 200 [("content-length", "11"), ("content-type", "application/json")] {"size":34}
                         """.trimIndent() + "\n"

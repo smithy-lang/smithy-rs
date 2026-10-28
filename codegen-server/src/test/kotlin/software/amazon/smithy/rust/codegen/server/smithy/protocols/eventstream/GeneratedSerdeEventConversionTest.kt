@@ -32,7 +32,11 @@ internal class GeneratedSerdeEventConversionTest {
             """
             ${'$'}version: "2"
             namespace test.eventfallibility
-            use ${if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"}#$protocol
+            use ${if (protocol == "rpcv2Cbor") {
+                "smithy.protocols"
+            } else {
+                "aws.protocols"
+            }}#$protocol
             @$protocol service Events { version: "1", operations: [Listen] }
             @http(method: "POST", uri: "/listen")
             operation Listen { input := { @required @httpPayload events: EventStream }, output := {} }

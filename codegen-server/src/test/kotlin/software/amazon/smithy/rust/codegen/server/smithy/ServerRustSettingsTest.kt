@@ -113,7 +113,12 @@ internal class ServerRustSettingsTest {
                 val settings =
                     settings(listOf(schemaSerde, """"http-1x": $http1x""").filter { it.isNotEmpty() }.joinToString(", "))
                 settings.codegenConfig.http1x shouldBe http1x
-                settings.runtimeConfig.httpVersion shouldBe if (http1x) HttpVersion.Http1x else HttpVersion.Http0x
+                settings.runtimeConfig.httpVersion shouldBe
+                    if (http1x) {
+                        HttpVersion.Http1x
+                    } else {
+                        HttpVersion.Http0x
+                    }
             }
         }
     }
@@ -223,7 +228,9 @@ internal class ServerRustSettingsTest {
         val handler =
             object : Handler() {
                 override fun publish(record: LogRecord) {
-                    if (Thread.currentThread() == testThread && record.level == Level.WARNING) warnings.add(record.message)
+                    if (Thread.currentThread() == testThread && record.level == Level.WARNING) {
+                        warnings.add(record.message)
+                    }
                 }
 
                 override fun flush() = Unit

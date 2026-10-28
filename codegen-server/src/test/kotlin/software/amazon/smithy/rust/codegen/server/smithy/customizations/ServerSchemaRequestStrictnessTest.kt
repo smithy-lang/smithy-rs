@@ -137,7 +137,12 @@ internal class ServerSchemaRequestStrictnessTest {
                     (b"\xbf\xff\xff", false),
                 """
                 }
-            val uri = if (protocol == "rpcv2Cbor") "/service/StrictService/operation/Read" else "/read"
+            val uri =
+                if (protocol == "rpcv2Cbor") {
+                    "/service/StrictService/operation/Read"
+                } else {
+                    "/read"
+                }
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode()),
@@ -157,8 +162,16 @@ internal class ServerSchemaRequestStrictnessTest {
                                     counter.fetch_add(1, Ordering::SeqCst);
                                     async { crate::output::ReadOutput::builder().build() }
                                 })
-                                ${if (protocol == "restXml") ".payload(|_: crate::input::PayloadInput| async { crate::output::PayloadOutput::builder().build() })" else ""}
-                                ${if (protocol == "restJson1") ".greedy(|input: crate::input::GreedyInput| async move { assert!([\"\", \"/a//b/\"].contains(&input.key.as_str())); #{Ok}::<_, crate::error::GreedyError>(crate::output::GreedyOutput::builder().build()) })" else ""}
+                                ${if (protocol == "restXml") {
+                                ".payload(|_: crate::input::PayloadInput| async { crate::output::PayloadOutput::builder().build() })"
+                            } else {
+                                ""
+                            }}
+                                ${if (protocol == "restJson1") {
+                                ".greedy(|input: crate::input::GreedyInput| async move { assert!([\"\", \"/a//b/\"].contains(&input.key.as_str())); #{Ok}::<_, crate::error::GreedyError>(crate::output::GreedyOutput::builder().build()) })"
+                            } else {
+                                ""
+                            }}
                                 .build_unchecked();
                             for (body, valid) in [${cases.replace("#", "##")}] {
                                 let before = calls.load(Ordering::SeqCst);

@@ -63,7 +63,12 @@ internal class ServerResponseBindingsTest {
         bindings: String?,
     ) {
         for (schemaSerde in listOf(false, true)) {
-            val versions = if (schemaSerde) listOf(HttpTestVersion.HTTP_1_X) else listOf(HttpTestVersion.HTTP_0_X, HttpTestVersion.HTTP_1_X)
+            val versions =
+                if (schemaSerde) {
+                    listOf(HttpTestVersion.HTTP_1_X)
+                } else {
+                    listOf(HttpTestVersion.HTTP_0_X, HttpTestVersion.HTTP_1_X)
+                }
             for (version in versions) {
                 checkResponses(protocol, bindings, schemaSerde, version)
             }
@@ -83,8 +88,18 @@ internal class ServerResponseBindingsTest {
         val settings =
             ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().toBuilder()
         if (bindings != null) {
-            val other = if (protocol == "awsJson1_0") "awsJson1_1" else "awsJson1_0"
-            val otherBindings = if (bindings == "smithy-specs") "historical" else "smithy-specs"
+            val other =
+                if (protocol == "awsJson1_0") {
+                    "awsJson1_1"
+                } else {
+                    "awsJson1_0"
+                }
+            val otherBindings =
+                if (bindings == "smithy-specs") {
+                    "historical"
+                } else {
+                    "smithy-specs"
+                }
             settings.withMember(
                 "customizationConfig",
                 Node.parse("""{"protocols":{"aws.protocols#$protocol":{"responseBindings":"$bindings"},"aws.protocols#$other":{"responseBindings":"$otherBindings"}}}"""),
@@ -95,10 +110,25 @@ internal class ServerResponseBindingsTest {
         // Codegen with generated serde (schemaSerde = false) ignores the setting and always behaves as mainline.
         val historicalAwsJson = protocol.startsWith("awsJson") && (!schemaSerde || bindings != "smithy-specs")
         val emitHeaders = isRest || historicalAwsJson
-        val outputStatus = if (emitHeaders) 201 else 200
+        val outputStatus =
+            if (emitHeaders) {
+                201
+            } else {
+                200
+            }
         val honorErrorStatus = isRest || protocol == "rpcv2Cbor" || historicalAwsJson
-        val clientStatus = if (honorErrorStatus) 422 else 400
-        val serverStatus = if (honorErrorStatus) 503 else 500
+        val clientStatus =
+            if (honorErrorStatus) {
+                422
+            } else {
+                400
+            }
+        val serverStatus =
+            if (honorErrorStatus) {
+                503
+            } else {
+                500
+            }
         val marker =
             when (protocol) {
                 "awsJson1_0" -> "protocol::aws_json_10::AwsJson1_0"
@@ -171,8 +201,18 @@ internal class ServerResponseBindingsTest {
                 } else {
                     """let document: #{Json}::Value = #{Json}::from_slice(&body).unwrap();"""
                 }
-            val respondOutput = if (schemaSerde) "send(#{Ok}(output)).await" else "#{Server}::response::IntoResponse::<#{Marker}>::into_response(output)"
-            val respondError = if (schemaSerde) "send(#{Err}(error)).await" else "#{Server}::response::IntoResponse::<#{Marker}>::into_response(error)"
+            val respondOutput =
+                if (schemaSerde) {
+                    "send(#{Ok}(output)).await"
+                } else {
+                    "#{Server}::response::IntoResponse::<#{Marker}>::into_response(output)"
+                }
+            val respondError =
+                if (schemaSerde) {
+                    "send(#{Err}(error)).await"
+                } else {
+                    "#{Server}::response::IntoResponse::<#{Marker}>::into_response(error)"
+                }
             val serviceRequest =
                 when (protocol) {
                     "restJson1", "restXml" -> """.method("PUT").uri("/things/n").body(#{Server}::body::Body::empty())"""
@@ -214,7 +254,12 @@ internal class ServerResponseBindingsTest {
                     check_response(response, $status, #{None}, #{Some}("$name")).await;
                     """
                 }
-            val codes = if (isRest) "[#{None}, #{Some}(299)]" else "[#{None}, #{Some}(299), #{Some}(-1)]"
+            val codes =
+                if (isRest) {
+                    "[#{None}, #{Some}(299)]"
+                } else {
+                    "[#{None}, #{Some}(299), #{Some}(-1)]"
+                }
             val errorType =
                 if (protocol == "awsJson1_1") {
                     "name.to_owned()"
@@ -236,11 +281,27 @@ internal class ServerResponseBindingsTest {
                             error: #{Option}<&str>,
                         ) {
                             assert_eq!(response.status().as_u16(), expected_status);
-                            assert_eq!(response.headers().get("etag").map(|h| h.to_str().unwrap()), ${if (emitHeaders) """#{Some}("\"abc\"")""" else "#{None}"});
-                            assert_eq!(response.headers().get_all("etag").iter().count(), ${if (emitHeaders) 1 else 0});
-                            assert_eq!(response.headers().get("x-meta-tag").map(|h| h.to_str().unwrap()), ${if (emitHeaders) """#{Some}("v")""" else "#{None}"});
+                            assert_eq!(response.headers().get("etag").map(|h| h.to_str().unwrap()), ${if (emitHeaders) {
+                            """#{Some}("\"abc\"")"""
+                        } else {
+                            "#{None}"
+                        }});
+                            assert_eq!(response.headers().get_all("etag").iter().count(), ${if (emitHeaders) {
+                            1
+                        } else {
+                            0
+                        }});
+                            assert_eq!(response.headers().get("x-meta-tag").map(|h| h.to_str().unwrap()), ${if (emitHeaders) {
+                            """#{Some}("v")"""
+                        } else {
+                            "#{None}"
+                        }});
                             assert_eq!(response.headers().get("content-type").unwrap(), "$contentType");
-                            ${if (protocol == "rpcv2Cbor") """assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");""" else ""}
+                            ${if (protocol == "rpcv2Cbor") {
+                            """assert_eq!(response.headers().get("smithy-protocol").unwrap(), "rpc-v2-cbor");"""
+                        } else {
+                            ""
+                        }}
                             let length = response.headers().get("content-length").unwrap().to_str().unwrap().parse::<usize>().unwrap();
                             #{CollectBody}
                             assert_eq!(length, body.len());
@@ -267,7 +328,11 @@ internal class ServerResponseBindingsTest {
                                 code,
                             };
                             let response = $respondOutput;
-                            let expected_status = ${if (isRest) "code.unwrap_or(201) as u16" else "$outputStatus"};
+                            let expected_status = ${if (isRest) {
+                            "code.unwrap_or(201) as u16"
+                        } else {
+                            "$outputStatus"
+                        }};
                             check_response(response, expected_status, code, #{None}).await;
                         }
                         $errorChecks

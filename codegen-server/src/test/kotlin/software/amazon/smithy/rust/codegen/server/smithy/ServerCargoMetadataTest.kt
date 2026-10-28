@@ -310,11 +310,20 @@ internal class ServerCargoMetadataTest {
                 .associateBy { it.name }
         val defaultProperties =
             defaults.keys.map {
-                if (it == ServerCodegenConfig.HTTP_1X_CONFIG_KEY) "http1x" else it
+                if (it == ServerCodegenConfig.HTTP_1X_CONFIG_KEY) {
+                    "http1x"
+                } else {
+                    it
+                }
             }.toSet()
         defaultProperties shouldBe settingFields.keys
         defaults.forEach { (key, wrapper) ->
-            val property = if (key == ServerCodegenConfig.HTTP_1X_CONFIG_KEY) "http1x" else key as String
+            val property =
+                if (key == ServerCodegenConfig.HTTP_1X_CONFIG_KEY) {
+                    "http1x"
+                } else {
+                    key as String
+                }
             val actualDefault = settingFields.getValue(property).apply { isAccessible = true }.get(defaultConfig)
             val recordedDefault = wrapper!!.javaClass.getDeclaredField("value").apply { isAccessible = true }.get(wrapper)
             recordedDefault shouldBe actualDefault

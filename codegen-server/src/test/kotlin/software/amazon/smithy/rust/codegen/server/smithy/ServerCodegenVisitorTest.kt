@@ -48,10 +48,21 @@ class ServerCodegenVisitorTest {
             use aws.protocols#restJson1
             use aws.protocols#awsJson1_1
             @restJson1
-            ${if (secondaryProtocol) "@awsJson1_1" else ""}
+            ${if (secondaryProtocol) {
+                "@awsJson1_1"
+            } else {
+                ""
+            }}
             service Example { version: "1", operations: [] }
             """.asSmithyModel()
-        val invalidProtocol = ShapeId.from("aws.protocols#${if (secondaryProtocol) "awsJson1_1" else "restJson1"}")
+        val invalidProtocol =
+            ShapeId.from(
+                "aws.protocols#${if (secondaryProtocol) {
+                    "awsJson1_1"
+                } else {
+                    "restJson1"
+                }}",
+            )
         val decorator =
             object : ServerCodegenDecorator {
                 override val name = "Non-server protocol factory"

@@ -49,7 +49,14 @@ internal class AwsJson10StrictCompatibilityTest {
                     additionalSettings =
                         ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
                     cargoCommand = "cargo test --quiet --lib --tests",
-                    overrideTestDir = observations.resolve("generated-${if (schemaSerde) "schema" else "legacy"}").toFile(),
+                    overrideTestDir =
+                        observations.resolve(
+                            "generated-${if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            }}",
+                        ).toFile(),
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
             ) { context, crate ->
@@ -238,7 +245,14 @@ internal class AwsJson11StrictCompatibilityTest {
                         additionalSettings =
                             ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
                         cargoCommand = "cargo test --quiet --lib --tests",
-                        overrideTestDir = observations.resolve("generated-${if (schemaSerde) "schema" else "legacy"}").toFile(),
+                        overrideTestDir =
+                            observations.resolve(
+                                "generated-${if (schemaSerde) {
+                                    "schema"
+                                } else {
+                                    "legacy"
+                                }}",
+                            ).toFile(),
                     ),
                     testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
                 ) { context, crate ->
@@ -343,7 +357,12 @@ internal class AwsJson11StrictCompatibilityTest {
                 for (row in legacy.lineSequence().drop(1).filter { it.isNotBlank() }) {
                     val columns = row.split('\t')
                     // Fresh mainline at 9267f0e25 honors this model's HTTP status traits.
-                    val expected = if (columns[0].startsWith("Fail/")) 409 else 201
+                    val expected =
+                        if (columns[0].startsWith("Fail/")) {
+                            409
+                        } else {
+                            201
+                        }
                     assertEquals(expected, columns[1].toInt(), "Legacy fixture status: ${columns[0]}")
                 }
             },

@@ -38,7 +38,11 @@ internal class StreamingBlobInputTest {
                 ${'$'}version: "2"
                 namespace test.upload
                 @smithy.protocols#rpcv2Cbor
-                ${if (schema) "@aws.protocols#restJson1" else ""}
+                ${if (schema) {
+                    "@aws.protocols#restJson1"
+                } else {
+                    ""
+                }}
                 service Uploads { version: "1", operations: [Upload, OptionalOnly] }
                 @http(method: "POST", uri: "/upload")
                 operation Upload {
@@ -78,7 +82,11 @@ internal class StreamingBlobInputTest {
                         rustTemplate(
                             """
                             use #{Tokio}::io::{AsyncReadExt, AsyncWriteExt};
-                            for mode in ${if (schema) "0..3" else "0..2"} {
+                            for mode in ${if (schema) {
+                                "0..3"
+                            } else {
+                                "0..2"
+                            }} {
                                 let entered = ::std::sync::Arc::new(#{Tokio}::sync::Notify::new());
                                 let handler_entered = entered.clone();
                                 let completed = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));

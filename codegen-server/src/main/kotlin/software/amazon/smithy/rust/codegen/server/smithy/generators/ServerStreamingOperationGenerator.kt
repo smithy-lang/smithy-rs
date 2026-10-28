@@ -311,9 +311,13 @@ class ServerStreamingOperationGenerator(
                 // Event streams contain setup statements and need a block. A blob is already
                 // an expression; extra braces trigger unused_braces in unformatted projections.
                 val needsBlock = streamingMember.isEventStream(model)
-                if (needsBlock) rust("{")
+                if (needsBlock) {
+                    rust("{")
+                }
                 streamingBody(streamingMember)(this)
-                if (needsBlock) rust("}")
+                if (needsBlock) {
+                    rust("}")
+                }
             }
         return writable {
             rustTemplate(
@@ -382,7 +386,11 @@ class ServerStreamingOperationGenerator(
                     marshaller,
                     error_marshaller,
                     protocol,
-                    #{InitialResponsePolicy}::${if (sendInitialResponse) "Send" else "Omit"},
+                    #{InitialResponsePolicy}::${if (sendInitialResponse) {
+                    "Send"
+                } else {
+                    "Omit"
+                }},
                 ) {
                     #{Ok}(body) => body,
                     #{Err}(err) => {

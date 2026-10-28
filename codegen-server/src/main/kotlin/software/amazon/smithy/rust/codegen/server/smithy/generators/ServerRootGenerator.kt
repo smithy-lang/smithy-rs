@@ -265,7 +265,11 @@ open class ServerRootGenerator(
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
             //! let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
-            //! let builder: $builderName<${if (codegenContext.usesSchemaHttpSerde) "_, _, _" else "#{Body}, _, _, _"}> = $serviceName::builder(config);
+            //! let builder: $builderName<${if (codegenContext.usesSchemaHttpSerde) {
+                "_, _, _"
+            } else {
+                "#{Body}, _, _, _"
+            }}> = $serviceName::builder(config);
             //! ```
             //!
             //! Check out [`crate::server::plugin`] to learn more about plugins.
@@ -411,7 +415,11 @@ open class ServerRootGenerator(
                 $configErrorReExport
                 ${serviceName}Builder,
                 MissingOperationsError,
-                ${if (codegenContext.usesSchemaHttpSerde) "BuildError," else ""}
+                ${if (codegenContext.usesSchemaHttpSerde) {
+                "BuildError,"
+            } else {
+                ""
+            }}
             };
             """,
         )

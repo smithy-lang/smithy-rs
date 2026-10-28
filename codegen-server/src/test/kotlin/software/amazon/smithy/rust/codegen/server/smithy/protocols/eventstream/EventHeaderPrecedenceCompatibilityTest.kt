@@ -27,7 +27,12 @@ class EventHeaderPrecedenceCompatibilityTest {
             listOf("awsJson1_1", "AwsJson1_1", """br##"{"from":"bob","flag":true,"text":"body"}"##""", """br##"{"flag":"invalid"}"##"""),
             listOf("rpcv2Cbor", "RpcV2Cbor", """b"\xa3\x64from\x63bob\x64flag\xf5\x64text\x64body" """, """b"\xa1\x64flag\x67invalid" """),
         )) {
-            val namespace = if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"
+            val namespace =
+                if (protocol == "rpcv2Cbor") {
+                    "smithy.protocols"
+                } else {
+                    "aws.protocols"
+                }
             val model =
                 """
                 namespace test

@@ -168,7 +168,11 @@ internal class ServerProtocolTestHelpersTest {
                 },
             ),
             testCoverage =
-                if (schemaSerde) HttpTestType.Only(HttpTestVersion.HTTP_1_X) else HttpTestType.ALL,
+                if (schemaSerde) {
+                    HttpTestType.Only(HttpTestVersion.HTTP_1_X)
+                } else {
+                    HttpTestType.ALL
+                },
         ) { context, crate ->
             crate.testModule {
                 unitTest("an_empty_whitelist_accepts_an_empty_header_map") {

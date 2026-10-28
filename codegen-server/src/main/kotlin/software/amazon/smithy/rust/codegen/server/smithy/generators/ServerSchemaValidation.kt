@@ -28,7 +28,9 @@ internal fun validateSchemaCollections(
                 is MapShape -> listOf(shape.key, shape.value)
                 else -> return // Structure and union boundaries have their own schema references.
             }
-        if (shape.id in finished) return
+        if (shape.id in finished) {
+            return
+        }
         if (!active.add(shape.id)) {
             throw CodegenException("Schema serde does not yet support collection-only recursion: ${(active.toList() + shape.id).joinToString(" -> ")}")
         }

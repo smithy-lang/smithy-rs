@@ -54,8 +54,18 @@ internal class RestXmlEventStreamErrorEnvelopeTest {
             """.asSmithyModel(smithyVersion = "2")
 
         // (body, outcome): `message` for a decoded error, `none` for one with no message, `rejected`.
-        val wrapped = if (noErrorWrapping) "rejected" else "failed"
-        val bare = if (noErrorWrapping) "failed" else "rejected"
+        val wrapped =
+            if (noErrorWrapping) {
+                "rejected"
+            } else {
+                "failed"
+            }
+        val bare =
+            if (noErrorWrapping) {
+                "failed"
+            } else {
+                "rejected"
+            }
         val cases =
             listOf(
                 "<ErrorResponse><Error><message>failed</message></Error></ErrorResponse>" to wrapped,

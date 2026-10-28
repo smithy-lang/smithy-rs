@@ -56,9 +56,22 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
         val snapshots = Files.createTempDirectory("cbor-streaming-blob-")
         for ((schemaSerde, shared) in listOf(false to false, true to false, true to true)) {
             val model =
-                (if (shared) modelText.replace("@rpcv2Cbor", "@rpcv2Cbor @aws.protocols#restJson1") else modelText)
+                (
+                    if (shared) {
+                        modelText.replace("@rpcv2Cbor", "@rpcv2Cbor @aws.protocols#restJson1")
+                    } else {
+                        modelText
+                    }
+                )
                     .asSmithyModel()
-            val snapshot = snapshots.resolve(if (shared) "shared.txt" else "$schemaSerde.txt")
+            val snapshot =
+                snapshots.resolve(
+                    if (shared) {
+                        "shared.txt"
+                    } else {
+                        "$schemaSerde.txt"
+                    },
+                )
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
@@ -229,7 +242,11 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                 ${'$'}version: "2"
                 namespace test.streamingblob
                 @aws.protocols#restJson1
-                ${if (shared) "@smithy.protocols#rpcv2Cbor" else ""}
+                ${if (shared) {
+                    "@smithy.protocols#rpcv2Cbor"
+                } else {
+                    ""
+                }}
                 service Downloads { version: "1", operations: [Download, Upload] }
                 @http(method: "POST", uri: "/download")
                 operation Download {
@@ -244,7 +261,14 @@ internal class RpcV2CborStreamingBlobCompatibilityTest {
                 }
                 @streaming blob StreamingBlob
                 """.asSmithyModel()
-            val snapshot = snapshots.resolve(if (shared) "shared.txt" else "$schemaSerde.txt")
+            val snapshot =
+                snapshots.resolve(
+                    if (shared) {
+                        "shared.txt"
+                    } else {
+                        "$schemaSerde.txt"
+                    },
+                )
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(

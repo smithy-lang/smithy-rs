@@ -382,8 +382,18 @@ internal class ServerSchemaRpcPayloadTest {
                 val oldParts = old.split('\t')
                 val currentParts = current.split('\t')
                 val isError = index % 3 == 2
-                oldParts[0] shouldBe if (isError) "409" else "200"
-                currentParts[0] shouldBe if (isError) "400" else "200"
+                oldParts[0] shouldBe
+                    if (isError) {
+                        "409"
+                    } else {
+                        "200"
+                    }
+                currentParts[0] shouldBe
+                    if (isError) {
+                        "400"
+                    } else {
+                        "200"
+                    }
                 currentParts[1] shouldBe oldParts[1].replace(""", ("x-h", "hv")""", "")
                 ObjectNode.parse(currentParts[2]) shouldBe ObjectNode.parse(oldParts[2])
             }

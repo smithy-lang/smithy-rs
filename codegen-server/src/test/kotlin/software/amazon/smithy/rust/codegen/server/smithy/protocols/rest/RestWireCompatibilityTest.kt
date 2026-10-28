@@ -52,7 +52,12 @@ internal class RestBodyBindingFilteringTest {
         val requests =
             model.expectShape(ShapeId.from("test.bodybindings#CreateOrder"))
                 .expectTrait(HttpRequestTestsTrait::class.java).getTestCasesFor(AppliesTo.SERVER)
-        val mediaType = if (protocol == "restJson1") "application/json" else "application/xml"
+        val mediaType =
+            if (protocol == "restJson1") {
+                "application/json"
+            } else {
+                "application/xml"
+            }
         val cases =
             requests.joinToString(",\n") {
                 "(${it.body.get().dq()}, ${it.headers.containsKey("x-tenant-id")})"
@@ -168,7 +173,14 @@ internal class CollectionTimestampFormatCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     cargoCommand = "cargo test --quiet --lib -- --nocapture",
                 ),
                 testCoverage = HttpTestType.Default,
@@ -184,7 +196,11 @@ internal class CollectionTimestampFormatCompatibilityTest {
                                         epochs: input.epochs, nested: input.nested, sparse: input.sparse,
                                         defaults: input.defaults,
                                         nested_mapping: input.nested_mapping,
-                                        ${if (xml) "" else "sparse_mapping: input.sparse_mapping,"}
+                                        ${if (xml) {
+                                ""
+                            } else {
+                                "sparse_mapping: input.sparse_mapping,"
+                            }}
                                     }
                                 }).build().unwrap();
                             let cases = [
@@ -193,7 +209,11 @@ internal class CollectionTimestampFormatCompatibilityTest {
                             let mut records = #{String}::new();
                             for (payload, expected) in cases {
                                 let request = #{Http}::Request::post("/echo")
-                                    .header("content-type", ${if (xml) "application/xml".dq() else "application/json".dq()})
+                                    .header("content-type", ${if (xml) {
+                                "application/xml".dq()
+                            } else {
+                                "application/json".dq()
+                            }})
                                     .body(#{Server}::body::to_boxed_sync(payload)).unwrap();
                                 let response = #{Tower}::ServiceExt::oneshot(app.clone(), request).await.unwrap();
                                 let status = response.status().as_u16();
@@ -249,7 +269,14 @@ internal class PrefixHeaderCompatibilityTest {
         mediaTypes: Boolean = false,
     ) {
         for (protocol in listOf("restJson1", "restXml")) {
-            val model = restWireModel("prefix-headers-$protocol-${if (mediaTypes) "media" else "plain"}")
+            val model =
+                restWireModel(
+                    "prefix-headers-$protocol-${if (mediaTypes) {
+                        "media"
+                    } else {
+                        "plain"
+                    }}",
+                )
             val requests =
                 model.expectShape(ShapeId.from("test.prefixwhitespace#Read"))
                     .expectTrait(HttpRequestTestsTrait::class.java).getTestCasesFor(AppliesTo.SERVER)
@@ -326,7 +353,11 @@ internal class PrefixHeaderCompatibilityTest {
                                 let body = #{BodyUtil}::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
                                 println!("$protocol schemaSerde=$schemaSerde invalid {values:?}: {status} {headers:?} {body:?}");
                                 assert_eq!(status, 400);
-                                assert_eq!(headers["content-type"], ${if (protocol == "restJson1") "\"application/json\"" else "\"application/xml\""});
+                                assert_eq!(headers["content-type"], ${if (protocol == "restJson1") {
+                                    "\"application/json\""
+                                } else {
+                                    "\"application/xml\""
+                                }});
                                 assert_eq!(body.as_ref(), b"{}");
                                 if "$protocol" == "restJson1" {
                                     assert_eq!(headers["x-amzn-errortype"], "SerializationException");

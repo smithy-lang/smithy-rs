@@ -56,7 +56,14 @@ internal class NestedCollectionCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     cargoCommand = "cargo test --quiet --lib -- --nocapture",
                 ),
                 testCoverage = HttpTestType.Default,
@@ -91,7 +98,11 @@ internal class NestedCollectionCompatibilityTest {
                                 let record = format!("{name}: {status} {headers:?} {}\n", ::std::str::from_utf8(&body).unwrap());
                                 println!("{record}");
                                 records.push_str(&record);
-                                ${if (!schemaSerde) "assert_eq!(status, 200);" else ""}
+                                ${if (!schemaSerde) {
+                                "assert_eq!(status, 200);"
+                            } else {
+                                ""
+                            }}
                             }
                             ::std::fs::write(${snapshot.toString().dq()}, records).unwrap();
                             """,
@@ -147,7 +158,14 @@ internal class NestedCollectionCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     cargoCommand = "cargo test --quiet --lib",
                 ),
                 testCoverage = HttpTestType.Default,

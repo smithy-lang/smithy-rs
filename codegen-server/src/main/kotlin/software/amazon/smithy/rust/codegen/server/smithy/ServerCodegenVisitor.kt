@@ -401,7 +401,11 @@ open class ServerCodegenVisitor(
                 if (codegenContext.usesSchemaHttpSerde) {
                     val status =
                         shape.getTrait<software.amazon.smithy.model.traits.HttpErrorTrait>()?.code
-                            ?: if (errorTrait.isClientError) 400 else 500
+                            ?: if (errorTrait.isClientError) {
+                                400
+                            } else {
+                                500
+                            }
                     rustTemplate(
                         """
                         impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {

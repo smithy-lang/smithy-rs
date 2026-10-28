@@ -52,10 +52,26 @@ internal class ServerSchemaLegacyReplayTest {
             operation Echo { input: EchoInput, output: EchoOutput, errors: [smithy.framework#ValidationException, Failure] }
             structure EchoInput {
                 @required @httpLabel key: String
-                ${if (xml) "" else "@required"} value: ${if (xml) "String" else "ShortText"}
+                ${if (xml) {
+                ""
+            } else {
+                "@required"
+            }} value: ${if (xml) {
+                "String"
+            } else {
+                "ShortText"
+            }}
                 tags: Tags
-                later: ${if (xml) "String" else "ShortText"}
-                ${if (rpc) "" else "@httpHeader(\"x-count\")"} count: Integer
+                later: ${if (xml) {
+                "String"
+            } else {
+                "ShortText"
+            }}
+                ${if (rpc) {
+                ""
+            } else {
+                "@httpHeader(\"x-count\")"
+            }} count: Integer
             }
             @length(min: 2) string ShortText
             list Tags { member: String }
@@ -134,10 +150,18 @@ internal class ServerSchemaLegacyReplayTest {
                                 .echo(move |input: crate::input::EchoInput| {
                                     counter.lock().unwrap().push(format!("{:?}", input));
                                     async move {
-                                        if ${if (xml) "input.value.as_deref() == #{Some}(\"fail\")" else "input.value.as_str() == \"fail\""} {
+                                        if ${if (xml) {
+                                "input.value.as_deref() == #{Some}(\"fail\")"
+                            } else {
+                                "input.value.as_str() == \"fail\""
+                            }} {
                                             return #{Err}(crate::error::EchoError::Failure(crate::error::Failure { message: #{Some}("failure".into()), kind: #{Some}("custom-error".into()) }));
                                         }
-                                        #{Ok}(crate::output::EchoOutput { value: ${if (xml) "input.value" else "#{Some}(input.value.as_str().to_owned())"}, tags: input.tags, count: input.count, media: #{Some}("application/test".into()) })
+                                        #{Ok}(crate::output::EchoOutput { value: ${if (xml) {
+                                "input.value"
+                            } else {
+                                "#{Some}(input.value.as_str().to_owned())"
+                            }}, tags: input.tags, count: input.count, media: #{Some}("application/test".into()) })
                                     }
                                 })
                                 .events(|_: crate::input::EventsInput| async {
@@ -153,7 +177,11 @@ internal class ServerSchemaLegacyReplayTest {
                                 .build().unwrap();
                             let mut requests = #{Vec}::new();
                             for body in [$bodyLiterals] {
-                                requests.push(("POST", "${if (rpc) "/" else "/echo/k"}", "Replay.Echo", "$contentType", "*/*", "", body.as_bytes().to_vec()));
+                                requests.push(("POST", "${if (rpc) {
+                                "/"
+                            } else {
+                                "/echo/k"
+                            }}", "Replay.Echo", "$contentType", "*/*", "", body.as_bytes().to_vec()));
                             }
                             for (ct, accept, count, body) in [
                                 ("$contentType", "application/unsupported", "bad", "malformed"),
@@ -162,18 +190,34 @@ internal class ServerSchemaLegacyReplayTest {
                                 ("text/xml", "*/*", "", ""),
                                 ("", "*/*", "", ""),
                                 ("$contentType", "*/*", "bad", "malformed"),
-                                ("$contentType", "*/*", "bad", ${if (xml) "r##\"<EchoInput><value>x</value></EchoInput>\"##" else "r##\"{\"key\":\"k\",\"value\":\"x\"}\"##"}),
+                                ("$contentType", "*/*", "bad", ${if (xml) {
+                                "r##\"<EchoInput><value>x</value></EchoInput>\"##"
+                            } else {
+                                "r##\"{\"key\":\"k\",\"value\":\"x\"}\"##"
+                            }}),
                             ] {
-                                requests.push(("POST", "${if (rpc) "/" else "/echo/k"}", "Replay.Echo", ct, accept, count, body.as_bytes().to_vec()));
+                                requests.push(("POST", "${if (rpc) {
+                                "/"
+                            } else {
+                                "/echo/k"
+                            }}", "Replay.Echo", ct, accept, count, body.as_bytes().to_vec()));
                             }
                             requests.extend([
                                 ("GET", "/missing", "Replay.Missing", "$contentType", "*/*", "", ""),
                                 ("PUT", "/echo/k", "Replay.Echo", "$contentType", "*/*", "", ""),
-                                ("POST", "${if (rpc) "/" else "/events"}", "Replay.Events", "$contentType", "*/*", "", ""),
+                                ("POST", "${if (rpc) {
+                                "/"
+                            } else {
+                                "/events"
+                            }}", "Replay.Events", "$contentType", "*/*", "", ""),
                             ].map(|(method, uri, target, ct, accept, count, body)| (method, uri, target, ct, accept, count, body.as_bytes().to_vec())));
                             ${if (!xml) {
                                 """
-                            requests.push(("POST", "${if (rpc) "/" else "/echo/k"}", "Replay.Echo", "$contentType", "*/*", "",
+                            requests.push(("POST", "${if (rpc) {
+                                    "/"
+                                } else {
+                                    "/echo/k"
+                                }}", "Replay.Echo", "$contentType", "*/*", "",
                                 b"{\"key\":\"k\",\"value\":\"ok\",\"unknown\":\"\xff\"}".to_vec()));
                             """
                             } else {

@@ -224,7 +224,11 @@ class ServerAwsJsonProtocol(
         }
         val name = operationShape.id.name
         val alias = name.replaceFirstChar { it.uppercase() }
-        return if (alias == name) emptyList() else listOf(writable { rust("$serviceName.$alias".dq()) })
+        return if (alias == name) {
+            emptyList()
+        } else {
+            listOf(writable { rust("$serviceName.$alias".dq()) })
+        }
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr

@@ -83,7 +83,11 @@ internal class StreamingBlobHttp1GenerationTest {
                             let mut records = #{String}::new();
                             for bytes in [b"hello".to_vec(), vec![], vec![0, 255, 1]] {
                                 let output = crate::output::BlobEchoOutput {
-                                    data: ${if (service == "CborBlob") "#{Types}::Blob::new(bytes.clone())" else "#{Types}::byte_stream::ByteStream::from(bytes.clone())"},
+                                    data: ${if (service == "CborBlob") {
+                                "#{Types}::Blob::new(bytes.clone())"
+                            } else {
+                                "#{Types}::byte_stream::ByteStream::from(bytes.clone())"
+                            }},
                                 };
                                 let response = crate::protocol_serde::shape_blob_echo::ser_blob_echo_http_response(output).unwrap();
                                 let status = response.status();
@@ -133,7 +137,14 @@ internal class StreamingOutputWarningsCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     command = { path -> "cargo test --quiet --lib".runWithWarnings(path) },
                 ),
                 testCoverage = HttpTestType.Default,

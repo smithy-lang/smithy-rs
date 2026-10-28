@@ -154,7 +154,12 @@ internal class TrailingSlashLabelsCompatibilityTest {
         // Generate and exercise both generated serde services before testing schema serde.
         for (schemaSerde in listOf(false, true)) {
             for (service in protocols) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val settings =
                     ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode().toBuilder()
                 serverIntegrationTest(

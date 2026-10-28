@@ -68,7 +68,9 @@ internal class MultiProtocolServerModelTest {
     ): Int {
         var cases = 0
         Walker(model).walkShapes(service).forEach { shape ->
-            if (shape.id.namespace != serviceId.namespace) return@forEach
+            if (shape.id.namespace != serviceId.namespace) {
+                return@forEach
+            }
             shape.getTrait(HttpRequestTestsTrait::class.java).orElse(null)?.let {
                 check(it.getTestCasesFor(AppliesTo.CLIENT).isEmpty())
                 check(it.getTestCasesFor(AppliesTo.SERVER).all { test -> test.protocol in service.allTraits })
@@ -135,7 +137,14 @@ internal class MultiProtocolServerModelTest {
                     check(legacy.headers[key.value] == value.expectStringNode().value) { "Legacy header for $id" }
                 }
             }
-            check(spec.code == if (id.endsWith("RichFailureError")) 400 else 200) { "Specs status for $id" }
+            check(
+                spec.code ==
+                    if (id.endsWith("RichFailureError")) {
+                        400
+                    } else {
+                        200
+                    },
+            ) { "Specs status for $id" }
             val observedSpec = observation.expectObjectMember("smithySpecs")
             check(observedSpec.expectNumberMember("code").value.toInt() == spec.code)
             check(Node.parse(observedSpec.expectStringMember("body").value) == Node.parse(spec.body.get()))

@@ -60,7 +60,14 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
         value: Duration?,
         payload: Boolean,
     ): Writable =
-        requiredTimeout(value, if (payload) "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT" else "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT")
+        requiredTimeout(
+            value,
+            if (payload) {
+                "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT"
+            } else {
+                "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT"
+            },
+        )
 
     private fun requiredTimeout(
         value: Duration?,

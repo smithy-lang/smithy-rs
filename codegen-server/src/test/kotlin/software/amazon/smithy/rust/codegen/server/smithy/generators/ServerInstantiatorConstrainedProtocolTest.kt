@@ -178,7 +178,9 @@ internal class ServerInstantiatorConstrainedProtocolTest {
                 val error = shouldThrow<MultiVersionTestFailure> { generate() }
                 error.message shouldContain "E0062"
                 error.message shouldContain "field `body` specified more than once"
-                if (publicConstrainedTypes) error.message shouldContain "E0308"
+                if (publicConstrainedTypes) {
+                    error.message shouldContain "E0308"
+                }
             }
         }
     }

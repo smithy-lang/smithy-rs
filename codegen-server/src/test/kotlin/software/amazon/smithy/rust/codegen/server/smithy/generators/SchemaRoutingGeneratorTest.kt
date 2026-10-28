@@ -77,7 +77,11 @@ class SchemaRoutingGeneratorTest {
                     override val order: Byte = 0
 
                     override fun protocolRegistries(codegenContext: ServerCodegenContext): List<RuntimeType> =
-                        if (customProtocol) listOf(testProtocolRegistry(codegenContext, false)) else emptyList()
+                        if (customProtocol) {
+                            listOf(testProtocolRegistry(codegenContext, false))
+                        } else {
+                            emptyList()
+                        }
 
                     override fun protocols(
                         serviceId: ShapeId,
@@ -214,7 +218,12 @@ class SchemaRoutingGeneratorTest {
                             ).joinToString("\n") { (operation, method, assertion) ->
                                 val operationShape = context.model.expectShape(ShapeId.from("test#$operation"), OperationShape::class.java)
                                 val output = "crate::output::${operation}Output {}"
-                                val result = if (operationShape.errors.isEmpty()) output else "#{Ok}($output)"
+                                val result =
+                                    if (operationShape.errors.isEmpty()) {
+                                        output
+                                    } else {
+                                        "#{Ok}($output)"
+                                    }
                                 """
                                 .$method(move |input: crate::input::${operation}Input| async move {
                                     $assertion
@@ -679,7 +688,12 @@ class SchemaRoutingGeneratorTest {
                     ).build(),
                 )
             }
-            val expectedStatus = if (asNotFound == true) 404 else 405
+            val expectedStatus =
+                if (asNotFound == true) {
+                    404
+                } else {
+                    405
+                }
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(additionalSettings = settings.build()),
@@ -943,7 +957,12 @@ class SchemaRoutingGeneratorTest {
                 protocolIds.joinToString(", ") { id ->
                     "#{Schema}::shape_id!(${id.substringBefore("#").dq()}, ${id.substringAfter("#").dq()})"
                 }
-            val registrationMethod = if (bodyRouting) "body_routed" else "metadata_routed"
+            val registrationMethod =
+                if (bodyRouting) {
+                    "body_routed"
+                } else {
+                    "metadata_routed"
+                }
             val registrations =
                 protocolIds.mapIndexed { index, id ->
                     val order =

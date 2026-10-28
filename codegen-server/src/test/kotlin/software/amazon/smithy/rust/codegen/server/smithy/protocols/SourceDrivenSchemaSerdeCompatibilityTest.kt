@@ -61,11 +61,21 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
             Files.writeString(run.resolve("cases/$protocol.json"), Node.printJson(Node.arrayNode(*cases.toTypedArray())))
         }
         for (protocol in protocols) {
-            val commonFile = if (protocol == "rpc-v2-cbor") "cbor-shapes.smithy" else "bindings-and-json.smithy"
+            val commonFile =
+                if (protocol == "rpc-v2-cbor") {
+                    "cbor-shapes.smithy"
+                } else {
+                    "bindings-and-json.smithy"
+                }
             val common = Files.readString(suite.resolve("models/$commonFile")).asSmithyModel()
             val model = Model.assembler().addModel(common).addImport(suite.resolve("models/$protocol.smithy")).assemble().unwrap()
             for (schemaSerde in listOf(false, true)) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val generated = run.resolve("$protocol/$mode")
                 serverIntegrationTest(
                     model,
@@ -82,7 +92,12 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                             process.environment()["PROTOCOL_COMPAT_OBSERVATIONS"] = run.resolve("$protocol-$mode.jsonl").toString()
                             // Keep the strict compilation probe separate from runtime observations:
                             // generated serde XML attributes leave a generated setter unused.
-                            process.environment()["RUSTFLAGS"] = if (protocol == "rest-xml") "-D warnings -A dead_code" else "-D warnings"
+                            process.environment()["RUSTFLAGS"] =
+                                if (protocol == "rest-xml") {
+                                    "-D warnings -A dead_code"
+                                } else {
+                                    "-D warnings"
+                                }
                             check(process.start().waitFor() == 0) {
                                 "Cargo failed: ${run.resolve("$protocol-$mode-cargo.log")}"
                             }
@@ -176,7 +191,11 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                             observation.getNumberMember("status").map { it.value.toInt() == 400 }.orElse(false) &&
                             observation.expectObjectMember("headers").getMember("x-amzn-errortype").orElse(null) ==
                             Node.arrayNode(Node.from("\"ValidationException\""))
-                    if (validationError) wire.withoutMember("wire_hex") else wire
+                    if (validationError) {
+                        wire.withoutMember("wire_hex")
+                    } else {
+                        wire
+                    }
                 }
             assertEquals(wire("legacy"), wire("schema"), "$protocol: $run")
         }
@@ -187,7 +206,12 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
         for (probe in listOf("sensitive-prefix", "sensitive-query-map", "xml-attribute")) {
             val model = Files.readString(root.resolve("codegen-server/src/test/resources/protocol-compat/models/$probe.smithy")).asSmithyModel()
             for (schemaSerde in listOf(false, true)) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 serverIntegrationTest(
                     model,
                     IntegrationTestParams(
@@ -203,7 +227,14 @@ internal class SourceDrivenSchemaSerdeCompatibilityTest {
                             // Fresh mainline fails these probes under the same warning policy.
                             // Assert the observed failure, and require the schema generator to compile.
                             val knownLegacyFailure = !schemaSerde && probe != "sensitive-query-map"
-                            assertEquals(if (knownLegacyFailure) 101 else 0, status, "$probe/$mode: ${run.resolve("compile-$probe-$mode.log")}")
+                            assertEquals(
+                                if (knownLegacyFailure) {
+                                    101
+                                } else {
+                                    0
+                                },
+                                status, "$probe/$mode: ${run.resolve("compile-$probe-$mode.log")}",
+                            )
                             if (knownLegacyFailure) {
                                 val diagnostic =
                                     when (probe) {

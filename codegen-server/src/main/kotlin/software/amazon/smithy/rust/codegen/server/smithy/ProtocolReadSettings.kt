@@ -137,7 +137,9 @@ internal object ProtocolReadSettings {
 
     fun requestBodyMaxBytes(protocolSettings: Map<String, ObjectNode>): Long? {
         val (value, path) = resolve(protocolSettings, "request", "body", "maxBytes")
-        if (value == null) return null
+        if (value == null) {
+            return null
+        }
         val errorMessage =
             "`$path` must be a non-negative integer byte count or a whole-number size string with " +
                 "B, KB, MB, GB, TB, KiB, MiB, GiB, or TiB units, fitting in a Long"
@@ -157,7 +159,9 @@ internal object ProtocolReadSettings {
             } catch (_: NumberFormatException) {
                 throw CodegenException(errorMessage)
             }
-        if (maxBytes < 0) throw CodegenException(errorMessage)
+        if (maxBytes < 0) {
+            throw CodegenException(errorMessage)
+        }
         return maxBytes
     }
 

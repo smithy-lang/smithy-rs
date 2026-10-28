@@ -52,7 +52,11 @@ class SchemaRoutingCompatibilityTest {
                     for (target, status) in [("Example.getFoo", VERBATIM_STATUS), ("Example.GetFoo", CAPITALIZED_STATUS)] {
                         let request = #{Http}::Request::post("/")
                             .header("x-amz-target", target)
-                            .header("content-type", "${if (protocol == "awsJson1_0") "application/x-amz-json-1.0" else "application/x-amz-json-1.1"}")
+                            .header("content-type", "${if (protocol == "awsJson1_0") {
+                        "application/x-amz-json-1.0"
+                    } else {
+                        "application/x-amz-json-1.1"
+                    }}")
                             .body(#{Server}::body::Body::empty()).unwrap();
                         assert_eq!(app.clone().oneshot(request).await.unwrap().status(), status, "{target}");
                     }

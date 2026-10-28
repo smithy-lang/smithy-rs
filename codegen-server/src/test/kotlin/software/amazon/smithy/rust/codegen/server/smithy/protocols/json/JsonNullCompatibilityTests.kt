@@ -43,7 +43,12 @@ internal class DuplicateJsonNullCompatibilityTest {
         val protocols = listOf("RestDuplicateNull", "Json10DuplicateNull", "Json11DuplicateNull")
         for (schemaSerde in listOf(false, true)) {
             for (service in protocols) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val settings =
                     ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode().toBuilder()
                 serverIntegrationTest(
@@ -106,7 +111,11 @@ internal class DuplicateJsonNullCompatibilityTest {
                                         #{Http}::Request::post("/echo").header("content-type", "application/json")
                                     } else {
                                         #{Http}::Request::post("/")
-                                            .header("content-type", "application/x-amz-json-${if (service == "Json10DuplicateNull") "1.0" else "1.1"}")
+                                            .header("content-type", "application/x-amz-json-${if (service == "Json10DuplicateNull") {
+                                    "1.0"
+                                } else {
+                                    "1.1"
+                                }}")
                                             .header("x-amz-target", "$service.Echo")
                                     };
                                     let response = app.clone().oneshot(request.body(#{Server}::body::Body::from(body)).unwrap()).await.unwrap();
@@ -222,7 +231,11 @@ internal class JsonDocumentNullInputCompatibilityTest {
                                 (b"{\"value\":[null,false]}".as_slice(), #{Some}(#{Document}::Array(vec![#{Document}::Null, #{Document}::Bool(false)]))),
                             ] {
                                 let request = #{Http}::Request::builder().method("POST")
-                                    .uri("${if (protocol == "restJson1") "/document" else "/"}")
+                                    .uri("${if (protocol == "restJson1") {
+                            "/document"
+                        } else {
+                            "/"
+                        }}")
                                     .header("content-type", "$contentType")
                                     .header("x-amz-target", "Documents.Inspect")
                                     .body(#{Server}::body::to_boxed_sync(body)).unwrap();
@@ -306,8 +319,20 @@ internal class RequiredMemberNullCompatibilityTest {
                                     .read(|_: crate::input::ReadInput| async { Ok::<_, crate::error::ReadError>(crate::output::ReadOutput::builder().build()) }).build().unwrap();
                                 let mut records = #{String}::new();
                                 for input in ["{}", "{\"text\":null}", "{\"text\":\"ok\"}", "{\"text\":\"ok\",\"text\":null}"] {
-                                    let request = #{Http}::Request::post(${if (protocol == "restJson1") "\"/read\"" else "\"/\""})
-                                        .header("content-type", ${if (protocol == "restJson1") "\"application/json\"" else "\"application/x-amz-json-${if (protocol == "awsJson1_0") "1.0" else "1.1"}\""})
+                                    let request = #{Http}::Request::post(${if (protocol == "restJson1") {
+                                    "\"/read\""
+                                } else {
+                                    "\"/\""
+                                }})
+                                        .header("content-type", ${if (protocol == "restJson1") {
+                                    "\"application/json\""
+                                } else {
+                                    "\"application/x-amz-json-${if (protocol == "awsJson1_0") {
+                                        "1.0"
+                                    } else {
+                                        "1.1"
+                                    }}\""
+                                }})
                                         .header("x-amz-target", "Review.Read")
                                         .body(#{Server}::body::to_boxed_sync(input)).unwrap();
                                     let response = #{Tower}::ServiceExt::oneshot(app.clone(), request).await.unwrap();

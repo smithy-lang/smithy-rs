@@ -77,7 +77,13 @@ data class ServerRustSettings(
     ) {
     private val parsedProtocolSettings by lazy { parseProtocolSettings() }
     internal val protocolResponseSettings =
-        ServerProtocolResponseSettings.from(if (codegenConfig.schemaSerde) protocolSettings() else emptyMap())
+        ServerProtocolResponseSettings.from(
+            if (codegenConfig.schemaSerde) {
+                protocolSettings()
+            } else {
+                emptyMap()
+            },
+        )
 
     /** Normalized protocol sections, including common request settings in either serde mode. */
     fun protocolSettings(): Map<String, ObjectNode> = parsedProtocolSettings
@@ -108,7 +114,11 @@ data class ServerRustSettings(
     /** Schema request body frame budget; zero disables forced yielding. */
     fun requestBodyReadPollBudget(): Int? {
         val configured = ProtocolReadSettings.requestBodyReadPollBudget(protocolSettings())
-        return if (configured == null) DEFAULT_REQUEST_BODY_READ_POLL_BUDGET else configured.takeIf { it > 0 }
+        return if (configured == null) {
+            DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
+        } else {
+            configured.takeIf { it > 0 }
+        }
     }
 
     /**
@@ -214,7 +224,11 @@ data class RequestBodyReadTimeouts(
             null
         } else {
             perOperation[operationId]
-                ?: if (operationId in payloadOperationIds) defaultPayloadTimeout else defaultNonPayloadTimeout
+                ?: if (operationId in payloadOperationIds) {
+                    defaultPayloadTimeout
+                } else {
+                    defaultNonPayloadTimeout
+                }
         }
 
     companion object {

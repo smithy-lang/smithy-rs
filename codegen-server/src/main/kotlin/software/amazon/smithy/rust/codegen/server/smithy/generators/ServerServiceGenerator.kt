@@ -70,15 +70,30 @@ class ServerServiceGenerator(
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
     private val schemaSerde = codegenContext.usesSchemaHttpSerde
-    private val shapeIdType = if (schemaSerde) "#{SchemaShapeId}<'static>" else "#{SmithyHttpServer}::shape_id::ShapeId"
+    private val shapeIdType =
+        if (schemaSerde) {
+            "#{SchemaShapeId}<'static>"
+        } else {
+            "#{SmithyHttpServer}::shape_id::ShapeId"
+        }
 
     /**
      * The erased per-operation handler type. The schema router shares one handler set across
      * threads, so its routes (and everything wrapped into them) must be `Sync`; the generated serde protocol
      * routers keep the non-`Sync` [`Route`] so existing handlers, plugins and layers still compile.
      */
-    private val routeType = if (schemaSerde) "#{SmithyHttpServer}::routing::SyncRoute" else "#{SmithyHttpServer}::routing::Route"
-    private val syncBound = if (schemaSerde) " + Sync" else ""
+    private val routeType =
+        if (schemaSerde) {
+            "#{SmithyHttpServer}::routing::SyncRoute"
+        } else {
+            "#{SmithyHttpServer}::routing::Route"
+        }
+    private val syncBound =
+        if (schemaSerde) {
+            " + Sync"
+        } else {
+            ""
+        }
 
     private fun streams(operation: OperationShape): Boolean =
         operation.id in additionalStreamingOperations ||
@@ -256,7 +271,11 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: ${if (schemaSerde) serviceName else "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"} = app;
+                    /// ## let app: ${if (schemaSerde) {
+                        serviceName
+                    } else {
+                        "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"
+                    }} = app;
                     /// ```
                     ///
                     pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
@@ -318,7 +337,11 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: ${if (schemaSerde) serviceName else "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"} = app;
+                    /// ## let app: ${if (schemaSerde) {
+                        serviceName
+                    } else {
+                        "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"
+                    }} = app;
                     /// ```
                     ///
                     pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
@@ -370,7 +393,13 @@ class ServerServiceGenerator(
                         self
                     }
                     """,
-                    "Router" to (if (schemaSerde) smithyHttpServer.resolve("schema::routing::MultiProtocolRoutingService") else protocol.routerType()),
+                    "Router" to (
+                        if (schemaSerde) {
+                            smithyHttpServer.resolve("schema::routing::MultiProtocolRoutingService")
+                        } else {
+                            protocol.routerType()
+                        }
+                    ),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
@@ -440,7 +469,12 @@ class ServerServiceGenerator(
                             val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
                             emitRouteEntries(specFunctions) { isClone ->
-                                val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                                val accessor =
+                                    if (isClone) {
+                                        "self.$fieldName.clone()"
+                                    } else {
+                                        "self.$fieldName"
+                                    }
 
                                 rust("$accessor.expect($expectMessageVariableName)")
                             }
@@ -534,7 +568,12 @@ class ServerServiceGenerator(
                             val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
                             emitRouteEntries(specFunctions) { isClone ->
-                                val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                                val accessor =
+                                    if (isClone) {
+                                        "self.$fieldName.clone()"
+                                    } else {
+                                        "self.$fieldName"
+                                    }
 
                                 rustTemplate(
                                     """
@@ -582,7 +621,14 @@ class ServerServiceGenerator(
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable =
         writable {
-            val builderGenerics = (if (schemaSerde) listOf("L", "HttpPl", "ModelPl") else listOf("Body", "L", "HttpPl", "ModelPl")).joinToString(", ")
+            val builderGenerics =
+                (
+                    if (schemaSerde) {
+                        listOf("L", "HttpPl", "ModelPl")
+                    } else {
+                        listOf("Body", "L", "HttpPl", "ModelPl")
+                    }
+                ).joinToString(", ")
             rustTemplate(
                 """
                 /// The service builder for [`$serviceName`].
@@ -593,7 +639,11 @@ class ServerServiceGenerator(
                     layer: L,
                     http_plugin: HttpPl,
                     model_plugin: ModelPl,
-                    ${if (schemaSerde) "routing_options: #{SmithyHttpServer}::schema::routing::ProtocolOptions," else ""}
+                    ${if (schemaSerde) {
+                    "routing_options: #{SmithyHttpServer}::schema::routing::ProtocolOptions,"
+                } else {
+                    ""
+                }}
                 }
 
                 impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -851,13 +901,31 @@ class ServerServiceGenerator(
                         rustTemplate("if !missing_operation_names.is_empty() { return #{Err}(BuildError::MissingOperations(MissingOperationsError { operation_names2setter_methods: missing_operation_names })); }", *codegenScope)
                     }
                 }
-            val name = if (unchecked) "build_unchecked" else "build"
-            val result = if (unchecked) serviceName else "#{Result}<$serviceName, BuildError>"
+            val name =
+                if (unchecked) {
+                    "build_unchecked"
+                } else {
+                    "build"
+                }
+            val result =
+                if (unchecked) {
+                    serviceName
+                } else {
+                    "#{Result}<$serviceName, BuildError>"
+                }
             rustTemplate(
                 """
-                /// Builds the service. ${if (unchecked) "Missing handlers return the selected protocol's internal failure response, or an empty 500 if a layer removes the routing context." else "Every operation must have a handler."}
+                /// Builds the service. ${if (unchecked) {
+                    "Missing handlers return the selected protocol's internal failure response, or an empty 500 if a layer removes the routing context."
+                } else {
+                    "Every operation must have a handler."
+                }}
                 /// Configured layers run after routing, with the selected operation in request extensions.
-                /// ${if (unchecked) "Panics on invalid routing configuration, such as contradictory protocol ordering." else "Returns an error for missing handlers or invalid routing configuration."}
+                /// ${if (unchecked) {
+                    "Panics on invalid routing configuration, such as contradictory protocol ordering."
+                } else {
+                    "Returns an error for missing handlers or invalid routing configuration."
+                }}
                 pub fn $name(self) -> $result
                 where
                     L: #{Tower}::Layer<#{SmithyHttpServer}::routing::SyncRoute<Body>>,
@@ -865,7 +933,11 @@ class ServerServiceGenerator(
                     <L::Service as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
                 {
                     #{Checks}
-                    self.$buildInnerName()${if (unchecked) ".expect(\"invalid schema routing configuration\")" else ""}
+                    self.$buildInnerName()${if (unchecked) {
+                    ".expect(\"invalid schema routing configuration\")"
+                } else {
+                    ""
+                }}
                 }
                 """,
                 *codegenScope, "Checks" to checks,
@@ -974,7 +1046,11 @@ class ServerServiceGenerator(
                         config: ${serviceName}Config<L, HttpPl, ModelPl>,
                     ) -> $builderName<L, HttpPl, ModelPl> {
                         $builderName {
-                            #{Fields1}${if (operations.isNotEmpty()) "," else ""}
+                            #{Fields1}${if (operations.isNotEmpty()) {
+                    ","
+                } else {
+                    ""
+                }}
                             layer: config.layers, http_plugin: config.http_plugins, model_plugin: config.model_plugins,
                             routing_options: Self::routing_options(),
                         }
@@ -989,7 +1065,11 @@ class ServerServiceGenerator(
                         http_plugin: HttpPl, model_plugin: ModelPl,
                     ) -> $builderName<#{Tower}::layer::util::Identity, HttpPl, ModelPl> {
                         $builderName {
-                            #{Fields2}${if (operations.isNotEmpty()) "," else ""}
+                            #{Fields2}${if (operations.isNotEmpty()) {
+                    ","
+                } else {
+                    ""
+                }}
                             layer: #{Tower}::layer::util::Identity::new(), http_plugin, model_plugin,
                             routing_options: Self::routing_options(),
                         }
@@ -1085,7 +1165,11 @@ class ServerServiceGenerator(
                             We are missing handlers for the following operations:\n",
                         )?;
                         for operation_name in self.operation_names2setter_methods.keys() {
-                            writeln!(f, "- {}", operation_name.${if (schemaSerde) "as_str" else "absolute"}())?;
+                            writeln!(f, "- {}", operation_name.${if (schemaSerde) {
+                    "as_str"
+                } else {
+                    "absolute"
+                }}())?;
                         }
 
                         writeln!(f, "\nUse the dedicated methods on `$builderName` to register the missing handlers:")?;
@@ -1257,7 +1341,11 @@ class ServerServiceGenerator(
                 }
 
                 impl Operation {
-                    /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](${if (schemaSerde) "#{SchemaShapeId}" else "#{SmithyHttpServer}::shape_id::ShapeId"}).
+                    /// Returns the [operations](https://smithy.io/2.0/spec/service-types.html##operation) [`ShapeId`](${if (schemaSerde) {
+                    "#{SchemaShapeId}"
+                } else {
+                    "#{SmithyHttpServer}::shape_id::ShapeId"
+                }}).
                     pub fn shape_id(&self) -> $shapeIdType {
                         match self {
                             #{Arms}
@@ -1284,7 +1372,9 @@ class ServerServiceGenerator(
         }
 
     fun render(writer: RustWriter) {
-        if (schemaSerde) writer.rustTemplate("use #{SmithyHttpServer}::body::Body;", *codegenScope)
+        if (schemaSerde) {
+            writer.rustTemplate("use #{SmithyHttpServer}::body::Body;", *codegenScope)
+        }
         writer.rustTemplate(
             """
             #{Builder:W}
@@ -1301,7 +1391,13 @@ class ServerServiceGenerator(
             """,
             "Builder" to builder(),
             "MissingOperationsError" to missingOperationsError(),
-            "RequestSpecs" to (if (schemaSerde) writable { } else requestSpecsModule()),
+            "RequestSpecs" to (
+                if (schemaSerde) {
+                    writable { }
+                } else {
+                    requestSpecsModule()
+                }
+            ),
             "Struct" to serviceStruct(),
             "Operations" to operationEnum(),
             "ServiceImpl" to serviceShapeImpl(),

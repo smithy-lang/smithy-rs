@@ -91,7 +91,11 @@ internal class ServerTowerDependencyTest {
             ) { context, rustCrate ->
                 // Existing decorators can still use the original public property.
                 val middlewareTower =
-                    if (context.usesSchemaHttpSerde) ServerCargoDependency.tower(context) else ServerCargoDependency.Tower
+                    if (context.usesSchemaHttpSerde) {
+                        ServerCargoDependency.tower(context)
+                    } else {
+                        ServerCargoDependency.Tower
+                    }
                 val scope =
                     arrayOf(
                         "Http" to RuntimeType.http(context.runtimeConfig),

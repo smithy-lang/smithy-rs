@@ -77,7 +77,13 @@ internal class JsonEmptyIntegerCompatibilityTest {
                                     ("no-digits", r##"{"value":-.}"##),
                                     ("no-fraction", r##"{"value":-.e2}"##),
                                 ] {
-                                    let request = #{Http}::Request::post(${(if (protocol == "restJson1") "/echo" else "/").dq()})
+                                    let request = #{Http}::Request::post(${(
+                                    if (protocol == "restJson1") {
+                                        "/echo"
+                                    } else {
+                                        "/"
+                                    }
+                                ).dq()})
                                         .header("content-type", ${contentType.dq()})
                                         .header("x-amz-target", "Numbers.Echo")
                                         .body(#{Server}::body::to_boxed_sync(input)).unwrap();

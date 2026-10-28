@@ -30,7 +30,12 @@ internal class ServerSchemaMediaTypeHeadersTest {
     @Test
     fun `media typed list headers round trip like legacy generated services`() {
         for (protocol in listOf("restJson1", "restXml")) {
-            val contentType = if (protocol == "restJson1") "application/json" else "application/xml"
+            val contentType =
+                if (protocol == "restJson1") {
+                    "application/json"
+                } else {
+                    "application/xml"
+                }
             for (schemaSerde in listOf(false, true)) {
                 // Generated serde media-type formatting passes enum/newtype wrappers directly to
                 // base64::encode, which cannot compile. Compare plain strings against

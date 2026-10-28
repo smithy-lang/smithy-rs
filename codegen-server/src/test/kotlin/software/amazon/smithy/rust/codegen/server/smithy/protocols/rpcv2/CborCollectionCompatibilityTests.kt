@@ -61,7 +61,12 @@ internal class CborCollectionLengthCompatibilityTest {
             """.asSmithyModel()
         val observations = Files.createTempDirectory("generated-cbor-collection-lengths")
         for (schemaSerde in listOf(false, true)) {
-            val label = if (schemaSerde) "schema" else "legacy"
+            val label =
+                if (schemaSerde) {
+                    "schema"
+                } else {
+                    "legacy"
+                }
             serverIntegrationTest(
                 model,
                 IntegrationTestParams(
@@ -229,7 +234,11 @@ internal class CborIntegerListCompatibilityTest {
             )
         for (publicConstrainedTypes in listOf(false, true)) {
             for (schemaSerde in listOf(false, true)) {
-                val label = "${if (schemaSerde) "schema" else "legacy"}-$publicConstrainedTypes"
+                val label = "${if (schemaSerde) {
+                    "schema"
+                } else {
+                    "legacy"
+                }}-$publicConstrainedTypes"
                 serverIntegrationTest(
                     model,
                     IntegrationTestParams(
@@ -362,7 +371,14 @@ internal class CborNestedCollectionCompatibilityTest {
                 model,
                 IntegrationTestParams(
                     additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
-                    overrideTestDir = run.resolve(if (schemaSerde) "schema" else "legacy").toFile(),
+                    overrideTestDir =
+                        run.resolve(
+                            if (schemaSerde) {
+                                "schema"
+                            } else {
+                                "legacy"
+                            },
+                        ).toFile(),
                     cargoCommand = "cargo test --quiet --lib",
                 ),
                 testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),

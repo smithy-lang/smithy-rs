@@ -258,17 +258,31 @@ class ServerSchemaGenerator(
     private fun iterSource(
         target: Shape,
         varName: String,
-    ): String = if (isAggregateNewtype(target)) "&$varName.0" else varName
+    ): String =
+        if (isAggregateNewtype(target)) {
+            "&$varName.0"
+        } else {
+            varName
+        }
 
     /** Map-key expression: enum and constrained-string keys expose `as_str()`. */
     private fun mapKeyExpr(keyTarget: Shape): String =
-        if (isStringEnum(keyTarget) || isConstrainedStringShape(keyTarget)) "key.as_str()" else "key"
+        if (isStringEnum(keyTarget) || isConstrainedStringShape(keyTarget)) {
+            "key.as_str()"
+        } else {
+            "key"
+        }
 
     /** Value expression for a number-typed position ([varName] is a reference). */
     private fun numberValueExpr(
         target: Shape,
         varName: String,
-    ): String = if (isNumberNewtype(target)) "$varName.0" else "*$varName"
+    ): String =
+        if (isNumberNewtype(target)) {
+            "$varName.0"
+        } else {
+            "*$varName"
+        }
 
     /** Value expression for a blob-typed position ([varName] is a reference). */
     private fun blobValueExpr(
@@ -302,7 +316,9 @@ class ServerSchemaGenerator(
                     val target = model.expectShape(member.target)
                     // Skip streaming members (event streams, streaming blobs) — they are
                     // serialized by the protocol layer, not the codec.
-                    if (target.hasTrait(StreamingTrait::class.java)) return@forEachIndexed
+                    if (target.hasTrait(StreamingTrait::class.java)) {
+                        return@forEachIndexed
+                    }
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
@@ -457,10 +473,30 @@ class ServerSchemaGenerator(
                         null
                     } else {
                         when (elementTarget) {
-                            is StringShape -> if (!isStringEnum(elementTarget) && !isConstrainedStringShape(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
-                            is BlobShape -> if (!isBlobNewtype(elementTarget)) "ser.write_blob_list(&$memberSchemaRef, $varName)?;" else null
-                            is IntegerShape, is IntEnumShape -> if (!isNumberNewtype(elementTarget)) "ser.write_integer_list(&$memberSchemaRef, $varName)?;" else null
-                            is LongShape -> if (!isNumberNewtype(elementTarget)) "ser.write_long_list(&$memberSchemaRef, $varName)?;" else null
+                            is StringShape ->
+                                if (!isStringEnum(elementTarget) && !isConstrainedStringShape(elementTarget)) {
+                                    "ser.write_string_list(&$memberSchemaRef, $varName)?;"
+                                } else {
+                                    null
+                                }
+                            is BlobShape ->
+                                if (!isBlobNewtype(elementTarget)) {
+                                    "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
+                                } else {
+                                    null
+                                }
+                            is IntegerShape, is IntEnumShape ->
+                                if (!isNumberNewtype(elementTarget)) {
+                                    "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
+                                } else {
+                                    null
+                                }
+                            is LongShape ->
+                                if (!isNumberNewtype(elementTarget)) {
+                                    "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                                } else {
+                                    null
+                                }
                             else -> null
                         }
                     }
@@ -954,7 +990,9 @@ class ServerSchemaGenerator(
             )
         for (trait in traits) {
             // Skip known traits — they're handled by with_*() setters
-            if (knownTraitSetter(trait) != null) continue
+            if (knownTraitSetter(trait) != null) {
+                continue
+            }
 
             if (trait is HttpErrorTrait) {
                 rustTemplate(
@@ -1170,7 +1208,11 @@ class ServerSchemaGenerator(
         val method = templateEscape(httpTrait.method.dq())
         val uri = templateEscape(httpTrait.uri.toString().dq())
         val code = httpTrait.code
-        return "\n    .with_http(aws_smithy_schema::traits::HttpTrait::new($method, $uri, ${if (code == 200) "None" else "Some($code)"}))"
+        return "\n    .with_http(aws_smithy_schema::traits::HttpTrait::new($method, $uri, ${if (code == 200) {
+            "None"
+        } else {
+            "Some($code)"
+        }}))"
     }
 
     /**
@@ -1215,8 +1257,12 @@ class ServerSchemaGenerator(
      * without ever touching the codec).
      */
     private fun noBodyMembersChain(shape: Shape): String {
-        if (inputOperation(shape) == null) return ""
-        if (shape !is software.amazon.smithy.model.shapes.StructureShape) return ""
+        if (inputOperation(shape) == null) {
+            return ""
+        }
+        if (shape !is software.amazon.smithy.model.shapes.StructureShape) {
+            return ""
+        }
 
         for (member in shape.allMembers.values) {
             val hasHttpHeader = member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java)
@@ -1422,7 +1468,9 @@ class ServerSchemaGenerator(
     /** Only XML request payload members need an alternate root schema. */
     private fun needsXmlPayloadSchema(member: MemberShape): Boolean {
         val context = codegenContext as? ServerCodegenContext ?: return false
-        if (RestXmlTrait.ID !in context.servedProtocols) return false
+        if (RestXmlTrait.ID !in context.servedProtocols) {
+            return false
+        }
         val container = model.expectShape(member.container)
         val target = model.expectShape(member.target)
         return container.hasTrait(SyntheticInputTrait::class.java) &&
@@ -1513,7 +1561,12 @@ class ServerSchemaGenerator(
                     )
                 }
                 if (model.memberShapes.any { it.target == shape.id && needsXmlPayloadSchema(it) }) {
-                    val traits = if (hasUnknownTraits(shape)) ".with_traits(&${schemaPrefix}_TRAITS)" else ""
+                    val traits =
+                        if (hasUnknownTraits(shape)) {
+                            ".with_traits(&${schemaPrefix}_TRAITS)"
+                        } else {
+                            ""
+                        }
                     writer.rustTemplate(
                         """
                         impl #{Target} {

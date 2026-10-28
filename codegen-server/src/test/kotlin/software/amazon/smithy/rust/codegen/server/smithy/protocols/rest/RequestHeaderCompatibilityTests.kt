@@ -39,7 +39,12 @@ internal class MalformedHeadersCompatibilityTest {
 
     private fun compare(protocol: String) {
         val run = Files.createTempDirectory("malformed-headers-$protocol-")
-        val contentType = if (protocol == "restXml") "application/xml" else "application/json"
+        val contentType =
+            if (protocol == "restXml") {
+                "application/xml"
+            } else {
+                "application/json"
+            }
         val model =
             """
             ${'$'}version: "2"
@@ -174,7 +179,12 @@ internal class PrefixHeaderWhitespaceCompatibilityTest {
         val protocols = listOf("JsonPrefixHeaders", "XmlPrefixHeaders")
         for (schemaSerde in listOf(false, true)) {
             for (service in protocols) {
-                val mode = if (schemaSerde) "schema" else "legacy"
+                val mode =
+                    if (schemaSerde) {
+                        "schema"
+                    } else {
+                        "legacy"
+                    }
                 val settings =
                     ServerAdditionalSettings.builder().withHttp1x().schemaSerde(schemaSerde).toObjectNode().toBuilder()
                 serverIntegrationTest(

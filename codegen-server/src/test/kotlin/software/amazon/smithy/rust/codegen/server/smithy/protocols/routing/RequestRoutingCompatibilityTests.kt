@@ -57,7 +57,11 @@ internal class SingleProtocolRoutingCompatibilityTest {
                 """
                 ${'$'}version: "2"
                 namespace test.routingcompat
-                use ${if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"}#$protocol
+                use ${if (protocol == "rpcv2Cbor") {
+                    "smithy.protocols"
+                } else {
+                    "aws.protocols"
+                }}#$protocol
                 @$protocol service Routes { version: "1", operations: [Read] }
                 @http(method: "POST", uri: "/read")
                 operation Read { input := {}, output := {} }
@@ -148,7 +152,11 @@ internal class BlobPayloadRoutingCompatibilityTest {
                 namespace test.uploadrouting
                 use aws.protocols#restJson1
                 @restJson1
-                ${if (multiProtocol) "@smithy.protocols#rpcv2Cbor" else ""}
+                ${if (multiProtocol) {
+                    "@smithy.protocols#rpcv2Cbor"
+                } else {
+                    ""
+                }}
                 service Uploads { version: "1", operations: [Upload] }
                 @http(method: "POST", uri: "/upload")
                 operation Upload {
@@ -230,7 +238,12 @@ internal class MissingHandlerContextCompatibilityTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "awsJson1_0", "awsJson1_1", "rpcv2Cbor"])
     fun `missing handler responses survive removed routing context`(protocol: String) {
-        val namespace = if (protocol == "rpcv2Cbor") "smithy.protocols" else "aws.protocols"
+        val namespace =
+            if (protocol == "rpcv2Cbor") {
+                "smithy.protocols"
+            } else {
+                "aws.protocols"
+            }
         val uri =
             when (protocol) {
                 "restJson1", "restXml" -> "/call"
@@ -256,7 +269,12 @@ internal class MissingHandlerContextCompatibilityTest {
         val run =
             Files.createTempDirectory("missing-handler-$protocol-")
         for (schemaSerde in listOf(false, true)) {
-            val mode = if (schemaSerde) "schema" else "legacy"
+            val mode =
+                if (schemaSerde) {
+                    "schema"
+                } else {
+                    "legacy"
+                }
             val settings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode().toBuilder()
             serverIntegrationTest(
                 model,

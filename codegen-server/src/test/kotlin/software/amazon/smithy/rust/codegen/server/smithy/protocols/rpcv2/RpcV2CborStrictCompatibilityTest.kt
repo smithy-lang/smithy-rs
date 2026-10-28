@@ -73,7 +73,11 @@ internal class RpcV2CborStrictCompatibilityTest {
             map Counts { key: String, value: Integer }
             union Choice { text: String, nested: Target, tags: Tags, empty: Empty }
             @error("client") @httpError(409)
-            structure Failure { @httpPayload body: Target ${if (bindErrorHeader) ", @httpHeader(\"x-failure\") marker: String" else ""} }
+            structure Failure { @httpPayload body: Target ${if (bindErrorHeader) {
+                ", @httpHeader(\"x-failure\") marker: String"
+            } else {
+                ""
+            }} }
             operation Download {
                 input := {}
                 output := { topic: String, events: Events }
@@ -183,7 +187,11 @@ internal class RpcV2CborStrictCompatibilityTest {
                                     async move {
                                         if input.mode.as_deref() == #{Some}("fail") {
                                             #{Err}(crate::error::StructuredError::Failure(crate::error::Failure {
-                                                body: input.body, ${if (bindErrorHeader) "marker: #{Some}(\"modeled-error\".into())," else ""}
+                                                body: input.body, ${if (bindErrorHeader) {
+                                "marker: #{Some}(\"modeled-error\".into()),"
+                            } else {
+                                ""
+                            }}
                                             }))
                                         } else {
                                             #{Ok}(crate::output::StructuredOutput { body: input.body, mode: input.mode })
@@ -201,7 +209,11 @@ internal class RpcV2CborStrictCompatibilityTest {
                                     async move {
                                         if input.mode.as_deref() == #{Some}("fail") {
                                             #{Err}(crate::error::PlainError::Failure(crate::error::Failure {
-                                                body: input.body, ${if (bindErrorHeader) "marker: #{Some}(\"modeled-error\".into())," else ""}
+                                                body: input.body, ${if (bindErrorHeader) {
+                                "marker: #{Some}(\"modeled-error\".into()),"
+                            } else {
+                                ""
+                            }}
                                             }))
                                         } else {
                                             #{Ok}(crate::output::PlainOutput { body: input.body, mode: input.mode })

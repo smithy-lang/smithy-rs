@@ -50,7 +50,12 @@ internal class EventStreamFailureCompatibilityTest {
         val cbor = protocol == "rpcv2Cbor"
         val xml = protocol == "restXml"
         val rpc = protocol.startsWith("awsJson") || cbor
-        val namespace = if (cbor) "smithy.protocols" else "aws.protocols"
+        val namespace =
+            if (cbor) {
+                "smithy.protocols"
+            } else {
+                "aws.protocols"
+            }
         val mediaType =
             when (protocol) {
                 "rpcv2Cbor" -> "application/cbor"
@@ -204,7 +209,15 @@ internal class EventStreamFailureCompatibilityTest {
                             };
                             let good = encode("event", "note", $notePayload);
                             let mut prefix = #{Vec}::new();
-                            ${if (rpc) """prefix.extend(encode("event", "initial-request", ${if (cbor) """b"\xbf\xff".as_slice()""" else """b"{}".as_slice()"""}));""" else ""}
+                            ${if (rpc) {
+                                """prefix.extend(encode("event", "initial-request", ${if (cbor) {
+                                    """b"\xbf\xff".as_slice()"""
+                                } else {
+                                    """b"{}".as_slice()"""
+                                }}));"""
+                            } else {
+                                ""
+                            }}
                             prefix.extend_from_slice(&good);
                             let mut bad_prelude = good.clone(); bad_prelude[8] ^= 1;
                             let mut bad_message = good.clone(); let last = bad_message.len() - 1; bad_message[last] ^= 1;
@@ -268,7 +281,11 @@ internal class EventStreamFailureCompatibilityTest {
                                         ("content-length".to_owned(), expected_body.len().to_string().into_bytes()),
                                         ("content-type".to_owned(), b"$mediaType".to_vec()),
                                     ];
-                                    ${if (cbor) """expected_headers.push(("smithy-protocol".to_owned(), b"rpc-v2-cbor".to_vec()));""" else ""}
+                                    ${if (cbor) {
+                                """expected_headers.push(("smithy-protocol".to_owned(), b"rpc-v2-cbor".to_vec()));"""
+                            } else {
+                                ""
+                            }}
                                     expected_headers.sort();
                                     assert_eq!(headers, expected_headers, "{case}");
                                 }
@@ -317,9 +334,17 @@ internal class EventStreamFailureCompatibilityTest {
                             if ${!schemaSerde} {
                                 assert_eq!(status, 200);
                                 let mut expected_headers = vec![
-                                    ("content-type".to_owned(), b"${if (protocol.startsWith("awsJson")) mediaType else "application/vnd.amazon.eventstream"}".to_vec()),
+                                    ("content-type".to_owned(), b"${if (protocol.startsWith("awsJson")) {
+                                mediaType
+                            } else {
+                                "application/vnd.amazon.eventstream"
+                            }}".to_vec()),
                                 ];
-                                ${if (cbor) """expected_headers.push(("smithy-protocol".to_owned(), b"rpc-v2-cbor".to_vec()));""" else ""}
+                                ${if (cbor) {
+                                """expected_headers.push(("smithy-protocol".to_owned(), b"rpc-v2-cbor".to_vec()));"""
+                            } else {
+                                ""
+                            }}
                                 expected_headers.sort();
                                 assert_eq!(headers, expected_headers);
                                 // Generated serde sends the next event after the exception; no initial frame by default.

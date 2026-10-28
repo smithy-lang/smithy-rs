@@ -34,12 +34,50 @@ internal class ServerSchemaStreamingTest {
         rpc: Boolean,
         sigv4: Boolean = false,
     ): String {
-        val service = (if (rpc) "@rpcv2Cbor" else "@restJson1") + (if (sigv4) "\n            @sigv4(name: \"chat\")" else "")
-        val http = if (rpc) "" else "@http(uri: \"/chat/{room}\", method: \"POST\")"
-        val label = if (rpc) "" else "@httpLabel"
-        val nickHeader = if (rpc) "" else "@httpHeader(\"x-nick\")"
-        val topicHeader = if (rpc) "" else "@httpHeader(\"x-topic\")"
-        val payload = if (rpc) "" else "@httpPayload"
+        val service =
+            (
+                if (rpc) {
+                    "@rpcv2Cbor"
+                } else {
+                    "@restJson1"
+                }
+            ) + (
+                if (sigv4) {
+                    "\n            @sigv4(name: \"chat\")"
+                } else {
+                    ""
+                }
+            )
+        val http =
+            if (rpc) {
+                ""
+            } else {
+                "@http(uri: \"/chat/{room}\", method: \"POST\")"
+            }
+        val label =
+            if (rpc) {
+                ""
+            } else {
+                "@httpLabel"
+            }
+        val nickHeader =
+            if (rpc) {
+                ""
+            } else {
+                "@httpHeader(\"x-nick\")"
+            }
+        val topicHeader =
+            if (rpc) {
+                ""
+            } else {
+                "@httpHeader(\"x-topic\")"
+            }
+        val payload =
+            if (rpc) {
+                ""
+            } else {
+                "@httpPayload"
+            }
         return """
             ${'$'}version: "2"
             namespace com.aws.example.streaming
@@ -51,7 +89,11 @@ internal class ServerSchemaStreamingTest {
             $service
             service ChatService {
                 version: "2026-09-12"
-                operations: [Chat, Upload, Download${if (rpc) "" else ", BlobEcho"}]
+                operations: [Chat, Upload, Download${if (rpc) {
+            ""
+        } else {
+            ", BlobEcho"
+        }}]
             }
 
             $http
@@ -73,13 +115,21 @@ internal class ServerSchemaStreamingTest {
                 }
             }
 
-            ${if (rpc) "" else "@http(uri: \"/upload\", method: \"POST\")"}
+            ${if (rpc) {
+            ""
+        } else {
+            "@http(uri: \"/upload\", method: \"POST\")"
+        }}
             operation Upload {
                 input := { $payload events: ChatEvents }
                 output := { count: Integer }
                 errors: [smithy.framework#ValidationException]
             }
-            ${if (rpc) "" else "@http(uri: \"/download\", method: \"POST\")"}
+            ${if (rpc) {
+            ""
+        } else {
+            "@http(uri: \"/download\", method: \"POST\")"
+        }}
             operation Download {
                 input := {}
                 output := { $payload events: ChatEvents }
@@ -409,8 +459,18 @@ internal class ServerSchemaStreamingTest {
         """
 
     private fun directionTests(rpc: Boolean): String {
-        val uploadUri = if (rpc) "/service/ChatService/operation/Upload" else "/upload"
-        val downloadUri = if (rpc) "/service/ChatService/operation/Download" else "/download"
+        val uploadUri =
+            if (rpc) {
+                "/service/ChatService/operation/Upload"
+            } else {
+                "/upload"
+            }
+        val downloadUri =
+            if (rpc) {
+                "/service/ChatService/operation/Download"
+            } else {
+                "/download"
+            }
         return """
         use #{SmithyHttpServer}::schema::SharedServerProtocol;
         let protocol = if $rpc {

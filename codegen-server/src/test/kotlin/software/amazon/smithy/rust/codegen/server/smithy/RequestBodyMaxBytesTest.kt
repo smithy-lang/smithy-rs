@@ -48,7 +48,11 @@ internal class RequestBodyMaxBytesTest {
                             Node.parse(
                                 """
                             {
-                                "codegen": {"schemaSerde": $schemaSerde, "requestBodyMaxBytes": ${if (limit == 0) 16 else 1024}},
+                                "codegen": {"schemaSerde": $schemaSerde, "requestBodyMaxBytes": ${if (limit == 0) {
+                                    16
+                                } else {
+                                    1024
+                                }}},
                                 "customizationConfig": {"protocols": {"common": {"request": {"body": {"maxBytes": $limit}}}}}
                             }
                             """,
@@ -222,7 +226,12 @@ internal class RequestBodyMaxBytesTest {
         common: String? = null,
         legacy: String? = null,
     ): ServerRustSettings {
-        val codegen = if (legacy != null) ""","codegen": { "requestBodyMaxBytes": $legacy }""" else ""
+        val codegen =
+            if (legacy != null) {
+                ""","codegen": { "requestBodyMaxBytes": $legacy }"""
+            } else {
+                ""
+            }
         val customization =
             if (common != null) {
                 ""","customizationConfig": { "protocols": { "common": {"request":{"body":{"maxBytes": $common}}} } }"""

@@ -73,7 +73,11 @@ class ServerProtocolTestGenerator(
     private val multiProtocol: Boolean = false,
 ) : ProtocolTestGenerator() {
     override val protocolTestsModuleSuffix: String =
-        if (multiProtocol) "_${codegenContext.protocol.name.toSnakeCase()}" else ""
+        if (multiProtocol) {
+            "_${codegenContext.protocol.name.toSnakeCase()}"
+        } else {
+            ""
+        }
 
     /** Whether the generated service runs the schema-driven request and response path. */
     private val schemaSerde =
@@ -627,7 +631,12 @@ class ServerProtocolTestGenerator(
         if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
             val bodyUtil = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType()
 
-            val boxFn = if (needsSync || schemaSerde) "boxed_sync" else "boxed"
+            val boxFn =
+                if (needsSync || schemaSerde) {
+                    "boxed_sync"
+                } else {
+                    "boxed"
+                }
             if (bytesExpr != null) {
                 rustTemplate(
                     "#{BoxFn}(#{Full}::new($bytesExpr))",
@@ -718,7 +727,11 @@ class ServerProtocolTestGenerator(
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder${if (schemaSerde) "" else "::<#{BodyType}, _, _, _>"}(config)
+            let service = crate::service::$serviceName::builder${if (schemaSerde) {
+                ""
+            } else {
+                "::<#{BodyType}, _, _, _>"
+            }}(config)
                 .$operationName(
                     // Rust 1.94+ flags the moved `sender` as "value captured is never read"
                     // since `send()` only borrows it.
@@ -858,9 +871,10 @@ class ServerProtocolTestGenerator(
                 testCase.body.get(),
                 testCase.bodyMediaType.orNull(),
                 checkContentLength =
-                    schemaSerde && (testCase.headers.keys + testCase.requireHeaders).any {
-                        it.equals("content-length", ignoreCase = true)
-                    },
+                    schemaSerde &&
+                        (testCase.headers.keys + testCase.requireHeaders).any {
+                            it.equals("content-length", ignoreCase = true)
+                        },
             )
         }
     }
@@ -879,7 +893,9 @@ class ServerProtocolTestGenerator(
         // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
-        if (testCase.body.isEmpty) return
+        if (testCase.body.isEmpty) {
+            return
+        }
 
         val httpMalformedResponseBodyDefinition = testCase.body.get()
         // From https://smithy.io/2.0/additional-specs/http-protocol-compliance-tests.html#httpmalformedresponsebodyassertion

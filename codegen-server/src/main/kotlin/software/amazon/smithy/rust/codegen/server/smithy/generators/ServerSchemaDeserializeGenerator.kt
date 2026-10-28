@@ -103,7 +103,9 @@ class ServerSchemaDeserializeGenerator(
                     renderStructure(shape)
                 } else if (shape.isReachableFromOperationInput()) {
                     renderStructureInto(shape)
-                    if (!isOperationInput(shape)) renderStructure(shape)
+                    if (!isOperationInput(shape)) {
+                        renderStructure(shape)
+                    }
                 }
             is UnionShape ->
                 if (shape.isReachableFromOperationInput() && !shape.hasTrait<StreamingTrait>()) {
@@ -119,8 +121,12 @@ class ServerSchemaDeserializeGenerator(
 
     /** Implements the runtime entry point on non-streaming operation input structures. */
     fun renderDeserializableShapeImpl() {
-        if (shape !is StructureShape || hasStreamingMember(shape)) return
-        if (!isOperationInput(shape)) return
+        if (shape !is StructureShape || hasStreamingMember(shape)) {
+            return
+        }
+        if (!isOperationInput(shape)) {
+            return
+        }
         val symbol = symbolProvider.toSymbol(shape)
         val constrained = shape.canReachConstrainedShape(model, symbolProvider)
         writer.rustTemplate(
@@ -183,7 +189,11 @@ class ServerSchemaDeserializeGenerator(
             impl ${symbol.name} {
                 /// Reads this shape from a [`ShapeDeserializer`](#{ShapeDeserializer}) guided by [`Self::SCHEMA`].
                 ///
-                /// Returns the ${if (unconstrained) "unconstrained builder; `build()` validates the modeled constraints" else "shape"}.
+                /// Returns the ${if (unconstrained) {
+                "unconstrained builder; `build()` validates the modeled constraints"
+            } else {
+                "shape"
+            }}.
                 ##[allow(dead_code, unused_variables, unused_mut, clippy::match_single_binding, clippy::single_match)]
                 pub(crate) fn $FUNCTION_NAME(
                     deserializer: &mut dyn #{ShapeDeserializer},
@@ -222,7 +232,12 @@ class ServerSchemaDeserializeGenerator(
                             }
                         // Explicit document null is a value; absence is handled by the request deserializer.
                         if (model.expectShape(member.target) !is DocumentShape) {
-                            val clear = if (symbolProvider.toSymbol(member).isOptional()) "builder.$fieldName = None;" else ""
+                            val clear =
+                                if (symbolProvider.toSymbol(member).isOptional()) {
+                                    "builder.$fieldName = None;"
+                                } else {
+                                    ""
+                                }
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; $clear } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
@@ -308,7 +323,12 @@ class ServerSchemaDeserializeGenerator(
                             }
                         // Explicit document null is a value; absence is handled by the request deserializer.
                         if (model.expectShape(member.target) !is DocumentShape) {
-                            val clear = if (symbolProvider.toSymbol(member).isOptional()) "builder.$fieldName = None;" else ""
+                            val clear =
+                                if (symbolProvider.toSymbol(member).isOptional()) {
+                                    "builder.$fieldName = None;"
+                                } else {
+                                    ""
+                                }
                             rust("Some($index) => { if deser.is_null() { deser.read_null()?; $clear } else { $assignment } }")
                         } else {
                             rust("Some($index) => { $assignment }")
@@ -410,8 +430,12 @@ class ServerSchemaDeserializeGenerator(
 
         fun wrap(value: String): String {
             var out = value
-            if (convert) out = "($out).into()"
-            if (boxed) out = "Box::new($out)"
+            if (convert) {
+                out = "($out).into()"
+            }
+            if (boxed) {
+                out = "Box::new($out)"
+            }
             return out
         }
         return when {
@@ -483,7 +507,12 @@ class ServerSchemaDeserializeGenerator(
         val helper =
             if (!sparse) {
                 when (element) {
-                    is StringShape -> if (!isStringEnum(element)) "deser.read_string_list($schemaRef)?" else null
+                    is StringShape ->
+                        if (!isStringEnum(element)) {
+                            "deser.read_string_list($schemaRef)?"
+                        } else {
+                            null
+                        }
                     is BlobShape -> "deser.read_blob_list($schemaRef)?"
                     is IntegerShape, is IntEnumShape -> "deser.read_integer_list($schemaRef)?"
                     is LongShape -> "deser.read_long_list($schemaRef)?"
