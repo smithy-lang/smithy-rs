@@ -3,24 +3,29 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Materialization of a schema graph with a [`Builder`].
+//! Selection and validation: the plan of what a [`RuntimeSchemaSet`](super::RuntimeSchemaSet)
+//! contains.
 //!
-//! Everything here is safe code. [`build`] receives the model and a [`Builder`] branded with
-//! the same lifetime, and returns a [`Graph`] of indexes that borrows nothing, so the type
-//! checker proves that every schema borrows only the model, the arena, or `'static` data
-//! (INV-4 in `owner`).
+//! [`plan`] selects the roots, members, and operations of a scope, decodes every
+//! schema-relevant trait, and checks collection cycles and index limits, reporting every
+//! problem before anything is allocated. The resulting [`Plan`] borrows nothing: it refers
+//! to model shapes by position and holds one empty slot per root, member, and operation,
+//! which `materialize` fills. Because the model is immutable, a plan that was
+//! built successfully can be materialized later, in any order, without new errors.
 
 use super::facts::{OperationFacts, TraitFacts};
-use super::owner::{Builder, SchemaIndex, SliceIndex};
+use super::owner::{SchemaHandle, SchemaSlot, SliceHandle};
 use super::SchemaBuildError;
 use crate::diagnostic::{Diagnostic, DiagnosticCode, DiagnosticSet};
-use crate::shape::{MemberView, OperationView, ServiceView, ShapeView};
+use crate::model::ModelData;
+use crate::shape::{OperationView, ServiceView, ShapeView};
 use crate::{Model, ShapeId, ShapeType};
-use aws_smithy_schema::{PayloadHint, Schema};
 use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 type SchemaShapeId<'a> = aws_smithy_schema::ShapeId<'a>;
+
 type SchemaShapeType = aws_smithy_schema::ShapeType;
 
 /// Which shapes to materialize.
@@ -49,33 +54,128 @@ pub(super) enum OperationFilter {
 pub(super) struct Options {
     pub(super) scope: Scope,
     pub(super) max_diagnostics: usize,
+    /// The most roots, members, or model shapes a plan can index. `u32::MAX`, except in
+    /// tests of the limit.
+    pub(super) max_plan_entries: u32,
+    /// Leave the plan unmaterialized, for tests of lazy materialization.
+    #[cfg(test)]
+    pub(super) lazy: bool,
 }
 
-/// Indexes into the built storage. Borrows nothing.
+/// What a set contains. Borrows nothing; refers to model shapes by position.
 #[derive(Debug)]
-pub(super) struct Graph {
-    /// Root and member schemas by shape ID.
-    pub(super) schemas: HashMap<ShapeId, SchemaIndex>,
-    /// The number of root (non-member) schemas in `schemas`.
-    pub(super) root_count: usize,
-    /// Operations in selection order.
-    pub(super) operations: IndexMap<ShapeId, OperationRecord>,
+pub(super) struct Plan {
     /// The selected service, if built for one.
     pub(super) service: Option<ShapeId>,
+    /// Selected data shapes, sorted by model position.
+    pub(super) roots: Box<[RootPlan]>,
+    /// The index in `roots` of the root at each model position, or [`NOT_SELECTED`]. Lets
+    /// `schema` find a root with the model's own lookup, without a second table of shape
+    /// IDs.
+    pub(super) root_index: Box<[u32]>,
+    /// The members of selected structures, unions, lists, and maps, grouped by container in
+    /// `roots` order and in declaration order within each.
+    pub(super) members: Box<[MemberPlan]>,
+    /// Selected operations in selection order: model order, or sorted by shape ID for a
+    /// service.
+    pub(super) operations: IndexMap<ShapeId, OperationPlan>,
 }
 
+#[derive(Debug)]
+pub(super) struct RootPlan {
+    /// Position in [`ModelData::root_at`] order.
+    pub(super) model_position: u32,
+    /// This root's members are `members[member_start..member_start + member_len]`.
+    pub(super) member_start: u32,
+    /// Zero for shapes without member schemas, including enums.
+    pub(super) member_len: u32,
+    pub(super) schema: SchemaSlot,
+}
+
+/// [`Plan::root_index`] of a shape that was not selected.
+pub(super) const NOT_SELECTED: u32 = u32::MAX;
+
+#[derive(Debug)]
+pub(super) struct MemberPlan {
+    /// Index of the containing root in [`Plan::roots`].
+    pub(super) container: u32,
+    /// Index of the target root in [`Plan::roots`].
+    pub(super) target: u32,
+    pub(super) schema: SchemaSlot,
+}
+
+#[derive(Debug)]
+pub(super) struct OperationPlan {
+    /// Position in [`ModelData::root_at`] order.
+    pub(super) model_position: u32,
+    /// Indexes in [`Plan::roots`].
+    pub(super) input: u32,
+    pub(super) output: u32,
+    /// Effective errors, in order, as indexes in [`Plan::roots`].
+    pub(super) errors: Box<[u32]>,
+    /// Published only when its schemas and error slice are complete (INV-6).
+    pub(super) record: OnceLock<OperationRecord>,
+}
+
+/// The schemas of a materialized operation.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct OperationRecord {
-    pub(super) input: SchemaIndex,
-    pub(super) output: SchemaIndex,
-    pub(super) errors: SliceIndex,
+    pub(super) input: SchemaHandle,
+    pub(super) output: SchemaHandle,
+    pub(super) errors: SliceHandle,
+}
+
+/// The slot of a selected root or member schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Slot {
+    Root(usize),
+    Member(usize),
+}
+
+impl Plan {
+    /// The slot of a selected root or member, or `None` if `id` was not selected.
+    pub(super) fn slot(&self, data: &ModelData, id: &ShapeId) -> Option<Slot> {
+        let index = *self.root_index.get(data.root_position(id)?)?;
+        if index == NOT_SELECTED {
+            return None;
+        }
+        let index = index as usize;
+        match id.member() {
+            None => Some(Slot::Root(index)),
+            Some(name) => {
+                let root = &self.roots[index];
+                if root.member_len == 0 {
+                    return None;
+                }
+                let shape = data.root_at(root.model_position as usize);
+                // Comparing a few names is faster than hashing one.
+                let position = if root.member_len <= 8 {
+                    ShapeView::new(data, shape)
+                        .members()
+                        .iter()
+                        .position(|member| member.name() == name)?
+                } else {
+                    shape.member_index(name)?
+                };
+                Some(Slot::Member(root.member_start as usize + position))
+            }
+        }
+    }
+
+    /// The published schema in `slot`, if materialized.
+    pub(super) fn get(&self, slot: Slot) -> Option<SchemaHandle> {
+        match slot {
+            Slot::Root(index) => self.roots[index].schema.get(),
+            Slot::Member(index) => self.members[index].schema.get(),
+        }
+    }
 }
 
 /// The runtime schema type of a model shape type, or `None` for shapes that have no schema.
 ///
 /// The match is exhaustive, so a new shape type cannot be added to this crate without
 /// deciding how it is materialized.
-fn schema_type(shape_type: ShapeType) -> Option<SchemaShapeType> {
+pub(super) fn schema_type(shape_type: ShapeType) -> Option<SchemaShapeType> {
     Some(match shape_type {
         ShapeType::Blob => SchemaShapeType::Blob,
         ShapeType::Boolean => SchemaShapeType::Boolean,
@@ -102,7 +202,7 @@ fn schema_type(shape_type: ShapeType) -> Option<SchemaShapeType> {
 
 /// Whether a shape's members are materialized as member schemas. Enum members are values,
 /// not serialized members.
-fn has_member_schemas(shape_type: ShapeType) -> bool {
+pub(super) fn has_member_schemas(shape_type: ShapeType) -> bool {
     matches!(
         shape_type,
         ShapeType::List | ShapeType::Map | ShapeType::Structure | ShapeType::Union
@@ -115,7 +215,7 @@ pub(super) fn root_id(id: &ShapeId) -> SchemaShapeId<'_> {
     SchemaShapeId::from_parts(id.as_str(), id.namespace(), id.name())
 }
 
-fn member_id(id: &ShapeId) -> SchemaShapeId<'_> {
+pub(super) fn member_id(id: &ShapeId) -> SchemaShapeId<'_> {
     match id.member() {
         Some(member) => {
             SchemaShapeId::from_parts_with_member(id.as_str(), id.namespace(), id.name(), member)
@@ -368,279 +468,195 @@ fn filter_operations<'a>(
     })
 }
 
-/// A member to materialize.
-struct Member<'a> {
-    view: MemberView<'a>,
-    /// Position in its container's members.
-    position: usize,
-    /// Index of the target in `Selection::roots`.
-    target: usize,
-    facts: TraitFacts<'a>,
+/// Trait facts decoded while planning, indexed like the plan, for materializing in the same
+/// batch without decoding again.
+pub(super) struct Prepared<'m> {
+    pub(super) roots: Vec<TraitFacts<'m>>,
+    pub(super) members: Vec<TraitFacts<'m>>,
+    pub(super) operations: Vec<OperationFacts<'m>>,
+    /// Every member, each after the members it references.
+    pub(super) member_order: Vec<usize>,
 }
 
-/// Builds the schemas selected by `options` with `arena`.
+/// Converts a plan index or count to `u32`, reporting a `ResourceLimit` if it exceeds `max`.
+fn plan_index(value: usize, max: u32, what: &str, diagnostics: &mut DiagnosticSet) -> Option<u32> {
+    match u32::try_from(value) {
+        Ok(value) if value <= max => Some(value),
+        _ => {
+            diagnostics.push(Diagnostic::error(
+                DiagnosticCode::ResourceLimit,
+                format!("the selection has {value} {what}, more than the limit of {max}"),
+            ));
+            None
+        }
+    }
+}
+
+/// Selects and validates what `options` selects from `model`.
 ///
-/// Validates every trait value and cycle before allocating. Internal invariant failures found
-/// while allocating leave a partial graph, which `Arena::build` releases.
-pub(super) fn build<'a>(
-    model: &'a Model,
-    arena: Builder<'a>,
+/// Reports every malformed schema-relevant trait, every list and map cycle, and selections
+/// too large to index. On success, returns the plan and the facts decoded for it.
+pub(super) fn plan<'m>(
+    model: &'m Model,
     options: &Options,
-) -> Result<Graph, SchemaBuildError> {
+) -> Result<(Plan, Prepared<'m>), SchemaBuildError> {
     let mut diagnostics = DiagnosticSet::with_limit(options.max_diagnostics);
     let fail = |diagnostics| Err(SchemaBuildError::new(diagnostics));
+    let data = model.data();
+    let max = options.max_plan_entries;
 
     let Some(selection) = Selection::select(model, &options.scope, &mut diagnostics) else {
         return fail(diagnostics);
     };
-    let roots = &selection.roots;
+    // Model positions are stored as `u32`, so the whole model must fit; `NOT_SELECTED` is
+    // never a valid index because the limit is at most `u32::MAX`.
+    if plan_index(data.root_count(), max, "model shapes", &mut diagnostics).is_none()
+        || plan_index(selection.roots.len(), max, "roots", &mut diagnostics).is_none()
+    {
+        return fail(diagnostics);
+    }
 
-    // Decode each schema-relevant trait application once.
-    let mut root_facts = Vec::with_capacity(roots.len());
-    let mut member_start = Vec::with_capacity(roots.len() + 1);
+    // Order the selected roots by model position, so `schema` can find them with the model's
+    // own lookup. `order[i]` is the selection index of plan index `i`, `rank` the reverse,
+    // and `by_position` the plan index at each model position.
+    let positions: Vec<u32> = selection
+        .roots
+        .keys()
+        .map(|id| {
+            data.root_position(id)
+                .expect("selected roots are in the model") as u32
+        })
+        .collect();
+    let mut by_position = vec![NOT_SELECTED; data.root_count()];
+    for (selection_index, &position) in positions.iter().enumerate() {
+        by_position[position as usize] = selection_index as u32;
+    }
+    let mut order = Vec::with_capacity(positions.len());
+    let mut rank = vec![0u32; positions.len()];
+    for entry in by_position
+        .iter_mut()
+        .filter(|entry| **entry != NOT_SELECTED)
+    {
+        let selection_index = *entry as usize;
+        rank[selection_index] = order.len() as u32;
+        *entry = order.len() as u32;
+        order.push(selection_index);
+    }
+
+    // Decode each schema-relevant trait application once, in plan order.
+    let mut roots = Vec::with_capacity(order.len());
     let mut members = Vec::new();
-    for shape in roots.values() {
-        root_facts.push(TraitFacts::decode(
+    let mut prepared = Prepared {
+        roots: Vec::with_capacity(order.len()),
+        members: Vec::new(),
+        operations: Vec::with_capacity(selection.operations.len()),
+        member_order: Vec::new(),
+    };
+    let mut member_views = Vec::new();
+    for (index, &selection_index) in order.iter().enumerate() {
+        let (_, shape) = selection
+            .roots
+            .get_index(selection_index)
+            .expect("in range");
+        prepared.roots.push(TraitFacts::decode(
             shape.id(),
             shape.traits(),
             &mut diagnostics,
         ));
-        member_start.push(members.len());
+        let member_start = members.len();
         if has_member_schemas(shape.shape_type()) {
             for (position, view) in shape.members().iter().enumerate() {
-                members.push(Member {
-                    view,
-                    position,
-                    target: roots
-                        .get_index_of(view.target())
-                        .expect("member targets are selected"),
-                    facts: TraitFacts::decode(view.id(), view.traits(), &mut diagnostics),
+                // `Schema::new_struct` asserts that each member schema's index is its position,
+                // and member schemas are built with their position, so this holds by
+                // construction; `index` hashes the name, so only check it in debug builds.
+                debug_assert_eq!(view.index(), position, "`{}`", view.id());
+                let target = selection
+                    .roots
+                    .get_index_of(view.target())
+                    .expect("member targets are selected");
+                members.push(MemberPlan {
+                    container: index as u32,
+                    target: rank[target],
+                    schema: SchemaSlot::new(),
                 });
+                member_views.push(view);
+                prepared.members.push(TraitFacts::decode(
+                    view.id(),
+                    view.traits(),
+                    &mut diagnostics,
+                ));
             }
         }
+        if plan_index(members.len(), max, "members", &mut diagnostics).is_none() {
+            return fail(diagnostics);
+        }
+        roots.push(RootPlan {
+            model_position: positions[selection_index],
+            member_start: member_start as u32,
+            member_len: (members.len() - member_start) as u32,
+            schema: SchemaSlot::new(),
+        });
     }
-    member_start.push(members.len());
-    let operation_facts: Vec<_> = selection
-        .operations
-        .iter()
-        .map(|operation| {
-            OperationFacts::decode(operation.id(), operation.traits(), &mut diagnostics)
-        })
-        .collect();
+    for operation in &selection.operations {
+        prepared.operations.push(OperationFacts::decode(
+            operation.id(),
+            operation.traits(),
+            &mut diagnostics,
+        ));
+    }
 
-    // List and map members reference the member schemas of their targets, so those must be
-    // built first. Order members so dependencies come first, rejecting cycles.
-    let dependencies = |member: &Member<'a>| -> ([usize; 2], usize) {
-        let start = member_start[member.target];
-        match roots[member.target].shape_type() {
+    // List and map members reference the member schemas of their targets, so those
+    // references must not form a cycle.
+    let dependencies = |member: usize| -> ([usize; 2], usize) {
+        let target = &roots[members[member].target as usize];
+        let start = target.member_start as usize;
+        let shape_type = data.root_at(target.model_position as usize).shape_type();
+        match shape_type {
             ShapeType::List => ([start, 0], 1),
             ShapeType::Map => ([start, start + 1], 2),
             _ => ([0, 0], 0),
         }
     };
-    let order = dependency_order(&members, dependencies, &mut diagnostics);
+    prepared.member_order = dependency_order(&member_views, dependencies, &mut diagnostics);
     if diagnostics.has_errors() {
         return fail(diagnostics);
     }
 
-    let struct_count = roots
-        .values()
-        .filter(|shape| matches!(shape.shape_type(), ShapeType::Structure | ShapeType::Union))
-        .count();
-    let operation_count = selection.operations.len();
-    arena.reserve(
-        roots.len() + members.len() + 2 * operation_count,
-        struct_count + operation_count,
-    );
-    let mut schemas = HashMap::with_capacity(roots.len() + members.len());
-
-    // Member schemas, dependencies first.
-    let mut member_schemas: Vec<Option<&'a Schema<'a>>> = vec![None; members.len()];
-    for &index in &order {
-        let member = &members[index];
-        let target = roots[member.target];
-        let target_facts = &root_facts[member.target];
-        let shape_type = schema_type(target.shape_type()).expect("members target data shapes");
-        let mut schema = member.facts.apply(Schema::new_member(
-            member_id(member.view.id()),
-            shape_type,
-            member.view.name(),
-            member.position,
-        ));
-        // Target traits that a member inherits, as in `memberTraitChain` in
-        // `SchemaGenerator.kt`.
-        if target.shape_type() == ShapeType::Timestamp && member.facts.timestamp_format.is_none() {
-            if let Some(format) = target_facts.timestamp_format {
-                schema = schema.with_timestamp_format(format);
-            }
-        }
-        if member.facts.media_type.is_none() {
-            if let Some(media_type) = target_facts.media_type {
-                schema = schema.with_media_type(media_type);
-            }
-        }
-        if !member.facts.streaming && target_facts.streaming {
-            schema = schema.with_streaming();
-        }
-        let (dependencies, count) = dependencies(member);
-        let built =
-            |i: usize| member_schemas[dependencies[i]].expect("dependencies are built first");
-        match count {
-            1 => schema = schema.with_list_member(built(0)),
-            2 => schema = schema.with_map_members(built(0), built(1)),
-            _ => {}
-        }
-        let (schema_index, schema) = arena.alloc(schema);
-        member_schemas[index] = Some(schema);
-        schemas.insert(member.view.id().clone(), schema_index);
-    }
-    let member_schemas: Vec<&'a Schema<'a>> = member_schemas
-        .into_iter()
-        .map(|schema| schema.expect("every member is built"))
-        .collect();
-
-    // Root schemas.
-    let mut root_indexes = Vec::with_capacity(roots.len());
-    let mut root_schemas = Vec::with_capacity(roots.len());
-    let mut root_slices: Vec<Option<(SliceIndex, &'a [&'a Schema<'a>])>> = vec![None; roots.len()];
-    for (position, shape) in roots.values().enumerate() {
-        let id = root_id(shape.id());
-        let shape_type = schema_type(shape.shape_type()).expect("roots are data shapes");
-        let own = &member_schemas[member_start[position]..member_start[position + 1]];
-        let schema = match shape.shape_type() {
-            ShapeType::List => Schema::new_list(id, own[0]),
-            ShapeType::Map => Schema::new_map(id, own[0], own[1]),
-            ShapeType::Structure | ShapeType::Union => {
-                // `new_struct` asserts this; check it so a bug is an error, not a panic.
-                if let Some((i, _)) = own
-                    .iter()
-                    .enumerate()
-                    .find(|(i, member)| member.member_index() != Some(*i))
-                {
-                    diagnostics.push(
-                        Diagnostic::error(
-                            DiagnosticCode::InvalidShape,
-                            format!(
-                                "internal error: member {i} of `{}` has the wrong member index",
-                                shape.id()
-                            ),
-                        )
-                        .with_source_location(shape.source_location().clone())
-                        .with_shape_id(shape.id().clone()),
-                    );
-                    return fail(diagnostics);
-                }
-                let slice = arena.alloc_slice(own.to_vec());
-                root_slices[position] = Some(slice);
-                root_facts[position].apply(Schema::new_struct(id, shape_type, slice.1))
-            }
-            // Generated schemas only carry root traits on structures and unions
-            // (`traitSetterChain`); match them.
-            _ => Schema::new(id, shape_type),
-        };
-        let (index, schema) = arena.alloc(schema);
-        schemas.insert(shape.id().clone(), index);
-        root_indexes.push(index);
-        root_schemas.push(schema);
-    }
-
-    // Operation overlays.
-    let mut operations = IndexMap::with_capacity(operation_count);
-    for (position, operation) in selection.operations.iter().enumerate() {
-        let facts = &operation_facts[position];
-        let input = roots
-            .get_index_of(operation.input())
-            .expect("inputs are selected");
-
-        // A structure root with the input's own ID, traits, and members, plus the
-        // operation's HTTP binding and the hints derived from it. One per operation, so
-        // operations that share an input (or `smithy.api#Unit`) do not share `@http`.
-        let mut schema = overlay(operation.input(), input, &root_facts, &root_slices);
-        if let Some(http) = facts.http_trait() {
-            schema = schema.with_http(http);
-        }
-        let input_members = &members[member_start[input]..member_start[input + 1]];
-        let mut has_body_members = false;
-        let mut struct_payload = false;
-        for member in input_members {
-            // As in `noBodyMembersChain` and `payloadHintChain` in `SchemaGenerator.kt`.
-            let framed_payload = member.facts.http_payload
-                && matches!(
-                    roots[member.target].shape_type(),
-                    ShapeType::Structure | ShapeType::Union
-                );
-            struct_payload |= framed_payload;
-            has_body_members |= framed_payload || !member.facts.has_http_binding();
-        }
-        schema = schema.with_payload_hint(if struct_payload {
-            PayloadHint::StructPayload
-        } else {
-            PayloadHint::NoStructPayload
-        });
-        if !has_body_members {
-            schema = schema.with_no_body_members();
-        }
-        let (input_index, _) = arena.alloc(schema);
-
-        let output = roots
-            .get_index_of(operation.output())
-            .expect("outputs are selected");
-        let output_index = if facts.xml_unwrapped_output {
-            let schema = overlay(operation.output(), output, &root_facts, &root_slices);
-            arena.alloc(schema.with_xml_unwrapped_output()).0
-        } else {
-            root_indexes[output]
-        };
-
-        let errors = selection.errors[position]
-            .iter()
-            .map(|id| root_schemas[roots.get_index_of(id).expect("errors are selected")])
-            .collect();
-        let (errors, _) = arena.alloc_slice(errors);
-
+    let root_index = |id: &ShapeId| rank[selection.roots.get_index_of(id).expect("selected")];
+    let mut operations = IndexMap::with_capacity(selection.operations.len());
+    for (operation, errors) in selection.operations.iter().zip(&selection.errors) {
         operations.insert(
             operation.id().clone(),
-            OperationRecord {
-                input: input_index,
-                output: output_index,
-                errors,
+            OperationPlan {
+                model_position: data
+                    .root_position(operation.id())
+                    .expect("operations are in the model") as u32,
+                input: root_index(operation.input()),
+                output: root_index(operation.output()),
+                errors: errors.iter().map(|id| root_index(id)).collect(),
+                record: OnceLock::new(),
             },
         );
     }
 
-    Ok(Graph {
-        schemas,
-        root_count: roots.len(),
-        operations,
+    let plan = Plan {
         service: match &options.scope {
             Scope::AllShapes => None,
             Scope::Service { service, .. } => Some(service.clone()),
         },
-    })
-}
-
-/// A new structure root for `id`, the selected root at `position`, that shares its members
-/// and repeats its traits. `Schema` is not `Clone`, so an overlay is rebuilt from the same
-/// decoded facts as the base schema.
-fn overlay<'a>(
-    id: &'a ShapeId,
-    position: usize,
-    root_facts: &[TraitFacts<'a>],
-    root_slices: &[Option<(SliceIndex, &'a [&'a Schema<'a>])>],
-) -> Schema<'a> {
-    let (_, members) = root_slices[position].expect("operation inputs and outputs are structures");
-    root_facts[position].apply(Schema::new_struct(
-        root_id(id),
-        SchemaShapeType::Structure,
-        members,
-    ))
+        roots: roots.into(),
+        root_index: by_position.into(),
+        members: members.into(),
+        operations,
+    };
+    Ok((plan, prepared))
 }
 
 /// Orders members so that each comes after the members it references, reporting every
 /// cycle. Iterative, so deeply nested collections cannot overflow the stack.
-fn dependency_order<'a>(
-    members: &[Member<'a>],
-    dependencies: impl Fn(&Member<'a>) -> ([usize; 2], usize),
+fn dependency_order(
+    members: &[crate::shape::MemberView<'_>],
+    dependencies: impl Fn(usize) -> ([usize; 2], usize),
     diagnostics: &mut DiagnosticSet,
 ) -> Vec<usize> {
     #[derive(Clone, Copy, PartialEq)]
@@ -661,7 +677,7 @@ fn dependency_order<'a>(
         stack.push((root, 0));
         while let Some((member, next)) = stack.last_mut() {
             let member = *member;
-            let (targets, count) = dependencies(&members[member]);
+            let (targets, count) = dependencies(member);
             if *next == count {
                 marks[member] = Mark::Built;
                 order.push(member);
@@ -682,13 +698,10 @@ fn dependency_order<'a>(
                         .expect("a building member is on the stack");
                     let path: Vec<String> = stack[start..]
                         .iter()
-                        .map(|&(entry, _)| format!("`{}`", members[entry].view.id()))
-                        .chain(std::iter::once(format!(
-                            "`{}`",
-                            members[dependency].view.id()
-                        )))
+                        .map(|&(entry, _)| format!("`{}`", members[entry].id()))
+                        .chain(std::iter::once(format!("`{}`", members[dependency].id())))
                         .collect();
-                    let view = members[member].view;
+                    let view = members[member];
                     diagnostics.push(
                         Diagnostic::error(
                             DiagnosticCode::InvalidShape,

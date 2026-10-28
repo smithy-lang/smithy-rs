@@ -13,8 +13,12 @@
 //!
 //! Models used under Miri disable the prelude, because parsing it is slow there; tests that
 //! need it are ignored under Miri.
+//!
+//! Public sets are materialized eagerly. Tests of lazy materialization build sets with the
+//! test-only `RuntimeSchemaSetBuilder::lazy`.
 
 use super::owner::tests::{count_allocations, with_panic_after, Sentinel};
+use super::plan::Slot;
 use super::{RuntimeSchemaSet, SchemaBuildError};
 use crate::diagnostic::DiagnosticCode;
 use crate::{Model, ShapeId};
@@ -637,7 +641,7 @@ fn containment_walk_matches_top_down() {
         .unwrap()
         .as_service()
         .unwrap();
-    let walked: Vec<_> = super::build::contained_operations(&model, service)
+    let walked: Vec<_> = super::plan::contained_operations(&model, service)
         .iter()
         .map(|o| o.id().clone())
         .collect();
@@ -825,12 +829,15 @@ static SET_DROPS: AtomicUsize = AtomicUsize::new(0);
 static SET_SENTINEL: SchemaExtensionKey<Sentinel> =
     SchemaExtensionKey::new(|_| Sentinel(&SET_DROPS));
 
-/// Visits every schema reachable from the set's public API.
+/// Visits every materialized root and member schema, then every operation's schemas
+/// (materializing them).
 fn for_each_schema<'a>(set: &'a RuntimeSchemaSet, mut f: impl FnMut(&'a Schema<'a>)) {
-    let mut ids: Vec<ShapeId> = set.graph.schemas.keys().cloned().collect();
-    ids.sort();
-    for id in &ids {
-        f(set.schema(id).unwrap());
+    let roots = (0..set.plan.roots.len()).map(Slot::Root);
+    let members = (0..set.plan.members.len()).map(Slot::Member);
+    for slot in roots.chain(members) {
+        if let Some(schema) = set.materialized(slot) {
+            f(schema);
+        }
     }
     for operation in set.operations() {
         f(operation.input());
@@ -952,7 +959,7 @@ fn operation_descriptors_borrow_the_model_id() {
     let schemas = set.storage.schema_count();
     for operation in set.operations() {
         let model_id = set
-            .graph
+            .plan
             .operations
             .get_key_value(operation.id().as_str())
             .unwrap()
@@ -969,4 +976,504 @@ fn operation_descriptors_borrow_the_model_id() {
     // Descriptors are built by value and allocate nothing in the set.
     let _ = set.operation(&id("ex#Read")).unwrap();
     assert_eq!(set.storage.schema_count(), schemas);
+}
+
+// --- Lazy materialization (Miri) ---
+
+/// Operations that share inputs, nested collections, outputs, and errors. `ex#Lonely` is not
+/// reachable from the service.
+const LAZY: &str = r#"
+    "ex#Service": {"type": "service", "operations": [
+        {"target": "ex#A"}, {"target": "ex#B"}, {"target": "ex#C"}, {"target": "ex#D"}]},
+    "ex#A": {"type": "operation", "input": {"target": "ex#AIn"}, "output": {"target": "ex#Out"},
+        "errors": [{"target": "ex#Err"}],
+        "traits": {"smithy.api#http": {"method": "POST", "uri": "/a"}}},
+    "ex#B": {"type": "operation", "input": {"target": "ex#BIn"}, "output": {"target": "ex#Out"}},
+    "ex#C": {"type": "operation", "input": {"target": "ex#Shared"},
+        "traits": {"smithy.api#http": {"method": "GET", "uri": "/c"}}},
+    "ex#D": {"type": "operation", "input": {"target": "ex#Shared"},
+        "traits": {"smithy.api#http": {"method": "GET", "uri": "/d"}}},
+    "ex#AIn": {"type": "structure", "members": {
+        "shared": {"target": "ex#Shared"},
+        "names": {"target": "ex#Names", "traits": {"smithy.api#httpHeader": "x-names"}}}},
+    "ex#BIn": {"type": "structure", "members": {"shared": {"target": "ex#Shared"}}},
+    "ex#Shared": {"type": "structure", "members": {
+        "list": {"target": "ex#Names"}, "map": {"target": "ex#Map"}}},
+    "ex#Names": {"type": "list", "member": {"target": "ex#String"}},
+    "ex#Map": {"type": "map", "key": {"target": "ex#String"}, "value": {"target": "ex#Names"}},
+    "ex#Out": {"type": "structure", "members": {"v": {"target": "ex#String",
+        "traits": {"smithy.api#jsonName": "V"}}}},
+    "ex#Err": {"type": "structure", "members": {}, "traits": {"smithy.api#error": "client"}},
+    "ex#Lonely": {"type": "structure", "members": {}}
+"#;
+
+fn service_set(model: &Model, operations: Option<&[&str]>, lazy: bool) -> RuntimeSchemaSet {
+    let service = id("ex#Service");
+    let builder = RuntimeSchemaSet::builder(model);
+    let builder = match operations {
+        None => builder.for_service(&service),
+        Some(operations) => {
+            let operations: Vec<_> = operations.iter().map(|o| id(o)).collect();
+            builder.for_service_operations(&service, &operations)
+        }
+    };
+    let builder = if lazy { builder.lazy() } else { builder };
+    builder.build().unwrap_or_else(|err| panic!("{err}"))
+}
+
+fn slots(set: &RuntimeSchemaSet) -> impl Iterator<Item = Slot> {
+    let roots = (0..set.plan.roots.len()).map(Slot::Root);
+    roots.chain((0..set.plan.members.len()).map(Slot::Member))
+}
+
+fn materialized_operations(set: &RuntimeSchemaSet) -> usize {
+    set.plan
+        .operations
+        .values()
+        .filter(|operation| operation.record.get().is_some())
+        .count()
+}
+
+/// How closely [`assert_matches_eager`] compares schemas. Formatting is slow under Miri.
+#[derive(Clone, Copy, PartialEq)]
+enum Compare {
+    /// Complete `Debug` output.
+    Debug,
+    /// [`fingerprint`]s.
+    Fingerprint,
+    /// Shape IDs, types, and member counts.
+    Structure,
+}
+
+/// Every materialized schema of `lazy` equals the eager set's schema in the same slot,
+/// references the published schemas of its members, and every materialized operation equals
+/// the eager operation.
+fn assert_matches_eager(lazy: &RuntimeSchemaSet, eager: &RuntimeSchemaSet, compare: Compare) {
+    let same =
+        |actual: &Schema<'_>, expected: &Schema<'_>, context: &dyn std::fmt::Debug| match compare {
+            Compare::Debug => assert_eq!(
+                format!("{actual:?}"),
+                format!("{expected:?}"),
+                "{context:?}"
+            ),
+            Compare::Fingerprint => {
+                assert_eq!(fingerprint(actual), fingerprint(expected), "{context:?}")
+            }
+            Compare::Structure => {
+                assert_eq!(actual.shape_id().as_str(), expected.shape_id().as_str());
+                assert_eq!(actual.shape_type(), expected.shape_type(), "{context:?}");
+                assert_eq!(actual.members().len(), expected.members().len());
+            }
+        };
+    assert_eq!(lazy.len(), eager.len());
+    for slot in slots(lazy) {
+        let Some(schema) = lazy.materialized(slot) else {
+            continue;
+        };
+        same(schema, eager.materialized(slot).unwrap(), &slot);
+        if let Slot::Root(root) = slot {
+            let start = lazy.plan.roots[root].member_start as usize;
+            for (i, member) in schema.members().iter().enumerate() {
+                let published = lazy.materialized(Slot::Member(start + i)).unwrap();
+                assert!(std::ptr::eq(*member, published), "{slot:?}");
+            }
+        }
+    }
+    for (index, (id, operation)) in lazy.plan.operations.iter().enumerate() {
+        if operation.record.get().is_some() {
+            let actual = lazy.operation_schema(index, id);
+            let expected = eager.operation(id).unwrap();
+            if compare != Compare::Structure {
+                assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
+            }
+            same(actual.input(), expected.input(), id);
+            same(actual.output(), expected.output(), id);
+        }
+    }
+}
+
+#[test]
+fn lazy_sets_allocate_nothing_until_used() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let eager = service_set(&model, None, false);
+    assert_eq!(lazy.storage.schema_count(), 0);
+    assert_eq!(lazy.len(), eager.len());
+    assert!(!lazy.is_empty());
+    assert_eq!(lazy.service(), eager.service());
+    // Debug neither materializes nor hides that nothing is materialized.
+    assert_eq!(
+        format!("{lazy:?}"),
+        "RuntimeSchemaSet { service: Some(ShapeId(\"ex#Service\")), roots: 9, schemas: 0, operations: 4, .. }"
+    );
+    assert_eq!(lazy.storage.schema_count(), 0);
+    // INV-3: dropping an unmaterialized set is fine (Miri checks for leaks).
+}
+
+#[test]
+fn first_operation_builds_only_its_closure() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let b = lazy.operation(&id("ex#B")).unwrap();
+    // Exactly what an eager set of only `ex#B` contains.
+    let only_b = service_set(&model, Some(&["ex#B"]), false);
+    assert_eq!(lazy.storage.schema_count(), only_b.storage.schema_count());
+    assert_eq!(materialized_operations(&lazy), 1);
+    assert!(lazy
+        .materialized(lazy.plan.slot(model.data(), &id("ex#AIn")).unwrap())
+        .is_none());
+    // A second lookup allocates nothing and returns the same schemas.
+    let input = b.input();
+    let again = lazy.operation(&id("ex#B")).unwrap();
+    assert!(std::ptr::eq(input, again.input()));
+    assert!(std::ptr::eq(b.output(), again.output()));
+    assert_eq!(lazy.storage.schema_count(), only_b.storage.schema_count());
+    assert_matches_eager(&lazy, &service_set(&model, None, false), Compare::Debug);
+}
+
+#[test]
+fn later_operations_share_built_schemas() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let b = lazy.operation(&id("ex#B")).unwrap();
+    let shared = schema(&lazy, "ex#Shared");
+    let names_member = schema(&lazy, "ex#Names$member");
+    let a = lazy.operation(&id("ex#A")).unwrap();
+    // Only the schemas `ex#A` does not share with `ex#B` are added.
+    let a_and_b = service_set(&model, Some(&["ex#A", "ex#B"]), false);
+    assert_eq!(lazy.storage.schema_count(), a_and_b.storage.schema_count());
+    assert!(std::ptr::eq(shared, schema(&lazy, "ex#Shared")));
+    let names = a.input().member_schema("names").unwrap();
+    assert!(std::ptr::eq(names.member().unwrap(), names_member));
+    assert!(std::ptr::eq(a.output(), b.output()));
+    assert_eq!(a.errors()[0].shape_id().as_str(), "ex#Err");
+
+    // `ex#C` and `ex#D` share an input structure but get their own inputs.
+    let c = lazy.operation(&id("ex#C")).unwrap();
+    let d = lazy.operation(&id("ex#D")).unwrap();
+    assert!(!std::ptr::eq(c.input(), d.input()));
+    assert!(!std::ptr::eq(c.input(), shared));
+    assert!(std::ptr::eq(c.input().members()[0], shared.members()[0]));
+    assert_eq!(d.input().http().unwrap().uri(), "/d");
+
+    // Everything materialized lazily is the eager set.
+    let eager = service_set(&model, None, false);
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+    assert_matches_eager(&lazy, &eager, Compare::Fingerprint);
+}
+
+#[test]
+fn lazy_schema_lookup_builds_the_containing_closure() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    // A member builds its container and everything the container reaches.
+    let member = schema(&lazy, "ex#Names$member");
+    assert_eq!(member.member_name(), Some("member"));
+    // `ex#Names`, its member, and `ex#String`.
+    assert_eq!(lazy.storage.schema_count(), 3);
+    assert_eq!(materialized_operations(&lazy), 0);
+    assert!(std::ptr::eq(
+        schema(&lazy, "ex#Names").member().unwrap(),
+        member
+    ));
+    assert_eq!(lazy.storage.schema_count(), 3);
+    // Unselected or nonexistent IDs are `None`, cold or not.
+    for missing in [
+        "ex#Lonely",
+        "ex#Names$nope",
+        "ex#Nope",
+        "ex#A",
+        "ex#Service",
+    ] {
+        assert!(lazy.schema(&id(missing)).is_none(), "{missing}");
+    }
+    assert_eq!(lazy.storage.schema_count(), 3);
+    assert_matches_eager(&lazy, &service_set(&model, None, false), Compare::Debug);
+}
+
+#[test]
+fn operations_iterator_materializes_as_it_goes() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let mut operations = lazy.operations();
+    assert_eq!(operations.len(), 4);
+    assert_eq!(materialized_operations(&lazy), 0);
+    let first = operations.next().unwrap();
+    assert_eq!(first.id().as_str(), "ex#A");
+    assert_eq!(materialized_operations(&lazy), 1);
+    drop(operations);
+    assert_eq!(materialized_operations(&lazy), 1);
+}
+
+/// INV-6, INV-7, INV-8: threads racing to materialize the same operation observe one set of
+/// schemas, and threads materializing different operations share the schemas they have in
+/// common.
+#[test]
+fn concurrent_materialization() {
+    let model = model(LAZY);
+    let eager = service_set(&model, None, false);
+    let one = service_set(&model, Some(&["ex#A"]), false);
+
+    let lazy = service_set(&model, None, true);
+    let inputs: Vec<usize> = std::thread::scope(|scope| {
+        let threads: Vec<_> = (0..3)
+            .map(|_| {
+                let lazy = &lazy;
+                scope.spawn(move || {
+                    let a = lazy.operation(&id("ex#A")).unwrap();
+                    assert_eq!(a.input().http().unwrap().uri(), "/a");
+                    a.input() as *const Schema<'_> as usize
+                })
+            })
+            .collect();
+        threads.into_iter().map(|t| t.join().unwrap()).collect()
+    });
+    assert!(inputs.windows(2).all(|pair| pair[0] == pair[1]));
+    assert_eq!(lazy.storage.schema_count(), one.storage.schema_count());
+
+    let lazy = service_set(&model, None, true);
+    std::thread::scope(|scope| {
+        for operation in ["ex#A", "ex#B", "ex#C", "ex#D"] {
+            let lazy = &lazy;
+            scope.spawn(move || {
+                lazy.operation(&id(operation)).unwrap();
+                schema(lazy, "ex#Shared");
+            });
+        }
+    });
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+    assert_matches_eager(&lazy, &eager, Compare::Structure);
+}
+
+/// INV-1, INV-2, INV-7: a reference stays valid while another thread adds schemas, and a
+/// partially materialized set can move between threads without moving its schemas.
+#[test]
+fn references_survive_appends_and_moves() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let b = lazy.operation(&id("ex#B")).unwrap().input();
+    let address = b as *const Schema<'_> as usize;
+    std::thread::scope(|scope| {
+        let lazy = &lazy;
+        scope.spawn(move || {
+            for operation in ["ex#A", "ex#C", "ex#D"] {
+                lazy.operation(&id(operation)).unwrap();
+            }
+        });
+        for _ in 0..10 {
+            assert_eq!(b.members()[0].member_name(), Some("shared"));
+        }
+    });
+    assert_eq!(b.shape_id().as_str(), "ex#BIn");
+
+    let lazy = service_set(&model, None, true);
+    let b = lazy.operation(&id("ex#B")).unwrap().input() as *const Schema<'_> as usize;
+    let lazy = std::thread::spawn(move || {
+        let lazy = Box::new(lazy);
+        lazy.operation(&id("ex#A")).unwrap();
+        lazy
+    })
+    .join()
+    .unwrap();
+    let after = lazy.operation(&id("ex#B")).unwrap().input() as *const Schema<'_> as usize;
+    assert_eq!(after, b);
+    assert_ne!(address, 0);
+}
+
+/// INV-3, INV-5: extensions forced before later batches are dropped exactly once.
+#[test]
+fn extensions_forced_between_batches_drop_once() {
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+    static KEY: SchemaExtensionKey<Sentinel> = SchemaExtensionKey::new(|_| Sentinel(&DROPS));
+    let model = model(LAZY);
+    let before = DROPS.load(Ordering::SeqCst);
+    let lazy = service_set(&model, None, true);
+    let mut seen = std::collections::HashSet::new();
+    for operation in ["ex#B", "ex#A", "ex#C", "ex#D"] {
+        lazy.operation(&id(operation)).unwrap();
+        for_each_schema(&lazy, |schema| {
+            schema.extension(&KEY);
+            seen.insert(schema as *const Schema<'_> as usize);
+        });
+    }
+    assert_eq!(seen.len(), lazy.storage.schema_count());
+    drop(lazy);
+    assert_eq!(DROPS.load(Ordering::SeqCst) - before, seen.len());
+}
+
+/// INV-3, INV-6, INV-8: a panic after any allocation of a lazy operation leaves only complete
+/// schemas published and no operation record; the poisoned batch lock is recovered, the same
+/// and other operations then materialize correctly, and everything is released once.
+#[test]
+fn a_panic_during_lazy_materialization_can_be_retried() {
+    let model = model(LAZY);
+    let eager = service_set(&model, None, false);
+    let expected = service_set(&model, Some(&["ex#A", "ex#B"]), false)
+        .storage
+        .schema_count();
+    let allocations = count_allocations(|| {
+        service_set(&model, None, true).operation(&id("ex#A"));
+    });
+    assert!(allocations > 10, "{allocations}");
+    for fail_after in 0..allocations {
+        let lazy = service_set(&model, None, true);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_panic_after(fail_after, || lazy.operation(&id("ex#A")))
+        }));
+        assert!(result.is_err(), "allocation {fail_after} did not fail");
+        assert_eq!(materialized_operations(&lazy), 0);
+        // Whatever was published is complete and correct.
+        assert_matches_eager(&lazy, &eager, Compare::Structure);
+        let a = lazy.operation(&id("ex#A")).unwrap();
+        assert_eq!(a.input().http().unwrap().uri(), "/a");
+        lazy.operation(&id("ex#B")).unwrap();
+        let compare = if fail_after + 1 == allocations {
+            Compare::Fingerprint
+        } else {
+            Compare::Structure
+        };
+        assert_matches_eager(&lazy, &eager, compare);
+        // At most the one allocation that panicked is unused.
+        let count = lazy.storage.schema_count();
+        assert!(count == expected || count == expected + 1, "{count}");
+    }
+}
+
+#[test]
+fn plans_too_large_to_index_are_resource_limits() {
+    let model = model(LAZY);
+    let error = RuntimeSchemaSet::builder(&model)
+        .max_plan_entries(5)
+        .build()
+        .unwrap_err();
+    let diagnostic = error.diagnostics().iter().next().unwrap();
+    assert_eq!(diagnostic.code(), DiagnosticCode::ResourceLimit);
+    assert!(
+        diagnostic.message().contains("more than the limit of 5"),
+        "{}",
+        diagnostic.message()
+    );
+    let filtered = RuntimeSchemaSet::builder(&model)
+        .max_plan_entries(14)
+        .for_service_operations(&id("ex#Service"), &[id("ex#B")])
+        .build();
+    // The model has 15 shapes; one operation selects far fewer, but positions in the whole
+    // model must be indexable.
+    assert!(filtered.is_err(), "the whole model must be indexable");
+}
+
+/// A non-recursive summary of the wire-relevant parts of a schema, for comparing large sets.
+fn fingerprint(schema: &Schema<'_>) -> String {
+    let members: Vec<_> = schema
+        .members()
+        .iter()
+        .map(|member| member.shape_id().as_str())
+        .collect();
+    format!(
+        "{} {:?} {:?} {:?} {members:?} list={:?} key={:?} http={:?} json={:?} xml={:?} \
+         header={:?} format={:?} payload={:?} body={} unwrapped={} sensitive={}",
+        schema.shape_id().as_str(),
+        schema.shape_type(),
+        schema.member_name(),
+        schema.member_index(),
+        schema.member().map(|m| m.shape_id().as_str()),
+        schema.key().map(|m| m.shape_id().as_str()),
+        schema.http().map(|h| (h.method(), h.uri(), h.code())),
+        schema.json_name().map(|t| t.value()),
+        schema.xml_name().map(|t| t.value()),
+        schema.http_header().map(|t| t.value()),
+        schema.timestamp_format().map(|t| t.format()),
+        schema.payload_hint(),
+        schema.has_body_members(),
+        schema.xml_unwrapped_output(),
+        schema.sensitive().is_some(),
+    )
+}
+
+/// Materializing every service operation lazily, in an order unlike the eager one and
+/// interleaved with schema lookups, gives the eager set: the same schemas in every slot, the
+/// same number of them, and the same sharing.
+#[test]
+#[cfg_attr(miri, ignore = "loads the AWS model corpus")]
+fn lazy_matches_eager_on_the_corpus() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../aws/sdk/aws-models");
+    let mut paths: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|e| e == "json"))
+        .collect();
+    paths.sort();
+    let mut checked = 0;
+    for path in paths {
+        // Other JSON files there are not models; `tests/corpus.rs` checks that every model
+        // loads.
+        let Ok(model) = Model::from_json_file(&path) else {
+            continue;
+        };
+        let Some(service) = model.services().next() else {
+            continue;
+        };
+        let name = path.display();
+        let build = |lazy: bool| {
+            let builder = RuntimeSchemaSet::builder(&model).for_service(service.id());
+            let builder = if lazy { builder.lazy() } else { builder };
+            builder.build().unwrap_or_else(|e| panic!("{name}: {e}"))
+        };
+        let eager = build(false);
+        let lazy = build(true);
+        assert_eq!(lazy.storage.schema_count(), 0, "{name}");
+        // Every other operation from the end, a few schemas, then the rest from the start.
+        let ids: Vec<ShapeId> = lazy.plan.operations.keys().cloned().collect();
+        for id in ids.iter().rev().step_by(2) {
+            lazy.operation(id).unwrap();
+        }
+        let data = model.data();
+        for root in lazy.plan.roots.iter().step_by(7) {
+            lazy.schema(data.root_at(root.model_position as usize).id())
+                .unwrap();
+        }
+        for operation in lazy.operations() {
+            let _ = operation.input();
+        }
+        assert_eq!(
+            lazy.storage.schema_count(),
+            eager.storage.schema_count(),
+            "{name}"
+        );
+        for slot in slots(&lazy) {
+            let actual = lazy.materialized(slot).unwrap();
+            let expected = eager.materialized(slot).unwrap();
+            assert_eq!(
+                fingerprint(actual),
+                fingerprint(expected),
+                "{name}: {slot:?}"
+            );
+            // Roots reference the published member schemas.
+            if let Slot::Root(root) = slot {
+                let start = lazy.plan.roots[root].member_start as usize;
+                for (i, member) in actual.members().iter().enumerate() {
+                    let published = lazy.materialized(Slot::Member(start + i)).unwrap();
+                    assert!(std::ptr::eq(*member, published), "{name}: {slot:?}");
+                }
+            }
+        }
+        for (actual, expected) in lazy.operations().zip(eager.operations()) {
+            assert_eq!(actual.id().as_str(), expected.id().as_str());
+            for (a, e) in [
+                (actual.input(), expected.input()),
+                (actual.output(), expected.output()),
+            ] {
+                assert_eq!(fingerprint(a), fingerprint(e), "{name}");
+            }
+            let errors = |o: &aws_smithy_schema::OperationSchema<'_>| {
+                o.errors()
+                    .iter()
+                    .map(|e| fingerprint(e))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(errors(&actual), errors(&expected), "{name}");
+        }
+        checked += 1;
+    }
+    assert!(checked >= 20, "only {checked} models");
 }

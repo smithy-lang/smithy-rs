@@ -219,6 +219,8 @@ taskset -c 2 cargo bench --features runtime-schema --bench model -- '^schema/' -
   schema.
 - `schema/operation_descriptor`: `RuntimeSchemaSet::operation`, reading every
   `OperationSchema` field (ID, input, output, errors).
+- `schema/schema_lookup/{model}/{root,member}`: `RuntimeSchemaSet::schema` for the
+  first operation input with members, and for its first member.
 
 Same machine and fixture commit as above, crate commit `052d4dddc` plus the
 uncommitted `runtime_schema` module:
@@ -257,3 +259,28 @@ finding and sorting the service's 769 contained operations. Lookup is 4–10%
 slower because `OperationSchema` holds an `aws_smithy_schema::ShapeId` by value
 (four borrowed strings) where the previous descriptor held a reference to the
 model's ID.
+
+### Plan and append-only storage
+
+A set is now planned first (selection, trait validation, cycle checks), then materialized
+into append-only storage whose slots can be filled after the set is shared; public sets are
+still materialized completely before `build` returns. Compares the previous commit
+(`cd5ffacab`) with the change, both pinned to one core (`taskset -c 5`) and run twice,
+alternating, on the same 16-core x86_64 machine:
+
+| Benchmark | Model | Before | After |
+| --------- | ----- | -----: | ----: |
+| `schema/all` | SQS / S3 / EC2 | 131 µs / 1.31 / 9.4–10.1 ms | 133 µs / 1.18–1.20 / 8.3–8.7 ms |
+| `schema/service` | SQS / S3 / EC2 | 161 µs / 1.38 / 10.0–11.8 ms | 162 µs / 1.26 / 8.6–8.8 ms |
+| `schema/operation_lookup` | SQS / S3 / EC2 | 45–46 / 44–46 / 51 ns | 47–48 / 46 / 49–51 ns |
+| `schema/schema_lookup/root` | SQS / S3 / EC2 | 36 / 36 / 37–39 ns | 42 / 45–46 / 46–47 ns |
+| `schema/schema_lookup/member` | SQS / S3 / EC2 | 42–43 / 44 / 41–42 ns | 62 / 66–67 / 66–68 ns |
+
+Building no longer inserts every root and member ID into a hash map, which pays for the
+plan and the slots. `schema` instead finds a root with the model's own lookup and a table
+from model position to plan index, then a member by comparing names (up to 8 members) or
+hashing the member name in the model: one more step than the removed map, so root lookups
+are about 6–9 ns slower and member lookups about 22 ns. Operation lookup, the request
+path, is unchanged. The plan takes 24 bytes per root, 16 per member, 72 per operation
+plus its errors, and 4 per model shape, about 0.34 MB for EC2 (4,041 roots, 10,259
+members, 769 operations, 4,951 shapes), less than the removed map of 14,300 IDs.

@@ -23,6 +23,10 @@ use std::fmt;
 ///   service does not exist or is not a service, or an operation selected with
 ///   [`for_service_operations`](super::RuntimeSchemaSetBuilder::for_service_operations) does
 ///   not exist, is not an operation, or is not contained in the service.
+/// - [`ResourceLimit`](crate::diagnostic::DiagnosticCode::ResourceLimit): the model or the
+///   selection has more than `u32::MAX` shapes or members, more than a set can index, or
+///   diagnostics exceeded
+///   [`max_diagnostics`](super::RuntimeSchemaSetBuilder::max_diagnostics).
 ///
 /// Diagnostics are reported in model order and bounded by
 /// [`RuntimeSchemaSetBuilder::max_diagnostics`](super::RuntimeSchemaSetBuilder::max_diagnostics).

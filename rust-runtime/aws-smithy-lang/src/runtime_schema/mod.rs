@@ -124,10 +124,11 @@
 //! frees them. That is a few bytes per distinct name, but it grows without bound in a process
 //! that keeps loading models with new header names.
 
-mod build;
 mod error;
 mod facts;
+mod materialize;
 mod owner;
+mod plan;
 
 #[cfg(test)]
 mod tests;
@@ -138,20 +139,30 @@ pub use error::SchemaBuildError;
 use crate::json_loader::DEFAULT_MAX_DIAGNOSTICS;
 use crate::{Model, ShapeId};
 use aws_smithy_schema::Schema;
-use build::{Graph, OperationFilter, OperationRecord, Options, Scope};
-use owner::{Arena, Storage};
+use materialize::{Batch, Facts};
+use owner::{SchemaHandle, Storage};
+use plan::{OperationFilter, OperationRecord, Options, Plan, Scope, Slot};
 use std::fmt;
 
 /// An immutable set of runtime schemas built from a [`Model`].
 ///
 /// See the [module documentation](self).
 pub struct RuntimeSchemaSet {
-    // The schemas in `storage` borrow from `model`, which safe Rust cannot express for two
-    // fields of one struct; `owner` explains why that requires `unsafe` and why the
-    // alternatives were rejected. Declared before `model` so that it drops first (INV-4).
-    storage: Storage,
-    graph: Graph,
-    model: Model,
+    /// What the set contains, and the handles of what has been built. Holds only handles
+    /// from `storage` (INV-9): it is created with `storage`, never replaced, and only
+    /// filled by batches of `storage`.
+    plan: Plan,
+    /// The model and the schemas that borrow it, which safe Rust cannot express for two
+    /// fields of one struct; `owner` explains why that requires `unsafe` and why the
+    /// alternatives were rejected.
+    // TODO(dynamic-client): This keeps the complete model alive (about 29 MiB for EC2), even
+    // when the set is scoped to a service or filtered to a few operations, whose schemas are
+    // a small fraction of that. Investigate owning a model trimmed to the selected closure
+    // instead, for example a `Model::project(service, operations)` that copies only the
+    // selected shapes and the service. That needs a policy for source locations, traits,
+    // and references to unselected shapes, and `model()` would then return the trimmed
+    // model.
+    storage: Storage<Model>,
 }
 
 const _: () = {
@@ -167,33 +178,65 @@ impl RuntimeSchemaSet {
             options: Options {
                 scope: Scope::AllShapes,
                 max_diagnostics: DEFAULT_MAX_DIAGNOSTICS,
+                max_plan_entries: u32::MAX,
+                #[cfg(test)]
+                lazy: false,
             },
         }
     }
 
     fn build(model: Model, options: &Options) -> Result<Self, SchemaBuildError> {
-        // The schemas borrow `model`, which only moves its `Arc` pointer, never the data
-        // (INV-4). If `build` fails or panics, everything it allocated is released.
-        let (graph, storage) = Arena::build(&model, |model, builder| {
-            build::build(model, builder, options)
+        // If planning fails or materializing panics, dropping `storage` releases everything
+        // allocated (INV-3).
+        let storage = Storage::new(model);
+        let plan = storage.with_builder(|model, builder| {
+            let (plan, prepared) = plan::plan(model, options)?;
+            #[cfg(test)]
+            if options.lazy {
+                return Ok(plan);
+            }
+            {
+                // SAFETY: INV-9: `plan` is new and holds no handles.
+                let mut batch =
+                    unsafe { Batch::new(&plan, model, builder, Facts::Prepared(prepared)) };
+                batch.all();
+            }
+            Ok::<_, SchemaBuildError>(plan)
         })?;
-        Ok(Self {
-            storage,
-            graph,
-            model,
+        Ok(Self { plan, storage })
+    }
+
+    /// Runs a materialization batch.
+    fn batch<R>(&self, run: impl for<'b> FnOnce(&mut Batch<'_, 'b>) -> R) -> R {
+        self.storage.with_builder(|model, builder| {
+            // SAFETY: INV-9: `self.plan` holds only handles from `self.storage` (see the
+            // field).
+            let mut batch = unsafe { Batch::new(&self.plan, model, builder, Facts::Decode) };
+            run(&mut batch)
         })
+    }
+
+    /// The handle in `slot`, materializing the containing root's closure if needed.
+    #[cold]
+    fn materialize(&self, slot: Slot) -> SchemaHandle {
+        let root = match slot {
+            Slot::Root(root) => root,
+            Slot::Member(member) => self.plan.members[member].container as usize,
+        };
+        self.batch(|batch| batch.closure([root]));
+        self.plan.get(slot).expect("materialized")
     }
 
     /// The model the schemas were built from.
     pub fn model(&self) -> &Model {
-        &self.model
+        self.storage.data()
     }
 
     /// The service the set was built for, if it was built with
     /// [`RuntimeSchemaSetBuilder::for_service`] or
     /// [`RuntimeSchemaSetBuilder::for_service_operations`].
     pub fn service(&self) -> Option<&ShapeId> {
-        self.graph.service.as_ref()
+        self.plan.service.as_ref()
     }
 
     /// The schema of a data shape or member, or `None` if it was not selected.
@@ -201,13 +244,14 @@ impl RuntimeSchemaSet {
     /// For an operation input, this is the shape's own schema, without the operation's
     /// `@http` trait; use [`RuntimeSchemaSet::operation`] to serialize a request.
     pub fn schema(&self, id: &ShapeId) -> Option<&Schema<'_>> {
-        let index = *self.graph.schemas.get(id)?;
-        // SAFETY: INV-4: the schemas in `self.storage` borrow only model data behind
-        // `self.model`'s `Arc`, which never moves and stays alive as long as `self`, and
-        // `self.storage` stays alive for the returned borrow of `self`. `index` comes from
-        // `self.graph`, which the same `Arena::build` call produced with `self.storage`, so
-        // it addresses this storage (`Graph` itself borrows nothing).
-        Some(unsafe { self.storage.schema(index) })
+        let slot = self.plan.slot(self.model().data(), id)?;
+        let handle = match self.plan.get(slot) {
+            Some(handle) => handle,
+            None => self.materialize(slot),
+        };
+        // SAFETY: INV-9: `handle` comes from `self.plan`, which holds only handles from
+        // `self.storage`.
+        Some(unsafe { self.storage.schema(handle) })
     }
 
     /// The schemas of an operation, or `None` if it was not selected.
@@ -226,24 +270,26 @@ impl RuntimeSchemaSet {
     /// [`OperationKnowledge::errors_in`](crate::knowledge::OperationKnowledge::errors_in)
     /// returns them. Otherwise, they are only the operation's own errors.
     pub fn operation(&self, id: &ShapeId) -> Option<OperationSchema<'_>> {
-        let (id, record) = self.graph.operations.get_key_value(id)?;
-        Some(self.operation_schema(id, record))
+        let (index, id, _) = self.plan.operations.get_full(id)?;
+        Some(self.operation_schema(index, id))
     }
 
     /// Every selected operation: in model order, or sorted by shape ID for a service.
     pub fn operations(&self) -> impl ExactSizeIterator<Item = OperationSchema<'_>> + '_ {
-        self.graph
+        self.plan
             .operations
-            .iter()
-            .map(|(id, record)| self.operation_schema(id, record))
+            .keys()
+            .enumerate()
+            .map(|(index, id)| self.operation_schema(index, id))
     }
 
-    fn operation_schema<'a>(
-        &'a self,
-        id: &'a ShapeId,
-        record: &OperationRecord,
-    ) -> OperationSchema<'a> {
-        // SAFETY: INV-4, as in `schema`.
+    fn operation_schema<'a>(&'a self, index: usize, id: &'a ShapeId) -> OperationSchema<'a> {
+        let (_, plan) = self.plan.operations.get_index(index).expect("in range");
+        let record = match plan.record.get() {
+            Some(record) => *record,
+            None => self.materialize_operation(index),
+        };
+        // SAFETY: INV-9, as in `schema`: the record was published in `self.plan`.
         let (input, output, errors) = unsafe {
             (
                 self.storage.schema(record.input),
@@ -251,21 +297,35 @@ impl RuntimeSchemaSet {
                 self.storage.slice(record.errors),
             )
         };
-        OperationSchema::builder(build::root_id(id))
+        OperationSchema::builder(plan::root_id(id))
             .input(input)
             .output(output)
             .errors(errors)
             .build()
     }
 
+    #[cold]
+    fn materialize_operation(&self, index: usize) -> OperationRecord {
+        self.batch(|batch| batch.operation(index))
+    }
+
     /// The number of root data shape schemas, excluding members and operation inputs.
     pub fn len(&self) -> usize {
-        self.graph.root_count
+        self.plan.roots.len()
     }
 
     /// Returns `true` if no data shapes were selected.
     pub fn is_empty(&self) -> bool {
-        self.graph.root_count == 0
+        self.plan.roots.is_empty()
+    }
+
+    /// The schema in `slot` if it has been materialized, without materializing it.
+    #[cfg(test)]
+    fn materialized(&self, slot: Slot) -> Option<&Schema<'_>> {
+        // SAFETY: INV-9, as in `schema`.
+        self.plan
+            .get(slot)
+            .map(|handle| unsafe { self.storage.schema(handle) })
     }
 }
 
@@ -293,10 +353,10 @@ impl TryFrom<Model> for RuntimeSchemaSet {
 impl fmt::Debug for RuntimeSchemaSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeSchemaSet")
-            .field("service", &self.graph.service)
-            .field("roots", &self.graph.root_count)
+            .field("service", &self.plan.service)
+            .field("roots", &self.plan.roots.len())
             .field("schemas", &self.storage.schema_count())
-            .field("operations", &self.graph.operations.len())
+            .field("operations", &self.plan.operations.len())
             .finish_non_exhaustive()
     }
 }
@@ -369,6 +429,20 @@ impl RuntimeSchemaSetBuilder<'_> {
     /// [`ModelAssembler::max_diagnostics`](crate::ModelAssembler::max_diagnostics).
     pub fn max_diagnostics(mut self, max: usize) -> Self {
         self.options.max_diagnostics = max;
+        self
+    }
+
+    /// Leaves the set unmaterialized, so tests can exercise lazy materialization.
+    #[cfg(test)]
+    fn lazy(mut self) -> Self {
+        self.options.lazy = true;
+        self
+    }
+
+    /// Limits how many roots, members, or model shapes a plan can index.
+    #[cfg(test)]
+    fn max_plan_entries(mut self, max: u32) -> Self {
+        self.options.max_plan_entries = max;
         self
     }
 

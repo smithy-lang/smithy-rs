@@ -330,6 +330,30 @@ fn runtime_schemas(c: &mut Criterion) {
         });
     }
     group.finish();
+
+    // Warm lookups of the first operation's input structure and of its first member.
+    let mut group = c.benchmark_group("schema/schema_lookup");
+    for (name, model) in &models {
+        let set = RuntimeSchemaSet::try_from(model).unwrap();
+        let input = model
+            .operations()
+            .map(|operation| operation.input())
+            .find(|input| {
+                let shape = model.get_shape(input).unwrap().as_shape().unwrap();
+                !shape.members().is_empty()
+            })
+            .unwrap();
+        let shape = model.get_shape(input).unwrap().as_shape().unwrap();
+        let member = shape.members().get_index(0).unwrap().id().clone();
+        let root = input.clone();
+        group.bench_function(BenchmarkId::new(*name, "root"), |b| {
+            b.iter(|| set.schema(black_box(&root)).unwrap().members().len())
+        });
+        group.bench_function(BenchmarkId::new(*name, "member"), |b| {
+            b.iter(|| set.schema(black_box(&member)).unwrap().member_index())
+        });
+    }
+    group.finish();
 }
 
 #[cfg(not(feature = "runtime-schema"))]
