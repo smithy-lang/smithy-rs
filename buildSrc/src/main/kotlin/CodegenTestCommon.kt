@@ -10,7 +10,7 @@ import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
 import java.io.File
 
-/**
+/*
  * This file contains common functionality shared across the build scripts for the
  * `codegen-client-test` and `codegen-server-test` modules.
  */
