@@ -292,6 +292,8 @@ class EndpointParamsGenerator(
             }
 
             docs("Consume this builder, creating [`Params`] without the validators run by `build()`.")
+            docs("")
+            docs("Endpoint rule-set tests use this so they test the rules as the model defines them.")
             rustBlockTemplate(
                 "fn $BUILD_WITHOUT_VALIDATORS(self) -> #{Result}<#{Params}, #{ParamsError}>",
                 *preludeScope,
