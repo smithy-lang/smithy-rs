@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.che
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -58,6 +59,36 @@ internal class ServerProtocolTestHelpersTest {
             output := { @httpHeader("x-value") header: String, value: String }
         }
         """.asSmithyModel()
+
+    @Test
+    fun `misc protocol tests preserve mainline helper dependencies with generated serde`() {
+        val model =
+            Files.readString(Path.of("../codegen-core/common-test-models/misc.smithy")).asSmithyModel()
+        val manifests = mutableListOf<String>()
+        for (schemaSerde in listOf(null, false, true)) {
+            val settings = ServerAdditionalSettings.builder().withHttp1x()
+            schemaSerde?.let { settings.schemaSerde(it) }
+            serverIntegrationTest(
+                model,
+                IntegrationTestParams(
+                    service = "aws.protocoltests.misc#MiscService",
+                    additionalSettings = settings.toObjectNode(),
+                    command = { path ->
+                        val manifest = Files.readString(path.resolve("Cargo.toml"))
+                        // Generated test crates have random package names.
+                        manifests.add(manifest.replace(Regex("(?m)^name = \".*\"$"), "name = \"misc\""))
+                        assertTrue(manifest.contains("[dev-dependencies.aws-smithy-protocol-test]"), manifest)
+                        val helpers =
+                            manifest.substringAfter("[dev-dependencies.aws-smithy-protocol-test]")
+                                .substringBefore("\n[")
+                        assertEquals(schemaSerde == true, helpers.contains("\"http-1x\""), manifest)
+                    },
+                ),
+                testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+            )
+        }
+        assertEquals(manifests[0], manifests[1], "omitted and false schemaSerde must produce identical manifests")
+    }
 
     @ParameterizedTest
     @ValueSource(booleans = [false, true])

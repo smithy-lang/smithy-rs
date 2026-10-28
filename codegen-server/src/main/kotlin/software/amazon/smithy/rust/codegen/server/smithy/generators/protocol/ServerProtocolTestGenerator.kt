@@ -345,8 +345,13 @@ class ServerProtocolTestGenerator(
             "decode_body_data" to protocolTestHelpers.resolve("decode_body_data"),
         )
 
-    /** Resolve helpers through the protocol-test support crate selected for the server's HTTP version. */
-    override fun protocolTestHelper(name: String): RuntimeType = protocolTestHelpers.resolve(name)
+    /** Preserve mainline's shared helper dependencies when using generated serde. */
+    override fun protocolTestHelper(name: String): RuntimeType =
+        if (schemaSerde) {
+            protocolTestHelpers.resolve(name)
+        } else {
+            super.protocolTestHelper(name)
+        }
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         for (it in allTests) {
