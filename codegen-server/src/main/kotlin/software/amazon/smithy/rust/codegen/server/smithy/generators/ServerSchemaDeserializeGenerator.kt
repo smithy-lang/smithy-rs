@@ -423,7 +423,7 @@ class ServerSchemaDeserializeGenerator(
      */
     private fun memberValueExpr(member: MemberShape): String {
         val target = model.expectShape(member.target)
-        val schemaStaticRef = ServerSchemaGenerator.memberSchemaName(shape, symbolProvider.toMemberName(member))
+        val schemaStaticRef = codegenContext.schemaNames.getMemberName(member.id)
         val expr = readExpr(target, "member", schemaStaticRef)
         val convert = member.targetCanReachConstrainedShape(model, symbolProvider)
         val boxed = symbolProvider.toSymbol(member).isRustBoxed()

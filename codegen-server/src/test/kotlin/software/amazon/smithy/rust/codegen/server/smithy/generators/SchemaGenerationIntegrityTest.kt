@@ -9,14 +9,19 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /**
@@ -26,6 +31,67 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * and requires a clear codegen error for unsupported recursion involving collections alone.
  */
 internal class SchemaGenerationIntegrityTest {
+    @Test
+    fun `schema member suffixes preserve request and response bindings`() {
+        val model =
+            """
+            ${'$'}version: "2"
+            namespace test.names
+            use aws.protocols#restJson1
+            @restJson1 service Names { version: "1", operations: [Echo] }
+            @http(method: "POST", uri: "/echo")
+            operation Echo {
+                input := { x: Values, xKey: String, xValueMember: String, l: Items, lMember: String }
+                output := { x: Values, xKey: String, xValueMember: String, l: Items, lMember: String }
+            }
+            map Values { key: String, value: Items }
+            list Items { member: String }
+            """.asSmithyModel()
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde().toObjectNode(),
+                cargoCommand = "cargo test --quiet --lib",
+            ),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, crate ->
+            crate.testModule {
+                tokioTest("colliding_member_names_round_trip") {
+                    rustTemplate(
+                        """
+                        let config = crate::service::NamesConfig::builder().build();
+                        let service = crate::service::Names::builder(config)
+                            .echo(|input: crate::input::EchoInput| async move {
+                                assert_eq!(input.x.as_ref().unwrap()["key"], vec!["value"]);
+                                assert_eq!(input.x_key.as_deref(), #{Some}("separate key"));
+                                assert_eq!(input.x_value_member.as_deref(), #{Some}("separate nested member"));
+                                assert_eq!(input.l.as_ref().unwrap(), &vec!["item"]);
+                                assert_eq!(input.l_member.as_deref(), #{Some}("separate list member"));
+                                crate::output::EchoOutput::builder()
+                                    .x(input.x).x_key(input.x_key).x_value_member(input.x_value_member)
+                                    .l(input.l).l_member(input.l_member).build()
+                            })
+                            .build_unchecked();
+                        let body = r##"{"x":{"key":["value"]},"xKey":"separate key","xValueMember":"separate nested member","l":["item"],"lMember":"separate list member"}"##;
+                        let request = #{Http}::Request::builder().method("POST").uri("/echo")
+                            .header("content-type", "application/json")
+                            .body(#{Server}::body::to_boxed_sync(body)).unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(service, request).await.unwrap();
+                        assert_eq!(response.status(), 200);
+                        let response_body = #{BodyUtil}::BodyExt::collect(response.into_body()).await.unwrap().to_bytes();
+                        assert_eq!(std::str::from_utf8(&response_body).unwrap(), body);
+                        """,
+                        *preludeScope,
+                        "Http" to RuntimeType.http(context.runtimeConfig),
+                        "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                        "Tower" to ServerCargoDependency.tower(context).toType(),
+                        "BodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    )
+                }
+            }
+        }
+    }
+
     @Test
     fun `schema names and trait strings compile and blob serialization shares allocations`() {
         val model =

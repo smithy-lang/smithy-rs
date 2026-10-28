@@ -97,7 +97,7 @@ class ServerSchemaGenerator(
                 ),
         ),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
-    /** Override the prefix used for generated static names. Defaults to an encoding of the full shape ID. */
+    /** Override the prefix used for generated static names. Defaults to the Rust symbol's name. */
     val schemaPrefix: String? = null,
     private val additionalTraitInsertions: List<Writable> = emptyList(),
 ) {
@@ -106,6 +106,9 @@ class ServerSchemaGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
     private val schemaContext = codegenContext as? ServerCodegenContext
+    private val schemaNames by lazy {
+        (schemaContext?.schemaNames ?: ServerSchemaNames(model, symbolProvider)).forShape(shape, schemaPrefix)
+    }
     private val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
 
     private fun inputOperation(shape: Shape) =
@@ -158,13 +161,12 @@ class ServerSchemaGenerator(
             arrayOf(
                 "Schema" to smithySchema.resolve("Schema"),
             )
-        val schemaPrefix = this.schemaPrefix ?: defaultSchemaPrefix(shape)
+        val schemaPrefix = schemaNames.prefix
 
         renderMemberSchemas(writer, schemaPrefix)
         renderSchemaStatic(writer, schemaPrefix, symbol.name)
 
-        // Fully-qualified impl targets: schema code renders into the dedicated
-        // `schema_serde` module, not the shape's own module.
+        // Use the symbol's qualified path for the impl target.
         writer.rustTemplate(
             """
             impl ${symbol.fullName} {
@@ -179,15 +181,15 @@ class ServerSchemaGenerator(
             shape.allMembers.values.firstOrNull {
                 outputOperation(shape) != null && model.expectShape(it.target).hasTrait(StreamingTrait::class.java)
             }?.let { member ->
-                val memberRef = "${schemaPrefix}_MEMBER_${constantName(symbolProvider.toMemberName(member))}"
+                val memberRef = schemaNames.getMemberName(member.id)
                 writer.rustTemplate(
                     "impl ${symbol.fullName} { pub(crate) const __STREAMING_MEMBER_SCHEMA: &'static #{Schema}<'static> = &$memberRef; }",
                     *codegenScope,
                 )
             }
-            renderSerializableStruct(writer, symbol.fullName, schemaPrefix)
+            renderSerializableStruct(writer, symbol.fullName)
         } else if (shape is UnionShape) {
-            renderSerializableUnion(writer, symbol.fullName, schemaPrefix)
+            renderSerializableUnion(writer, symbol.fullName)
         }
     }
 
@@ -299,7 +301,6 @@ class ServerSchemaGenerator(
     private fun renderSerializableStruct(
         writer: RustWriter,
         structName: String,
-        schemaPrefix: String,
     ) {
         val codegenScope =
             arrayOf(
@@ -321,7 +322,7 @@ class ServerSchemaGenerator(
                     }
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
-                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                    val memberSchemaRef = schemaNames.getMemberName(member.id)
                     val writeCall = writeMethodForShape(target, memberSchemaRef, member)
                     if (memberSymbol.isOptional()) {
                         rust(
@@ -366,7 +367,6 @@ class ServerSchemaGenerator(
     private fun renderSerializableUnion(
         writer: RustWriter,
         unionName: String,
-        schemaPrefix: String,
     ) {
         val codegenScope =
             arrayOf(
@@ -382,10 +382,9 @@ class ServerSchemaGenerator(
         val variantArms =
             writable {
                 members.forEachIndexed { idx, member ->
-                    val rustMemberName = symbolProvider.toMemberName(member)
                     val variantName = symbolProvider.toSymbol(member).name
                     val target = model.expectShape(member.target)
-                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
+                    val memberSchemaRef = schemaNames.getMemberName(member.id)
 
                     if (member.isTargetUnit()) {
                         // Unit variants serialize as empty objects {} in JSON, not null
@@ -1515,8 +1514,7 @@ class ServerSchemaGenerator(
                 val members = shape.members()
                 val modelRefs =
                     members.map { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        "&${memberSchemaName(schemaPrefix, memberName)}"
+                        "&${schemaNames.getMemberName(member.id)}"
                     }
                 val allRefs = modelRefs
                 val membersArray =
@@ -1639,12 +1637,11 @@ class ServerSchemaGenerator(
         when (shape) {
             is StructureShape, is UnionShape -> {
                 shape.members().forEachIndexed { idx, member ->
-                    val rustMemberName = symbolProvider.toMemberName(member)
                     val smithyMemberName = member.memberName
                     val target = model.expectShape(member.target)
                     val memberId = ShapeId.fromParts(schemaShapeId.namespace, schemaShapeId.name, member.memberName)
                     val escapedMemberId = memberId.toString().replace("#", "##")
-                    val memberConstName = memberSchemaName(schemaPrefix, rustMemberName)
+                    val memberConstName = schemaNames.getMemberName(member.id)
                     val traitChain = memberTraitChain(member)
                     val xmlPayload = needsXmlPayloadSchema(member)
                     val xmlMetadata =
@@ -1764,25 +1761,5 @@ class ServerSchemaGenerator(
                 )
             }
         }
-    }
-
-    companion object {
-        /** Encode names injectively; case folding and aggregate suffixes cannot collide. */
-        private fun constantName(name: String): String =
-            name.toByteArray(Charsets.UTF_8).joinToString("") {
-                "%02X".format(it)
-            }
-
-        private fun defaultSchemaPrefix(shape: Shape): String = "SHAPE_${constantName(shape.id.toString())}"
-
-        internal fun memberSchemaName(
-            shape: Shape,
-            rustMemberName: String,
-        ): String = memberSchemaName(defaultSchemaPrefix(shape), rustMemberName)
-
-        private fun memberSchemaName(
-            schemaPrefix: String,
-            rustMemberName: String,
-        ): String = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
     }
 }

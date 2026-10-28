@@ -13,11 +13,13 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaNames
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.returnSymbolToParseFn
 
 /**
@@ -79,6 +81,10 @@ data class ServerCodegenContext(
                 index.getOutputShape(operation).orElse(null)?.let { putIfAbsent(it.id, operation) }
             }
         }
+    }
+
+    internal val schemaNames: ServerSchemaNames by lazy {
+        ServerSchemaNames(model, symbolProvider, DirectedWalker(model).walkShapes(serviceShape))
     }
 
     override fun builderInstantiator(): BuilderInstantiator {
