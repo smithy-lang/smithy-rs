@@ -14,12 +14,12 @@
 //! Models used under Miri disable the prelude, because parsing it is slow there; tests that
 //! need it are ignored under Miri.
 //!
-//! Public sets are materialized eagerly. Tests of lazy materialization build sets with the
-//! test-only `RuntimeSchemaSetBuilder::lazy`.
+//! Sets are eager unless a test builds them with `Materialization::Lazy`; `LAZY` and
+//! `service_set` are the fixtures for lazy materialization.
 
 use super::owner::tests::{count_allocations, with_panic_after, Sentinel};
 use super::plan::Slot;
-use super::{RuntimeSchemaSet, SchemaBuildError};
+use super::{Materialization, RuntimeSchemaSet, SchemaBuildError};
 use crate::diagnostic::DiagnosticCode;
 use crate::{Model, ShapeId};
 use aws_smithy_schema::extension::SchemaExtensionKey;
@@ -944,7 +944,7 @@ fn owned_and_borrowed_conversions_agree() {
     assert!(borrowed.model().equivalent(&model));
     assert_eq!(
         format!("{borrowed:?}"),
-        "RuntimeSchemaSet { service: None, roots: 3, schemas: 9, operations: 4, .. }"
+        "RuntimeSchemaSet { service: None, materialization: Eager, roots: 3, operations: 4, built_schemas: 9, built_operations: 4, .. }"
     );
     let read = borrowed.operation(&id("ex#Read")).unwrap();
     assert_eq!(
@@ -1017,8 +1017,18 @@ fn service_set(model: &Model, operations: Option<&[&str]>, lazy: bool) -> Runtim
             builder.for_service_operations(&service, &operations)
         }
     };
-    let builder = if lazy { builder.lazy() } else { builder };
-    builder.build().unwrap_or_else(|err| panic!("{err}"))
+    builder
+        .materialization(materialization(lazy))
+        .build()
+        .unwrap_or_else(|err| panic!("{err}"))
+}
+
+fn materialization(lazy: bool) -> Materialization {
+    if lazy {
+        Materialization::Lazy
+    } else {
+        Materialization::Eager
+    }
 }
 
 fn slots(set: &RuntimeSchemaSet) -> impl Iterator<Item = Slot> {
@@ -1104,10 +1114,32 @@ fn lazy_sets_allocate_nothing_until_used() {
     // Debug neither materializes nor hides that nothing is materialized.
     assert_eq!(
         format!("{lazy:?}"),
-        "RuntimeSchemaSet { service: Some(ShapeId(\"ex#Service\")), roots: 9, schemas: 0, operations: 4, .. }"
+        "RuntimeSchemaSet { service: Some(ShapeId(\"ex#Service\")), materialization: Lazy, roots: 9, operations: 4, built_schemas: 0, built_operations: 0, .. }"
     );
     assert_eq!(lazy.storage.schema_count(), 0);
-    // INV-3: dropping an unmaterialized set is fine (Miri checks for leaks).
+
+    // Operation IDs build nothing, and come in service order, not the order requested.
+    let ids: Vec<_> = lazy.operation_ids().map(ShapeId::as_str).collect();
+    assert_eq!(ids, ["ex#A", "ex#B", "ex#C", "ex#D"]);
+    assert_eq!(lazy.operation_ids().len(), 4);
+    let filtered = service_set(&model, Some(&["ex#C", "ex#A", "ex#C"]), true);
+    let ids: Vec<_> = filtered.operation_ids().map(ShapeId::as_str).collect();
+    assert_eq!(ids, ["ex#A", "ex#C"]);
+    assert_eq!(filtered.storage.schema_count(), 0);
+    assert_eq!(lazy.storage.schema_count(), 0);
+
+    // Debug counts what is built, without building anything.
+    lazy.operation(&id("ex#B")).unwrap();
+    let built = lazy.storage.schema_count();
+    assert_eq!(
+        format!("{lazy:?}"),
+        format!(
+            "RuntimeSchemaSet {{ service: Some(ShapeId(\"ex#Service\")), materialization: Lazy, \
+             roots: 9, operations: 4, built_schemas: {built}, built_operations: 1, .. }}"
+        )
+    );
+    assert_eq!(lazy.storage.schema_count(), built);
+    // INV-3: dropping a partly materialized set is fine (Miri checks for leaks).
 }
 
 #[test]
@@ -1203,6 +1235,128 @@ fn operations_iterator_materializes_as_it_goes() {
     assert_eq!(materialized_operations(&lazy), 1);
     drop(operations);
     assert_eq!(materialized_operations(&lazy), 1);
+    // `take(1)` builds only the first operation, even on a fresh set.
+    let lazy = service_set(&model, None, true);
+    assert_eq!(lazy.operations().take(1).count(), 1);
+    assert_eq!(materialized_operations(&lazy), 1);
+}
+
+/// The three scopes of the `LAZY` model: every shape, the service, and one operation.
+fn scopes(
+    builder: super::RuntimeSchemaSetBuilder<'_>,
+    scope: usize,
+) -> super::RuntimeSchemaSetBuilder<'_> {
+    match scope {
+        0 => builder.all_shapes(),
+        1 => builder.for_service(&id("ex#Service")),
+        _ => builder.for_service_operations(&id("ex#Service"), &[id("ex#B")]),
+    }
+}
+
+fn fully_materialized(set: &RuntimeSchemaSet) -> bool {
+    slots(set).all(|slot| set.materialized(slot).is_some())
+        && materialized_operations(set) == set.plan.operations.len()
+}
+
+#[test]
+fn eager_is_the_default_for_every_scope() {
+    let model = model(LAZY);
+    let from = RuntimeSchemaSet::try_from(&model).unwrap();
+    assert_eq!(from.materialization(), Materialization::Eager);
+    assert!(fully_materialized(&from));
+    for scope in 0..3 {
+        let set = scopes(RuntimeSchemaSet::builder(&model), scope)
+            .build()
+            .unwrap();
+        assert_eq!(
+            set.materialization(),
+            Materialization::Eager,
+            "scope {scope}"
+        );
+        assert!(fully_materialized(&set), "scope {scope}");
+        // Lookups find everything built and allocate nothing.
+        let schemas = set.storage.schema_count();
+        let allocations = count_allocations(|| {
+            for id in set.operation_ids() {
+                set.operation(id).unwrap();
+            }
+            schema(&set, "ex#Shared$list");
+            set.materialize_all();
+        });
+        assert_eq!(
+            (allocations, set.storage.schema_count()),
+            (0, schemas),
+            "scope {scope}"
+        );
+    }
+}
+
+#[test]
+fn lazy_is_honored_for_every_scope_in_any_order() {
+    let model = model(LAZY);
+    for scope in 0..3 {
+        let eager = scopes(RuntimeSchemaSet::builder(&model), scope)
+            .build()
+            .unwrap();
+        let before = scopes(
+            RuntimeSchemaSet::builder(&model).materialization(Materialization::Lazy),
+            scope,
+        );
+        let after =
+            scopes(RuntimeSchemaSet::builder(&model), scope).materialization(Materialization::Lazy);
+        for builder in [before, after] {
+            let lazy = builder.build().unwrap();
+            assert_eq!(
+                lazy.materialization(),
+                Materialization::Lazy,
+                "scope {scope}"
+            );
+            assert_eq!(lazy.storage.schema_count(), 0, "scope {scope}");
+            assert_eq!(lazy.len(), eager.len(), "scope {scope}");
+            assert!(
+                lazy.operation_ids().eq(eager.operation_ids()),
+                "scope {scope}"
+            );
+            lazy.materialize_all();
+            assert!(fully_materialized(&lazy), "scope {scope}");
+            assert_eq!(
+                lazy.storage.schema_count(),
+                eager.storage.schema_count(),
+                "scope {scope}"
+            );
+            assert_matches_eager(&lazy, &eager, Compare::Structure);
+        }
+    }
+    // A later choice replaces an earlier one.
+    let set = RuntimeSchemaSet::builder(&model)
+        .materialization(Materialization::Lazy)
+        .materialization(Materialization::Eager)
+        .build()
+        .unwrap();
+    assert!(fully_materialized(&set));
+}
+
+#[test]
+fn materialize_all_completes_a_partly_built_set_once() {
+    let model = model(LAZY);
+    let eager = service_set(&model, None, false);
+    let lazy = service_set(&model, None, true);
+    let b = lazy.operation(&id("ex#B")).unwrap();
+    let shared = schema(&lazy, "ex#Shared");
+    lazy.materialize_all();
+    assert!(fully_materialized(&lazy));
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+    // What was built before is kept, not rebuilt.
+    assert!(std::ptr::eq(
+        b.input(),
+        lazy.operation(&id("ex#B")).unwrap().input()
+    ));
+    assert!(std::ptr::eq(shared, schema(&lazy, "ex#Shared")));
+    assert_matches_eager(&lazy, &eager, Compare::Fingerprint);
+    // A second call does nothing.
+    let schemas = lazy.storage.schema_count();
+    assert_eq!(count_allocations(|| lazy.materialize_all()), 0);
+    assert_eq!(lazy.storage.schema_count(), schemas);
 }
 
 /// INV-6, INV-7, INV-8: threads racing to materialize the same operation observe one set of
@@ -1241,6 +1395,21 @@ fn concurrent_materialization() {
             });
         }
     });
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+    assert_matches_eager(&lazy, &eager, Compare::Structure);
+
+    // `materialize_all` racing with lookups builds each schema once.
+    let lazy = service_set(&model, None, true);
+    std::thread::scope(|scope| {
+        let set = &lazy;
+        scope.spawn(move || set.materialize_all());
+        for operation in ["ex#D", "ex#A"] {
+            scope.spawn(move || {
+                set.operation(&id(operation)).unwrap();
+            });
+        }
+    });
+    lazy.materialize_all();
     assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
     assert_matches_eager(&lazy, &eager, Compare::Structure);
 }
@@ -1415,11 +1584,21 @@ fn lazy_matches_eager_on_the_corpus() {
         };
         let name = path.display();
         let build = |lazy: bool| {
-            let builder = RuntimeSchemaSet::builder(&model).for_service(service.id());
-            let builder = if lazy { builder.lazy() } else { builder };
-            builder.build().unwrap_or_else(|e| panic!("{name}: {e}"))
+            RuntimeSchemaSet::builder(&model)
+                .for_service(service.id())
+                .materialization(materialization(lazy))
+                .build()
+                .unwrap_or_else(|e| panic!("{name}: {e}"))
         };
         let eager = build(false);
+        let prewarmed = build(true);
+        prewarmed.materialize_all();
+        assert_eq!(
+            prewarmed.storage.schema_count(),
+            eager.storage.schema_count(),
+            "{name}"
+        );
+        drop(prewarmed);
         let lazy = build(true);
         assert_eq!(lazy.storage.schema_count(), 0, "{name}");
         // Every other operation from the end, a few schemas, then the rest from the start.

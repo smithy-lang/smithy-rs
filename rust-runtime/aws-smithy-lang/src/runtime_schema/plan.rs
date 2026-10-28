@@ -57,9 +57,7 @@ pub(super) struct Options {
     /// The most roots, members, or model shapes a plan can index. `u32::MAX`, except in
     /// tests of the limit.
     pub(super) max_plan_entries: u32,
-    /// Leave the plan unmaterialized, for tests of lazy materialization.
-    #[cfg(test)]
-    pub(super) lazy: bool,
+    pub(super) materialization: super::Materialization,
 }
 
 /// What a set contains. Borrows nothing; refers to model shapes by position.

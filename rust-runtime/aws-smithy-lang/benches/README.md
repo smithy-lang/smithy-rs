@@ -284,3 +284,42 @@ are about 6–9 ns slower and member lookups about 22 ns. Operation lookup, the 
 path, is unchanged. The plan takes 24 bytes per root, 16 per member, 72 per operation
 plus its errors, and 4 per model shape, about 0.34 MB for EC2 (4,041 roots, 10,259
 members, 769 operations, 4,951 shapes), less than the removed map of 14,300 IDs.
+
+### Lazy materialization
+
+`Materialization::Lazy` sets, built with `for_service`, measured on the same machine pinned to
+one core (`taskset -c 5`), except the threaded `contended_*` cases, which run unpinned. The
+eager `schema/service` from the same run is the comparison:
+
+| Benchmark | SQS | S3 | EC2 |
+| --------- | --: | -: | --: |
+| `schema/service` (eager) | 162 µs | 1.30 ms | 8.97 ms |
+| `schema/service_plan` (lazy, nothing built) | 93 µs | 0.64 ms | 4.58 ms |
+| `schema/materialize_all` (lazy, then everything) | 182 µs | 1.47 ms | 9.71 ms |
+| `schema/first_operation/p50` | 4.6 µs | 9.2 µs | 13.5 µs |
+| `schema/first_operation/p90` | 7.8 µs | 25.9 µs | 18.4 µs |
+| `schema/first_operation/max` | 17.3 µs | 35.4 µs | 169 µs |
+| `schema/overlapping_operation` | 2.3 µs | 25.9 µs | 3.9 µs |
+
+`first_operation` ranks the service's operations by how many shapes they reach (with
+`Walker`) and measures the median, 90th-percentile, and largest; it measures the lookup
+only, after the set is built. `overlapping_operation` is the second operation in service
+order after the first. All are well within the design's EC2 targets (100 µs, 250 µs, 1 ms).
+
+A lazy plan costs 51% of an eager EC2 build, above the provisional 35% target: selection,
+trait validation, and cycle checks are half the work, and allocation the other half. In the
+profile, hashing shape IDs (selection and model lookups) is the largest part of planning,
+then trait decoding. `materialize_all` after a lazy build costs 1.08–1.14 times an eager
+build, within the 1.5 times target, because it decodes traits a second time and builds
+members by searching rather than in the planner's order.
+
+First lookups contending on one lock, EC2, including spawning the threads (unpinned):
+
+| Threads | `contended_same` | `contended_distinct` |
+| ------: | ---------------: | -------------------: |
+| 2 | 86 µs | 112 µs |
+| 4 | 118 µs | 153 µs |
+| 8 | 184 µs | 237 µs |
+
+Threads asking for the same operation wait for one build and then share it; threads asking
+for different ones are serialized by the lock, so the time grows with their total work.

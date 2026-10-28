@@ -393,24 +393,35 @@ impl<'p, 'b> Batch<'p, 'b> {
         record
     }
 
-    /// Builds every root, member, and operation of the plan, with facts prepared by the
-    /// planner.
+    /// Builds every root, member, and operation of the plan not built yet. With prepared
+    /// facts (an eager build), members are built in the planner's dependency order, otherwise
+    /// each root builds its members as it goes.
     pub(super) fn all(&mut self) {
         let plan = self.plan;
         let data = self.model.data();
-        let structures = plan
-            .roots
-            .iter()
-            .filter(|root| {
-                let shape_type = data.root_at(root.model_position as usize).shape_type();
+        // Reserve for what is missing, so prewarming a partly built set does not
+        // over-allocate.
+        let (mut roots, mut structures) = (0, 0);
+        for root in plan.roots.iter().filter(|root| root.schema.get().is_none()) {
+            roots += 1;
+            let shape_type = data.root_at(root.model_position as usize).shape_type();
+            structures += usize::from(
                 has_member_schemas(shape_type)
-                    && matches!(shape_type, ShapeType::Structure | ShapeType::Union)
-            })
+                    && matches!(shape_type, ShapeType::Structure | ShapeType::Union),
+            );
+        }
+        let members = plan
+            .members
+            .iter()
+            .filter(|member| member.schema.get().is_none())
             .count();
-        self.builder.reserve(
-            plan.roots.len() + plan.members.len() + 2 * plan.operations.len(),
-            structures + plan.operations.len(),
-        );
+        let operations = plan
+            .operations
+            .values()
+            .filter(|operation| operation.record.get().is_none())
+            .count();
+        self.builder
+            .reserve(roots + members + 2 * operations, structures + operations);
         // Members in the planner's dependency order, so none has to search for its
         // dependencies.
         let order = match &mut self.facts {

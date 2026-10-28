@@ -221,7 +221,15 @@ fn ids_and_traits(c: &mut Criterion) {
 /// Runtime schema construction and lookup. Requires `--features runtime-schema`.
 #[cfg(feature = "runtime-schema")]
 fn runtime_schemas(c: &mut Criterion) {
-    use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+    use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
+
+    let lazy_service = |model: &Model, service: &ShapeId| {
+        RuntimeSchemaSet::builder(model)
+            .for_service(service)
+            .materialization(Materialization::Lazy)
+            .build()
+            .unwrap()
+    };
 
     let models: Vec<_> = MODELS
         .iter()
@@ -354,6 +362,123 @@ fn runtime_schemas(c: &mut Criterion) {
         });
     }
     group.finish();
+
+    // A lazy service set: selection and validation, but no schemas.
+    let mut group = c.benchmark_group("schema/service_plan");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap().id().clone();
+        group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
+            b.iter(|| lazy_service(black_box(model), &service))
+        });
+    }
+    group.finish();
+
+    // The first lookup of one operation in a new lazy set, for operations ranked by the
+    // number of shapes they reach: the median, the 90th percentile, and the largest. These
+    // are corpus ranks, not Criterion percentiles. Building the set is not measured.
+    let mut group = c.benchmark_group("schema/first_operation");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap().id().clone();
+        let mut ranked: Vec<_> = model
+            .operations()
+            .map(|operation| {
+                (
+                    Walker::new().walk(operation).count(),
+                    operation.id().clone(),
+                )
+            })
+            .collect();
+        ranked.sort();
+        let at = |fraction: f64| &ranked[((ranked.len() - 1) as f64 * fraction) as usize].1;
+        for (rank, operation) in [("p50", at(0.5)), ("p90", at(0.9)), ("max", at(1.0))] {
+            group.bench_function(BenchmarkId::new(*name, rank), |b| {
+                b.iter_batched(
+                    || lazy_service(model, &service),
+                    |set| {
+                        set.operation(black_box(operation)).unwrap();
+                        set
+                    },
+                    BatchSize::LargeInput,
+                )
+            });
+        }
+    }
+    group.finish();
+
+    // A second operation after the first in service order, which shares some of its schemas.
+    let mut group = c.benchmark_group("schema/overlapping_operation");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap().id().clone();
+        let ids: Vec<_> = lazy_service(model, &service)
+            .operation_ids()
+            .cloned()
+            .collect();
+        let (first, second) = (&ids[0], &ids[1.min(ids.len() - 1)]);
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter_batched(
+                || {
+                    let set = lazy_service(model, &service);
+                    set.operation(first).unwrap();
+                    set
+                },
+                |set| {
+                    set.operation(black_box(second)).unwrap();
+                    set
+                },
+                BatchSize::LargeInput,
+            )
+        });
+    }
+    group.finish();
+
+    // A lazy service build followed by `materialize_all`, to compare with `schema/service`.
+    let mut group = c.benchmark_group("schema/materialize_all");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap().id().clone();
+        group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
+            b.iter(|| {
+                let set = lazy_service(black_box(model), &service);
+                set.materialize_all();
+                set
+            })
+        });
+    }
+    group.finish();
+
+    // EC2 only: N threads making first lookups at once, of the same operation or of N
+    // different ones. Includes spawning the threads; building the set is not measured.
+    let (_, ec2) = models.iter().find(|(name, _)| *name == "ec2").unwrap();
+    let service = ec2.services().next().unwrap().id().clone();
+    let ids: Vec<_> = lazy_service(ec2, &service)
+        .operation_ids()
+        .cloned()
+        .collect();
+    for (group_name, distinct) in [
+        ("schema/contended_same", false),
+        ("schema/contended_distinct", true),
+    ] {
+        let mut group = c.benchmark_group(group_name);
+        for threads in [2, 4, 8] {
+            let stride = ids.len() / threads;
+            group.bench_function(BenchmarkId::new("ec2", threads), |b| {
+                b.iter_batched(
+                    || lazy_service(ec2, &service),
+                    |set| {
+                        std::thread::scope(|scope| {
+                            for thread in 0..threads {
+                                let id = &ids[if distinct { thread * stride } else { 0 }];
+                                let set = &set;
+                                scope.spawn(move || set.operation(id).unwrap().errors().len());
+                            }
+                        });
+                        set
+                    },
+                    BatchSize::LargeInput,
+                )
+            });
+        }
+        group.finish();
+    }
 }
 
 #[cfg(not(feature = "runtime-schema"))]
