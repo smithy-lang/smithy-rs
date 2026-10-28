@@ -256,6 +256,43 @@ pub fn observed_runtime_rejection(wire: Wire, kind: &str) -> Reply {
     }
 }
 
+/// Schema CBOR validation errors encode the message as a map; legacy emits raw bytes.
+/// All other response fields and rejection bodies retain their legacy expectations.
+pub fn assert_schema_runtime_rejection(actual: Reply, wire: Wire, kind: &str) {
+    let expected = observed_runtime_rejection(wire, kind);
+    assert_eq!(actual.status, expected.status, "{wire:?} {kind}");
+    assert_eq!(actual.headers, expected.headers, "{wire:?} {kind}");
+    assert_eq!(
+        actual.runtime_error, expected.runtime_error,
+        "{wire:?} {kind}"
+    );
+    assert_schema_rejection_body(&actual.body, &expected.body, wire, kind);
+}
+
+pub fn assert_schema_rejection_body(actual: &[u8], legacy: &[u8], wire: Wire, kind: &str) {
+    if matches!(wire, Wire::Cbor) && kind == "validation" {
+        assert_eq!(legacy, MESSAGE.as_bytes(), "legacy CBOR validation body");
+        assert_cbor_message(actual, MESSAGE);
+    } else {
+        assert_eq!(actual, legacy, "{wire:?} {kind}");
+    }
+}
+
+fn assert_cbor_message(body: &[u8], message: &str) {
+    let mut decoder = minicbor::Decoder::new(body);
+    let length = decoder.map().expect("CBOR error body must be a map");
+    if let Some(length) = length {
+        assert_eq!(length, 1, "CBOR error map must contain only the message");
+    }
+    assert_eq!(decoder.str().unwrap(), "message");
+    assert_eq!(decoder.str().unwrap(), message);
+    if length.is_none() {
+        assert_eq!(decoder.datatype().unwrap(), minicbor::data::Type::Break);
+        decoder.skip().unwrap();
+    }
+    assert_eq!(decoder.position(), body.len(), "trailing CBOR error bytes");
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CustomResponseMarker(pub &'static str);
 

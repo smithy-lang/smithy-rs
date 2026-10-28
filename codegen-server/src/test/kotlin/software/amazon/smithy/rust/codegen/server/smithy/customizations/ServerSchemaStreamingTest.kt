@@ -705,8 +705,8 @@ internal class ServerSchemaStreamingTest {
                                     assert_eq!(bytes, b"custom caller rejection".as_slice());
                                     assert!(parts.extensions.get::<#{SmithyHttpServer}::extension::RuntimeErrorExtension>().is_none());
                                 } else {
-                                    // Preserve the generated serde runtime validation contract: these are raw reason bytes,
-                                    // even with the CBOR media type, and an HTTP rejection rather than an event frame.
+                                    // Rejections remain ordinary HTTP responses. Schema CBOR encodes
+                                    // the reason as a message map; REST JSON retains raw reason bytes.
                                     assert_eq!(parts.status, #{Http}::StatusCode::BAD_REQUEST, "{operation}, rpc={rpc}");
                                     headers.insert("content-type", #{Http}::HeaderValue::from_static(
                                         if rpc { "application/cbor" } else { "application/json" }
@@ -714,7 +714,22 @@ internal class ServerSchemaStreamingTest {
                                     if !rpc {
                                         headers.insert("x-amzn-errortype", #{Http}::HeaderValue::from_static("ValidationException"));
                                     }
-                                    assert_eq!(bytes, b"Caller identity could not be resolved".as_slice());
+                                    if rpc {
+                                        let mut decoder = #{Cbor}::Decoder::new(&bytes);
+                                        let length = decoder.map().expect("CBOR error body must be a map");
+                                        if let #{Some}(length) = length {
+                                            assert_eq!(length, 1);
+                                        }
+                                        assert_eq!(decoder.str().unwrap(), "message");
+                                        assert_eq!(decoder.str().unwrap(), "Caller identity could not be resolved");
+                                        if length.is_none() {
+                                            assert_eq!(decoder.datatype().unwrap(), #{Cbor}::data::Type::Break);
+                                            decoder.skip().unwrap();
+                                        }
+                                        assert_eq!(decoder.position(), bytes.len(), "trailing CBOR error bytes");
+                                    } else {
+                                        assert_eq!(bytes, b"Caller identity could not be resolved".as_slice());
+                                    }
                                     assert_eq!(parts.extensions.get::<#{SmithyHttpServer}::extension::RuntimeErrorExtension>()
                                         .expect("runtime error metadata").to_string(), "ValidationException");
                                 }

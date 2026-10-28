@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -24,8 +25,9 @@ import java.nio.file.Files
 
 /**
  * Replays malformed initial event-stream request frames against single-protocol legacy and
- * schema services. It checks the rejection status, headers, and body against the observed legacy
- * result and compares the two captures. The service remains single-protocol so the test isolates
+ * schema services. It checks rejection status and headers against the observed legacy result,
+ * and validates raw legacy messages versus CBOR message maps on schema CBOR responses before
+ * comparing the semantic captures. The service remains single-protocol so the test isolates
  * initial-frame validation rather than multi-protocol request claiming.
  */
 internal class InitialEventStreamFrameCompatibilityTest {
@@ -127,14 +129,28 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                     let headers = response.headers().clone();
                                     #{Collect}
                                     assert_eq!(status, 400);
-                                    // Observed on the generated serde path, including both truncations.
-                                    if ${!schemaSerde} {
-                                        let mut expected_headers = #{Http}::HeaderMap::new();
-                                        expected_headers.insert("content-type", #{Http}::HeaderValue::from_static("$responseMediaType"));
-                                        assert_eq!(headers, expected_headers, "{case}");
+                                    let mut expected_headers = #{Http}::HeaderMap::new();
+                                    expected_headers.insert("content-type", #{Http}::HeaderValue::from_static("$responseMediaType"));
+                                    assert_eq!(headers, expected_headers, "{case}");
+                                    let reason = if ${schemaSerde && protocol == "rpcv2Cbor"} {
+                                        let mut decoder = #{Cbor}::Decoder::new(body.as_ref());
+                                        let length = decoder.map().expect("CBOR error body must be a map");
+                                        if let #{Some}(length) = length {
+                                            assert_eq!(length, 1, "{case}");
+                                        }
+                                        assert_eq!(decoder.str().unwrap(), "message", "{case}");
+                                        assert_eq!(decoder.str().unwrap(), "response error", "{case}");
+                                        if length.is_none() {
+                                            assert_eq!(decoder.datatype().unwrap(), #{Cbor}::data::Type::Break, "{case}");
+                                            decoder.skip().unwrap();
+                                        }
+                                        assert_eq!(decoder.position(), body.len(), "trailing CBOR error bytes: {case}");
+                                        b"response error".as_slice()
+                                    } else {
                                         assert_eq!(body.as_ref(), b"response error", "{case}");
-                                    }
-                                    records.push_str(&format!("{case}: {status} {headers:?} {:?}\n", body.as_ref()));
+                                        body.as_ref()
+                                    };
+                                    records.push_str(&format!("{case}: {status} {headers:?} {reason:?}\n"));
                                 }
                                 ::std::fs::write(${observations.toString().dq()}, records).unwrap();
                                 """,
@@ -142,6 +158,7 @@ internal class InitialEventStreamFrameCompatibilityTest {
                                 "Http" to RuntimeType.http(context.runtimeConfig),
                                 "Types" to RuntimeType.smithyTypes(context.runtimeConfig),
                                 "EventStream" to RuntimeType.smithyEventStream(context.runtimeConfig),
+                                "Cbor" to CargoDependency.smithyCbor(context.runtimeConfig).toType(),
                                 "Tower" to ServerCargoDependency.tower(context).toType(),
                                 "RequestBody" to ServerHttpTestHelpers.createBodyFromBytes(context, "payload"),
                                 "Collect" to ServerHttpTestHelpers.httpBodyToBytes(context.runtimeConfig, "body", "response"),

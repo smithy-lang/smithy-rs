@@ -109,10 +109,10 @@ macro_rules! shared_parity {
             for kind in REJECTIONS {
                 let before = send(legacy.clone(), request($wire, $name, kind)).await;
                 assert_eq!(before, observed_runtime_rejection($wire, kind));
-                assert_eq!(
+                assert_schema_runtime_rejection(
                     send(schema.clone(), request($wire, $name, kind)).await,
-                    before,
-                    "{kind}"
+                    $wire,
+                    kind,
                 );
             }
             assert_eq!(legacy_calls.load(Ordering::SeqCst), 0);
@@ -133,7 +133,7 @@ shared_parity!(
     legacy_rest
 );
 shared_parity!(
-    shared_cbor_errors_match_generated_legacy,
+    shared_cbor_rejections_use_schema_message_encoding,
     Wire::Cbor,
     "ReviewCbor",
     shared_cbor,
@@ -153,10 +153,10 @@ async fn shared_error_uses_each_requests_protocol_on_one_service() {
     let service = shared_multi::service(calls.clone());
     for wire in [Wire::Rest, Wire::Cbor, Wire::Rest, Wire::Cbor] {
         for kind in REJECTIONS {
-            assert_eq!(
+            assert_schema_runtime_rejection(
                 send(service.clone(), request(wire, "ReviewRestCbor", kind)).await,
-                observed_runtime_rejection(wire, kind),
-                "{wire:?} {kind}"
+                wire,
+                kind,
             );
         }
     }
@@ -205,7 +205,7 @@ macro_rules! tuple_test {
                 for wire in [Wire::Rest, Wire::Cbor] {
                     let mut req = request(wire, "ReviewRestCbor", "validation");
                     req.headers_mut().insert("x-fail-index", index.to_string().parse().unwrap());
-                    assert_eq!(send(service.clone(), req).await, observed_runtime_rejection(wire, "validation"), "arity {} position {index} protocol {wire:?}", $arity);
+                    assert_schema_runtime_rejection(send(service.clone(), req).await, wire, "validation");
                 }
             }
         }
@@ -338,13 +338,14 @@ async fn streaming_shared_rejections_use_selection_without_polling_body() {
     for wire in [Wire::Rest, Wire::Cbor] {
         for kind in REJECTIONS {
             let polls = Arc::new(AtomicUsize::new(0));
-            assert_eq!(
+            assert_schema_runtime_rejection(
                 send(
                     service.clone(),
-                    streaming_request(wire, kind, polls.clone())
+                    streaming_request(wire, kind, polls.clone()),
                 )
                 .await,
-                observed_runtime_rejection(wire, kind)
+                wire,
+                kind,
             );
             assert_eq!(polls.load(Ordering::SeqCst), 0);
         }
@@ -402,7 +403,7 @@ async fn shared_error_without_selection_has_only_semantic_status_and_extension()
 async fn shared_serializer_matches_all_five_protocol_local_conversions() {
     use http_body_util::BodyExt;
     macro_rules! compare {
-        ($protocol:expr, $marker:ty, $error:ty) => {
+        ($wire:expr, $protocol:expr, $marker:ty, $error:ty) => {
             for kind in REJECTIONS {
                 use $error as LegacyError;
                 let legacy = match kind {
@@ -434,35 +435,41 @@ async fn shared_serializer_matches_all_five_protocol_local_conversions() {
                         .get::<aws_smithy_http_server::extension::RuntimeErrorExtension>()
                         .map(|e| e.to_string())
                 );
-                assert_eq!(
-                    after.into_body().collect().await.unwrap().to_bytes(),
-                    before.into_body().collect().await.unwrap().to_bytes(),
-                    "{kind}"
+                assert_schema_rejection_body(
+                    &after.into_body().collect().await.unwrap().to_bytes(),
+                    &before.into_body().collect().await.unwrap().to_bytes(),
+                    $wire,
+                    kind,
                 );
             }
         };
     }
     compare!(
+        Wire::Rest,
         RestJson1::default(),
         RestJson1,
         aws_smithy_http_server::protocol::rest_json_1::runtime_error::RuntimeError
     );
     compare!(
+        Wire::Cbor,
         RpcV2Cbor::default(),
         RpcV2Cbor,
         aws_smithy_http_server::protocol::rpc_v2_cbor::runtime_error::RuntimeError
     );
     compare!(
+        Wire::AwsJson,
         AwsJson1_0::default(),
         AwsJson1_0,
         aws_smithy_http_server::protocol::aws_json::runtime_error::RuntimeError
     );
     compare!(
+        Wire::AwsJson11,
         AwsJson1_1::default(),
         AwsJson1_1,
         aws_smithy_http_server::protocol::aws_json::runtime_error::RuntimeError
     );
     compare!(
+        Wire::Xml,
         RestXml::default(),
         RestXml,
         aws_smithy_http_server::protocol::rest_xml::runtime_error::RuntimeError
@@ -580,10 +587,10 @@ async fn one_service_frames_runtime_rejections_for_all_five_protocols() {
         Wire::Xml,
     ] {
         for kind in REJECTIONS {
-            assert_eq!(
+            assert_schema_runtime_rejection(
                 send(service.clone(), request(wire, "ReviewAll", kind)).await,
-                observed_runtime_rejection(wire, kind),
-                "{wire:?} {kind}"
+                wire,
+                kind,
             );
         }
         assert_eq!(

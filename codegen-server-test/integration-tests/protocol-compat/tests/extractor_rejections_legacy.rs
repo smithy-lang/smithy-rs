@@ -18,8 +18,7 @@ use std::sync::{
 };
 
 macro_rules! parity {
-    ($(#[$attr:meta])* $test:ident, $wire:expr, $name:literal, $legacy:ident, $schema:ident) => {
-        $(#[$attr])*
+    ($test:ident, $wire:expr, $name:literal, $legacy:ident, $schema:ident) => {
         #[tokio::test]
         async fn $test() {
             let legacy_calls = Arc::new(AtomicUsize::new(0));
@@ -33,10 +32,10 @@ macro_rules! parity {
                     observed_runtime_rejection($wire, kind),
                     "legacy {kind}"
                 );
-                assert_eq!(
+                assert_schema_runtime_rejection(
                     send(schema.clone(), request($wire, $name, kind)).await,
-                    observed,
-                    "schema {kind}"
+                    $wire,
+                    kind,
                 );
             }
             assert_eq!(legacy_calls.load(Ordering::SeqCst), 0);
@@ -60,8 +59,7 @@ parity!(
     schema_rest
 );
 parity!(
-    #[ignore = "Schema correctly CBOR-encodes validation messages; legacy returns raw message bytes"]
-    cbor_extractor_responses_match_generated_legacy,
+    cbor_extractor_rejections_use_each_modes_message_encoding,
     Wire::Cbor,
     "ReviewCbor",
     legacy_cbor,
@@ -187,3 +185,44 @@ parity!(
     legacy_xml,
     schema_xml
 );
+
+#[test]
+fn schema_cbor_validation_requires_a_complete_message_map() {
+    let definite = [
+        b"\xa1\x67message".as_slice(),
+        &[0x78, MESSAGE.len().try_into().unwrap()],
+        MESSAGE.as_bytes(),
+    ]
+    .concat();
+    let mut indefinite = definite.clone();
+    indefinite[0] = 0xbf;
+    indefinite.push(0xff);
+    for body in [&definite, &indefinite] {
+        assert_schema_rejection_body(body, MESSAGE.as_bytes(), Wire::Cbor, "validation");
+    }
+
+    let mut trailing = definite.clone();
+    trailing.push(0);
+    let mut wrong_message = definite.clone();
+    *wrong_message.last_mut().unwrap() = b'!';
+    let mut wrong_key = definite.clone();
+    wrong_key[2] = b'M';
+    let mut missing_break = indefinite;
+    missing_break.pop();
+    for body in [
+        MESSAGE.as_bytes(),
+        b"\xa0",
+        &trailing,
+        &wrong_message,
+        &wrong_key,
+        &missing_break,
+    ] {
+        assert!(
+            std::panic::catch_unwind(|| {
+                assert_schema_rejection_body(body, MESSAGE.as_bytes(), Wire::Cbor, "validation");
+            })
+            .is_err(),
+            "invalid schema CBOR body accepted: {body:?}"
+        );
+    }
+}
