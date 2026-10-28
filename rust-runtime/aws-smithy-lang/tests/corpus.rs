@@ -336,21 +336,20 @@ fn corpus_runtime_schemas() {
 
         let operations = model.knowledge().operations();
         for operation in scoped.operations() {
-            let knowledge = operations.get(operation.id()).unwrap();
+            let operation_id = ShapeId::new(operation.id().as_str()).unwrap();
+            let knowledge = operations.get(&operation_id).unwrap();
             let view = knowledge.operation();
             let input = operation.input();
             assert_eq!(input.shape_id().as_str(), view.input().as_str(), "{name}");
             assert_eq!(
                 input.members().len(),
                 knowledge.input_members().len(),
-                "{name}: {}",
-                operation.id()
+                "{name}: {operation_id}"
             );
             assert_eq!(
                 input.http().is_some(),
                 view.has_trait(&ShapeId::from_static("smithy.api#http")),
-                "{name}: {}",
-                operation.id()
+                "{name}: {operation_id}"
             );
             assert_eq!(
                 operation.output().shape_id().as_str(),
@@ -366,7 +365,59 @@ fn corpus_runtime_schemas() {
                 .unwrap()
                 .map(|error| error.id().as_str())
                 .collect();
-            assert_eq!(errors, expected, "{name}: {}", operation.id());
+            assert_eq!(errors, expected, "{name}: {operation_id}");
+        }
+
+        // The service scope's own containment walk selects exactly `TopDownIndex`'s
+        // operations, in the same order.
+        let contained: Vec<&str> = service
+            .contained_operations()
+            .map(|operation| operation.id().as_str())
+            .collect();
+        let selected: Vec<&str> = scoped.operations().map(|o| o.id().as_str()).collect();
+        assert_eq!(selected, contained, "{name}");
+
+        // Filtered scopes select only the requested operations, which agree with the full
+        // service scope. First, middle, and last, alone and together (given in reverse).
+        let ids: Vec<ShapeId> = service
+            .contained_operations()
+            .map(|operation| operation.id().clone())
+            .collect();
+        let picks = [0, ids.len() / 2, ids.len() - 1].map(|i| ids[i].clone());
+        let mut selections: Vec<Vec<ShapeId>> = picks.iter().map(|id| vec![id.clone()]).collect();
+        selections.push(picks.iter().rev().cloned().collect());
+        for selection in selections {
+            let filtered = RuntimeSchemaSet::builder(&model)
+                .for_service_operations(service.id(), &selection)
+                .build()
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(filtered.len() <= scoped.len(), "{name}");
+            let mut expected: Vec<&str> = selection.iter().map(|id| id.as_str()).collect();
+            expected.sort_unstable();
+            expected.dedup();
+            let actual: Vec<&str> = filtered.operations().map(|o| o.id().as_str()).collect();
+            assert_eq!(actual, expected, "{name}");
+            for operation in filtered.operations() {
+                let id = ShapeId::new(operation.id().as_str()).unwrap();
+                let full = scoped.operation(&id).unwrap();
+                let error_ids = |o: &aws_smithy_lang::runtime_schema::OperationSchema<'_>| {
+                    o.errors()
+                        .iter()
+                        .map(|error| error.shape_id().as_str().to_owned())
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(error_ids(&operation), error_ids(&full), "{name}: {id}");
+                assert_eq!(
+                    operation.input().members().len(),
+                    full.input().members().len(),
+                    "{name}: {id}"
+                );
+                assert_eq!(
+                    operation.input().http().map(|http| http.uri()),
+                    full.input().http().map(|http| http.uri()),
+                    "{name}: {id}"
+                );
+            }
         }
 
         // Every member schema mirrors its model member, and is the one schema for that

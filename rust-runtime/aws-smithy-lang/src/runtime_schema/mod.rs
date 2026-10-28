@@ -91,6 +91,20 @@
 //! # let _ = schema;
 //! ```
 //!
+//! Nor can operation descriptors:
+//!
+//! ```compile_fail,E0597
+//! # use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+//! # use aws_smithy_lang::{Model, ShapeId};
+//! # let model = Model::from_json_str("m", r#"{"smithy":"2.0"}"#).unwrap();
+//! let id = ShapeId::new("example#GetThing").unwrap();
+//! let operation = {
+//!     let schemas = RuntimeSchemaSet::try_from(&model).unwrap();
+//!     schemas.operation(&id)
+//! };
+//! # let _ = operation;
+//! ```
+//!
 //! Nor can strings borrowed from a schema:
 //!
 //! ```compile_fail,E0597
@@ -118,12 +132,13 @@ mod owner;
 #[cfg(test)]
 mod tests;
 
+pub use aws_smithy_schema::OperationSchema;
 pub use error::SchemaBuildError;
 
 use crate::json_loader::DEFAULT_MAX_DIAGNOSTICS;
 use crate::{Model, ShapeId};
 use aws_smithy_schema::Schema;
-use build::{Graph, OperationRecord, Options, Scope};
+use build::{Graph, OperationFilter, OperationRecord, Options, Scope};
 use owner::{Arena, Storage};
 use std::fmt;
 
@@ -175,7 +190,8 @@ impl RuntimeSchemaSet {
     }
 
     /// The service the set was built for, if it was built with
-    /// [`RuntimeSchemaSetBuilder::for_service`].
+    /// [`RuntimeSchemaSetBuilder::for_service`] or
+    /// [`RuntimeSchemaSetBuilder::for_service_operations`].
     pub fn service(&self) -> Option<&ShapeId> {
         self.graph.service.as_ref()
     }
@@ -195,33 +211,51 @@ impl RuntimeSchemaSet {
     }
 
     /// The schemas of an operation, or `None` if it was not selected.
-    pub fn operation(&self, id: &ShapeId) -> Option<OperationSchemas<'_>> {
+    ///
+    /// The descriptor's [`input`](OperationSchema::input) is specific to this operation: it
+    /// has the input structure's ID (`smithy.api#Unit` when the input is omitted), traits, and
+    /// members plus the operation's `@http` trait, payload hint, and whether any member is
+    /// bound to the body. Each operation has its own input, even when operations share an
+    /// input structure. Its [`output`](OperationSchema::output) is the output structure's own
+    /// schema, unless the operation has the `aws.customizations#s3UnwrappedXmlOutput` trait,
+    /// which gives it its own output that records it.
+    ///
+    /// Its [`errors`](OperationSchema::errors), for a set built
+    /// [`for_service`](RuntimeSchemaSetBuilder::for_service), are the service's common errors
+    /// then the operation's own, without duplicates, as
+    /// [`OperationKnowledge::errors_in`](crate::knowledge::OperationKnowledge::errors_in)
+    /// returns them. Otherwise, they are only the operation's own errors.
+    pub fn operation(&self, id: &ShapeId) -> Option<OperationSchema<'_>> {
         let (id, record) = self.graph.operations.get_key_value(id)?;
-        Some(self.operation_schemas(id, record))
+        Some(self.operation_schema(id, record))
     }
 
     /// Every selected operation: in model order, or sorted by shape ID for a service.
-    pub fn operations(&self) -> impl ExactSizeIterator<Item = OperationSchemas<'_>> + '_ {
+    pub fn operations(&self) -> impl ExactSizeIterator<Item = OperationSchema<'_>> + '_ {
         self.graph
             .operations
             .iter()
-            .map(|(id, record)| self.operation_schemas(id, record))
+            .map(|(id, record)| self.operation_schema(id, record))
     }
 
-    fn operation_schemas<'a>(
+    fn operation_schema<'a>(
         &'a self,
         id: &'a ShapeId,
         record: &OperationRecord,
-    ) -> OperationSchemas<'a> {
+    ) -> OperationSchema<'a> {
         // SAFETY: INV-4, as in `schema`.
-        unsafe {
-            OperationSchemas {
-                id,
-                input: self.storage.schema(record.input),
-                output: self.storage.schema(record.output),
-                errors: self.storage.slice(record.errors),
-            }
-        }
+        let (input, output, errors) = unsafe {
+            (
+                self.storage.schema(record.input),
+                self.storage.schema(record.output),
+                self.storage.slice(record.errors),
+            )
+        };
+        OperationSchema::builder(build::root_id(id))
+            .input(input)
+            .output(output)
+            .errors(errors)
+            .build()
     }
 
     /// The number of root data shape schemas, excluding members and operation inputs.
@@ -286,7 +320,48 @@ impl RuntimeSchemaSetBuilder<'_> {
     /// resources, their inputs, outputs, and errors (with the service's common errors), and
     /// every shape those reach.
     pub fn for_service(mut self, service: &ShapeId) -> Self {
-        self.options.scope = Scope::Service(service.clone());
+        self.options.scope = Scope::Service {
+            service: service.clone(),
+            operations: OperationFilter::All,
+        };
+        self
+    }
+
+    /// Builds only the subset of schemas needed by the indicated operations. Those operations, their inputs,
+    /// outputs, and errors (with the service's common errors), and every shape those reach.
+    ///
+    /// Each operation must be contained in the service, directly or through its resources;
+    /// [`build`](Self::build) reports any that do not exist, are not operations, or are not
+    /// in the service. Duplicates are ignored, and the operations keep the order of
+    /// [`for_service`](Self::for_service), not the order given. Only the selected closure is
+    /// validated, so a malformed trait reachable only from other operations is not an error.
+    ///
+    /// ```
+    /// # use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+    /// # use aws_smithy_lang::{Model, ShapeId};
+    /// # let model = Model::from_json_str("m.json", r#"{"smithy": "2.0", "shapes": {
+    /// #     "example#Service": {"type": "service", "operations": [
+    /// #         {"target": "example#GetThing"}, {"target": "example#PutThing"}]},
+    /// #     "example#GetThing": {"type": "operation", "input": {"target": "example#GetInput"}},
+    /// #     "example#PutThing": {"type": "operation", "input": {"target": "example#PutInput"}},
+    /// #     "example#GetInput": {"type": "structure", "members": {}},
+    /// #     "example#PutInput": {"type": "structure", "members": {}}
+    /// # }}"#)?;
+    /// let service = ShapeId::new("example#Service")?;
+    /// let get_thing = ShapeId::new("example#GetThing")?;
+    /// let schemas = RuntimeSchemaSet::builder(&model)
+    ///     .for_service_operations(&service, &[get_thing.clone()])
+    ///     .build()?;
+    /// assert!(schemas.operation(&get_thing).is_some());
+    /// assert!(schemas.operation(&ShapeId::new("example#PutThing")?).is_none());
+    /// assert!(schemas.schema(&ShapeId::new("example#PutInput")?).is_none());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn for_service_operations(mut self, service: &ShapeId, operations: &[ShapeId]) -> Self {
+        self.options.scope = Scope::Service {
+            service: service.clone(),
+            operations: OperationFilter::Selected(operations.into()),
+        };
         self
     }
 
@@ -303,72 +378,5 @@ impl RuntimeSchemaSetBuilder<'_> {
     /// members form a cycle; see [`SchemaBuildError`].
     pub fn build(self) -> Result<RuntimeSchemaSet, SchemaBuildError> {
         RuntimeSchemaSet::build(self.model.clone(), &self.options)
-    }
-}
-
-/// The schemas of one operation in a [`RuntimeSchemaSet`].
-// TODO(schema): Consider moving this type into `aws-smithy-schema`. There is already
-// Some work on this from the server team https://github.com/smithy-lang/smithy-rs/pull/4839
-// It depends only on `Schema` apart from its `ShapeId`, so generated and runtime clients
-// could share one operation descriptor.
-#[derive(Clone, Copy)]
-pub struct OperationSchemas<'a> {
-    id: &'a ShapeId,
-    input: &'a Schema<'a>,
-    output: &'a Schema<'a>,
-    errors: &'a [&'a Schema<'a>],
-}
-
-impl<'a> OperationSchemas<'a> {
-    /// The operation's shape ID.
-    pub fn id(&self) -> &'a ShapeId {
-        self.id
-    }
-
-    /// The input root for this operation, to pass to a protocol's `serialize_request`.
-    ///
-    /// Its shape ID is the input structure's (`smithy.api#Unit` when the input is omitted),
-    /// not the operation's, and it carries the input structure's traits and members plus the
-    /// operation's `@http` trait, payload hint, and whether any member is bound to the body.
-    /// Each operation has its own input root, even when operations share an input.
-    pub fn input(&self) -> &'a Schema<'a> {
-        self.input
-    }
-
-    /// The output root for this operation.
-    ///
-    /// Usually the output structure's own schema. An operation with the
-    /// `aws.customizations#s3UnwrappedXmlOutput` trait has its own output root that records
-    /// it.
-    pub fn output(&self) -> &'a Schema<'a> {
-        self.output
-    }
-
-    /// The error structures the operation can return.
-    ///
-    /// For a set built [`for_service`](RuntimeSchemaSetBuilder::for_service), the service's
-    /// common errors then the operation's own, without duplicates, as
-    /// [`OperationKnowledge::errors_in`](crate::knowledge::OperationKnowledge::errors_in)
-    /// returns them. Otherwise, only the operation's own errors.
-    pub fn errors(&self) -> &'a [&'a Schema<'a>] {
-        self.errors
-    }
-}
-
-impl fmt::Debug for OperationSchemas<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OperationSchemas")
-            .field("id", self.id)
-            .field("input", self.input.shape_id())
-            .field("output", self.output.shape_id())
-            .field(
-                "errors",
-                &self
-                    .errors
-                    .iter()
-                    .map(|error| error.shape_id())
-                    .collect::<Vec<_>>(),
-            )
-            .finish()
     }
 }

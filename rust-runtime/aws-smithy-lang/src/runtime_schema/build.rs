@@ -14,11 +14,11 @@ use super::facts::{OperationFacts, TraitFacts};
 use super::owner::{Builder, SchemaIndex, SliceIndex};
 use super::SchemaBuildError;
 use crate::diagnostic::{Diagnostic, DiagnosticCode, DiagnosticSet};
-use crate::shape::{MemberView, OperationView, ShapeView};
+use crate::shape::{MemberView, OperationView, ServiceView, ShapeView};
 use crate::{Model, ShapeId, ShapeType};
 use aws_smithy_schema::{PayloadHint, Schema};
-use indexmap::IndexMap;
-use std::collections::HashMap;
+use indexmap::{IndexMap, IndexSet};
+use std::collections::{HashMap, HashSet};
 
 type SchemaShapeId<'a> = aws_smithy_schema::ShapeId<'a>;
 type SchemaShapeType = aws_smithy_schema::ShapeType;
@@ -30,7 +30,19 @@ pub(super) enum Scope {
     AllShapes,
     /// The operations of one service (including those bound through resources), their
     /// inputs, outputs, and errors, and every shape those reach.
-    Service(ShapeId),
+    Service {
+        service: ShapeId,
+        operations: OperationFilter,
+    },
+}
+
+/// Which of a service's operations to select.
+#[derive(Debug, Clone)]
+pub(super) enum OperationFilter {
+    /// Every operation the service contains, and the service's common errors.
+    All,
+    /// Only these operations, which must be contained in the service.
+    Selected(Box<[ShapeId]>),
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +109,9 @@ fn has_member_schemas(shape_type: ShapeType) -> bool {
     )
 }
 
-fn root_id(id: &ShapeId) -> SchemaShapeId<'_> {
+/// A schema shape ID borrowing the parts of a model root shape ID, without allocating.
+pub(super) fn root_id(id: &ShapeId) -> SchemaShapeId<'_> {
+    debug_assert!(id.member().is_none(), "`{id}` is a member ID");
     SchemaShapeId::from_parts(id.as_str(), id.namespace(), id.name())
 }
 
@@ -137,50 +151,34 @@ impl<'a> Selection<'a> {
                     selection.add_operation(model, operation, errors);
                 }
             }
-            Scope::Service(id) => {
-                let service = match model.get_shape(id).and_then(|shape| shape.as_shape()) {
-                    Some(shape) => match shape.as_service() {
-                        Some(service) => service,
-                        None => {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    DiagnosticCode::InvalidTarget,
-                                    format!("`{id}` is a {}, not a service", shape.shape_type()),
-                                )
-                                .with_source_location(shape.source_location().clone())
-                                .with_shape_id(id.clone()),
-                            );
-                            return None;
-                        }
-                    },
-                    None => {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                DiagnosticCode::UnresolvedReference,
-                                format!("service `{id}` does not exist"),
-                            )
-                            .with_shape_id(id.clone()),
-                        );
-                        return None;
+            Scope::Service {
+                service: id,
+                operations: filter,
+            } => {
+                let service = select_service(model, id, diagnostics)?;
+                let contained = contained_operations(model, service);
+                let operations = match filter {
+                    OperationFilter::All => contained,
+                    OperationFilter::Selected(requested) => {
+                        filter_operations(model, service, &contained, requested, diagnostics)?
                     }
                 };
-                let knowledge = model.knowledge();
-                let operations = knowledge
-                    .top_down()
-                    .get_contained_operations(service.id())
-                    .expect("a service is an entity");
                 for operation in operations {
                     // The service's common errors, then the operation's own, keeping the
                     // first occurrence: `OperationKnowledge::errors_in` without re-checking
                     // containment for every operation.
-                    let errors: indexmap::IndexSet<&ShapeId> = service
+                    let errors: IndexSet<&ShapeId> = service
                         .common_errors()
                         .chain(operation.direct_errors())
                         .collect();
                     selection.add_operation(model, operation, errors.into_iter().collect());
                 }
-                for error in service.common_errors() {
-                    selection.add_root(model, error);
+                // With a filter, common errors are only selected through the operations
+                // that can return them.
+                if let OperationFilter::All = filter {
+                    for error in service.common_errors() {
+                        selection.add_root(model, error);
+                    }
                 }
             }
         }
@@ -229,6 +227,145 @@ impl<'a> Selection<'a> {
             next += 1;
         }
     }
+}
+
+/// Resolves the selected service, reporting a missing ID or a shape that is not a service.
+fn select_service<'a>(
+    model: &'a Model,
+    id: &ShapeId,
+    diagnostics: &mut DiagnosticSet,
+) -> Option<ServiceView<'a>> {
+    let Some(shape) = model.get_shape(id).and_then(|shape| shape.as_shape()) else {
+        diagnostics.push(
+            Diagnostic::error(
+                DiagnosticCode::UnresolvedReference,
+                format!("service `{id}` does not exist"),
+            )
+            .with_shape_id(id.clone()),
+        );
+        return None;
+    };
+    let service = shape.as_service();
+    if service.is_none() {
+        diagnostics.push(
+            Diagnostic::error(
+                DiagnosticCode::InvalidTarget,
+                format!("`{id}` is a {}, not a service", shape.shape_type()),
+            )
+            .with_source_location(shape.source_location().clone())
+            .with_shape_id(id.clone()),
+        );
+    }
+    service
+}
+
+/// Every operation contained in `service`, sorted by shape ID, as
+/// [`TopDownIndex`](crate::knowledge::TopDownIndex) returns them: operations bound directly,
+/// through resources (lifecycle, instance, and collection operations), and recursively.
+///
+/// Walks the service and resource declarations directly, rather than building the
+/// model-wide relationship index, which costs more than the rest of a service build on large
+/// models. Iterative, and visits each resource once, so shared resources and resource cycles
+/// terminate.
+pub(super) fn contained_operations<'a>(
+    model: &'a Model,
+    service: ServiceView<'a>,
+) -> Vec<OperationView<'a>> {
+    let operation = |id: &ShapeId| {
+        model
+            .get_shape(id)
+            .and_then(|shape| shape.as_shape())
+            .and_then(|shape| shape.as_operation())
+            .expect("operation bindings resolve to operations")
+    };
+    let mut operations: IndexSet<&'a ShapeId> = service.direct_operations().collect();
+    let mut visited: HashSet<&'a ShapeId> = HashSet::new();
+    let mut stack: Vec<&'a ShapeId> = service.direct_resources().collect();
+    while let Some(id) = stack.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let resource = model
+            .get_shape(id)
+            .and_then(|shape| shape.as_shape())
+            .and_then(|shape| shape.as_resource())
+            .expect("resource bindings resolve to resources");
+        let lifecycle = [
+            resource.create(),
+            resource.put(),
+            resource.read(),
+            resource.update(),
+            resource.delete(),
+            resource.list(),
+        ];
+        operations.extend(lifecycle.into_iter().flatten());
+        operations.extend(resource.direct_operations());
+        operations.extend(resource.direct_collection_operations());
+        stack.extend(resource.child_resources());
+    }
+    let mut operations: Vec<_> = operations.into_iter().map(operation).collect();
+    operations.sort_unstable_by(|a, b| a.id().cmp(b.id()));
+    operations
+}
+
+/// The requested operations of a service, in `contained` (service) order, without
+/// duplicates. Reports every requested ID that is missing, is not an operation, or is not
+/// contained in the service.
+fn filter_operations<'a>(
+    model: &'a Model,
+    service: ServiceView<'a>,
+    contained: &[OperationView<'a>],
+    requested: &[ShapeId],
+    diagnostics: &mut DiagnosticSet,
+) -> Option<Vec<OperationView<'a>>> {
+    let positions: HashMap<&ShapeId, usize> = contained
+        .iter()
+        .enumerate()
+        .map(|(position, operation)| (operation.id(), position))
+        .collect();
+    let mut selected = vec![false; contained.len()];
+    let mut valid = true;
+    for id in requested {
+        if let Some(&position) = positions.get(id) {
+            selected[position] = true;
+            continue;
+        }
+        valid = false;
+        let diagnostic = match model.get_shape(id).and_then(|shape| shape.as_shape()) {
+            None => Diagnostic::error(
+                DiagnosticCode::UnresolvedReference,
+                format!(
+                    "operation `{id}` selected for service `{}` does not exist",
+                    service.id()
+                ),
+            ),
+            Some(shape) if shape.shape_type() != ShapeType::Operation => Diagnostic::error(
+                DiagnosticCode::InvalidTarget,
+                format!(
+                    "`{id}` selected for service `{}` is a {}, not an operation",
+                    service.id(),
+                    shape.shape_type()
+                ),
+            )
+            .with_source_location(shape.source_location().clone()),
+            Some(shape) => Diagnostic::error(
+                DiagnosticCode::InvalidTarget,
+                format!(
+                    "operation `{id}` is not contained in service `{}`",
+                    service.id()
+                ),
+            )
+            .with_source_location(shape.source_location().clone()),
+        };
+        diagnostics.push(diagnostic.with_shape_id(id.clone()));
+    }
+    valid.then(|| {
+        contained
+            .iter()
+            .zip(selected)
+            .filter_map(|(operation, selected)| selected.then_some(*operation))
+            .collect()
+    })
 }
 
 /// A member to materialize.
@@ -477,7 +614,7 @@ pub(super) fn build<'a>(
         operations,
         service: match &options.scope {
             Scope::AllShapes => None,
-            Scope::Service(id) => Some(id.clone()),
+            Scope::Service { service, .. } => Some(service.clone()),
         },
     })
 }

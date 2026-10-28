@@ -236,7 +236,9 @@ fn runtime_schemas(c: &mut Criterion) {
     }
     group.finish();
 
-    // Service selection uses the knowledge index; measure it warm and, separately, cold.
+    // Service selection walks the service's declarations rather than the knowledge index, so
+    // warm and cold knowledge should now measure the same; both are kept for comparison with
+    // earlier results.
     let mut group = c.benchmark_group("schema/service");
     for (name, model) in &models {
         let service = model.services().next().unwrap().id().clone();
@@ -272,6 +274,28 @@ fn runtime_schemas(c: &mut Criterion) {
     }
     group.finish();
 
+    // A filtered service scope with the first 1 and 10 operations in service order.
+    let mut group = c.benchmark_group("schema/filtered");
+    for (name, model) in &models {
+        let service = model.services().next().unwrap();
+        let ids: Vec<_> = service
+            .contained_operations()
+            .map(|operation| operation.id().clone())
+            .collect();
+        for count in [1, 10] {
+            let selected = &ids[..count.min(ids.len())];
+            group.bench_function(BenchmarkId::new(*name, count), |b| {
+                b.iter(|| {
+                    RuntimeSchemaSet::builder(black_box(model))
+                        .for_service_operations(service.id(), selected)
+                        .build()
+                        .unwrap()
+                })
+            });
+        }
+    }
+    group.finish();
+
     let mut group = c.benchmark_group("schema/operation_lookup");
     for (name, model) in &models {
         let set = RuntimeSchemaSet::try_from(model).unwrap();
@@ -283,6 +307,25 @@ fn runtime_schemas(c: &mut Criterion) {
                     .input()
                     .members()
                     .len()
+            })
+        });
+    }
+    group.finish();
+
+    // The complete descriptor, touching every field so none is optimized away.
+    let mut group = c.benchmark_group("schema/operation_descriptor");
+    for (name, model) in &models {
+        let set = RuntimeSchemaSet::try_from(model).unwrap();
+        let operation = model.operations().next().unwrap().id().clone();
+        group.bench_function(BenchmarkId::from_parameter(name), |b| {
+            b.iter(|| {
+                let descriptor = black_box(set.operation(black_box(&operation)).unwrap());
+                (
+                    descriptor.id().as_str().len(),
+                    descriptor.input().members().len(),
+                    descriptor.output().members().len(),
+                    descriptor.errors().len(),
+                )
             })
         });
     }

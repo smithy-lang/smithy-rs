@@ -442,7 +442,7 @@ fn omitted_inputs_are_separate_unit_inputs() {
     let ping = set.operation(&id("ex#Ping")).unwrap();
     let pong = set.operation(&id("ex#Pong")).unwrap();
     assert!(!std::ptr::eq(ping.input(), pong.input()));
-    for (operation, uri) in [(ping, "/ping"), (pong, "/pong")] {
+    for (operation, uri) in [(&ping, "/ping"), (&pong, "/pong")] {
         assert_eq!(operation.input().shape_id().as_str(), "smithy.api#Unit");
         assert_eq!(operation.input().http().unwrap().uri(), uri);
         assert!(operation.input().members().is_empty());
@@ -583,6 +583,214 @@ fn missing_or_wrong_service_is_an_error() {
         .message()
         .contains("is a structure, not a service"));
     assert_eq!(diagnostic.source_location().unwrap().line(), Some(9));
+}
+
+/// A service whose operations are bound directly, through lifecycle, instance, and collection
+/// bindings, through a nested resource, and through a resource bound twice.
+const RESOURCES: &str = r#"
+    "ex#Service": {"type": "service",
+        "operations": [{"target": "ex#Direct"}],
+        "resources": [{"target": "ex#Parent"}, {"target": "ex#Shared"}],
+        "errors": [{"target": "ex#Common"}]},
+    "ex#Parent": {"type": "resource",
+        "create": {"target": "ex#Create"}, "put": {"target": "ex#Put"},
+        "read": {"target": "ex#Read"}, "update": {"target": "ex#Update"},
+        "delete": {"target": "ex#Delete"}, "list": {"target": "ex#List"},
+        "operations": [{"target": "ex#Instance"}],
+        "collectionOperations": [{"target": "ex#Collection"}],
+        "resources": [{"target": "ex#Child"}, {"target": "ex#Shared"}]},
+    "ex#Child": {"type": "resource", "operations": [{"target": "ex#Nested"}]},
+    "ex#Shared": {"type": "resource", "read": {"target": "ex#SharedRead"}},
+    "ex#Direct": {"type": "operation", "input": {"target": "ex#DirectInput"},
+        "errors": [{"target": "ex#Own"}, {"target": "ex#Common"}]},
+    "ex#Create": {"type": "operation"}, "ex#Put": {"type": "operation"},
+    "ex#Read": {"type": "operation"}, "ex#Update": {"type": "operation"},
+    "ex#Delete": {"type": "operation"}, "ex#List": {"type": "operation"},
+    "ex#Instance": {"type": "operation"}, "ex#Collection": {"type": "operation"},
+    "ex#Nested": {"type": "operation", "input": {"target": "ex#NestedInput"}},
+    "ex#SharedRead": {"type": "operation"},
+    "ex#Outside": {"type": "operation"},
+    "ex#DirectInput": {"type": "structure", "members": {"n": {"target": "ex#Names"}}},
+    "ex#Names": {"type": "list", "member": {"target": "ex#String"}},
+    "ex#NestedInput": {"type": "structure", "members": {
+        "bad": {"target": "ex#String", "traits": {"smithy.api#jsonName": 1}}}},
+    "ex#Own": {"type": "structure", "members": {}, "traits": {"smithy.api#error": "client"}},
+    "ex#Common": {"type": "structure", "members": {}, "traits": {"smithy.api#error": "server"}}
+"#;
+
+fn operation_ids(set: &RuntimeSchemaSet) -> Vec<String> {
+    set.operations().map(|o| o.id().to_string()).collect()
+}
+
+fn filtered(model: &Model, operations: &[&str]) -> Result<RuntimeSchemaSet, SchemaBuildError> {
+    let operations: Vec<_> = operations.iter().map(|o| id(o)).collect();
+    RuntimeSchemaSet::builder(model)
+        .for_service_operations(&id("ex#Service"), &operations)
+        .build()
+}
+
+#[test]
+fn containment_walk_matches_top_down() {
+    let model = model(RESOURCES);
+    let service = model
+        .expect_shape(&id("ex#Service"))
+        .unwrap()
+        .as_service()
+        .unwrap();
+    let walked: Vec<_> = super::build::contained_operations(&model, service)
+        .iter()
+        .map(|o| o.id().clone())
+        .collect();
+    let expected: Vec<_> = service
+        .contained_operations()
+        .map(|o| o.id().clone())
+        .collect();
+    assert_eq!(walked, expected);
+    assert_eq!(walked.len(), 11);
+    assert!(!walked.contains(&id("ex#Outside")));
+}
+
+#[test]
+fn service_operations_selects_only_the_requested_closures() {
+    let model = model(RESOURCES);
+    // Out of order and duplicated; selected in service order without duplicates.
+    let set = filtered(&model, &["ex#SharedRead", "ex#Direct", "ex#SharedRead"]).unwrap();
+    assert_eq!(set.service(), Some(&id("ex#Service")));
+    assert_eq!(operation_ids(&set), ["ex#Direct", "ex#SharedRead"]);
+    assert!(set.operation(&id("ex#Nested")).is_none());
+    // `ex#NestedInput` has a malformed trait, but only `ex#Nested` reaches it.
+    assert!(set.schema(&id("ex#NestedInput")).is_none());
+    for shape in [
+        "ex#DirectInput",
+        "ex#Names",
+        "ex#String",
+        "ex#Own",
+        "ex#Common",
+    ] {
+        schema(&set, shape);
+    }
+    let errors = |operation: &str| -> Vec<&str> {
+        set.operation(&id(operation))
+            .unwrap()
+            .errors()
+            .iter()
+            .map(|e| e.shape_id().as_str())
+            .collect()
+    };
+    assert_eq!(errors("ex#Direct"), ["ex#Common", "ex#Own"]);
+    assert_eq!(errors("ex#SharedRead"), ["ex#Common"]);
+
+    // The full service scope reaches the malformed trait.
+    let full = RuntimeSchemaSet::builder(&model)
+        .for_service(&id("ex#Service"))
+        .max_diagnostics(10)
+        .build()
+        .unwrap_err();
+    assert_eq!(
+        full.diagnostics().len(),
+        1,
+        "the malformed trait fails the full scope"
+    );
+}
+
+#[test]
+fn service_operations_reaches_resource_bound_operations() {
+    let model = model(RESOURCES);
+    let every = [
+        "ex#Create",
+        "ex#Put",
+        "ex#Read",
+        "ex#Update",
+        "ex#Delete",
+        "ex#List",
+        "ex#Instance",
+        "ex#Collection",
+        "ex#SharedRead",
+    ];
+    let set = filtered(&model, &every).unwrap();
+    let mut expected: Vec<_> = every.iter().map(|o| o.to_string()).collect();
+    expected.sort();
+    assert_eq!(operation_ids(&set), expected);
+    // A malformed trait in a selected closure fails the build.
+    let error = filtered(&model, &["ex#Nested"]).unwrap_err();
+    let diagnostic = error.diagnostics().iter().next().unwrap();
+    assert_eq!(diagnostic.code(), DiagnosticCode::InvalidTrait);
+}
+
+#[test]
+fn empty_service_operations_selects_nothing() {
+    let model = model(RESOURCES);
+    let set = filtered(&model, &[]).unwrap();
+    assert_eq!(set.service(), Some(&id("ex#Service")));
+    assert!(set.is_empty());
+    assert_eq!(set.len(), 0);
+    assert_eq!(set.operations().len(), 0);
+    // Common errors are only selected through operations that return them.
+    assert!(set.schema(&id("ex#Common")).is_none());
+    assert_eq!(set.storage.schema_count(), 0);
+}
+
+#[test]
+fn invalid_service_operations_are_errors() {
+    let model = model(RESOURCES);
+    let error = filtered(&model, &["ex#Nope", "ex#Names", "ex#Outside", "ex#Direct"]).unwrap_err();
+    let diagnostics: Vec<_> = error
+        .diagnostics()
+        .iter()
+        .map(|d| {
+            (
+                d.code(),
+                d.message().to_string(),
+                d.source_location().is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        diagnostics,
+        [
+            (
+                DiagnosticCode::UnresolvedReference,
+                "operation `ex#Nope` selected for service `ex#Service` does not exist".into(),
+                false
+            ),
+            (
+                DiagnosticCode::InvalidTarget,
+                "`ex#Names` selected for service `ex#Service` is a list, not an operation".into(),
+                true
+            ),
+            (
+                DiagnosticCode::InvalidTarget,
+                "operation `ex#Outside` is not contained in service `ex#Service`".into(),
+                true
+            ),
+        ]
+    );
+    // The service itself is still checked first.
+    let missing = RuntimeSchemaSet::builder(&model)
+        .for_service_operations(&id("ex#Nope"), &[id("ex#Direct")])
+        .build()
+        .unwrap_err();
+    assert_eq!(
+        missing.to_string(),
+        "failed to build runtime schemas: service `ex#Nope` does not exist"
+    );
+}
+
+#[test]
+fn last_scope_wins() {
+    let model = model(RESOURCES);
+    let set = RuntimeSchemaSet::builder(&model)
+        .for_service(&id("ex#Service"))
+        .for_service_operations(&id("ex#Service"), &[id("ex#Direct")])
+        .build()
+        .unwrap();
+    assert_eq!(operation_ids(&set), ["ex#Direct"]);
+    let set = RuntimeSchemaSet::builder(&model)
+        .for_service_operations(&id("ex#Service"), &[id("ex#Nested")])
+        .all_shapes()
+        .build();
+    // All shapes includes the malformed trait.
+    assert!(set.is_err());
 }
 
 #[test]
@@ -734,6 +942,31 @@ fn owned_and_borrowed_conversions_agree() {
     let read = borrowed.operation(&id("ex#Read")).unwrap();
     assert_eq!(
         format!("{read:?}"),
-        r#"OperationSchemas { id: ShapeId("ex#Read"), input: ShapeId { fqn: "ex#Shared", namespace: "ex", shape_name: "Shared", member_name: None }, output: ShapeId { fqn: "smithy.api#Unit", namespace: "smithy.api", shape_name: "Unit", member_name: None }, errors: [] }"#
+        r#"OperationSchema { id: "ex#Read", input: "ex#Shared", output: "smithy.api#Unit", errors: [] }"#
     );
+}
+
+#[test]
+fn operation_descriptors_borrow_the_model_id() {
+    let set = build(&model(OPERATIONS));
+    let schemas = set.storage.schema_count();
+    for operation in set.operations() {
+        let model_id = set
+            .graph
+            .operations
+            .get_key_value(operation.id().as_str())
+            .unwrap()
+            .0;
+        let schema_id = operation.id();
+        // Every component, so inconsistent `from_parts` arguments cannot pass.
+        assert_eq!(schema_id.as_str(), model_id.as_str());
+        assert_eq!(schema_id.namespace(), model_id.namespace());
+        assert_eq!(schema_id.shape_name(), model_id.name());
+        assert_eq!(schema_id.member_name(), None);
+        // Borrowed from the model, not copied.
+        assert!(std::ptr::eq(schema_id.as_str(), model_id.as_str()));
+    }
+    // Descriptors are built by value and allocate nothing in the set.
+    let _ = set.operation(&id("ex#Read")).unwrap();
+    assert_eq!(set.storage.schema_count(), schemas);
 }

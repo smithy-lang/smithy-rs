@@ -210,10 +210,15 @@ taskset -c 2 cargo bench --features runtime-schema --bench model -- '^schema/' -
   operation.
 - `schema/service`: `RuntimeSchemaSet::builder(&model).for_service(..)`, with the
   model's knowledge index already built.
-- `schema/service_cold_knowledge`: the same on a freshly parsed model, so it
-  includes building the knowledge index that service selection uses.
+- `schema/service_cold_knowledge`: the same on a freshly parsed model. Service
+  selection originally used the knowledge index, so this included building it;
+  it now walks the service's declarations and matches `schema/service`.
+- `schema/filtered/{model}/{n}`: `for_service_operations(..)` with the service's
+  first `n` operations in service order.
 - `schema/operation_lookup`: `RuntimeSchemaSet::operation` plus reading the input
   schema.
+- `schema/operation_descriptor`: `RuntimeSchemaSet::operation`, reading every
+  `OperationSchema` field (ID, input, output, errors).
 
 Same machine and fixture commit as above, crate commit `052d4dddc` plus the
 uncommitted `runtime_schema` module:
@@ -229,3 +234,26 @@ first computed effective errors with `OperationKnowledge::errors_in`, which
 walks the service's containment graph once per operation; EC2's 769 operations
 made `schema/service` 27.3 ms. Deriving the same errors from the service's
 common errors and each operation's own errors brought it to 9.2 ms.
+
+### Shared `OperationSchema` and filtered service scope
+
+Compares the commit before the change (`77cd8e531`) with the change, run back to
+back on the same unpinned 16-core x86_64 machine with the command above (no
+`taskset`), so absolute numbers differ from the table above:
+
+| Benchmark | Model | Before | After |
+| --------- | ----- | -----: | ----: |
+| `schema/service` | SQS / S3 / EC2 | 0.16 / 1.37 / 10.62 ms | 0.16 / 1.40 / 10.44 ms |
+| `schema/service_cold_knowledge` | SQS / S3 / EC2 | 0.42 / 2.76 / 23.07 ms | 0.17 / 1.41 / 11.22 ms |
+| `schema/filtered/1` | SQS / S3 / EC2 | — | 14 / 29 / 213 µs |
+| `schema/filtered/10` | SQS / S3 / EC2 | — | 68 / 211 / 319 µs |
+| `schema/operation_lookup` | SQS / S3 / EC2 | 43 / 42 / 48 ns | 45 / 45 / 53 ns |
+| `schema/operation_descriptor` | SQS / S3 / EC2 | — | 53 / 54 / 58 ns |
+
+Walking the service and resource declarations instead of building the
+relationship index halves a service build on a freshly loaded model. Selecting
+one EC2 operation costs about 2% of the full service; most of what remains is
+finding and sorting the service's 769 contained operations. Lookup is 4–10%
+slower because `OperationSchema` holds an `aws_smithy_schema::ShapeId` by value
+(four borrowed strings) where the previous descriptor held a reference to the
+model's ID.

@@ -20,7 +20,9 @@ use std::fmt;
 ///   form a cycle that does not pass through a structure or union.
 /// - [`UnresolvedReference`](crate::diagnostic::DiagnosticCode::UnresolvedReference) or
 ///   [`InvalidTarget`](crate::diagnostic::DiagnosticCode::InvalidTarget): the requested
-///   service does not exist or is not a service.
+///   service does not exist or is not a service, or an operation selected with
+///   [`for_service_operations`](super::RuntimeSchemaSetBuilder::for_service_operations) does
+///   not exist, is not an operation, or is not contained in the service.
 ///
 /// Diagnostics are reported in model order and bounded by
 /// [`RuntimeSchemaSetBuilder::max_diagnostics`](super::RuntimeSchemaSetBuilder::max_diagnostics).

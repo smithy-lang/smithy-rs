@@ -11,7 +11,7 @@ set -eux
 : "$RUST_NIGHTLY_VERSION"
 
 # Running the unsafe invariant tests for aws-smithy-lang.The first run builds
-# Miri's sysroot (about 20 seconds), the suite takes about 90 seconds.
+# Miri's sysroot (about 20 seconds), the suite takes about 160 seconds.
 echo "### Running the runtime schema ownership tests under Miri"
 MIRIFLAGS="-Zmiri-strict-provenance" \
     cargo +"${RUST_NIGHTLY_VERSION}" miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::
