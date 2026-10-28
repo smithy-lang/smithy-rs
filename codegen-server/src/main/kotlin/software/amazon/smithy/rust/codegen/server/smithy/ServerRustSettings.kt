@@ -5,16 +5,29 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import java.util.Optional
 import java.util.logging.Logger
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 /*
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
@@ -42,6 +55,7 @@ data class ServerRustSettings(
     override val examplesUri: String?,
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
+    val requestBodyReadTimeouts: RequestBodyReadTimeouts,
 ) : CoreRustSettings(
         service,
         moduleName,
@@ -56,6 +70,20 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
+    private val parsedProtocolSettings by lazy { ProtocolReadSettings.protocolSettings(customizationConfig) }
+    val headerReadTimeout: Duration? by lazy { ProtocolReadSettings.headerReadTimeout(protocolSettings()) }
+    val requestBodyReadPollBudget: Int? by lazy { ProtocolReadSettings.requestBodyReadPollBudget(protocolSettings()) }
+    val eventStreamTimeouts by lazy {
+        EventStreamTimeouts.fromProtocolSettings(protocolSettings(), requestBodyReadTimeouts)
+    }
+
+    /** Normalized protocol sections, shared by every generated configuration reader. */
+    fun protocolSettings(): Map<String, ObjectNode> = parsedProtocolSettings
+
+    fun requestBodyMaxBytes(): Long? = ProtocolReadSettings.requestBodyMaxBytes(protocolSettings())
+
+    fun requestBodyReadPollBudget(): Int? = requestBodyReadPollBudget
+
     companion object {
         fun from(
             model: Model,
@@ -74,6 +102,13 @@ data class ServerRustSettings(
             val httpVersion = if (serverCodegenConfig.http1x) HttpVersion.Http1x else HttpVersion.Http0x
             val runtimeConfig = coreRustSettings.runtimeConfig.copy(httpVersion = httpVersion)
 
+            val customizationConfig =
+                ProtocolReadSettings.foldLegacyRequestBodyMaxBytes(
+                    coreRustSettings.customizationConfig,
+                    codegenSettingsNode.orElse(null),
+                )
+            val protocolSettings = ProtocolReadSettings.protocolSettings(customizationConfig)
+
             return ServerRustSettings(
                 service = coreRustSettings.service,
                 moduleName = coreRustSettings.moduleName,
@@ -86,7 +121,220 @@ data class ServerRustSettings(
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
-                customizationConfig = coreRustSettings.customizationConfig,
+                customizationConfig = customizationConfig,
+                requestBodyReadTimeouts =
+                    RequestBodyReadTimeouts.fromProtocolSettings(
+                        model,
+                        coreRustSettings.service,
+                        protocolSettings,
+                    ),
+            ).also {
+                it.headerReadTimeout
+                it.requestBodyMaxBytes()
+                it.requestBodyReadPollBudget()
+                it.eventStreamTimeouts
+            }
+        }
+    }
+}
+
+data class RequestBodyReadTimeouts(
+    val defaultNonPayloadTimeout: Duration?,
+    val defaultPayloadTimeout: Duration?,
+    val perOperation: Map<ShapeId, Duration>,
+    val payloadOperationIds: Set<ShapeId>,
+    val streamingOperationIds: Set<ShapeId>,
+    val eventStreamInputOperationIds: Set<ShapeId>,
+) {
+    /** Returns an override, preserving zero; null inherits runtime policy for non-streaming inputs. */
+    fun timeoutFor(operationId: ShapeId): Duration? =
+        if (operationId in streamingOperationIds) {
+            null
+        } else {
+            perOperation[operationId]
+                ?: if (operationId in payloadOperationIds) defaultPayloadTimeout else defaultNonPayloadTimeout
+        }
+
+    companion object {
+        private const val CONFIG_KEY = "readTimeouts"
+        private const val DEFAULT_NON_PAYLOAD_KEY = "defaultNonPayload"
+        private const val DEFAULT_PAYLOAD_KEY = "defaultPayload"
+        private const val PER_OPERATION_KEY = "perOperation"
+
+        /** Parses a duration with an explicit unit, or `0` to disable the timeout. */
+        internal fun parseTimeout(
+            node: Node,
+            configPath: String,
+        ): Duration =
+            when {
+                node.isNumberNode && node.expectNumberNode().value.toDouble() == 0.0 -> Duration.ZERO
+                node.isStringNode -> parseTimeoutString(node.expectStringNode().value, configPath)
+                else -> throw invalidTimeout(configPath)
+            }
+
+        private fun parseTimeoutString(
+            value: String,
+            configPath: String,
+        ): Duration {
+            val trimmed = value.trim()
+            val match =
+                TIMEOUT_VALUE_REGEX.matchEntire(trimmed)
+                    ?: throw invalidTimeout(configPath)
+            return try {
+                val amount = match.groupValues[1].toLong()
+                val duration =
+                    when (match.groupValues[2]) {
+                        "ms" -> amount.milliseconds
+                        "s" -> amount.seconds
+                        "m" -> amount.minutes
+                        "h" -> amount.hours
+                        else -> throw invalidTimeout(configPath)
+                    }
+                if (duration.isInfinite()) {
+                    throw CodegenException("`$configPath` exceeds the maximum supported duration")
+                }
+                duration
+            } catch (_: NumberFormatException) {
+                throw CodegenException("`$configPath` exceeds the maximum supported duration")
+            }
+        }
+
+        private fun invalidTimeout(configPath: String) =
+            CodegenException(
+                "`$configPath` must be `0` to disable the timeout or a duration string with an explicit unit, " +
+                    "such as `1000ms`, `10s`, `30m`, or `1h`",
+            )
+
+        private val TIMEOUT_VALUE_REGEX = Regex("^([0-9]+)\\s*(ms|s|m|h)$")
+
+        fun fromCustomizationConfig(
+            model: Model,
+            serviceId: ShapeId,
+            customizationConfig: ObjectNode?,
+        ): RequestBodyReadTimeouts =
+            fromProtocolSettings(model, serviceId, ProtocolReadSettings.protocolSettings(customizationConfig))
+
+        fun fromProtocolSettings(
+            model: Model,
+            serviceId: ShapeId,
+            protocolSettings: Map<String, ObjectNode>,
+        ): RequestBodyReadTimeouts {
+            val (configNode, configPath) = ProtocolReadSettings.resolve(protocolSettings, "request", "body", CONFIG_KEY)
+            val config = ProtocolReadSettings.expectObject(configNode, configPath)
+            config?.let {
+                ProtocolReadSettings.warnUnknownKeys(
+                    it,
+                    setOf(DEFAULT_NON_PAYLOAD_KEY, DEFAULT_PAYLOAD_KEY, PER_OPERATION_KEY),
+                    configPath,
+                )
+            }
+            val defaultNonPayloadTimeout =
+                config
+                    ?.getMember(DEFAULT_NON_PAYLOAD_KEY)
+                    ?.map { parseTimeout(it, "$configPath.$DEFAULT_NON_PAYLOAD_KEY") }
+                    ?.orElse(null)
+            val defaultPayloadTimeout =
+                config
+                    ?.getMember(DEFAULT_PAYLOAD_KEY)
+                    ?.map { parseTimeout(it, "$configPath.$DEFAULT_PAYLOAD_KEY") }
+                    ?.orElse(null)
+            val service = model.expectShape(serviceId, ServiceShape::class.java)
+            val containedOperations = TopDownIndex.of(model).getContainedOperations(service)
+            val containedOperationIds =
+                containedOperations
+                    .map { it.id }
+                    .toSet()
+            val streamingOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.input
+                            .map { inputId ->
+                                model.expectShape(inputId).members().any { member ->
+                                    member.isStreaming(model)
+                                }
+                            }
+                            .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val eventStreamInputOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.input
+                            .map { inputId ->
+                                model.expectShape(inputId).members().any { member ->
+                                    member.isEventStream(model)
+                                }
+                            }
+                            .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val payloadOperationIds =
+                containedOperations
+                    .filter { operation ->
+                        operation.id !in streamingOperationIds &&
+                            operation.input
+                                .map { inputId ->
+                                    model.expectShape(inputId).members().any { member ->
+                                        member.hasTrait<HttpPayloadTrait>()
+                                    }
+                                }
+                                .orElse(false)
+                    }
+                    .map { it.id }
+                    .toSet()
+            val perOperation =
+                ProtocolReadSettings.expectObject(
+                    config?.getMember(PER_OPERATION_KEY)?.orElse(null),
+                    "$configPath.$PER_OPERATION_KEY",
+                )
+                    ?.members
+                    ?.map { (key, value) ->
+                        val operationId =
+                            try {
+                                ShapeId.from(key.value)
+                            } catch (error: RuntimeException) {
+                                throw CodegenException(
+                                    "`$configPath.$PER_OPERATION_KEY` contains invalid operation ID `${key.value}`",
+                                    error,
+                                )
+                            }
+                        if (operationId !in containedOperationIds) {
+                            throw CodegenException(
+                                "`$configPath.$PER_OPERATION_KEY` contains `$operationId`, " +
+                                    "which is not an operation attached to service `$serviceId`",
+                            )
+                        }
+                        // Streaming inputs have no whole-body read deadline. Event stream inputs are
+                        // configured via `request.body.eventStreamTimeouts.perOperation` instead.
+                        if (operationId in streamingOperationIds) {
+                            val hint =
+                                if (operationId in eventStreamInputOperationIds) {
+                                    "; configure event stream deadlines via `${EventStreamTimeouts.CONFIG_PATH}.perOperation`"
+                                } else {
+                                    ""
+                                }
+                            throw CodegenException(
+                                "`$configPath.$PER_OPERATION_KEY` contains streaming operation " +
+                                    "`$operationId`, but request body read timeouts are not supported for streaming inputs$hint",
+                            )
+                        }
+                        operationId to
+                            parseTimeout(
+                                value,
+                                "$configPath.$PER_OPERATION_KEY.$operationId",
+                            )
+                    }?.toMap()
+                    ?: emptyMap()
+
+            return RequestBodyReadTimeouts(
+                defaultNonPayloadTimeout,
+                defaultPayloadTimeout,
+                perOperation,
+                payloadOperationIds,
+                streamingOperationIds,
+                eventStreamInputOperationIds,
             )
         }
     }
@@ -99,7 +347,9 @@ data class ServerRustSettings(
  * [requestBodyMaxBytes]: Maximum number of bytes to buffer when deserializing a non-streaming
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
- *   values). Default is `0` (no limit) for backwards compatibility.
+ *   values). Omitted settings inherit the runtime default. Configured with
+ *   `customizationConfig.protocols.common.request.body.maxBytes`; the deprecated
+ *   `codegen.requestBodyMaxBytes` key emits a warning and is read when the nested key is absent.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
  *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
@@ -130,7 +380,7 @@ data class ServerCodegenConfig(
     val addValidationExceptionToConstrainedOperations: Boolean? = null,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
-    val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
+    val requestBodyMaxBytes: Long? = null,
     /**
      * When true, a union JSON body whose object did not set any recognized variant
      * (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a
@@ -149,15 +399,6 @@ data class ServerCodegenConfig(
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
-
-        /**
-         * The default maximum size (in bytes) of a non-streaming request body that the generated
-         * server will buffer into memory. `0` means no limit (the historical behavior).
-         *
-         * Services should set `requestBodyMaxBytes` to a positive value to prevent
-         * memory-exhaustion denial-of-service attacks via unbounded request bodies.
-         */
-        const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
 
         /**
          * Default value for `rpcV2CborAddCapitalizedRoute`.
@@ -257,17 +498,15 @@ data class ServerCodegenConfig(
                         DEFAULT_HTTP_1X,
                     ),
                 requestBodyMaxBytes =
-                    node.get().getNumberMemberOrDefault(
-                        REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                        DEFAULT_REQUEST_BODY_MAX_BYTES,
-                    ).toLong(),
+                    node.get().getNumberMember(REQUEST_BODY_MAX_BYTES_CONFIG_KEY)
+                        .map { it.value.toLong() }.orElse(null),
                 rpcV2CborAddCapitalizedRoute =
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                         DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
                     ),
             ).also {
-                require(it.requestBodyMaxBytes >= 0) {
+                require(it.requestBodyMaxBytes == null || it.requestBodyMaxBytes >= 0) {
                     "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
                 }
             }

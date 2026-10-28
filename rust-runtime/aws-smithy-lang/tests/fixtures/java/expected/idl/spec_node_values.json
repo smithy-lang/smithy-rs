@@ -1,0 +1,54 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "arrays": [
+            [],
+            [
+                true
+            ],
+            [
+                1,
+                "hello"
+            ]
+        ],
+        "foo": {
+            "an_array": [
+                10.5
+            ],
+            "foo": "456",
+            "hello": 123,
+            "nested_object": {
+                "hello_there": true
+            },
+            "testing": "Hello!\n"
+        },
+        "keywords": [
+            true,
+            false,
+            null
+        ],
+        "numbers": [
+            0,
+            0.0,
+            1234,
+            -1234.1234,
+            100.0,
+            1.0E-10
+        ],
+        "objects": [
+            {},
+            {
+                "foo": true
+            },
+            {
+                "bar": [
+                    1,
+                    2,
+                    {}
+                ],
+                "foo": "hello"
+            }
+        ]
+    },
+    "shapes": {}
+}

@@ -1,0 +1,10 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "broken": [
+            "smithy.api#NotAShape",
+            "nested.ns#Missing"
+        ]
+    },
+    "shapes": {}
+}

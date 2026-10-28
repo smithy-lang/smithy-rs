@@ -5,7 +5,7 @@
 
 //! The immutable [`Model`].
 
-use crate::assembler::ModelAssembler;
+use crate::assembler::{Format, ModelAssembler};
 use crate::diagnostic::LoadError;
 use crate::knowledge::{Knowledge, KnowledgeCache};
 use crate::node::{Node, NodeObject};
@@ -92,9 +92,9 @@ impl ModelData {
 /// A `Model` is only produced when assembly reports no errors, so every ordinary shape
 /// reference in it resolves. Cloning is cheap.
 ///
-/// Load a single JSON AST document with [`Model::from_json_str`] and friends, or use
-/// [`Model::assembler`] to combine several documents, existing models, and shapes built in
-/// code.
+/// Load a single document with [`Model::from_idl_str`], [`Model::from_json_str`], and friends,
+/// or use [`Model::assembler`] to combine several IDL and JSON documents, existing models, and
+/// shapes built in code.
 #[derive(Clone)]
 pub struct Model {
     data: Arc<ModelData>,
@@ -121,7 +121,7 @@ impl Model {
     /// Loads a model from JSON AST bytes with default options.
     pub fn from_json_slice(source: &str, input: &[u8]) -> Result<Model, LoadError> {
         ModelAssembler::new()
-            .assemble_with_borrowed(source, input)
+            .assemble_with_borrowed(Format::Json, source, input)
             .into_result()
     }
 
@@ -138,6 +138,65 @@ impl Model {
     pub fn from_json_file(path: impl AsRef<Path>) -> Result<Model, LoadError> {
         ModelAssembler::new()
             .add_json_file(path)
+            .assemble()
+            .into_result()
+    }
+
+    /// Loads a model from a Smithy IDL string with default options. `source` labels
+    /// diagnostics, for example with a file name.
+    ///
+    /// ```
+    /// use aws_smithy_lang::{Model, ShapeId};
+    ///
+    /// let idl = r#"
+    /// $version: "2"
+    /// namespace example.weather
+    ///
+    /// /// Provides weather forecasts.
+    /// service Weather {
+    ///     version: "2006-03-01"
+    ///     operations: [GetForecast]
+    /// }
+    ///
+    /// @readonly
+    /// operation GetForecast {
+    ///     input := {
+    ///         @required
+    ///         cityId: String
+    ///     }
+    ///     output := {
+    ///         chanceOfRain: Float
+    ///     }
+    /// }
+    /// "#;
+    /// let model = Model::from_idl_str("weather.smithy", idl)?;
+    /// assert!(model.contains_shape(&ShapeId::new("example.weather#GetForecastInput")?));
+    /// # Ok::<_, Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn from_idl_str(source: &str, input: &str) -> Result<Model, LoadError> {
+        Self::from_idl_slice(source, input.as_bytes())
+    }
+
+    /// Loads a model from Smithy IDL bytes, which must be UTF-8, with default options.
+    pub fn from_idl_slice(source: &str, input: &[u8]) -> Result<Model, LoadError> {
+        ModelAssembler::new()
+            .assemble_with_borrowed(Format::Idl, source, input)
+            .into_result()
+    }
+
+    /// Loads a model from a Smithy IDL reader with default options. The reader is consumed
+    /// during the call and is not retained.
+    pub fn from_idl_reader(source: &str, reader: impl Read) -> Result<Model, LoadError> {
+        ModelAssembler::new()
+            .add_idl_reader(source, reader)
+            .assemble()
+            .into_result()
+    }
+
+    /// Loads a model from a Smithy IDL file with default options.
+    pub fn from_idl_file(path: impl AsRef<Path>) -> Result<Model, LoadError> {
+        ModelAssembler::new()
+            .add_idl_file(path)
             .assemble()
             .into_result()
     }

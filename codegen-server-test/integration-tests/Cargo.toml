@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["eventstreams-legacy", "eventstreams"]
+members = ["eventstreams-legacy", "eventstreams", "request-limits"]
 
 [workspace.dependencies]
+request-limits-server-sdk = { path = "../build/smithyprojections/codegen-server-test/request-limits-server-sdk/rust-server-codegen" }
 # http@1 versions
 rpcv2cbor_extras = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras/rust-server-codegen" }
 rpcv2cbor_extras_no_initial_response = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras_no_initial_response/rust-server-codegen" }

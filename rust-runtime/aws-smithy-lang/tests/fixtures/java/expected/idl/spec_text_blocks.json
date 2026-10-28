@@ -1,0 +1,16 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "delimiterRightOfContent": "Foo\n    Baz\nBar\n",
+        "escapedDelimiter": "foo \"\"\"\nbaz",
+        "escapedNewlines": "Foo Baz Bam",
+        "escapesAfterIndentation": "<div>\n  <p>Hi\n    bar</p>\n</div>\n",
+        "html": "<div>\n    <p>Hello!</p>\n</div>\n",
+        "htmlNoTrailingNewline": "<div>\n    <p>Hello!</p>\n</div>",
+        "incidental": "Foo\n    Baz\n\n\nBar\n",
+        "mixedNewlines": "Foo\nBaz Bam",
+        "quotes": "\"hello!\"\n",
+        "significantTrailingLine": "    Foo\n        Baz\n    Bar\n"
+    },
+    "shapes": {}
+}
