@@ -194,48 +194,140 @@ fn rejection_response<P, T: FromParts<P>>(error: T::Rejection) -> Response {
 
 Existing generic callers relying on that bound need no additional constraint.
 
-### Your own modeled rejection
+For a new handwritten modeled extractor error, prefer `ModeledRejection<MyError>`.
+Implement the schema, member walker, and `HttpModeledError` on `MyError`; the
+wrapper supplies response conversion. `HttpModeledError` alone has no blanket
+`IntoResponse<P>` implementation. Generated errors and errors with an existing
+conversion can still be used directly.
 
-If your extractor returns a modeled error, use the runtime wrapper instead:
+Choose a rejection that preserves the error's semantics:
+
+| Rejection | Contracts | When to use it |
+| --- | --- | --- |
+| `ModeledRejection<MyError>` | `MyError: HttpModeledError`; the wrapper supplies `IntoResponse<P>` | Recommended for new handwritten modeled extractor errors; the runtime handles response conversion. |
+| A modeled error directly | `HttpModeledError` and `IntoResponse<P>` | Generated modeled errors, errors with an existing conversion, or a handwritten error whose conversion you explicitly choose to implement. |
+| Shared `RuntimeError` | Already implements `IntoResponse<P>` | Framework failures and runtime validation, without a modeled error shape. |
+| A custom response rejection | Your `IntoResponse<P>` implementation | A complete HTTP response whose status, headers, body, and extensions you control. |
+
+The Pokémon example has a concrete implementation in
+[`PreferredLanguage`](https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service-common/src/language.rs).
+It reads `Accept-Language` without changing the Smithy operation input and
+returns `ModeledRejection<InvalidAcceptLanguage>` for malformed preferences.
+`InvalidAcceptLanguage` is handwritten: it defines its schema and member walker
+and implements `HttpModeledError` with status `400`. The wrapper supplies
+`IntoResponse<P>` and lets the selected protocol serialize the message and error
+identity. The error needs no generated shape or handwritten response conversion.
+`GetPokemonSpecies` takes this extractor as an additional handler argument,
+returns the selected translation, and retains all translations when the header
+is absent. Its HTTP plugin adds `Vary: Accept-Language` to the response.
+The same extractor works with the example's five-protocol tuple; its integration
+tests exercise translation selection and rejection framing for each protocol.
+
+### Recommended: let the runtime provide conversion with `ModeledRejection`
+
+For a new handwritten modeled extractor error, define its schema, member
+walker, error traits, and `HttpModeledError` status as in the handwritten example
+below. Omit the error's `IntoResponse<P>` implementation: the runtime wrapper
+supplies that conversion:
 
 ```rust
 # extern crate pokemon_service_server_schema_sdk as sdk;
+# extern crate aws_smithy_schema;
 # use sdk::server::http;
+# use std::sync::LazyLock;
+# use aws_smithy_schema::{
+#     serde::{SerdeError, SerializableStruct, ShapeSerializer},
+#     shape_id, Schema, ShapeType, StringTrait, TraitMap,
+# };
+# use sdk::server::{
+#     body,
+#     extension::ModeledErrorExtension,
+#     response::{IntoResponse, Response},
+#     schema::{HttpModeledError, ServerProtocol},
+# };
+#
+# #[derive(Debug)]
+# struct MyError {
+#     message: String,
+# }
+#
+# static MESSAGE: Schema<'static> = Schema::new_member(
+#     shape_id!("my_service.auth", "MyError", "message"),
+#     ShapeType::String,
+#     "message",
+#     0,
+# );
+# static ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+#     let mut traits = TraitMap::new();
+#     traits.insert(Box::new(StringTrait::new(
+#         shape_id!("smithy.api", "error"),
+#         "client",
+#     )));
+#     traits
+# });
+# static ERROR_SCHEMA: Schema<'static> = Schema::new_struct(
+#     shape_id!("my_service.auth", "MyError"),
+#     ShapeType::Structure,
+#     &[&MESSAGE],
+# )
+# .with_traits(&ERROR_TRAITS);
+#
+# impl std::fmt::Display for MyError {
+#     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+#         f.write_str(&self.message)
+#     }
+# }
+#
+# impl std::error::Error for MyError {}
+#
+# impl SerializableStruct for MyError {
+#     fn schema(&self) -> &Schema<'_> {
+#         &ERROR_SCHEMA
+#     }
+#
+#     fn serialize_members(
+#         &self,
+#         serializer: &mut dyn ShapeSerializer,
+#     ) -> Result<(), SerdeError> {
+#         serializer.write_string(&MESSAGE, &self.message)
+#     }
+# }
+#
+# impl HttpModeledError for MyError {
+#     fn status_code(&self) -> u16 {
+#         401
+#     }
+# }
 # #[derive(Clone, Debug)]
 # struct CallerInfo;
-# fn extract_caller_info_from_parts(parts: &http::request::Parts) -> Option<CallerInfo> {
-#     parts.extensions.get::<CallerInfo>().cloned()
-# }
-# type MyError = sdk::error::ValidationException;
 # fn authenticate(parts: &http::request::Parts) -> Result<CallerInfo, MyError> {
-#     extract_caller_info_from_parts(parts).ok_or_else(|| MyError {
+#     parts.extensions.get::<CallerInfo>().cloned().ok_or_else(|| MyError {
 #         message: "Caller identity could not be resolved".to_owned(),
-#         field_list: None,
 #     })
 # }
 use http::request::Parts;
-use sdk::server::{request::FromParts, response::ModeledRejection};
+use sdk::server::{
+    request::FromParts,
+    response::ModeledRejection,
+};
 
 impl<P> FromParts<P> for CallerInfo {
     type Rejection = ModeledRejection<MyError>;
 
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        // Your function returns Result<CallerInfo, MyError>.
         authenticate(parts).map_err(Into::into)
     }
 }
 ```
 
-`MyError` implements `SerializableStruct` and `HttpModeledError`.
-`SerializableStruct` supplies the schema and walks the value's fields; schema
-metadata alone cannot read a Rust value. `HttpModeledError` supplies the modeled
-HTTP status and optional operation context. Smithy-generated modeled errors
-already implement these contracts. Handwritten errors supply them without
-naming any concrete protocol.
-
 `ModeledRejection<E>` supplies `IntoResponse<P>` for every `P`. You write no
-response-conversion implementation. Both ordinary and streaming schema upgrades
-explicitly call `into_response_with_protocol` with the selected protocol.
-The tuple rejection wrappers forward that call to the failing extractor:
+response-conversion implementation. This is the recommended path for new
+handwritten errors. Generated errors and existing conversion implementations can
+still be used directly. Both direct modeled rejections and wrapped rejections
+reach `into_response_with_protocol` with the selected protocol through ordinary
+and streaming schema upgrades. Tuple rejection wrappers forward that call to
+the failing extractor. For the adapter, the path is:
 
 ```text
 Router selects protocol
@@ -254,6 +346,240 @@ an empty body and no protocol-specific headers; invalid statuses become `500`.
 Use this adapter for schema serde, where the upgrade supplies the selected
 protocol. A generated-serde upgrade calls its static method and receives that
 fallback.
+
+### Alternative: use a modeled error directly
+
+For an application rejection with a modeled error shape, retain that error's
+schema and status. You can use the error directly as `type Rejection` when it
+implements both `HttpModeledError` and `IntoResponse<P>`. The error can be generated
+from a Smithy model or written entirely by hand.
+
+```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# extern crate aws_smithy_schema;
+# use sdk::server::http;
+# use std::sync::LazyLock;
+# use aws_smithy_schema::{
+#     serde::{SerdeError, SerializableStruct, ShapeSerializer},
+#     shape_id, Schema, ShapeType, StringTrait, TraitMap,
+# };
+# use sdk::server::{
+#     body,
+#     extension::ModeledErrorExtension,
+#     response::{IntoResponse, Response},
+#     schema::{HttpModeledError, ServerProtocol},
+# };
+#
+# #[derive(Debug)]
+# struct MyError {
+#     message: String,
+# }
+#
+# static MESSAGE: Schema<'static> = Schema::new_member(
+#     shape_id!("my_service.auth", "MyError", "message"),
+#     ShapeType::String,
+#     "message",
+#     0,
+# );
+# static ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+#     let mut traits = TraitMap::new();
+#     traits.insert(Box::new(StringTrait::new(
+#         shape_id!("smithy.api", "error"),
+#         "client",
+#     )));
+#     traits
+# });
+# static ERROR_SCHEMA: Schema<'static> = Schema::new_struct(
+#     shape_id!("my_service.auth", "MyError"),
+#     ShapeType::Structure,
+#     &[&MESSAGE],
+# )
+# .with_traits(&ERROR_TRAITS);
+#
+# impl std::fmt::Display for MyError {
+#     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+#         f.write_str(&self.message)
+#     }
+# }
+#
+# impl std::error::Error for MyError {}
+#
+# impl SerializableStruct for MyError {
+#     fn schema(&self) -> &Schema<'_> {
+#         &ERROR_SCHEMA
+#     }
+#
+#     fn serialize_members(
+#         &self,
+#         serializer: &mut dyn ShapeSerializer,
+#     ) -> Result<(), SerdeError> {
+#         serializer.write_string(&MESSAGE, &self.message)
+#     }
+# }
+#
+# impl HttpModeledError for MyError {
+#     fn status_code(&self) -> u16 {
+#         401
+#     }
+# }
+#
+# impl<P> IntoResponse<P> for MyError {
+#     fn into_response(self) -> Response {
+#         // Define the behavior for callers without a selected protocol.
+#         let mut response = Response::new(body::empty());
+#         *response.status_mut() = http::StatusCode::from_u16(self.status_code())
+#             .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR);
+#         response.extensions_mut().insert(ModeledErrorExtension::new(
+#             aws_smithy_schema::intern_header_name(self.schema().shape_id().shape_name()),
+#         ));
+#         response
+#     }
+#
+#     fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
+#         // Schema upgrades supply the actual routed protocol instance.
+#         protocol.serialize_error(&self)
+#     }
+# }
+# #[derive(Clone, Debug)]
+# struct CallerInfo;
+# fn authenticate(parts: &http::request::Parts) -> Result<CallerInfo, MyError> {
+#     parts.extensions.get::<CallerInfo>().cloned().ok_or_else(|| MyError {
+#         message: "Caller identity could not be resolved".to_owned(),
+#     })
+# }
+use http::request::Parts;
+use sdk::server::request::FromParts;
+
+impl<P> FromParts<P> for CallerInfo {
+    type Rejection = MyError;
+
+    fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
+        // Your function returns Result<CallerInfo, MyError>.
+        authenticate(parts)
+    }
+}
+```
+
+Schema-generated modeled error structures and operation error enums already
+implement both contracts for every `P`, including protocol tuples. For example,
+if your SDK contains `ValidationException`, the associated type can be
+`type Rejection = sdk::error::ValidationException;`. No wrapper or handwritten
+response conversion is required for those generated types.
+
+`HttpModeledError` alone does not imply `IntoResponse<P>`. For new handwritten
+errors, prefer the `ModeledRejection` adapter shown above. If you need to own
+the conversion, the following example shows the complete direct implementation.
+
+### Alternative: write the modeled error and its response conversion yourself
+
+A handwritten error supplies its schema, member walker, error traits, and HTTP
+status. Add `aws-smithy-schema` to your application's dependencies using the same
+version as the generated SDK. This complete error example has one message
+member and a modeled `401` status:
+
+```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# extern crate aws_smithy_schema;
+# use sdk::server::http;
+use std::sync::LazyLock;
+use aws_smithy_schema::{
+    serde::{SerdeError, SerializableStruct, ShapeSerializer},
+    shape_id, Schema, ShapeType, StringTrait, TraitMap,
+};
+use sdk::server::{
+    body,
+    extension::ModeledErrorExtension,
+    response::{IntoResponse, Response},
+    schema::{HttpModeledError, ServerProtocol},
+};
+
+#[derive(Debug)]
+struct MyError {
+    message: String,
+}
+
+static MESSAGE: Schema<'static> = Schema::new_member(
+    shape_id!("my_service.auth", "MyError", "message"),
+    ShapeType::String,
+    "message",
+    0,
+);
+static ERROR_TRAITS: LazyLock<TraitMap> = LazyLock::new(|| {
+    let mut traits = TraitMap::new();
+    traits.insert(Box::new(StringTrait::new(
+        shape_id!("smithy.api", "error"),
+        "client",
+    )));
+    traits
+});
+static ERROR_SCHEMA: Schema<'static> = Schema::new_struct(
+    shape_id!("my_service.auth", "MyError"),
+    ShapeType::Structure,
+    &[&MESSAGE],
+)
+.with_traits(&ERROR_TRAITS);
+
+impl std::fmt::Display for MyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for MyError {}
+
+impl SerializableStruct for MyError {
+    fn schema(&self) -> &Schema<'_> {
+        &ERROR_SCHEMA
+    }
+
+    fn serialize_members(
+        &self,
+        serializer: &mut dyn ShapeSerializer,
+    ) -> Result<(), SerdeError> {
+        serializer.write_string(&MESSAGE, &self.message)
+    }
+}
+
+impl HttpModeledError for MyError {
+    fn status_code(&self) -> u16 {
+        401
+    }
+}
+
+impl<P> IntoResponse<P> for MyError {
+    fn into_response(self) -> Response {
+        // Define the behavior for callers without a selected protocol.
+        let mut response = Response::new(body::empty());
+        *response.status_mut() = http::StatusCode::from_u16(self.status_code())
+            .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR);
+        response.extensions_mut().insert(ModeledErrorExtension::new(
+            aws_smithy_schema::intern_header_name(self.schema().shape_id().shape_name()),
+        ));
+        response
+    }
+
+    fn into_response_with_protocol(self, protocol: &dyn ServerProtocol) -> Response {
+        // Schema upgrades supply the actual routed protocol instance.
+        protocol.serialize_error(&self)
+    }
+}
+# let response = IntoResponse::<()>::into_response(MyError { message: "missing caller".to_owned() });
+# assert_eq!(response.status(), 401);
+# assert!(response.extensions().get::<ModeledErrorExtension>().is_some());
+```
+
+Use this `MyError` directly in the extractor above. `SerializableStruct` supplies
+the schema and walks the value's fields; schema metadata alone cannot read a
+Rust value. `HttpModeledError` requires `SerializableStruct`, `std::error::Error`,
+`Send`, `Sync`, and `'static`, and supplies the modeled HTTP status and optional
+operation context. An error returned outside an operation can retain the default
+`operation_schema()` result of `None`.
+
+The generic `IntoResponse<P>` implementation works for both a concrete protocol
+and a protocol tuple. Its static method explicitly chooses an empty response
+with the modeled status and error extension. Its contextual method preserves
+the schema and lets the selected protocol serialize the error's members and
+protocol-specific headers. The handwritten error names no concrete protocol.
 
 ### Required and optional extensions
 
@@ -332,9 +658,10 @@ fn contextual_response<E: HttpModeledError>(
 }
 ```
 
-Keep or define its context-free `into_response()` behavior too. For a new modeled
-extractor rejection, prefer `ModeledRejection<MyError>` from step 4; the runtime
-supplies both methods.
+Keep or define its context-free `into_response()` behavior too. A generated or
+handwritten modeled error with both conversion methods can be the extractor's
+rejection directly. For a new handwritten modeled extractor error, prefer
+`ModeledRejection<MyError>` from step 4 so the runtime supplies both methods.
 
 There is no blanket `IntoResponse<P>` implementation for every
 `HttpModeledError`: it would conflict with existing types implementing both
@@ -523,8 +850,9 @@ The generated service selects the converter:
 This works for single-protocol and multi-protocol schema services. The current
 converters both require the error's `IntoResponse<P>` implementation; generated
 operation errors, framework failures, and `Infallible` satisfy their bounds.
-For a handwritten modeled error, a `ModeledRejection<E>` value also satisfies
-the current converter contract.
+A handwritten modeled error also satisfies the converter contract when it
+implements `IntoResponse<P>`; alternatively, a `ModeledRejection<E>` value
+supplies that conversion for an `E: HttpModeledError`.
 
 Compilation alone does not establish correct framing. Old middleware bounds can
 compile against schema-generated errors while a direct `into_response()` call
@@ -718,7 +1046,8 @@ its local tests; they did not execute authentication against an external service
 Before rollout, exercise every supported protocol against the regenerated service:
 
 - Successful operations and modeled errors.
-- Authentication failures and extractor rejections, including `ModeledRejection`.
+- Authentication failures and extractor rejections, including direct modeled
+  errors and `ModeledRejection`.
 - Required and optional extensions.
 - Streaming operations and body-collection failures.
 - Status, headers, exact body bytes, and instrumentation extensions.
@@ -732,11 +1061,12 @@ compatibility settings.
 | --- | --- |
 | Existing custom response | Status, headers, body, and extensions stay unchanged through the contextual default. |
 | Shared runtime rejection | Each variant matches its established protocol-local framing. |
-| Modeled extractor rejection | The wrapper reaches the selected serializer through ordinary and streaming upgrades. |
+| Direct modeled extractor rejection | A generated or handwritten error's contextual conversion reaches the selected serializer through ordinary and streaming upgrades. |
+| Wrapped modeled extractor rejection | `ModeledRejection` reaches the selected serializer through both schema upgrades without a handwritten response conversion. |
 | Multiple extractors | Tuple rejection wrappers forward contextual conversion from each failing position. |
 | Required and optional extensions | Required absence retains the empty `500`; optional absence reaches the handler with `None`. |
 | Rejected extraction | The handler is skipped; a live body is not polled by the upgrade. |
-| Direct static conversion | New shared-error and modeled-wrapper fallbacks are checked separately from protocol framing. |
+| Direct static conversion | Shared runtime errors, direct modeled errors, and modeled wrappers have their static response behavior checked separately from protocol framing. |
 | Custom protocol | Its serializers are invoked through routing and a generated operation's upgrade. |
 
 The runtime regression tests cover the modeled wrapper's static fallback and
