@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rustsdk.customize.dynamodb
+package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -17,18 +17,21 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rustsdk.AwsRuntimeType
-import software.amazon.smithy.rustsdk.SdkConfigSection
 
-class DynamoDbDecorator : ClientCodegenDecorator {
-    override val name: String = "DynamoDb"
+/**
+ * Overrides the default retry config for DynamoDB and DynamoDB Streams. They use a 25ms
+ * non-throttling initial backoff and 4 max attempts. The generic Retry Behavior 2.1 defaults are
+ * 50ms and 3.
+ */
+class RetryDefaultOverrideDecorator : ClientCodegenDecorator {
+    override val name: String = "RetryDefaultOverride"
     override val order: Byte = 0
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations + DynamoDbServiceRuntimePluginCustomization(codegenContext)
+        baseCustomizations + RetryDefaultOverrideRuntimePluginCustomization(codegenContext)
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         val rc = codegenContext.runtimeConfig
@@ -68,7 +71,7 @@ class DynamoDbDecorator : ClientCodegenDecorator {
     }
 }
 
-private class DynamoDbServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
+private class RetryDefaultOverrideRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
