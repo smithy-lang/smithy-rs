@@ -30,6 +30,9 @@ IntoResponse<P>` bound would break downstream generic code that relies on the
 associated-type guarantee:
 
 ```rust
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::{request::FromParts, response::{IntoResponse, Response}};
+
 fn rejection_response<P, T: FromParts<P>>(error: T::Rejection) -> Response {
     error.into_response()
 }
@@ -43,11 +46,20 @@ We therefore retain `IntoResponse<P>` and the rejection bound, and extend the
 existing trait with a default method:
 
 ```rust
-fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response
-where
-    Self: Sized,
-{
-    self.into_response()
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+use sdk::server::response::{IntoResponse, Response};
+# struct MissingCaller;
+use sdk::server::schema::ServerProtocol;
+
+impl<P> IntoResponse<P> for MissingCaller {
+#     fn into_response(self) -> Response {
+#         http::Response::builder().status(401)
+#             .body(sdk::server::body::to_boxed("missing caller")).unwrap()
+#     }
+    fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response {
+        <Self as IntoResponse<P>>::into_response(self)
+    }
 }
 ```
 
@@ -118,21 +130,25 @@ JSON, XML, CBOR, or a protocol supplied by another runtime crate.
 ### Adding a protocol registry
 
 A runtime crate exports a static registry. For example, an
-`example-server-protocols` crate could provide a metadata-routed legacy protocol:
+`example-server-protocols` crate could register a metadata-routed legacy protocol
+using this constructor:
 
 ```rust
+# extern crate aws_smithy_http_server;
 use aws_smithy_http_server::schema::{
-    ProtocolOrder, ProtocolRegistration, ProtocolRegistry,
+    MetadataRoutedProtocol, ProtocolOrder, ProtocolRegistration,
 };
 
-// LegacyRpcProtocol implements ServerProtocol and MetadataRoutedProtocol.
-pub static PROTOCOLS: ProtocolRegistry = ProtocolRegistry::new(&[
-    ProtocolRegistration::metadata_routed::<LegacyRpcProtocol>(
-        "example.protocols#legacyRpc",
-    )
-    .with_order(&[ProtocolOrder::Before("smithy.protocols#rpcv2Cbor")]),
-]);
+pub const fn legacy_rpc_registration<P: MetadataRoutedProtocol>() -> ProtocolRegistration {
+    ProtocolRegistration::metadata_routed::<P>("example.protocols#legacyRpc")
+        .with_order(&[ProtocolOrder::Before("smithy.protocols#rpcv2Cbor")])
+}
 ```
+
+Once the crate implements `LegacyRpcProtocol`, it exports
+`pub static PROTOCOLS: ProtocolRegistry =
+ProtocolRegistry::new(&[legacy_rpc_registration::<LegacyRpcProtocol>()]);`.
+The protocol's `protocol_id()` must return `example.protocols#legacyRpc`.
 
 Its factory constructs the protocol from `ProtocolBuildContext`; its router
 selects from the supplied operation targets. A protocol that needs body bytes
@@ -161,33 +177,39 @@ Contributions from multiple decorators are combined. The service
 model must declare `example.protocols#legacyRpc`, and codegen must recognize the
 protocol trait; the registry hook supplies its runtime implementation.
 
-For a hypothetical `ExampleService` with `GetItem` and `PutItem`, the generated
-builder then emits wiring equivalent to this excerpt. The handler fields already
-contain upgrade services and configured HTTP plugins:
+For a service with `GetItem` and `PutItem`, the generated builder uses the
+following wiring. This helper accepts the two handler routes after they have
+been wrapped in upgrade services and configured HTTP plugins:
 
 ```rust
+# extern crate aws_smithy_http_server;
 use aws_smithy_http_server::{
-    schema::routing::MultiProtocolRoutingServiceBuilder,
+    body::RequestBody,
+    routing::SyncRoute,
+    schema::{
+        ProtocolRegistry,
+        routing::{
+            MultiProtocolRoutingService, MultiProtocolRoutingServiceBuilder,
+            ProtocolOptions, RouterBuildError,
+        },
+    },
     service::SchemaServiceShape,
 };
 
-let schema = <ExampleService as SchemaServiceShape>::SCHEMA;
-let handlers = [
-    self.get_item.expect("GetItem handler was checked"),
-    self.put_item.expect("PutItem handler was checked"),
-];
-let svc =
+fn build_service<S: SchemaServiceShape>(
+    handlers: [SyncRoute<RequestBody>; 2],
+    protocols: &'static ProtocolRegistry,
+    routing_options: ProtocolOptions,
+) -> Result<MultiProtocolRoutingService, RouterBuildError> {
+    let schema = S::SCHEMA;
     MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
         schema,
-        [&example_server_protocols::PROTOCOLS],
+        [protocols],
         schema.operations().iter().copied().zip(handlers),
-        self.routing_options,
+        routing_options,
     )
-    .layer(self.layer)
     .build()
-    .map_err(BuildError::Routing)?;
-
-Ok(ExampleService { svc })
+}
 ```
 
 Codegen emits schemas and handlers in the same operation order. With several
@@ -230,13 +252,18 @@ The earlier registry example puts `legacyRpc` before this chain. Alternatively,
 to place it between AWS JSON 1.1 and REST JSON, register it with both boundaries:
 
 ```rust
-ProtocolRegistration::metadata_routed::<LegacyRpcProtocol>(
-    "example.protocols#legacyRpc",
-)
-.with_order(&[
-    ProtocolOrder::After("aws.protocols#awsJson1_1"),
-    ProtocolOrder::Before("aws.protocols#restJson1"),
-])
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::schema::{
+    MetadataRoutedProtocol, ProtocolOrder, ProtocolRegistration,
+};
+
+pub const fn legacy_rpc_registration<P: MetadataRoutedProtocol>() -> ProtocolRegistration {
+    ProtocolRegistration::metadata_routed::<P>("example.protocols#legacyRpc")
+        .with_order(&[
+            ProtocolOrder::After("aws.protocols#awsJson1_1"),
+            ProtocolOrder::Before("aws.protocols#restJson1"),
+        ])
+}
 ```
 
 The resulting order is:

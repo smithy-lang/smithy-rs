@@ -39,6 +39,8 @@ HTTP setting is omitted; explicitly setting `"http-1x": false` is invalid.
 Code that constructs a protocol marker as a unit struct changes to:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::protocol::rest_json_1::RestJson1;
 let protocol = RestJson1::default();
 ```
 
@@ -63,14 +65,36 @@ service MyService {
 }
 ```
 
-Register each operation handler once:
+Register each operation handler once. This Rust example uses the generated
+Pokémon SDK; substitute your service's names and handlers:
 
-```rust
-let config = sdk::MyServiceConfig::builder().build();
+```rust,no_run
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# async fn get_pokemon_species(
+#     input: sdk::input::GetPokemonSpeciesInput,
+# ) -> Result<sdk::output::GetPokemonSpeciesOutput, sdk::error::GetPokemonSpeciesError> {
+#     Err(sdk::error::ResourceNotFoundException {
+#         message: format!("No species named {}", input.name),
+#     }.into())
+# }
+# async fn unused_handler<Op: sdk::server::operation::OperationShape>(
+#     _: Op::Input,
+# ) -> Result<Op::Output, Op::Error> {
+#     std::future::pending().await
+# }
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+let config = sdk::PokemonServiceConfig::builder().build();
 
-let service = sdk::MyService::builder(config)
-    .get_thing(get_thing)
+let service = sdk::PokemonService::builder(config)
+    .get_pokemon_species(get_pokemon_species)
+#     .capture_pokemon(unused_handler::<sdk::operation_shape::CapturePokemon>)
+#     .do_nothing(unused_handler::<sdk::operation_shape::DoNothing>)
+#     .get_server_statistics(unused_handler::<sdk::operation_shape::GetServerStatistics>)
+#     .get_storage(unused_handler::<sdk::operation_shape::GetStorage>)
+#     .stream_pokemon_radio(unused_handler::<sdk::operation_shape::StreamPokemonRadio>)
     .build()?;
+# Ok(())
+# }
 ```
 
 Routing selects the protocol for each request. Your handler receives the same
@@ -103,16 +127,26 @@ A generic implementation usually handles both service configurations.
 Your old extractor might look like:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+# #[derive(Clone, Debug)]
+# struct CallerInfo;
+# fn extract_caller_info_from_parts(parts: &http::request::Parts) -> Option<CallerInfo> {
+#     parts.extensions.get::<CallerInfo>().cloned()
+# }
 use sdk::server::{
-    protocol::rest_json_1::RestJson1,
+    protocol::rest_json_1::{RestJson1, runtime_error::RuntimeError},
     request::FromParts,
 };
 
 impl FromParts<RestJson1> for CallerInfo {
-    type Rejection =
-        sdk::server::protocol::rest_json_1::runtime_error::RuntimeError;
+    type Rejection = RuntimeError;
 
-    // Existing extraction logic.
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+        extract_caller_info_from_parts(parts).ok_or_else(|| {
+            RuntimeError::Validation("Caller identity could not be resolved".to_owned())
+        })
+    }
 }
 ```
 
@@ -120,20 +154,22 @@ For a protocol-independent extractor returning a framework error, change both
 the trait implementation and the rejection type:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+# #[derive(Clone, Debug)]
+# struct CallerInfo;
+# fn extract_caller_info_from_parts(parts: &http::request::Parts) -> Option<CallerInfo> {
+#     parts.extensions.get::<CallerInfo>().cloned()
+# }
 use http::request::Parts;
-use sdk::server::{
-    request::FromParts,
-    runtime_error::RuntimeError,
-};
+use sdk::server::{request::FromParts, runtime_error::RuntimeError};
 
 impl<P> FromParts<P> for CallerInfo {
     type Rejection = RuntimeError;
 
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
         extract_caller_info_from_parts(parts).ok_or_else(|| {
-            RuntimeError::Validation(
-                "Caller identity could not be resolved".to_owned(),
-            )
+            RuntimeError::Validation("Caller identity could not be resolved".to_owned())
         })
     }
 }
@@ -147,7 +183,13 @@ pipeline passes the selected protocol to its contextual conversion method.
 The original associated-type guarantee remains intact:
 
 ```rust
-FromParts<P>::Rejection: IntoResponse<P>
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::{request::FromParts, response::{IntoResponse, Response}};
+
+fn rejection_response<P, T: FromParts<P>>(error: T::Rejection) -> Response {
+    // FromParts already guarantees that its rejection implements IntoResponse<P>.
+    error.into_response()
+}
 ```
 
 Existing generic callers relying on that bound need no additional constraint.
@@ -157,17 +199,27 @@ Existing generic callers relying on that bound need no additional constraint.
 If your extractor returns a modeled error, use the runtime wrapper instead:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+# #[derive(Clone, Debug)]
+# struct CallerInfo;
+# fn extract_caller_info_from_parts(parts: &http::request::Parts) -> Option<CallerInfo> {
+#     parts.extensions.get::<CallerInfo>().cloned()
+# }
+# type MyError = sdk::error::ValidationException;
+# fn authenticate(parts: &http::request::Parts) -> Result<CallerInfo, MyError> {
+#     extract_caller_info_from_parts(parts).ok_or_else(|| MyError {
+#         message: "Caller identity could not be resolved".to_owned(),
+#         field_list: None,
+#     })
+# }
 use http::request::Parts;
-use sdk::server::{
-    request::FromParts,
-    response::ModeledRejection,
-};
+use sdk::server::{request::FromParts, response::ModeledRejection};
 
 impl<P> FromParts<P> for CallerInfo {
     type Rejection = ModeledRejection<MyError>;
 
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
-        // Your function returns Result<CallerInfo, MyError>.
         authenticate(parts).map_err(Into::into)
     }
 }
@@ -220,8 +272,10 @@ An existing rejection that deliberately returns a complete HTTP response can
 remain unchanged:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
 use sdk::server::response::{IntoResponse, Response};
-
+# struct MissingCaller;
 impl<P> IntoResponse<P> for MissingCaller {
     fn into_response(self) -> Response {
         http::Response::builder()
@@ -231,19 +285,29 @@ impl<P> IntoResponse<P> for MissingCaller {
             .unwrap()
     }
 }
+# let response = IntoResponse::<()>::into_response(MissingCaller);
+# assert_eq!(response.status(), 401);
+# assert_eq!(response.headers()["x-caller-error"], "missing");
 ```
 
-The new trait method defaults to:
+The new trait method preserves this response by default. An explicit
+implementation of that behavior is:
 
 ```rust
-fn into_response_with_protocol(
-    self,
-    _protocol: &dyn ServerProtocol,
-) -> Response
-where
-    Self: Sized,
-{
-    self.into_response()
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+use sdk::server::response::{IntoResponse, Response};
+# struct MissingCaller;
+use sdk::server::schema::ServerProtocol;
+
+impl<P> IntoResponse<P> for MissingCaller {
+#     fn into_response(self) -> Response {
+#         http::Response::builder().status(401)
+#             .body(sdk::server::body::to_boxed("missing caller")).unwrap()
+#     }
+    fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response {
+        <Self as IntoResponse<P>>::into_response(self)
+    }
 }
 ```
 
@@ -254,14 +318,17 @@ be made generic before use with a protocol tuple.
 
 If you maintain a conversion implementation whose response must follow the
 selected protocol's encoding, override the new method. For an error implementing
-`HttpModeledError`, that override can be:
+`HttpModeledError`, the override can delegate to this helper:
 
 ```rust
-fn into_response_with_protocol(
-    self,
-    protocol: &dyn sdk::server::schema::ServerProtocol,
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::{response::Response, schema::{HttpModeledError, ServerProtocol}};
+
+fn contextual_response<E: HttpModeledError>(
+    error: &E,
+    protocol: &dyn ServerProtocol,
 ) -> Response {
-    protocol.serialize_error(&self)
+    protocol.serialize_error(error)
 }
 ```
 
@@ -284,13 +351,17 @@ Do not reinterpret a runtime validation error as a modeled constraint violation.
 
 ## 6. Continue returning modeled errors from operation handlers
 
-Keep returning your generated operation error enum:
+Keep returning your generated operation error enum. For example, this Pokémon
+handler returns a modeled not-found error:
 
 ```rust
-async fn get_thing(
-    input: sdk::input::GetThingInput,
-) -> Result<sdk::output::GetThingOutput, sdk::error::GetThingError> {
-    // Existing business logic.
+# extern crate pokemon_service_server_schema_sdk as sdk;
+async fn get_pokemon_species(
+    input: sdk::input::GetPokemonSpeciesInput,
+) -> Result<sdk::output::GetPokemonSpeciesOutput, sdk::error::GetPokemonSpeciesError> {
+    Err(sdk::error::ResourceNotFoundException {
+        message: format!("No species named {}", input.name),
+    }.into())
 }
 ```
 
@@ -307,7 +378,14 @@ The current generator also emits response implementations for schema-generated
 modeled error structures and operation error enums. Direct context-free calls:
 
 ```rust
-IntoResponse::<P>::into_response(schema_generated_error)
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::response::IntoResponse;
+
+let schema_generated_error = sdk::error::ResourceNotFoundException {
+    message: "No species found".to_owned(),
+};
+let response = IntoResponse::<()>::into_response(schema_generated_error);
+# assert_eq!(response.status(), 404);
 ```
 
 return an empty response with the modeled status and error extension. To obtain
@@ -318,11 +396,19 @@ path.
 ## 7. Use the service's converter in middleware supporting both serde modes
 
 The updated AWS auth middleware tested with this runtime retains its application
-entry point:
+entry point, `HttpPlugins::new().authenticate(authenticator, config)`.
+That extension method belongs to the auth library. With a constructed HTTP
+authentication plugin, the public runtime API is:
 
 ```rust
-let plugins = HttpPlugins::new()
-    .authenticate(authenticator, config);
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, PluginStack};
+
+fn authentication_plugins<P: HttpMarker>(
+    authentication_plugin: P,
+) -> HttpPlugins<PluginStack<P, IdentityPlugin>> {
+    HttpPlugins::new().push(authentication_plugin)
+}
 ```
 
 That implementation already performs the required dispatch. Check that your
@@ -332,9 +418,11 @@ call `into_response()` directly.
 If you maintain middleware yourself, import the runtime contracts:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
 use sdk::server::{
+    http::Request,
     operation::OperationShape,
-    response::ErrorConverter,
+    response::{ErrorConverter, Response},
     runtime_error::InternalFailureException,
     service::{ServiceSerde, ServiceShape},
 };
@@ -343,12 +431,27 @@ use sdk::server::{
 Add these bounds to the plugin implementation:
 
 ```rust
-Ser: ServiceShape + ServiceSerde,
-Op: OperationShape,
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::{
+    http::Request,
+    operation::OperationShape,
+    response::{ErrorConverter, Response},
+    runtime_error::InternalFailureException,
+    service::{ServiceSerde, ServiceShape},
+};
 
-Ser::SerdeKind:
-    ErrorConverter<Op::Error>
-    + ErrorConverter<InternalFailureException>,
+fn authentication_response<Ser, Op, B>(
+    mapped_error: Op::Error,
+    request: &Request<B>,
+) -> Response
+where
+    Ser: ServiceShape + ServiceSerde,
+    Op: OperationShape,
+    Ser::SerdeKind:
+        ErrorConverter<Op::Error> + ErrorConverter<InternalFailureException>,
+{
+    <Ser::SerdeKind as ErrorConverter<Op::Error>>::convert(mapped_error, request)
+}
 ```
 
 Thread `Ser::SerdeKind` into the middleware service as its `Converter` type.
@@ -356,28 +459,58 @@ Thread `Ser::SerdeKind` into the middleware service as its `Converter` type.
 the converter marker. The `Plugin<Ser, Op, S>` trait retains its three parameters;
 applications do not choose a serde mode.
 
-Replace direct error conversion:
+Replace direct error conversion of the mapped error:
 
 ```rust
-IntoResponse::<P>::into_response(config.map_error(err))
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::response::{IntoResponse, Response};
+
+fn generated_error_response<P, E: IntoResponse<P>>(mapped_error: E) -> Response {
+    IntoResponse::<P>::into_response(mapped_error)
+}
 ```
 
 with:
 
 ```rust
-<Converter as ErrorConverter<Op::Error>>::convert(
-    config.map_error(err),
-    &request,
-)
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::{
+    http::Request,
+    operation::OperationShape,
+    response::{ErrorConverter, Response},
+};
+
+fn authentication_response<Converter, Op, B>(
+    mapped_error: Op::Error,
+    request: &Request<B>,
+) -> Response
+where
+    Op: OperationShape,
+    Converter: ErrorConverter<Op::Error>,
+{
+    <Converter as ErrorConverter<Op::Error>>::convert(mapped_error, request)
+}
 ```
 
 Convert framework failures through the same marker:
 
 ```rust
-<Converter as ErrorConverter<InternalFailureException>>::convert(
-    InternalFailureException,
-    &request,
-)
+# extern crate pokemon_service_server_schema_sdk as sdk;
+use sdk::server::{
+    http::Request,
+    response::{ErrorConverter, Response},
+    runtime_error::InternalFailureException,
+};
+
+fn internal_failure_response<Converter, B>(request: &Request<B>) -> Response
+where
+    Converter: ErrorConverter<InternalFailureException>,
+{
+    <Converter as ErrorConverter<InternalFailureException>>::convert(
+        InternalFailureException,
+        request,
+    )
+}
 ```
 
 The generated service selects the converter:
@@ -411,19 +544,26 @@ those older APIs.
 Per-operation HTTP middleware can read the selection:
 
 ```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
 use sdk::server::schema::SelectedOperation;
-
-if let Some(selected) = SelectedOperation::get_from_request(&request) {
+# fn inspect_request<B>(request: &http::Request<B>) {
+if let Some(selected) = SelectedOperation::get_from_request(request) {
     let protocol = selected.protocol();
     let operation = selected.operation();
     // Inspect metadata or serialize with this protocol.
 }
+# }
 ```
 
 Extractors read the same selection through:
 
 ```rust
-SelectedOperation::get_from_extensions(&parts.extensions)
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+use sdk::server::schema::SelectedOperation;
+# let (parts, _) = http::Request::new(()).into_parts();
+let selected = SelectedOperation::get_from_extensions(&parts.extensions);
 ```
 
 `SharedServerProtocol::get_from_request(&request)` remains a convenience accessor
@@ -434,9 +574,21 @@ Preserve request extensions when forwarding or rebuilding requests. For example,
 auth middleware retains the original parts after body collection:
 
 ```rust
-let (parts, body) = request.into_parts();
-// Collect the body, producing `collected_body`.
-let request = http::Request::from_parts(parts, collected_body);
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# extern crate bytes;
+# extern crate http_body_util;
+use sdk::server::{
+    body::RequestBody,
+    error::Error,
+    http::Request,
+};
+use http_body_util::BodyExt;
+
+async fn collect_request(request: Request<RequestBody>) -> Result<Request<bytes::Bytes>, Error> {
+    let (parts, body) = request.into_parts();
+    let collected_body = body.collect().await?.to_bytes();
+    Ok(Request::from_parts(parts, collected_body))
+}
 ```
 
 On a collection failure, rebuild a request from the original parts before calling
@@ -466,14 +618,26 @@ middleware runs.
 
 For RPC v2 CBOR streaming blob inputs, schema serde exposes `ByteStream` where
 generated serde previously exposed `Blob`. Replace direct blob access with stream
-collection, mapping collection failures into your operation error:
+collection, mapping collection failures into your operation error. This helper
+accepts your application's error mapper and preserves its error type:
 
 ```rust
-let bytes = input.data
-    .collect()
-    .await
-    .map_err(map_stream_error)?
-    .into_bytes();
+# extern crate aws_smithy_types;
+# extern crate bytes;
+use aws_smithy_types::byte_stream::{ByteStream, error::Error};
+# struct UploadInput { data: ByteStream }
+
+async fn collect_upload<E>(
+    input: UploadInput,
+    map_stream_error: impl FnOnce(Error) -> E,
+) -> Result<bytes::Bytes, E> {
+    let bytes = input.data
+        .collect()
+        .await
+        .map_err(map_stream_error)?
+        .into_bytes();
+    Ok(bytes)
+}
 ```
 
 CBOR input is still buffered and decoded before the handler runs, under the
