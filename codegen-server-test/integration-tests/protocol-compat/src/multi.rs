@@ -18,16 +18,16 @@ use multi_protocol_server_sdk::error::{
     UnionPayloadError, Unwelcome, UploadError,
 };
 use multi_protocol_server_sdk::input::{
-    GreetInput, ModeledDefaultsInput, NoInputOutputInput, NullableValuesInput, PingInput, PublishInput,
-    ResponseBindingsInput, RichDataInput, StructurePayloadInput, SubscribeInput, UnionPayloadInput,
-    UploadInput,
+    GreetInput, ModeledDefaultsInput, NoInputOutputInput, NullableValuesInput, PingInput,
+    PublishInput, ResponseBindingsInput, RichDataInput, StructurePayloadInput, SubscribeInput,
+    UnionPayloadInput, UploadInput,
 };
 use multi_protocol_server_sdk::model::{
     DefaultColor, Events, NestedRecord, Note, PayloadChoice, PayloadRecord, RichRecord,
 };
 use multi_protocol_server_sdk::output::{
-    GreetOutput, ModeledDefaultsOutput, NoInputOutputOutput, NullableValuesOutput, PingOutput, PublishOutput,
-    ResponseBindingsOutput, RichDataOutput, StructurePayloadOutput, SubscribeOutput,
+    GreetOutput, ModeledDefaultsOutput, NoInputOutputOutput, NullableValuesOutput, PingOutput,
+    PublishOutput, ResponseBindingsOutput, RichDataOutput, StructurePayloadOutput, SubscribeOutput,
     UnionPayloadOutput, UploadOutput,
 };
 use multi_protocol_server_sdk::{MultiProtocolService, MultiProtocolServiceConfig};
