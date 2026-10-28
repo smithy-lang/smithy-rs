@@ -21,8 +21,7 @@ pub enum MissingContentTypeReason {
 }
 
 pub mod any_rejections {
-    //! This module hosts enums, up to size 8, which implement [`IntoResponse`] when their variants implement
-    //! [`IntoResponse`].
+    //! Rejection enums up to size 8. Both conversion methods forward to the rejected variant.
 
     use super::IntoResponse;
     use thiserror::Error;
@@ -45,6 +44,16 @@ pub mod any_rejections {
                 fn into_response(self) -> http::Response<crate::body::BoxBody> {
                     match self {
                         $($name::$var ($var) => $var.into_response(),)*
+                    }
+                }
+                #[allow(non_snake_case)]
+                fn into_response_with_protocol(
+                    self,
+                    protocol: &dyn crate::schema::ServerProtocol,
+                ) -> http::Response<crate::body::BoxBody> {
+                    match self {
+                        $($name::$var ($var) =>
+                            $var.into_response_with_protocol(protocol),)*
                     }
                 }
             }
