@@ -120,6 +120,27 @@ impl ServiceRequestBodyConfig {
         self
     }
 
+    /// Computes the provisional allowance before the operation is known.
+    /// An absent operation override inherits `global`; an unlimited field dominates the maximum.
+    pub fn for_routing(&self) -> RequestBodyCollectionConfig {
+        let mut maximum = self.global;
+        for config in self.per_operation.values() {
+            maximum.max_bytes = match (maximum.max_bytes, config.max_bytes) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+            maximum.read_timeout = match (maximum.read_timeout, config.read_timeout) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+            maximum.read_poll_budget = match (maximum.read_poll_budget, config.read_poll_budget) {
+                (Some(left), Some(right)) => Some(left.max(right)),
+                _ => None,
+            };
+        }
+        maximum
+    }
+
     pub fn for_operation(&self, operation: &ShapeId<'_>) -> RequestBodyCollectionConfig {
         self.per_operation
             .get(operation.as_str())

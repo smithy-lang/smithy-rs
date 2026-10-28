@@ -31,8 +31,8 @@ pub mod request;
 #[doc(hidden)]
 pub mod response;
 pub mod routing;
-#[doc(hidden)]
 pub mod runtime_error;
+pub mod schema;
 pub mod serve;
 pub mod service;
 #[doc(hidden)]
@@ -43,6 +43,8 @@ pub mod shape_id;
 pub(crate) use self::error::Error;
 #[doc(inline)]
 pub use self::request::extension::Extension;
+#[doc(inline)]
+pub use self::shape_id::ShapeId;
 #[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 

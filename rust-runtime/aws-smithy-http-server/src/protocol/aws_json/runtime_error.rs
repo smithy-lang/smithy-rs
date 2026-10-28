@@ -62,11 +62,18 @@ impl IntoResponse<AwsJson1_0> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_0>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
+    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+        protocol.serialize_runtime_error(self.into())
+    }
 }
 
 impl IntoResponse<AwsJson1_1> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+    }
+
+    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+        protocol.serialize_runtime_error(self.into())
     }
 }
 
