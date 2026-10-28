@@ -1,0 +1,39 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#GetUser": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#GetUserInput"
+            },
+            "output": {
+                "target": "smithy.example#GetUserOutput"
+            }
+        },
+        "smithy.example#GetUserInput": {
+            "type": "structure",
+            "members": {
+                "userId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#GetUserOutput": {
+            "type": "structure",
+            "members": {
+                "username": {
+                    "target": "smithy.api#String"
+                },
+                "userId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        }
+    }
+}

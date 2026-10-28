@@ -1,0 +1,79 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#EmptyParens": {
+            "type": "string",
+            "traits": {
+                "ex#documentTrait": null,
+                "ex#listTrait": [],
+                "ex#mapTrait": {},
+                "ex#structTrait": {}
+            }
+        },
+        "ex#Omitted": {
+            "type": "string",
+            "traits": {
+                "ex#documentTrait": null,
+                "ex#listTrait": [],
+                "ex#mapTrait": {},
+                "ex#structTrait": {}
+            }
+        },
+        "ex#StructuredSyntax": {
+            "type": "string",
+            "traits": {
+                "ex#documentTrait": {
+                    "key": "value"
+                },
+                "ex#unionTrait": {
+                    "a": "x"
+                }
+            }
+        },
+        "ex#documentTrait": {
+            "type": "document",
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#listTrait": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#mapTrait": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String"
+            },
+            "value": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#structTrait": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#unionTrait": {
+            "type": "union",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        }
+    }
+}
