@@ -203,8 +203,9 @@ val commonCodegenTests =
             ),
         ).flatMap {
             val versions = it.bothHttpVersions()
-            // Each schema protocol fixture already has a generated-serde HTTP 0.x counterpart.
-            if (it.module.endsWith("_schema")) {
+            // Each schema projection already has a generated-serde HTTP 0.x counterpart, so its
+            // forced-legacy HTTP 0.x twin would duplicate that projection exactly.
+            if (it.module.contains("schema")) {
                 versions.filterNot { version -> version.module.endsWith("-http0x") }
             } else {
                 versions
