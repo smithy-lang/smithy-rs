@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -156,14 +157,26 @@ internal class ServerProtocolTestHelpersTest {
                             "unexpected_response_header_response" to "unexpected response header: x-value",
                             "empty_response_header_whitelist_response" to "unexpected response header:",
                         )
-                    val (status, output) = cargoTest(path, failures.keys.flatMap { listOf("--skip", it) })
-                    assertEquals(0, status, output)
-                    // Execute negative fixtures separately so missing generated assertions fail CI.
-                    for ((testName, diagnostic) in failures) {
-                        val (failedStatus, failedOutput) = cargoTest(path, filter = testName)
-                        assertEquals(101, failedStatus, failedOutput)
-                        assertTrue(failedOutput.contains("1 failed"), failedOutput)
-                        assertTrue(failedOutput.contains(diagnostic), failedOutput)
+                    if (schemaSerde) {
+                        val (status, output) = cargoTest(path, failures.keys.flatMap { listOf("--skip", it) })
+                        assertEquals(0, status, output)
+                        // Execute negative fixtures separately so missing generated assertions fail CI.
+                        for ((testName, diagnostic) in failures) {
+                            val (failedStatus, failedOutput) = cargoTest(path, filter = testName)
+                            assertEquals(101, failedStatus, failedOutput)
+                            assertTrue(failedOutput.contains("1 failed"), failedOutput)
+                            assertTrue(failedOutput.contains(diagnostic), failedOutput)
+                        }
+                    } else {
+                        // Generated serde matches mainline, which ignores forbidAdditionalHeaders,
+                        // so the negative fixtures pass and no assertion is generated.
+                        val (status, output) = cargoTest(path)
+                        assertEquals(0, status, output)
+                        val operations = Files.readString(path.resolve("src/operation.rs"))
+                        assertFalse(
+                            operations.contains("unexpected response header"),
+                            "generated serde must not forbid additional headers",
+                        )
                     }
                 },
             ),

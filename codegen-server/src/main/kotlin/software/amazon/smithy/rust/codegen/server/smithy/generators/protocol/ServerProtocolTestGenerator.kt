@@ -257,8 +257,9 @@ class ServerProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.SERVER
     override val expectFail: Set<FailingTest>
+        // Generated serde test output matches mainline, which does not mark these tests.
         get() =
-            if (codegenContext.protocol.toString() == "aws.protocols#restXml") {
+            if (schemaSerde && codegenContext.protocol.toString() == "aws.protocols#restXml") {
                 ExpectFail +
                     LegacyRestXmlHeaderFailures.map {
                         FailingTest.ResponseTest(codegenContext.serviceShape.id.toString(), it)
@@ -836,7 +837,8 @@ class ServerProtocolTestGenerator(
                 }
                 it.expectBooleanNode().value
             }.orElse(false)
-        if (forbidAdditionalHeaders) {
+        // Generated serde test output matches mainline, which ignores this vendor parameter.
+        if (schemaSerde && forbidAdditionalHeaders) {
             checkNoAdditionalHeaders(
                 rustWriter,
                 "http_response.headers()",
