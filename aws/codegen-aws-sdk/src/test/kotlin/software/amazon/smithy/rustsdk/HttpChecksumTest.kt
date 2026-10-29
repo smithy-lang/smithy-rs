@@ -50,8 +50,7 @@ internal class HttpChecksumTest {
                 operations: [
                     HttpChecksumOperation,
                     HttpChecksumStreamingOperation,
-                    HttpChecksumNotRequiredOperation,
-                    HttpChecksumNotRequiredStreamingOperation
+                    HttpChecksumNotRequiredOperation
                 ]
             }
 
@@ -134,8 +133,8 @@ internal class HttpChecksumTest {
             @output
             structure SomeStreamingOutput {}
 
-            // Modeled like S3 PutObject / UploadPart: a checksum is supported but not required, and the
-            // caller can opt in by setting the request algorithm member.
+            // Modeled like S3 PutObject: a checksum is supported but not required, and the caller can opt in
+            // by setting the request algorithm member. Used by the `RequestChecksumCalculation::WhenRequired` tests.
             @http(uri: "/HttpChecksumNotRequiredOperation", method: "POST")
             @optionalAuth
             @httpChecksum(
@@ -159,30 +158,6 @@ internal class HttpChecksumTest {
 
             @output
             structure NotRequiredOutput {}
-
-            @http(uri: "/HttpChecksumNotRequiredStreamingOperation", method: "POST")
-            @optionalAuth
-            @httpChecksum(
-                requestChecksumRequired: false,
-                requestAlgorithmMember: "checksumAlgorithm"
-            )
-            operation HttpChecksumNotRequiredStreamingOperation {
-                input: NotRequiredStreamingInput,
-                output: NotRequiredStreamingOutput
-            }
-
-            @input
-            structure NotRequiredStreamingInput {
-                @httpHeader("x-amz-request-algorithm")
-                checksumAlgorithm: ChecksumAlgorithm
-
-                @httpPayload
-                @required
-                body: StreamingBlob
-            }
-
-            @output
-            structure NotRequiredStreamingOutput {}
 
             enum ChecksumAlgorithm {
                 CRC32
@@ -221,7 +196,8 @@ internal class HttpChecksumTest {
                 streamingRequestTests.map { createStreamingRequestChecksumCalculationTest(it, context) }.join("\n")
             val userProvidedChecksumTestWritables =
                 userProvidedChecksumTests.map { createUserProvidedChecksumsTest(it, context) }.join("\n")
-            val miscTests = createMiscellaneousTests(context)
+            val miscTests =
+                createMiscellaneousTests(context).plus(createRequestChecksumWhenRequiredTests(context))
 
             // Shared imports for all test types
             // Note about the `//#{PresigningMarker}` below. The `RequestChecksumInterceptor` relies on the `PresigningMarker` type from
@@ -303,10 +279,6 @@ internal class HttpChecksumTest {
 
             rustCrate.integrationTest("misc_tests") {
                 testBase.plus(miscTests)()
-            }
-
-            rustCrate.integrationTest("when_required_request_checksums") {
-                testBase.plus(createWhenRequiredRequestChecksumTests(context))()
             }
         }
     }
@@ -780,11 +752,11 @@ internal class HttpChecksumTest {
     }
 
     /**
-     * Generate tests for `RequestChecksumCalculation::WhenRequired` on operations where a checksum is not required
+     * Generate tests for `RequestChecksumCalculation::WhenRequired` on an operation where a checksum is not required
      * (`requestChecksumRequired: false`) but a `requestAlgorithmMember` is modeled. Per the flexible checksums SEP,
      * a checksum must be calculated when the caller sets that member, and must not be when it is unset.
      */
-    private fun createWhenRequiredRequestChecksumTests(context: ClientCodegenContext): Writable {
+    private fun createRequestChecksumWhenRequiredTests(context: ClientCodegenContext): Writable {
         val rc = context.runtimeConfig
         val moduleName = context.moduleUseName()
         return writable {
@@ -803,22 +775,8 @@ internal class HttpChecksumTest {
                     ($moduleName::Client::from_conf(config), rx)
                 }
 
-                // Returns the file too: the ByteStream reads it lazily, so the caller keeps it alive.
-                async fn streaming_body(
-                    payload: &str,
-                ) -> (aws_smithy_types::byte_stream::ByteStream, tempfile::NamedTempFile) {
-                    let mut file = tempfile::NamedTempFile::new().unwrap();
-                    file.as_file_mut().write_all(payload.as_bytes()).unwrap();
-                    let body = aws_smithy_types::byte_stream::ByteStream::read_from()
-                        .path(&file)
-                        .build()
-                        .await
-                        .unwrap();
-                    (body, file)
-                }
-
                 ##[::tokio::test]
-                async fn when_required_calculates_checksum_if_algorithm_set() {
+                async fn request_checksum_when_required_calculates_if_algorithm_set() {
                     let (client, rx) = when_required_client();
                     let _ = client
                         .http_checksum_not_required_operation()
@@ -838,7 +796,7 @@ internal class HttpChecksumTest {
                 }
 
                 ##[::tokio::test]
-                async fn when_required_skips_checksum_if_algorithm_unset() {
+                async fn request_checksum_when_required_skips_if_algorithm_unset() {
                     let (client, rx) = when_required_client();
                     let _ = client
                         .http_checksum_not_required_operation()
@@ -849,57 +807,6 @@ internal class HttpChecksumTest {
                     let headers = request.headers();
 
                     assert_eq!(headers.get("x-amz-request-algorithm"), None);
-                    assert!(
-                        !headers.iter().any(|(name, _)| name.starts_with("x-amz-checksum-")),
-                        "no checksum header expected, got {headers:?}",
-                    );
-                }
-
-                ##[::tokio::test]
-                async fn when_required_streaming_calculates_checksum_if_algorithm_set() {
-                    let (client, rx) = when_required_client();
-                    let (body, _file) = streaming_body("Hello world").await;
-                    let _ = client
-                        .http_checksum_not_required_streaming_operation()
-                        .body(body)
-                        .checksum_algorithm($moduleName::types::ChecksumAlgorithm::Crc32)
-                        .send()
-                        .await;
-                    let request = rx.expect_request();
-                    let headers = request.headers();
-
-                    assert_eq!(headers.get("x-amz-trailer"), Some("x-amz-checksum-crc32"));
-                    assert_eq!(headers.get("content-encoding"), Some("aws-chunked"));
-
-                    let body = request
-                        .body()
-                        .try_clone()
-                        .expect("body is retryable")
-                        .collect()
-                        .await
-                        .expect("body is collectable")
-                        .to_bytes();
-                    let body = std::str::from_utf8(&body).unwrap();
-                    assert!(
-                        body.contains("x-amz-checksum-crc32:i9aeUg=="),
-                        "expected CRC32 trailer in body: {body}",
-                    );
-                }
-
-                ##[::tokio::test]
-                async fn when_required_streaming_skips_checksum_if_algorithm_unset() {
-                    let (client, rx) = when_required_client();
-                    let (body, _file) = streaming_body("Hello world").await;
-                    let _ = client
-                        .http_checksum_not_required_streaming_operation()
-                        .body(body)
-                        .send()
-                        .await;
-                    let request = rx.expect_request();
-                    let headers = request.headers();
-
-                    assert_eq!(headers.get("x-amz-trailer"), None);
-                    assert_ne!(headers.get("content-encoding"), Some("aws-chunked"));
                     assert!(
                         !headers.iter().any(|(name, _)| name.starts_with("x-amz-checksum-")),
                         "no checksum header expected, got {headers:?}",
