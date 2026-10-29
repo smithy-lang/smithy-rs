@@ -424,9 +424,10 @@ event_loop.add_signal_handler(signal.SIGINT,
         // Lock the workers mutex.
         let mut active_workers = self.workers().lock();
         // Register the main signal handler.
-        // TODO(move from num_cpus to thread::available_parallelism after MSRV is 1.60)
         // Start all the workers as new Python processes and store the in the `workers` attribute.
-        for idx in 1..workers.unwrap_or_else(num_cpus::get) + 1 {
+        for idx in
+            1..workers.unwrap_or_else(|| thread::available_parallelism().map_or(1, |n| n.get())) + 1
+        {
             let sock = socket.try_clone()?;
             let tls = tls.clone();
             let process = mp.getattr("Process")?;
