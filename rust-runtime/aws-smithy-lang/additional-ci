@@ -4,22 +4,51 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# This script contains additional CI checks to run for this specific package
+# This script contains additional CI checks to run for this specific package. It runs in its
+# own CI job (`check-aws-smithy-lang`), not with the other crates' additional checks.
+#
+# These checks cover the `unsafe` ownership code in `runtime_schema`, which holds all of the
+# crate's `unsafe`. They use `cargo nextest`, which runs each test in its own process, so the
+# Miri tests run in parallel.
 
 set -eux
 
 : "$RUST_NIGHTLY_VERSION"
 
-# Running the unsafe invariant tests for aws-smithy-lang. The first run builds
-# Miri's sysroot (about 20 seconds), the suite takes about 350 seconds.
+jobs="$(nproc)"
+host="$(rustc +"${RUST_NIGHTLY_VERSION}" -vV | sed -n 's/^host: //p')"
+nextest=(cargo +"${RUST_NIGHTLY_VERSION}" nextest run --no-tests=fail -p aws-smithy-lang --features runtime-schema --lib)
+miri_nextest=(cargo +"${RUST_NIGHTLY_VERSION}" miri nextest run --no-tests=fail -p aws-smithy-lang --features runtime-schema --lib)
+suite='test(/^runtime_schema::/)'
+
+# `--run-ignored all` includes `referenced_prelude_shapes_are_built`, which is ignored under
+# Miri by default because parsing the prelude takes about 3 minutes there; nextest runs it
+# alongside the rest. The corpus test stays excluded: under Miri it would take hours, and it
+# reaches no `unsafe` code the other tests do not. It runs natively and under the sanitizers
+# below.
 echo "### Running the runtime schema ownership tests under Miri"
-MIRIFLAGS="-Zmiri-strict-provenance" \
-    cargo +"${RUST_NIGHTLY_VERSION}" miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::
+MIRIFLAGS="-Zmiri-strict-provenance" "${miri_nextest[@]}" -j "${jobs}" --run-ignored all \
+    -E "${suite} - test(=runtime_schema::tests::lazy_matches_eager_on_the_corpus)"
 
 # The tests that materialize from several threads
 echo "### Running the runtime schema concurrency tests under several Miri schedules"
-MIRIFLAGS="-Zmiri-strict-provenance -Zmiri-many-seeds=0..8" \
-    cargo +"${RUST_NIGHTLY_VERSION}" miri test -p aws-smithy-lang --features runtime-schema --lib -- \
-    runtime_schema::tests::concurrent_materialization \
-    runtime_schema::tests::references_survive_appends_and_moves \
-    runtime_schema::owner::tests::readers_and_concurrent_batches
+MIRIFLAGS="-Zmiri-strict-provenance -Zmiri-many-seeds=0..8" "${miri_nextest[@]}" -j "${jobs}" -E '
+    test(=runtime_schema::tests::concurrent_materialization)
+    | test(=runtime_schema::tests::readers_race_slot_publication)
+    | test(=runtime_schema::tests::references_survive_appends_and_moves)
+    | test(=runtime_schema::owner::tests::readers_and_concurrent_batches)'
+
+# The same tests, natively, under the address and thread sanitizers. Unlike Miri, these also
+# run the corpus test, and `racing_threads_on_a_service` on the SQS model for 20 rounds.
+# Building the standard library (`CARGO_UNSTABLE_BUILD_STD`, which needs the `rust-src`
+# component Miri already requires) instruments it too; the thread sanitizer needs that. The
+# address sanitizer also checks for leaks. A separate target directory keeps the instrumented
+# builds apart.
+for sanitizer in address thread; do
+    echo "### Running the runtime schema tests under the ${sanitizer} sanitizer"
+    CARGO_UNSTABLE_BUILD_STD=std \
+    RUSTFLAGS="-Zsanitizer=${sanitizer}" \
+    RUSTDOCFLAGS="-Zsanitizer=${sanitizer}" \
+    CARGO_TARGET_DIR="target/sanitizer-${sanitizer}" \
+        "${nextest[@]}" --target "${host}" -E "${suite}"
+done

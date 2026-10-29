@@ -454,9 +454,8 @@ impl<'b> Builder<'b> {
 
 #[cfg(test)]
 pub(super) mod tests {
-    //! Ownership tests. These are the Miri suite: run with
-    //! `cargo +nightly miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::`.
-    //! CI runs these tests in this crate's `additional-ci` script.
+    //! Ownership tests, part of the Miri suite described in `runtime_schema/tests.rs`. CI runs
+    //! them in this crate's `additional-ci` script.
 
     use super::*;
     use aws_smithy_schema::extension::SchemaExtensionKey;

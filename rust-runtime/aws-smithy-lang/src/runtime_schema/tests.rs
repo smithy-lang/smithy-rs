@@ -6,13 +6,15 @@
 //! Unit tests, and the Miri suite for the ownership component:
 //!
 //! ```text
-//! cargo +nightly miri test -p aws-smithy-lang --features runtime-schema --lib runtime_schema::
+//! cargo +nightly miri nextest run -p aws-smithy-lang --features runtime-schema --lib \
+//!     -E 'test(/^runtime_schema::/)'
 //! ```
 //!
 //! CI runs this, with `-Zmiri-strict-provenance`, from the crate's `additional-ci` script.
 //!
 //! Models used under Miri disable the prelude, because parsing it is slow there; tests that
-//! need it are ignored under Miri.
+//! need it, or load an AWS model, are ignored under Miri. `additional-ci` runs two of them
+//! under Miri separately, with `--run-ignored only`.
 //!
 //! Sets are eager unless a test builds them with `Materialization::Lazy`; `LAZY` and
 //! `service_set` are the fixtures for lazy materialization.
@@ -1412,6 +1414,191 @@ fn concurrent_materialization() {
     lazy.materialize_all();
     assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
     assert_matches_eager(&lazy, &eager, Compare::Structure);
+}
+
+/// INV-6, INV-7: a thread that reads a root or member slot another thread is publishing,
+/// with no operation record between them, sees the complete schema. Each thread looks up
+/// schemas directly, in a different order, so the only ordering between the publishing batch
+/// and the reader is the slot's own release and acquire. The other thread tests mostly
+/// reach schemas through operation records, whose `OnceLock` already orders them, so they
+/// pass with relaxed slot accesses; this test, under Miri's schedules, does not.
+#[test]
+fn readers_race_slot_publication() {
+    let model = model(LAZY);
+    let lazy = service_set(&model, None, true);
+    let order = ["ex#Shared", "ex#Names", "ex#Map", "ex#AIn$shared", "ex#Out"];
+    std::thread::scope(|scope| {
+        for thread in 0..3 {
+            let lazy = &lazy;
+            scope.spawn(move || {
+                for i in 0..order.len() {
+                    let name = order[(i + thread * 2) % order.len()];
+                    let schema = schema(lazy, name);
+                    assert_eq!(schema.shape_id().as_str(), name);
+                    for member in schema.members() {
+                        assert!(member.member_name().is_some());
+                    }
+                    // A list's member, or a map's value.
+                    if let Some(member) = schema.member() {
+                        assert!(member.member_name().is_some());
+                    }
+                }
+            });
+        }
+    });
+    let eager = service_set(&model, None, false);
+    lazy.materialize_all();
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+}
+
+/// A model shaped like a small AWS service, without the prelude: `operations` operations,
+/// each with its own input (with an `@httpHeader` member) and `@http`, sharing a common
+/// output and error and `shared` structures that refer to each other through lists and maps.
+/// Under Miri it loads in about a second; the SQS model and the prelude take about 7 minutes.
+fn service_like_model(operations: usize, shared: usize) -> Model {
+    let targets: Vec<String> = (0..operations)
+        .map(|i| format!(r#"{{"target": "ex#Op{i}"}}"#))
+        .collect();
+    let mut shapes = vec![
+        format!(
+            r#""ex#Service": {{"type": "service", "operations": [{}]}}"#,
+            targets.join(", ")
+        ),
+        r#""ex#Out": {"type": "structure", "members": {"v": {"target": "ex#String",
+            "traits": {"smithy.api#jsonName": "V"}}}}"#
+            .into(),
+        r#""ex#Err": {"type": "structure", "members": {"message": {"target": "ex#String"}},
+            "traits": {"smithy.api#error": "client"}}"#
+            .into(),
+    ];
+    for i in 0..shared {
+        let next = (i + 1) % shared;
+        shapes.push(format!(
+            r#""ex#S{i}": {{"type": "structure", "members": {{
+                "name": {{"target": "ex#String"}},
+                "items": {{"target": "ex#L{i}"}},
+                "byName": {{"target": "ex#M{i}"}}}}}},
+            "ex#L{i}": {{"type": "list", "member": {{"target": "ex#S{next}"}}}},
+            "ex#M{i}": {{"type": "map", "key": {{"target": "ex#String"}},
+                "value": {{"target": "ex#L{next}"}}}}"#
+        ));
+    }
+    for i in 0..operations {
+        let (a, b) = (i % shared, (i * 3 + 1) % shared);
+        shapes.push(format!(
+            r#""ex#Op{i}": {{"type": "operation", "input": {{"target": "ex#In{i}"}},
+                "output": {{"target": "ex#Out"}}, "errors": [{{"target": "ex#Err"}}],
+                "traits": {{"smithy.api#http": {{"method": "POST", "uri": "/op{i}"}}}}}},
+            "ex#In{i}": {{"type": "structure", "members": {{
+                "first": {{"target": "ex#S{a}"}},
+                "second": {{"target": "ex#S{b}"}},
+                "list": {{"target": "ex#L{b}"}},
+                "token": {{"target": "ex#String",
+                    "traits": {{"smithy.api#httpHeader": "x-token-{i}"}}}}}}}}"#
+        ));
+    }
+    model(&shapes.join(",\n"))
+}
+
+/// INV-6, INV-7, INV-8 under real contention: in every round, eight threads start together on
+/// a fresh lazy set. Each looks up every root schema directly (so readers load slots that
+/// other threads publish, with no operation record ordering them), then every operation and
+/// its input members, each thread in a different order, one of them racing `materialize_all`.
+/// Every round must end with the eager set's schemas, each built once.
+///
+/// Natively (and under the sanitizers in `additional-ci`) this uses the SQS model. Under Miri,
+/// where parsing SQS and the prelude takes about 7 minutes, it uses `service_like_model`.
+#[test]
+fn racing_threads_on_a_service() {
+    const THREADS: usize = 8;
+    let model = if cfg!(miri) {
+        service_like_model(8, 4)
+    } else {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../aws/sdk/aws-models/sqs.json");
+        Model::from_json_file(&path).unwrap()
+    };
+    let service = model.services().next().unwrap().id().clone();
+    let build = |materialization| {
+        RuntimeSchemaSet::builder(&model)
+            .for_service(&service)
+            .materialization(materialization)
+            .build()
+            .unwrap()
+    };
+    let eager = build(Materialization::Eager);
+    let ids: Vec<ShapeId> = eager.operation_ids().cloned().collect();
+    let data = model.data();
+    let roots: Vec<ShapeId> = eager
+        .plan
+        .roots
+        .iter()
+        .map(|root| data.root_at(root.model_position as usize).id().clone())
+        .collect();
+    let rounds = std::env::var("RUNTIME_SCHEMA_STRESS_ROUNDS")
+        .ok()
+        .map_or(if cfg!(miri) { 1 } else { 20 }, |rounds| {
+            rounds.parse().unwrap()
+        });
+    for round in 0..rounds {
+        let lazy = build(Materialization::Lazy);
+        let barrier = std::sync::Barrier::new(THREADS);
+        let inputs: Vec<Vec<usize>> = std::thread::scope(|scope| {
+            let threads: Vec<_> = (0..THREADS)
+                .map(|thread| {
+                    let (lazy, ids, roots, barrier) = (&lazy, &ids, &roots, &barrier);
+                    scope.spawn(move || {
+                        barrier.wait();
+                        // Rotate and, on odd threads, reverse, so that threads collide on
+                        // the same schemas and operations at different times.
+                        let order = |len: usize| {
+                            let mut order: Vec<_> = (0..len)
+                                .map(|i| (i + thread * len / THREADS) % len)
+                                .collect();
+                            if thread % 2 == 1 {
+                                order.reverse();
+                            }
+                            order
+                        };
+                        for i in order(roots.len()) {
+                            let root = lazy.schema(&roots[i]).unwrap();
+                            assert_eq!(root.shape_id().as_str(), roots[i].as_str());
+                            for member in root.members() {
+                                assert!(member.member_name().is_some());
+                            }
+                        }
+                        let mut inputs = vec![0; ids.len()];
+                        for i in order(ids.len()) {
+                            let input = lazy.operation(&ids[i]).unwrap().input();
+                            for member in input.members() {
+                                let id = ShapeId::new(member.shape_id().as_str()).unwrap();
+                                let looked_up = lazy.schema(&id).unwrap();
+                                assert_eq!(looked_up.member_name(), member.member_name());
+                            }
+                            inputs[i] = input as *const Schema<'_> as usize;
+                        }
+                        // Last, so that it races with the other threads' lookups rather than
+                        // building everything before they start.
+                        if thread == 0 {
+                            lazy.materialize_all();
+                        }
+                        inputs
+                    })
+                })
+                .collect();
+            threads.into_iter().map(|t| t.join().unwrap()).collect()
+        });
+        assert!(
+            inputs.windows(2).all(|pair| pair[0] == pair[1]),
+            "round {round}"
+        );
+        assert!(fully_materialized(&lazy), "round {round}");
+        assert_eq!(
+            lazy.storage.schema_count(),
+            eager.storage.schema_count(),
+            "round {round}"
+        );
+    }
 }
 
 /// INV-1, INV-2, INV-7: a reference stays valid while another thread adds schemas, and a
