@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationNames
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
@@ -128,11 +128,11 @@ internal class AcronymOperationCompatibilityTest {
                                             // Marker traits must reference the descriptor declared for that operation.
                                             assert!(::std::ptr::eq(
                                                 <crate::operation_shape::AcLsUpdateStatus as #{Server}::operation::SchemaOperationShape>::SCHEMA,
-                                                &crate::schema::operations::${ServerOperationNames(context.symbolProvider.toSymbol(deniedOperation)).schemaConst},
+                                                &crate::schema::operations::${ServerServiceSchemaGenerator.operationSchemaConstName(context.symbolProvider.toSymbol(deniedOperation))},
                                             ));
                                             assert!(::std::ptr::eq(
                                                 <crate::operation_shape::Http2GetStatus as #{Server}::operation::SchemaOperationShape>::SCHEMA,
-                                                &crate::schema::operations::${ServerOperationNames(context.symbolProvider.toSymbol(successOperation)).schemaConst},
+                                                &crate::schema::operations::${ServerServiceSchemaGenerator.operationSchemaConstName(context.symbolProvider.toSymbol(successOperation))},
                                             ));
                                             """,
                                             "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),

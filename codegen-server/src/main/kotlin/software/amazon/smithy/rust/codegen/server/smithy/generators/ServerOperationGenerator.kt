@@ -14,8 +14,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 
 class ServerOperationGenerator(
     private val operation: OperationShape,
@@ -30,8 +32,7 @@ class ServerOperationGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
 
-    private val operationNames = ServerOperationNames(symbolProvider.toSymbol(operation))
-    private val operationName = operationNames.markerType
+    private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
     private val schemaSerde = (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
 
@@ -117,7 +118,7 @@ class ServerOperationGenerator(
             writer.rustTemplate(
                 """
                 impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {
-                    const SCHEMA: &'static #{SmithyHttpServer}::schema::OperationSchema<'static> = &crate::schema::operations::${operationNames.schemaConst};
+                    const SCHEMA: &'static #{SmithyHttpServer}::schema::OperationSchema<'static> = &crate::schema::operations::${ServerServiceSchemaGenerator.operationSchemaConstName(symbolProvider.toSymbol(operation))};
                 }
                 """,
                 *codegenScope,

@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
@@ -118,7 +119,6 @@ open class ServerOperationErrorGenerator(
         }
 
         if (schemaSerde && operationOrEventStream is OperationShape) {
-            val operationNames = ServerOperationNames(symbol)
             val schema = RuntimeType.smithySchema(runtimeConfig)
             val serializable = schema.resolve("serde::SerializableStruct")
             val server = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -139,7 +139,7 @@ open class ServerOperationErrorGenerator(
                 rustTemplate(
                     """
                     fn operation_schema(&self) -> #{Option}<&#{Server}::schema::OperationSchema<'_>> {
-                        #{Some}(<crate::operation_shape::${operationNames.markerType} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
+                        #{Some}(<crate::operation_shape::${symbol.name.toPascalCase()} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
                     }
                     """,
                     *RuntimeType.preludeScope,

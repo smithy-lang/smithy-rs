@@ -9,6 +9,7 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
@@ -38,7 +39,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationNames
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaGenerator
 
@@ -258,7 +258,7 @@ class ServerServiceSchemaGenerator(
         )
 
     private fun operationConstName(operation: OperationShape): String =
-        ServerOperationNames(symbolProvider.toSymbol(operation)).schemaConst
+        operationSchemaConstName(symbolProvider.toSymbol(operation))
 
     private fun schemaRef(shape: Shape): String = "${symbolProvider.toSymbol(shape).fullName}::SCHEMA"
 
@@ -281,5 +281,9 @@ class ServerServiceSchemaGenerator(
 
         /** The name of the `ServiceSchema` static in `crate::schema::service`. */
         fun serviceSchemaConstName(service: ServiceShape): String = service.id.name.toSnakeCase().uppercase()
+
+        /** The name of an operation's `OperationSchema` static in `crate::schema::operations`. The symbol carries service renames. */
+        fun operationSchemaConstName(operation: Symbol): String =
+            "OPERATION_" + operation.name.toSnakeCase().uppercase()
     }
 }

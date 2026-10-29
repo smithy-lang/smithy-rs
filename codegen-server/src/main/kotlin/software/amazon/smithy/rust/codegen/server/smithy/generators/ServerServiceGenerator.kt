@@ -122,10 +122,7 @@ class ServerServiceGenerator(
             )
 
     /** Associate each operation with the name of the corresponding Zero-Sized Type (ZST) struct name. */
-    private val operationStructNames =
-        operations.associateWith {
-            ServerOperationNames(symbolProvider.toSymbol(it)).markerType
-        }
+    private val operationStructNames = operations.associateWith { symbolProvider.toSymbol(it).name.toPascalCase() }
 
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
@@ -1315,7 +1312,7 @@ class ServerServiceGenerator(
                         (shape, name) ->
                     writable {
                         if (schemaSerde) {
-                            val schemaConst = ServerOperationNames(symbolProvider.toSymbol(shape)).schemaConst
+                            val schemaConst = ServerServiceSchemaGenerator.operationSchemaConstName(symbolProvider.toSymbol(shape))
                             rustTemplate(
                                 "Operation::$name => crate::schema::operations::$schemaConst.shape_id().clone()",
                                 *codegenScope,
