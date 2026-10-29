@@ -323,3 +323,68 @@ First lookups contending on one lock, EC2, including spawning the threads (unpin
 
 Threads asking for the same operation wait for one build and then share it; threads asking
 for different ones are serialized by the lock, so the time grows with their total work.
+
+### Positional planning
+
+Selection now hashes each reference once, to find its model position, and indexes dense
+tables by position afterwards (previously it hashed shape IDs into an `IndexMap` of
+selected roots and looked each member target up again while planning). A lazy plan no
+longer keeps the trait facts that only an eager build reuses. Same machine, pinned, two
+runs:
+
+| Benchmark | Model | Phase 3 | Now |
+| --------- | ----- | ------: | --: |
+| `schema/all` | SQS / S3 / EC2 | 136 µs / 1.19 / 8.34 ms | 97 µs / 1.00 / 6.1–6.5 ms |
+| `schema/service` | SQS / S3 / EC2 | 162 µs / 1.30 / 8.97 ms | 113 µs / 1.03 / 6.7–7.6 ms |
+| `schema/service_plan` | SQS / S3 / EC2 | 93 µs / 0.64 / 4.58 ms | 46 µs / 0.37 / 2.57–2.81 ms |
+| `schema/materialize_all` | SQS / S3 / EC2 | 182 µs / 1.47 / 9.71 ms | 129 µs / 1.22 / 7.6–8.2 ms |
+| `schema/first_operation` EC2 | p50 / p90 / max | 13.5 / 18.4 / 169 µs | 11.3 / 16.9 / 166 µs |
+
+The EC2 lazy plan is now 38–42% of an eager service build (target 35%); what remains is
+trait decoding, hashing to find model positions, and the model lookups behind them, each
+needed to validate. A test of the prefix of applied trait IDs before matching them made no
+measurable difference and was not kept. `materialize_all` is 1.1–1.2 times an eager build.
+Warm lookups are unchanged: `operation_lookup` 46–51 ns, `operation_descriptor` 54–59 ns,
+`schema_lookup` roots 42–44 ns and members 64–67 ns.
+
+### Memory
+
+`benches/schema_memory.rs` installs a counting allocator (so it is a separate binary from
+`model.rs`) and prints allocations, allocated bytes, peak live bytes, and retained bytes for
+each step:
+
+```text
+cargo bench -p aws-smithy-lang --features runtime-schema --bench schema_memory
+```
+
+EC2 (S3 and SQS are proportionally smaller; the binary prints all three):
+
+| Case | Schemas | Allocations | Peak | Retained |
+| ---- | ------: | ----------: | ---: | -------: |
+| model | – | 459,098 | 35.20 MiB | 29.38 MiB |
+| eager all shapes | 15,069 | 17,536 | 7.66 MiB | 5.66 MiB |
+| eager service | 15,069 | 17,540 | 7.66 MiB | 5.66 MiB |
+| lazy service, nothing built | 0 | 69 | 0.94 MiB | 367.5 KiB |
+| lazy, 1 operation selected | 0 | 31 | 51.0 KiB | 20.0 KiB |
+| first operation, p50 / p90 / max | 33 / 44 / 630 | 47 / 61 / 749 | – | 12.0 / 15.9 / 229.7 KiB |
+| 10 consecutive / spread operations | 231 / 327 | 321 / 423 | – | 83.4 / 118.9 KiB |
+| lazy service, then everything | 15,069 | 17,541 | 5.66 MiB | 5.66 MiB |
+| 10 lazy build/use/drop cycles | – | 175,410 | 5.66 MiB | 0 |
+
+A lazy set that has built everything retains exactly what an eager one does (the gate is
+at most 15% more), and builds the same 15,069 schemas. Its plan retains 367.5 KiB before
+anything is built, against 5.66 MiB for an eager set, and an eager build peaks 2 MiB above
+what it retains, from the planner's facts. `size_of::<OperationSchema>()` is 96 bytes; it is
+built by value and never allocated. Repeated cycles retain nothing.
+
+### Compile time and size
+
+Release `libaws_smithy_lang.rlib`, `cd5ffacab` → now: with `runtime-schema` 8,723,562 →
+8,804,230 bytes (+80.7 KB, under the 100 KiB gate; the Phase 2 overrun of +139 KB is gone),
+without it 8,330,126 → 8,330,502. Of the growth, 9.4 KB is code in `runtime_schema` symbols;
+other `aws_smithy_lang` code grows 11.8 KB and inlined dependency code shrinks 10.9 KB, so
+most of it is crate metadata.
+
+Rebuilding only `aws-smithy-lang` (dependencies built, `lib.rs` touched, median of five):
+release 7.79 → 7.75 s, `cargo check` 0.77 → 0.80 s (+4%), and a debug incremental rebuild
+after editing the materializer (`build.rs` before) 1.20 → 1.25 s (+4%, within the 5% gate).

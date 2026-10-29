@@ -223,30 +223,45 @@ pub(super) fn member_id(id: &ShapeId) -> SchemaShapeId<'_> {
 }
 
 /// The selected shapes and operations.
+///
+/// Selection is positional: each reference is hashed once, to find its model position, and
+/// everything after that indexes dense tables by position or selection index.
 struct Selection<'a> {
-    roots: IndexMap<&'a ShapeId, ShapeView<'a>>,
+    data: &'a ModelData,
+    /// The selection index at each model position, or `NOT_SELECTED`.
+    by_position: Vec<u32>,
+    /// Selected roots in selection order, with their model positions.
+    roots: Vec<(u32, ShapeView<'a>)>,
+    /// The model positions of the member targets of every selected root, in selection
+    /// order, starting at `member_targets_start` of the root.
+    member_targets: Vec<u32>,
+    member_targets_start: Vec<u32>,
     operations: Vec<OperationView<'a>>,
-    /// The errors of each operation, in `operations` order.
-    errors: Vec<Vec<&'a ShapeId>>,
+    /// The model positions of each operation's errors, in `operations` order.
+    errors: Vec<Box<[u32]>>,
 }
 
 impl<'a> Selection<'a> {
     fn select(model: &'a Model, scope: &Scope, diagnostics: &mut DiagnosticSet) -> Option<Self> {
+        let data = model.data();
         let mut selection = Selection {
-            roots: IndexMap::new(),
+            data,
+            by_position: vec![NOT_SELECTED; data.root_count()],
+            roots: Vec::new(),
+            member_targets: Vec::new(),
+            member_targets_start: Vec::new(),
             operations: Vec::new(),
             errors: Vec::new(),
         };
         match scope {
             Scope::AllShapes => {
-                for shape in model.non_prelude_shapes() {
-                    if schema_type(shape.shape_type()).is_some() {
-                        selection.roots.insert(shape.id(), shape);
+                for (position, shape) in model.non_prelude_shapes().enumerate() {
+                    selection.add_at(position);
+                    if let Some(operation) = shape.as_operation() {
+                        let errors = operation.direct_errors().map(|id| selection.position(id));
+                        let errors = errors.collect::<Vec<_>>();
+                        selection.add_operation(operation, errors);
                     }
-                }
-                for operation in model.operations() {
-                    let errors = operation.direct_errors().collect();
-                    selection.add_operation(model, operation, errors);
                 }
             }
             Scope::Service {
@@ -261,69 +276,93 @@ impl<'a> Selection<'a> {
                         filter_operations(model, service, &contained, requested, diagnostics)?
                     }
                 };
-                for operation in operations {
-                    // The service's common errors, then the operation's own, keeping the
-                    // first occurrence: `OperationKnowledge::errors_in` without re-checking
-                    // containment for every operation.
-                    let errors: IndexSet<&ShapeId> = service
-                        .common_errors()
-                        .chain(operation.direct_errors())
-                        .collect();
-                    selection.add_operation(model, operation, errors.into_iter().collect());
+                let common: Vec<u32> = service
+                    .common_errors()
+                    .map(|id| selection.position(id))
+                    .collect();
+                // The service's common errors, then the operation's own, keeping the first
+                // occurrence: `OperationKnowledge::errors_in` without re-checking containment
+                // for every operation. `seen[position]` is the last operation (plus one) that
+                // listed the error.
+                let mut seen = vec![0u32; data.root_count()];
+                for (index, operation) in operations.into_iter().enumerate() {
+                    let mark = index as u32 + 1;
+                    let mut errors = Vec::with_capacity(common.len());
+                    let direct = operation.direct_errors().map(|id| selection.position(id));
+                    for position in common.iter().copied().chain(direct) {
+                        if std::mem::replace(&mut seen[position as usize], mark) != mark {
+                            errors.push(position);
+                        }
+                    }
+                    selection.add_operation(operation, errors);
                 }
                 // With a filter, common errors are only selected through the operations
                 // that can return them.
                 if let OperationFilter::All = filter {
-                    for error in service.common_errors() {
-                        selection.add_root(model, error);
+                    for position in common {
+                        selection.add_at(position as usize);
                     }
                 }
             }
         }
-        selection.close(model);
+        selection.close();
         Some(selection)
     }
 
-    fn add_operation(
-        &mut self,
-        model: &'a Model,
-        operation: OperationView<'a>,
-        errors: Vec<&'a ShapeId>,
-    ) {
-        self.add_root(model, operation.input());
-        self.add_root(model, operation.output());
+    /// The model position of a referenced root. Every reference in a model resolves to one.
+    fn position(&self, id: &ShapeId) -> u32 {
+        self.data
+            .root_position(id)
+            .expect("references resolve to root shapes") as u32
+    }
+
+    fn add_operation(&mut self, operation: OperationView<'a>, errors: Vec<u32>) {
+        let input = self.position(operation.input());
+        let output = self.position(operation.output());
+        self.add_at(input as usize);
+        self.add_at(output as usize);
         for &error in &errors {
-            self.add_root(model, error);
+            self.add_at(error as usize);
         }
         self.operations.push(operation);
-        self.errors.push(errors);
+        self.errors.push(errors.into());
     }
 
-    /// Selects a data shape. Every reference in a model resolves to one.
-    fn add_root(&mut self, model: &'a Model, id: &'a ShapeId) {
-        if self.roots.contains_key(id) {
+    /// Selects the data shape at a model position, if it is not already selected.
+    fn add_at(&mut self, position: usize) {
+        if self.by_position[position] != NOT_SELECTED {
             return;
         }
-        let shape = model
-            .get_shape(id)
-            .and_then(|shape| shape.as_shape())
-            .expect("references resolve to root shapes");
+        let shape = ShapeView::new(self.data, self.data.root_at(position));
         if schema_type(shape.shape_type()).is_some() {
-            self.roots.insert(shape.id(), shape);
+            self.by_position[position] = self.roots.len() as u32;
+            self.roots.push((position as u32, shape));
         }
     }
 
-    /// Adds every shape targeted by a member of a selected shape, transitively.
-    fn close(&mut self, model: &'a Model) {
+    /// Adds every shape targeted by a member of a selected shape, transitively, recording
+    /// each member's target position.
+    fn close(&mut self) {
         let mut next = 0;
-        while let Some((_, &shape)) = self.roots.get_index(next) {
+        while let Some(&(_, shape)) = self.roots.get(next) {
+            self.member_targets_start
+                .push(self.member_targets.len() as u32);
             if has_member_schemas(shape.shape_type()) {
                 for member in shape.members().iter() {
-                    self.add_root(model, member.target());
+                    let position = self.position(member.target());
+                    self.add_at(position as usize);
+                    self.member_targets.push(position);
                 }
             }
             next += 1;
         }
+    }
+
+    /// The selection index of the selected shape at a model position.
+    fn index_at(&self, position: u32) -> usize {
+        let index = self.by_position[position as usize];
+        debug_assert_ne!(index, NOT_SELECTED);
+        index as usize
     }
 }
 
@@ -467,7 +506,7 @@ fn filter_operations<'a>(
 }
 
 /// Trait facts decoded while planning, indexed like the plan, for materializing in the same
-/// batch without decoding again.
+/// batch without decoding again. Empty when the plan is for a lazy set.
 pub(super) struct Prepared<'m> {
     pub(super) roots: Vec<TraitFacts<'m>>,
     pub(super) members: Vec<TraitFacts<'m>>,
@@ -517,20 +556,9 @@ pub(super) fn plan<'m>(
     // Order the selected roots by model position, so `schema` can find them with the model's
     // own lookup. `order[i]` is the selection index of plan index `i`, `rank` the reverse,
     // and `by_position` the plan index at each model position.
-    let positions: Vec<u32> = selection
-        .roots
-        .keys()
-        .map(|id| {
-            data.root_position(id)
-                .expect("selected roots are in the model") as u32
-        })
-        .collect();
-    let mut by_position = vec![NOT_SELECTED; data.root_count()];
-    for (selection_index, &position) in positions.iter().enumerate() {
-        by_position[position as usize] = selection_index as u32;
-    }
-    let mut order = Vec::with_capacity(positions.len());
-    let mut rank = vec![0u32; positions.len()];
+    let mut by_position = selection.by_position.clone();
+    let mut order = Vec::with_capacity(selection.roots.len());
+    let mut rank = vec![0u32; selection.roots.len()];
     for entry in by_position
         .iter_mut()
         .filter(|entry| **entry != NOT_SELECTED)
@@ -541,66 +569,62 @@ pub(super) fn plan<'m>(
         order.push(selection_index);
     }
 
-    // Decode each schema-relevant trait application once, in plan order.
+    // Decode each schema-relevant trait application once, in plan order. A lazy set
+    // decodes again when it builds, so its plan only validates and keeps no facts.
+    let keep = options.materialization == super::Materialization::Eager;
+    let member_count = selection.member_targets.len();
     let mut roots = Vec::with_capacity(order.len());
-    let mut members = Vec::new();
+    let mut members = Vec::with_capacity(member_count);
+    let kept = |count: usize| if keep { count } else { 0 };
     let mut prepared = Prepared {
-        roots: Vec::with_capacity(order.len()),
-        members: Vec::new(),
-        operations: Vec::with_capacity(selection.operations.len()),
+        roots: Vec::with_capacity(kept(order.len())),
+        members: Vec::with_capacity(kept(member_count)),
+        operations: Vec::with_capacity(kept(selection.operations.len())),
         member_order: Vec::new(),
     };
-    let mut member_views = Vec::new();
+    let mut member_views = Vec::with_capacity(member_count);
     for (index, &selection_index) in order.iter().enumerate() {
-        let (_, shape) = selection
-            .roots
-            .get_index(selection_index)
-            .expect("in range");
-        prepared.roots.push(TraitFacts::decode(
-            shape.id(),
-            shape.traits(),
-            &mut diagnostics,
-        ));
+        let (position, shape) = selection.roots[selection_index];
+        let targets = selection.member_targets_start[selection_index] as usize;
+        let facts = TraitFacts::decode(shape.id(), shape.traits(), &mut diagnostics);
+        if keep {
+            prepared.roots.push(facts);
+        }
         let member_start = members.len();
         if has_member_schemas(shape.shape_type()) {
-            for (position, view) in shape.members().iter().enumerate() {
+            for (i, view) in shape.members().iter().enumerate() {
                 // `Schema::new_struct` asserts that each member schema's index is its position,
                 // and member schemas are built with their position, so this holds by
                 // construction; `index` hashes the name, so only check it in debug builds.
-                debug_assert_eq!(view.index(), position, "`{}`", view.id());
-                let target = selection
-                    .roots
-                    .get_index_of(view.target())
-                    .expect("member targets are selected");
+                debug_assert_eq!(view.index(), i, "`{}`", view.id());
+                let target = selection.index_at(selection.member_targets[targets + i]);
                 members.push(MemberPlan {
                     container: index as u32,
                     target: rank[target],
                     schema: SchemaSlot::new(),
                 });
                 member_views.push(view);
-                prepared.members.push(TraitFacts::decode(
-                    view.id(),
-                    view.traits(),
-                    &mut diagnostics,
-                ));
+                let facts = TraitFacts::decode(view.id(), view.traits(), &mut diagnostics);
+                if keep {
+                    prepared.members.push(facts);
+                }
             }
         }
         if plan_index(members.len(), max, "members", &mut diagnostics).is_none() {
             return fail(diagnostics);
         }
         roots.push(RootPlan {
-            model_position: positions[selection_index],
+            model_position: position,
             member_start: member_start as u32,
             member_len: (members.len() - member_start) as u32,
             schema: SchemaSlot::new(),
         });
     }
     for operation in &selection.operations {
-        prepared.operations.push(OperationFacts::decode(
-            operation.id(),
-            operation.traits(),
-            &mut diagnostics,
-        ));
+        let facts = OperationFacts::decode(operation.id(), operation.traits(), &mut diagnostics);
+        if keep {
+            prepared.operations.push(facts);
+        }
     }
 
     // List and map members reference the member schemas of their targets, so those
@@ -615,23 +639,27 @@ pub(super) fn plan<'m>(
             _ => ([0, 0], 0),
         }
     };
-    prepared.member_order = dependency_order(&member_views, dependencies, &mut diagnostics);
+    let member_order = dependency_order(&member_views, dependencies, &mut diagnostics);
+    if keep {
+        prepared.member_order = member_order;
+    }
     if diagnostics.has_errors() {
         return fail(diagnostics);
     }
 
-    let root_index = |id: &ShapeId| rank[selection.roots.get_index_of(id).expect("selected")];
+    let root_index = |position: u32| rank[selection.index_at(position)];
     let mut operations = IndexMap::with_capacity(selection.operations.len());
     for (operation, errors) in selection.operations.iter().zip(&selection.errors) {
         operations.insert(
             operation.id().clone(),
             OperationPlan {
-                model_position: data
-                    .root_position(operation.id())
-                    .expect("operations are in the model") as u32,
-                input: root_index(operation.input()),
-                output: root_index(operation.output()),
-                errors: errors.iter().map(|id| root_index(id)).collect(),
+                model_position: selection.position(operation.id()),
+                input: root_index(selection.position(operation.input())),
+                output: root_index(selection.position(operation.output())),
+                errors: errors
+                    .iter()
+                    .map(|&position| root_index(position))
+                    .collect(),
                 record: OnceLock::new(),
             },
         );
