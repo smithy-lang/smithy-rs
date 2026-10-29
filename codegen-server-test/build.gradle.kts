@@ -33,122 +33,262 @@ smithy {
     format.set(false)
 }
 
-val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
-    listOf(
-        CodegenTest(
-            "crate#Config",
-            "naming_test_ops",
-            imports = listOf("$commonModels/naming-obstacle-course-ops.smithy"),
-        ),
-        CodegenTest(
-            "casing#ACRONYMInside_Service",
-            "naming_test_casing",
-            imports = listOf("$commonModels/naming-obstacle-course-casing.smithy"),
-        ),
-        CodegenTest(
-            "naming_obs_structs#NamingObstacleCourseStructs",
-            "naming_test_structs",
-            imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
-        ),
-        CodegenTest(
-            "com.amazonaws.simple#SimpleService",
-            "simple",
-            imports = listOf("$commonModels/simple.smithy"),
-        ),
-        // Generate both http@0 and http@1 versions for protocol tests
-        CodegenTest(
-            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
-            "rpcv2Cbor",
-        ),
-        CodegenTest(
-            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
-            "rpcv2Cbor_extras",
-            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
-            extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": true""",
-        ),
-        CodegenTest(
-            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
-            "rpcv2Cbor_extras_no_initial_response",
-            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
-        ),
-        CodegenTest(
-            "com.amazonaws.constraints#ConstraintsService",
-            "constraints_without_public_constrained_types",
-            imports = listOf("$commonModels/constraints.smithy"),
-            extraCodegenConfig = """"publicConstrainedTypes": false""",
-        ),
-        CodegenTest(
-            "com.amazonaws.constraints#UniqueItemsService",
-            "unique_items",
-            imports = listOf("$commonModels/unique-items.smithy"),
-        ),
-        CodegenTest(
-            "com.amazonaws.constraints#ConstraintsService",
-            "constraints",
-            imports = listOf("$commonModels/constraints.smithy"),
-        ),
-        CodegenTest(
-            "aws.protocoltests.restjson#RestJson",
-            "rest_json",
-            extraCodegenConfig = """"debugMode": true""",
-        ),
-        CodegenTest(
-            "aws.protocoltests.restjson#RestJsonExtras",
-            "rest_json_extras",
-            imports = listOf("$commonModels/rest-json-extras.smithy"),
-        ),
-        CodegenTest(
-            "aws.protocoltests.restjson.validation#RestJsonValidation",
-            "rest_json_validation",
-            // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
-            // See https://github.com/smithy-lang/smithy-rs/issues/1401.
-            extraCodegenConfig = """"ignoreUnsupportedConstraints": true""",
-        ),
-        CodegenTest(
-            "aws.protocoltests.json10#JsonRpc10",
-            "json_rpc10",
-        ),
-        CodegenTest(
-            "aws.protocoltests.json#JsonProtocol",
-            "json_rpc11",
-        ),
-        CodegenTest(
-            "aws.protocoltests.misc#MiscService",
-            "misc",
-            imports = listOf("$commonModels/misc.smithy"),
-        ),
-        CodegenTest(
-            "com.amazonaws.ebs#Ebs",
-            "ebs",
-            imports = listOf("$commonModels/ebs.json"),
-        ),
-        CodegenTest(
-            "com.amazonaws.s3#AmazonS3",
-            "s3",
-        ),
-        CodegenTest(
-            "com.aws.example#PokemonService",
-            "pokemon-service-server-sdk",
-            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
-            extraCodegenConfig = """"debugMode": true""",
-        ),
-        CodegenTest(
-            "com.aws.example#PokemonService",
-            "pokemon-service-awsjson-server-sdk",
-            imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
-        ),
-    ).flatMap { it.bothHttpVersions() }
-}
+val commonCodegenTests =
+    "../codegen-core/common-test-models".let { commonModels ->
+        listOf(
+            CodegenTest(
+                "crate#Config",
+                "naming_test_ops",
+                imports = listOf("$commonModels/naming-obstacle-course-ops.smithy"),
+            ),
+            CodegenTest(
+                "casing#ACRONYMInside_Service",
+                "naming_test_casing",
+                imports = listOf("$commonModels/naming-obstacle-course-casing.smithy"),
+            ),
+            CodegenTest(
+                "naming_obs_structs#NamingObstacleCourseStructs",
+                "naming_test_structs",
+                imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
+            ),
+            CodegenTest(
+                "com.amazonaws.simple#SimpleService",
+                "simple",
+                imports = listOf("$commonModels/simple.smithy"),
+            ),
+            // Generate both http@0 and http@1 versions for protocol tests
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+                "rpcv2Cbor",
+            ),
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+                "rpcv2Cbor_schema",
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+                "rpcv2Cbor_extras",
+                imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+                extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": true""",
+            ),
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+                "rpcv2Cbor_extras_no_initial_response",
+                imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            ),
+            // Schema-driven path with event streams and initial messages on rpcv2Cbor.
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+                "rpcv2Cbor_extras_schema",
+                imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+                extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+                "rpcv2Cbor_extras_schema_no_initial_response",
+                imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+                extraCodegenConfig = """"alwaysSendEventStreamInitialResponse": false, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.amazonaws.constraints#ConstraintsService",
+                "constraints_without_public_constrained_types",
+                imports = listOf("$commonModels/constraints.smithy"),
+                extraCodegenConfig = """"publicConstrainedTypes": false""",
+            ),
+            CodegenTest(
+                "com.amazonaws.constraints#UniqueItemsService",
+                "unique_items",
+                imports = listOf("$commonModels/unique-items.smithy"),
+            ),
+            CodegenTest(
+                "com.amazonaws.constraints#ConstraintsService",
+                "constraints",
+                imports = listOf("$commonModels/constraints.smithy"),
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson#RestJson",
+                "rest_json",
+                extraCodegenConfig = """"debugMode": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson#RestJsonExtras",
+                "rest_json_extras",
+                imports = listOf("$commonModels/rest-json-extras.smithy"),
+            ),
+            // Schema-driven (runtime) request/response path for restJson1.
+            CodegenTest(
+                "com.amazonaws.constraints#ConstraintsService",
+                "constraints_schema",
+                imports = listOf("$commonModels/constraints.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "com.amazonaws.constraints#ConstraintsService",
+                "constraints_without_public_constrained_types_schema",
+                imports = listOf("$commonModels/constraints.smithy"),
+                extraCodegenConfig = """"publicConstrainedTypes": false, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson#RestJson",
+                "rest_json_schema",
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson#RestJsonExtras",
+                "rest_json_extras_schema",
+                imports = listOf("$commonModels/rest-json-extras.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson.validation#RestJsonValidation",
+                "rest_json_validation_schema",
+                extraCodegenConfig = """"ignoreUnsupportedConstraints": true, "schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.restjson.validation#RestJsonValidation",
+                "rest_json_validation",
+                // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
+                // See https://github.com/smithy-lang/smithy-rs/issues/1401.
+                extraCodegenConfig = """"ignoreUnsupportedConstraints": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.json10#JsonRpc10",
+                "json_rpc10",
+            ),
+            CodegenTest(
+                "aws.protocoltests.json10#JsonRpc10",
+                "json_rpc10_schema",
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.json#JsonProtocol",
+                "json_rpc11",
+            ),
+            CodegenTest(
+                "aws.protocoltests.json#JsonProtocol",
+                "json_rpc11_schema",
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+            CodegenTest(
+                "aws.protocoltests.misc#MiscService",
+                "misc",
+                imports = listOf("$commonModels/misc.smithy"),
+            ),
+            CodegenTest(
+                "com.amazonaws.ebs#Ebs",
+                "ebs",
+                imports = listOf("$commonModels/ebs.json"),
+            ),
+            CodegenTest(
+                "com.amazonaws.s3#AmazonS3",
+                "s3",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-server-sdk",
+                imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": false""",
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-awsjson-server-sdk",
+                imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
+            ),
+            CodegenTest(
+                "com.aws.example#PokemonService",
+                "pokemon-service-server-schema-sdk",
+                imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+                extraCodegenConfig = """"schemaSerde": true""",
+            ),
+        ).flatMap {
+            val versions = it.bothHttpVersions()
+            // Each schema projection already has a generated-serde HTTP 0.x counterpart, so its
+            // forced-legacy HTTP 0.x twin would duplicate that projection exactly.
+            if (it.module.contains("schema")) {
+                versions.filterNot { version -> version.module.endsWith("-http0x") }
+            } else {
+                versions
+            }
+        }.map {
+            if (it.module.endsWith("-http0x")) {
+                // Generated serde projections must disable schema serde, which otherwise enables HTTP 1.x.
+                it.copy(extraCodegenConfig = it.extraCodegenConfig?.replace(""""schemaSerde": true""", """"schemaSerde": false"""))
+            } else if (it.module == "pokemon-service-server-schema-sdk") {
+                // Only the schema-driven HTTP/1.x example serves multiple protocols.
+                it.copy(imports = it.imports + "custom-test-models/pokemon-multi-protocol.smithy")
+            } else {
+                it
+            }
+        } +
+            listOf(
+                CodegenTest(
+                    "smithy.rust.server.protocoltests#RestXmlServerTests",
+                    "rest_xml_schema",
+                    imports = listOf("custom-test-models/rest-xml-server-tests.smithy"),
+                    extraCodegenConfig = """"http-1x": true, "schemaSerde": true""",
+                ),
+            )
+    }
+
 // When iterating on protocol tests use this to speed up codegen:
 //    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
 
-val customCodegenTests = "custom-test-models".let { customModels ->
-    CodegenTest(
-        "com.aws.example#CustomValidationExample",
-        "custom-validation-exception-example",
-        imports = listOf("$customModels/custom-validation-exception.smithy"),
-    ).bothHttpVersions()
-}
+val customCodegenTests =
+    "custom-test-models".let { customModels ->
+        CodegenTest(
+            "com.aws.example#CustomValidationExample",
+            "custom-validation-exception-example",
+            imports = listOf("$customModels/custom-validation-exception.smithy"),
+        ).bothHttpVersions()
+    }
+
+// Server-only Criterion comparisons use the same model and HTTP types on both serde paths.
+// The benchmark Makefile selects these through the `modules` property; the models carry no
+// protocol tests and their codegen paths are covered elsewhere, so CI skips generating them.
+val eventStreamBenchmarkTests =
+    listOf("rest-json", "rpc-v2-cbor").flatMap { protocol ->
+        listOf(false, true).map { schemaSerde ->
+            CodegenTest(
+                "benchmark.eventstream#BenchmarkService",
+                "event-stream-bench-$protocol-${if (schemaSerde) {
+                    "schema"
+                } else {
+                    "legacy"
+                }}",
+                imports =
+                    listOf(
+                        "benchmarks/event-stream/model/common.smithy",
+                        "benchmarks/event-stream/model/$protocol.smithy",
+                    ),
+                extraCodegenConfig =
+                    """"http-1x": true, "schemaSerde": $schemaSerde, "alwaysSendEventStreamInitialResponse": ${protocol == "rpc-v2-cbor"}""",
+            )
+        }
+    } +
+        // Match the selected single-protocol service's initial-response setting.
+        // The global setting must be false for REST and true for CBOR, so the
+        // two multi-protocol projections differ only in that setting.
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-rest-json-schema",
+            imports =
+                listOf(
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": false""",
+        ) +
+        CodegenTest(
+            "benchmark.eventstream#BenchmarkService",
+            "event-stream-bench-multi-schema",
+            imports =
+                listOf(
+                    "benchmarks/event-stream/model/common.smithy",
+                    "benchmarks/event-stream/model/multi.smithy",
+                ),
+            extraCodegenConfig = """"http-1x": true, "schemaSerde": true, "alwaysSendEventStreamInitialResponse": true""",
+        )
 
 // A generated service for request-limit integration tests.
 val requestLimitsCodegenTest =
@@ -183,7 +323,19 @@ val requestLimitsCodegenTest =
             """.trimIndent(),
     )
 
-val allCodegenTests = commonCodegenTests + customCodegenTests + requestLimitsCodegenTest
+val benchmarkModulesRequested = properties.get("modules")?.contains("event-stream-bench") ?: false
+
+apply(from = "integration-tests/protocol-compat/server-sdk.gradle.kts")
+val serverCompatibilityCodegenTests: List<CodegenTest> by extra
+
+val allCodegenTests =
+    commonCodegenTests + customCodegenTests + requestLimitsCodegenTest +
+        serverCompatibilityCodegenTests +
+        if (benchmarkModulesRequested) {
+            eventStreamBenchmarkTests
+        } else {
+            emptyList()
+        }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 tasks.named("generateSmithyBuild") {

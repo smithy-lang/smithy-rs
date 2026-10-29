@@ -60,7 +60,14 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
         value: Duration?,
         payload: Boolean,
     ): Writable =
-        requiredTimeout(value, if (payload) "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT" else "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT")
+        requiredTimeout(
+            value,
+            if (payload) {
+                "DEFAULT_PAYLOAD_REQUEST_BODY_READ_TIMEOUT"
+            } else {
+                "DEFAULT_NON_PAYLOAD_REQUEST_BODY_READ_TIMEOUT"
+            },
+        )
 
     private fun requiredTimeout(
         value: Duration?,
@@ -125,7 +132,7 @@ class ServerServiceConfigGenerator(private val codegenContext: ServerCodegenCont
                     settings.requestBodyMaxBytes()?.let {
                         rustTemplate(".with_max_bytes(#{NonZeroUsize}::new(${it}usize))", "NonZeroUsize" to RuntimeType.std.resolve("num::NonZeroUsize"))
                     }
-                    settings.requestBodyReadPollBudget()?.let {
+                    settings.requestBodyReadPollBudget?.let {
                         rustTemplate(".with_read_poll_budget(#{NonZeroUsize}::new(${it}usize))", "NonZeroUsize" to RuntimeType.std.resolve("num::NonZeroUsize"))
                     }
                 }

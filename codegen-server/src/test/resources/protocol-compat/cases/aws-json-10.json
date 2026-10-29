@@ -1,0 +1,107 @@
+[
+  {
+    "id": "body-object",
+    "uri": "/",
+    "body": "{}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-known-null",
+    "uri": "/",
+    "body": "{\"text\":\"a\",\"text\":null}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/",
+    "body": "{\"nested\":{}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/",
+    "body": "{\"nested\":{\"required\":\"ok\"}}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/",
+    "body": "{\"blob\":\"e30=\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Body"
+      ]
+    ],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/",
+    "body": "{\"scenario\": \"empty\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/",
+    "body": "{\"scenario\": \"zero\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/",
+    "body": "{\"scenario\": \"quotes\"}",
+    "headers": [
+      [
+        "x-amz-target",
+        "Audit.Response"
+      ]
+    ],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode",
+    "content_type": "application/x-amz-json-1.0"
+  }
+]

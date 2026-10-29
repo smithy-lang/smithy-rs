@@ -46,7 +46,10 @@ async fn plugin_layers_are_executed_in_registration_order() {
         rcvr.expect_request()
     };
 
-    app.call(request.try_into().unwrap()).await.unwrap();
+    let request = request.try_into_http1x().unwrap();
+    app.call(request.map(pokemon_service_server_sdk::server::body::Body::new))
+        .await
+        .unwrap();
 
     let output_guard = output.lock().unwrap();
     assert_eq!(output_guard.deref(), &vec!["first", "second"]);

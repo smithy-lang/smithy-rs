@@ -34,10 +34,18 @@ internal class EventStreamTimeoutsTest {
         @http(uri: "/publish", method: "POST")
         operation PublishEvents {
             input := {
-                ${if (protocol == "aws.protocols#restJson1") "@httpPayload" else ""}
+                ${if (protocol == "aws.protocols#restJson1") {
+            "@httpPayload"
+        } else {
+            ""
+        }}
                 @required
                 events: Events
-                ${if (protocol == "smithy.protocols#rpcv2Cbor") "metadata: String" else ""}
+                ${if (protocol == "smithy.protocols#rpcv2Cbor") {
+            "metadata: String"
+        } else {
+            ""
+        }}
             }
             output := {}
         }
@@ -73,7 +81,11 @@ internal class EventStreamTimeoutsTest {
                                 "request": {
                                     "body": {
                                         "eventStreamTimeouts": $global
-                                        ${if (bodyTimeouts != null) ""","readTimeouts": $bodyTimeouts""" else ""}
+                                        ${if (bodyTimeouts != null) {
+                    ""","readTimeouts": $bodyTimeouts"""
+                } else {
+                    ""
+                }}
                                     }
                                 }
                             }
@@ -430,7 +442,12 @@ internal class EventStreamTimeoutsTest {
             ),
         ) { codegenContext, rustCrate ->
             val cbor = protocol == "smithy.protocols#rpcv2Cbor"
-            val uri = if (cbor) "/service/EventService/operation/PublishEvents" else "/"
+            val uri =
+                if (cbor) {
+                    "/service/EventService/operation/PublishEvents"
+                } else {
+                    "/"
+                }
             val headers =
                 if (cbor) {
                     """.header("smithy-protocol", "rpc-v2-cbor")"""
@@ -447,7 +464,7 @@ internal class EventStreamTimeoutsTest {
                     "SmithyTypes" to RuntimeType.smithyTypes(codegenContext.runtimeConfig),
                     "EventStream" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig),
                     "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.Tower.toType(),
                 )
             rustCrate.testModule {
                 rustTemplate(
@@ -512,7 +529,11 @@ internal class EventStreamTimeoutsTest {
                     }
                     fn initial_frame() -> #{Bytes} {
                         use #{SmithyTypes}::event_stream::{Header, HeaderValue, Message};
-                        let payload = #{Bytes}::from_static(${if (cbor) "&[0xa0]" else """b"{}""""});
+                        let payload = #{Bytes}::from_static(${if (cbor) {
+                        "&[0xa0]"
+                    } else {
+                        """b"{}""""
+                    }});
                         let message = Message::new(payload)
                             .add_header(Header::new(":message-type", HeaderValue::String("event".into())))
                             .add_header(Header::new(":event-type", HeaderValue::String("initial-request".into())));
