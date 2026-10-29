@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use bytes;
-use http_body_util;
-use hyper_util::{client::legacy::Client, rt::TokioExecutor};
+use hyper::Client;
 use pokemon_service_client::{
     error::{DisplayErrorContext, SdkError},
     operation::get_storage::GetStorageError,
@@ -85,12 +83,12 @@ async fn simple_integration_test() {
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
     assert_eq!(2, service_statistics_out.calls_count);
 
-    let hyper_client = Client::builder(TokioExecutor::new()).build_http();
+    let hyper_client = Client::new();
     let health_check_url = format!("{}/ping", common::base_url());
     let health_check_url = hyper::Uri::try_from(health_check_url).unwrap();
     let request = hyper::Request::builder()
         .uri(health_check_url)
-        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .body(hyper::Body::empty())
         .unwrap();
     let result = hyper_client.request(request).await.unwrap();
 
@@ -110,19 +108,18 @@ async fn health_check() {
     // Hyper HTTP client to make a request to it.
     let request = hyper::Request::builder()
         .uri(uri)
-        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .body(hyper::Body::empty())
         .expect("failed to build request");
 
-    let client = Client::builder(TokioExecutor::new()).build_http();
+    let client = Client::new();
     let response = client
         .request(request)
         .await
         .expect("failed to get response");
 
     assert_eq!(response.status(), hyper::StatusCode::OK);
-    let body = http_body_util::BodyExt::collect(response.into_body())
+    let body = hyper::body::to_bytes(response.into_body())
         .await
-        .expect("failed to read response body")
-        .to_bytes();
+        .expect("failed to read response body");
     assert!(body.is_empty());
 }

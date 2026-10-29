@@ -1,4 +1,51 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 29th, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (server, [smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906), @fahadzub) Upgrade `aws-smithy-http-server` to 0.69.0 with schema-based serialization and
+    multi-protocol routing for HTTP 1.x servers. Enable schema serde with
+    `codegen.schemaSerde: true` and regenerate your server SDK. Review these migration
+    changes when upgrading:
+
+    - Protocol types such as `RestJson1` now carry configuration. Replace unit-struct
+      construction with `RestJson1::default()`. For request-specific serialization,
+      use the protocol selected by routing so its configuration is preserved.
+    - The HTTP 1.x server runtime uses Tower 0.5. Update application dependencies
+      and middleware that use Tower utility types to Tower 0.5.
+      `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro` 0.4.0
+      target server 0.69; upgrade the server and metrics crates together.
+    - Schema serde calls `IntoResponse<P>::into_response_with_protocol` to frame
+      errors using the selected protocol. Its default preserves the existing
+      `into_response` conversion and the `FromParts<P>::Rejection: IntoResponse<P>`
+      bound. Override the contextual method when an error needs protocol-specific
+      framing. Generated-serde callers continue using `into_response`. Use
+      `response::ModeledRejection<E>` for modeled extractor errors and the shared
+      `runtime_error::RuntimeError` for framework errors.
+    - AWS JSON routing uses the modeled operation name in both serde modes:
+      `getFoo` uses `X-Amz-Target: Service.getFoo`. To also accept the former generated
+      spelling `Service.GetFoo`, set `capitalizeRoutes: true` in the
+      `aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` section of
+      `customizationConfig.protocols`.
+    - Schema-serde RPC v2 CBOR streaming blob inputs use `ByteStream` instead of
+      `Blob`. The CBOR document is collected and decoded before the handler is
+      invoked; the stream contains the decoded blob bytes.
+
+**New this release:**
+- :bug: (server, [smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472), @franco2002lu) Exclude `@internal` enum values from the enum value set in server constraint violation messages. Previously, rejecting an invalid enum value listed every value, including internal ones that should not be exposed to callers. Internal values are still accepted as valid input.
+- (server, [smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934), @xz0803) Improve server routing performance for REST protocols. `RestRouter` now holds its `RequestSpec`s behind an `Arc`, so cloning the router shares each route's path regex and its match cache instead of rebuilding the cache: on every request for `aws_smithy_http_server::serve`, and on every connection for `aws-smithy-legacy-http-server`.
+- :bug: (client, [smithy-rs#4967](https://github.com/smithy-lang/smithy-rs/issues/4967)) Generated endpoint rule-set tests no longer run the validators in `ParamsBuilder::build()`, so a test case with an
+    invalid `Region` reaches the rules instead of panicking with `invalid params`. Requests still run the validators.
+- :bug: (server, @fahadzub) Encode shared runtime validation messages and initial request frame rejection messages
+    as CBOR maps for rpcv2Cbor, so clients can decode the message. Modeled validation errors,
+    including custom validation types, retain their own schema and serialized fields.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @fahadzub ([smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906))
+- @franco2002lu ([smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472))
+- @xz0803 ([smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934))
+
+
 October 27th, 2026
 ==================
 **Breaking Changes:**

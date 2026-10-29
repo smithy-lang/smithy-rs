@@ -60,7 +60,7 @@ class ScopeMacroGenerator(
             // If we have a second operation we can perform further checks
             val otherOperationName: String? =
                 operations.toList().getOrNull(1)?.let {
-                    codegenContext.symbolProvider.toSymbol(it).name
+                    codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
                 }
             val furtherTests =
                 if (otherOperationName != null) {
