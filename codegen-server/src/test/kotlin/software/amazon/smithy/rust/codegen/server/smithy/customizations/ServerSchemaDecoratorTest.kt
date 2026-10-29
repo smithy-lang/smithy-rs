@@ -136,7 +136,7 @@ internal class ServerSchemaDecoratorTest {
                         unitTest("operation_descriptor_reports_the_modeled_http_binding") {
                             rust(
                                 """
-                                let echo = &crate::schema::operations::OPERATION_4563686F;
+                                let echo = &crate::schema::operations::OPERATION_ECHO;
                                 assert_eq!(echo.shape_id().as_str(), "com.aws.example.schema##Echo");
                                 let http = echo.http().expect("`@http` recorded on the operation input");
                                 assert_eq!(http.method(), "POST");

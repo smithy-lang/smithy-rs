@@ -170,14 +170,12 @@ class ServerServiceSchemaGenerator(
         val errorRefs = operation.errorsSet.sorted().joinToString(", ") { schemaRef(model.expectShape(it)) }
         writer.rustTemplate(
             """
-            static ${name}_ERRORS: &[&#{Schema}<'static>] = &[$errorRefs];
-
             /// Descriptor for the `${escape(operation.id)}` operation.
             pub(crate) static $name: #{OperationSchema}<'static> = #{OperationSchema}::new(
                 ${shapeIdExpr(operation.id)},
                 ${schemaRef(operation.inputShape(model))},
                 ${schemaRef(operation.outputShape(model))},
-                ${name}_ERRORS,
+                &[$errorRefs],
             );
             """,
             *codegenScope,
