@@ -247,6 +247,10 @@ impl<'b> Decoder<'b> {
                 | minicbor::data::Type::F64 => self.decoder.f64().map_err(DeserializeError::new)?,
                 _ => self.decoder.i64().map_err(DeserializeError::new)? as f64,
             };
+            let millis = (epoch_seconds * 1000.0).round();
+            if millis.abs() <= (1u64 << 53) as f64 && millis / 1000.0 == epoch_seconds {
+                return Ok(DateTime::from_millis(millis as i64));
+            }
             let mut result = DateTime::from_secs_f64(epoch_seconds);
             let subsec_nanos = result.subsec_nanos();
             result.set_subsec_nanos((subsec_nanos / 1_000_000) * 1_000_000);
@@ -788,5 +792,55 @@ mod tests {
             .timestamp()
             .expect("should decode integer timestamp");
         assert_eq!(timestamp, aws_smithy_types::DateTime::from_secs(1700000000));
+    }
+
+    fn decode_float_timestamp(epoch_seconds: f64) -> aws_smithy_types::DateTime {
+        let mut bytes = vec![0xc1, 0xfb];
+        bytes.extend_from_slice(&epoch_seconds.to_be_bytes());
+        Decoder::new(&bytes)
+            .timestamp()
+            .expect("should decode timestamp")
+    }
+
+    #[test]
+    fn test_timestamp_exact_milliseconds_are_not_truncated() {
+        for secs in [1_700_000_000i64, 946_845_296, 0, -1, -1_700_000_000] {
+            for ms in 0..1000 {
+                let millis = secs * 1000 + ms;
+                assert_eq!(
+                    decode_float_timestamp(millis as f64 / 1000.0),
+                    aws_smithy_types::DateTime::from_millis(millis),
+                    "{millis} ms"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_timestamp_millisecond_round_trip() {
+        for secs in [1_700_000_000i64, 946_845_296, -1_700_000_000] {
+            for ms in 0..1000 {
+                let date_time = aws_smithy_types::DateTime::from_millis(secs * 1000 + ms);
+                let mut encoder = crate::Encoder::new(Vec::new());
+                encoder.timestamp(&date_time);
+                let bytes = encoder.into_writer();
+                let decoded = Decoder::new(&bytes)
+                    .timestamp()
+                    .expect("should decode timestamp");
+                assert_eq!(decoded, date_time, "{date_time:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_timestamp_sub_millisecond_values_are_truncated() {
+        assert_eq!(
+            decode_float_timestamp(1_700_000_000.123_9),
+            aws_smithy_types::DateTime::from_millis(1_700_000_000_123)
+        );
+        assert_eq!(
+            decode_float_timestamp(-0.0005),
+            aws_smithy_types::DateTime::from_millis(-1)
+        );
     }
 }
