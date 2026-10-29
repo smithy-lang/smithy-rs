@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.16.2"
+version = "1.17.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -29,7 +29,7 @@ http-02x = [
 ]
 # NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014", "aws-smithy-types/http-body-0-4-x"]
-tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x", "aws-smithy-runtime-api/legacy-client"]
+tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 
