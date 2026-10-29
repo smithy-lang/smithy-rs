@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -543,12 +544,12 @@ class XmlBindingTraitSerializerGenerator(
         rootNameOverride: String? = null,
     ) {
         val itemName = safeName("list_item")
-        val isOptional = symbolProvider.toSymbol(listShape.member).isOptional()
+        val flattenSparseList = codegenTarget == CodegenTarget.SERVER && symbolProvider.toSymbol(listShape.member).isOptional()
         val target = model.expectShape(listShape.member.target)
-        val pattern = if (isOptional && target.isStructureShape && target.members().isEmpty()) "_$itemName" else itemName
-        val input = if (isOptional) "${ctx.input.removePrefix("&")}.iter().flatten()" else ctx.input
+        val pattern = if (flattenSparseList && target.isStructureShape && target.members().isEmpty()) "_$itemName" else itemName
+        val input = if (flattenSparseList) "${ctx.input.removePrefix("&")}.iter().flatten()" else ctx.input
         rustBlock("for $pattern in $input") {
-            serializeMember(listShape.member, ctx.copy(input = itemName), rootNameOverride, isUnwrapped = isOptional)
+            serializeMember(listShape.member, ctx.copy(input = itemName), rootNameOverride, isUnwrapped = flattenSparseList)
         }
     }
 

@@ -19,8 +19,8 @@ use std::process::ExitCode;
 
 /// Multi-character operators, longest first.
 const OPERATORS: &[&str] = &[
-    "<<=", ">>=", "...", "..=", "::", "->", "=>", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=",
-    "/=", "%=", "^=", "&=", "|=", "<<", ">>", "..",
+    "<<=", ">>=", "...", "..=", "::", "->", "=>", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=",
+    "*=", "/=", "%=", "^=", "&=", "|=", "<<", ">>", "..",
 ];
 
 fn write_token(out: &mut impl Write, line: usize, token: &str) -> io::Result<()> {
@@ -86,9 +86,15 @@ fn main() -> ExitCode {
     for path in std::env::args().skip(1) {
         let parsed = std::fs::read_to_string(&path)
             .map_err(|error| error.to_string())
-            .and_then(|source| source.parse::<TokenStream>().map_err(|error| error.to_string()));
+            .and_then(|source| {
+                source
+                    .parse::<TokenStream>()
+                    .map_err(|error| error.to_string())
+            });
         let result = match parsed {
-            Ok(stream) => writeln!(out, "file\t{path}").and_then(|()| write_stream(&mut out, stream)),
+            Ok(stream) => {
+                writeln!(out, "file\t{path}").and_then(|()| write_stream(&mut out, stream))
+            }
             Err(error) => {
                 eprintln!("{path}: {error}");
                 return ExitCode::FAILURE;
