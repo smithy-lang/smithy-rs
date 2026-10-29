@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.restjson
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -30,6 +31,7 @@ import java.nio.file.Files
  * complete HTTP responses. This catches inconsistent case conversion between operation markers,
  * error tables, and schema descriptors.
  */
+@Tag("server-compatibility")
 internal class AcronymOperationCompatibilityTest {
     @Test
     fun `acronym operations compile and preserve legacy responses`() {

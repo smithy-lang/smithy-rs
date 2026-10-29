@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.response
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -29,6 +30,7 @@ import java.nio.file.Path
  * error wrappers must retain the correct operation descriptor, and wire captures must match legacy.
  * The CBOR comparison is disabled pending a fix for legacy error header serialization.
  */
+@Tag("server-compatibility")
 internal class ModeledErrorContentTypeCompatibilityTest {
     @Test
     fun `modeled error content type follows the operation output`() {

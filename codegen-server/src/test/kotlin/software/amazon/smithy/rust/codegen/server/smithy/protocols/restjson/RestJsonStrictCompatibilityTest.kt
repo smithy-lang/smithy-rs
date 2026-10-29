@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.restjson
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -26,6 +27,7 @@ import java.nio.file.Files
  * and HTTP response bindings. It checks that the intended handler paths run, validates content
  * lengths, and requires identical complete HTTP captures, including error payload cases.
  */
+@Tag("server-compatibility")
 internal class RestJsonStrictCompatibilityTest {
     @Test
     fun `populated outputs and errors preserve the legacy HTTP contract`() {

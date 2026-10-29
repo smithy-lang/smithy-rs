@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.routing
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -29,6 +30,7 @@ import java.nio.file.Path
  * success or unknown-operation response framing. Identical cases run with legacy and schema
  * serde to preserve the legacy treatment of trailing template slashes.
  */
+@Tag("server-compatibility")
 internal class TrailingSlashLabelCompatibilityTest {
     @Test
     fun `legacy labels ignore trailing template slashes`() = checkLabels(schemaSerde = false)
@@ -144,6 +146,7 @@ internal class TrailingSlashLabelCompatibilityTest {
  * handler-visible label strings, then compares complete response captures. This covers label
  * extraction and routing together rather than only parsing a URI template.
  */
+@Tag("server-compatibility")
 internal class TrailingSlashLabelsCompatibilityTest {
     @Test
     fun `trailing template slashes preserve legacy routing and label values`() {

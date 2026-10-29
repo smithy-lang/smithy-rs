@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -27,6 +28,7 @@ import java.nio.file.Path
  * decoded values and rejection responses, then checks schema captures against them. Established
  * legacy panic cases are recorded explicitly, while the schema path is required to avoid panics.
  */
+@Tag("server-compatibility")
 internal class PrefixHeaderMediaTypeCompatibilityTest {
     @Test
     fun `media typed prefix headers preserve legacy decoding and rejection behavior`() {
@@ -204,6 +206,7 @@ internal class PrefixHeaderMediaTypeCompatibilityTest {
  * of plain headers, and rejection status, then compares legacy and schema captures. This guards
  * the interaction between generated prefix-header metadata and runtime response serialization.
  */
+@Tag("server-compatibility")
 internal class ResponsePrefixHeaderMediaTypeCompatibilityTest {
     @Test
     fun `media typed response prefix headers preserve legacy encoding and errors`() {

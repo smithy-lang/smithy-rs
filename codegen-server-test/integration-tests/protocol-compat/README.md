@@ -17,7 +17,10 @@ Cross-protocol behavior tests over generated servers, in two styles:
 
 The service shares one set of handlers across AWS JSON 1.0/1.1, REST JSON, REST XML and RPCv2 CBOR.
 
-`make test` generates the server, five protocol-specific clients, and the runtime-selecting schema client, then runs the client and wire suites. It also generates the service crates referenced by the other members of the integration-test workspace, which Cargo needs to load their manifests. The wire tests exercise the generated service directly without a listening socket and select REST XML explicitly by Content-Type.
+`make test` invokes the manual `:codegen-server-test:protocolCompatibilityTest` Gradle
+task. It generates the optional server/client SDKs before running this standalone
+Cargo workspace. The sibling event-stream and request-limit fixtures are not
+required to resolve this workspace. The wire tests exercise the generated service directly without a listening socket and select REST XML explicitly by Content-Type.
 
 The suites moved from `examples/multi-protocol` retain their assertions, including
 Unit versus explicit empty structures, modeled errors, validation, and streams.
@@ -44,7 +47,7 @@ cargo test --quiet -p protocol-compat --test runtime_protocol_clients --test wir
 
 The runnable client showcase remains in `examples/multi-protocol`.
 
-The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-server-test/custom-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. The server integration Gradle task generates both server and client crates before running the workspace.
+The shared multiprotocol models (common operation definitions, server fixtures, and single-protocol client services) live in `codegen-server-test/custom-test-models/multi-protocol-compat/`; the remaining protocol-compat-only models live in `models/`. The manual compatibility Gradle task generates both server and client crates before running this workspace.
 
 The server model in `codegen-server-test/custom-test-models/multi-protocol-compat/multi-protocol-server.smithy` imports the shared operations and the server extras. The extras include ordinary structure/union payloads with distinct member/target XML names, response status/header/prefix bindings, nested collections and union variants, blobs and timestamps, populated modeled errors, generated builder defaults, and absent/empty/null sparse values. JSON-only fuzz and coverage profiles additionally include DocumentValues; this operation is outside the all-five-protocol server. The generated clients retain their original operation sets; the added server operations are exercised by the wire tests.
 
@@ -108,18 +111,36 @@ the recorded generated serde expectations; the new shared error's context-free f
 
 ## CI and coverage ownership
 
-The `check-server-codegen-integration-tests` job in `.github/workflows/ci.yml`
-runs `tools/ci-scripts/check-server-codegen-integration-tests`, which invokes
-`./gradlew codegen-server-test:test`. Its `cargoTestIntegration` task generates
-the fixtures and runs `cargo nextest run --no-tests=pass` in the integration
-workspace. `protocol-compat` is a workspace member, so all its test targets run
-in that job, including client round trips, direct generated-SDK parity,
-and selected-protocol extractor and middleware rejections. The task also runs
-the workspace doctests through `cargoTestIntegrationDoctests`.
+The default `check-server-codegen-integration-tests` CI job runs native generated
+protocol tests and the event-stream/request-limit integration workspace. This
+`protocol-compat` crate is excluded from that workspace, and its generated SDKs
+are omitted from default server and client generation.
 
-The retained Kotlin checks run in the separate
-`check-server-codegen-unit-tests` CI job, which invokes
-`./gradlew codegen-server:test`.
+Run this crate, including generation, from the repository root:
+
+```sh
+./gradlew :codegen-server-test:protocolCompatibilityTest
+```
+
+Run all manual server compatibility coverage, including Kotlin comparisons and
+the standalone generated protocol fixtures:
+
+```sh
+./gradlew serverCompatibilityTest
+```
+
+Generate compatibility SDKs without running tests:
+
+```sh
+./gradlew generateServerCompatibilitySdk
+```
+
+Explicit `-Pmodules=...` selections also enable the named compatibility SDKs,
+so the multi-protocol example and targeted development commands remain usable.
+`-PserverCompatibility=true` includes all compatibility SDKs when running other
+Gradle generation tasks. The default server unit-test CI job excludes Kotlin
+suites tagged `server-compatibility`; `:codegen-server:compatibilityTest` runs
+those comparisons locally.
 
 Overlapping checks live in the following suites; these replacements exercise
 generated services rather than only inspecting generated source.
@@ -134,3 +155,8 @@ generated services rather than only inspecting generated source.
 
 The client round trips and selected-protocol rejection suites retain their
 existing assertions.
+
+The optional SDK projections and Rust tasks are defined alongside this suite in
+`server-sdk.gradle.kts` and `client-sdk.gradle.kts`. The root build only supplies
+the aggregate generation and test commands; existing SDK projections remain in
+their original module build files.

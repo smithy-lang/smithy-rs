@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.rpcv2
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -27,6 +28,7 @@ import java.nio.file.Files
  * checking schema live-blob framing and its absent content length. A separate REST upload/download
  * case checks that raw blob bytes retain legacy behavior when the generated types are shared.
  */
+@Tag("server-compatibility")
 internal class RpcV2CborStreamingBlobCompatibilityTest {
     @Test
     fun `CBOR blob inputs and decoded outputs match legacy`() {

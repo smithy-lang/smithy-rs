@@ -3,6 +3,40 @@
 These fixtures compare generated server serde with schema serde using the same
 models, requests, protocol, and HTTP version.
 
+The Kotlin comparison suites carry the `server-compatibility` JUnit tag. The server
+unit-test CI job excludes this tag with `-PexcludeServerCompatibilityTests=true`:
+these comparisons repeatedly generate and compile separate legacy/schema crates.
+They remain available locally, including cases such as repeated headers and sparse
+timestamp nulls that cannot be represented by Smithy protocol-test traits.
+
+Run only the compatibility suites:
+
+```sh
+./gradlew :codegen-server:compatibilityTest
+```
+
+Select a particular compatibility suite:
+
+```sh
+./gradlew :codegen-server:compatibilityTest --tests '*CollectionTimestampFormatCompatibilityTest'
+```
+
+Run the same unit-test selection as CI:
+
+```sh
+./gradlew :codegen-server:test -PexcludeServerCompatibilityTests=true
+```
+
+The normal local `:codegen-server:test` task still includes these comparisons.
+The dedicated `codegen-server-test:test` CI job continues to run native generated
+protocol tests and live event-stream/request-limit integration tests. The extra
+compatibility projections and the standalone `integration-tests/protocol-compat`
+crate are opt-in. Run `./gradlew serverCompatibilityTest` to generate the optional
+SDKs and run all Kotlin, generated-protocol, and Rust integration comparisons.
+Focused codegen regressions for schema generation,
+settings, validation, routing, body limits, timeouts, and streaming stay in the
+server unit-test CI job.
+
 - `codegen-server-test/custom-test-models/` contains the Smithy request, response,
   and malformed-request tests for body bindings, collection timestamp formats,
   and prefix headers. `codegen-server-test/build.gradle.kts` registers each model

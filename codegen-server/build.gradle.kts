@@ -56,3 +56,22 @@ tasks.processResources {
 tasks.named("sourcesJar").configure {
     dependsOn(generateServerCodegenVersion)
 }
+
+// CI keeps focused codegen regressions; full legacy/schema comparisons run separately.
+tasks.test {
+    if (providers.gradleProperty("excludeServerCompatibilityTests").map { it.toBoolean() }.getOrElse(false)) {
+        useJUnitPlatform {
+            excludeTags("server-compatibility")
+        }
+    }
+}
+
+val compatibilityTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Runs the server legacy/schema compatibility comparisons excluded from CI."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("server-compatibility")
+    }
+}

@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.tracing
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -30,6 +31,7 @@ import java.nio.file.Files
  * differ, so log strings are checked separately. Status, headers, response bytes, runtime error
  * extensions, and handler inputs must match across serde modes.
  */
+@Tag("server-compatibility")
 internal class RequestRejectionLoggingTest {
     @Test
     fun `generated request rejection logs retain diagnostics in both serde modes`() {

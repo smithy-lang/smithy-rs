@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.streaming
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -295,6 +296,7 @@ internal class StreamingBlobInputTest {
  * then streams a large blob and verifies that the handler consumes it incrementally to completion.
  * This protects live REST request bodies and early rejection of invalid transport-bound inputs.
  */
+@Tag("server-compatibility")
 internal class RestStreamingBlobInputCompatibilityTest {
     @Test
     fun `REST JSON exposes validated headers before body bytes arrive in legacy and schema serde`() {

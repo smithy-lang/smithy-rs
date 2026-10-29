@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.rpcv2
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
@@ -37,6 +38,7 @@ import java.nio.file.Path
  * container endings, and complete consumption of the response. Status and protocol headers are
  * also checked, and the body bytes and headers must match between serde modes.
  */
+@Tag("server-compatibility")
 internal class CborCollectionLengthCompatibilityTest {
     @Test
     fun `generated schema collections retain legacy definite lengths`() {
@@ -175,6 +177,7 @@ internal class CborCollectionLengthCompatibilityTest {
  * maps, constrained elements, and integer enums, then compares body bytes and response metadata.
  * Union framing has an established legacy/schema difference, so each encoding is pinned separately.
  */
+@Tag("server-compatibility")
 internal class CborIntegerListCompatibilityTest {
     @Test
     fun `integer list dispatch retains generated legacy wire behavior`() {
@@ -341,6 +344,7 @@ internal class CborIntegerListCompatibilityTest {
  * all nested values and complete consumption, validates content length and protocol headers,
  * and compares the recorded HTTP metadata and response encoding between the two implementations.
  */
+@Tag("server-compatibility")
 internal class CborNestedCollectionCompatibilityTest {
     @Test
     fun `sparse and mixed nested CBOR requests echo legacy values and wire responses`() {
@@ -492,6 +496,7 @@ internal class CborNestedCollectionCompatibilityTest {
  * same CBOR count response, status, and headers. The test protects RPC document-member encoding
  * for @httpPayload lists and uses RPC routing rather than the operation's modeled REST URI.
  */
+@Tag("server-compatibility")
 internal class RpcV2CborListPayloadCompatibilityTest {
     @Test
     fun `schema serde preserves the generated serde CBOR list member encoding`() {

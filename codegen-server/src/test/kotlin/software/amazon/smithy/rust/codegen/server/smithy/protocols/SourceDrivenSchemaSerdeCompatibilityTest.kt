@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
@@ -36,6 +37,7 @@ import java.nio.file.Path
  * The CBOR comparison is disabled pending a fix for legacy error header serialization.
  * Compilation probes separately pin known legacy failures and require schema probes to compile.
  */
+@Tag("server-compatibility")
 internal class SourceDrivenSchemaSerdeCompatibilityTest {
     private val root = Path.of("..").toAbsolutePath().normalize()
     private val run = Files.createTempDirectory("schema-compat-ci-")

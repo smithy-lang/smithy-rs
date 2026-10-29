@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -29,6 +30,7 @@ import java.nio.file.Files
  * sends an initial frame promptly without closing the stream; the short timeouts are observation
  * guards in the test, not configured server read or idle timeouts.
  */
+@Tag("server-compatibility")
 internal class EventStreamInitialResponseCompatibilityTest {
     @Test
     fun `restJson1 initial response matches generated legacy servers`() = compare("restJson1", "application/json", "{}")

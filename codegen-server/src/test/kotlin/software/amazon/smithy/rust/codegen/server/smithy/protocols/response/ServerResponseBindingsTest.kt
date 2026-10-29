@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.response
 
 import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -36,6 +37,7 @@ import java.nio.file.Path
  * The same model also verifies that generated legacy serde ignores the schema-only binding option.
  * The CBOR comparison is disabled pending a fix for legacy error header serialization.
  */
+@Tag("server-compatibility")
 internal class ServerResponseBindingsTest {
     @ParameterizedTest
     @ValueSource(strings = ["awsJson1_0", "awsJson1_1"])

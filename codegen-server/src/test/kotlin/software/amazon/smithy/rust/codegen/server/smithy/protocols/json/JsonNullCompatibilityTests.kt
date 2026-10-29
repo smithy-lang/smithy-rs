@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.json
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -34,6 +35,7 @@ import java.nio.file.Path
  * test pins legacy overwrite/null semantics and rejection behavior. It compares complete
  * response captures from independently generated legacy and schema services.
  */
+@Tag("server-compatibility")
 internal class DuplicateJsonNullCompatibilityTest {
     @Test
     fun `duplicate JSON null values match legacy member assignment`() {
@@ -170,6 +172,7 @@ internal class DuplicateJsonNullCompatibilityTest {
  * Rust assertions distinguish present null from an omitted optional member. The same cases run
  * with legacy and schema serde and must retain their successful responses and input values.
  */
+@Tag("server-compatibility")
 internal class JsonDocumentNullInputCompatibilityTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "awsJson1_0", "awsJson1_1"])
@@ -269,6 +272,7 @@ internal class JsonDocumentNullInputCompatibilityTest {
  * responses. This catches changes in required-member assignment when nulls or duplicate members
  * are encountered during request deserialization.
  */
+@Tag("server-compatibility")
 internal class RequiredMemberNullCompatibilityTest {
     // Generated serde REST JSON writes fieldList before message; schema writes them in model order.
     // Preserve the raw captures, but compare validation errors as JSON objects.

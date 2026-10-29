@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.routing
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -32,6 +33,7 @@ import java.nio.file.Files
  * and body and requires identical observations for each protocol. The test isolates routing
  * rejections from multi-protocol priority and request-claiming behavior.
  */
+@Tag("server-compatibility")
 internal class SingleProtocolRoutingCompatibilityTest {
     @Test
     fun `single protocol routing rejection responses match legacy`() {
@@ -138,6 +140,7 @@ internal class SingleProtocolRoutingCompatibilityTest {
  * The test records this multi-protocol routing difference explicitly rather than treating it
  * as a serde compatibility result.
  */
+@Tag("server-compatibility")
 internal class BlobPayloadRoutingCompatibilityTest {
     @Test
     fun `blob content types preserve single protocol behavior and determine multi protocol routing`() {
@@ -234,6 +237,7 @@ internal class BlobPayloadRoutingCompatibilityTest {
  * match legacy. The legacy response also survives discarded extensions; the schema response
  * instead must be the explicitly pinned empty 500 fallback, with neither path panicking.
  */
+@Tag("server-compatibility")
 internal class MissingHandlerContextCompatibilityTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "awsJson1_0", "awsJson1_1", "rpcv2Cbor"])

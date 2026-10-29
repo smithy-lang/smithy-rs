@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -27,6 +28,7 @@ import java.nio.file.Files
  * and mixed nested values. The test pins legacy responses, checks echoed values, and compares
  * status, headers, and body captures between legacy and schema serde.
  */
+@Tag("server-compatibility")
 internal class NestedCollectionCompatibilityTest {
     @Test
     fun `nested XML collections preserve legacy member schemas`() {

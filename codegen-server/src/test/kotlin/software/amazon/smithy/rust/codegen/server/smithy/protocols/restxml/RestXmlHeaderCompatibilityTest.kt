@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.restxml
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -26,6 +27,7 @@ import java.nio.file.Files
  * then requires the schema server to produce the same captures. These cases document the
  * observed behavior behind the upstream header tests marked as expected failures.
  */
+@Tag("server-compatibility")
 internal class RestXmlHeaderCompatibilityTest {
     @Test
     fun `empty headers and bound prefix collisions match legacy`() {

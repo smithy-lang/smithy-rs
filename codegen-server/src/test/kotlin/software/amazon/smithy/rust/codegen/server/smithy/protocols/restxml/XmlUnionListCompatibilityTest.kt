@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.restxml
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -26,6 +27,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * with the union variant nested inside it. This catches schema serialization that incorrectly
  * uses a union or shape name for the surrounding list-item tag.
  */
+@Tag("server-compatibility")
 internal class XmlUnionListCompatibilityTest {
     @Test
     fun `legacy union list items use list member names`() = checkTags(schemaSerde = false)

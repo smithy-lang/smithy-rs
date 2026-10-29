@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -30,6 +31,7 @@ import java.nio.file.Path
  * accepted controls do. It pins legacy error statuses, error-type headers, and bodies and requires
  * complete response captures to match when schema serde is enabled.
  */
+@Tag("server-compatibility")
 internal class MalformedHeadersCompatibilityTest {
     @Test
     fun `REST JSON malformed headers match legacy wire responses`() = compare("restJson1")
@@ -170,6 +172,7 @@ internal class MalformedHeadersCompatibilityTest {
  * values so the test can pin legacy trimming and validation rules. Status, headers, and response
  * bodies must agree between the two generated implementations.
  */
+@Tag("server-compatibility")
 internal class PrefixHeaderWhitespaceCompatibilityTest {
     @Test
     fun `prefix header strings preserve legacy whitespace and validation semantics`() {

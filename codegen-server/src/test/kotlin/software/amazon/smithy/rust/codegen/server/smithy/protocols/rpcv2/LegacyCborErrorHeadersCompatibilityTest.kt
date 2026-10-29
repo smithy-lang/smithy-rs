@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.rpcv2
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * Schema rpcv2Cbor ignores HTTP error bindings, including the modeled error status
  * and encoded member values. Generated serde retains mainline's serializer.
  */
+@Tag("server-compatibility")
 internal class LegacyCborErrorHeadersCompatibilityTest {
     private val model =
         """

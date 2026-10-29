@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.restjson
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -26,6 +27,7 @@ import java.nio.file.Path
  * value while an absent body remains absent. Structured and union payloads must retain the
  * legacy rejection of null. Complete recorded responses must agree between the two serde modes.
  */
+@Tag("server-compatibility")
 internal class DocumentNullCompatibilityTest {
     @Test
     fun `REST JSON document payload null remains present like legacy`() {

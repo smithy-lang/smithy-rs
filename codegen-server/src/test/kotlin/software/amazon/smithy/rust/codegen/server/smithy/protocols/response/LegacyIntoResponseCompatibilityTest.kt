@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.response
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * HTTP status, content type, error-type header, and JSON body so legacy callers can continue
  * creating protocol-specific responses outside a service request.
  */
+@Tag("server-compatibility")
 internal class LegacyIntoResponseCompatibilityTest {
     @Test
     fun `legacy modeled errors retain protocol-specific IntoResponse without routing context`() {

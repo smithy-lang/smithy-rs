@@ -40,3 +40,24 @@ services, supply `--service namespace#ServiceName`.
 The script prints the output directory containing generated SDKs and generation
 logs. Exit code `0` means parity passed; `1` indicates differences or a generation
 failure. Use `--help` for the options to compare existing generated SDKs.
+
+## Manual server compatibility suites
+
+The broad compatibility SDK matrix is excluded from default generation and CI.
+Run all Kotlin, generated-protocol, and Rust integration comparisons with:
+
+```sh
+./gradlew serverCompatibilityTest
+```
+
+Use `:codegen-server:compatibilityTest` for only Kotlin comparisons,
+`:codegen-server-test:compatibilityProtocolTest` for the standalone generated
+protocol fixtures, or `:codegen-server-test:protocolCompatibilityTest` for the
+Rust `integration-tests/protocol-compat` crate. Each Rust task enables its optional
+SDK projections automatically. `generateServerCompatibilitySdk` generates the
+optional server/client fixtures without running tests. Existing `-Pmodules=...`
+selections continue to generate the requested compatibility SDKs.
+
+The Rust compatibility crate remains in its existing directory with an independent
+Cargo workspace and lockfile. The default integration workspace contains only the
+event-stream and request-limit suites.

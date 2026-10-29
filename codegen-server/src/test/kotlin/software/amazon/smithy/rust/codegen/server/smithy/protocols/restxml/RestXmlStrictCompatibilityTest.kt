@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.restxml
 
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -27,6 +28,7 @@ import java.nio.file.Files
  * checks content lengths, and compares complete HTTP and generated-output captures between
  * legacy and schema services without excluding known payload cases.
  */
+@Tag("server-compatibility")
 internal class RestXmlStrictCompatibilityTest {
     @Test
     fun `generated REST XML servers agree for populated and absent response features`() {

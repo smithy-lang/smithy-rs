@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.rest
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -44,6 +45,7 @@ private fun restWireModel(name: String): Model =
  * including incorrectly typed copies, must not overwrite the actual transport bindings.
  * It checks handler-derived values and compares exact status, all headers, and response bytes.
  */
+@Tag("server-compatibility")
 internal class RestBodyBindingFilteringTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml"])
@@ -136,6 +138,7 @@ internal class RestBodyBindingFilteringTest {
  * Ordinary cases come from Smithy protocol-test traits; sparse timestamp null cases remain here
  * because the Smithy protocol-test validator rejects null timestamp parameters.
  */
+@Tag("server-compatibility")
 internal class CollectionTimestampFormatCompatibilityTest {
     @Test
     fun `JSON collection timestamps preserve legacy formats`() = checkFormats("restJson1")
@@ -251,6 +254,7 @@ internal class CollectionTimestampFormatCompatibilityTest {
  * exact payload bytes, text content type, and content length. Repeated and invalid media-typed
  * headers must be rejected before the handler runs; repeated-header coverage stays in Rust here.
  */
+@Tag("server-compatibility")
 internal class PrefixHeaderCompatibilityTest {
     @Test
     fun `legacy prefix headers trim surrounding whitespace`() = checkHeaders(schemaSerde = false)

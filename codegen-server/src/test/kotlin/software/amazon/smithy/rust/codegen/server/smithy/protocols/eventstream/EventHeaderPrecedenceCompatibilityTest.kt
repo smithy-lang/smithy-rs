@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
+@Tag("server-compatibility")
 class EventHeaderPrecedenceCompatibilityTest {
     @Test
     fun `implicit payload overwrites headers and validates body copies in both modes`() {

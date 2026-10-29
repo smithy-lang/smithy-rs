@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.streaming
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -31,6 +32,7 @@ import java.nio.file.Path
  * and expected response bytes. This protects the legacy streaming code path after adopting the
  * HTTP 1.x body types.
  */
+@Tag("server-compatibility")
 internal class StreamingBlobHttp1GenerationTest {
     @Test
     fun `generate streaming blob servers with HTTP 1 and generated serde`() {
@@ -117,6 +119,7 @@ internal class StreamingBlobHttp1GenerationTest {
  * headers between serde modes. This catches invalid expression wrapping in generated Rust as
  * well as changes to the streaming response's HTTP framing.
  */
+@Tag("server-compatibility")
 internal class StreamingOutputWarningsCompatibilityTest {
     @Test
     fun `streaming blob outputs compile with warnings denied and preserve legacy responses`() {

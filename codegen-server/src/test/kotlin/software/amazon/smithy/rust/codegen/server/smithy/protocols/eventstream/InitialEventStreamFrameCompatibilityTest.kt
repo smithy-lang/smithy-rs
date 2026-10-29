@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -30,6 +31,7 @@ import java.nio.file.Files
  * comparing the semantic captures. The service remains single-protocol so the test isolates
  * initial-frame validation rather than multi-protocol request claiming.
  */
+@Tag("server-compatibility")
 internal class InitialEventStreamFrameCompatibilityTest {
     @Test
     fun `malformed initial frames match legacy validation rejections`() {

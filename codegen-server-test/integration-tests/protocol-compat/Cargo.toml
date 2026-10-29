@@ -58,3 +58,7 @@ multi-protocol-client-restxml = { path = "../../../codegen-client-test/build/smi
 tower = { version = "0.5", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+
+# Manual compatibility coverage resolves independently of the CI integration workspace.
+[workspace]
+resolver = "3"

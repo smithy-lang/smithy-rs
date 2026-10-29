@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["eventstreams-legacy", "eventstreams", "protocol-compat", "request-limits"]
-exclude = ["review-findings-mainline"]
+members = ["eventstreams-legacy", "eventstreams", "request-limits"]
+exclude = ["protocol-compat", "review-findings-mainline"]
 
 [workspace.dependencies]
 request-limits-server-sdk = { path = "../build/smithyprojections/codegen-server-test/request-limits-server-sdk/rust-server-codegen" }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.awsjson
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -30,6 +31,7 @@ import java.nio.file.Path
  * binding traits on RPC shapes. It checks that the intended handlers run, validates content
  * lengths, and compares statuses, all response headers, and body bytes for every scenario.
  */
+@Tag("server-compatibility")
 internal class AwsJson10StrictCompatibilityTest {
     @Test
     fun `populated outputs and errors preserve the legacy HTTP contract`() {
@@ -222,6 +224,7 @@ internal class AwsJson10StrictCompatibilityTest {
  * bindings on RPC operations. It pins observed legacy statuses, checks response content lengths,
  * and requires identical recorded HTTP responses when schema serde is enabled.
  */
+@Tag("server-compatibility")
 internal class AwsJson11StrictCompatibilityTest {
     @Test
     fun `generated AWS JSON 11 servers agree for populated payloads and HTTP binding traits`() {

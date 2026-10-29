@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -29,6 +30,7 @@ import java.nio.file.Files
  * schema descriptors and sends HTTP requests through both serde modes. The response comparison
  * ensures that valid empty documents survive code emission and serialization unchanged.
  */
+@Tag("server-compatibility")
 internal class EmptyTraitDocumentCompatibilityTest {
     @Test
     fun `empty trait objects compile with warnings denied and retain their values`() {

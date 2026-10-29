@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -19,6 +20,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersio
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /** Schema routing follows protocol names; generated serde preserves historical routing. */
+@Tag("server-compatibility")
 class SchemaRoutingCompatibilityTest {
     @Test
     fun `REST query literals retain modeled plus and percent characters`() {

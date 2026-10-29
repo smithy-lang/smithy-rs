@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.json
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -26,6 +27,7 @@ import java.nio.file.Files
  * then compares complete HTTP response captures. This protects observed parser compatibility
  * even where the accepted token differs from ordinary JSON number syntax.
  */
+@Tag("server-compatibility")
 internal class JsonEmptyIntegerCompatibilityTest {
     @Test
     fun `negative fractions with no integer part preserve legacy JSON behavior`() {

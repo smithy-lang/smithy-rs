@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.eventstream
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -29,6 +30,7 @@ import java.nio.file.Files
  * records response status, headers, body, and event frames. Schema results must match the legacy
  * captures so stream failures are propagated after successful events with the expected framing.
  */
+@Tag("server-compatibility")
 internal class EventStreamFailureCompatibilityTest {
     @Test
     fun `REST JSON streaming failures match legacy`() = compare("restJson1")

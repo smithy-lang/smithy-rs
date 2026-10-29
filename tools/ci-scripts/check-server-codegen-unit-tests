@@ -6,4 +6,4 @@
 
 set -eux
 cd smithy-rs
-./gradlew codegen-server:test
+./gradlew codegen-server:test -PexcludeServerCompatibilityTests=true

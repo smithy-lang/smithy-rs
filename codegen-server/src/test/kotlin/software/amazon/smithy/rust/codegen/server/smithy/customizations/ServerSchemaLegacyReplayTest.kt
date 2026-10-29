@@ -5,6 +5,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import io.kotest.matchers.shouldBe
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -28,6 +29,7 @@ import java.nio.file.Files
  * It records each complete HTTP response and requires the schema responses to match the legacy
  * snapshots, protecting default behavior when schemaSerde is enabled.
  */
+@Tag("server-compatibility")
 internal class ServerSchemaLegacyReplayTest {
     @ParameterizedTest
     @ValueSource(strings = ["restJson1", "restXml", "awsJson1_0", "awsJson1_1"])

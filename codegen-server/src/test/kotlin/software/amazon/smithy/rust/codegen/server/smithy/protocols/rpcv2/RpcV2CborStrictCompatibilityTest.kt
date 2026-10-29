@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.rpcv2
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -29,6 +30,7 @@ import java.nio.file.Files
  * serde modes, and an optional historical capture can provide an additional baseline.
  * This comparison is disabled pending a fix for legacy error header serialization.
  */
+@Tag("server-compatibility")
 internal class RpcV2CborStrictCompatibilityTest {
     // TODO(Fix with legacy): In CBOR, @httpHeader on a modeled error field makes generated serde uncompilable.
     @Disabled("Legacy CBOR error header bindings generate uncompilable Rust; reproduced on mainline at 0075e635d")
