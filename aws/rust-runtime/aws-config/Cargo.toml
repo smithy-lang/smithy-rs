@@ -37,6 +37,7 @@ credentials-login = [
     "dep:p256",
     "p256?/arithmetic",
     "p256?/pem",
+    "dep:rand",
 ]
 test-util = ["aws-runtime/test-util"]
 
@@ -80,6 +81,7 @@ sha2 = { version = "0.10.9", optional = true }
 aws-sdk-signin = { path = "../../sdk/build/aws-sdk/sdk/signin", default-features = false, optional = true }
 base64-simd = { version = "0.8.0", optional = true }
 uuid = { version = "1.18.1", optional = true }
+rand = { version = "0.10.3", default-features = false, features = ["std", "std_rng", "sys_rng"], optional = true }
 
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }

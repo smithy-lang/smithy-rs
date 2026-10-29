@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::Number;
-use p256::ecdsa::signature::Signer;
+use p256::ecdsa::signature::RandomizedSigner;
 use p256::ecdsa::{Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToSec1Point;
 use p256::SecretKey;
@@ -102,7 +102,8 @@ fn build_message(header: &Header, payload: &Payload) -> String {
 
 fn sign(message: &str, private_key: &SecretKey) -> Result<String, LoginTokenError> {
     let signing_key = SigningKey::from(private_key);
-    let signature: Signature = signing_key.sign(message.as_bytes());
+    let mut rng: rand::rngs::StdRng = rand::make_rng();
+    let signature: Signature = signing_key.sign_with_rng(&mut rng, message.as_bytes());
     let signature_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(signature.to_bytes());
     Ok(format!("{message}.{signature_b64}"))
 }
