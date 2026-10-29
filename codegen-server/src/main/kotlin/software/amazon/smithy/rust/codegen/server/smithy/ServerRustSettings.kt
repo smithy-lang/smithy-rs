@@ -8,8 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.NullNode
+import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -21,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
 import kotlin.time.Duration
@@ -70,21 +75,88 @@ data class ServerRustSettings(
         minimumSupportedRustVersion,
         customizationConfig,
     ) {
-    private val parsedProtocolSettings by lazy { ProtocolReadSettings.protocolSettings(customizationConfig) }
+    private val parsedProtocolSettings by lazy { parseProtocolSettings() }
+    internal val protocolResponseSettings =
+        ServerProtocolResponseSettings.from(
+            if (codegenConfig.schemaSerde) {
+                protocolSettings()
+            } else {
+                emptyMap()
+            },
+        )
+
+    /** Normalized protocol sections, including common request settings in either serde mode. */
+    fun protocolSettings(): Map<String, ObjectNode> = parsedProtocolSettings
+
+    private fun parseProtocolSettings(): Map<String, ObjectNode> {
+        val sections = ProtocolReadSettings.protocolSettings(customizationConfig)
+        if (!codegenConfig.rpcV2CborAddCapitalizedRoute) {
+            return sections
+        }
+        val cborSection = sections[RPC_V2_CBOR_PROTOCOL_ID]
+        if (cborSection?.containsMember(CAPITALIZE_ROUTES_KEY) == true) {
+            Logger.getLogger("ServerRustSettings").warning(
+                "Both `codegen.${ServerCodegenConfig.RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY}` and " +
+                    "`$CUSTOMIZATION_CONFIG_KEY.$PROTOCOLS_CUSTOMIZATION_KEY.$RPC_V2_CBOR_PROTOCOL_ID.$CAPITALIZE_ROUTES_KEY` " +
+                    "are set; using the `$CUSTOMIZATION_CONFIG_KEY` value.",
+            )
+            return sections
+        }
+        val folded =
+            (cborSection ?: ObjectNode.objectNode())
+                .withMember(CAPITALIZE_ROUTES_KEY, true)
+        return sections + (RPC_V2_CBOR_PROTOCOL_ID to folded)
+    }
+
+    /** Common body limit; null inherits the runtime default and zero disables the limit. */
+    fun requestBodyMaxBytes(): Long? = ProtocolReadSettings.requestBodyMaxBytes(protocolSettings())
+
+    /** Schema request body frame budget; zero disables forced yielding. */
+    fun requestBodyReadPollBudget(): Int? {
+        val configured = ProtocolReadSettings.requestBodyReadPollBudget(protocolSettings())
+        return if (configured == null) {
+            DEFAULT_REQUEST_BODY_READ_POLL_BUDGET
+        } else {
+            configured.takeIf { it > 0 }
+        }
+    }
+
+    /**
+     * The effective RPCv2 CBOR capitalized-route-alias value, honored by both the generated serde router
+     * codegen and, through [protocolSettings], the schema routing path.
+     */
+    fun rpcV2CborCapitalizeRoutes(): Boolean =
+        protocolSettings()[RPC_V2_CBOR_PROTOCOL_ID]
+            ?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false) ?: false
+
+    /** Schema AWS JSON keeps modeled routing names and optionally adds capitalized aliases. */
+    fun awsJsonCapitalizeRoutes(protocolId: String): Boolean =
+        protocolSettings()[protocolId]?.getBooleanMemberOrDefault(CAPITALIZE_ROUTES_KEY, false) ?: false
+
     val headerReadTimeout: Duration? by lazy { ProtocolReadSettings.headerReadTimeout(protocolSettings()) }
     val requestBodyReadPollBudget: Int? by lazy { ProtocolReadSettings.requestBodyReadPollBudget(protocolSettings()) }
     val eventStreamTimeouts by lazy {
         EventStreamTimeouts.fromProtocolSettings(protocolSettings(), requestBodyReadTimeouts)
     }
 
-    /** Normalized protocol sections, shared by every generated configuration reader. */
-    fun protocolSettings(): Map<String, ObjectNode> = parsedProtocolSettings
-
-    fun requestBodyMaxBytes(): Long? = ProtocolReadSettings.requestBodyMaxBytes(protocolSettings())
-
-    fun requestBodyReadPollBudget(): Int? = requestBodyReadPollBudget
-
     companion object {
+        /** Key under `customizationConfig` holding the per-protocol settings sections. */
+        const val PROTOCOLS_CUSTOMIZATION_KEY = "protocols"
+
+        /** The `customizationConfig` key in smithy-build.json, for diagnostics. */
+        const val CUSTOMIZATION_CONFIG_KEY = "customizationConfig"
+
+        const val RPC_V2_CBOR_PROTOCOL_ID = "smithy.protocols#rpcv2Cbor"
+        const val CAPITALIZE_ROUTES_KEY = "capitalizeRoutes"
+
+        /** Key under `customizationConfig.protocols` for the section every protocol shares. */
+        const val COMMON_PROTOCOL_SETTINGS_KEY = "common"
+
+        /** Deprecated codegen key folded into the nested common request body settings. */
+        const val REQUEST_BODY_MAX_BYTES_KEY = "requestBodyMaxBytes"
+
+        const val DEFAULT_REQUEST_BODY_READ_POLL_BUDGET = 32
+
         fun from(
             model: Model,
             config: ObjectNode,
@@ -99,7 +171,12 @@ data class ServerRustSettings(
             // Use the http1x field from ServerCodegenConfig to set RuntimeConfig httpVersion
             // This must be done because RuntimeConfig is created in CoreRustSettings.from()
             // before we have access to the http-1x flag
-            val httpVersion = if (serverCodegenConfig.http1x) HttpVersion.Http1x else HttpVersion.Http0x
+            val httpVersion =
+                if (serverCodegenConfig.http1x) {
+                    HttpVersion.Http1x
+                } else {
+                    HttpVersion.Http0x
+                }
             val runtimeConfig = coreRustSettings.runtimeConfig.copy(httpVersion = httpVersion)
 
             val customizationConfig =
@@ -107,7 +184,7 @@ data class ServerRustSettings(
                     coreRustSettings.customizationConfig,
                     codegenSettingsNode.orElse(null),
                 )
-            val protocolSettings = ProtocolReadSettings.protocolSettings(customizationConfig)
+            val protocolSettings = ProtocolReadSettings.protocolSettings(customizationConfig, validateRequest = false)
 
             return ServerRustSettings(
                 service = coreRustSettings.service,
@@ -152,7 +229,11 @@ data class RequestBodyReadTimeouts(
             null
         } else {
             perOperation[operationId]
-                ?: if (operationId in payloadOperationIds) defaultPayloadTimeout else defaultNonPayloadTimeout
+                ?: if (operationId in payloadOperationIds) {
+                    defaultPayloadTimeout
+                } else {
+                    defaultNonPayloadTimeout
+                }
         }
 
     companion object {
@@ -352,12 +433,15 @@ data class RequestBodyReadTimeouts(
  *   `codegen.requestBodyMaxBytes` key emits a warning and is read when the nested key is absent.
  * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
  *   only the spec-compliant verbatim route derived from the Smithy operation shape name
- *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
- *   capitalized is also registered (e.g., `Example.GetFoo`) for operations whose Rust symbol
+ *   (e.g., `Example/operation/getFoo`). When true, an additional legacy alias with the first character
+ *   capitalized is also registered (e.g., `Example/operation/GetFoo`) for operations whose Rust symbol
  *   name differs from the verbatim Smithy operation name. Set this to `true` to preserve
  *   compatibility with clients that were previously reaching the server via the capitalized URI
  *   (which was the only route the server registered before the fix for
  *   https://github.com/smithy-lang/smithy-rs/issues/4731).
+ * [schemaSerde]: When true, every generated structure and union exposes its schema through a `SCHEMA`
+ *   constant, and the crate gains `schema::operations` and `schema::service` descriptors. Enables HTTP 1.x
+ *   when `http-1x` is omitted; explicitly disabling HTTP 1.x is invalid. Off by default.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -380,7 +464,6 @@ data class ServerCodegenConfig(
     val addValidationExceptionToConstrainedOperations: Boolean? = null,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
-    val requestBodyMaxBytes: Long? = null,
     /**
      * When true, a union JSON body whose object did not set any recognized variant
      * (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a
@@ -388,7 +471,10 @@ data class ServerCodegenConfig(
      * clients depending on the lenient behavior.
      */
     val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
+    /** Deprecated fallback for `customizationConfig.protocols.common.request.body.maxBytes`. */
+    val requestBodyMaxBytes: Long? = null,
     val rpcV2CborAddCapitalizedRoute: Boolean = DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
+    val schemaSerde: Boolean = DEFAULT_SCHEMA_SERDE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -409,6 +495,9 @@ data class ServerCodegenConfig(
          */
         const val DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE = false
 
+        /** Default value for `schemaSerde`: schema descriptors are not generated. */
+        const val DEFAULT_SCHEMA_SERDE = false
+
         /**
          * Configuration key for the HTTP 1.x flag.
          *
@@ -426,26 +515,53 @@ data class ServerCodegenConfig(
          */
         const val HTTP_1X_CONFIG_KEY = "http-1x"
 
-        /** Configuration key for the per-request body size limit. */
-        const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
-
         /** Configuration key for the RPCv2 CBOR opt-in flag that adds a legacy capitalized route alias. */
         const val RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY = "rpcV2CborAddCapitalizedRoute"
 
-        private val KNOWN_CONFIG_KEYS =
-            setOf(
-                "formatTimeoutSeconds",
-                "debugMode",
-                "publicConstrainedTypes",
-                "ignoreUnsupportedConstraints",
-                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
-                "addValidationExceptionToConstrainedOperations",
-                "alwaysSendEventStreamInitialResponse",
-                "allowMissingUnionVariant",
-                HTTP_1X_CONFIG_KEY,
-                REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
+        /** Configuration key for generating schema descriptors for the service, its operations and its shapes. */
+        const val SCHEMA_SERDE_CONFIG_KEY = "schemaSerde"
+
+        private data class ConfigDefault<T>(val value: T) {
+            fun matches(node: Node): Boolean =
+                when (val default = value) {
+                    null -> node is NullNode
+                    is Boolean -> node is BooleanNode && node.value == default
+                    is String -> node is StringNode && node.value == default
+                    is Number ->
+                        node is NumberNode &&
+                            node.value.toString().toBigDecimal().compareTo(default.toString().toBigDecimal()) == 0
+                    else -> throw IllegalArgumentException("Unsupported codegen default type: ${default.javaClass.name}")
+                }
+        }
+
+        // Accepted configuration keys and constructor defaults. Cargo metadata selects a separate subset.
+        private val KNOWN_CONFIG_KEYS: Map<String, ConfigDefault<*>> =
+            mapOf(
+                "formatTimeoutSeconds" to ConfigDefault(DEFAULT_FORMAT_TIMEOUT_SECONDS),
+                "debugMode" to ConfigDefault(DEFAULT_DEBUG_MODE),
+                "publicConstrainedTypes" to ConfigDefault(DEFAULT_PUBLIC_CONSTRAINED_TYPES),
+                "ignoreUnsupportedConstraints" to ConfigDefault(DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
+                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse" to ConfigDefault<String?>(defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
+                "addValidationExceptionToConstrainedOperations" to ConfigDefault<Boolean?>(null),
+                "alwaysSendEventStreamInitialResponse" to ConfigDefault(DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE),
+                "allowMissingUnionVariant" to ConfigDefault(DEFAULT_ALLOW_MISSING_UNION_VARIANT),
+                "requestBodyMaxBytes" to ConfigDefault<Long?>(null),
+                HTTP_1X_CONFIG_KEY to ConfigDefault(DEFAULT_HTTP_1X),
+                RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY to ConfigDefault(DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE),
+                SCHEMA_SERDE_CONFIG_KEY to ConfigDefault(DEFAULT_SCHEMA_SERDE),
             )
+
+        /** Known supplied settings that differ from their defaults, retaining their original node types. */
+        internal fun nonDefaultSettings(config: ObjectNode): ObjectNode {
+            val builder = ObjectNode.builder()
+            config.members.forEach { (key, value) ->
+                val default = KNOWN_CONFIG_KEYS[key.value] ?: return@forEach
+                if (!default.matches(value)) {
+                    builder.withMember(key.value, value)
+                }
+            }
+            return builder.build()
+        }
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -453,12 +569,23 @@ data class ServerCodegenConfig(
         ) = if (node.isPresent) {
             // Validate that all config keys are known
             val configNode = node.get()
-            val unknownKeys = configNode.members.keys.map { it.toString() }.filter { it !in KNOWN_CONFIG_KEYS }
+            // The legacy body limit is folded into customizationConfig when server settings are loaded.
+            val unknownKeys =
+                configNode.members.keys.map { it.value }
+                    .filter { it !in KNOWN_CONFIG_KEYS && it != ServerRustSettings.REQUEST_BODY_MAX_BYTES_KEY }
             if (unknownKeys.isNotEmpty()) {
                 Logger.getLogger("ServerCodegenConfig").warning(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
-                        "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. ",
+                        "Known keys are: ${KNOWN_CONFIG_KEYS.keys.joinToString(", ")}. ",
                 )
+            }
+
+            val schemaSerde = configNode.getBooleanMemberOrDefault(SCHEMA_SERDE_CONFIG_KEY, DEFAULT_SCHEMA_SERDE)
+            val configuredHttp1x = configNode.getBooleanMember(HTTP_1X_CONFIG_KEY).orNull()?.value
+            require(!schemaSerde || configuredHttp1x != false) {
+                "`codegen.$SCHEMA_SERDE_CONFIG_KEY` requires HTTP 1.x; " +
+                    "`codegen.$HTTP_1X_CONFIG_KEY` cannot be false when `codegen.$SCHEMA_SERDE_CONFIG_KEY` is true. " +
+                    "Set `codegen.$HTTP_1X_CONFIG_KEY` to true or omit it."
             }
 
             ServerCodegenConfig(
@@ -492,22 +619,19 @@ data class ServerCodegenConfig(
                         "allowMissingUnionVariant",
                         DEFAULT_ALLOW_MISSING_UNION_VARIANT,
                     ),
-                http1x =
-                    node.get().getBooleanMemberOrDefault(
-                        HTTP_1X_CONFIG_KEY,
-                        DEFAULT_HTTP_1X,
-                    ),
+                http1x = configuredHttp1x ?: (schemaSerde || DEFAULT_HTTP_1X),
                 requestBodyMaxBytes =
-                    node.get().getNumberMember(REQUEST_BODY_MAX_BYTES_CONFIG_KEY)
+                    node.get().getNumberMember(ServerRustSettings.REQUEST_BODY_MAX_BYTES_KEY)
                         .map { it.value.toLong() }.orElse(null),
                 rpcV2CborAddCapitalizedRoute =
                     node.get().getBooleanMemberOrDefault(
                         RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
                         DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
                     ),
+                schemaSerde = schemaSerde,
             ).also {
                 require(it.requestBodyMaxBytes == null || it.requestBodyMaxBytes >= 0) {
-                    "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
+                    "`${ServerRustSettings.REQUEST_BODY_MAX_BYTES_KEY}` must be non-negative, got ${it.requestBodyMaxBytes}"
                 }
             }
         } else {

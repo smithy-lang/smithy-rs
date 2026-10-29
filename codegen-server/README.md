@@ -4,19 +4,44 @@ Server-side Smithy code generator
 
 [Design documentation](https://smithy-lang.github.io/smithy-rs/design/server/overview.html)
 
-## Request-read configuration
+## Serde terminology
 
-Set request-read settings in the `rust-server-codegen` plugin configuration in
-`smithy-build-template.json`, under `customizationConfig.protocols.common.request`.
-Only the `common` section is supported in this version. Per-protocol sections
-such as `customizationConfig.protocols.aws.protocols#restJson1` fail generation.
-For example:
+* **Generated serde** (`codegen.schemaSerde: false`): codegen emits protocol serializers and deserializers.
+* **Schema serde** (`codegen.schemaSerde: true`): the runtime reads shape schemas to serialize and deserialize.
+
+HTTP version selection is separate from the serde mode. HTTP 0.x uses
+`aws-smithy-legacy-http-server`; HTTP 1.x uses `aws-smithy-http-server` and supports both
+serde modes. Reserve "legacy runtime" for the HTTP 0.x crate.
+
+Generated serde servers retain Tower 0.4; schema serde servers use Tower 0.5.
+HTTP 1.x servers can use `aws-smithy-http-server-metrics` with either serde mode.
+
+## Generated SDK metadata
+
+Schema serde SDKs record the generator commit and release and the served protocol IDs
+in `Cargo.toml`. Configuration metadata uses explicit allowlists in
+`ServerCargoMetadata.kt`: only non-default SDK API and protocol compatibility choices
+are included. Protocol settings are recorded only for served protocols, and the
+deprecated CBOR route flag is normalized to `capitalizeRoutes` with configuration
+precedence applied.
+
+Timeouts, body-size limits, polling budgets, formatting and debug settings, and
+arbitrary customization values are excluded. These settings remain supported;
+operational settings are available in the generated configuration and can be
+overridden at runtime.
+
+## Shared runtime configuration
+
+Schema service builders emit typed request-body settings through
+`aws_smithy_http_server::config::{ServiceConfig, ServiceRequestBodyConfig,
+RequestBodyCollectionConfig}`. Routing and serialization remain under `schema`;
+configuration is exposed only through `config`.
+
+Both serde modes read shared request settings from
+`customizationConfig.protocols.common.request`:
 
 ```json
 {
-  "codegen": {
-    "http-1x": true
-  },
   "customizationConfig": {
     "protocols": {
       "common": {
@@ -138,3 +163,47 @@ the runtime's own defaults.
 * `codegen-server-test`: Server-side Smithy test and validation generation.
   Common commands:
   * `./gradlew :codegen-server-test:test` Generate code and run tests against it
+
+## AWS JSON response bindings
+
+AWS JSON 1.0 and 1.1 servers have always answered with the operation's `@http(code)`
+success status, the modeled error's `@httpError` status (if present), and
+`@httpHeader`/`@httpPrefixHeaders` members as response headers (each member also stays
+in the document). `@httpResponseCode` members remain body data. This is the default,
+with or without `codegen.schemaSerde`.
+
+With `codegen.schemaSerde: true` you can instead follow the AWS JSON specification,
+independently for each protocol in the `rust-server-codegen` plugin settings:
+
+```json
+{
+  "codegen": { "schemaSerde": true },
+  "customizationConfig": {
+    "protocols": {
+      "aws.protocols#awsJson1_0": { "responseBindings": "smithy-specs" },
+      "aws.protocols#awsJson1_1": { "responseBindings": "historical" }
+    }
+  }
+}
+```
+
+* `"historical"` (default): as described above.
+* `"smithy-specs"`: status 200 for success, the `@error` class status (400/500) for errors, and
+  every member in the document with no REST headers.
+
+Servers generated without `schemaSerde` always behave as `"historical"` for response bindings.
+REST JSON/XML apply REST response bindings and RPC v2 CBOR
+ignores them, whatever this setting says. In both serde modes, protocol settings must use full protocol shape IDs,
+including custom protocols (for example, `example.protocols#customRpc`). The shared `common` section is
+the only exception. Shorthand keys such as `awsJson1_0` or `restJson1` are rejected during settings
+loading. Header read timeouts must be configured under
+`customizationConfig.protocols.common.request.header.readTimeout`; setting them in a
+protocol-specific section is rejected because the deadline starts before the request
+protocol is identified. Unknown common request-setting keys emit a warning.
+
+Schema-serde AWS JSON routing uses the modeled operation name: `getFoo` routes with
+`X-Amz-Target: Example.getFoo`. Set `"capitalizeRoutes": true` in the
+`aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` protocol section to also
+accept `Example.GetFoo`. Both spellings coexist when enabled; the default is
+`false`. Generated serde retains its historical generated operation name
+(`Example.GetFoo`).

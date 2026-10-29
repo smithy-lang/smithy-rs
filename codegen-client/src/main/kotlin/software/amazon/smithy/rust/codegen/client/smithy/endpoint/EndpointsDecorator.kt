@@ -113,34 +113,21 @@ interface EndpointCustomization {
     /**
      * Allows injecting validation logic for endpoint parameters into the `ParamsBuilder::build` method.
      *
-     * e.g. when generating the builder for the endpoint parameters this allows you to insert validation logic before
-     * being finalizing the parameters.
+     * Called once for each rule-set parameter; return `null` for a parameter that needs no validation. Requests build
+     * their endpoint parameters with `build()`, so the validation runs on every request. Generated endpoint rule-set
+     * tests call `build_without_validators()` instead, so they check the rules alone. The validation must borrow the
+     * builder's fields (`&self.field`), because `build()` then moves the builder into `build_without_validators()`.
      *
      * ```rs
      * impl ParamsBuilder {
      *     pub fn build(self) -> ::std::result::Result<crate::config::endpoint::Params, crate::config::endpoint::InvalidParams> {
      *         <validation logic>
-     *         ...
+     *         self.build_without_validators()
      *     }
      * }
-     *
-     * Example:
-     * ```kotlin
-     *
-     *  override fun endpointParamsBuilderValidator(codegenContext: ClientCodegenContext, parameter: Parameter): Writable? {
-     *  rustTemplate("""
-     *      if let Some(region) = self.${parameter.memberName()} {
-     *          if #{is_valid_host_label}(region.as_ref() as &str, false, #{DiagnosticCollector}::new()) {
-     *              return Err(#{ParamsError}::invalid_value(${parameter.memberName().dq()}, "must be a valid host label"))
-     *          }
-     *      }
-     *      """,
-     *          "is_valid_host_label" to EndpointsLib.isValidHostLabel,
-     *          "ParamsError" to EndpointParamsGenerator.paramsError(),
-     *          "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-     *       )
-     *   }
      * ```
+     *
+     * For an example, see `RegionDecorator` in `aws/codegen-aws-sdk`, which checks that the Region is a valid host label.
      */
     fun endpointParamsBuilderValidator(
         codegenContext: ClientCodegenContext,

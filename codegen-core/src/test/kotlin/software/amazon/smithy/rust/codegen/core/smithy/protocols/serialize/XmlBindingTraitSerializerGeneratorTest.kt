@@ -92,6 +92,23 @@ internal class XmlBindingTraitSerializerGeneratorTest {
 
             @xmlFlattened
             recursive: TopList
+
+            sparse: SparseStrings,
+
+            @xmlFlattened
+            flatSparse: SparseStrings,
+
+            sparseFlags: SparseFlags,
+        }
+
+        @sparse
+        list SparseStrings {
+            member: String
+        }
+
+        @sparse
+        list SparseFlags {
+            member: Boolean
         }
 
         list TopList {
@@ -165,6 +182,22 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                 let serialized = ${format(operationSerializer)}(&input.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
+                """,
+            )
+            unitTest(
+                "sparse_lists_skip_nulls_and_preserve_values",
+                """
+                use test_model::Top;
+                let input = crate::test_input::OpInput::builder().payload(
+                    Top::builder()
+                        .set_sparse(Some(vec![Some("first".into()), None, Some("last".into())]))
+                        .set_flat_sparse(Some(vec![None, Some("flat".into()), None]))
+                        .set_sparse_flags(Some(vec![Some(false), None, Some(true)]))
+                        .build()
+                ).build().unwrap();
+                let serialized = ${format(operationSerializer)}(&input.payload.unwrap()).unwrap();
+                let output = std::str::from_utf8(&serialized).unwrap();
+                assert_eq!(output, "<Top><sparse><member>first</member><member>last</member></sparse><flatSparse>flat</flatSparse><sparseFlags><member>false</member><member>true</member></sparseFlags></Top>");
                 """,
             )
             unitTest(

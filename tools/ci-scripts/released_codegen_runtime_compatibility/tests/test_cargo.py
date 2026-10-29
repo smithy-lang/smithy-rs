@@ -9,6 +9,7 @@ from unittest import mock
 
 from released_codegen_runtime_compatibility.cargo import (
     _append_runtime_patches,
+    _assert_registry_runtime_dependencies,
     _patch_selection_problems,
     _resolved_runtime_packages,
     _satisfies_requirement,
@@ -30,6 +31,55 @@ def toml_basic_string(value: str) -> str:
     Re-derive the expected rendering rather than reusing the code under test.
     """
     return '"{}"'.format(value.replace("\\", "\\\\").replace('"', '\\"'))
+
+
+class RegistryRuntimeDependenciesTest(unittest.TestCase):
+    def test_expanded_and_inline_runtime_paths_are_rejected(self) -> None:
+        for runtime in ("rust-runtime", "aws/rust-runtime"):
+            for dependency in (
+                '[dependencies.aws-smithy-example]\npath = "../../%s/aws-smithy-example"\n',
+                '[dependencies]\naws-smithy-example = { version = "1", path = "../../%s/aws-smithy-example" }\n',
+            ):
+                with self.subTest(runtime=runtime, dependency=dependency):
+                    with tempfile.TemporaryDirectory() as temp:
+                        workspace = Path(temp)
+                        sdk = workspace / "sdk"
+                        sdk.mkdir()
+                        manifest = sdk / "Cargo.toml"
+                        manifest.write_text(dependency % runtime)
+                        with self.assertRaisesRegex(
+                            RuntimeError, "retained local runtime dependencies"
+                        ) as caught:
+                            _assert_registry_runtime_dependencies(workspace)
+                        self.assertIn(str(manifest), str(caught.exception))
+
+    def test_registry_dependencies_are_permitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            sdk = workspace / "sdk"
+            sdk.mkdir()
+            (sdk / "Cargo.toml").write_text(
+                '[dependencies]\n'
+                'aws-smithy-types = "1"\n'
+                'aws-smithy-json = { version = "0.63", features = ["default"] }\n'
+                '[dependencies.aws-smithy-runtime]\nversion = "1"\n'
+            )
+            _assert_registry_runtime_dependencies(workspace)
+
+    def test_root_workspace_runtime_patches_are_permitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp)
+            (workspace / "Cargo.toml").write_text(
+                '[workspace]\nmembers = ["sdk"]\n'
+                '[patch.crates-io]\n'
+                'aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }\n'
+                '[patch.crates-io.aws-runtime]\n'
+                'path = "../../aws/rust-runtime/aws-runtime"\n'
+            )
+            sdk = workspace / "sdk"
+            sdk.mkdir()
+            (sdk / "Cargo.toml").write_text('[dependencies]\naws-smithy-types = "1"\n')
+            _assert_registry_runtime_dependencies(workspace)
 
 
 class CargoPatchingTest(unittest.TestCase):
