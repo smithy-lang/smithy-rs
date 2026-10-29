@@ -378,11 +378,12 @@ class XmlBindingTraitSerializerGenerator(
         memberShape: MemberShape,
         ctx: Ctx.Scope,
         rootNameOverride: String? = null,
+        isUnwrapped: Boolean = false,
     ) {
         val target = model.expectShape(memberShape.target)
         val xmlName = rootNameOverride ?: xmlIndex.memberName(memberShape)
         val ns = memberShape.xmlNamespace(root = false).apply()
-        handleOptional(memberShape, ctx) { ctx ->
+        handleOptional(memberShape, ctx, isUnwrapped) { ctx ->
             when (target) {
                 is StringShape,
                 is BooleanShape,
@@ -539,10 +540,15 @@ class XmlBindingTraitSerializerGenerator(
     private fun RustWriter.serializeList(
         listShape: CollectionShape,
         ctx: Ctx.Scope,
+        rootNameOverride: String? = null,
     ) {
         val itemName = safeName("list_item")
-        rustBlock("for $itemName in ${ctx.input}") {
-            serializeMember(listShape.member, ctx.copy(input = itemName))
+        val isOptional = symbolProvider.toSymbol(listShape.member).isOptional()
+        val target = model.expectShape(listShape.member.target)
+        val pattern = if (isOptional && target.isStructureShape && target.members().isEmpty()) "_$itemName" else itemName
+        val input = if (isOptional) "${ctx.input.removePrefix("&")}.iter().flatten()" else ctx.input
+        rustBlock("for $pattern in $input") {
+            serializeMember(listShape.member, ctx.copy(input = itemName), rootNameOverride, isUnwrapped = isOptional)
         }
     }
 
@@ -551,14 +557,7 @@ class XmlBindingTraitSerializerGenerator(
         listShape: CollectionShape,
         ctx: Ctx.Scope,
     ) {
-        val itemName = safeName("list_item")
-        rustBlock("for $itemName in ${ctx.input}") {
-            serializeMember(
-                listShape.member,
-                ctx.copy(input = itemName),
-                xmlIndex.memberName(member),
-            )
-        }
+        serializeList(listShape, ctx, xmlIndex.memberName(member))
     }
 
     private fun RustWriter.serializeMap(
@@ -591,10 +590,13 @@ class XmlBindingTraitSerializerGenerator(
     private fun <T : Ctx> RustWriter.handleOptional(
         member: MemberShape,
         ctx: T,
+        isUnwrapped: Boolean = false,
         inner: RustWriter.(T) -> Unit,
     ) {
         val memberSymbol = symbolProvider.toSymbol(member)
-        if (memberSymbol.isOptional()) {
+        if (isUnwrapped) {
+            inner(ctx)
+        } else if (memberSymbol.isOptional()) {
             val tmp = safeName()
             val target = model.expectShape(member.target)
             val pattern =
