@@ -1,0 +1,26 @@
+[
+  {
+    "id": "query-empty",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "content_type": "application/xml",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "xml-empty",
+    "uri": "/xml",
+    "body": "",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator"
+  },
+  {
+    "id": "xml-root",
+    "uri": "/xml",
+    "body": "<XmlBodyInput/>",
+    "content_type": "application/xml",
+    "source": "XmlBindingTraitParserGenerator.parseStructureInner/parseList/parseFlatList/mapEntryParser/parseUnion; RestXmlParserGenerator",
+    "expected_legacy_status": 200
+  }
+]

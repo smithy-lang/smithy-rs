@@ -75,10 +75,25 @@ abstract class ProtocolTestGenerator {
     private val serviceShapeId: ShapeId
         get() = codegenContext.serviceShape.id
 
+    /**
+     * Suffix appended to the name of the module the tests for [operationShape] are generated into.
+     * The default empty suffix keeps the historical `<operation>_test` module name; implementors that
+     * render the same operation's tests several times (e.g. once per served protocol) can override this
+     * to disambiguate the modules.
+     */
+    open val protocolTestsModuleSuffix: String = ""
+
+    /**
+     * Resolves a named helper from the protocol-test support library. Implementors can override this to
+     * select a different support library (e.g. one compiled against another HTTP crate version).
+     */
+    open fun protocolTestHelper(name: String): RuntimeType =
+        RuntimeType.protocolTest(codegenContext.runtimeConfig, name)
+
     /** The Rust module in which we should generate the protocol tests for [operationShape]. */
     private fun protocolTestsModule(): RustModule.LeafModule {
         val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
-        val testModuleName = "${operationName.toSnakeCase()}_test"
+        val testModuleName = "${operationName.toSnakeCase()}_test$protocolTestsModuleSuffix"
         val additionalAttributes = listOf(Attribute(allow("unreachable_code", "unused_variables")))
         return RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes)
     }
@@ -315,7 +330,7 @@ abstract class ProtocolTestGenerator {
         assertOk(rustWriter) {
             write(
                 "#T($actualExpression, $variableName)",
-                RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_headers"),
+                protocolTestHelper("validate_headers"),
             )
         }
     }
@@ -336,7 +351,7 @@ abstract class ProtocolTestGenerator {
         assertOk(rustWriter) {
             rustWriter.rust(
                 "#T($actualExpression, $expectedVariableName)",
-                RuntimeType.protocolTest(codegenContext.runtimeConfig, checkFunction),
+                protocolTestHelper(checkFunction),
             )
         }
     }
@@ -349,7 +364,7 @@ abstract class ProtocolTestGenerator {
         rustWriter: RustWriter,
         inner: Writable,
     ) {
-        rustWriter.rust("#T(", RuntimeType.protocolTest(codegenContext.runtimeConfig, "assert_ok"))
+        rustWriter.rust("#T(", protocolTestHelper("assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }
