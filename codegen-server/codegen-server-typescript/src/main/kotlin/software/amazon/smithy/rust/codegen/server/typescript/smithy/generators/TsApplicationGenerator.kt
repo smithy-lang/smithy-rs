@@ -50,7 +50,6 @@ class TsApplicationGenerator(
             "tracing" to TsServerCargoDependency.Tracing.toType(),
             "tower" to TsServerCargoDependency.Tower.toType(),
             "tower_http" to TsServerCargoDependency.TowerHttp.toType(),
-            "num_cpus" to TsServerCargoDependency.NumCpus.toType(),
             "hyper" to TsServerCargoDependency.Hyper.toType(),
             "HashMap" to RuntimeType.HashMap,
             "parking_lot" to TsServerCargoDependency.ParkingLot.toType(),
