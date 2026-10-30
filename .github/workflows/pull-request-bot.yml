@@ -90,8 +90,11 @@ jobs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/cache@v4
+    # Pull requests only restore; a run on `main` saves (see `Save Gradle cache`). Each PR used to
+    # save its own 1 GB copy, which only that PR could read, filling the repository's cache.
+    - uses: actions/cache/restore@v4
       name: Gradle Cache
+      id: gradle-cache
       with:
         path: |
           ~/.gradle/caches
@@ -134,6 +137,14 @@ jobs:
         ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
         echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
+    - name: Save Gradle cache
+      if: github.ref == 'refs/heads/main' && steps.gradle-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
     - uses: aws-actions/configure-aws-credentials@v4
       name: Acquire credentials for uploading to S3
       with:
