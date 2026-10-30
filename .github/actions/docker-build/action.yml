@@ -27,23 +27,27 @@ inputs:
 runs:
   using: composite
   steps:
+  # The Gradle home the build container mounts (see `tools/ci-build/ci-action`). Pull requests only
+  # restore; `main` saves (see `Save Gradle cache`), because the repository's cache is at its size
+  # limit and a PR's entries are visible only to that PR.
+  #
+  # The key hashes the checkout's Gradle build files. It used to hash `gradle/caches` itself, which
+  # does not exist before the restore, so the key never changed. The `docker-gradle` prefix keeps
+  # this entry apart from the PR bot's `~/.gradle` cache, which is stored under another path.
+  #
+  # There is no Rust target cache: each action would need its own entry of several GB, which does
+  # not fit the repository's 10 GB cache limit.
   - name: Gradle Cache
-    if: ${{ github.event.inputs.use_cache == 'true' }}
-    uses: actions/cache@v4
+    id: gradle-cache
+    if: inputs.use_cache == 'true'
+    uses: actions/cache/restore@v4
     with:
       path: |
         gradle/caches
         gradle/wrapper
-      key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
+      key: ${{ runner.os }}-docker-gradle-${{ hashFiles('smithy-rs/**/*.gradle.kts', 'smithy-rs/gradle.properties', 'smithy-rs/gradle/libs.versions.toml', 'smithy-rs/gradle/wrapper/gradle-wrapper.properties') }}
       restore-keys: |
-        ${{ runner.os }}-gradle-
-       # Pinned to the commit hash of v2.7.3
-  - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
-    with:
-      # Per-leg key: keying only on `github.job` made a job's matrix legs contend for one cache
-      shared-key: ${{ runner.os }}-${{ github.job }}-${{ inputs.label != '' && inputs.label || inputs.action }}
-      workspaces: |
-        . smithy-rs-target
+        ${{ runner.os }}-docker-gradle-
   - name: Download all artifacts
     uses: ./smithy-rs/.github/actions/download-all-artifacts
   - name: Prepare build image
@@ -91,8 +95,12 @@ runs:
   # Restored here rather than with the other caches at the top of this action: nothing before the
   # step below reads it, and when it sat immediately ahead of `Download all artifacts` that download
   # started aborting mid-stream while still exiting 0. Same cache and key, just claimed later.
+  #
+  # Pull requests only restore; `main` saves (below). The repository's cache is at its size limit,
+  # and a PR's entries are visible only to that PR, so per-PR copies just evict shared entries.
   - name: Cargo registry cache
-    uses: actions/cache@v4
+    id: cargo-registry
+    uses: actions/cache/restore@v4
     with:
       path: cargo-registry
       key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
@@ -106,6 +114,21 @@ runs:
     run: |
       ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
       tar cfz "artifacts-${ARTIFACT_LABEL}.tar.gz" -C artifacts .
+  # Saved after the action, like `actions/cache`'s own post step, and only on success.
+  - name: Save Gradle cache
+    if: inputs.use_cache == 'true' && github.ref == 'refs/heads/main' && steps.gradle-cache.outputs.cache-hit != 'true'
+    uses: actions/cache/save@v4
+    with:
+      path: |
+        gradle/caches
+        gradle/wrapper
+      key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
+  - name: Save cargo registry cache
+    if: github.ref == 'refs/heads/main' && steps.cargo-registry.outputs.cache-hit != 'true'
+    uses: actions/cache/save@v4
+    with:
+      path: cargo-registry
+      key: ${{ steps.cargo-registry.outputs.cache-primary-key }}
   - name: Upload artifacts
     uses: actions/upload-artifact@v4
     with:
