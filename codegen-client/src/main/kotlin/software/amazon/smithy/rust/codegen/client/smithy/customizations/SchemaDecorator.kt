@@ -83,7 +83,6 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.codepipeline",
             "com.amazonaws.ecrpublic",
             "com.amazonaws.lightsail",
-            // Phase 4 — 100-1,000 customers
             "com.amazonaws.fsx",
             "com.amazonaws.codebuild",
             "com.amazonaws.firehose",
@@ -96,16 +95,70 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.route53resolver",
             "com.amazonaws.ecs",
             "com.amazonaws.cognitoidentityprovider",
+            // Phase 5
+            "com.amazonaws.ecr",
+            "com.amazonaws.kms",
+            "com.amazonaws.cloudwatchlogs",
+            "com.amazonaws.secretsmanager",
             // awsJson1_0 phased rollout
-            // Phase 1 — Canary
             "com.amazonaws.swf",
+            // Phase 2
+            "com.amazonaws.opensearchserverless",
+            "com.amazonaws.proton",
+            "com.amazonaws.cloudcontrol",
+            "com.amazonaws.paymentcryptography",
             // rpcv2Cbor phased rollout
-            // Phase 1 — Canary. Also has awsJson1_1; codegen prefers rpcv2Cbor when a model
-            // carries both protocol traits.
             "com.amazonaws.marketplaceentitlementservice",
+            // Phase 2
+            "com.amazonaws.cloudwatch",
             // restJson1 phased rollout
-            // Phase 1 — Canary
             "com.amazonaws.wisdom",
+            // Phase 2
+            "com.amazonaws.cleanrooms",
+            "com.amazonaws.glacier",
+            "com.amazonaws.mediapackage",
+            "com.amazonaws.networkmanager",
+            "com.amazonaws.neptunegraph",
+            "com.amazonaws.securitylake",
+            "com.amazonaws.marketplacecatalog",
+            "com.amazonaws.iot",
+            "com.amazonaws.outposts",
+            "com.amazonaws.managedblockchainquery",
+            "com.amazonaws.mediaconnect",
+            "com.amazonaws.vpclattice",
+            "com.amazonaws.grafana",
+            "com.amazonaws.lexruntimev2",
+            "com.amazonaws.ivs",
+            "com.amazonaws.amp",
+            "com.amazonaws.schemas",
+            "com.amazonaws.connectcases",
+            "com.amazonaws.medialive",
+            "com.amazonaws.ram",
+            "com.amazonaws.accessanalyzer",
+            "com.amazonaws.signer",
+            "com.amazonaws.lexmodelsv2",
+            "com.amazonaws.imagebuilder",
+            "com.amazonaws.emrcontainers",
+            "com.amazonaws.mediaconvert",
+            "com.amazonaws.quicksight",
+            "com.amazonaws.pipes",
+            "com.amazonaws.drs",
+            "com.amazonaws.guardduty",
+            "com.amazonaws.inspector2",
+            "com.amazonaws.pinpoint",
+            "com.amazonaws.appsync",
+            "com.amazonaws.groundstation",
+            "com.amazonaws.resourcegroups",
+            "com.amazonaws.bedrockagent",
+            "com.amazonaws.transcribestreaming",
+            "com.amazonaws.bedrockagentruntime",
+            "com.amazonaws.ssooidc",
+            "com.amazonaws.connect",
+            "com.amazonaws.mq",
+            "com.amazonaws.amplify",
+            "com.amazonaws.fis",
+            "com.amazonaws.bedrock",
+            "com.amazonaws.appconfig",
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
