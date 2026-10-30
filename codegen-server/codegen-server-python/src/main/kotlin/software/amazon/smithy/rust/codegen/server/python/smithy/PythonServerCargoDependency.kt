@@ -25,7 +25,6 @@ object PythonServerCargoDependency {
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
     val Hyper: CargoDependency =
         CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
-    val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-legacy-http-server")
