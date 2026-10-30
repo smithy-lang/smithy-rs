@@ -1,4 +1,7 @@
 allowed_external_types = [
     # Exposed only by the optional `runtime-schema` feature.
     "aws_smithy_schema::Schema",
+    # Re-exported at the crate root as `aws_smithy_schema::OperationSchema`; the checker reports
+    # the path where it is defined.
+    "aws_smithy_schema::schema::operation_schema::OperationSchema",
 ]

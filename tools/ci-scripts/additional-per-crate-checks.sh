@@ -17,11 +17,21 @@ if [[ $# -lt 1 ]]; then
     exit 1
 fi
 
+# Scripts that run in their own CI job instead, relative to the scanned directory.
+own_job=(
+    "./aws-smithy-lang/additional-ci" # `check-aws-smithy-lang`
+)
+
 for area in "$@"; do
     pushd "${area}" &>/dev/null
     echo -e "${C_CYAN}Scanning '${area}'...${C_RESET}"
 
     find . -name 'additional-ci' -print0 | while read -d $'\0' file; do
+        if [[ " ${own_job[*]} " == *" ${file} "* ]]; then
+            echo
+            echo -e "${C_YELLOW}Skipping '${file}', which runs in its own CI job${C_RESET}"
+            continue
+        fi
         echo
         echo -e "${C_YELLOW}Running additional checks script '${file}'...${C_RESET}"
         echo

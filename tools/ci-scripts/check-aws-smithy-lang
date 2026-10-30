@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Runs aws-smithy-lang's additional checks (Miri and the sanitizers, about 10 minutes) in their
+# own CI job, so they run alongside the other crates' additional checks instead of after them.
+# `additional-per-crate-checks.sh` skips this crate.
+
+set -eux
+
+: "$RUST_NIGHTLY_VERSION"
+
+cd smithy-rs/rust-runtime/aws-smithy-lang
+./additional-ci

@@ -166,6 +166,11 @@ jobs:
           label: check-rust-runtimes-smithy-additional
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
+        # aws-smithy-lang's Miri and sanitizer checks, in their own leg so they run in parallel
+        # with the other crates' additional checks. This can be removed when aws-smithy-lang moves
+        # out of this repo.
+        - action: check-aws-smithy-lang
+          runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
           action-arguments: aws/rust-runtime
           label: check-rust-runtimes-aws
@@ -404,7 +409,7 @@ jobs:
     name: Rust Tests on Windows
     needs: detect-changes
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0

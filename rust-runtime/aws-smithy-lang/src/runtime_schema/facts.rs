@@ -6,8 +6,10 @@
 //! Decoding of the traits that runtime schemas carry.
 //!
 //! A `Model` guarantees that references resolve, not that every trait value is well formed,
-//! so each schema-relevant trait is validated once here, before anything is allocated. The
-//! decoded facts borrow their strings from the model.
+//! so every selected schema-relevant trait is validated here while planning, before anything
+//! is allocated. The decoded facts borrow their strings from the model. They are used at once
+//! for eager materialization, and decoded again when a schema is materialized later, which
+//! cannot fail because the model is immutable.
 
 use crate::diagnostic::{Diagnostic, DiagnosticCode, DiagnosticSet};
 use crate::node::Node;
