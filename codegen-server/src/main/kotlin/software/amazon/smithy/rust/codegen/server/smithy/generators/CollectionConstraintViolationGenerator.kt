@@ -122,8 +122,7 @@ class CollectionConstraintViolationGenerator(
             if (memberConstraintVariantPresent) {
                 rustTemplate(
                     """
-                    Self::Member(index, failing_member) => format!("Value at index {index} failed to satisfy constraint. {}",
-                       failing_member)
+                    Self::Member(index, failing_member) => format!("Value at index {index} failed to satisfy constraint. {failing_member}")
                     """,
                 )
             }
