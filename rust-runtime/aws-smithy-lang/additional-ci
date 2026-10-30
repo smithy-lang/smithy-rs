@@ -21,6 +21,13 @@ nextest=(cargo +"${RUST_NIGHTLY_VERSION}" nextest run --no-tests=fail -p aws-smi
 miri_nextest=(cargo +"${RUST_NIGHTLY_VERSION}" miri nextest run --no-tests=fail -p aws-smithy-lang --features runtime-schema --lib)
 suite='test(/^runtime_schema::/)'
 
+# Doctests on nightly, because only nightly rustdoc checks the error code of a
+# `compile_fail,E0597` doctest; stable accepts any compile error, so a doctest that broke for
+# another reason would still pass. Those doctests check that schemas and `OperationSchema`s
+# cannot outlive their set. Nextest cannot run doctests, so this step uses `cargo test`.
+echo "### Running the aws-smithy-lang doctests on nightly"
+cargo +"${RUST_NIGHTLY_VERSION}" test --doc -p aws-smithy-lang --features runtime-schema
+
 # `--run-ignored all` includes `referenced_prelude_shapes_are_built`, which is ignored under
 # Miri by default because parsing the prelude takes about 3 minutes there; nextest runs it
 # alongside the rest. The corpus test stays excluded: under Miri it would take hours, and it
