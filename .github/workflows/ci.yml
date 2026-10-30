@@ -409,7 +409,7 @@ jobs:
     name: Rust Tests on Windows
     needs: detect-changes
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
