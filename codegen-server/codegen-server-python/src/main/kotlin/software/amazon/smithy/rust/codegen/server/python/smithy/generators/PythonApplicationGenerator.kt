@@ -297,8 +297,11 @@ class PythonApplicationGenerator(
                 /// :param backlog ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
                 /// :param workers ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
                 /// :param tls ${PythonType.Optional(tlsConfig).renderAsDocstring()}:
+                /// :param max_connections ${PythonType.Optional(PythonType.Int).renderAsDocstring()}:
+                ///     Maximum accepted connections per worker, including TLS handshakes.
+                ///     Defaults to 16384. Must be positive. Excess connections wait in the socket backlog.
                 /// :rtype ${PythonType.None.renderAsDocstring()}:
-                ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None)")]
+                ##[pyo3(text_signature = "(${'$'}self, address=None, port=None, backlog=None, workers=None, tls=None, max_connections=None)")]
                 pub fn run(
                     &mut self,
                     py: #{pyo3}::Python,
@@ -307,9 +310,10 @@ class PythonApplicationGenerator(
                     backlog: Option<i32>,
                     workers: Option<usize>,
                     tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
+                    max_connections: Option<usize>,
                 ) -> #{pyo3}::PyResult<()> {
                     use #{SmithyPython}::PyApp;
-                    self.run_server(py, address, port, backlog, workers, tls)
+                    self.run_server_with_max_connections(py, address, port, backlog, workers, tls, max_connections)
                 }
 
                 /// Lambda entrypoint: start the server on Lambda.
@@ -325,18 +329,19 @@ class PythonApplicationGenerator(
                 }
 
                 /// Build the service and start a single worker.
-                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None)")]
+                ##[pyo3(text_signature = "(${'$'}self, socket, worker_number, tls=None, max_connections=None)")]
                 pub fn start_worker(
                     &mut self,
                     py: pyo3::Python,
                     socket: &pyo3::PyCell<#{SmithyPython}::PySocket>,
                     worker_number: isize,
                     tls: Option<#{SmithyPython}::tls::PyTlsConfig>,
+                    max_connections: Option<usize>,
                 ) -> pyo3::PyResult<()> {
                     use #{SmithyPython}::PyApp;
                     let event_loop = self.configure_python_event_loop(py)?;
                     let service = self.build_and_configure_service(py, event_loop)?;
-                    self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
+                    self.start_hyper_worker_with_max_connections(py, socket, event_loop, service, worker_number, tls, max_connections)
                 }
                 """,
                 *codegenScope,

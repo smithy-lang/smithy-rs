@@ -10,6 +10,7 @@ use std::ops::Deref;
 use std::process;
 use std::sync::{mpsc, Arc};
 use std::thread;
+use std::time::Duration;
 
 use aws_smithy_legacy_http_server::{
     body::{Body, BoxBody},
@@ -26,6 +27,7 @@ use tokio_rustls::TlsAcceptor;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
 use crate::{
+    connection_limit::{LimitedIncoming, DEFAULT_MAX_CONNECTIONS},
     context::{layer::AddPyContextLayer, PyContext},
     tls::{listener::Listener as TlsListener, PyTlsConfig},
     util::{error::rich_py_err, func_metadata},
@@ -56,6 +58,16 @@ impl Deref for PyHandler {
 
 // A `BoxCloneService` with default `Request`, `Response` and `Error`.
 type Service = BoxCloneService<Request<Body>, Response<BoxBody>, Infallible>;
+
+fn validate_max_connections(max_connections: Option<usize>) -> PyResult<usize> {
+    let limit = max_connections.unwrap_or(DEFAULT_MAX_CONNECTIONS);
+    if limit == 0 || limit > tokio::sync::Semaphore::MAX_PERMITS {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "max_connections must be positive and no greater than Semaphore::MAX_PERMITS",
+        ));
+    }
+    Ok(limit)
+}
 
 /// Trait defining a Python application.
 ///
@@ -235,6 +247,33 @@ event_loop.add_signal_handler(signal.SIGINT,
         worker_number: isize,
         tls: Option<PyTlsConfig>,
     ) -> PyResult<()> {
+        self.start_hyper_worker_with_max_connections(
+            py,
+            socket,
+            event_loop,
+            service,
+            worker_number,
+            tls,
+            None,
+        )
+    }
+
+    /// Start a worker with a positive connection limit (16,384 by default).
+    ///
+    /// The limit is per worker and includes connections performing TLS handshakes.
+    // Extend the existing entry point without changing its arguments for older SDKs.
+    #[allow(clippy::too_many_arguments)]
+    fn start_hyper_worker_with_max_connections(
+        &mut self,
+        py: Python,
+        socket: &PyCell<PySocket>,
+        event_loop: &PyAny,
+        service: Service,
+        worker_number: isize,
+        tls: Option<PyTlsConfig>,
+        max_connections: Option<usize>,
+    ) -> PyResult<()> {
+        let max_connections = validate_max_connections(max_connections)?;
         // Clone the socket.
         let borrow = socket.try_borrow_mut()?;
         let held_socket: &PySocket = &borrow;
@@ -257,13 +296,16 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .build()
                 .expect("unable to start a new tokio runtime for this process");
             rt.block_on(async move {
-                let addr = addr_incoming_from_socket(raw_socket);
+                let addr =
+                    LimitedIncoming::new(addr_incoming_from_socket(raw_socket), max_connections);
 
                 if let Some(config) = tls {
                     let (acceptor, acceptor_rx) = tls_config_reloader(config);
-                    let listener = TlsListener::new(acceptor, addr, acceptor_rx);
-                    let server =
-                        hyper::Server::builder(listener).serve(IntoMakeService::new(service));
+                    let listener =
+                        TlsListener::new(acceptor, tls_listener::hyper::wrap(addr), acceptor_rx);
+                    let server = hyper::Server::builder(listener)
+                        .http1_header_read_timeout(Duration::from_secs(60))
+                        .serve(IntoMakeService::new(service));
 
                     tracing::trace!("started tls hyper server from shared socket");
                     // Run forever-ish...
@@ -271,7 +313,9 @@ event_loop.add_signal_handler(signal.SIGINT,
                         tracing::error!(error = ?err, "server error");
                     }
                 } else {
-                    let server = hyper::Server::builder(addr).serve(IntoMakeService::new(service));
+                    let server = hyper::Server::builder(addr)
+                        .http1_header_read_timeout(Duration::from_secs(60))
+                        .serve(IntoMakeService::new(service));
 
                     tracing::trace!("started hyper server from shared socket");
                     // Run forever-ish...
@@ -397,6 +441,26 @@ event_loop.add_signal_handler(signal.SIGINT,
         workers: Option<usize>,
         tls: Option<PyTlsConfig>,
     ) -> PyResult<()> {
+        self.run_server_with_max_connections(py, address, port, backlog, workers, tls, None)
+    }
+
+    /// Start the server with a positive per-worker connection limit.
+    ///
+    /// `None` selects the default of 16,384. The socket backlog is independent of
+    /// this limit: excess connections wait for an accepted connection to close.
+    // Match the generated Python run arguments while retaining the old entry point.
+    #[allow(clippy::too_many_arguments)]
+    fn run_server_with_max_connections(
+        &mut self,
+        py: Python,
+        address: Option<String>,
+        port: Option<i32>,
+        backlog: Option<i32>,
+        workers: Option<usize>,
+        tls: Option<PyTlsConfig>,
+        max_connections: Option<usize>,
+    ) -> PyResult<()> {
+        validate_max_connections(max_connections)?;
         // Setup multiprocessing environment, allowing connections and socket
         // sharing between processes.
         let mp = py.import("multiprocessing")?;
@@ -430,11 +494,18 @@ event_loop.add_signal_handler(signal.SIGINT,
             let sock = socket.try_clone()?;
             let tls = tls.clone();
             let process = mp.getattr("Process")?;
+            // Preserve compatibility with SDKs generated before the optional
+            // max_connections argument was added to start_worker.
+            let worker_args: PyObject = if let Some(max_connections) = max_connections {
+                (sock.into_py(py), idx, tls.into_py(py), max_connections).into_py(py)
+            } else {
+                (sock.into_py(py), idx, tls.into_py(py)).into_py(py)
+            };
             let handle = process.call1((
                 py.None(),
                 self.clone().into_py(py).getattr(py, "start_worker")?,
                 format!("smithy-rs-worker[{idx}]"),
-                (sock.into_py(py), idx, tls.into_py(py)),
+                worker_args,
             ))?;
             handle.call_method0("start")?;
             active_workers.push(handle.to_object(py));

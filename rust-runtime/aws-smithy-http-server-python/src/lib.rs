@@ -17,6 +17,7 @@
 //! [PyO3]: https://pyo3.rs/
 
 pub mod context;
+mod connection_limit;
 mod error;
 pub mod lambda;
 pub mod logging;
