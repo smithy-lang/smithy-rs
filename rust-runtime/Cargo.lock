@@ -801,10 +801,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
+ "aws-smithy-checksums",
  "aws-smithy-runtime-api 1.20.0",
+ "aws-smithy-types 1.9.2",
  "serial_test",
+ "tracing",
 ]
 
 [[package]]
