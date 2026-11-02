@@ -15,6 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 };
 use aws_smithy_runtime_api::client::interceptors::{dyn_dispatch_hint, Intercept};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::unit_of_work::ChecksumSkip;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::ResponseChecksumValidation;
@@ -139,7 +140,7 @@ where
                 self.response_algorithms,
             );
 
-            if let Some((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
+            if let Ok((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
                 let mut body = SdkBody::taken();
                 mem::swap(&mut body, response.body_mut());
 
@@ -175,13 +176,13 @@ pub(crate) fn wrap_body_with_checksum_validator(
     })
 }
 
-/// Given a `HeaderMap`, extract any checksum included in the headers as `Some(Bytes)`.
-/// If no checksum header is set, return `None`. If multiple checksum headers are set, the one that
-/// is fastest to compute will be chosen.
+/// Given a `HeaderMap`, extract the checksum to validate the response body against. If multiple
+/// checksum headers are set, the one that is fastest to compute will be chosen. If that header
+/// can't be used, or no checksum header is set, return why.
 pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &Headers,
     response_algorithms: &[&str],
-) -> Option<(ChecksumAlgorithm, bytes::Bytes)> {
+) -> Result<(ChecksumAlgorithm, bytes::Bytes), ChecksumSkip> {
     let checksum_algorithms_to_check =
         aws_smithy_checksums::http::CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
             .into_iter()
@@ -212,7 +213,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
                       "This checksum is a part-level checksum which can't be validated by the Rust SDK. Disable checksum validation for this request to fix this warning.",
                   );
 
-                return None;
+                return Err(ChecksumSkip::PartLevelChecksum);
             }
 
             let precalculated_checksum = match aws_smithy_types::base64::decode(
@@ -221,15 +222,15 @@ pub(crate) fn check_headers_for_precalculated_checksum(
                 Ok(decoded_checksum) => decoded_checksum.into(),
                 Err(_) => {
                     tracing::error!("Checksum received from server could not be base64 decoded. No checksum validation will be performed.");
-                    return None;
+                    return Err(ChecksumSkip::InvalidChecksumHeader);
                 }
             };
 
-            return Some((checksum_algorithm, precalculated_checksum));
+            return Ok((checksum_algorithm, precalculated_checksum));
         }
     }
 
-    None
+    Err(ChecksumSkip::NoChecksum)
 }
 
 fn is_part_level_checksum(checksum: &str) -> bool {
@@ -262,11 +263,118 @@ fn is_part_level_checksum(checksum: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_part_level_checksum, wrap_body_with_checksum_validator};
+    use super::{
+        check_headers_for_precalculated_checksum, is_part_level_checksum,
+        wrap_body_with_checksum_validator,
+    };
+    use aws_smithy_checksums::ChecksumAlgorithm;
+    use aws_smithy_runtime_api::client::unit_of_work::ChecksumSkip;
+    use aws_smithy_runtime_api::http::Headers;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
+
+    /// The CRC32 of "Hello world", in base64.
+    const HELLO_WORLD_CRC32: &str = "i9aeUg==";
+
+    fn select(
+        headers: &[(&'static str, &'static str)],
+        response_algorithms: &[&str],
+    ) -> Result<(ChecksumAlgorithm, Bytes), ChecksumSkip> {
+        let mut map = Headers::new();
+        for (name, value) in headers {
+            map.insert(*name, *value);
+        }
+        check_headers_for_precalculated_checksum(&map, response_algorithms)
+    }
+
+    #[test]
+    fn header_selection() {
+        let crc32 = |bytes: &'static [u8]| Ok((ChecksumAlgorithm::Crc32, Bytes::from(bytes)));
+        for (headers, response_algorithms, expected) in [
+            (&[][..], &["crc32"][..], Err(ChecksumSkip::NoChecksum)),
+            (
+                &[("x-amz-checksum-crc32", HELLO_WORLD_CRC32)],
+                &["crc32"],
+                crc32(&[0x8b, 0xd6, 0x9e, 0x52]),
+            ),
+            // The model's algorithm names match in any case.
+            (
+                &[("x-amz-checksum-crc32", HELLO_WORLD_CRC32)],
+                &["CRC32"],
+                crc32(&[0x8b, 0xd6, 0x9e, 0x52]),
+            ),
+            // A header for an algorithm the model does not list is ignored.
+            (
+                &[("x-amz-checksum-sha256", HELLO_WORLD_CRC32)],
+                &["crc32"],
+                Err(ChecksumSkip::NoChecksum),
+            ),
+            (
+                &[("x-amz-checksum-crc32", "i9aeUg==-3")],
+                &["crc32"],
+                Err(ChecksumSkip::PartLevelChecksum),
+            ),
+            (
+                &[("x-amz-checksum-crc32", "not base64!")],
+                &["crc32"],
+                Err(ChecksumSkip::InvalidChecksumHeader),
+            ),
+            // Empty and wrong-length values are still validated, so they fail as a mismatch.
+            (&[("x-amz-checksum-crc32", "")], &["crc32"], crc32(&[])),
+            (
+                &[("x-amz-checksum-crc32", "AAA=")],
+                &["crc32"],
+                crc32(&[0, 0]),
+            ),
+            // The fastest algorithm wins, and its header decides even when it can't be used.
+            (
+                &[
+                    ("x-amz-checksum-crc32", HELLO_WORLD_CRC32),
+                    ("x-amz-checksum-crc32c", "AAAAAA=="),
+                ],
+                &["crc32", "crc32c"],
+                Ok((ChecksumAlgorithm::Crc32c, Bytes::from_static(&[0, 0, 0, 0]))),
+            ),
+            (
+                &[
+                    ("x-amz-checksum-crc32", HELLO_WORLD_CRC32),
+                    ("x-amz-checksum-crc32c", "AAAAAA==-3"),
+                ],
+                &["crc32", "crc32c"],
+                Err(ChecksumSkip::PartLevelChecksum),
+            ),
+        ] {
+            assert_eq!(
+                select(headers, response_algorithms),
+                expected,
+                "{headers:?} for {response_algorithms:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_and_wrong_length_checksums_fail_as_a_mismatch() {
+        for value in ["", "AAA="] {
+            let (algorithm, precalculated) = select(&[("x-amz-checksum-crc32", value)], &["crc32"])
+                .expect("the header is selected");
+            let body = wrap_body_with_checksum_validator(
+                SdkBody::from("Hello world"),
+                algorithm,
+                precalculated,
+            );
+
+            let error = ByteStream::new(body).collect().await.unwrap_err();
+            let source = std::error::Error::source(&error).expect("the body's error");
+            assert!(
+                source
+                    .downcast_ref::<aws_smithy_checksums::body::validate::Error>()
+                    .is_some(),
+                "{value:?}: {error}"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn test_build_checksum_validated_body_works() {
