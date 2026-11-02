@@ -1,7 +1,7 @@
 ---
 applies_to: ["server"]
 authors: ["trivikr"]
-references: ["smithy-rs#4980"]
+references: ["smithy-rs#4982"]
 breaking: false
 new_feature: false
 bug_fix: false
