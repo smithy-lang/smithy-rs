@@ -109,6 +109,8 @@ object SchemaSerdeAllowlist {
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
+            // Dedicated fixture namespace for the example client with runtime protocol selection.
+            "smithy.rust.codegen.test.multiprotocol",
             // Test model namespaces, listed explicitly until protocols are fully enabled.
             // restJson1
             "aws.protocoltests.restjson",

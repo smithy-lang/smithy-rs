@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.ShapeId
 import java.util.logging.Logger
 import kotlin.time.Duration
 
@@ -49,23 +50,49 @@ internal object ProtocolReadSettings {
         }
     }
 
-    /** Parse shared settings, rejecting per-protocol sections until they are supported. */
-    fun protocolSettings(customizationConfig: ObjectNode?): Map<String, ObjectNode> {
+    /** Parse the protocol sections once, using the same shape-ID keys as decoupled routing. */
+    fun protocolSettings(
+        customizationConfig: ObjectNode?,
+        validateRequest: Boolean = true,
+    ): Map<String, ObjectNode> {
         val protocolsPath = "customizationConfig.protocols"
         val protocols = expectObject(customizationConfig?.getMember("protocols")?.orElse(null), protocolsPath)
         return protocols?.members?.entries?.associate { (key, value) ->
             val protocolId = key.value
             val path = "$protocolsPath.$protocolId"
             if (protocolId != "common") {
-                throw CodegenException(
-                    "`$path` is not supported in this version. " +
-                        "Per-protocol configuration is not yet supported; use `$COMMON_PATH` instead.",
-                )
+                val shapeId = runCatching { ShapeId.from(protocolId) }.getOrNull()
+                if (shapeId == null || shapeId.hasMember()) {
+                    throw CodegenException(
+                        "`$path` must use a full protocol shape ID without a member, " +
+                            "such as `aws.protocols#restJson1`, or the shared `common` key. " +
+                            "Protocol shorthand names are not supported.",
+                    )
+                }
             }
             val section = expectObject(value, path)!!
-            validateRequestSections(section)
+            if (protocolId == "common" && validateRequest) {
+                validateRequestSections(section)
+            } else if (protocolId != "common") {
+                validateProtocolHeaderSettings(section, path)
+            }
             protocolId to section
         }.orEmpty()
+    }
+
+    private fun validateProtocolHeaderSettings(
+        section: ObjectNode,
+        path: String,
+    ) {
+        val request = expectObject(section.getMember("request").orElse(null), "$path.request") ?: return
+        val header = expectObject(request.getMember("header").orElse(null), "$path.request.header") ?: return
+        if (header.containsMember("readTimeout")) {
+            throw CodegenException(
+                "`$path.request.header.readTimeout` cannot be configured per protocol because " +
+                    "the header deadline starts before the request protocol is identified. " +
+                    "Use `$HEADER_PATH.readTimeout` instead.",
+            )
+        }
     }
 
     private fun validateRequestSections(common: ObjectNode) {
@@ -127,7 +154,9 @@ internal object ProtocolReadSettings {
 
     fun requestBodyMaxBytes(protocolSettings: Map<String, ObjectNode>): Long? {
         val (value, path) = resolve(protocolSettings, "request", "body", "maxBytes")
-        if (value == null) return null
+        if (value == null) {
+            return null
+        }
         val errorMessage =
             "`$path` must be a non-negative integer byte count or a whole-number size string with " +
                 "B, KB, MB, GB, TB, KiB, MiB, GiB, or TiB units, fitting in a Long"
@@ -147,7 +176,9 @@ internal object ProtocolReadSettings {
             } catch (_: NumberFormatException) {
                 throw CodegenException(errorMessage)
             }
-        if (maxBytes < 0) throw CodegenException(errorMessage)
+        if (maxBytes < 0) {
+            throw CodegenException(errorMessage)
+        }
         return maxBytes
     }
 

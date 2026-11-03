@@ -80,6 +80,68 @@ class RegionDecoratorTest {
         operation SomeOperation { output: SomeOutput }
         """.asSmithyModel()
 
+    private val modelWithRulesValidatingRegion =
+        """
+        namespace test
+
+        use aws.api#service
+        use aws.protocols#awsJson1_0
+        use smithy.rules#endpointRuleSet
+        use smithy.rules#endpointTests
+
+        @awsJson1_0
+        @endpointRuleSet({
+            "version": "1.0",
+            "parameters": {
+                "Region": { "required": true, "type": "String", "builtIn": "AWS::Region" },
+                "Endpoint": { "required": false, "type": "String", "builtIn": "SDK::Endpoint" },
+            },
+            "rules": [
+                {
+                    "type": "endpoint",
+                    "conditions": [{ "fn": "isSet", "argv": [{ "ref": "Endpoint" }] }],
+                    "endpoint": { "url": { "ref": "Endpoint" } }
+                },
+                {
+                    "type": "error",
+                    "conditions": [
+                        { "fn": "not", "argv": [{ "fn": "isValidHostLabel", "argv": [{ "ref": "Region" }, true] }] }
+                    ],
+                    "error": "Region is not a valid host label"
+                },
+                {
+                    "type": "endpoint",
+                    "conditions": [],
+                    "endpoint": { "url": "https://service.{Region}.example.com" }
+                }
+            ]
+        })
+        @endpointTests({
+            "version": "1.0",
+            "testCases": [
+                {
+                    "documentation": "the rules reject a Region that is not a host label",
+                    "params": { "Region": "@controlled-proxy.com#" },
+                    "expect": { "error": "Region is not a valid host label" }
+                },
+                {
+                    "documentation": "the rules use the endpoint override before checking the Region",
+                    "params": { "Region": "@controlled-proxy.com#", "Endpoint": "https://override.example.com" },
+                    "expect": { "endpoint": { "url": "https://override.example.com" } }
+                },
+                {
+                    "documentation": "a valid Region resolves the regional endpoint",
+                    "params": { "Region": "us-east-1" },
+                    "expect": { "endpoint": { "url": "https://service.us-east-1.example.com" } }
+                }
+            ]
+        })
+        @service(sdkId: "dontcare")
+        service TestService { version: "2023-01-01", operations: [SomeOperation] }
+        structure SomeOutput { something: String }
+        operation SomeOperation { output: SomeOutput }
+        """.asSmithyModel()
+
     @Test
     fun `models without region built-in params or SigV4 should not have configurable regions`() {
         val path =
@@ -146,6 +208,67 @@ class RegionDecoratorTest {
                         let expected = "invalid value for field: `region` - must be a valid host label";
                         assert!(err_str.contains(expected));
 
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `models whose rules validate region should pass their endpoint tests and still validate region on requests`() {
+        // The model's @endpointTests also run here as generated unit tests; two of them use a Region `build()` rejects
+        awsSdkIntegrationTest(modelWithRulesValidatingRegion) { ctx, rustCrate ->
+            val rc = ctx.runtimeConfig
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "capture_request" to RuntimeType.captureRequest(rc),
+                    "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                )
+
+            rustCrate.integrationTest("endpoint_params_validation") {
+                val moduleName = ctx.moduleUseName()
+                tokioTest("region_must_be_valid_host_label_with_endpoint_override") {
+                    rustTemplate(
+                        """
+                        let (http_client, rx) = #{capture_request}(#{None});
+                        let client_config = $moduleName::Config::builder()
+                            .http_client(http_client)
+                            .region(#{Region}::new("@controlled-proxy.com##"))
+                            .endpoint_url("https://override.example.com")
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(client_config);
+
+                        let err = client
+                            .some_operation()
+                            .send()
+                            .await
+                            .expect_err("error");
+
+                        let err_str = format!("{}", $moduleName::error::DisplayErrorContext(&err));
+                        let expected = "invalid value for field: `region` - must be a valid host label";
+                        assert!(err_str.contains(expected), "{err_str}");
+                        rx.expect_no_request();
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                tokioTest("valid_region_resolves_regional_endpoint") {
+                    rustTemplate(
+                        """
+                        let (http_client, rx) = #{capture_request}(#{None});
+                        let client_config = $moduleName::Config::builder()
+                            .http_client(http_client)
+                            .region(#{Region}::new("us-east-1"))
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(client_config);
+                        let _ = client.some_operation().send().await;
+                        assert_eq!("https://service.us-east-1.example.com/", rx.expect_request().uri());
                         """,
                         *codegenScope,
                     )

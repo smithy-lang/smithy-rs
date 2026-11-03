@@ -10,10 +10,32 @@ import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
 import java.io.File
 
-/**
+/*
  * This file contains common functionality shared across the build scripts for the
  * `codegen-client-test` and `codegen-server-test` modules.
  */
+
+/**
+ * A smithy-build transform applied to a projection's model before codegen, such as
+ * `includeServices` or `excludeTraits`. `args` values may be strings, numbers, booleans,
+ * or nested lists and maps of those.
+ */
+data class ModelTransform(
+    val name: String,
+    val args: Map<String, Any> = emptyMap(),
+) {
+    fun toJson(): String = render(mapOf("name" to name, "args" to args))
+
+    private fun render(value: Any?): String =
+        when (value) {
+            null -> "null"
+            is String -> "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+            is Number, is Boolean -> value.toString()
+            is List<*> -> value.joinToString(", ", "[", "]") { render(it) }
+            is Map<*, *> -> value.entries.joinToString(", ", "{", "}") { (key, entry) -> "${render(key.toString())}: ${render(entry)}" }
+            else -> throw IllegalArgumentException("unsupported transform argument type: ${value::class}")
+        }
+}
 
 data class CodegenTest(
     val service: String,
@@ -21,6 +43,8 @@ data class CodegenTest(
     val extraConfig: String? = null,
     val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
+    /** Smithy-build transforms applied to this projection's model before codegen. */
+    val transforms: List<ModelTransform> = emptyList(),
 )
 
 /**
@@ -51,6 +75,13 @@ fun generateImports(imports: List<String>): String =
         ""
     } else {
         "\"imports\": [${imports.joinToString(", ") { "\"$it\"" }}],"
+    }
+
+fun generateTransforms(transforms: List<ModelTransform>): String =
+    if (transforms.isEmpty()) {
+        ""
+    } else {
+        "\"transforms\": ${transforms.joinToString(", ", "[", "]") { it.toJson() }},"
     }
 
 val RustKeywords =
@@ -141,6 +172,7 @@ private fun generateSmithyBuild(
             """
             "${it.module}": {
                 ${generateImports(it.imports)}
+                ${generateTransforms(it.transforms)}
                 "plugins": {
                     "$pluginName": {
                         "runtimeConfig": {
@@ -262,6 +294,8 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        inputs.property("modules", listOfNotNull(properties.get("modules")))
+        inputs.property("codegenTests", allCodegenTests.toString())
         // Declare Smithy model files as inputs so task reruns when they change
         allCodegenTests.flatMap { it.imports }.forEach {
             val resolvedPath = project.projectDir.resolve(it)
@@ -304,6 +338,8 @@ fun Project.registerGenerateCargoWorkspaceTask(
         description = "generate Cargo.toml workspace file"
         val path = project.layout.buildDirectory.file("$workingDirUnderBuildDir/Cargo.toml")
         outputs.file(path)
+        inputs.property("modules", listOfNotNull(properties.get("modules")))
+        inputs.property("codegenTests", allCodegenTests.toString())
         doFirst {
             path.get().asFile.writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
         }
