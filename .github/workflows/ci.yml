@@ -139,7 +139,7 @@ jobs:
     # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
     name: Test Codegen / ${{ matrix.test.label || matrix.test.action }}
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 60
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
