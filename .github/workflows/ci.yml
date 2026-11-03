@@ -115,7 +115,9 @@ jobs:
   # critical path so the smoketest-only legs don't wait on this slower generate.
   generate-full:
     name: Generate / full-sdk
-    timeout-minutes: 30
+    # Generates the full SDK including every schema-serde service on the
+    # SchemaSerdeAllowlist, which grows each rollout phase.
+    timeout-minutes: 45
     runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
@@ -139,7 +141,9 @@ jobs:
     # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
     name: Test Codegen / ${{ matrix.test.label || matrix.test.action }}
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 35
+    # Defaults to 35 minutes; individual matrix entries can request more via
+    # `timeout` so that one slow action doesn't loosen the guard for the others.
+    timeout-minutes: ${{ matrix.test.timeout || 35 }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -166,6 +170,9 @@ jobs:
           label: check-rust-runtimes-smithy-additional
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
+          # Carries the heavy aws-smithy-lang Miri suite plus more schema-serde
+          # generated code to compile as the SchemaSerdeAllowlist grows.
+          timeout: 60
         - action: check-rust-runtimes
           action-arguments: aws/rust-runtime
           label: check-rust-runtimes-aws
@@ -181,6 +188,8 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
+          # Compiles the growing set of schema-serde generated services.
+          timeout: 60
         - action: check-server-codegen-unit-tests-python
           runner: smithy_ubuntu-latest_8-core
         - action: check-serde-codegen-unit-tests
