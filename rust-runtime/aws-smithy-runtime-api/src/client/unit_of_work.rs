@@ -67,7 +67,7 @@ pub enum ChecksumSkip {
     PartLevelChecksum,
     /// The checksum header is present but is not valid base64.
     InvalidChecksumHeader,
-    /// The only checksum header is for an algorithm the client does not compute.
+    /// The response's only checksum headers are for algorithms the client does not compute.
     UnsupportedAlgorithm,
 }
 

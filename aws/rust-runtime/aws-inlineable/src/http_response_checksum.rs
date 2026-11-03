@@ -135,19 +135,19 @@ where
             true
         };
 
-        // Observers are registered by callers that want to know how validation went, such as a
-        // `Capture` from `aws-smithy-observability`. Usually there are none.
-        let observers: Vec<SharedResponseChecksumObserver> = cfg
-            .load::<SharedResponseChecksumObserver>()
-            .cloned()
-            .collect();
-
         let response = context.response_mut();
         // An error response is never validated: a mismatch would replace its modeled error with a
         // body error that is retried as transient.
         if !response.status().is_success() {
             return Ok(());
         }
+
+        // Observers are registered by callers that want to know how validation went, such as a
+        // `Capture` from `aws-smithy-observability`. Usually there are none.
+        let observers: Vec<SharedResponseChecksumObserver> = cfg
+            .load::<SharedResponseChecksumObserver>()
+            .cloned()
+            .collect();
         if !validation_enabled {
             observers
                 .iter()

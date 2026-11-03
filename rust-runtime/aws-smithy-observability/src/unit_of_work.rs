@@ -154,8 +154,9 @@ impl ChecksumCapture {
 
     /// The outcome, once it is complete. Never waits.
     ///
-    /// The outcome is complete once both the call and its response body have ended. For a
-    /// streaming response, that is after the body is read to its end or dropped.
+    /// The outcome is complete once the call has ended and, if the response body is validated,
+    /// once that body has ended too. For a validated streaming response, that is after the body
+    /// is read to its end or dropped.
     pub fn try_outcome(&self) -> Option<ChecksumOutcome> {
         match self.state() {
             ChecksumState::Complete(outcome) => Some(outcome),
@@ -238,7 +239,7 @@ pub enum NotValidatedReason {
     PartLevelChecksum,
     /// The checksum header is present but is not valid base64.
     InvalidChecksumHeader,
-    /// The only checksum header is for an algorithm the client does not compute.
+    /// The response's only checksum headers are for algorithms the client does not compute.
     UnsupportedAlgorithm,
     /// The call succeeded, but nothing decided whether to validate its response, for example
     /// because the operation does not validate response checksums.
