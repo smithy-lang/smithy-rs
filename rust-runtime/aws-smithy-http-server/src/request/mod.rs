@@ -81,6 +81,13 @@ fn internal_server_error() -> http::Response<BoxBody> {
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
     /// The type of the extraction failures.
+    ///
+    /// Both serialization systems use this conversion contract. Generated serde calls
+    /// `into_response`; schema serde supplies the routed protocol to
+    /// `into_response_with_protocol`. Existing rejections inherit the latter's default.
+    /// Schema extractors can wrap an [`HttpModeledError`](crate::schema::HttpModeledError)
+    /// in [`ModeledRejection`](crate::response::ModeledRejection) to obtain this conversion
+    /// without implementing it themselves.
     type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
@@ -164,7 +171,7 @@ where
     T1: FromRequest<P, B>,
     T2: FromParts<P>,
     T1::Rejection: std::fmt::Display,
-    T2::Rejection: std::fmt::Display,
+    T2::Rejection: std::fmt::Display + IntoResponse<P>,
 {
     type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
     type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;

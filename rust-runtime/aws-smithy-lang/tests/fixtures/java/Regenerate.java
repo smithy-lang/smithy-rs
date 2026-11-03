@@ -39,6 +39,11 @@ import software.amazon.smithy.model.validation.ValidationEvent;
  * <p>For every fixture in {@code knowledge/}, writes the answers of Java's structural knowledge
  * indexes to {@code expected/knowledge/NAME.json}.
  *
+ * <p>For every IDL fixture in {@code idl/GROUP/} (a {@code .smithy} file, or a directory of
+ * {@code .smithy} and {@code .json} files assembled together), records the IDs of ERROR and
+ * DANGER events separately, plus the location and message of the first ERROR event. Fixtures
+ * without ERROR events are also written to {@code expected/idl/NAME.json}.
+ *
  * <p>See README.md for how to run this.
  */
 public final class Regenerate {
@@ -93,6 +98,68 @@ public final class Regenerate {
             String file = fixture.getFileName().toString();
             Files.writeString(knowledgeExpected.resolve(file), Node.prettyPrintJson(knowledge(model)) + "\n");
         }
+
+        regenerateIdl(root);
+    }
+
+    private static void regenerateIdl(Path root) throws Exception {
+        Path idlExpected = root.resolve("expected").resolve("idl");
+        Files.createDirectories(idlExpected);
+        TreeMap<String, Node> idlOutcomes = new TreeMap<>();
+        for (String group : List.of("valid", "danger", "unsupported", "invalid")) {
+            List<Path> fixtures = new ArrayList<>();
+            try (Stream<Path> files = Files.list(root.resolve("idl").resolve(group))) {
+                files.filter(p -> Files.isDirectory(p) || p.toString().endsWith(".smithy"))
+                        .sorted()
+                        .forEach(fixtures::add);
+            }
+            for (Path fixture : fixtures) {
+                String stem = fixture.getFileName().toString().replace(".smithy", "");
+                ValidatedResult<Model> result = Model.assembler().addImport(fixture).assemble();
+                TreeSet<String> errors = new TreeSet<>();
+                TreeSet<String> dangers = new TreeSet<>();
+                ValidationEvent first = null;
+                for (ValidationEvent event : result.getValidationEvents()) {
+                    if (event.getSeverity() == Severity.ERROR) {
+                        errors.add(event.getId());
+                        if (first == null) {
+                            first = event;
+                        }
+                    } else if (event.getSeverity() == Severity.DANGER) {
+                        dangers.add(event.getId());
+                    }
+                }
+                boolean accepted = errors.isEmpty() && result.getResult().isPresent();
+                ObjectNode.Builder outcome = ObjectNode.builder()
+                        .withMember("accepted", accepted)
+                        .withMember("errors", errors.stream().map(Node::from).collect(ArrayNode.collect()))
+                        .withMember("dangers", dangers.stream().map(Node::from).collect(ArrayNode.collect()));
+                if (first != null) {
+                    String file = first.getSourceLocation().getFilename();
+                    String fileName = file.isEmpty() ? "" : Path.of(file).getFileName().toString();
+                    outcome.withMember("firstError", ObjectNode.builder()
+                            .withMember("file", fileName)
+                            .withMember("line", first.getSourceLocation().getLine())
+                            .withMember("column", first.getSourceLocation().getColumn())
+                            .withMember("message", first.getMessage())
+                            .build());
+                }
+                idlOutcomes.put(group + "/" + stem, outcome.build());
+                if (accepted) {
+                    // `unwrap` also rejects DANGER events, which these fixtures may contain.
+                    Model model = result.getResult().get();
+                    ObjectNode serialized = ModelSerializer.builder().build().serialize(model);
+                    Files.writeString(idlExpected.resolve(stem + ".json"), Node.prettyPrintJson(serialized) + "\n");
+                }
+            }
+        }
+        ObjectNode.Builder cases = ObjectNode.builder();
+        idlOutcomes.forEach(cases::withMember);
+        ObjectNode document = ObjectNode.builder()
+                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                .withMember("outcomes", cases.build())
+                .build();
+        Files.writeString(idlExpected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
     }
 
     private static ArrayNode ids(Collection<? extends Shape> shapes) {

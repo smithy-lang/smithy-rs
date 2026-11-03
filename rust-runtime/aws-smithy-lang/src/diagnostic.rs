@@ -28,7 +28,8 @@ pub enum DiagnosticCode {
     Io,
     /// Input is not valid JSON.
     JsonSyntax,
-    /// An object contains the same key more than once.
+    /// An object contains the same key more than once, or an IDL document repeats a control
+    /// statement, metadata key, import, shape, member, or property.
     DuplicateKey,
     /// A configured resource limit was exceeded.
     ResourceLimit,
@@ -74,21 +75,40 @@ pub enum DiagnosticCode {
     UnknownShape,
     /// Reported by a custom [`Validator`](crate::validation::Validator).
     Custom,
+    /// Input is not valid Smithy IDL.
+    IdlSyntax,
+    /// An unquoted Smithy IDL node value (a syntactic shape ID) does not resolve to a shape.
+    /// This is a warning: the value is still loaded as the absolute shape ID string.
+    SyntacticShapeIdTarget,
 }
 
 /// Where a shape, member, trait, or node came from.
 ///
 /// Values loaded from a model record the caller-supplied source label (such as a file name),
-/// the 1-based line and column, and an [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901) JSON
-/// Pointer to the value. Values created in code use [`SourceLocation::none`].
+/// the 1-based line and column (in characters), and an
+/// [RFC 6901](https://www.rfc-editor.org/rfc/rfc6901) JSON Pointer to the value in the
+/// *semantic* model. Values created in code use [`SourceLocation::none`].
 ///
-/// The line and column are those of the object key that introduces the value (for example
-/// `"MyShape": {`), or of the value itself for strings and objects in arrays. When a key
-/// contains escape sequences, an object uses the position of its first key; other values
+/// The pointer describes the JSON AST form of the model regardless of the input
+/// representation, so equivalent IDL and JSON values have the same pointer (such as
+/// `/shapes/example#Shape/members/name/target`) at different lines and columns.
+///
+/// For JSON, the line and column are those of the object key that introduces the value (for
+/// example `"MyShape": {`), or of the value itself for strings and objects in arrays. When a
+/// key contains escape sequences, an object uses the position of its first key; other values
 /// without a position of their own (such as a number in an array) use the position of the
 /// closest enclosing value. Locations derived after loading, such as
 /// the location of a shape reference, use the line of the enclosing shape or member; their
 /// pointer still identifies the exact value.
+///
+/// For IDL, the same policy applies to node values. Shapes are located at their name,
+/// members at their name, references at the referenced shape ID, traits at their `@`, and
+/// documentation comments at their first `///`. Values the IDL synthesizes are located at the
+/// syntax they come from: an enum member's `smithy.api#Unit` target at the member name, an
+/// `= value` assignment at the value, and an inline operation input or output at its `:=`.
+/// Syntax errors, IDL-only statements (such as control statements), and
+/// [`SyntacticShapeIdTarget`](crate::diagnostic::DiagnosticCode::SyntacticShapeIdTarget)
+/// warnings have a line and column but no pointer.
 ///
 /// `Display` renders `file:line:column (pointer)`:
 ///
@@ -209,6 +229,17 @@ impl SourceLocation {
             line: position.map(|p| p.line),
             column: position.map(|p| p.column),
             pointer: Some(pointer),
+        })
+    }
+
+    /// A position in `source` without a semantic pointer, for syntax that has no
+    /// counterpart in the semantic model (such as IDL control statements).
+    pub(crate) fn at_position(source: Arc<str>, position: Position) -> Self {
+        Self::data(LocationData {
+            source,
+            line: Some(position.line),
+            column: Some(position.column),
+            pointer: None,
         })
     }
 
@@ -719,8 +750,9 @@ impl<'a> IntoIterator for &'a DiagnosticSet {
 
 /// Loading a model failed.
 ///
-/// Every collected diagnostic is available through [`LoadError::diagnostics`]. I/O and JSON
-/// syntax failures also expose their underlying error through [`std::error::Error::source`].
+/// Every collected diagnostic is available through [`LoadError::diagnostics`]. I/O, JSON
+/// syntax, and Smithy IDL syntax failures also expose their underlying error through
+/// [`std::error::Error::source`].
 #[derive(Debug)]
 pub struct LoadError {
     kind: LoadErrorKind,
@@ -731,9 +763,33 @@ pub struct LoadError {
 pub(crate) enum LoadErrorKind {
     Io { source: std::io::Error },
     Json { source: serde_json::Error },
+    Idl { source: IdlSyntaxError },
     InvalidModel,
     ResourceLimit,
 }
+
+/// A Smithy IDL input was not syntactically valid (including duplicate keys and invalid
+/// UTF-8). The location is recorded by the accompanying diagnostic.
+#[derive(Debug)]
+pub(crate) struct IdlSyntaxError {
+    message: String,
+}
+
+impl IdlSyntaxError {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+impl fmt::Display for IdlSyntaxError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for IdlSyntaxError {}
 
 impl LoadError {
     pub(crate) fn io(source: std::io::Error, diagnostics: DiagnosticSet) -> Self {
@@ -746,6 +802,13 @@ impl LoadError {
     pub(crate) fn json(source: serde_json::Error, diagnostics: DiagnosticSet) -> Self {
         Self {
             kind: LoadErrorKind::Json { source },
+            diagnostics,
+        }
+    }
+
+    pub(crate) fn idl(source: IdlSyntaxError, diagnostics: DiagnosticSet) -> Self {
+        Self {
+            kind: LoadErrorKind::Idl { source },
             diagnostics,
         }
     }
@@ -792,7 +855,13 @@ impl LoadError {
         matches!(self.kind, LoadErrorKind::Json { .. })
     }
 
-    /// Returns `true` if the input was valid JSON but not a valid model.
+    /// Returns `true` if the input was not valid Smithy IDL (including duplicate keys,
+    /// members, or declarations, and invalid UTF-8).
+    pub fn is_idl_syntax(&self) -> bool {
+        matches!(self.kind, LoadErrorKind::Idl { .. })
+    }
+
+    /// Returns `true` if the input was syntactically valid but not a valid model.
     pub fn is_invalid_model(&self) -> bool {
         matches!(self.kind, LoadErrorKind::InvalidModel)
     }
@@ -818,6 +887,13 @@ impl fmt::Display for LoadError {
             }
             LoadErrorKind::Json { .. } => {
                 f.write_str("failed to parse Smithy JSON AST")?;
+                if let Some(location) = location {
+                    write!(f, " at {}", location.short())?;
+                }
+                Ok(())
+            }
+            LoadErrorKind::Idl { .. } => {
+                f.write_str("failed to parse Smithy IDL")?;
                 if let Some(location) = location {
                     write!(f, " at {}", location.short())?;
                 }
@@ -859,6 +935,7 @@ impl std::error::Error for LoadError {
         match &self.kind {
             LoadErrorKind::Io { source } => Some(source),
             LoadErrorKind::Json { source } => Some(source),
+            LoadErrorKind::Idl { source } => Some(source),
             LoadErrorKind::InvalidModel | LoadErrorKind::ResourceLimit => None,
         }
     }

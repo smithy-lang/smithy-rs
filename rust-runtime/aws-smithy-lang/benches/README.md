@@ -10,6 +10,8 @@
 - `service_closure`: a `Walker` over every shape and member reachable from the
   model's service, following all relationships.
 
+`idl.rs` loads the same three models as Smithy IDL (see [Smithy IDL](#smithy-idl)).
+
 There is no pass/fail threshold. Compare new results against this baseline on
 the same machine class and fixture commit.
 
@@ -124,6 +126,77 @@ and one table per trait. That removes about a third of EC2's allocations, which
 outweighs the cost of computing positions. The table also records structural
 values such as targets, so retained memory grows. `write`, `service_closure`,
 and `relationship_index_build` are unchanged.
+
+## Smithy IDL
+
+`idl.rs` renders each JSON model as equivalent IDL with the test-support converter
+`tests/support/to_idl.rs`, and checks that every rendering assembles to a model equivalent to
+the JSON one before measuring. The rendering uses `///` documentation, relative shape IDs,
+omitted annotation-trait values, and `= value` assignments, so it is smaller than the JSON
+(for S3, 1.8 MiB versus 2.8 MiB). `tests/idl_corpus.rs` applies the same check to every model
+in `aws/sdk/aws-models`.
+
+- `parse/json` and `parse/idl`: one input loaded and validated, as in `parse` above. Both run
+  in the same binary, under the same counting allocator.
+- `assemble/idl_64_files`: each namespace's shapes dealt round-robin into 64 IDL files, so
+  most relative references resolve across files.
+- `assemble/mixed`: shapes alternated between an IDL file and a JSON AST document.
+- `strings`: a synthetic 0.3 MiB file of nested metadata objects, documentation comments,
+  text blocks, and list traits.
+- `syntax_error/early` and `syntax_error/late`: the S3 IDL with a syntax error inserted 1%
+  and 99% of the way through.
+
+```bash
+taskset -c 2 cargo bench --bench idl -- --warm-up-time 1 --measurement-time 3 --noplot
+```
+
+Same machine, toolchain, and fixture commit as above; crate commit `5130265fc` plus the
+uncommitted IDL changes. Times are criterion medians; throughput is per input byte, so it is
+not directly comparable between representations.
+
+| Model | `parse/json` | `parse/idl` | `assemble/idl_64_files` | `assemble/mixed` |
+| ----- | -----------: | ----------: | ----------------------: | ---------------: |
+| SQS   |      2.82 ms |     5.05 ms |                 5.41 ms |          4.24 ms |
+| S3    |      29.1 ms |     54.9 ms |                 54.2 ms |          38.4 ms |
+| EC2   |     115.3 ms |    173.6 ms |                167.5 ms |         145.7 ms |
+
+| Benchmark            |    Time |
+| -------------------- | ------: |
+| `strings`            | 31.6 ms |
+| `syntax_error/early` | 2.15 ms |
+| `syntax_error/late`  | 28.0 ms |
+
+Loading IDL takes 1.5–1.9× as long as loading the equivalent JSON. Spreading a model over
+64 files costs nothing extra: the declaration index is built once, and lookups are hash
+probes. A syntax error stops parsing, so an early error costs mostly UTF-8 validation and
+line indexing.
+
+The memory report (printed once by the benchmark) counts every allocation while loading
+once, including dropping temporary data:
+
+| Model | Input |   Bytes | Allocations | Allocated | Peak live | Retained |
+| ----- | ----- | ------: | ----------: | --------: | --------: | -------: |
+| SQS   | JSON  | 0.3 MiB |      12,279 |   2.6 MiB |   1.2 MiB |  1.0 MiB |
+| SQS   | IDL   | 0.2 MiB |      24,540 |   4.3 MiB |   2.1 MiB |  1.0 MiB |
+| S3    | JSON  | 2.8 MiB |     109,717 |  23.4 MiB |  12.6 MiB | 11.8 MiB |
+| S3    | IDL   | 1.8 MiB |     252,326 |  40.8 MiB |  21.7 MiB | 11.4 MiB |
+| EC2   | JSON  | 6.1 MiB |     459,098 |  84.9 MiB |  35.2 MiB | 29.4 MiB |
+| EC2   | IDL   | 3.7 MiB |     820,887 | 128.8 MiB |  59.3 MiB | 29.3 MiB |
+
+The retained model is the same size for both representations, so a loaded `Model` keeps
+nothing IDL-specific. IDL peaks at about 1.7× the JSON peak because each file's syntax tree
+is kept until the declaration index covering every input is built; JSON streams one shape
+at a time. Its peak stays about twice the retained model, so the two-pass parser the design
+describes as a fallback is not needed.
+
+The following come from one-off profiling during development, not from the committed
+benchmark. With a temporary timer around each phase, EC2 spent about 54 ms parsing and
+79 ms lowering through the shared converter, both dominated by allocation (the syntax tree
+owns its identifier and shape ID strings). An earlier version spent 52% of `parse/idl/s3`
+counting characters for columns, because each lookup rescanned its line from the start,
+which is quadratic for long lines such as S3's documentation. Columns on ASCII lines are now
+byte differences, and other lines resume from the previous lookup; `parse/idl/s3` went from
+177 ms to 55 ms in the same benchmark.
 
 ## Runtime schemas
 

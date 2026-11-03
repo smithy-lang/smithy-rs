@@ -1,0 +1,100 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Empty": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#Failure": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#error": "client"
+            }
+        },
+        "ex#Read": {
+            "type": "operation",
+            "input": {
+                "target": "ex#ReadInput"
+            },
+            "output": {
+                "target": "ex#ReadResult"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#ReadInput": {
+            "type": "structure",
+            "members": {}
+        },
+        "ex#ReadResult": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#Service": {
+            "type": "service",
+            "operations": [
+                {
+                    "target": "ex#Empty"
+                },
+                {
+                    "target": "ex#Read"
+                },
+                {
+                    "target": "ex#Write"
+                }
+            ]
+        },
+        "ex#Write": {
+            "type": "operation",
+            "input": {
+                "target": "ex#WriteInput"
+            },
+            "output": {
+                "target": "ex#WriteResult"
+            },
+            "errors": [
+                {
+                    "target": "ex#Failure"
+                }
+            ]
+        },
+        "ex#WriteInput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#default": "default",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "input docs",
+                "smithy.api#input": {}
+            }
+        },
+        "ex#WriteResult": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {},
+                "smithy.api#sensitive": {}
+            }
+        }
+    }
+}

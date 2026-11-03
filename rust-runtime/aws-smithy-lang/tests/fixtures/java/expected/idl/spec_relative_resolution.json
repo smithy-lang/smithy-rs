@@ -1,0 +1,40 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "foo.baz#Bar": {
+            "type": "string"
+        },
+        "smithy.example#MyBoolean": {
+            "type": "boolean"
+        },
+        "smithy.example#MyString": {
+            "type": "string"
+        },
+        "smithy.example#MyStructure": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.example#MyString"
+                },
+                "b": {
+                    "target": "smithy.example#MyString"
+                },
+                "c": {
+                    "target": "foo.baz#Bar"
+                },
+                "d": {
+                    "target": "smithy.api#String"
+                },
+                "e": {
+                    "target": "smithy.example#MyBoolean"
+                },
+                "g": {
+                    "target": "smithy.example#Other"
+                }
+            }
+        },
+        "smithy.example#Other": {
+            "type": "long"
+        }
+    }
+}

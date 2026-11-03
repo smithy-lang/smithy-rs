@@ -77,16 +77,21 @@ internal class Http1xDependencyTest {
                 "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
             );
 
-            // Should NOT have HTTP 1.x specific dependencies
+            // The shared event-stream helper tests use http-body-util as a dev dependency.
+            // Continue rejecting it as a production dependency and reject HTTP 1.x runtimes.
             let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
             for dep_name in http1_only_crates {
                 assert!(
-                    !root_package.dependencies.iter().any(|d| d.name == dep_name),
+                    !root_package.dependencies.iter().any(|d| {
+                        d.name == dep_name
+                            && !(dep_name == "http-body-util" && d.kind == #{DependencyKind}::Development)
+                    }),
                     "Should NOT have `{}` dependency for HTTP 0.x", dep_name
                 );
             }
             """,
             "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+            "DependencyKind" to cargoMetadata.resolve("DependencyKind"),
             "VersionReq" to semver.resolve("VersionReq"),
             "Version" to semver.resolve("Version"),
             *preludeScope,
@@ -386,16 +391,21 @@ internal class Http1xDependencyTest {
                             "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
                         );
 
-                        // Should NOT have HTTP 1.x specific dependencies
+                        // The shared event-stream helper tests use http-body-util as a dev dependency.
+                        // Continue rejecting it as a production dependency and reject HTTP 1.x runtimes.
                         let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
                         for dep_name in http1_only_crates {
                             assert!(
-                                !root_package.dependencies.iter().any(|d| d.name == dep_name),
+                                !root_package.dependencies.iter().any(|d| {
+                                    d.name == dep_name
+                                        && !(dep_name == "http-body-util" && d.kind == #{DependencyKind}::Development)
+                                }),
                                 "Should NOT have `{}` dependency for HTTP 0.x", dep_name
                             );
                         }
                         """,
                         "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+                        "DependencyKind" to cargoMetadata.resolve("DependencyKind"),
                         "VersionReq" to semver.resolve("VersionReq"),
                         "Version" to semver.resolve("Version"),
                         *preludeScope,

@@ -1,0 +1,86 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#BaseUser": {
+            "type": "structure",
+            "members": {
+                "userId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "smithy.example#GetUser": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#GetUserInput"
+            },
+            "output": {
+                "target": "smithy.example#GetUserOutput"
+            }
+        },
+        "smithy.example#GetUserInput": {
+            "type": "structure",
+            "members": {
+                "userId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {},
+                "smithy.api#references": [
+                    {
+                        "resource": "smithy.example#User"
+                    }
+                ]
+            }
+        },
+        "smithy.example#GetUserOutput": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#BaseUser"
+                }
+            ],
+            "members": {
+                "username": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "smithy.example#PutUser": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#PutUserInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "smithy.example#PutUserInput": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#BaseUser"
+                }
+            ],
+            "members": {},
+            "traits": {
+                "smithy.api#input": {},
+                "smithy.api#references": [
+                    {
+                        "resource": "smithy.example#User"
+                    }
+                ]
+            }
+        },
+        "smithy.example#User": {
+            "type": "resource"
+        }
+    }
+}

@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# This is the base Docker build image used by CI
+# Shared CI base image; runner-specific users belong in add-local-user.dockerfile.
+# Only this base image is published to the shared registry.
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.94.1

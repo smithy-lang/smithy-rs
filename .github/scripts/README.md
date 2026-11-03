@@ -99,7 +99,7 @@ GITHUB_ACTIONS=true ./acquire-build-image
 
 ## upload-build-image.sh
 
-**Purpose**: Uploads a local Docker build image to AWS ECR with proper authentication and tagging.
+**Purpose**: Uploads a local Docker base image to AWS ECR with proper authentication and tagging.
 
 ### Usage
 
@@ -120,9 +120,9 @@ OCI_EXE=podman ./upload-build-image.sh <tag-name>
 
 ### Behavior
 1. Authenticates with AWS ECR using AWS CLI
-2. Tags local `smithy-rs-build-image:latest` as `<account>.dkr.ecr.us-west-2.amazonaws.com/smithy-rs-build-image:<tag>`
+2. Tags local `smithy-rs-base-image:<tag>` as `<account>.dkr.ecr.us-west-2.amazonaws.com/smithy-rs-build-image:<tag>`, keeping runner-specific user layers out of the shared image
 3. Pushes tagged image to ECR (unless `DRY_RUN=true`)
 
 ### Requirements
 - AWS CLI configured with appropriate permissions
-- Local image `smithy-rs-build-image:latest` must exist
+- Local image `smithy-rs-base-image:<tag>` must exist

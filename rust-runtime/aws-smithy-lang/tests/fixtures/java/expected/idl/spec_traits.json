@@ -1,0 +1,73 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Animal": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "age": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#length": {
+                            "min": 0
+                        },
+                        "smithy.api#tags": [
+                            "private-beta",
+                            "metered"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "An animal in the animal kingdom"
+            }
+        },
+        "smithy.example#Explicit": {
+            "type": "string",
+            "traits": {
+                "smithy.example#structuredTrait": {
+                    "bar": "baz",
+                    "qux": "true"
+                }
+            }
+        },
+        "smithy.example#MyString": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Contains a string",
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 100
+                }
+            }
+        },
+        "smithy.example#Sugared": {
+            "type": "string",
+            "traits": {
+                "smithy.example#structuredTrait": {
+                    "bar": "baz",
+                    "qux": "true"
+                }
+            }
+        },
+        "smithy.example#structuredTrait": {
+            "type": "structure",
+            "members": {
+                "bar": {
+                    "target": "smithy.api#String"
+                },
+                "qux": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        }
+    }
+}
