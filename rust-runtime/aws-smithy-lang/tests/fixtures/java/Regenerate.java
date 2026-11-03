@@ -18,6 +18,9 @@ import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.BottomUpIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.SourceLocation;
+import software.amazon.smithy.model.loader.ModelAssembler;
+import software.amazon.smithy.model.loader.Prelude;
 import software.amazon.smithy.model.node.ArrayNode;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -25,6 +28,10 @@ import software.amazon.smithy.model.shapes.EntityShape;
 import software.amazon.smithy.model.shapes.ModelSerializer;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.traits.DynamicTrait;
+import software.amazon.smithy.model.traits.Trait;
+import software.amazon.smithy.model.traits.TraitFactory;
 import software.amazon.smithy.model.validation.Severity;
 import software.amazon.smithy.model.validation.ValidatedResult;
 import software.amazon.smithy.model.validation.ValidationEvent;
@@ -44,9 +51,17 @@ import software.amazon.smithy.model.validation.ValidationEvent;
  * DANGER events separately, plus the location and message of the first ERROR event. Fixtures
  * without ERROR events are also written to {@code expected/idl/NAME.json}.
  *
+ * <p>For every case in {@code assembly/} (a directory with a {@code case.json} listing assembler
+ * steps), records the outcome and, for accepted cases, the serialized model and the source file
+ * of selected shapes, members, and traits. These cover inputs added in code ({@code addShape},
+ * {@code addModel}, {@code putMetadata}, {@code addTrait}), which file fixtures cannot express.
+ *
  * <p>See README.md for how to run this.
  */
 public final class Regenerate {
+    /** The IDs of the prelude's own shapes. */
+    private static final java.util.Set<ShapeId> PRELUDE_IDS = Model.assembler().assemble().unwrap().getShapeIds();
+
     public static void main(String[] args) throws Exception {
         Path root = Path.of(args.length > 0 ? args[0] : ".");
         Path expected = root.resolve("expected");
@@ -100,6 +115,7 @@ public final class Regenerate {
         }
 
         regenerateIdl(root);
+        regenerateAssembly(root);
     }
 
     private static void regenerateIdl(Path root) throws Exception {
@@ -115,7 +131,7 @@ public final class Regenerate {
             }
             for (Path fixture : fixtures) {
                 String stem = fixture.getFileName().toString().replace(".smithy", "");
-                ValidatedResult<Model> result = Model.assembler().addImport(fixture).assemble();
+                ValidatedResult<Model> result = importSorted(Model.assembler(), fixture).assemble();
                 TreeSet<String> errors = new TreeSet<>();
                 TreeSet<String> dangers = new TreeSet<>();
                 ValidationEvent first = null;
@@ -160,6 +176,142 @@ public final class Regenerate {
                 .withMember("outcomes", cases.build())
                 .build();
         Files.writeString(idlExpected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
+    }
+
+    private static void regenerateAssembly(Path root) throws Exception {
+        Path expected = root.resolve("expected").resolve("assembly");
+        Files.createDirectories(expected);
+        TreeMap<String, Node> outcomes = new TreeMap<>();
+        List<Path> cases = new ArrayList<>();
+        try (Stream<Path> files = Files.list(root.resolve("assembly"))) {
+            files.filter(Files::isDirectory).sorted().forEach(cases::add);
+        }
+        TraitFactory traitFactory = TraitFactory.createServiceFactory();
+        for (Path dir : cases) {
+            String name = dir.getFileName().toString();
+            ObjectNode spec = Node.parse(Files.readString(dir.resolve("case.json"))).expectObjectNode();
+            ObjectNode generate = spec.getObjectMember("serializeWithPrelude").orElse(null);
+            if (generate != null) {
+                // An input file generated from another one: the model serialized with its
+                // prelude shapes, as the smithy-build `model` plugin writes it with
+                // `includePreludeShapes`.
+                Model source = Model.assembler()
+                        .addImport(dir.resolve(generate.expectStringMember("from").getValue()))
+                        .assemble()
+                        .unwrap();
+                ObjectNode serialized = ModelSerializer.builder().includePrelude(true).build().serialize(source);
+                Files.writeString(dir.resolve(generate.expectStringMember("to").getValue()),
+                        Node.prettyPrintJson(serialized) + "\n");
+            }
+            ModelAssembler assembler = Model.assembler();
+            for (Node element : spec.expectArrayMember("steps").getElements()) {
+                applyStep(assembler, dir, element.expectObjectNode(), traitFactory);
+            }
+            ValidatedResult<Model> result = assembler.assemble();
+            TreeSet<String> errors = new TreeSet<>();
+            for (ValidationEvent event : result.getValidationEvents()) {
+                if (event.getSeverity() == Severity.ERROR || event.getSeverity() == Severity.DANGER) {
+                    errors.add(event.getId());
+                }
+            }
+            boolean accepted = errors.isEmpty() && result.getResult().isPresent();
+            ObjectNode.Builder outcome = ObjectNode.builder()
+                    .withMember("accepted", accepted)
+                    .withMember("errors", errors.stream().map(Node::from).collect(ArrayNode.collect()));
+            if (accepted) {
+                Model model = result.getResult().get();
+                ObjectNode.Builder locations = ObjectNode.builder();
+                for (Node key : spec.getArrayMember("locations").map(ArrayNode::getElements)
+                        .orElse(List.of())) {
+                    String target = key.expectStringNode().getValue();
+                    locations.withMember(target, sourceFile(model, target));
+                }
+                outcome.withMember("locations", locations.build());
+                // Shapes a model adds to the prelude namespace are kept; only the prelude's own
+                // shapes are left out.
+                ObjectNode serialized = ModelSerializer.builder()
+                        .includePrelude(true)
+                        .shapeFilter(shape -> !PRELUDE_IDS.contains(shape.getId().withoutMember()))
+                        .build()
+                        .serialize(model);
+                Files.writeString(expected.resolve(name + ".json"), Node.prettyPrintJson(serialized) + "\n");
+            }
+            outcomes.put(name, outcome.build());
+        }
+        ObjectNode.Builder caseNodes = ObjectNode.builder();
+        outcomes.forEach(caseNodes::withMember);
+        ObjectNode document = ObjectNode.builder()
+                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                .withMember("outcomes", caseNodes.build())
+                .build();
+        Files.writeString(expected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
+    }
+
+    /** Applies one {@code case.json} step to {@code assembler}. Paths are relative to the case. */
+    private static void applyStep(ModelAssembler assembler, Path dir, ObjectNode step, TraitFactory traitFactory) {
+        if (step.getStringMember("addShapes").isPresent()) {
+            // The shapes of a file, added one by one as if built in code.
+            boolean disablePrelude = step.getBooleanMemberOrDefault("disablePrelude", false);
+            ModelAssembler loader = Model.assembler();
+            if (disablePrelude) {
+                loader.disablePrelude();
+            }
+            Model source = loader.addImport(dir.resolve(step.expectStringMember("addShapes").getValue()))
+                    .assemble().unwrap();
+            for (Shape shape : source.toSet()) {
+                if (!shape.isMemberShape() && (disablePrelude || !Prelude.isPreludeShape(shape))) {
+                    assembler.addShape(shape);
+                }
+            }
+        } else if (step.getStringMember("addModel").isPresent()) {
+            Path file = dir.resolve(step.expectStringMember("addModel").getValue());
+            assembler.addModel(Model.assembler().addImport(file).assemble().unwrap());
+        } else if (step.getStringMember("addFile").isPresent()) {
+            assembler.addImport(dir.resolve(step.expectStringMember("addFile").getValue()));
+        } else if (step.getStringMember("putMetadata").isPresent()) {
+            assembler.putMetadata(step.expectStringMember("putMetadata").getValue(), step.expectMember("value"));
+        } else if (step.getStringMember("addTrait").isPresent()) {
+            ShapeId target = ShapeId.from(step.expectStringMember("addTrait").getValue());
+            ShapeId traitId = ShapeId.from(step.expectStringMember("trait").getValue());
+            Node value = step.expectMember("value");
+            Trait trait = traitFactory.createTrait(traitId, target, value)
+                    .orElseGet(() -> new DynamicTrait(traitId, value));
+            assembler.addTrait(target, trait);
+        } else {
+            throw new IllegalArgumentException("Unknown step in " + dir + ": " + Node.printJson(step));
+        }
+    }
+
+    /**
+     * The file name a shape, member, or trait ({@code SHAPE_ID@TRAIT_ID}) came from, or an empty
+     * string for one created in code.
+     */
+    private static String sourceFile(Model model, String target) {
+        String[] parts = target.split("@", 2);
+        Shape shape = model.expectShape(ShapeId.from(parts[0]));
+        SourceLocation location = parts.length == 1
+                ? shape.getSourceLocation()
+                : shape.findTrait(ShapeId.from(parts[1])).orElseThrow().getSourceLocation();
+        if (location == SourceLocation.NONE || location.getFilename().isEmpty()
+                || location.getFilename().equals("N/A")) {
+            return "";
+        }
+        return Path.of(location.getFilename()).getFileName().toString();
+    }
+
+    /**
+     * Imports a fixture file, or the files of a fixture directory in sorted order, matching
+     * the order the Rust harness adds them. {@code addImport} on a directory follows the file
+     * system's order, which decides the order of merged trait arrays.
+     */
+    private static ModelAssembler importSorted(ModelAssembler assembler, Path fixture) throws Exception {
+        if (!Files.isDirectory(fixture)) {
+            return assembler.addImport(fixture);
+        }
+        try (Stream<Path> files = Files.list(fixture)) {
+            files.sorted().forEach(assembler::addImport);
+        }
+        return assembler;
     }
 
     private static ArrayNode ids(Collection<? extends Shape> shapes) {

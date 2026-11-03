@@ -1,0 +1,158 @@
+{
+    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "outcomes": {
+        "add_trait_document_prelude_namespace": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "add_trait_prelude_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "add_trait_replaces_default": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#R$x@smithy.api#default": ""
+            }
+        },
+        "created_add_trait": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_after_document": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "f.json",
+                "ex#S$m": "f.json"
+            }
+        },
+        "created_conflicting_document": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "created_idl": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "code.json",
+                "ex#S$m": "code.json"
+            }
+        },
+        "created_json_map_value_first": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_json_members_first": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "f.json",
+                "ex#S$m": "f.json"
+            }
+        },
+        "created_json_traits_first": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "f.json",
+                "ex#S$m": "f.json"
+            }
+        },
+        "created_json_without_traits": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "code.json",
+                "ex#S$m": "code.json"
+            }
+        },
+        "created_last_wins": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_prelude_namespace": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_replaced_then_document": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "string.json"
+            }
+        },
+        "document_prelude_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "document_prelude_namespace": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "smithy.api#Foo": "f.json",
+                "smithy.api#Foo$x": "f.json",
+                "smithy.api#Bar": "f.json",
+                "ex#Uses@smithy.api#Bar": "f.json"
+            }
+        },
+        "document_with_prelude_shapes": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "duplicate_locations": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#R": "b.smithy",
+                "ex#R$x": "b.smithy",
+                "ex#R$x@smithy.api#default": "b.smithy"
+            }
+        },
+        "idl_prelude_namespace": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "smithy.api#Foo": "a.smithy"
+            }
+        },
+        "metadata_order": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "model_prelude_namespace": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "model_wins_over_shapes": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "put_metadata_last_wins": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "trait_merge_order": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        }
+    }
+}

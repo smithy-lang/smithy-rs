@@ -24,7 +24,7 @@ use crate::shape_id::{IntoShapeId, InvalidShapeIdError, ShapeId};
 use crate::traits;
 use crate::validation::{builtin_validators, DiagnosticSink, Validated, Validator};
 use indexmap::IndexMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -36,15 +36,43 @@ use std::sync::Arc;
 /// Inputs are combined in the order they were added, following Smithy's merge rules:
 ///
 /// - **Shapes.** A shape defined more than once is accepted if every definition is equal
-///   (ignoring source locations); the first is kept and a
+///   (ignoring source locations and applied traits, see below); the last one is kept (it
+///   provides the source locations) and a
 ///   [`DuplicateDefinition`](DiagnosticCode::DuplicateDefinition) note records the others.
 ///   Different definitions are a [`ShapeConflict`](DiagnosticCode::ShapeConflict) error.
+/// - **Traits** are applied to a shape or member separately from its definition, as in the
+///   [Smithy reference implementation](https://github.com/smithy-lang/smithy), and merged
+///   across every definition and every [`add_trait`](Self::add_trait): equal values are
+///   accepted, arrays are concatenated, and any other difference is a
+///   [`TraitConflict`](DiagnosticCode::TraitConflict) error. So two files that define the same
+///   shape with `@tags(["a"])` and `@tags(["b"])` define one shape with both tags. The traits
+///   of JSON AST documents, models, and shapes built in code merge first (in input order), then
+///   `add_trait` traits, then the traits of IDL documents (in input order), which decides the
+///   order of concatenated arrays (the specification leaves that order unspecified). The IDL
+///   syntactic sugar for default and enum values (`member: T = value` and enum
+///   `NAME = value`) is instead part of the definition, as in the reference implementation:
+///   different values in two definitions conflict, and an applied trait with the same ID
+///   replaces the value.
 /// - **Metadata.** Equal values for a key are accepted, two arrays are concatenated in input
 ///   order, and any other difference is a
 ///   [`MetadataConflict`](DiagnosticCode::MetadataConflict) error.
-/// - **Traits** added with [`add_trait`](Self::add_trait) are merged into the target shape or
-///   member: equal values are accepted, arrays are concatenated, and any other difference is a
-///   [`TraitConflict`](DiagnosticCode::TraitConflict) error.
+/// - **Shapes, metadata, and models added in code** are merged before any document, whatever
+///   order they were added in, as in the reference implementation. Among themselves the last
+///   one wins: a later [`put_metadata`](Self::put_metadata) value for a key, or a later shape
+///   with the same ID (shapes of [models](Self::add_model) after [shapes](Self::add_shape)),
+///   replaces an earlier one without a diagnostic. Shapes in the prelude namespace are ignored,
+///   with or without the prelude (see [`disable_prelude`](Self::disable_prelude)). Such a shape is merged with a document that defines it like any other definition, and its
+///   traits are merged when a document or [`add_trait`](Self::add_trait) first touches it.
+/// - **The prelude namespace.** With the prelude, a document's definition of a shape the
+///   prelude defines is merged and compared like any other definition, then replaced by the
+///   prelude shape, without a diagnostic; a document may add new shapes to the namespace. Both
+///   follow the reference implementation, so a model serialized with its prelude shapes (such as
+///   the output of the smithy-build `model` plugin with `includePreludeShapes`) loads. Traits
+///   cannot be applied to the prelude's own shapes with [`add_trait`](Self::add_trait), but
+///   can be applied to shapes a document added to the namespace, as in the reference
+///   implementation.
+///
+/// The model's shapes keep the order of the inputs that added them.
 ///
 /// The prelude is then attached and the result validated (see the
 /// [`validation`](crate::validation) module). Shapes may refer to shapes from any input, so
@@ -274,6 +302,12 @@ impl ModelAssembler {
 
     /// Adds the shapes and metadata of an existing model. Its prelude and cached knowledge are
     /// not copied; the prelude is attached according to this assembler's options.
+    ///
+    /// As in the reference implementation, models are merged before any document and after
+    /// every shape added with [`add_shape`](Self::add_shape), whatever order they were added
+    /// in. A model's shape replaces a shape with the same ID added in code or by an earlier
+    /// model, without a diagnostic, and its metadata is merged like a document's. Shapes in the
+    /// prelude namespace are not carried over, including ones a document added to it.
     pub fn add_model(mut self, model: &Model) -> Self {
         self.inputs.push(Input::Model(model.clone()));
         self
@@ -281,12 +315,18 @@ impl ModelAssembler {
 
     /// Adds a shape, such as one built with
     /// [`StructureShape::builder`](crate::shape::StructureShape::builder).
+    ///
+    /// As in the reference implementation, shapes added in code are merged before any model or
+    /// document, whatever order they were added in. A later shape with the same ID replaces an
+    /// earlier one without a diagnostic, and a shape in the prelude namespace is ignored, with
+    /// or without the prelude. A document that defines the same shape is merged with it like
+    /// any other definition.
     pub fn add_shape(mut self, shape: impl Into<Shape>) -> Self {
         self.inputs.push(Input::Shape(Box::new(shape.into())));
         self
     }
 
-    /// Adds several shapes.
+    /// Adds several shapes, like [`add_shape`](Self::add_shape).
     pub fn add_shapes(mut self, shapes: impl IntoIterator<Item = impl Into<Shape>>) -> Self {
         self.inputs
             .extend(shapes.into_iter().map(|s| Input::Shape(Box::new(s.into()))));
@@ -294,6 +334,11 @@ impl ModelAssembler {
     }
 
     /// Adds a metadata entry, merged with metadata from other inputs.
+    ///
+    /// As in the reference implementation, metadata added in code is merged before any model or
+    /// document, whatever order it was added in, and a later value for the same key replaces an
+    /// earlier one without a diagnostic. It then merges with the metadata of models and
+    /// documents like any other.
     pub fn put_metadata(mut self, key: impl Into<String>, value: impl Into<Node>) -> Self {
         self.inputs.push(Input::Metadata {
             key: key.into(),
@@ -303,7 +348,8 @@ impl ModelAssembler {
     }
 
     /// Applies a trait to a shape or member from any input, like a Smithy `apply` statement.
-    /// The target must exist once every input is combined, and must not be a prelude shape.
+    /// The target must exist once every input is combined, and must not be one of the prelude's
+    /// own shapes (unless the prelude is disabled).
     pub fn add_trait(
         mut self,
         target: impl IntoShapeId,
@@ -439,34 +485,78 @@ impl ModelAssembler {
         let mut merge = Merge {
             prelude: with_prelude,
             shapes: IndexMap::new(),
+            created: HashSet::new(),
+            input: 0,
+            input_order: None,
+            definition_traits: HashSet::new(),
+            duplicates: Vec::new(),
+            deferred_traits: Vec::new(),
             metadata: NodeObject::new(),
             diagnostics: DiagnosticSet::with_limit(loader.max_diagnostics),
             failure: None,
             syntactic_ids: Vec::new(),
         };
-        for input in parsed {
+        // Like the reference implementation, metadata, shapes, and models added in code are
+        // registered before any document, whatever order they were added in. Metadata added in code
+        // behaves like a map (the last value of a key wins), and so do shapes built in code and the
+        // shapes of models, with shapes of models registered after shapes built in code.
+        let mut code_metadata = IndexMap::new();
+        let mut code_shapes = Vec::new();
+        let mut models = Vec::new();
+        let mut documents = Vec::new();
+        for (position, input) in parsed.into_iter().enumerate() {
             match input {
-                Parsed::Document(document) => merge.document(document),
+                Parsed::Metadata { key, value } => {
+                    code_metadata.insert(key, value);
+                }
+                Parsed::Shape(shape) => code_shapes.push((position, *shape)),
+                Parsed::Model(model) => models.push((position, model)),
+                document @ (Parsed::Document(_) | Parsed::Idl(_)) => {
+                    documents.push((position, document))
+                }
+            }
+        }
+        if !code_shapes.is_empty() || !models.is_empty() {
+            // Registering them first changes the order shapes are added in; the model keeps
+            // the order of its inputs regardless.
+            merge.input_order = Some(HashMap::new());
+        }
+        for (key, value) in code_metadata {
+            merge.metadata(key, value);
+        }
+        for (position, shape) in code_shapes {
+            merge.input = position;
+            merge.created(shape);
+        }
+        for (position, model) in models {
+            merge.input = position;
+            let data = model.data();
+            for (key, value) in data.metadata.iter() {
+                merge.metadata(key.to_owned(), value.clone());
+            }
+            for shape in data.shapes.values() {
+                merge.created(shape.clone());
+            }
+        }
+        for (position, document) in documents {
+            merge.input = position;
+            match document {
+                Parsed::Document(document) => merge.document(document, false),
                 Parsed::Idl(document) => {
                     let index = index.as_ref().expect("built when an IDL input is present");
-                    merge.document(lower::lower(&document, index, loader.max_diagnostics));
+                    let lowered = lower::lower(&document, index, loader.max_diagnostics);
+                    merge.document(lowered, true);
                 }
-                Parsed::Model(model) => {
-                    let data = model.data();
-                    for shape in data.shapes.values() {
-                        merge.shape(shape.clone());
-                    }
-                    for (key, value) in data.metadata.iter() {
-                        merge.metadata(key.to_owned(), value.clone());
-                    }
-                }
-                Parsed::Shape(shape) => merge.shape(*shape),
-                Parsed::Metadata { key, value } => merge.metadata(key, value),
+                _ => unreachable!("only documents are collected"),
             }
         }
         for pending in pending_traits {
             merge.apply_trait(pending);
         }
+        merge.apply_deferred_traits();
+        merge.finish_duplicates();
+        merge.drop_prelude_redefinitions();
+        merge.restore_input_order();
 
         let Merge {
             shapes,
@@ -559,6 +649,9 @@ pub(crate) struct LoadedDocument {
     pub(crate) diagnostics: DiagnosticSet,
     /// IDL syntactic shape IDs to check once every input is assembled. Always empty for JSON.
     pub(crate) syntactic_ids: Vec<PendingSyntacticId>,
+    /// `(target, trait)` pairs that are part of a shape's definition rather than applied
+    /// traits; see [`Merge`]. Always empty for JSON.
+    pub(crate) definition_traits: HashSet<(ShapeId, ShapeId)>,
 }
 
 impl From<Document> for LoadedDocument {
@@ -571,9 +664,67 @@ impl From<Document> for LoadedDocument {
 }
 
 /// Merge state while combining inputs.
+///
+/// Like the loader of the Smithy reference implementation (`software.amazon.smithy:smithy-model`),
+/// a shape's *definition* and the traits *applied* to it are merged separately:
+///
+/// - Every trait in a JSON AST document, every IDL trait annotation and documentation comment,
+///   every [`add_trait`](ModelAssembler::add_trait), and every trait of a shape built in code or
+///   taken from a model is an applied trait. Applied traits are merged per target (shape or
+///   member) with [`merge_nodes`], across every definition of the shape.
+/// - The IDL syntactic sugar for default and enum values (`member: T = value` and enum
+///   `NAME = value`) is part of the
+///   definition, as in the reference implementation, whose IDL loader sets them on the shape
+///   builder. An applied trait with the same ID replaces such a value.
+///
+/// Repeated definitions of a shape are compared only after every input is merged, once every
+/// applied trait is known: two definitions are equal when they are equal with every applied
+/// trait added to both. So `@tags(["a"])` in one file and `@tags(["b"])` in another define one
+/// shape with both tags, while two different `= value` default values conflict. Of equal
+/// definitions the last one is kept (it provides the source locations), as in the reference
+/// implementation.
+///
+/// Applied traits merge in the reference implementation's order, which decides the order of
+/// concatenated arrays and which value a conflict reports as the previous one: JSON AST traits
+/// in document order as documents are merged, then [`add_trait`](ModelAssembler::add_trait)
+/// traits, then IDL traits in input order. (The reference implementation resolves every IDL
+/// trait as a forward reference once all inputs are loaded.)
+///
+/// Shapes built in code and the shapes of models are registered before any document (see
+/// `assemble_inner`), and follow the reference implementation's rules for such "created"
+/// shapes: a later one with the same ID replaces an earlier one, shapes in the prelude namespace
+/// are ignored, and a shape only joins the merge once a document defines it or a trait is applied
+/// to it. At that point its traits are applied, right after whatever touched it:
+///
+/// - a trait applied to it (by `add_trait`, a JSON AST document, or an IDL document): that
+///   trait first, then the shape's own traits; for a JSON AST definition, the remaining traits
+///   of the document follow, and the document's definition counts as the later one;
+/// - a definition without applied traits (a JSON AST shape without traits, or any IDL shape,
+///   whose traits are deferred): the shape's own traits, and the document's definition counts
+///   as the earlier one.
 struct Merge {
     prelude: bool,
+    /// Every shape: for a shape defined by documents, its kept definition with every applied
+    /// trait merged into it; otherwise, a shape built in code or taken from a model.
     shapes: IndexMap<ShapeId, Shape>,
+    /// Shapes in [`shapes`](Self::shapes) built in code or taken from a model that nothing has
+    /// touched yet; see [`touch_created`](Self::touch_created).
+    created: HashSet<ShapeId>,
+    /// The index of the input being merged.
+    input: usize,
+    /// When inputs are not merged in the order they were added (because shapes built in code
+    /// or models are registered first), the `(input, sequence)` at which each shape was first
+    /// added, used by [`restore_input_order`](Self::restore_input_order).
+    input_order: Option<HashMap<ShapeId, (usize, usize)>>,
+    /// The `(target, trait)` pairs of [`shapes`](Self::shapes) that still hold a definition
+    /// trait, as opposed to an applied one.
+    definition_traits: HashSet<(ShapeId, ShapeId)>,
+    /// Later definitions of shapes in [`shapes`](Self::shapes), holding only their definition
+    /// traits, compared by [`finish_duplicates`](Self::finish_duplicates).
+    duplicates: Vec<Shape>,
+    /// Applied traits of IDL documents, merged by
+    /// [`apply_deferred_traits`](Self::apply_deferred_traits).
+    deferred_traits: Vec<DeferredTrait>,
     metadata: NodeObject,
     diagnostics: DiagnosticSet,
     /// The first input-level failure (I/O, syntax, or resource limit).
@@ -581,6 +732,10 @@ struct Merge {
     /// IDL syntactic shape IDs, checked once every shape is known.
     syntactic_ids: Vec<PendingSyntacticId>,
 }
+
+/// Applied traits as `(target, trait, value, index)`, where `index` is the trait's position
+/// among its target's traits.
+type AppliedTraits = Vec<(ShapeId, ShapeId, Node, usize)>;
 
 impl Merge {
     fn failed(&mut self, err: LoadError) {
@@ -591,70 +746,246 @@ impl Merge {
         self.diagnostics.extend(diagnostics);
     }
 
-    fn document(&mut self, document: Result<LoadedDocument, LoadError>) {
+    /// Merges a document. `defer_traits` is `true` for IDL documents, whose applied traits are
+    /// merged after every other input.
+    fn document(&mut self, document: Result<LoadedDocument, LoadError>, defer_traits: bool) {
         match document {
             Ok(LoadedDocument {
-                document: Document { metadata, shapes },
+                document:
+                    Document {
+                        metadata,
+                        shapes,
+                        first_traits,
+                    },
                 diagnostics,
                 syntactic_ids,
+                definition_traits,
             }) => {
                 self.diagnostics.extend(diagnostics);
                 self.syntactic_ids.extend(syntactic_ids);
                 for (key, value) in metadata.into_entries() {
                     self.metadata(key, value);
                 }
-                for shape in shapes.into_values() {
-                    self.shape(shape);
+                for mut shape in shapes.into_values() {
+                    if defer_traits {
+                        // A first definition gets its traits back in source order.
+                        let first = !self.shapes.contains_key(shape.id());
+                        let applied = take_applied_traits(&mut shape, &definition_traits);
+                        self.deferred_traits.extend(applied.into_iter().map(
+                            |(target, id, value, position)| DeferredTrait {
+                                target,
+                                id,
+                                value,
+                                position: first.then_some(position),
+                            },
+                        ));
+                    }
+                    let first_trait = first_traits.get(shape.id()).cloned();
+                    self.definition(shape, &definition_traits, first_trait);
                 }
             }
             Err(err) => self.failed(err),
         }
     }
 
-    fn shape(&mut self, shape: Shape) {
-        let id = shape.id();
-        if self.prelude && prelude::is_prelude_shape(id) {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    DiagnosticCode::PreludeConflict,
-                    format!(
-                        "`{id}` cannot be defined in the prelude namespace `{}`",
-                        prelude::NAMESPACE
-                    ),
-                )
-                .with_shape_id(id.clone())
-                .with_source_location(shape.source_location().clone()),
-            );
+    /// Registers a shape built in code or taken from a model. As in the reference implementation,
+    /// it replaces an earlier one with the same ID, and shapes in the prelude namespace are
+    /// ignored.
+    fn created(&mut self, shape: Shape) {
+        if prelude::is_prelude_shape(shape.id()) {
             return;
         }
-        let Some(previous) = self.shapes.get(id) else {
-            self.shapes.insert(id.clone(), shape);
+        let id = shape.id().clone();
+        self.created.insert(id.clone());
+        self.record_input_order(&id);
+        self.shapes.insert(id, shape);
+    }
+
+    /// Records where a shape first appeared, if inputs are merged out of order.
+    fn record_input_order(&mut self, id: &ShapeId) {
+        if let Some(order) = &mut self.input_order {
+            let sequence = order.len();
+            order.entry(id.clone()).or_insert((self.input, sequence));
+        }
+    }
+
+    /// Puts shapes back in the order of the inputs that first added them, which the model
+    /// promises; registering shapes built in code and models first changed it.
+    fn restore_input_order(&mut self) {
+        if let Some(order) = self.input_order.take() {
+            self.shapes.sort_by_cached_key(|id, _| order[id]);
+        }
+    }
+
+    /// If `id` is a shape built in code or taken from a model that nothing has touched yet, takes
+    /// its traits so they can be applied in the order the reference implementation applies them,
+    /// and returns them. From then on the shape is merged like a document definition.
+    fn touch_created(&mut self, id: &str) -> Option<AppliedTraits> {
+        if !self.created.remove(id) {
+            return None;
+        }
+        let shape = self
+            .shapes
+            .get_mut(id)
+            .expect("created shapes are in `shapes`");
+        Some(take_applied_traits(shape, &HashSet::new()))
+    }
+
+    /// Adds one definition of a shape from a document. `definition_traits` lists which of its
+    /// traits are part of the definition; every other trait is applied. `first_trait` is the
+    /// shape's first applied trait in document order as `(target, trait)`, when that is not
+    /// the [canonical one](crate::json_loader::canonical_first_trait).
+    fn definition(
+        &mut self,
+        mut shape: Shape,
+        definition_traits: &HashSet<(ShapeId, ShapeId)>,
+        first_trait: Option<(ShapeId, ShapeId)>,
+    ) {
+        let id = shape.id().clone();
+        if let Some(created_traits) = self.touch_created(id.as_str()) {
+            let mut applied = take_applied_traits(&mut shape, definition_traits);
+            if applied.is_empty() {
+                // Defined before any of its traits are applied: this definition is the
+                // earlier one, and the shape built in code the later one.
+                let kept = self
+                    .shapes
+                    .get_mut(&id)
+                    .expect("created shapes are in `shapes`");
+                let created = std::mem::replace(kept, shape);
+                self.add_definition_traits(&id, definition_traits);
+                self.merge_all(created_traits);
+                self.duplicates.push(created);
+            } else {
+                // The reference implementation applies a JSON AST shape's traits in document order
+                // before defining it: the first one touches the shape built in code, whose traits
+                // follow, and this definition is the later one.
+                let first = first_trait_index(&applied, first_trait.as_ref());
+                let (target, trait_id, value, _) = applied.remove(first);
+                self.merge_trait(&target, trait_id, value, None);
+                self.merge_all(created_traits);
+                self.merge_all(applied);
+                self.duplicates.push(shape);
+            }
             return;
-        };
-        let (location, first) = (shape.source_location(), previous.source_location());
-        if *previous != shape {
-            self.diagnostics.push(
-                Diagnostic::error(
-                    DiagnosticCode::ShapeConflict,
-                    format!(
-                        "conflicting definitions of `{id}`{}",
-                        built_in_code(location, first)
-                    ),
-                )
-                .with_shape_id(id.clone())
-                .with_source_location(location.clone())
-                .with_related(first.clone()),
-            );
-        } else if location != first {
-            self.diagnostics.push(
-                Diagnostic::note(
-                    DiagnosticCode::DuplicateDefinition,
-                    format!("ignoring duplicate but equivalent definition of `{id}`"),
-                )
-                .with_shape_id(id.clone())
-                .with_source_location(location.clone())
-                .with_related(first.clone()),
-            );
+        }
+        if !self.shapes.contains_key(&id) {
+            self.add_definition_traits(&id, definition_traits);
+            self.record_input_order(&id);
+            self.shapes.insert(id, shape);
+            return;
+        }
+        // A later definition: its applied traits apply to the shape (and so to every
+        // definition), and the definition itself is compared once every input is merged.
+        let applied = take_applied_traits(&mut shape, definition_traits);
+        self.merge_all(applied);
+        self.duplicates.push(shape);
+    }
+
+    /// Records the definition traits of the kept definition of `id`.
+    fn add_definition_traits(
+        &mut self,
+        id: &ShapeId,
+        definition_traits: &HashSet<(ShapeId, ShapeId)>,
+    ) {
+        self.definition_traits.extend(
+            definition_traits
+                .iter()
+                .filter(|(target, _)| target.root_str() == id.as_str())
+                .cloned(),
+        );
+    }
+
+    /// Merges applied traits in order. A target that only a later definition has is reported
+    /// as a conflict when the definitions are compared, so it is skipped here.
+    fn merge_all(&mut self, traits: AppliedTraits) {
+        for (target, id, value, _) in traits {
+            self.merge_trait(&target, id, value, None);
+        }
+    }
+
+    /// Merges a trait applied by `add_trait` or an IDL document. If it touches a shape built in
+    /// code, that shape's own traits are applied right after it, as in the reference
+    /// implementation.
+    fn merge_applied_trait(
+        &mut self,
+        target: &ShapeId,
+        id: ShapeId,
+        value: Node,
+        position: Option<usize>,
+    ) -> bool {
+        let created_traits = self.touch_created(target.root_str());
+        let merged = self.merge_trait(target, id, value, position);
+        if let Some(created_traits) = created_traits {
+            self.merge_all(created_traits);
+        }
+        merged
+    }
+
+    /// Merges the applied traits of IDL documents, after every other input and `add_trait`.
+    fn apply_deferred_traits(&mut self) {
+        for deferred in std::mem::take(&mut self.deferred_traits) {
+            // The target is a shape or member of the same document, so it exists.
+            let DeferredTrait {
+                target,
+                id,
+                value,
+                position,
+            } = deferred;
+            self.merge_applied_trait(&target, id, value, position);
+        }
+    }
+
+    /// Compares every repeated definition with the kept one, now that every applied trait is known.
+    /// Like the reference implementation, an equal definition replaces the kept one (so the last of
+    /// equal definitions provides the source locations), with a note; a different one conflicts and
+    /// is dropped.
+    fn finish_duplicates(&mut self) {
+        for duplicate in std::mem::take(&mut self.duplicates) {
+            let id = duplicate.id().clone();
+            let kept = &self.shapes[&id];
+            let duplicate = with_applied_traits(duplicate, kept, &self.definition_traits);
+            let (location, kept_location) = (duplicate.source_location(), kept.source_location());
+            if *kept != duplicate {
+                self.diagnostics.push(
+                    Diagnostic::error(
+                        DiagnosticCode::ShapeConflict,
+                        format!(
+                            "conflicting definitions of `{id}`{}",
+                            built_in_code(location, kept_location)
+                        ),
+                    )
+                    .with_shape_id(id.clone())
+                    .with_source_location(location.clone())
+                    .with_related(kept_location.clone()),
+                );
+                continue;
+            }
+            if location != kept_location {
+                self.diagnostics.push(
+                    Diagnostic::note(
+                        DiagnosticCode::DuplicateDefinition,
+                        format!("ignoring duplicate but equivalent definition of `{id}`"),
+                    )
+                    .with_shape_id(id.clone())
+                    .with_source_location(location.clone())
+                    .with_related(kept_location.clone()),
+                );
+            }
+            let kept = self
+                .shapes
+                .get_mut(&id)
+                .expect("duplicates have a kept shape");
+            adopt_locations(kept, &duplicate, &self.definition_traits);
+        }
+    }
+
+    /// Drops document definitions of shapes the prelude defines: as in the reference
+    /// implementation, the prelude replaces them, once they have been merged and compared like
+    /// any other definition. Shapes a document adds to the prelude namespace are kept.
+    fn drop_prelude_redefinitions(&mut self) {
+        if self.prelude {
+            let prelude = prelude::shapes();
+            self.shapes.retain(|id, _| !prelude.contains_key(id));
         }
     }
 
@@ -714,25 +1045,69 @@ impl Merge {
             ));
             return;
         }
-        if prelude::is_prelude_shape(&target) && self.prelude {
+        // As in the reference implementation, only the prelude's own shapes are immutable here;
+        // shapes a document added to the namespace accept traits applied in code.
+        if self.prelude && prelude::shapes().contains_key(target.root_str()) {
             self.diagnostics.push(fail(
                 DiagnosticCode::PreludeConflict,
                 format!("cannot apply `{id}` to the prelude shape `{target}`"),
             ));
             return;
         }
-        let Some(traits) = trait_map(&mut self.shapes, &target) else {
+        if !self.merge_applied_trait(&target, id.clone(), pending.value, None)
+            && !self.has_target(&target)
+        {
             self.diagnostics.push(fail(
                 DiagnosticCode::UnknownShape,
                 format!("trait `{id}` is applied to unknown shape `{target}`"),
             ));
-            return;
+        }
+    }
+
+    /// Returns `true` if any definition has `target` (a root shape or member).
+    fn has_target(&self, target: &ShapeId) -> bool {
+        let defines = |shape: &Shape| {
+            shape.id().as_str() == target.root_str()
+                && target
+                    .member()
+                    .is_none_or(|name| shape.member(name).is_some())
         };
+        self.shapes.get(target.root_str()).is_some_and(defines)
+            || self.duplicates.iter().any(defines)
+    }
+
+    /// Merges an applied trait into the first definition of its target. Returns `false` if
+    /// that definition does not have the target.
+    ///
+    /// A new trait is added at `position` (clamped), or last. Positions only keep a first IDL
+    /// definition's traits in source order; they do not affect merging.
+    fn merge_trait(
+        &mut self,
+        target: &ShapeId,
+        id: ShapeId,
+        value: Node,
+        position: Option<usize>,
+    ) -> bool {
+        let Some(traits) = trait_map(&mut self.shapes, target) else {
+            return false;
+        };
+        // An applied trait replaces a definition trait (an IDL value assignment).
+        if self.definition_traits.remove(&(target.clone(), id.clone())) {
+            traits.insert(id, value);
+            return true;
+        }
         let Some(previous) = traits.get(&id) else {
-            traits.insert(id, pending.value);
-            return;
+            match position {
+                Some(position) => {
+                    traits.shift_insert(position.min(traits.len()), id, value);
+                }
+                None => {
+                    traits.insert(id, value);
+                }
+            }
+            return true;
         };
-        let merged = merge_nodes(previous, pending.value, |previous, value| {
+        let merged = merge_nodes(previous, value, |previous, value| {
             Diagnostic::error(
                 DiagnosticCode::TraitConflict,
                 format!(
@@ -751,7 +1126,111 @@ impl Merge {
             Ok(None) => {}
             Err(diagnostic) => self.diagnostics.push(diagnostic),
         }
+        true
     }
+}
+
+/// An applied trait of an IDL document, merged after every other input.
+struct DeferredTrait {
+    target: ShapeId,
+    id: ShapeId,
+    value: Node,
+    /// The trait's index on its target, for a shape's first definition.
+    position: Option<usize>,
+}
+
+/// Removes the applied traits of `shape` and its members, returning them as
+/// `(target, trait, value, index)` in declaration order, where `index` is the trait's position
+/// among its target's traits. Traits listed in `definition_traits` stay.
+fn take_applied_traits(
+    shape: &mut Shape,
+    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+) -> AppliedTraits {
+    let mut applied = Vec::new();
+    let mut split = |target: &ShapeId, traits: &mut TraitMap| {
+        for (index, (id, value)) in std::mem::take(traits).into_iter().enumerate() {
+            if definition_traits.contains(&(target.clone(), id.clone())) {
+                traits.insert(id, value);
+            } else {
+                applied.push((target.clone(), id, value, index));
+            }
+        }
+    };
+    let root = shape.id().clone();
+    split(&root, &mut shape.common_mut().traits);
+    for member in shape.members_mut() {
+        let target = member.id.clone();
+        split(&target, &mut member.traits);
+    }
+    applied
+}
+
+/// The index in `applied` (from [`take_applied_traits`]) of a JSON AST shape's first trait
+/// in document order: `first`, or else the canonical first trait, which is the first member
+/// trait or else the first shape trait (see
+/// [`canonical_first_trait`](crate::json_loader::canonical_first_trait)).
+fn first_trait_index(applied: &AppliedTraits, first: Option<&(ShapeId, ShapeId)>) -> usize {
+    let found = match first {
+        Some((target, id)) => applied
+            .iter()
+            .position(|(t, i, _, _)| t == target && i == id),
+        None => applied.iter().position(|(target, ..)| target.is_member()),
+    };
+    found.unwrap_or(0)
+}
+
+/// Gives `kept` the source locations of an equal later definition, which the reference
+/// implementation keeps instead: the shape's and its members' locations, and the values (with their
+/// locations) of the traits that are still definition traits.
+fn adopt_locations(
+    kept: &mut Shape,
+    duplicate: &Shape,
+    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+) {
+    kept.common_mut().source = duplicate.source_location().clone();
+    for member in kept.members_mut() {
+        let Some(other) = duplicate.member(member.name()) else {
+            continue;
+        };
+        member.source = other.source.clone();
+        for (id, value) in &other.traits {
+            if definition_traits.contains(&(member.id.clone(), id.clone())) {
+                if let Some(slot) = member.traits.get_mut(id) {
+                    *slot = value.clone();
+                }
+            }
+        }
+    }
+}
+
+/// A later definition (holding only its definition traits) with the applied traits of the
+/// shape added, so it can be compared with `first`. The applied traits of a target are the
+/// traits of `first` that are not definition traits; members that `first` lacks keep only
+/// their own traits.
+fn with_applied_traits(
+    mut duplicate: Shape,
+    first: &Shape,
+    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+) -> Shape {
+    let apply = |target: &ShapeId, from: &TraitMap, to: &mut TraitMap| {
+        for (id, value) in from {
+            if !definition_traits.contains(&(target.clone(), id.clone())) {
+                to.insert(id.clone(), value.clone());
+            }
+        }
+    };
+    apply(
+        first.id(),
+        &first.common().traits,
+        &mut duplicate.common_mut().traits,
+    );
+    for member in duplicate.members_mut() {
+        if let Some(first_member) = first.member(member.name()) {
+            let target = member.id.clone();
+            apply(&target, &first_member.traits, &mut member.traits);
+        }
+    }
+    duplicate
 }
 
 /// The traits of a shape or member, for applying a trait.
@@ -770,7 +1249,8 @@ fn trait_map<'a>(
     }
 }
 
-/// Merges a repeated metadata or trait value, following Java Smithy's loader:
+/// Merges a repeated metadata or trait value, following Smithy's reference implementation
+/// loader:
 ///
 /// - the same value from the same location (the same input added twice) is ignored;
 /// - two arrays are concatenated;

@@ -36,6 +36,7 @@ use crate::shape::ShapeType;
 use crate::shape_id::ShapeId;
 use crate::traits;
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 const DEFAULT: &str = "smithy.api#default";
 
@@ -81,6 +82,7 @@ pub(crate) fn lower(
         index,
         converter: AstConverter::new(document.source.clone(), max_diagnostics),
         syntactic_ids: Vec::new(),
+        definition_traits: HashSet::new(),
         output: Document::default(),
     };
     lowerer.controls()?;
@@ -91,6 +93,7 @@ pub(crate) fn lower(
     let Lowerer {
         converter,
         syntactic_ids,
+        definition_traits,
         output,
         ..
     } = lowerer;
@@ -102,6 +105,7 @@ pub(crate) fn lower(
         document: output,
         diagnostics,
         syntactic_ids,
+        definition_traits,
     })
 }
 
@@ -120,6 +124,9 @@ struct Lowerer<'a> {
     index: &'a DeclarationIndex,
     converter: AstConverter,
     syntactic_ids: Vec<PendingSyntacticId>,
+    /// Traits set by value assignments, which the Smithy reference implementation treats as part of
+    /// the definition rather than as applied traits (see the assembler's `Merge`).
+    definition_traits: HashSet<(ShapeId, ShapeId)>,
     output: Document,
 }
 
@@ -408,6 +415,7 @@ impl<'a> Lowerer<'a> {
                 let binding = self.binding(scope, shape.resource.as_ref());
                 let entries = self.members(
                     scope,
+                    &id,
                     shape.kind,
                     members,
                     &binding,
@@ -495,10 +503,13 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// Lowers members to `(name, {"target": ..., "traits": ...})` entries.
+    /// Lowers members to `(name, {"target": ..., "traits": ...})` entries. `container` is the
+    /// absolute ID of the shape that declares them.
+    #[allow(clippy::too_many_arguments)]
     fn members(
         &mut self,
         scope: &Scope<'_>,
+        container: &str,
         kind: ShapeKindSyntax,
         members: &[MemberSyntax],
         binding: &Binding<'_>,
@@ -552,6 +563,13 @@ impl<'a> Lowerer<'a> {
                 let value = self
                     .node(Some(scope), value)
                     .with_position(self.position(value.span()));
+                // An invalid ID is reported when the shape is converted.
+                if let (Ok(member), Ok(trait_shape)) = (
+                    ShapeId::new(&format!("{container}${name}")),
+                    ShapeId::new(&trait_id),
+                ) {
+                    self.definition_traits.insert((member, trait_shape));
+                }
                 sugar.push((trait_id, value));
             }
             let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
@@ -750,6 +768,7 @@ impl<'a> Lowerer<'a> {
         let binding = self.binding(scope, resource.as_ref());
         let entries = self.members(
             scope,
+            &id,
             ShapeKindSyntax::Structure,
             members,
             &binding,

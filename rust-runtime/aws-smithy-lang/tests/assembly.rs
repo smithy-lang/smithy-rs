@@ -19,6 +19,9 @@ use aws_smithy_lang::{
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+const TAGS: ShapeId = ShapeId::from_static("smithy.api#tags");
+const DEFAULT: ShapeId = ShapeId::from_static("smithy.api#default");
+
 fn doc(shapes: &str) -> String {
     format!(r#"{{"smithy":"2.0","shapes":{{{shapes}}}}}"#)
 }
@@ -338,25 +341,71 @@ fn inputs_combine_and_resolve_across_sources() {
 }
 
 #[test]
-fn prelude_shapes_cannot_be_redefined() {
-    let json = doc(r#""smithy.api#String":{"type":"string"}"#);
+fn prelude_shapes_are_replaced_by_the_prelude() {
+    // Like the reference implementation, a document's definition of a prelude shape is replaced
+    // by the prelude shape, without a diagnostic, even when it differs, and the shapes a document
+    // adds to the prelude namespace are kept.
+    let json = doc(concat!(
+        r#""smithy.api#String":{"type":"integer","traits":{"smithy.api#documentation":"x"}},"#,
+        r#""smithy.api#Foo":{"type":"structure","members":{"x":{"target":"smithy.api#String"}}},"#,
+        r#""ex#Uses":{"type":"structure","members":{"#,
+        r#""name":{"target":"smithy.api#String","traits":{"smithy.api#length":{"min":1}}},"#,
+        r#""foo":{"target":"smithy.api#Foo"}}}"#
+    ));
     let validated = Model::assembler()
         .add_json_str("p.json", json.clone())
         .assemble();
+    assert_eq!(codes(&validated), []);
+    let model = expect_model(validated);
+    let string = model
+        .expect_shape(&ShapeId::from_static("smithy.api#String"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert_eq!(string.shape_type(), ShapeType::String);
+    assert!(string.is_prelude());
+    assert!(!string.has_trait(&traits::DOCUMENTATION));
+    let foo = model
+        .expect_shape(&ShapeId::from_static("smithy.api#Foo"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert_eq!(foo.source_location().source(), "p.json");
+    assert!(foo.is_prelude());
+    assert_eq!(
+        model
+            .non_prelude_shapes()
+            .map(|s| s.id().as_str().to_owned())
+            .collect::<Vec<_>>(),
+        ["smithy.api#Foo", "ex#Uses"]
+    );
+    // A redefinition is still merged and compared like any other definition.
+    let other = doc(r#""smithy.api#String":{"type":"string"}"#);
+    let validated = Model::assembler()
+        .add_json_str("p.json", json.clone())
+        .add_json_str("q.json", other)
+        .assemble();
     assert_eq!(
         codes(&validated),
-        [(Severity::Error, DiagnosticCode::PreludeConflict)]
+        [(Severity::Error, DiagnosticCode::ShapeConflict)]
     );
-    let built = SimpleShape::builder(ShapeType::String, "smithy.api#String")
+    // Shapes built in code (or from models) in the prelude namespace are ignored.
+    let built = SimpleShape::builder(ShapeType::Integer, "smithy.api#String")
         .build()
         .unwrap();
-    let validated = Model::assembler().add_shape(built).assemble();
-    assert!(validated.has_errors());
-    // Without the prelude, `smithy.api` shapes can be defined.
+    let model = expect_model(Model::assembler().add_shape(built).assemble());
+    let string = model
+        .expect_shape(&ShapeId::from_static("smithy.api#String"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert_eq!(string.shape_type(), ShapeType::String);
+    assert!(string.is_prelude());
+    // Without the prelude, `smithy.api` shapes are ordinary shapes.
     let model = expect_model(
         Model::assembler()
             .disable_prelude()
-            .add_json_str("p", json)
+            .add_json_str("p", doc(r#""smithy.api#String":{"type":"string"}"#))
             .assemble(),
     );
     let string = model
@@ -366,6 +415,50 @@ fn prelude_shapes_cannot_be_redefined() {
         .unwrap();
     assert!(!string.is_prelude());
     assert!(aws_smithy_lang::prelude::is_prelude_shape(string.id()));
+    // Shapes built in code in the prelude namespace are ignored even without the prelude, as in
+    // the reference implementation; a document's are kept.
+    let foo = SimpleShape::builder(ShapeType::String, "smithy.api#Foo")
+        .build()
+        .unwrap();
+    let validated = Model::assembler()
+        .disable_prelude()
+        .add_shape(foo)
+        .add_json_str("p", doc(r#""smithy.api#Bar":{"type":"string"}"#))
+        .assemble();
+    assert_eq!(codes(&validated), []);
+    let model = expect_model(validated);
+    assert!(!model.contains_shape(&ShapeId::from_static("smithy.api#Foo")));
+    assert!(model.contains_shape(&ShapeId::from_static("smithy.api#Bar")));
+}
+
+#[test]
+fn shapes_keep_the_order_of_their_inputs() {
+    // Shapes and models added in code are merged before documents, but the model lists every
+    // shape in the order of the input that first added it.
+    let string = |id: &'static str| SimpleShape::builder(ShapeType::String, id).build().unwrap();
+    let model = Model::from_json_str("m.json", &doc(r#""ex#M":{"type":"string"}"#)).unwrap();
+    let names = |model: &Model| {
+        model
+            .non_prelude_shapes()
+            .map(|s| s.id().name().to_owned())
+            .collect::<Vec<_>>()
+    };
+    let assembled = expect_model(
+        Model::assembler()
+            .add_json_str("a.json", doc(r#""ex#A":{"type":"string"}"#))
+            .add_shape(string("ex#B"))
+            .add_json_str(
+                "c.json",
+                doc(r#""ex#C":{"type":"string"},"ex#B":{"type":"string"}"#),
+            )
+            .add_model(&model)
+            .add_shape(string("ex#D"))
+            // Added again later: keeps the position of the input that first added it.
+            .add_shape(string("ex#B"))
+            .add_json_str("e.json", doc(r#""ex#E":{"type":"string"}"#))
+            .assemble(),
+    );
+    assert_eq!(names(&assembled), ["A", "B", "C", "M", "D", "E"]);
 }
 
 #[test]
@@ -449,27 +542,40 @@ fn metadata_merges_like_java_smithy() {
             .put_metadata("only_code", "x")
             .assemble(),
     );
+    // Like the reference implementation, metadata added in code is merged before any document.
     assert_eq!(
         model.metadata_value("list").unwrap().to_json_string(),
-        "[1,2,3,4]"
+        "[4,1,2,3]"
     );
     assert_eq!(
         model.metadata_value("same").unwrap().to_json_string(),
         r#"{"x":1}"#
     );
     let keys: Vec<_> = model.metadata().keys().collect();
-    assert_eq!(keys, ["list", "same", "only_a", "only_code"]);
+    assert_eq!(keys, ["list", "only_code", "same", "only_a"]);
     // Elements keep the locations of the documents they came from.
     let list = model.metadata_value("list").unwrap().as_array().unwrap();
+    assert!(list[0].source_location().is_none());
     assert_eq!(
-        list[0].source_location().to_string(),
+        list[1].source_location().to_string(),
         "a.json:1:29 (/metadata/list/0)"
     );
     assert_eq!(
-        list[2].source_location().to_string(),
+        list[3].source_location().to_string(),
         "b.json:1:29 (/metadata/list/0)"
     );
-    assert!(list[3].source_location().is_none());
+
+    // Metadata added in code behaves like a map: the last value of a key wins.
+    let model = expect_model(
+        Model::assembler()
+            .put_metadata("k", Node::from(vec![Node::from("a")]))
+            .put_metadata("k", Node::from(vec![Node::from("b")]))
+            .assemble(),
+    );
+    assert_eq!(
+        model.metadata_value("k").unwrap().to_json_string(),
+        r#"["b"]"#
+    );
 
     let validated = Model::assembler()
         .add_json_str("a.json", m(r#"{"k":"a"}"#))
@@ -546,6 +652,301 @@ fn applied_traits_merge_like_java_smithy() {
         fails(base().add_trait("ex#A", traits::MIXIN, empty())),
         DiagnosticCode::UnsupportedFeature
     );
+}
+
+#[test]
+fn applied_traits_merge_across_definitions() {
+    let tags = |model: &Model, id: &'static str| {
+        model
+            .expect_shape(&ShapeId::from_static(id))
+            .unwrap()
+            .get_trait(&TAGS)
+            .map(|t| t.to_json_string())
+    };
+    let tagged = |tag: &str| {
+        doc(&format!(
+            r#""ex#T":{{"type":"string","traits":{{"smithy.api#tags":["{tag}"]}}}}"#
+        ))
+    };
+
+    // Traits are applied separately from definitions, so definitions that apply different
+    // traits are the same shape (with a note), and their traits merge: arrays concatenate
+    // and a trait from only one definition is kept.
+    let a = doc(
+        r#""ex#S":{"type":"structure","members":{"m":{"target":"smithy.api#String",
+                   "traits":{"smithy.api#tags":["a"]}}},"traits":{"smithy.api#tags":["a"]}}"#,
+    );
+    let b = doc(
+        r#""ex#S":{"type":"structure","members":{"m":{"target":"smithy.api#String",
+                   "traits":{"smithy.api#tags":["b"]}}},"traits":{"smithy.api#documentation":"d"}}"#,
+    );
+    let validated = Model::assembler()
+        .add_json_str("a.json", a)
+        .add_json_str("b.json", b)
+        .assemble();
+    assert_eq!(
+        codes(&validated),
+        [(Severity::Note, DiagnosticCode::DuplicateDefinition)]
+    );
+    let model = expect_model(validated);
+    assert_eq!(tags(&model, "ex#S").as_deref(), Some(r#"["a"]"#));
+    assert_eq!(tags(&model, "ex#S$m").as_deref(), Some(r#"["a","b"]"#));
+    assert!(model
+        .expect_shape(&ShapeId::from_static("ex#S"))
+        .unwrap()
+        .has_trait(&traits::DOCUMENTATION));
+
+    // The reference implementation merges JSON AST traits as documents load, `add_trait` traits
+    // next, and IDL traits last (they are forward references there), whatever the input order.
+    let idl = |tag: &str| format!("$version: \"2\"\nnamespace ex\n@tags([\"{tag}\"])\nstring T\n");
+    let model = expect_model(
+        Model::assembler()
+            .add_idl_str("a.smithy", idl("idl"))
+            .add_json_str("b.json", tagged("json"))
+            .add_trait("ex#T", TAGS, Node::from(vec![Node::from("added")]))
+            .assemble(),
+    );
+    assert_eq!(
+        tags(&model, "ex#T").as_deref(),
+        Some(r#"["json","added","idl"]"#)
+    );
+    // IDL documents keep their input order among themselves.
+    let model = expect_model(
+        Model::assembler()
+            .add_idl_str("b.smithy", idl("second"))
+            .add_idl_str("a.smithy", idl("first"))
+            .assemble(),
+    );
+    assert_eq!(
+        tags(&model, "ex#T").as_deref(),
+        Some(r#"["second","first"]"#)
+    );
+
+    // Different values of other traits still conflict, also between definitions.
+    let documented = |text: &str| {
+        doc(&format!(
+            r#""ex#D":{{"type":"string","traits":{{"smithy.api#documentation":"{text}"}}}}"#
+        ))
+    };
+    let validated = Model::assembler()
+        .add_json_str("a.json", documented("a"))
+        .add_json_str("b.json", documented("b"))
+        .assemble();
+    assert!(codes(&validated).contains(&(Severity::Error, DiagnosticCode::TraitConflict)));
+}
+
+#[test]
+fn idl_value_assignments_are_part_of_the_definition() {
+    let record = |value: &str| {
+        format!("$version: \"2\"\nnamespace ex\nstructure R {{\n    x: String = \"{value}\"\n}}\n")
+    };
+    let default = |model: &Model| {
+        model
+            .expect_shape(&ShapeId::from_static("ex#R$x"))
+            .unwrap()
+            .get_trait(&DEFAULT)
+            .unwrap()
+            .to_json_string()
+    };
+
+    // Like the reference implementation, which sets them on the shape builder: different values
+    // conflict as definitions, and equal values are one definition.
+    let validated = Model::assembler()
+        .add_idl_str("a.smithy", record("a"))
+        .add_idl_str("b.smithy", record("b"))
+        .assemble();
+    assert_eq!(
+        codes(&validated),
+        [(Severity::Error, DiagnosticCode::ShapeConflict)]
+    );
+    let model = expect_model(
+        Model::assembler()
+            .add_idl_str("a.smithy", record("a"))
+            .add_idl_str("b.smithy", record("a"))
+            .assemble(),
+    );
+    assert_eq!(default(&model), r#""a""#);
+
+    // An applied trait with the same ID replaces the assigned value, in every definition.
+    let model = expect_model(
+        Model::assembler()
+            .add_idl_str("a.smithy", record("a"))
+            .add_trait("ex#R$x", DEFAULT, "b")
+            .assemble(),
+    );
+    assert_eq!(default(&model), r#""b""#);
+    let model = expect_model(
+        Model::assembler()
+            .add_idl_str("a.smithy", record("a"))
+            .add_idl_str("b.smithy", record("b"))
+            .add_trait("ex#R$x", DEFAULT, "c")
+            .assemble(),
+    );
+    assert_eq!(default(&model), r#""c""#);
+
+    // A trait applied to a member that only a conflicting definition has is not reported as
+    // applied to an unknown shape; the conflict is.
+    let validated = Model::assembler()
+        .add_json_str("a.json", doc(r#""ex#S":{"type":"structure","members":{}}"#))
+        .add_json_str(
+            "b.json",
+            doc(r#""ex#S":{"type":"structure","members":{"m":{"target":"smithy.api#String"}}}"#),
+        )
+        .add_trait("ex#S$m", traits::REQUIRED, empty())
+        .assemble();
+    assert_eq!(
+        codes(&validated),
+        [(Severity::Error, DiagnosticCode::ShapeConflict)]
+    );
+}
+
+#[test]
+fn shapes_built_in_code_merge_like_created_shapes() {
+    let tags_of = |model: &Model, id: &'static str| {
+        model
+            .expect_shape(&ShapeId::from_static(id))
+            .unwrap()
+            .get_trait(&TAGS)
+            .map(|t| t.to_json_string())
+    };
+    let tags = |tag: &str| Node::from(vec![Node::from(tag)]);
+    let built = |tag: &str| {
+        StructureShape::builder("ex#S")
+            .add_trait(TAGS, tags(tag))
+            .add_member(
+                MemberShape::builder("ex#S$m", "smithy.api#String")
+                    .add_trait(TAGS, tags(tag))
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap()
+    };
+    let member =
+        r#""members":{"m":{"target":"smithy.api#String","traits":{"smithy.api#tags":["file"]}}}"#;
+    let shape_traits = r#""traits":{"smithy.api#tags":["file"]}"#;
+
+    // A JSON AST definition with traits: its first trait in document order touches the shape
+    // built in code, whose traits follow; then the rest of the document's traits. The
+    // document's definition is the later, kept one.
+    let traits_first = doc(&format!(
+        r#""ex#S":{{"type":"structure",{shape_traits},{member}}}"#
+    ));
+    let model = expect_model(
+        Model::assembler()
+            .add_json_str("f.json", traits_first)
+            .add_shape(built("code"))
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["file","code"]"#)
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S$m").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
+    assert_eq!(shape.source_location().source(), "f.json");
+    let members_first = doc(&format!(
+        r#""ex#S":{{"type":"structure",{member},{shape_traits}}}"#
+    ));
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(built("code"))
+            .add_json_str("f.json", members_first)
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S$m").as_deref(),
+        Some(r#"["file","code"]"#)
+    );
+
+    // A definition without applied traits (here an IDL one, whose traits are applied last):
+    // the shape built in code is the later, kept definition.
+    let idl = "$version: \"2\"\nnamespace ex\n@tags([\"file\"])\nstructure S {\n    @tags([\"file\"])\n    m: String\n}\n";
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(built("code"))
+            .add_idl_str("f.smithy", idl)
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S$m").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
+    assert!(shape.source_location().is_none());
+
+    // `add_trait`: that trait first, then the shape's own traits.
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(built("code"))
+            .add_trait("ex#S", TAGS, tags("added"))
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["added","code"]"#)
+    );
+
+    // The same shape built in code or taken from a model twice: the last one wins silently,
+    // and shapes of models win over shapes built in code, whatever the order they were added.
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(built("first"))
+            .add_shape(built("second"))
+            .assemble(),
+    );
+    assert_eq!(tags_of(&model, "ex#S").as_deref(), Some(r#"["second"]"#));
+    let from_model = expect_model(Model::assembler().add_shape(built("model")).assemble());
+    let validated = Model::assembler()
+        .add_model(&from_model)
+        .add_shape(built("shape"))
+        .add_shape(
+            SimpleShape::builder(ShapeType::String, "ex#S")
+                .build()
+                .unwrap(),
+        )
+        .assemble();
+    assert!(validated.diagnostics().is_empty());
+    assert_eq!(
+        tags_of(&expect_model(validated), "ex#S").as_deref(),
+        Some(r#"["model"]"#)
+    );
+
+    // A different definition in a document still conflicts; the document's definition (the
+    // earlier one here) is kept.
+    let validated = Model::assembler()
+        .add_shape(built("code"))
+        .add_json_str(
+            "f.json",
+            doc(r#""ex#S":{"type":"structure","members":{"m":{"target":"smithy.api#Integer"}}}"#),
+        )
+        .assemble();
+    assert_eq!(
+        codes(&validated),
+        [(Severity::Error, DiagnosticCode::ShapeConflict)]
+    );
+
+    // Of equal definitions in documents, the last one is kept and provides the locations.
+    let string = doc(r#""ex#T":{"type":"string"}"#);
+    let model = expect_model(
+        Model::assembler()
+            .add_json_str("one.json", string.clone())
+            .add_json_str("two.json", string)
+            .assemble(),
+    );
+    let shape = model.expect_shape(&ShapeId::from_static("ex#T")).unwrap();
+    assert_eq!(shape.source_location().source(), "two.json");
 }
 
 #[test]
