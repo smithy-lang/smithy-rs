@@ -517,10 +517,6 @@ pub(super) mod tests {
         }
     }
 
-    static OWNER_DROPS: AtomicUsize = AtomicUsize::new(0);
-    static OWNER_SENTINEL: SchemaExtensionKey<Sentinel> =
-        SchemaExtensionKey::new(|_| Sentinel(&OWNER_DROPS));
-
     type Names = Arc<[String]>;
 
     fn names(count: usize) -> Names {
@@ -607,14 +603,18 @@ pub(super) mod tests {
         assert_eq!(storage.schema_count(), 3 + 64 + 2);
     }
 
-    /// INV-2, INV-7, INV-8: one thread holds references while others append, and batches from
-    /// several threads are serialized.
+    /// INV-2, INV-5, INV-7, INV-8: one thread holds references while others append, batches
+    /// from several threads are serialized, and an extension forced before the appends drops
+    /// once with the storage.
     #[test]
     fn readers_and_concurrent_batches() {
+        // Its own counter, so that tests run in parallel threads do not count its drops.
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        static KEY: SchemaExtensionKey<Sentinel> = SchemaExtensionKey::new(|_| Sentinel(&DROPS));
         let ((root, _), storage) = build(names(2));
         // SAFETY: INV-9: `root` comes from `storage`.
         let held = unsafe { storage.schema(root) };
-        held.extension(&OWNER_SENTINEL);
+        held.extension(&KEY);
         std::thread::scope(|scope| {
             for thread in 0..3 {
                 let storage = &storage;
@@ -638,19 +638,24 @@ pub(super) mod tests {
         });
         assert_eq!(storage.schema_count(), 3 + 3 * 4);
         assert_eq!(held.members()[1].member_name(), Some("m1"));
+        let before = DROPS.load(Ordering::SeqCst);
+        drop(storage);
+        assert_eq!(DROPS.load(Ordering::SeqCst) - before, 1);
     }
 
     /// INV-5: extension values are dropped exactly once with their storage.
     #[test]
     fn extensions_drop_with_storage() {
-        let before = OWNER_DROPS.load(Ordering::SeqCst);
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        static KEY: SchemaExtensionKey<Sentinel> = SchemaExtensionKey::new(|_| Sentinel(&DROPS));
+        let before = DROPS.load(Ordering::SeqCst);
         for _ in 0..3 {
             let ((root, _), storage) = build(names(2));
             // SAFETY: INV-9: `root` comes from `storage`.
             let root = unsafe { storage.schema(root) };
-            root.extension(&OWNER_SENTINEL);
+            root.extension(&KEY);
             for member in root.members() {
-                member.extension(&OWNER_SENTINEL);
+                member.extension(&KEY);
             }
             // A later batch does not disturb forced extensions.
             storage.with_builder(|_, builder| {
@@ -660,7 +665,7 @@ pub(super) mod tests {
             });
             drop(storage);
         }
-        assert_eq!(OWNER_DROPS.load(Ordering::SeqCst) - before, 9);
+        assert_eq!(DROPS.load(Ordering::SeqCst) - before, 9);
     }
 
     /// INV-3, INV-5, INV-8: a panic during a batch keeps every allocation owned, releases each

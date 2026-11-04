@@ -52,6 +52,42 @@ fn build(model: &Model) -> RuntimeSchemaSet {
     RuntimeSchemaSet::try_from(model).unwrap_or_else(|err| panic!("{err}"))
 }
 
+/// Both materializations, for tests that check the same schemas each way.
+const MODES: [Materialization; 2] = [Materialization::Eager, Materialization::Lazy];
+
+/// An all-shapes set of `model`, built with `materialization`.
+fn build_in(model: &Model, materialization: Materialization) -> RuntimeSchemaSet {
+    RuntimeSchemaSet::builder(model)
+        .materialization(materialization)
+        .build()
+        .unwrap_or_else(|err| panic!("{err}"))
+}
+
+/// Builds every schema of a lazy all-shapes set of `model` through lookups, and checks that
+/// it matches the eager set: operations first (their closures and input overlays), then every
+/// selected root, so both lazy paths that decode traits again are covered.
+fn assert_modes_agree(model: &Model) {
+    let eager = build(model);
+    let lazy = build_in(model, Materialization::Lazy);
+    let operations: Vec<ShapeId> = lazy.operation_ids().cloned().collect();
+    for operation in &operations {
+        lazy.operation(operation).unwrap();
+    }
+    let data = model.data();
+    for root in lazy.plan.roots.iter() {
+        lazy.schema(data.root_at(root.model_position as usize).id())
+            .unwrap();
+    }
+    assert_eq!(lazy.storage.schema_count(), eager.storage.schema_count());
+    // `Debug` output includes every trait, but formatting is slow under Miri.
+    let compare = if cfg!(miri) {
+        Compare::Fingerprint
+    } else {
+        Compare::Debug
+    };
+    assert_matches_eager(&lazy, &eager, compare);
+}
+
 fn build_err(model: &Model) -> SchemaBuildError {
     RuntimeSchemaSet::try_from(model).expect_err("build should fail")
 }
@@ -234,7 +270,7 @@ fn collection_only_cycles_are_errors() {
 
 #[test]
 fn member_traits_and_target_propagation() {
-    let set = build(&model(
+    let model = model(
         r#"
         "ex#Time": {"type": "timestamp", "traits": {"smithy.api#timestampFormat": "epoch-seconds"}},
         "ex#Json": {"type": "string", "traits": {"smithy.api#mediaType": "application/json"}},
@@ -261,66 +297,102 @@ fn member_traits_and_target_propagation() {
                 "smithy.api#eventPayload": {},
                 "smithy.api#hostLabel": {}
             }}
-        }}"#,
-    ));
-    let s = schema(&set, "ex#S");
-    let member = |name| s.member_schema(name).unwrap();
-    let format = |name| member(name).timestamp_format().map(|f| f.format());
-    assert_eq!(format("inherited"), Some(TimestampFormat::EpochSeconds));
-    assert_eq!(format("own"), Some(TimestampFormat::HttpDate));
-    assert_eq!(
-        member("json").media_type().unwrap().value(),
-        "application/json"
+        }},
+        "ex#Op": {"type": "operation", "input": {"target": "ex#S"}}"#,
     );
-    assert!(member("body").streaming());
-    assert!(member("body").http_payload().is_some());
+    for materialization in MODES {
+        // Shown if an assertion below fails.
+        eprintln!("materialization: {materialization:?}");
+        let set = build_in(&model, materialization);
+        let s = schema(&set, "ex#S");
+        let member = |name| s.member_schema(name).unwrap();
+        let format = |name| member(name).timestamp_format().map(|f| f.format());
+        assert_eq!(format("inherited"), Some(TimestampFormat::EpochSeconds));
+        assert_eq!(format("own"), Some(TimestampFormat::HttpDate));
+        assert_eq!(
+            member("json").media_type().unwrap().value(),
+            "application/json"
+        );
+        assert!(member("body").streaming());
+        assert!(member("body").http_payload().is_some());
 
-    let all = member("all");
-    assert!(all.sensitive().is_some());
-    assert_eq!(all.json_name().unwrap().value(), "ALL");
-    assert_eq!(all.xml_name().unwrap().value(), "All");
-    assert!(all.xml_attribute() && all.xml_flattened());
-    let namespace = all.xml_namespace().unwrap();
-    assert_eq!(
-        (namespace.uri(), namespace.prefix()),
-        ("https://example.com", Some("e"))
-    );
-    assert_eq!(all.http_header().unwrap().value(), "x-all");
-    assert!(all.http_label().is_some());
-    assert_eq!(all.http_prefix_headers().unwrap().value(), "x-p-");
-    assert_eq!(all.http_query().unwrap().value(), "q");
-    assert!(all.http_query_params().is_some() && all.http_response_code().is_some());
-    // `Schema` has no getters for these yet; its `Debug` output shows them.
-    let debug = format!("{all:?}");
-    for field in [
-        "event_header: Some(EventHeaderTrait)",
-        "event_payload: Some(EventPayloadTrait)",
-        "host_label: Some(HostLabelTrait)",
-    ] {
-        assert!(debug.contains(field), "{field} in {debug}");
+        let all = member("all");
+        assert!(all.sensitive().is_some());
+        assert_eq!(all.json_name().unwrap().value(), "ALL");
+        assert_eq!(all.xml_name().unwrap().value(), "All");
+        assert!(all.xml_attribute() && all.xml_flattened());
+        let namespace = all.xml_namespace().unwrap();
+        assert_eq!(
+            (namespace.uri(), namespace.prefix()),
+            ("https://example.com", Some("e"))
+        );
+        assert_eq!(all.http_header().unwrap().value(), "x-all");
+        assert!(all.http_label().is_some());
+        assert_eq!(all.http_prefix_headers().unwrap().value(), "x-p-");
+        assert_eq!(all.http_query().unwrap().value(), "q");
+        assert!(all.http_query_params().is_some() && all.http_response_code().is_some());
+        // `Schema` has no getters for these yet; its `Debug` output shows them.
+        let debug = format!("{all:?}");
+        for field in [
+            "event_header: Some(EventHeaderTrait)",
+            "event_payload: Some(EventPayloadTrait)",
+            "host_label: Some(HostLabelTrait)",
+        ] {
+            assert!(debug.contains(field), "{field} in {debug}");
+        }
+
+        // The operation's input overlay shares the members, and their traits.
+        let input = set.operation(&id("ex#Op")).unwrap().input();
+        assert!(std::ptr::eq(input.members(), s.members()));
+
+        // Like generated code, a scalar root carries no traits.
+        assert!(schema(&set, "ex#Time").timestamp_format().is_none());
     }
-
-    // Like generated code, a scalar root carries no traits.
-    assert!(schema(&set, "ex#Time").timestamp_format().is_none());
+    assert_modes_agree(&model);
 }
 
 #[test]
 fn structure_roots_carry_traits() {
-    let set = build(&model(
+    let model = model(
         r#"
         "ex#S": {"type": "structure", "members": {}, "traits": {
             "smithy.api#xmlName": "Root",
             "smithy.api#xmlNamespace": {"uri": "https://example.com"},
             "smithy.api#sensitive": true
-        }}"#,
-    ));
-    let s = schema(&set, "ex#S");
-    assert_eq!(s.xml_name().unwrap().value(), "Root");
-    assert_eq!(s.xml_namespace().unwrap().prefix(), None);
-    assert!(
-        s.sensitive().is_some(),
-        "the Smithy 1.0 `true` form is accepted"
+        }},
+        "ex#In": {"type": "structure", "members": {"a": {"target": "ex#String"}}, "traits": {
+            "smithy.api#xmlName": "Input",
+            "smithy.api#xmlNamespace": {"uri": "https://example.com/ns", "prefix": "p"}
+        }},
+        "ex#Op": {"type": "operation", "input": {"target": "ex#In"}}"#,
     );
+    for materialization in MODES {
+        // Shown if an assertion below fails.
+        eprintln!("materialization: {materialization:?}");
+        let set = build_in(&model, materialization);
+        // In a lazy set, look the operation up first, so its input overlay decodes the
+        // root's traits before the root itself is built.
+        let input = set.operation(&id("ex#Op")).unwrap().input();
+        assert_eq!(input.shape_id().as_str(), "ex#In");
+        assert_eq!(input.xml_name().unwrap().value(), "Input");
+        let namespace = input.xml_namespace().unwrap();
+        assert_eq!(
+            (namespace.uri(), namespace.prefix()),
+            ("https://example.com/ns", Some("p"))
+        );
+        let root = schema(&set, "ex#In");
+        assert_eq!(root.xml_name().unwrap().value(), "Input");
+        assert_eq!(root.xml_namespace().unwrap().prefix(), Some("p"));
+
+        let s = schema(&set, "ex#S");
+        assert_eq!(s.xml_name().unwrap().value(), "Root");
+        assert_eq!(s.xml_namespace().unwrap().prefix(), None);
+        assert!(
+            s.sensitive().is_some(),
+            "the Smithy 1.0 `true` form is accepted"
+        );
+    }
+    assert_modes_agree(&model);
 }
 
 #[test]
@@ -1719,6 +1791,10 @@ fn plans_too_large_to_index_are_resource_limits() {
 }
 
 /// A non-recursive summary of the wire-relevant parts of a schema, for comparing large sets.
+///
+/// It reads every trait accessor `Schema` has, so that a trait lost on only one path
+/// (eager or lazy) changes it. Add new `Schema` trait accessors here. `host_label` has no
+/// accessor; tests that need it compare `Debug` output instead.
 fn fingerprint(schema: &Schema<'_>) -> String {
     let members: Vec<_> = schema
         .members()
@@ -1726,23 +1802,41 @@ fn fingerprint(schema: &Schema<'_>) -> String {
         .map(|member| member.shape_id().as_str())
         .collect();
     format!(
-        "{} {:?} {:?} {:?} {members:?} list={:?} key={:?} http={:?} json={:?} xml={:?} \
-         header={:?} format={:?} payload={:?} body={} unwrapped={} sensitive={}",
+        "{} {:?} {:?} {:?} {members:?} list={:?} key={:?} original={:?} http={:?} json={:?} \
+         xml={:?} xml_ns={:?} xml_attr={} xml_flat={} header={:?} prefix_headers={:?} \
+         query={:?} query_params={} label={} payload={} response_code={} media={:?} \
+         streaming={} event_header={} event_payload={} format={:?} payload_hint={:?} body={} \
+         unwrapped={} sensitive={} fallback_traits={}",
         schema.shape_id().as_str(),
         schema.shape_type(),
         schema.member_name(),
         schema.member_index(),
         schema.member().map(|m| m.shape_id().as_str()),
         schema.key().map(|m| m.shape_id().as_str()),
+        schema.original_name(),
         schema.http().map(|h| (h.method(), h.uri(), h.code())),
         schema.json_name().map(|t| t.value()),
         schema.xml_name().map(|t| t.value()),
+        schema.xml_namespace().map(|t| (t.uri(), t.prefix())),
+        schema.xml_attribute(),
+        schema.xml_flattened(),
         schema.http_header().map(|t| t.value()),
+        schema.http_prefix_headers().map(|t| t.value()),
+        schema.http_query().map(|t| t.value()),
+        schema.http_query_params().is_some(),
+        schema.http_label().is_some(),
+        schema.http_payload().is_some(),
+        schema.http_response_code().is_some(),
+        schema.media_type().map(|t| t.value()),
+        schema.streaming(),
+        schema.event_header().is_some(),
+        schema.event_payload().is_some(),
         schema.timestamp_format().map(|t| t.format()),
         schema.payload_hint(),
         schema.has_body_members(),
         schema.xml_unwrapped_output(),
         schema.sensitive().is_some(),
+        schema.traits().is_some(),
     )
 }
 
