@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.framework.rust.ValidationExceptionTrait
 import software.amazon.smithy.framework.rust.ValidationFieldListTrait
 import software.amazon.smithy.framework.rust.ValidationFieldMessageTrait
@@ -223,6 +224,9 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
+    override fun validationExceptionSymbol(): Symbol =
+        codegenContext.symbolProvider.toSymbol(validationExceptionStructure)
+
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
             val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
@@ -250,47 +254,75 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """,
                 *preludeScope,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
-                "FieldCreation" to
-                    writable {
-                        if (maybeValidationFieldList != null) {
-                            rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
-                        }
-                    },
-                "ValidationMessage" to
-                    writable {
-                        val message =
-                            maybeValidationFieldList?.maybeValidationFieldMessageMember?.let {
-                                val validationFieldMessageName =
-                                    codegenContext.symbolProvider.toMemberName(it)
-                                if (it.isOptional) {
-                                    """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName.clone().unwrap_or_default())"""
-                                } else {
-                                    """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName)"""
-                                }
-                            } ?: """format!("validation error detected")"""
-                        rust(validationMessageMember.wrapValueIfOptional(message))
-                    },
-                "FieldListAssignment" to
-                    writable {
-                        maybeValidationFieldList?.validationFieldListMember?.let {
-                            val fieldName =
-                                codegenContext.symbolProvider.toMemberName(it)
-                            val value = it.wrapValueIfOptional("vec![first_validation_exception_field]")
-                            rust("$fieldName: $value,")
-                        }
-                    },
-                "AdditionalFieldAssignments" to
-                    writable {
-                        rust(
-                            additionalFieldMembers.joinToString { member ->
-                                val memberName = codegenContext.symbolProvider.toMemberName(member)!!
-                                "$memberName: ${defaultFieldAssignment(member)}"
-                            },
-                        )
-                    },
+                "ValidationException" to validationExceptionSymbol(),
+                *validationExceptionConstructionScope(),
             )
         }
+
+    override fun renderImplFromConstraintViolationForValidationException(): Writable =
+        writable {
+            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
+
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{ValidationException} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        #{FieldCreation}
+                        Self {
+                            $validationMessageName: #{ValidationMessage},
+                            #{FieldListAssignment}
+                            #{AdditionalFieldAssignments}
+                        }
+                    }
+                }
+                """,
+                *preludeScope,
+                "ValidationException" to validationExceptionSymbol(),
+                *validationExceptionConstructionScope(),
+            )
+        }
+
+    private fun validationExceptionConstructionScope() =
+        arrayOf(
+            "FieldCreation" to
+                writable {
+                    if (maybeValidationFieldList != null) {
+                        rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
+                    }
+                },
+            "ValidationMessage" to
+                writable {
+                    val message =
+                        maybeValidationFieldList?.maybeValidationFieldMessageMember?.let {
+                            val validationFieldMessageName =
+                                codegenContext.symbolProvider.toMemberName(it)
+                            if (it.isOptional) {
+                                """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName.clone().unwrap_or_default())"""
+                            } else {
+                                """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName)"""
+                            }
+                        } ?: """format!("validation error detected")"""
+                    rust(validationMessageMember.wrapValueIfOptional(message))
+                },
+            "FieldListAssignment" to
+                writable {
+                    maybeValidationFieldList?.validationFieldListMember?.let {
+                        val fieldName =
+                            codegenContext.symbolProvider.toMemberName(it)
+                        val value = it.wrapValueIfOptional("vec![first_validation_exception_field]")
+                        rust("$fieldName: $value,")
+                    }
+                },
+            "AdditionalFieldAssignments" to
+                writable {
+                    rust(
+                        additionalFieldMembers.joinToString { member ->
+                            val memberName = codegenContext.symbolProvider.toMemberName(member)!!
+                            "$memberName: ${defaultFieldAssignment(member)}"
+                        },
+                    )
+                },
+        )
 
     override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable {
         val validationFieldList = maybeValidationFieldList ?: return writable { }

@@ -92,6 +92,11 @@ class ClientAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun disableSchemaSerde(disabled: Boolean = true): Builder {
+                settings.add(DisableSchemaSerde(disabled))
+                return this
+            }
+
             override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
         }
 
@@ -99,6 +104,13 @@ class ClientAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("includeLegacyClient", enabled)
+                    .build()
+        }
+
+        private data class DisableSchemaSerde(val disabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("disableSchemaSerde", disabled)
                     .build()
         }
 
@@ -124,6 +136,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
 
             fun alwaysSendEventStreamInitialResponse(enabled: Boolean = true): Builder {
                 settings.add(AlwaysSendEventStreamInitialResponse(enabled))
+                return this
+            }
+
+            fun schemaSerde(enabled: Boolean = true): Builder {
+                settings.add(SchemaSerde(enabled))
                 return this
             }
 
@@ -168,6 +185,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("alwaysSendEventStreamInitialResponse", enabled)
+                    .build()
+        }
+
+        private data class SchemaSerde(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("schemaSerde", enabled)
                     .build()
         }
 

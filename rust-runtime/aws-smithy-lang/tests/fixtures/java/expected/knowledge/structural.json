@@ -1,0 +1,974 @@
+{
+    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "topDown": {
+        "ex#Child": {
+            "operations": [
+                "ex#ChildOp",
+                "ex#SharedRead"
+            ],
+            "resources": [
+                "ex#Shared"
+            ]
+        },
+        "ex#Hidden": {
+            "operations": [
+                "ex#DeepOp"
+            ],
+            "resources": [
+                "ex#Inner",
+                "ex#Outer"
+            ]
+        },
+        "ex#Inner": {
+            "operations": [
+                "ex#DeepOp"
+            ],
+            "resources": []
+        },
+        "ex#Other": {
+            "operations": [
+                "ex#SharedRead"
+            ],
+            "resources": [
+                "ex#Shared"
+            ]
+        },
+        "ex#Outer": {
+            "operations": [
+                "ex#DeepOp"
+            ],
+            "resources": [
+                "ex#Inner"
+            ]
+        },
+        "ex#Service": {
+            "operations": [
+                "ex#BatchThing",
+                "ex#ChildOp",
+                "ex#CreateThing",
+                "ex#DeleteThing",
+                "ex#DirectOp",
+                "ex#GetThing",
+                "ex#ListThings",
+                "ex#PutThing",
+                "ex#SharedOp",
+                "ex#SharedRead",
+                "ex#ThingAction",
+                "ex#UpdateThing"
+            ],
+            "resources": [
+                "ex#Child",
+                "ex#Shared",
+                "ex#Thing"
+            ]
+        },
+        "ex#Shared": {
+            "operations": [
+                "ex#SharedRead"
+            ],
+            "resources": []
+        },
+        "ex#Thing": {
+            "operations": [
+                "ex#BatchThing",
+                "ex#ChildOp",
+                "ex#CreateThing",
+                "ex#DeleteThing",
+                "ex#GetThing",
+                "ex#ListThings",
+                "ex#PutThing",
+                "ex#SharedOp",
+                "ex#SharedRead",
+                "ex#ThingAction",
+                "ex#UpdateThing"
+            ],
+            "resources": [
+                "ex#Child",
+                "ex#Shared"
+            ]
+        }
+    },
+    "operations": {
+        "ex#BatchThing": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#ChildOp": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#CreateThing": {
+            "input": "ex#SharedInput",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": "ex#SharedInput",
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#DeepOp": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Hidden": []
+            }
+        },
+        "ex#DeleteThing": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#DirectOp": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#GetThing": {
+            "input": "ex#GetThingInput",
+            "output": "ex#GetThingOutput",
+            "meaningfulInput": "ex#GetThingInput",
+            "meaningfulOutput": "ex#GetThingOutput",
+            "inputMembers": [
+                "ex#GetThingInput$zeta",
+                "ex#GetThingInput$alpha",
+                "ex#GetThingInput$mid"
+            ],
+            "outputMembers": [
+                "ex#GetThingOutput$thing"
+            ],
+            "directErrors": [
+                "ex#NotFound",
+                "ex#Common"
+            ],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common",
+                    "ex#NotFound"
+                ]
+            }
+        },
+        "ex#ListThings": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#PutThing": {
+            "input": "ex#SharedInput",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": "ex#SharedInput",
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#SharedOp": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#SharedRead": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Other": [],
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#ThingAction": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common"
+                ]
+            }
+        },
+        "ex#Unbound": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [
+                "ex#NotFound"
+            ],
+            "errorsIn": {}
+        },
+        "ex#UpdateThing": {
+            "input": "smithy.api#Unit",
+            "output": "smithy.api#Unit",
+            "meaningfulInput": null,
+            "meaningfulOutput": null,
+            "inputMembers": [],
+            "outputMembers": [],
+            "directErrors": [
+                "ex#NotFound"
+            ],
+            "errorsIn": {
+                "ex#Service": [
+                    "ex#Throttled",
+                    "ex#Common",
+                    "ex#NotFound"
+                ]
+            }
+        }
+    },
+    "structures": {
+        "ex#Common": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [
+                "ex#GetThing",
+                "ex#Service"
+            ],
+            "isInput": false,
+            "isOutput": false
+        },
+        "ex#GetThingInput": {
+            "inputBindings": [
+                "ex#GetThing"
+            ],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": true,
+            "isOutput": false
+        },
+        "ex#GetThingOutput": {
+            "inputBindings": [],
+            "outputBindings": [
+                "ex#GetThing"
+            ],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": true
+        },
+        "ex#MarkedInput": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": true,
+            "isOutput": false
+        },
+        "ex#MarkedOutput": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": true
+        },
+        "ex#NotFound": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [
+                "ex#GetThing",
+                "ex#Unbound",
+                "ex#UpdateThing"
+            ],
+            "isInput": false,
+            "isOutput": false
+        },
+        "ex#Plain": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "ex#SharedInput": {
+            "inputBindings": [
+                "ex#CreateThing",
+                "ex#PutThing"
+            ],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": true,
+            "isOutput": false
+        },
+        "ex#Throttled": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [
+                "ex#Service"
+            ],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#EnumDefinition": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#Example": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#ExampleError": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#Reference": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#ResourceDeletionBinding": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#ResourceLifecycleBinding": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#ResourceMemberBinding": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#ShapeClosure": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#TraitDiffRule": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#TraitValidator": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#Unit": {
+            "inputBindings": [
+                "ex#BatchThing",
+                "ex#ChildOp",
+                "ex#DeepOp",
+                "ex#DeleteThing",
+                "ex#DirectOp",
+                "ex#ListThings",
+                "ex#SharedOp",
+                "ex#SharedRead",
+                "ex#ThingAction",
+                "ex#Unbound",
+                "ex#UpdateThing"
+            ],
+            "outputBindings": [
+                "ex#BatchThing",
+                "ex#ChildOp",
+                "ex#CreateThing",
+                "ex#DeepOp",
+                "ex#DeleteThing",
+                "ex#DirectOp",
+                "ex#ListThings",
+                "ex#PutThing",
+                "ex#SharedOp",
+                "ex#SharedRead",
+                "ex#ThingAction",
+                "ex#Unbound",
+                "ex#UpdateThing"
+            ],
+            "errorBindings": [],
+            "isInput": true,
+            "isOutput": true
+        },
+        "smithy.api#UnstableFeatureInfo": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#addedDefault": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#authDefinition": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#box": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#clientOptional": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#cors": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#deprecated": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#endpoint": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#eventHeader": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#eventPayload": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#hostLabel": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#http": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpApiKeyAuth": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpBasicAuth": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpBearerAuth": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpChecksumRequired": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpDigestAuth": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpLabel": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpPayload": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpQueryParams": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#httpResponseCode": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#idRef": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#idempotencyToken": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#idempotent": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#input": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#internal": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#length": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#longPoll": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#metadata": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#mixin": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#nestedProperties": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#noReplace": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#notProperty": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#optionalAuth": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#output": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#paginated": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#private": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#property": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#protocolDefinition": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#range": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#readonly": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#recommended": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#requestCompression": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#required": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#requiresLength": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#retryable": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#sensitive": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#sparse": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#streaming": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#trait": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#uniqueItems": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#unitType": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#unstable": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#xmlAttribute": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#xmlFlattened": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        },
+        "smithy.api#xmlNamespace": {
+            "inputBindings": [],
+            "outputBindings": [],
+            "errorBindings": [],
+            "isInput": false,
+            "isOutput": false
+        }
+    },
+    "bottomUp": {
+        "ex#Hidden": {
+            "ex#DeepOp": [
+                "ex#Inner",
+                "ex#Outer",
+                "ex#Hidden"
+            ],
+            "ex#Inner": [
+                "ex#Outer",
+                "ex#Hidden"
+            ],
+            "ex#Outer": [
+                "ex#Hidden"
+            ]
+        },
+        "ex#Other": {
+            "ex#Shared": [
+                "ex#Other"
+            ],
+            "ex#SharedRead": [
+                "ex#Shared",
+                "ex#Other"
+            ]
+        },
+        "ex#Service": {
+            "ex#BatchThing": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#Child": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#ChildOp": [
+                "ex#Child",
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#CreateThing": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#DeleteThing": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#DirectOp": [
+                "ex#Service"
+            ],
+            "ex#GetThing": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#ListThings": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#PutThing": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#Shared": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#SharedOp": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#SharedRead": [
+                "ex#Shared",
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#Thing": [
+                "ex#Service"
+            ],
+            "ex#ThingAction": [
+                "ex#Thing",
+                "ex#Service"
+            ],
+            "ex#UpdateThing": [
+                "ex#Thing",
+                "ex#Service"
+            ]
+        }
+    }
+}

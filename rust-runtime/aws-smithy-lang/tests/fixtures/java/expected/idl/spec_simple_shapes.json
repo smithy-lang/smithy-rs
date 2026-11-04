@@ -1,0 +1,17 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#MaxResults": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#range": {
+                    "min": 0,
+                    "max": 1000
+                }
+            }
+        },
+        "smithy.example#MyString": {
+            "type": "string"
+        }
+    }
+}

@@ -1,0 +1,21 @@
+# Runs one Rust client with runtime protocol selection against one server serving every built-in protocol.
+#
+# `make codegen` generates the crates this depends on; see the Makefile.
+[workspace]
+resolver = "2"
+
+[package]
+name = "multi-protocol"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Select protocols at runtime with one generated smithy-rs client."
+
+[dependencies]
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+multi-protocol-server-sdk = { path = "../../codegen-server-test/build/smithyprojections/codegen-server-test/multi-protocol-server-sdk/rust-server-codegen" }
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
+multi-protocol-client = { path = "../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }

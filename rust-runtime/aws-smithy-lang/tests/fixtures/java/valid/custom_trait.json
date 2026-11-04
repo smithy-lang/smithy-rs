@@ -1,0 +1,29 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#tag": {
+      "type": "structure",
+      "members": {
+        "value": {
+          "target": "smithy.api#String"
+        }
+      },
+      "traits": {
+        "smithy.api#trait": {}
+      }
+    },
+    "ex#Tagged": {
+      "type": "string",
+      "traits": {
+        "ex#tag": {
+          "value": "x"
+        },
+        "smithy.api#documentation": "Docs",
+        "smithy.api#length": {
+          "min": 1,
+          "max": 10
+        }
+      }
+    }
+  }
+}

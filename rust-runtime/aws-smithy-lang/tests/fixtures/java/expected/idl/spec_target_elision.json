@@ -1,0 +1,27 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#User": {
+            "type": "resource",
+            "identifiers": {
+                "name": {
+                    "target": "smithy.api#String"
+                },
+                "uuid": {
+                    "target": "smithy.api#String"
+                }
+            }
+        },
+        "smithy.example#UserSummary": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String"
+                },
+                "age": {
+                    "target": "smithy.api#Short"
+                }
+            }
+        }
+    }
+}

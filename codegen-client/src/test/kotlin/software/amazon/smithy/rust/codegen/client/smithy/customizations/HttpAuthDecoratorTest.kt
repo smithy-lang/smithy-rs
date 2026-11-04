@@ -20,13 +20,11 @@ class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> =
         arrayOf(
             "ReplayEvent" to
-                CargoDependency.smithyRuntime(runtimeConfig)
-                    .toDevDependency().withFeature("test-util").toType()
-                    .resolve("client::http::test_util::ReplayEvent"),
+                CargoDependency.smithyHttpClientTestUtil(runtimeConfig)
+                    .toType().resolve("test_util::ReplayEvent"),
             "StaticReplayClient" to
-                CargoDependency.smithyRuntime(runtimeConfig)
-                    .toDevDependency().withFeature("test-util").toType()
-                    .resolve("client::http::test_util::StaticReplayClient"),
+                CargoDependency.smithyHttpClientTestUtil(runtimeConfig)
+                    .toType().resolve("test_util::StaticReplayClient"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
 
@@ -43,11 +41,11 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -74,12 +72,12 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -183,7 +181,7 @@ class HttpAuthDecoratorTest {
                                 .ok_or("custom auth requires a `Login` identity")?;
                             // Use the login to add an authorization header to the request
                             request.headers_mut().try_append(
-                                http::header::AUTHORIZATION,
+                                http_1x::header::AUTHORIZATION,
                                 login.0.to_string()
                             )?;
                             Ok(())
@@ -236,12 +234,12 @@ class HttpAuthDecoratorTest {
                         let (_guard, _rx) = #{capture_test_logs}();
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .header("authorization", "password")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
                         let config = $moduleName::Config::builder()
@@ -279,11 +277,11 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -319,12 +317,12 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .header("authorization", "ApiKey some-api-key")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -360,12 +358,12 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -401,12 +399,12 @@ class HttpAuthDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .header("authorization", "Bearer some-token")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 
@@ -440,11 +438,11 @@ class HttpAuthDecoratorTest {
                     async fn optional_auth() {
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
-                                http::Request::builder()
+                                http_1x::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                                http_1x::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
                         );
 

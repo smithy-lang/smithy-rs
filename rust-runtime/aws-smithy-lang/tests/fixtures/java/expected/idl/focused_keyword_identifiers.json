@@ -1,0 +1,40 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Keywords": {
+            "type": "structure",
+            "members": {
+                "input": {
+                    "target": "smithy.api#String"
+                },
+                "output": {
+                    "target": "smithy.api#String"
+                },
+                "errors": {
+                    "target": "smithy.api#String"
+                },
+                "for": {
+                    "target": "smithy.api#String"
+                },
+                "with": {
+                    "target": "smithy.api#String"
+                },
+                "apply": {
+                    "target": "smithy.api#String"
+                }
+            }
+        },
+        "ex#metadata": {
+            "type": "string"
+        },
+        "ex#namespaceName": {
+            "type": "string"
+        },
+        "ex#structureValue": {
+            "type": "string"
+        },
+        "ex#use": {
+            "type": "string"
+        }
+    }
+}

@@ -16,7 +16,7 @@ use pokemon_service_server_sdk::{
 };
 use tower::{Layer, Service};
 
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
 
@@ -46,7 +46,10 @@ async fn plugin_layers_are_executed_in_registration_order() {
         rcvr.expect_request()
     };
 
-    app.call(request.try_into().unwrap()).await.unwrap();
+    let request = request.try_into_http1x().unwrap();
+    app.call(request.map(pokemon_service_server_sdk::server::body::Body::new))
+        .await
+        .unwrap();
 
     let output_guard = output.lock().unwrap();
     assert_eq!(output_guard.deref(), &vec!["first", "second"]);

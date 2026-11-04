@@ -309,27 +309,45 @@ pub(crate) mod build_connector {
     }
 
     pub(crate) fn wrap_connector<R>(
-        mut conn: HttpConnector<R>,
+        conn: HttpConnector<R>,
         crypto_mode: CryptoMode,
         tls_context: &TlsContext,
         proxy_config: crate::client::proxy::ProxyConfig,
     ) -> super::connect::RustTlsConnector<R> {
-        let client_config = create_rustls_client_config(crypto_mode, tls_context);
+        wrap_connector_with_alpn(
+            conn,
+            crypto_mode,
+            tls_context,
+            proxy_config,
+            &[b"h2", b"http/1.1"],
+        )
+    }
+
+    /// Wraps an HTTP connector with the ALPN offer selected for one pool attempt.
+    pub(crate) fn wrap_connector_with_alpn<R>(
+        mut conn: HttpConnector<R>,
+        crypto_mode: CryptoMode,
+        tls_context: &TlsContext,
+        proxy_config: crate::client::proxy::ProxyConfig,
+        alpn_protocols: &[&[u8]],
+    ) -> super::connect::RustTlsConnector<R> {
+        let mut client_config = create_rustls_client_config(crypto_mode, tls_context);
+        client_config.alpn_protocols = alpn_protocols
+            .iter()
+            .map(|protocol| protocol.to_vec())
+            .collect();
         conn.enforce_http(false);
-        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(client_config.clone())
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .wrap_connector(conn);
+        let https_connector = hyper_rustls::HttpsConnector::from((conn, client_config.clone()));
 
         super::connect::RustTlsConnector::new(https_connector, client_config, proxy_config)
     }
 }
 
 pub(crate) mod connect {
-    use crate::client::connect::{Conn, Connecting};
+    use crate::client::connect::{Conn, ConnectPathInner, Connecting};
+    use crate::client::error_chain;
     use crate::client::proxy::ProxyConfig;
+    use crate::client::tls::{TlsConnectError, TlsConnectErrorKind};
     use aws_smithy_runtime_api::box_error::BoxError;
     use http_1x::uri::Scheme;
     use http_1x::Uri;
@@ -350,6 +368,19 @@ pub(crate) mod connect {
     use tokio::net::TcpStream;
     use tokio_rustls::client::TlsStream;
     use tower::Service;
+
+    /// Tags a TLS handshake failure whose chain carries a `rustls::Error` as
+    /// [`TlsConnectErrorKind::Protocol`], and returns any other `error` unchanged.
+    ///
+    /// The chain is walked with [`error_chain`], which also visits each `io::Error`'s payload:
+    /// hyper-rustls nests the rustls error two `io::Error`s deep.
+    fn classify_rustls(error: BoxError) -> BoxError {
+        if error_chain(error.as_ref()).any(|error| error.is::<rustls::Error>()) {
+            Box::new(TlsConnectError::new(TlsConnectErrorKind::Protocol, error))
+        } else {
+            error
+        }
+    }
 
     #[derive(Debug, Clone)]
     pub(crate) struct RustTlsConnector<R> {
@@ -429,10 +460,10 @@ pub(crate) mod connect {
         fn handle_direct_connection(&mut self, dst: Uri) -> Connecting {
             let fut = self.https.call(dst);
             Box::pin(async move {
-                let conn = fut.await?;
+                let conn = fut.await.map_err(classify_rustls)?;
                 Ok(Conn {
                     inner: Box::new(conn),
-                    is_proxy: false,
+                    connect_path: ConnectPathInner::Direct,
                 })
             })
         }
@@ -444,12 +475,13 @@ pub(crate) mod connect {
         ) -> Connecting {
             // For HTTP through proxy, connect to the proxy and let it handle the request
             let proxy_uri = intercept.uri().clone();
+            let connect_path = ConnectPathInner::forward_proxy(intercept.basic_auth().cloned());
             let fut = self.https.call(proxy_uri);
             Box::pin(async move {
                 let conn = fut.await?;
                 Ok(Conn {
                     inner: Box::new(conn),
-                    is_proxy: true,
+                    connect_path,
                 })
             })
         }
@@ -482,10 +514,7 @@ pub(crate) mod connect {
             Box::pin(async move {
                 // Establish CONNECT tunnel
                 tracing::trace!("tunneling HTTPS over proxy");
-                let tunneled = tunnel
-                    .call(dst_clone.clone())
-                    .await
-                    .map_err(|e| BoxError::from(format!("CONNECT tunnel failed: {e}")))?;
+                let tunneled = tunnel.call(dst_clone.clone()).await?;
 
                 // Stage 2: Manual TLS handshake over tunneled stream
                 let host = dst_clone
@@ -498,13 +527,14 @@ pub(crate) mod connect {
 
                 let tls_connector = tokio_rustls::TlsConnector::from(tls_config)
                     .connect(server_name, TokioIo::new(tunneled))
-                    .await?;
+                    .await
+                    .map_err(|error| classify_rustls(error.into()))?;
 
                 Ok(Conn {
                     inner: Box::new(RustTlsConn {
                         inner: TokioIo::new(tls_connector),
                     }),
-                    is_proxy: true,
+                    connect_path: ConnectPathInner::ProxyTunnel,
                 })
             })
         }
@@ -595,6 +625,45 @@ pub(crate) mod connect {
         ) -> Poll<Result<(), tokio::io::Error>> {
             let this = self.project();
             Write::poll_shutdown(this.inner, cx)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use rustls::CertificateError;
+
+        #[test]
+        fn rustls_rejection_is_tagged_protocol() {
+            // hyper-rustls wraps tokio-rustls's `InvalidData` error in `io::Error::other`.
+            let rejection = io::Error::other(io::Error::new(
+                io::ErrorKind::InvalidData,
+                rustls::Error::InvalidCertificate(CertificateError::UnknownIssuer),
+            ));
+
+            let error = classify_rustls(rejection.into());
+
+            let tls = error
+                .downcast_ref::<TlsConnectError>()
+                .expect("a rustls rejection is tagged");
+            assert_eq!(TlsConnectErrorKind::Protocol, tls.kind());
+            assert!(
+                error_chain(tls).any(|error| error.is::<rustls::Error>()),
+                "the tag keeps the rustls error in its source chain"
+            );
+        }
+
+        #[test]
+        fn handshake_eof_passes_through_untagged() {
+            let eof = io::Error::new(io::ErrorKind::UnexpectedEof, "tls handshake eof");
+
+            let error = classify_rustls(eof.into());
+
+            assert!(!error.is::<TlsConnectError>());
+            let io = error
+                .downcast_ref::<io::Error>()
+                .expect("the I/O error is returned unchanged");
+            assert_eq!(io::ErrorKind::UnexpectedEof, io.kind());
         }
     }
 }

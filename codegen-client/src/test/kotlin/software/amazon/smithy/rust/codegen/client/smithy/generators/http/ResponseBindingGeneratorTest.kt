@@ -56,6 +56,9 @@ class ResponseBindingGeneratorTest {
             @httpHeader("X-Ints")
             intList: Extras,
 
+            @httpHeader("X-Str")
+            stringHeader: String,
+
             @httpHeader("X-MediaType")
             mediaType: Video,
 
@@ -117,6 +120,56 @@ class ResponseBindingGeneratorTest {
                     assert_eq!(de_int_list_header(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
                     assert_eq!(de_media_type_header(resp.headers()).expect("valid").unwrap(), "smithy-rs");
                     assert_eq!(de_date_header_list_header(resp.headers()).unwrap().unwrap().len(), 3);
+                }
+                """,
+                "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
+                "http" to RuntimeType.Http1x,
+            )
+        }
+        testProject.compileAndTest()
+    }
+
+    /**
+     * A header value that is not valid UTF-8 reaches the binding deserializer, which must report a
+     * `ParseError` for the member it is bound to. Returning `Ok(None)` instead would silently drop
+     * a value the peer actually sent.
+     */
+    @Test
+    fun nonUtf8HeaderValueIsAParseErrorNotAMissingValue() {
+        val testProject = TestWorkspace.testProject(symbolProvider)
+        testProject.renderOperation()
+        testProject.withModule(symbolProvider.moduleForShape(outputShape)) {
+            rustTemplate(
+                """
+                ##[test]
+                fn non_utf8_header_is_a_parse_error() {
+                    use crate::protocol_serde::shape_put_object_output::*;
+                    // A lone 0xE9 is a valid HTTP header octet (obs-text per RFC 7230) but is not
+                    // valid UTF-8.
+                    let resp = #{Response}::try_from(
+                        #{http}::Response::builder()
+                            .header("X-Str", #{http}::HeaderValue::from_bytes(b"value-\xe9").unwrap())
+                            .body(())
+                            .expect("valid response")
+                    ).expect("non-UTF-8 header values are admitted");
+
+                    de_string_header_header(resp.headers())
+                        .expect_err("a non-UTF-8 value must not deserialize to None");
+                }
+
+                ##[test]
+                fn valid_utf8_string_header_still_parses() {
+                    use crate::protocol_serde::shape_put_object_output::*;
+                    let resp = #{Response}::try_from(
+                        #{http}::Response::builder()
+                            .header("X-Str", "hello")
+                            .body(())
+                            .expect("valid response")
+                    ).unwrap();
+                    assert_eq!(
+                        de_string_header_header(resp.headers()).unwrap(),
+                        Some("hello".to_string())
+                    );
                 }
                 """,
                 "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
