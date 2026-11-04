@@ -32,10 +32,12 @@ use std::fmt;
 /// [`RuntimeSchemaSetBuilder::max_diagnostics`](super::RuntimeSchemaSetBuilder::max_diagnostics).
 #[derive(Debug)]
 pub struct SchemaBuildError {
+    /// Every diagnostic, at least one of which is an error.
     diagnostics: DiagnosticSet,
 }
 
 impl SchemaBuildError {
+    /// An error with `diagnostics`, which must include an error.
     pub(super) fn new(diagnostics: DiagnosticSet) -> Self {
         debug_assert!(diagnostics.has_errors());
         Self { diagnostics }

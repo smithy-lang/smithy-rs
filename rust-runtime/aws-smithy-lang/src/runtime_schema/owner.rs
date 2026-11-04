@@ -106,8 +106,8 @@
 //!   vectors.
 //! - **INV-8 serialized batches.** [`Storage::with_builder`] holds a mutex for the whole batch,
 //!   so batches never interleave. The mutex is recovered after a panic, which is sound because
-//!   a batch only appends allocations (INV-2, INV-3) and its caller only publishes complete
-//!   values (INV-6).
+//!   a batch only appends allocations (INV-2, INV-3) and only complete values are published
+//!   (INV-6).
 //! - **INV-9 handle provenance.** A handle passed to [`Storage::schema`], [`Storage::slice`],
 //!   or [`Builder::published_schema`] was returned by this same storage. A foreign handle
 //!   would be undefined behavior rather than a wrong lookup, so debug builds tag every handle
@@ -125,6 +125,7 @@ use std::sync::{Mutex, PoisonError};
 /// A schema whose data lifetime has been erased. Never dereferenced as `'static`; see
 /// [`Storage::schema`].
 type ErasedSchema = Schema<'static>;
+/// A member slice whose lifetimes have been erased; see [`Storage::slice`].
 type ErasedSlice = [&'static ErasedSchema];
 
 /// Data that schemas may borrow while it is owned by a [`Storage`].
@@ -151,6 +152,7 @@ unsafe impl<T: ?Sized + Send + Sync> StableData for std::sync::Arc<T> {}
 #[cfg(debug_assertions)]
 type StorageTag = u64;
 
+/// A tag no other storage in this process has.
 #[cfg(debug_assertions)]
 fn next_tag() -> StorageTag {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -160,7 +162,9 @@ fn next_tag() -> StorageTag {
 /// A schema allocated by a [`Storage`]. Borrows nothing; see INV-9.
 #[derive(Clone, Copy)]
 pub(super) struct SchemaHandle {
+    /// The schema, allocated by [`Builder::alloc`].
     pointer: NonNull<ErasedSchema>,
+    /// The storage that allocated it.
     #[cfg(debug_assertions)]
     tag: StorageTag,
 }
@@ -168,7 +172,9 @@ pub(super) struct SchemaHandle {
 /// A member slice allocated by a [`Storage`]. Borrows nothing; see INV-9.
 #[derive(Clone, Copy)]
 pub(super) struct SliceHandle {
+    /// The slice, allocated by [`Builder::alloc_slice`].
     pointer: NonNull<ErasedSlice>,
+    /// The storage that allocated it.
     #[cfg(debug_assertions)]
     tag: StorageTag,
 }
@@ -204,12 +210,15 @@ impl std::fmt::Debug for SliceHandle {
 /// (INV-8). Filling it is a release store and reading it an acquire load, so a reader that
 /// sees the handle also sees the complete schema (INV-7).
 pub(super) struct SchemaSlot {
+    /// The published schema, or null while the slot is empty.
     pointer: AtomicPtr<ErasedSchema>,
+    /// The published handle's tag. Stored before `pointer`, so visible once it is.
     #[cfg(debug_assertions)]
     tag: std::sync::atomic::AtomicU64,
 }
 
 impl SchemaSlot {
+    /// An empty slot.
     pub(super) const fn new() -> Self {
         Self {
             pointer: AtomicPtr::new(std::ptr::null_mut()),
@@ -254,7 +263,9 @@ impl std::fmt::Debug for SchemaSlot {
 
 /// Owns raw allocations and releases each exactly once.
 struct Allocations {
+    /// Every schema allocated, released when this drops.
     schemas: Vec<NonNull<ErasedSchema>>,
+    /// Every member slice allocated, released when this drops.
     slices: Vec<NonNull<ErasedSlice>>,
 }
 
@@ -276,14 +287,16 @@ impl Drop for Allocations {
 
 /// Owns `data` and the schemas built from it, which may borrow it.
 pub(super) struct Storage<T> {
-    // Declared before `data` so that every schema is released before the data it borrows
-    // (INV-4). The mutex serializes batches (INV-8); the `RefCell` gives the builder of the
-    // batch that holds it mutable access.
+    /// Every allocation. The mutex serializes batches (INV-8), and the `RefCell` gives the
+    /// builder of the batch that holds it mutable access. Declared before `data`, so every
+    /// schema is released before the data it borrows (INV-4).
     allocations: Mutex<RefCell<Allocations>>,
     /// The number of schemas, readable without waiting for a batch.
     schema_count: AtomicUsize,
+    /// Tags the handles this storage allocates.
     #[cfg(debug_assertions)]
     tag: StorageTag,
+    /// The data schemas may borrow. Never replaced, and dropped after every schema (INV-4).
     data: T,
 }
 
@@ -379,10 +392,14 @@ impl<T: StableData> Storage<T> {
 /// would let a schema borrow a local (INV-4).
 #[derive(Clone, Copy)]
 pub(super) struct Builder<'b> {
+    /// The allocations of the storage, borrowed while its batch mutex is held (INV-8).
     allocations: &'b RefCell<Allocations>,
+    /// The storage's schema count.
     schema_count: &'b AtomicUsize,
+    /// The storage's tag, given to every handle this builder returns.
     #[cfg(debug_assertions)]
     tag: StorageTag,
+    /// Makes `'b` invariant, so the builder cannot be converted to another lifetime (INV-4).
     _brand: PhantomData<fn(&'b ()) -> &'b ()>,
 }
 
@@ -463,6 +480,7 @@ impl<'b> Builder<'b> {
 }
 
 #[cfg(test)]
+#[allow(clippy::missing_docs_in_private_items)]
 pub(super) mod tests {
     //! Ownership tests, part of the Miri suite described in `runtime_schema/tests.rs`. CI runs
     //! them in this crate's `additional-ci` script.

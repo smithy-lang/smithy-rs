@@ -6,11 +6,12 @@
 //! Building the schemas of a [`Plan`], in batches.
 //!
 //! A [`Batch`] runs inside one [`Storage::with_builder`](super::owner::Storage::with_builder)
-//! call, so batches are serialized (INV-8). It builds missing schemas on demand: a member
-//! after the list and map members it references, a root after its members, and an operation
-//! after the closure of data shapes it reaches. Every completed schema is published in its
-//! plan slot at once, so a batch that panics leaves complete slots that a later batch reuses
-//! (INV-6). Operation records are published last, after their schemas and error slice.
+//! call, so batches are serialized ([INV-8](super::owner#invariants)). It builds missing
+//! schemas on demand: a member after the list and map members it references, a root after its
+//! members, and an operation after the closure of data shapes it reaches. Every completed
+//! schema is published in its plan slot at once, so a batch that panics leaves complete slots
+//! that a later batch reuses (INV-6). Operation records are published last, after their
+//! schemas and error slice.
 //!
 //! Everything here is safe code except reading published handles back and publishing new
 //! ones, which rely on the plan only holding handles from this storage (INV-9).
@@ -25,6 +26,7 @@ use crate::shape::{MemberView, ShapeView};
 use crate::{Model, ShapeType};
 use aws_smithy_schema::{PayloadHint, Schema};
 
+/// `aws-smithy-schema`'s shape type, as distinct from this crate's [`ShapeType`].
 type SchemaShapeType = aws_smithy_schema::ShapeType;
 
 /// Where a batch gets trait facts.
@@ -38,19 +40,23 @@ pub(super) enum Facts<'m> {
 
 /// One serialized materialization batch.
 pub(super) struct Batch<'p, 'b> {
+    /// What to build, and the slots to publish it in.
     plan: &'p Plan,
+    /// The storage's model, which the schemas borrow.
     model: &'b Model,
+    /// Allocates in the set's storage.
     builder: Builder<'b>,
+    /// Where trait facts come from.
     facts: Facts<'b>,
     /// Diagnostics from decoding facts again; always empty.
     diagnostics: DiagnosticSet,
     /// Facts decoded again, with [`Facts::Decode`].
     scratch: TraitFacts<'b>,
     /// Roots whose closure this batch has built or is building, indexed like `Plan::roots`.
-    /// Allocated on first use; a new batch starts with a fresh one, so a batch that panicked
+    /// Empty until first needed, and never shared between batches, so a batch that panicked
     /// leaves no stale state.
     visited: Vec<bool>,
-    /// Traversal stack reused by `member`; cleared before each use.
+    /// Scratch traversal stack, kept only to reuse its allocation; cleared before each use.
     stack: Vec<usize>,
 }
 
@@ -59,9 +65,10 @@ impl<'p, 'b> Batch<'p, 'b> {
     ///
     /// # Safety
     ///
-    /// INV-9: every handle already published in `plan` must have been returned by a builder
-    /// of the same storage as `builder`. Nothing ties `plan` to that storage, so a plan from
-    /// another set would make the batch dereference that set's pointers.
+    /// [INV-9](super::owner#invariants): every handle already published in `plan` must have
+    /// been returned by a builder of the same storage as `builder`. Nothing ties `plan` to
+    /// that storage, so a plan from another set would make the batch dereference that set's
+    /// pointers.
     ///
     /// `model` needs no such condition: `builder`'s brand only accepts data that outlives
     /// the batch, which inside [`Storage::with_builder`](super::owner::Storage::with_builder)
@@ -93,7 +100,8 @@ impl<'p, 'b> Batch<'p, 'b> {
     }
 
     /// Allocates `schema` and publishes it in `slot` of this batch's plan, which must be empty
-    /// (INV-8) and is filled only now that the schema is complete (INV-6).
+    /// ([INV-8](super::owner#invariants)) and is filled only now that the schema is complete
+    /// (INV-6).
     fn publish(&self, slot: Slot, schema: Schema<'b>) -> &'b Schema<'b> {
         let cell = match slot {
             Slot::Root(root) => &self.plan.roots[root].schema,
@@ -107,6 +115,7 @@ impl<'p, 'b> Batch<'p, 'b> {
         schema
     }
 
+    /// The model shape of plan root `root`.
     fn root_shape(&self, root: usize) -> ShapeView<'b> {
         let data = self.model.data();
         ShapeView::new(
@@ -115,6 +124,7 @@ impl<'p, 'b> Batch<'p, 'b> {
         )
     }
 
+    /// The model member of plan member `member`.
     fn member_view(&self, member: usize) -> MemberView<'b> {
         let plan = &self.plan.members[member];
         let container = &self.plan.roots[plan.container as usize];
@@ -124,6 +134,7 @@ impl<'p, 'b> Batch<'p, 'b> {
             .expect("planned members exist")
     }
 
+    /// The trait facts of plan root `root`: prepared, or decoded again into `scratch`.
     fn root_facts(&mut self, root: usize) -> &TraitFacts<'b> {
         match &self.facts {
             Facts::Prepared(prepared) => &prepared.roots[root],
@@ -136,6 +147,7 @@ impl<'p, 'b> Batch<'p, 'b> {
         }
     }
 
+    /// The trait facts of plan member `member`: prepared, or decoded again into `scratch`.
     fn member_facts(&mut self, member: usize) -> &TraitFacts<'b> {
         match &self.facts {
             Facts::Prepared(prepared) => &prepared.members[member],
@@ -147,6 +159,7 @@ impl<'p, 'b> Batch<'p, 'b> {
         }
     }
 
+    /// The trait facts of plan operation `operation`: prepared, or decoded again.
     fn operation_facts(&mut self, operation: usize) -> OperationFacts<'b> {
         let plan = self.plan;
         let (_, operation_plan) = plan.operations.get_index(operation).expect("in range");

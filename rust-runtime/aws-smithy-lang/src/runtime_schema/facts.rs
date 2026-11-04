@@ -23,26 +23,44 @@ use aws_smithy_schema::Schema;
 /// Mirrors the known trait fields of `Schema` and `knownTraitSetter` in `SchemaGenerator.kt`.
 #[derive(Debug, Default, Clone, Copy)]
 pub(super) struct TraitFacts<'m> {
+    /// `@sensitive`.
     pub(super) sensitive: bool,
+    /// `@jsonName`.
     pub(super) json_name: Option<&'m str>,
+    /// `@timestampFormat` applied to this shape or member itself, not to its target.
     pub(super) timestamp_format: Option<TimestampFormat>,
+    /// `@xmlName`.
     pub(super) xml_name: Option<&'m str>,
+    /// `@xmlAttribute`.
     pub(super) xml_attribute: bool,
+    /// `@xmlFlattened`.
     pub(super) xml_flattened: bool,
+    /// `@xmlNamespace`: its URI and optional prefix.
     pub(super) xml_namespace: Option<(&'m str, Option<&'m str>)>,
+    /// `@mediaType` applied to this shape or member itself, not to its target.
     pub(super) media_type: Option<&'m str>,
     /// Model-borrowed. Interned by [`TraitFacts::apply`], because a header name must be
     /// `'static`; see `with_http_header`.
     pub(super) http_header: Option<&'m str>,
+    /// `@httpLabel`.
     pub(super) http_label: bool,
+    /// `@httpPayload`.
     pub(super) http_payload: bool,
+    /// `@httpPrefixHeaders`: the header name prefix.
     pub(super) http_prefix_headers: Option<&'m str>,
+    /// `@httpQuery`: the query parameter name.
     pub(super) http_query: Option<&'m str>,
+    /// `@httpQueryParams`.
     pub(super) http_query_params: bool,
+    /// `@httpResponseCode`.
     pub(super) http_response_code: bool,
+    /// `@streaming` applied to this shape or member itself, not to its target.
     pub(super) streaming: bool,
+    /// `@eventHeader`.
     pub(super) event_header: bool,
+    /// `@eventPayload`.
     pub(super) event_payload: bool,
+    /// `@hostLabel`.
     pub(super) host_label: bool,
 }
 
@@ -176,6 +194,7 @@ pub(super) struct OperationFacts<'m> {
 }
 
 impl<'m> OperationFacts<'m> {
+    /// Decodes the schema-relevant traits of operation `owner`, reporting malformed values.
     pub(super) fn decode(
         owner: &ShapeId,
         traits: Traits<'m>,
@@ -209,13 +228,18 @@ impl<'m> OperationFacts<'m> {
 
 /// Validates one trait value, reporting a located diagnostic when it is malformed.
 struct Decoder<'d, 'm> {
+    /// The shape or member the trait is applied to, named in diagnostics.
     owner: &'d ShapeId,
+    /// The trait's shape ID.
     id: &'m ShapeId,
+    /// The trait's value.
     node: &'m Node,
+    /// Where malformed values are reported.
     diagnostics: &'d mut DiagnosticSet,
 }
 
 impl<'m> Decoder<'_, 'm> {
+    /// Reports that this trait's value `message`, located at `node`.
     fn report(&mut self, node: &Node, message: impl std::fmt::Display) {
         self.diagnostics.push(
             Diagnostic::error(
@@ -242,11 +266,13 @@ impl<'m> Decoder<'_, 'm> {
         }
     }
 
+    /// The trait value as a string, reporting any other type.
     fn string(&mut self) -> Option<&'m str> {
         let node = self.node;
         self.string_at(node)
     }
 
+    /// `node` as a string, reporting any other type.
     fn string_at(&mut self, node: &'m Node) -> Option<&'m str> {
         let value = node.as_str();
         if value.is_none() {
@@ -258,6 +284,7 @@ impl<'m> Decoder<'_, 'm> {
         value
     }
 
+    /// The trait value as one of the three timestamp formats, reporting anything else.
     fn timestamp_format(&mut self) -> Option<TimestampFormat> {
         let node = self.node;
         match self.string_at(node)? {
@@ -295,6 +322,7 @@ impl<'m> Decoder<'_, 'm> {
         Ok(value)
     }
 
+    /// An `@xmlNamespace` value: a required string `uri` and an optional string `prefix`.
     fn xml_namespace(&mut self) -> Option<(&'m str, Option<&'m str>)> {
         let uri = self.property("uri", true).ok()??;
         let prefix = self.property("prefix", false).ok()?;
@@ -306,6 +334,8 @@ impl<'m> Decoder<'_, 'm> {
         Some((uri?, prefix))
     }
 
+    /// An `@http` value: its method, URI, and status code. The code is `None` when omitted or
+    /// 200, the default; codes outside 100 to 999 are reported.
     fn http(&mut self) -> Option<(&'m str, &'m str, Option<u16>)> {
         let method = self.property("method", true).ok()??;
         let uri = self.property("uri", true).ok()??;

@@ -24,8 +24,10 @@ use indexmap::{IndexMap, IndexSet};
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+/// `aws-smithy-schema`'s shape ID, which borrows its parts.
 type SchemaShapeId<'a> = aws_smithy_schema::ShapeId<'a>;
 
+/// `aws-smithy-schema`'s shape type, as distinct from this crate's [`ShapeType`].
 type SchemaShapeType = aws_smithy_schema::ShapeType;
 
 /// Which shapes to materialize.
@@ -36,7 +38,9 @@ pub(super) enum Scope {
     /// The operations of one service (including those bound through resources), their
     /// inputs, outputs, and errors, and every shape those reach.
     Service {
+        /// The service.
         service: ShapeId,
+        /// Which of its operations to select.
         operations: OperationFilter,
     },
 }
@@ -50,13 +54,17 @@ pub(super) enum OperationFilter {
     Selected(Box<[ShapeId]>),
 }
 
+/// What a set selects, and how it is built.
 #[derive(Debug, Clone)]
 pub(super) struct Options {
+    /// Which shapes to select.
     pub(super) scope: Scope,
+    /// The most diagnostics to report.
     pub(super) max_diagnostics: usize,
     /// The most roots, members, or model shapes a plan can index. `u32::MAX`, except in
     /// tests of the limit.
     pub(super) max_plan_entries: u32,
+    /// When to build schemas.
     pub(super) materialization: super::Materialization,
 }
 
@@ -79,6 +87,8 @@ pub(super) struct Plan {
     pub(super) operations: IndexMap<ShapeId, OperationPlan>,
 }
 
+/// A selected data shape: where it is in the model, which [`Plan::members`] are its members,
+/// and its schema once built.
 #[derive(Debug)]
 pub(super) struct RootPlan {
     /// Position in [`ModelData::root_at`] order.
@@ -87,39 +97,50 @@ pub(super) struct RootPlan {
     pub(super) member_start: u32,
     /// Zero for shapes without member schemas, including enums.
     pub(super) member_len: u32,
+    /// Its schema, once built.
     pub(super) schema: SchemaSlot,
 }
 
 /// [`Plan::root_index`] of a shape that was not selected.
 pub(super) const NOT_SELECTED: u32 = u32::MAX;
 
+/// A member of a selected structure, union, list, or map, and its schema once built.
 #[derive(Debug)]
 pub(super) struct MemberPlan {
     /// Index of the containing root in [`Plan::roots`].
     pub(super) container: u32,
     /// Index of the target root in [`Plan::roots`].
     pub(super) target: u32,
+    /// Its schema, once built.
     pub(super) schema: SchemaSlot,
 }
 
+/// A selected operation: its input, output, and effective errors, and its schemas once
+/// built.
 #[derive(Debug)]
 pub(super) struct OperationPlan {
     /// Position in [`ModelData::root_at`] order.
     pub(super) model_position: u32,
-    /// Indexes in [`Plan::roots`].
+    /// Index in [`Plan::roots`] of the input, or of `smithy.api#Unit` when it is omitted.
     pub(super) input: u32,
+    /// Index in [`Plan::roots`] of the output, or of `smithy.api#Unit` when it is omitted.
     pub(super) output: u32,
     /// Effective errors, in order, as indexes in [`Plan::roots`].
     pub(super) errors: Box<[u32]>,
-    /// Published only when its schemas and error slice are complete (INV-6).
+    /// Published only when its schemas and error slice are complete
+    /// ([INV-6](super::owner#invariants)).
     pub(super) record: RecordSlot,
 }
 
 /// The schemas of a materialized operation.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct OperationRecord {
+    /// The operation's own input overlay, with its `@http` trait and body hints.
     pub(super) input: SchemaHandle,
+    /// The output's base root, or an operation-specific overlay when the operation has
+    /// `aws.customizations#s3UnwrappedXmlOutput`.
     pub(super) output: SchemaHandle,
+    /// The effective errors, in order.
     pub(super) errors: SliceHandle,
 }
 
@@ -137,14 +158,14 @@ impl RecordSlot {
         self.0.get()
     }
 
-    /// Publishes `record`, whose schemas and error slice must be complete (INV-6). A record is
-    /// published at most once (INV-8); publishing it twice would keep the first record and
-    /// leave the second unused (INV-3).
+    /// Publishes `record`, whose schemas and error slice must be complete
+    /// ([INV-6](super::owner#invariants)). A record is published at most once (INV-8);
+    /// publishing it twice would keep the first record and leave the second unused (INV-3).
     ///
     /// # Safety
     ///
-    /// INV-9: every handle in `record` must have been allocated by the same storage as every
-    /// other handle in this slot's plan.
+    /// [INV-9](super::owner#invariants): every handle in `record` must have been allocated by
+    /// the same storage as every other handle in this slot's plan.
     pub(super) unsafe fn set(&self, record: OperationRecord) {
         let published = self.0.set(record);
         debug_assert!(published.is_ok(), "an operation was built twice");
@@ -154,7 +175,9 @@ impl RecordSlot {
 /// The slot of a selected root or member schema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Slot {
+    /// An index in [`Plan::roots`].
     Root(usize),
+    /// An index in [`Plan::members`].
     Member(usize),
 }
 
@@ -241,6 +264,7 @@ pub(super) fn root_id(id: &ShapeId) -> SchemaShapeId<'_> {
     SchemaShapeId::from_parts(id.as_str(), id.namespace(), id.name())
 }
 
+/// A schema shape ID borrowing the parts of a model shape or member ID, without allocating.
 pub(super) fn member_id(id: &ShapeId) -> SchemaShapeId<'_> {
     match id.member() {
         Some(member) => {
@@ -255,6 +279,7 @@ pub(super) fn member_id(id: &ShapeId) -> SchemaShapeId<'_> {
 /// Selection is positional: each reference is hashed once, to find its model position, and
 /// everything after that indexes dense tables by position or selection index.
 struct Selection<'a> {
+    /// The model being selected from.
     data: &'a ModelData,
     /// The selection index at each model position, or `NOT_SELECTED`.
     by_position: Vec<u32>,
@@ -263,13 +288,16 @@ struct Selection<'a> {
     /// The model positions of the member targets of every selected root, in selection
     /// order, starting at `member_targets_start` of the root.
     member_targets: Vec<u32>,
+    /// Where each selected root's member targets start in `member_targets`.
     member_targets_start: Vec<u32>,
+    /// Selected operations, in selection order.
     operations: Vec<OperationView<'a>>,
     /// The model positions of each operation's errors, in `operations` order.
     errors: Vec<Box<[u32]>>,
 }
 
 impl<'a> Selection<'a> {
+    /// Selects the shapes and operations of `scope`, or reports why it cannot.
     fn select(model: &'a Model, scope: &Scope, diagnostics: &mut DiagnosticSet) -> Option<Self> {
         let data = model.data();
         let mut selection = Selection {
@@ -344,6 +372,7 @@ impl<'a> Selection<'a> {
             .expect("references resolve to root shapes") as u32
     }
 
+    /// Selects `operation`, its input and output, and its effective `errors` (model positions).
     fn add_operation(&mut self, operation: OperationView<'a>, errors: Vec<u32>) {
         let input = self.position(operation.input());
         let output = self.position(operation.output());
@@ -536,8 +565,11 @@ fn filter_operations<'a>(
 /// Trait facts decoded while planning, indexed like the plan, for materializing in the same
 /// batch without decoding again. Empty when the plan is for a lazy set.
 pub(super) struct Prepared<'m> {
+    /// The facts of each root, indexed like [`Plan::roots`].
     pub(super) roots: Vec<TraitFacts<'m>>,
+    /// The facts of each member, indexed like [`Plan::members`].
     pub(super) members: Vec<TraitFacts<'m>>,
+    /// The facts of each operation, indexed like [`Plan::operations`].
     pub(super) operations: Vec<OperationFacts<'m>>,
     /// Every member, each after the members it references.
     pub(super) member_order: Vec<usize>,

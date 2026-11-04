@@ -143,6 +143,11 @@
 //! frees them. That is a few bytes per distinct name, but it grows without bound in a process
 //! that keeps loading models with new header names.
 
+// Private items are documented too: much of this module is `unsafe` ownership code whose
+// contracts live in its docs.
+#![warn(clippy::missing_docs_in_private_items)]
+
+/// [`SchemaBuildError`].
 mod error;
 mod facts;
 mod materialize;
@@ -150,6 +155,7 @@ mod owner;
 mod plan;
 
 #[cfg(test)]
+#[allow(clippy::missing_docs_in_private_items)]
 mod tests;
 
 pub use aws_smithy_schema::OperationSchema;
@@ -168,9 +174,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 ///
 /// See the [module documentation](self).
 pub struct RuntimeSchemaSet {
-    /// What the set contains, and the handles of what has been built. Holds only handles
-    /// from `storage` (INV-9): it is created with `storage`, never replaced, and only
-    /// filled by batches of `storage`.
+    /// What the set contains, and the handles of the schemas built so far. Every handle in
+    /// it was allocated by `storage` ([INV-9](owner#invariants)).
     plan: Plan,
     /// The model and the schemas that borrow it, which safe Rust cannot express for two
     /// fields of one struct; `owner` explains why that requires `unsafe` and why the
@@ -183,10 +188,11 @@ pub struct RuntimeSchemaSet {
     // and references to unselected shapes, and `model()` would then return the trimmed
     // model.
     storage: Storage<Model>,
+    /// When the set builds its schemas.
     materialization: Materialization,
-    /// Whether every slot and record of `plan` is filled, so `materialize_all` can return
-    /// without a batch. Stored with release ordering after the batch that filled them, so a
-    /// thread whose `materialize_all` returns early still observes every slot filled.
+    /// `true` only if every slot and record of `plan` is filled. Set with a release store
+    /// after the batch that filled them, so a thread that reads `true` with an acquire load
+    /// also sees every slot and record filled.
     complete: AtomicBool,
 }
 
@@ -236,6 +242,8 @@ impl RuntimeSchemaSet {
         }
     }
 
+    /// Plans `model` for `options` and, for an eager set, builds every schema in the same
+    /// batch, reusing the facts decoded while planning.
     fn build(model: Model, options: &Options) -> Result<Self, SchemaBuildError> {
         // If planning fails or materializing panics, dropping `storage` releases everything
         // allocated (INV-3).
@@ -339,6 +347,7 @@ impl RuntimeSchemaSet {
             .map(|(index, id)| self.operation_schema(index, id))
     }
 
+    /// The descriptor of plan operation `index`, whose ID is `id`, building it if needed.
     fn operation_schema<'a>(&'a self, index: usize, id: &'a ShapeId) -> OperationSchema<'a> {
         let (_, plan) = self.plan.operations.get_index(index).expect("in range");
         let record = match plan.record.get() {
@@ -360,6 +369,7 @@ impl RuntimeSchemaSet {
             .build()
     }
 
+    /// Builds plan operation `index` in a new batch.
     #[cold]
     fn materialize_operation(&self, index: usize) -> OperationRecord {
         self.batch(|batch| batch.operation(index))
@@ -457,7 +467,9 @@ impl fmt::Debug for RuntimeSchemaSet {
 /// Chooses which shapes a [`RuntimeSchemaSet`] contains.
 #[derive(Debug)]
 pub struct RuntimeSchemaSetBuilder<'m> {
+    /// The model to build from.
     model: &'m Model,
+    /// What to select, how to build it, and limits.
     options: Options,
 }
 
