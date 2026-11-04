@@ -62,6 +62,37 @@ Other known differences:
 - `-0` loads as the float `0.0`, matching how serde_json reads it in JSON AST input; Java
   reads it as the integer `0`. Covered by `tests/idl.rs`.
 
+## Assembly fixtures
+
+`assembly/CASE/` contains a `case.json` with ordered assembler steps, plus the files they use.
+They cover inputs added in code, which file fixtures cannot express:
+
+- `{"addShapes": FILE}` loads `FILE` and adds each of its shapes as if built in code
+  (`addShape` / `add_shape`). With `"disablePrelude": true`, the file is loaded without the
+  prelude so that it can define shapes in the prelude namespace.
+- `{"addModel": FILE}` loads `FILE` and adds the resulting model (`addModel` / `add_model`).
+- `{"addFile": FILE}` adds a `.json` or `.smithy` file (`addImport` / `add_json_file`,
+  `add_idl_file`).
+- `{"putMetadata": KEY, "value": VALUE}` adds metadata in code.
+- `{"addTrait": SHAPE_ID, "trait": TRAIT_ID, "value": VALUE}` applies a trait in code.
+
+`case.json` may also list `locations`: shapes, members, or traits (`SHAPE_ID@TRAIT_ID`) whose
+source file `expected/assembly/outcomes.json` records, which shows which of several definitions
+the reference implementation keeps. The outcomes also record whether each case is accepted and
+the IDs of ERROR and DANGER events; `expected/assembly/CASE.json` is each accepted case as
+serialized by the reference implementation, including shapes the case adds to the prelude
+namespace but not the prelude's own shapes.
+
+`case.json` may also have `"serializeWithPrelude": {"from": FILE, "to": OUTPUT}`: regenerating
+writes `OUTPUT` as `FILE` serialized by the reference implementation with its prelude shapes
+(as the smithy-build `model` plugin writes it with `includePreludeShapes`), for the steps to
+load. `OUTPUT` is committed with the case, and only regenerating keeps it in sync with `FILE`:
+regenerate after changing `FILE` or moving the pinned Smithy version.
+
+`tests/java_assembly_fixtures.rs` replays the same steps and checks that accepted cases produce
+an equivalent model (including the order of merged arrays and metadata) with the same source
+files, and that rejected cases report corresponding diagnostic codes.
+
 ## Regenerating
 
 After adding or changing a fixture, regenerate `expected/` with JDK 17+ and the pinned
