@@ -129,12 +129,21 @@ class ResponseDeserializerGenerator(
 
     /** Schema-serde path for streaming blob responses.
      *
-     * Strategy (mirrors the legacy path):
-     * 1. Create a deserializer from the response body (while it's still available).
-     * 2. Call deserialize_with_response to read header-bound members. The streaming
-     *    blob member gets set to an empty ByteStream placeholder.
-     * 3. Swap the body out of the response (take ownership).
-     * 4. Replace the placeholder with the real ByteStream wrapping the swapped body.
+     * Builder-first, and the ordering is a borrow-checking requirement rather than a style
+     * preference. Both the response deserializer and the borrowed headers hold an immutable borrow
+     * of the response, and taking the live body needs a mutable one, so:
+     *
+     * 1. create the builder;
+     * 2. in an inner scope, create the protocol's response deserializer and populate the builder
+     *    from it — the composite omits the streaming payload member, leaving it for step 4 — then
+     *    run `MutateOutput` while the headers are still borrowed;
+     * 3. let that scope end, dropping every immutable borrow;
+     * 4. swap the live body out and set it on the builder as a `ByteStream`;
+     * 5. finalize, which is where required-member correction runs.
+     *
+     * The stream is set after member population rather than before because the composite never
+     * invokes the consumer for a streaming payload member, so there is nothing to protect it from;
+     * setting it afterward keeps the borrow scopes as small as possible.
      */
     private fun RustWriter.deserializeStreamingBlobSchema(
         operationShape: OperationShape,
@@ -145,7 +154,6 @@ class ResponseDeserializerGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val streamingMember = outputShape.findStreamingMember(model)!!
-        val memberName = symbolProvider.toMemberName(streamingMember)
         val operationName = symbolProvider.toSymbol(operationShape).name
 
         rustTemplate(
@@ -161,29 +169,23 @@ class ResponseDeserializerGenerator(
                 }
 
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
-                    // Read header-bound members while the body is still in the response.
-                    // deserialize_with_response sets the streaming blob member to a placeholder.
-                    let _response_headers = response.headers();
-                    let mut output = {
+                    ##[allow(unused_mut)]
+                    let mut output = <#{BuilderSymbol}>::default();
+                    {
+                        let _response_headers = response.headers();
                         let protocol = _cfg.load::<#{SharedClientProtocol}>()
                             .expect("a SharedClientProtocol is required");
                         let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                             .map_err(#{E}::unhandled)?;
-                        #{ConcreteOutput}::deserialize_with_response(
-                            &mut *deser, _response_headers, response.status().as_u16(), &[],
-                        ).map_err(#{E}::unhandled)?
-                    };
-                    // Run MutateOutput so service-specific accessors (e.g. S3's
-                    // request-id reader that checks both `x-amz-request-id` and
-                    // `x-amzn-requestid`) populate synthetic members like
-                    // `_request_id` after deserialize_with_response. The schema-serde
-                    // gating in BaseRequestIdDecorator emits direct field access here
-                    // because `output` is the built Output struct.
-                    #{MutateOutput}
-                    // Now take ownership of the body and replace the placeholder
+                        output.deserialize_members(&mut *deser).map_err(#{E}::unhandled)?;
+                        #{MutateOutput}
+                    }
+                    // Every immutable borrow of the response has been dropped, so the live body can
+                    // be taken. The streaming member was left unset above.
                     let mut body = #{SdkBody}::taken();
                     std::mem::swap(&mut body, response.body_mut());
-                    output.$memberName = #{ByteStream}::new(body);
+                    let output = output.${streamingMember.setterName()}(#{Some}(#{ByteStream}::new(body)));
+                    let output = #{finalizeBuilder};
                     #{Ok}(output)
                 })();
 
@@ -193,11 +195,18 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "ConcreteOutput" to outputSymbol,
             "E" to errorSymbol,
+            "BuilderSymbol" to symbolProvider.symbolForBuilder(outputShape),
             "ByteStream" to RuntimeType.byteStream(runtimeConfig),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
                 },
+            "finalizeBuilder" to
+                codegenContext.builderInstantiator().finalizeBuilder(
+                    "output",
+                    outputShape,
+                    mapErr = writable { rustTemplate("#{E}::unhandled", "E" to errorSymbol) },
+                ),
             "MutateOutput" to
                 writable {
                     writeCustomizations(
@@ -208,19 +217,23 @@ class ResponseDeserializerGenerator(
         )
     }
 
-    /** Schema-serde path for event stream responses (hybrid).
+    /** Schema-serde path for event stream responses.
      *
-     * Creates the output builder, sets the event stream member via
-     * `set_<memberName>(Some(receiver))`, then builds. `EventStreamUnmarshallerGenerator`
-     * (invoked here with `useSchemaSerde = true`) emits a schema-serde unmarshaller
-     * that uses `self.protocol.payload_codec()` to decode each event frame, and also
-     * handles initial-response data for RPC protocols (which arrives via the first
-     * event frame, not the HTTP body).
+     * Builder-first, in this order:
      *
-     * Unlike the non-streaming schema path, `deserialize_with_response` is not
-     * used because it would call `builder.build()` internally — and for
-     * @required streaming members the build fails before the event stream
-     * member can be populated.
+     * 1. swap the live body out of the response; it becomes the event receiver;
+     * 2. set the receiver on the output builder;
+     * 3. create the protocol's response deserializer over the now-bodyless response and populate
+     *    the builder's remaining members from it;
+     * 4. run `MutateOutput` and finalize, which is where required-member correction runs.
+     *
+     * Step 3 is what lets a REST protocol populate modeled response headers and status on an
+     * event-stream output, which this path previously omitted entirely. It cannot disturb the
+     * receiver: the composite never invokes the consumer for the `@streaming` payload member, and
+     * the generated arm for a streaming member only skips. For an RPC protocol the deserializer is
+     * body-only over an empty body, which every built-in codec reads as an empty structure, so the
+     * step is a no-op there and initial-response members still come from the first event frame via
+     * the unmarshaller emitted by `EventStreamUnmarshallerGenerator` (`useSchemaSerde = true`).
      */
     private fun RustWriter.deserializeStreamingEventStreamSchema(
         operationShape: OperationShape,
@@ -231,6 +244,7 @@ class ResponseDeserializerGenerator(
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val streamingMember = outputShape.findStreamingMember(model)!!
+        val operationName = symbolProvider.toSymbol(operationShape).name
         val unionTarget = model.expectShape(streamingMember.target, UnionShape::class.java)
 
         val unmarshallerCtor =
@@ -263,23 +277,15 @@ class ResponseDeserializerGenerator(
                     // valid — swapping the body does not invalidate headers.
                     let _response_headers = response.headers();
                     let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required")
-                        .clone();
-                    let unmarshaller = #{unmarshaller}(protocol);
+                        .expect("a SharedClientProtocol is required");
+                    let unmarshaller = #{unmarshaller}(protocol.clone());
                     let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
-                    let output = #{BuilderSymbol}::default();
-                    // `mut` is required because `MutateOutput` customizations (e.g.,
-                    // the AWS SDK request-id decorator) call builder setters that take
-                    // `&mut self` (like `_set_request_id`). Marked `allow(unused_mut)`
-                    // because the customization block is empty for non-AWS services.
-                    ##[allow(unused_mut)]
-                    let mut output = output.${streamingMember.setterName()}(#{Some}(receiver));
-                    // Emit MutateOutput customizations (populates synthetic members like
-                    // `_request_id` from `_response_headers`). `deserialize_with_response`
-                    // is not usable here because it calls `builder.build()` internally,
-                    // which would fail for `@required` streaming members. The legacy
-                    // streaming path emits the same customizations via
-                    // `ProtocolParserGenerator.renderShapeParser`.
+                    let mut output = #{BuilderSymbol}::default().${streamingMember.setterName()}(#{Some}(receiver));
+                    // The body is gone, so the protocol reads only headers and status.
+                    let mut deser = protocol
+                        .deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
+                        .map_err(#{E}::unhandled)?;
+                    output.deserialize_members(&mut *deser).map_err(#{E}::unhandled)?;
                     #{MutateOutput}
                     // Build via finalizeBuilder — applies error correction so @required
                     // non-event-stream members are populated with defaults. For RPC
@@ -327,7 +333,7 @@ class ResponseDeserializerGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-            fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
                 ##[allow(unused_mut)]
                 let mut force_error = false;
                 #{BeforeParseResponse}
@@ -336,7 +342,7 @@ class ResponseDeserializerGenerator(
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
-                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
+                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response, _cfg)))
             }
             """,
             *codegenScope,
@@ -353,12 +359,27 @@ class ResponseDeserializerGenerator(
         customizations: List<OperationCustomization>,
     ) {
         if (schemaExclusive) {
+            // `body` is read by error-metadata parsing and customizations; `headers` and
+            // `status` are referenced by request-id-applying customizations through the
+            // `PopulateErrorMetadataExtras` contract that `renderSchemaErrorParsing` declares
+            // (it lists `status` and `headers` as the in-scope names). Bind all three so the
+            // scope matches the non-streaming error path (`deserializeNonStreamingSchemaOnly`)
+            // and a customization that reads `status` compiles uniformly on both paths.
+            //
+            // Any of the three can be unused depending on the operation shape: streaming
+            // operations with zero modeled errors don't reference `body`; protocol-test models
+            // without request-id customizations don't reference `headers`/`status`. The bindings
+            // stay unconditional and are annotated to suppress the warning, mirroring the
+            // `#[allow(unused_mut)]` idiom used elsewhere in this generator.
             rustTemplate(
                 """
                 // For streaming operations, we only hit this case if its an error
+                ##[allow(unused_variables)]
                 let body = response.body().bytes().expect("body loaded");
-                let status = response.status().as_u16();
+                ##[allow(unused_variables)]
                 let headers = response.headers();
+                ##[allow(unused_variables)]
+                let status = response.status().as_u16();
                 """,
                 *codegenScope,
             )
@@ -368,7 +389,7 @@ class ResponseDeserializerGenerator(
                 """
                 // For streaming operations, we only hit this case if its an error
                 let body = response.body().bytes().expect("body loaded");
-                #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
+                #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body, _cfg))
                 """,
                 *codegenScope,
                 "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
@@ -384,7 +405,7 @@ class ResponseDeserializerGenerator(
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         if (schemaExclusive) {
-            deserializeNonStreamingSchemaOnly(operationShape, operationName, outputSymbol, customizations, successCode)
+            deserializeNonStreamingSchemaOnly(operationShape, operationName, customizations, successCode)
         } else {
             deserializeNonStreamingLegacy(operationShape, customizations, successCode)
         }
@@ -394,10 +415,17 @@ class ResponseDeserializerGenerator(
     private fun RustWriter.deserializeNonStreamingSchemaOnly(
         operationShape: OperationShape,
         operationName: String,
-        outputSymbol: software.amazon.smithy.codegen.core.Symbol,
         customizations: List<OperationCustomization>,
         successCode: Int,
     ) {
+        val outputShape = operationShape.outputShape(model)
+        // `body` is only read by `BeforeParseResponse` customizations and by the
+        // `PopulateErrorMetadataExtras` contract that `renderSchemaErrorParsing` declares; the
+        // success path no longer takes it, because the selected protocol reads the body from the
+        // response itself. An operation with no modeled errors and no body-inspecting
+        // customization therefore leaves it unused, hence `allow(unused_variables)`. This
+        // rationale lives here rather than in the template because a generated comment is
+        // emitted once per operation (0.42% of SSM's source when it was generated).
         rustTemplate(
             """
             let (success, status) = (response.status().is_success(), response.status().as_u16());
@@ -405,6 +433,7 @@ class ResponseDeserializerGenerator(
             // (e.g., S3's `body_is_error` check that detects errors returned with
             // HTTP 200) can inspect them. The legacy non-streaming path also
             // loads `body` before firing this hook.
+            ##[allow(unused_variables)]
             let body = response.body().bytes().expect("body loaded");
             let headers = response.headers();
             ##[allow(unused_mut)]
@@ -420,16 +449,16 @@ class ResponseDeserializerGenerator(
         )
         renderSchemaErrorParsing(operationShape, customizations)
 
-        // Always use deserialize_with_response — it handles both HTTP-bound members
-        // (headers, status code) and body members. When there are no HTTP bindings,
-        // it trivially delegates to deserialize(). After deserialize_with_response,
-        // run `MutateOutput` customizations so service-specific header readers
-        // (e.g. S3's request-id decorator that checks `x-amz-request-id` /
-        // `x-amzn-requestid` with fallback) populate synthetic members like
-        // `_request_id`. This mirrors the streaming path and the legacy
-        // non-streaming path; without it, S3 responses leave `_request_id` as
-        // `None` because the schema-serde synthetic-member read uses only the
-        // default `x-amzn-requestid` header.
+        // Populate the output BUILDER from the protocol's response deserializer, then run
+        // `MutateOutput` customizations, then finalize. Builder-first ordering matters for two
+        // reasons. The selected protocol decides which members it can supply — a REST protocol
+        // reads `@httpHeader` / `@httpPrefixHeaders` / `@httpResponseCode` / `@httpPayload`
+        // members from the response itself, a body-only protocol reads them from its document —
+        // so no shape-specific response method or ConfigBag argument is chosen here. And service
+        // customizations that populate unmodeled members (e.g. the AWS request-id decorator
+        // reading `x-amz-request-id` / `x-amzn-requestid`) run against the builder while the
+        // response headers are still borrowed, so required-member error correction is applied
+        // exactly once, at finalization, after every source has contributed.
         rustTemplate(
             """
             } else {
@@ -437,24 +466,25 @@ class ResponseDeserializerGenerator(
                     .expect("a SharedClientProtocol is required");
                 let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                // body and headers are already in scope from the top of the function;
-                // alias `headers` as `_response_headers` so MutateOutput
-                // customizations have a stable name to read from.
+                // `headers` is already in scope from the top of the function; alias it as
+                // `_response_headers` so MutateOutput customizations have a stable name to
+                // read from.
                 let _response_headers = headers;
+                // `mut` is required because `deserialize_members` and the `MutateOutput`
+                // builder setters take `&mut self`. Marked `allow(unused_mut)` because an
+                // empty output has no members and no customizations to run.
                 ##[allow(unused_mut)]
-                let mut output = #{ConcreteOutput}::deserialize_with_response(
-                    &mut *deser,
-                    _response_headers,
-                    response.status().into(),
-                    body,
-                ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                let mut output = <#{BuilderSymbol}>::default();
+                output.deserialize_members(&mut *deser)
+                    .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 #{MutateOutput}
+                let output = #{finalizeBuilder};
                 #{Ok}(#{Output}::erase(output))
             }
             """,
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
-            "ConcreteOutput" to outputSymbol,
+            "BuilderSymbol" to symbolProvider.symbolForBuilder(outputShape),
             "MutateOutput" to
                 writable {
                     writeCustomizations(
@@ -462,13 +492,33 @@ class ResponseDeserializerGenerator(
                         OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
                     )
                 },
+            "finalizeBuilder" to
+                codegenContext.builderInstantiator().finalizeBuilder(
+                    "output",
+                    outputShape,
+                    mapErr =
+                        writable {
+                            rustTemplate(
+                                "|e| #{OrchestratorError}::other(#{BoxError}::from(e))",
+                                *codegenScope,
+                                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                            )
+                        },
+                ),
         )
     }
 
     /**
      * Renders schema-based error parsing code.
-     * Assumes `status`, `headers`, `body`, and `_cfg` are in scope.
+     * Assumes `response`, `body`, and `_cfg` are in scope.
      * Emits a complete expression that returns `OutputOrError`.
+     *
+     * Calls the protocol's [`ClientProtocolInner::parse_error_metadata`] to
+     * extract `code` / `message` / `request_id` from the wire envelope, then
+     * matches on the resolved code and per-variant calls
+     * [`ClientProtocolInner::deserialize_error_response`] to obtain a body
+     * deserializer positioned wherever the variant's members live (e.g.
+     * inside `<Error>` for restXml).
      */
     private fun RustWriter.renderSchemaErrorParsing(
         operationShape: OperationShape,
@@ -477,28 +527,34 @@ class ResponseDeserializerGenerator(
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val errors = operationShape.operationErrors(model)
 
+        // Both `parse_error_metadata` and (per-variant)
+        // `deserialize_error_response` are trait methods on the protocol, so
+        // the protocol must be in scope before extracting the metadata
+        // builder. The `parseHttpErrorMetadata` free-function call and the
+        // protocol-specific `errorBodyContents` shim that the legacy schema
+        // path used are eliminated.
         rustTemplate(
             """
+            let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                .expect("a SharedClientProtocol is required");
             ##[allow(unused_mut)]
-            let mut generic_builder = #{parse_http_error_metadata}(status, headers, body)
+            let mut generic_builder = protocol.parse_error_metadata(response, _cfg)
                 .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
             #{PopulateErrorMetadataExtras}
             let generic = generic_builder.build();
             """,
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
-            "parse_http_error_metadata" to protocol.parseHttpErrorMetadata(operationShape),
             "PopulateErrorMetadataExtras" to
                 writable {
                     writeCustomizations(
                         customizations,
-                        OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "status", "headers"),
+                        OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "status", "headers", "body"),
                     )
                 },
         )
 
         if (errors.isNotEmpty()) {
-            val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
             rustTemplate(
                 """
                 let error_code = match generic.code() {
@@ -506,66 +562,47 @@ class ResponseDeserializerGenerator(
                     #{None} => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(#{error_symbol}::unhandled(generic)))),
                 };
                 let _error_message = generic.message().map(|msg| msg.to_owned());
-                let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                    .expect("a SharedClientProtocol is required");
                 """,
                 *codegenScope,
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "error_symbol" to errorSymbol,
             )
-            if (errorBodyContentsFn != null) {
-                rustTemplate(
-                    "let error_body = #{error_body_contents}(body);",
-                    "error_body_contents" to errorBodyContentsFn,
-                )
-            }
             rustTemplate("let err = match error_code {")
             for (error in errors) {
                 val errorShape = model.expectShape(error.id, StructureShape::class.java)
                 val variantName = symbolProvider.toSymbol(errorShape).name
                 val errorCode = httpBindingResolver.errorCode(errorShape).dq()
-                val errorType = symbolProvider.toSymbol(errorShape)
                 val errorMessageMember = errorShape.errorMessageMember()
 
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
-                if (errorBodyContentsFn != null) {
-                    rustTemplate(
-                        """
-                        let mut deser = protocol.payload_codec()
-                            .expect("protocol has a payload codec")
-                            .create_deserializer(error_body);
-                        let mut tmp = match #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), error_body)
-                        {
-                            #{Ok}(val) => val,
-                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                        };
-                        tmp.meta = generic;
-                        """,
-                        *codegenScope,
-                        "BoxError" to RuntimeType.boxError(runtimeConfig),
-                        "error_symbol" to errorSymbol,
-                        "ErrorType" to errorType,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
-                            .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
-                        {
-                            #{Ok}(val) => val,
-                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                        };
-                        tmp.meta = generic;
-                        """,
-                        *codegenScope,
-                        "BoxError" to RuntimeType.boxError(runtimeConfig),
-                        "error_symbol" to errorSymbol,
-                        "ErrorType" to errorType,
-                    )
-                }
+                // The protocol decides where the error body deserializer is
+                // positioned: for envelope-less protocols (awsJson, restJson1)
+                // it's the response body root; for restXml it's inside
+                // `<Error>`. Generated code is uniform across protocols.
+                //
+                // `deserialize_error_response` returns an error-mode deserializer,
+                // which tolerates an empty body: a modeled error carrying only
+                // HTTP bindings (an S3 `HEAD` failure, for example) still
+                // populates them without the body codec being asked to parse
+                // nothing. That replaces the empty-body short circuit the
+                // generated response method used to perform.
+                rustTemplate(
+                    """
+                    let mut deser = protocol.deserialize_error_response(response, _cfg)
+                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                    let mut tmp = <#{ErrorBuilder}>::default();
+                    tmp.deserialize_members(&mut *deser)
+                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                    """,
+                    *codegenScope,
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
+                    "ErrorBuilder" to symbolProvider.symbolForBuilder(errorShape),
+                )
                 if (errorMessageMember != null) {
                     val symbol = symbolProvider.toSymbol(errorMessageMember)
                     if (symbol.isOptional()) {
+                        // The fallback now applies to the builder rather than to a
+                        // built error, so finalization still sees a complete shape.
                         rust(
                             """
                             if tmp.message.is_none() {
@@ -575,10 +612,59 @@ class ResponseDeserializerGenerator(
                         )
                     }
                 }
-                rust("tmp")
+                // `meta` is a private builder field, so it is set through the
+                // generated consuming setter rather than directly.
+                rust("let tmp = tmp.meta(generic);")
+                rustTemplate(
+                    "#{finalizeErrorBuilder}",
+                    "finalizeErrorBuilder" to
+                        codegenContext.builderInstantiator().finalizeBuilder(
+                            "tmp",
+                            errorShape,
+                            mapErr =
+                                writable {
+                                    rustTemplate(
+                                        "|e| #{OrchestratorError}::other(#{BoxError}::from(e))",
+                                        *codegenScope,
+                                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                                    )
+                                },
+                        ),
+                )
                 rust("}),")
             }
-            rustTemplate("_ => #{error_symbol}::generic(generic)", "error_symbol" to errorSymbol)
+            rustTemplate(
+                """
+                _ => {
+                    // Registry-backed, operation-scoped reification of an error whose
+                    // code this operation does not model directly: the operation's own
+                    // error registry is consulted first, then the lookup widens to the
+                    // service-wide error registry. On a hit, the reified error is attached
+                    // as the source of the returned unhandled error while its metadata
+                    // (code, message, request id) is preserved; on a miss the generic
+                    // error is returned unchanged.
+                    match protocol
+                        .deserialize_error_response(response, _cfg)
+                        .ok()
+                        .and_then(|mut deser| {
+                            #{reify_error}(
+                                ${errorSymbol.namespace}::error_registry::REGISTRY
+                                    .or(&crate::error_type_registry::REGISTRY),
+                                error_code,
+                                &mut *deser,
+                            )
+                        }) {
+                        #{Some}(source) => <#{error_symbol} as #{CreateUnhandledError}>::create_unhandled_error(source, #{Some}(generic)),
+                        #{None} => #{error_symbol}::generic(generic),
+                    }
+                }
+                """,
+                *codegenScope,
+                "error_symbol" to errorSymbol,
+                "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
+                "CreateUnhandledError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError"),
+            )
             rustTemplate(
                 """
                 };
@@ -610,9 +696,9 @@ class ResponseDeserializerGenerator(
             let mut force_error = false;
             #{BeforeParseResponse}
             let parse_result = if !success && status != $successCode || force_error {
-                #{parse_error}(status, headers, body)
+                #{parse_error}(status, headers, body, _cfg)
             } else {
-                #{parse_response}(status, headers, body)
+                #{parse_response}(status, headers, body, _cfg)
             };
             #{type_erase_result}(parse_result)
             """,

@@ -88,6 +88,7 @@ async fn simple_integration_test() {
     let health_check_url = hyper::Uri::try_from(health_check_url).unwrap();
     let request = hyper::Request::builder()
         .uri(health_check_url)
+        .header("content-type", "application/json")
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .unwrap();
     let result = hyper_client.request(request).await.unwrap();
@@ -103,9 +104,11 @@ async fn health_check() {
     let uri = url.parse::<hyper::Uri>().expect("invalid URL");
 
     // `/health` is served by the `AlbHealthCheckLayer` wrapping the router, and is not a modeled
-    // operation, so we use a regular Hyper HTTP client to make a request to it.
+    // operation, so we use a regular Hyper HTTP client, with the REST JSON identification header,
+    // to make a request to it.
     let request = hyper::Request::builder()
         .uri(uri)
+        .header("content-type", "application/json")
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .expect("failed to build request");
 

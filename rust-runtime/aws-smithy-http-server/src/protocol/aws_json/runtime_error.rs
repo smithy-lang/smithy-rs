@@ -28,6 +28,10 @@ pub enum RuntimeError {
     /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
     #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
+    /// The request was not received in full before a configured read deadline expired.
+    /// Returned as `408 Request Timeout`, which is retryable per RFC 9110.
+    #[error("the request was not received before the configured read deadline")]
+    RequestTimeout,
 }
 
 impl RuntimeError {
@@ -38,6 +42,7 @@ impl RuntimeError {
             Self::NotAcceptable => "NotAcceptableException",
             Self::UnsupportedMediaType => "UnsupportedMediaTypeException",
             Self::Validation(_) => "ValidationException",
+            Self::RequestTimeout => "RequestTimeoutException",
         }
     }
 
@@ -48,6 +53,7 @@ impl RuntimeError {
             Self::NotAcceptable => StatusCode::NOT_ACCEPTABLE,
             Self::UnsupportedMediaType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Validation(_) => StatusCode::BAD_REQUEST,
+            Self::RequestTimeout => StatusCode::REQUEST_TIMEOUT,
         }
     }
 }
@@ -56,11 +62,18 @@ impl IntoResponse<AwsJson1_0> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_0>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
+    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+        protocol.serialize_runtime_error(self.into())
+    }
 }
 
 impl IntoResponse<AwsJson1_1> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+    }
+
+    fn into_response_with_protocol(self, protocol: &dyn crate::schema::ServerProtocol) -> crate::response::Response {
+        protocol.serialize_runtime_error(self.into())
     }
 }
 
@@ -109,6 +122,7 @@ impl From<RequestRejection> for RuntimeError {
     fn from(err: RequestRejection) -> Self {
         match err {
             RequestRejection::ConstraintViolation(reason) => Self::Validation(reason),
+            RequestRejection::RequestTimeout => Self::RequestTimeout,
             _ => Self::Serialization(crate::Error::new(err)),
         }
     }

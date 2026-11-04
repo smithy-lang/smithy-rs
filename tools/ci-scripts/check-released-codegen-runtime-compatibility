@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euo pipefail
+
+if [[ $# -gt 1 ]]; then
+    echo "Usage: check-released-codegen-runtime-compatibility [codegen-version]"
+    exit 1
+fi
+
+cd smithy-rs
+
+args=()
+if [[ $# -eq 1 ]]; then
+    args+=(--codegen-version "$1")
+fi
+
+echo "running compatibility tooling unit tests"
+PYTHONPATH=tools/ci-scripts python3 -m unittest discover \
+    -s tools/ci-scripts/released_codegen_runtime_compatibility/tests
+
+./tools/ci-scripts/released-codegen-runtime-compatibility.py "${args[@]}"

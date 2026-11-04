@@ -4,15 +4,20 @@
  */
 
 use crate::{
+    manifest::{dependency_edges, DependencyEdge},
     repo::Repo,
+    requirements::{stale_requirements, stale_requirements_error},
     tag::{previous_release_tag, release_tags},
     util::utf8_path_buf,
     Audit,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
+use semver::Version;
 use smithy_rs_tool_common::{
-    command::sync::CommandExt, index::CratesIndex, package::PackageCategory,
+    command::sync::CommandExt,
+    index::{CratesIndex, PublishedCrateVersion},
+    package::PackageCategory,
     release_tag::ReleaseTag,
 };
 use std::{
@@ -40,10 +45,20 @@ pub fn audit(args: Audit) -> Result<()> {
     let next_crates = discover_runtime_crates(&repo.root).context("next")?;
     let previous_crates = resolve_previous_crates(&repo, previous_release_tag.as_str())?;
 
+    // The current version of every managed runtime crate, used to evaluate the dependency
+    // requirements that were published for these crates' current versions.
+    let current_versions: BTreeMap<String, Version> = next_crates
+        .values()
+        .map(|next_crate| (next_crate.name.clone(), next_crate.parsed_version.clone()))
+        .collect();
+
     let crates = augment_runtime_crates(previous_crates, next_crates, args.fake_crates_io_index)?;
     let mut errors = Vec::new();
     for rt_crate in crates {
-        if let Err(err) = audit_crate(&repo, &previous_release_tag, rt_crate) {
+        if let Err(err) = audit_crate(&repo, &previous_release_tag, &rt_crate) {
+            errors.push(err);
+        }
+        if let Err(err) = audit_published_requirements(&rt_crate, &current_versions) {
             errors.push(err);
         }
     }
@@ -58,7 +73,7 @@ pub fn audit(args: Audit) -> Result<()> {
     }
 }
 
-fn audit_crate(repo: &Repo, release_tag: &ReleaseTag, rt_crate: RuntimeCrate) -> Result<()> {
+fn audit_crate(repo: &Repo, release_tag: &ReleaseTag, rt_crate: &RuntimeCrate) -> Result<()> {
     if rt_crate.changed_since_release(repo, release_tag)? {
         // There is an edge case with the aws/rust-runtime crates due to the decoupled smithy-rs/SDK releases.
         // After a smithy-rs release and before a SDK release, there is a period of time where the smithy-rs
@@ -76,7 +91,7 @@ fn audit_crate(repo: &Repo, release_tag: &ReleaseTag, rt_crate: RuntimeCrate) ->
         // If this version has never been published before, then we're good.
         // (This tool doesn't check semver compatibility.)
         if !rt_crate.next_version_is_published() && !is_sdk_runtime_edge_case {
-            if let Some(previous_version) = rt_crate.previous_release_version {
+            if let Some(previous_version) = &rt_crate.previous_release_version {
                 tracing::info!(
                     "'{}' changed and was version bumped from {previous_version} to {}",
                     rt_crate.name,
@@ -111,18 +126,58 @@ fn audit_crate(repo: &Repo, release_tag: &ReleaseTag, rt_crate: RuntimeCrate) ->
     }
 }
 
+/// Verifies that the dependency requirements already published for this crate's current
+/// version still accept the current versions of the runtime crates they refer to.
+///
+/// A dependency's version bump changes files in the dependency's directory, not in its
+/// dependents' directories, so [`audit_crate`] can't see it. If the dependent's current
+/// version is already published with a requirement that no longer accepts the dependency,
+/// that published requirement is stale and the dependent needs a new version.
+///
+/// Crates whose current version isn't published yet need nothing further: the publisher
+/// stamps the dependency's current version into the manifest before publishing it.
+fn audit_published_requirements(
+    rt_crate: &RuntimeCrate,
+    current_versions: &BTreeMap<String, Version>,
+) -> Result<()> {
+    let Some(published) = rt_crate.published_next_version() else {
+        return Ok(());
+    };
+    let stale = stale_requirements(
+        &rt_crate.name,
+        published,
+        &rt_crate.dependencies,
+        current_versions,
+    )?;
+    if stale.is_empty() {
+        Ok(())
+    } else {
+        Err(stale_requirements_error(&rt_crate.name, published, &stale))
+    }
+}
+
 struct RuntimeCrate {
     name: String,
     path: Utf8PathBuf,
     previous_release_version: Option<String>,
     next_release_version: String,
-    published_versions: Vec<String>,
+    published_versions: Vec<PublishedCrateVersion>,
+    dependencies: Vec<DependencyEdge>,
 }
 
 impl RuntimeCrate {
     /// True if the runtime crate's next version exists in crates.io
     fn next_version_is_published(&self) -> bool {
-        self.published_versions.contains(&self.next_release_version)
+        self.published_next_version().is_some()
+    }
+
+    /// The published record for this crate's next version, if that version is published.
+    ///
+    /// A yanked version is still published: its version number can't be reused.
+    fn published_next_version(&self) -> Option<&PublishedCrateVersion> {
+        self.published_versions
+            .iter()
+            .find(|published| published.version == self.next_release_version)
     }
 
     /// True if this runtime crate changed since the given release tag.
@@ -150,6 +205,10 @@ impl RuntimeCrate {
 }
 
 /// Loads version information from crates.io and attaches it to the passed in runtime crates.
+///
+/// The complete published record is retained for each crate, including the dependency
+/// requirements published for each version, so that no additional crates.io requests are
+/// needed to audit those requirements.
 fn augment_runtime_crates(
     previous_crates: BTreeMap<String, DiscoveredCrate>,
     next_crates: BTreeMap<String, DiscoveredCrate>,
@@ -165,11 +224,12 @@ fn augment_runtime_crates(
         let previous_crate = previous_crates.get(key);
         if let Some(next_crate) = next_crates.get(key) {
             result.push(RuntimeCrate {
-                published_versions: index.published_versions(&next_crate.name)?,
+                published_versions: index.published_crate_versions(&next_crate.name)?,
                 name: next_crate.name.clone(),
                 previous_release_version: previous_crate.map(|c| c.version.clone()),
                 next_release_version: next_crate.version.clone(),
                 path: next_crate.path.clone(),
+                dependencies: next_crate.dependencies.clone(),
             });
         } else {
             tracing::warn!("runtime crate '{key}' was removed and will not be published");
@@ -181,12 +241,19 @@ fn augment_runtime_crates(
 struct DiscoveredCrate {
     name: String,
     version: String,
+    /// The crate's current version, parsed. Used to evaluate dependency requirements.
+    parsed_version: Version,
     path: Utf8PathBuf,
+    /// Every dependency entry declared by this crate's manifest.
+    dependencies: Vec<DependencyEdge>,
 }
 
 /// Discovers runtime crates that are independently versioned.
 /// For now, that just means the ones that don't have the special version number `0.0.0-smithy-rs-head`.
 /// In the future, this can be simplified to just return all the runtime crates.
+///
+/// Crates are keyed by their package name rather than their directory name. These are
+/// equal by convention today, but dependency declarations refer to package names.
 fn discover_runtime_crates(repo_root: &Utf8Path) -> Result<BTreeMap<String, DiscoveredCrate>> {
     const ROOT_PATHS: &[&str] = &["rust-runtime", "aws/rust-runtime"];
     let mut result = BTreeMap::new();
@@ -215,13 +282,23 @@ fn discover_runtime_crates(repo_root: &Utf8Path) -> Result<BTreeMap<String, Disc
                 .as_str()
                 .expect("version is a string");
             if publish && version != "0.0.0-smithy-rs-head" {
-                let name: String = entry.path().file_name().unwrap().to_string_lossy().into();
+                let name = manifest["package"]["name"]
+                    .as_str()
+                    .expect("name is a string")
+                    .to_string();
+                let parsed_version = Version::parse(version).with_context(|| {
+                    format!("failed to parse the version of '{name}' ('{version}')")
+                })?;
+                let dependencies = dependency_edges(&manifest)
+                    .with_context(|| format!("failed to read the dependencies of '{name}'"))?;
                 result.insert(
                     name.clone(),
                     DiscoveredCrate {
                         name,
                         version: version.into(),
+                        parsed_version,
                         path: utf8_path_buf(entry.path()),
+                        dependencies,
                     },
                 );
             }

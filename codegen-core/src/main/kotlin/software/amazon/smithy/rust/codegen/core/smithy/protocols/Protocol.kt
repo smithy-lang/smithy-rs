@@ -28,12 +28,51 @@ interface Protocol {
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
     /**
-     * Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol.
+     * Returns the headers that this *protocol itself* requires on every request — its framing.
+     *
+     * These are a function of the protocol alone, never of the operation or the service, so the
+     * schema-serde request path deliberately does **not** emit them: the runtime `ClientProtocol`
+     * sets them inside `serialize_request`, which keeps them correct when a customer selects a
+     * different protocol at runtime via `Config::builder().protocol(..)`. Emitting them from
+     * codegen would both leave them behind when swapping this protocol out and omit them when
+     * swapping it in.
+     *
+     * The legacy (non-schema) request path has no runtime protocol to delegate to, so it emits
+     * these itself via [additionalRequestHeaders].
+     *
+     * Contrast [serviceRequestHeaders], which are emitted by both paths.
      *
      * These MUST all be lowercase, or the application will panic, as per
      * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
      */
-    fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+    fun protocolFramingHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
+    /**
+     * Returns additional request headers determined by the *service* — typically by a trait applied
+     * to the service shape — rather than by the protocol.
+     *
+     * Both codegen paths emit these, because their value does not change when the protocol does.
+     * `x-amzn-query-mode` is the motivating example: it comes from `@awsQueryCompatible` on the
+     * service, and the same service sends it under either awsJson or rpcv2Cbor.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
+    fun serviceRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
+    /**
+     * Returns every additional HTTP header that should be included in HTTP requests for the given
+     * operation: [protocolFramingHeaders] plus [serviceRequestHeaders].
+     *
+     * Prefer the two more specific accessors when generating code, so that the runtime protocol
+     * remains the single owner of protocol framing. This method exists for callers that need the
+     * complete set, such as the legacy request path.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
+    fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        protocolFramingHeaders(operationShape) + serviceRequestHeaders(operationShape)
 
     /**
      * Returns additional HTTP headers that should be included in HTTP responses for the given operation for this protocol.

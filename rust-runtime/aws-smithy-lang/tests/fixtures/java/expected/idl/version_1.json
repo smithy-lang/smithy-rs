@@ -1,0 +1,14 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Strings": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#uniqueItems": {}
+            }
+        }
+    }
+}

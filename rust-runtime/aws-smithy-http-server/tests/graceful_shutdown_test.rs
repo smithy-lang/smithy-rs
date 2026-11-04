@@ -10,12 +10,18 @@
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
 use aws_smithy_http_server::routing::IntoMakeService;
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Notify};
 use tower::service_fn;
 
-/// Test service that delays before responding
-async fn slow_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
+/// Test service that delays before responding. Notifies `started` once the request has reached
+/// the handler, so tests can wait for the request to be in flight instead of sleeping.
+async fn slow_service(
+    started: Arc<Notify>,
+    _request: http::Request<hyper::body::Incoming>,
+) -> Result<http::Response<BoxBody>, Infallible> {
+    started.notify_one();
     // Simulate slow processing
     tokio::time::sleep(Duration::from_millis(100)).await;
     Ok(http::Response::builder()
@@ -38,9 +44,16 @@ async fn test_graceful_shutdown_waits_for_connections() {
     // Create shutdown signal
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    // Notified by the service once the request is being processed
+    let request_started = Arc::new(Notify::new());
+    let service = service_fn({
+        let request_started = request_started.clone();
+        move |request| slow_service(request_started.clone(), request)
+    });
+
     // Start server in background
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(slow_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -61,8 +74,10 @@ async fn test_graceful_shutdown_waits_for_connections() {
 
     let request_handle = tokio::spawn(async move { client.request(request).await });
 
-    // Give request time to start
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    // Wait until the server is actually processing the request
+    tokio::time::timeout(Duration::from_secs(5), request_started.notified())
+        .await
+        .expect("request did not reach the service in time");
 
     // Trigger shutdown while request is in flight
     shutdown_tx.send(()).unwrap();
@@ -91,15 +106,25 @@ async fn test_graceful_shutdown_with_timeout() {
     // Create shutdown signal
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
+    // Notified by the service once the request is being processed
+    let request_started = Arc::new(Notify::new());
+
     // Create a very slow service that takes longer than timeout
-    let very_slow_service = |_request: http::Request<hyper::body::Incoming>| async {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-        Ok::<_, Infallible>(
-            http::Response::builder()
-                .status(200)
-                .body(to_boxed("Very slow"))
-                .unwrap(),
-        )
+    let very_slow_service = {
+        let request_started = request_started.clone();
+        move |_request: http::Request<hyper::body::Incoming>| {
+            let request_started = request_started.clone();
+            async move {
+                request_started.notify_one();
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                Ok::<_, Infallible>(
+                    http::Response::builder()
+                        .status(200)
+                        .body(to_boxed("Very slow"))
+                        .unwrap(),
+                )
+            }
+        }
     };
 
     // Start server with short timeout
@@ -129,8 +154,10 @@ async fn test_graceful_shutdown_with_timeout() {
         let _ = client.request(request).await;
     });
 
-    // Give request time to start
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    // Wait until the server is actually processing the request
+    tokio::time::timeout(Duration::from_secs(5), request_started.notified())
+        .await
+        .expect("request did not reach the service in time");
 
     // Trigger shutdown while request is in flight
     shutdown_tx.send(()).unwrap();

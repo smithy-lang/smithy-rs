@@ -797,8 +797,8 @@ class DeserializeImplGenerator(private val codegenContext: CodegenContext) {
                     }
                     """,
                     "Document" to RuntimeType.document(codegenContext.runtimeConfig),
-                    "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
                     "HashMap" to RuntimeType.HashMap,
+                    "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
                     *SupportStructures.codegenScope,
                     *RuntimeType.preludeScope,
                 )

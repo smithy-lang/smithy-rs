@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViola
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.withoutInternalValues
 
 open class ConstrainedEnum(
     private val codegenContext: ServerCodegenContext,
@@ -45,6 +46,7 @@ open class ConstrainedEnum(
         context: EnumGeneratorContext,
         generateTryFromStrAndString: RustWriter.(EnumGeneratorContext) -> Unit,
     ) = writable {
+        val enumTrait = context.enumTrait.withoutInternalValues(shape)
         withInlineModule(constraintViolationSymbol.module(), codegenContext.moduleDocProvider) {
             rustTemplate(
                 """
@@ -54,7 +56,7 @@ open class ConstrainedEnum(
                 impl #{Display} for $constraintViolationName {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         write!(f, r##"${
-                    context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
+                    enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
                 }"##)
                     }
                 }
@@ -75,7 +77,7 @@ open class ConstrainedEnum(
                     """,
                     "EnumShapeConstraintViolationImplBlock" to
                         validationExceptionConversionGenerator.enumShapeConstraintViolationImplBlock(
-                            context.enumTrait,
+                            enumTrait,
                         ),
                 )
             }
