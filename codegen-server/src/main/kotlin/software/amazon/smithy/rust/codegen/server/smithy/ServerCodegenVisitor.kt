@@ -255,6 +255,8 @@ open class ServerCodegenVisitor(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
 
+        validateServiceHasOperations(model, service)
+
         if (codegenContext.usesSchemaHttpSerde) {
             validateServedProtocols(service, codegenContext.servedProtocols, protocolGeneratorFactories.keys)
         }
