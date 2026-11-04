@@ -71,6 +71,30 @@ fi
 docker compose -f build.docker-compose.yml up -d
 if [[ "${ACTION_NAME}" == "--shell" ]]; then
     docker compose -f build.docker-compose.yml exec smithy-rs-build /bin/bash
+elif [[ -n "${CI_ACTION_TIMEOUT_SECONDS:-}" ]]; then
+    # Stopping the `docker compose exec` client leaves the action's processes running in the
+    # container, so they can still be inspected below. `cleanup` stops the container afterward.
+    status=0
+    timeout --kill-after=30s "${CI_ACTION_TIMEOUT_SECONDS}s" \
+        docker compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./ci-scripts/${ACTION_NAME} ${ACTION_ARGS[*]}" ||
+        status=$?
+    # 124 is `timeout`'s own status; 137 means the client also ignored SIGTERM and was killed.
+    if [[ "${status}" == 124 || "${status}" == 137 ]]; then
+        echo "::error::${ACTION_NAME} ${ACTION_ARGS[*]} did not finish within ${CI_ACTION_TIMEOUT_SECONDS}s"
+        # The host sees the container's processes too. Long-lived ones with a low CPU `TIME`
+        # relative to their `ELAPSED` are waiting, and `WCHAN` says on what.
+        echo "::group::Processes still running"
+        ps -eo pid,ppid,etime,time,stat,wchan:32,args --forest || true
+        echo "::endgroup::"
+        echo "::group::Container resource usage"
+        docker stats --no-stream || true
+        echo "::endgroup::"
+        echo "::group::Host memory and disk"
+        free -m || true
+        df -h || true
+        echo "::endgroup::"
+    fi
+    exit "${status}"
 else
     docker compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./ci-scripts/${ACTION_NAME} ${ACTION_ARGS[*]}"
 fi
