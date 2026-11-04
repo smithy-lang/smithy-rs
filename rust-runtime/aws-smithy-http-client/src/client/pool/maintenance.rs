@@ -170,19 +170,30 @@ impl PartitionMaintenance {
     }
 
     /// Polls until a deadline publication or shutdown changes `observed`.
+    ///
+    /// The task's waker is cloned before taking the scheduler lock, and
+    /// whichever waker this poll no longer needs is dropped after releasing
+    /// it. Raw-waker `clone` and `drop` callbacks run executor code, which
+    /// must never run while a pool lock is held.
     fn poll_revision(&self, observed: u64, cx: &Context<'_>) -> Poll<()> {
-        let mut state = self.state.lock();
-        if state.shutdown || state.revision != observed {
-            return Poll::Ready(());
-        }
-        if state
-            .waker
-            .as_ref()
-            .is_none_or(|registered| !registered.will_wake(cx.waker()))
-        {
-            state.waker = Some(cx.waker().clone());
-        }
-        Poll::Pending
+        let mut waker = Some(cx.waker().clone());
+        let poll = {
+            let mut state = self.state.lock();
+            if state.shutdown || state.revision != observed {
+                Poll::Ready(())
+            } else {
+                if state
+                    .waker
+                    .as_ref()
+                    .is_none_or(|registered| !registered.will_wake(cx.waker()))
+                {
+                    waker = std::mem::replace(&mut state.waker, waker.take());
+                }
+                Poll::Pending
+            }
+        };
+        drop(waker);
+        poll
     }
 
     #[cfg(all(test, smithy_http_client_loom))]
@@ -593,6 +604,50 @@ mod tests {
             self.submitted.fetch_add(1, Ordering::SeqCst);
             drop(driver);
         }
+    }
+
+    /// Shuts the scheduler down from its destructor, re-entering the scheduler lock.
+    struct ReentrantWaker(Arc<PartitionMaintenance>);
+
+    impl std::task::Wake for ReentrantWaker {
+        fn wake(self: std::sync::Arc<Self>) {}
+        fn wake_by_ref(self: &std::sync::Arc<Self>) {}
+    }
+
+    impl Drop for ReentrantWaker {
+        fn drop(&mut self) {
+            self.0.shutdown();
+        }
+    }
+
+    /// A waker displaced by a later poll must drop outside the scheduler lock.
+    ///
+    /// Raw-waker `clone` and `drop` callbacks run executor code. One that
+    /// re-enters the pool while the scheduler lock is held trips the
+    /// lock-nesting assertion in debug builds and deadlocks in release builds.
+    #[test]
+    fn replacing_the_task_waker_drops_it_outside_the_scheduler_lock() {
+        let maintenance = PartitionMaintenance::new(MaintenanceConfig::default());
+        let observed = maintenance
+            .begin_scan()
+            .expect("new maintenance scheduler was shut down");
+        let reentrant =
+            std::task::Waker::from(std::sync::Arc::new(ReentrantWaker(maintenance.clone())));
+        assert!(maintenance
+            .poll_revision(observed, &Context::from_waker(&reentrant))
+            .is_pending());
+        drop(reentrant);
+
+        // The second poll displaces the reentrant waker. Its destructor then
+        // shuts the scheduler down, which only the next poll can observe.
+        let replacement = Context::from_waker(std::task::Waker::noop());
+        assert!(maintenance
+            .poll_revision(observed, &replacement)
+            .is_pending());
+        assert!(
+            maintenance.poll_revision(observed, &replacement).is_ready(),
+            "the displaced waker's destructor did not run"
+        );
     }
 
     #[test]

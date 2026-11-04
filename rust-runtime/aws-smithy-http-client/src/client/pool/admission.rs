@@ -89,11 +89,45 @@ impl<T> SupplyRevision<T> {
 /// This non-`Copy` value proves that admission removed one unit from its
 /// available count. Identities are never reused so diagnostics remain
 /// unambiguous.
-pub(super) struct CapacityPermit(u64);
+///
+/// Every owner — a lease, a detached assignment, a delivery payload, or
+/// admission's own pending slot — must hand the permit back to its budget
+/// rather than drop it. Dropping one silently destroys a unit of origin
+/// capacity for the life of the pool, so in debug and test builds the drop is
+/// a panic that names the lost unit.
+pub(super) struct CapacityPermit {
+    /// Never-reused identity of this unit of capacity.
+    id: u64,
+}
+
+impl CapacityPermit {
+    /// Consumes this permit without running its lost-permit check.
+    ///
+    /// Called only by the budget that issued it, immediately before the
+    /// available count recovers. The permit holds no resources, so skipping
+    /// its destructor leaks nothing.
+    fn consume(self) -> u64 {
+        std::mem::ManuallyDrop::new(self).id
+    }
+}
+
+impl Drop for CapacityPermit {
+    fn drop(&mut self) {
+        // Reaching this destructor means the permit never went back through
+        // `CapacityBudget::return_permit`, which consumes it without dropping.
+        #[cfg(any(debug_assertions, test))]
+        if !std::thread::panicking() {
+            panic!(
+                "capacity permit {} was dropped without returning to admission",
+                self.id
+            );
+        }
+    }
+}
 
 impl fmt::Debug for CapacityPermit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("CapacityPermit").field(&self.0).finish()
+        f.debug_tuple("CapacityPermit").field(&self.id).finish()
     }
 }
 
@@ -467,6 +501,23 @@ impl OriginAdmission {
         self.state.lock().demand.len()
     }
 
+    /// Asserts that no unit of origin capacity is still held.
+    ///
+    /// Call at a point where every lease, delivery, and connection has been
+    /// released. A permit lost across a lock crossing leaves this non-zero even
+    /// though the available count alone looks unremarkable.
+    #[cfg(test)]
+    pub(super) fn assert_capacity_conserved_for_test(&self) {
+        let state = self.state.lock();
+        assert_eq!(
+            0,
+            state.capacity.outstanding_permits(),
+            "origin capacity was not conserved at teardown: {} of {} units still held",
+            state.capacity.outstanding_permits(),
+            state.capacity.limit
+        );
+    }
+
     #[cfg(all(test, smithy_http_client_loom))]
     pub(super) fn clear_modeled_cells_for_test(&self) {
         // Loom has no modeled Weak, so its synchronization facade retains
@@ -585,6 +636,14 @@ struct CapacityBudget {
     available: usize,
     /// Next never-reused permit identity.
     next_permit_id: u64,
+    /// Identities of permits removed from `available` and not yet returned.
+    ///
+    /// Capacity is conserved as `available + outstanding == limit`. Tracking the
+    /// identities rather than a count turns a lost permit into a failure that
+    /// names the unit that went missing, and rejects a permit returned twice or
+    /// returned to an origin that never issued it.
+    #[cfg(any(debug_assertions, test))]
+    outstanding: std::collections::BTreeSet<u64>,
 }
 
 impl CapacityBudget {
@@ -594,6 +653,8 @@ impl CapacityBudget {
             limit,
             available: limit,
             next_permit_id: 0,
+            #[cfg(any(debug_assertions, test))]
+            outstanding: std::collections::BTreeSet::new(),
         }
     }
 
@@ -604,10 +665,17 @@ impl CapacityBudget {
         let id = self.next_permit_id;
         self.next_permit_id = id.checked_add(1).expect("permit identity exhausted");
         self.available -= 1;
-        Some(CapacityPermit(id))
+        #[cfg(any(debug_assertions, test))]
+        {
+            assert!(
+                self.outstanding.insert(id),
+                "permit identity {id} was issued twice"
+            );
+        }
+        Some(CapacityPermit { id })
     }
 
-    fn return_permit(&mut self, _permit: CapacityPermit) {
+    fn return_permit(&mut self, permit: CapacityPermit) {
         let available = self
             .available
             .checked_add(1)
@@ -616,7 +684,26 @@ impl CapacityBudget {
             available <= self.limit,
             "available capacity exceeded the configured limit"
         );
+        let id = permit.consume();
+        #[cfg(any(debug_assertions, test))]
+        assert!(
+            self.outstanding.remove(&id),
+            "returned permit {id} was not outstanding at this origin"
+        );
+        // Release builds keep no identity set; the identity is only a
+        // diagnostic there.
+        #[cfg(not(any(debug_assertions, test)))]
+        let _ = id;
         self.available = available;
+    }
+
+    /// Reports permits issued and not yet returned.
+    ///
+    /// At a quiescent point with every lease and delivery released, capacity is
+    /// conserved only if this is zero.
+    #[cfg(test)]
+    fn outstanding_permits(&self) -> usize {
+        self.outstanding.len()
     }
 }
 
@@ -785,6 +872,58 @@ mod tests {
         )
     }
 
+    /// A permit that never reaches `return_permit` destroys origin capacity.
+    ///
+    /// This is the guard that makes the HTTP/1 and HTTP/2 crossing models able
+    /// to fail on a lost permit rather than only on a corrupted structure. If
+    /// this test stops panicking, those models have silently lost that power.
+    #[test]
+    #[should_panic(expected = "was dropped without returning to admission")]
+    fn dropping_a_permit_outside_its_lease_is_rejected() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(1).unwrap());
+        let permit = origin
+            .state
+            .lock()
+            .take_permit()
+            .expect("test origin had no available capacity");
+        drop(permit);
+    }
+
+    /// Every issued permit identity is distinct and is retired on return.
+    ///
+    /// The identity set is what makes a dropped permit detectable; this pins
+    /// that it tracks issue and return exactly. Identities are per origin, so a
+    /// permit misrouted from another origin whose independent counter issued the
+    /// same number is not detectable without an origin tag on the permit.
+    #[test]
+    fn permit_identities_are_issued_and_retired_exactly_once() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+        let mut state = origin.state.lock();
+        let first = state.take_permit().expect("origin had no capacity");
+        let second = state.take_permit().expect("origin had no capacity");
+        assert_ne!(first.id, second.id, "permit identities were reused");
+        assert_eq!(2, state.capacity.outstanding_permits());
+        state.return_permit(first);
+        assert_eq!(1, state.capacity.outstanding_permits());
+        state.return_permit(second);
+        assert_eq!(0, state.capacity.outstanding_permits());
+        assert_eq!(2, state.available_capacity());
+    }
+
+    /// Capacity is conserved once every lease is released.
+    #[test]
+    fn released_leases_leave_no_outstanding_capacity() {
+        let origin = OriginAdmission::for_test(NonZeroUsize::new(2).unwrap());
+        let first = OriginAdmission::lease_for_test(&origin);
+        let second = OriginAdmission::lease_for_test(&origin);
+        assert_eq!(2, origin.state.lock().capacity.outstanding_permits());
+        assert_eq!(0, origin.available_capacity_for_test());
+        drop(first);
+        drop(second);
+        origin.assert_capacity_conserved_for_test();
+        assert_eq!(2, origin.available_capacity_for_test());
+    }
+
     #[test]
     #[should_panic(expected = "cell origin did not match its admission authority")]
     fn registration_rejects_a_cell_from_another_origin() {
@@ -806,14 +945,14 @@ mod tests {
 
         assert_eq!(2, state.available_capacity());
         let first = state.take_permit().unwrap();
-        let first_id = first.0;
+        let first_id = first.id;
         let second = state.take_permit().unwrap();
         assert_eq!(0, state.available_capacity());
         assert!(state.take_permit().is_none());
 
         state.return_permit(first);
         let third = state.take_permit().unwrap();
-        assert_ne!(first_id, third.0);
+        assert_ne!(first_id, third.id);
         state.return_permit(second);
         state.return_permit(third);
         assert_eq!(2, state.available_capacity());
@@ -909,14 +1048,11 @@ mod tests {
         state.apply_demand_snapshot(first, demand(3));
         state.return_permit(held);
 
-        assert_eq!(
-            second,
-            state
-                .prepare_capacity_delivery()
-                .unwrap()
-                .assignment
-                .requester
-        );
+        let prepared = state.prepare_capacity_delivery().unwrap();
+        assert_eq!(second, prepared.assignment.requester);
+        // Hand the permit back rather than discarding the prepared delivery:
+        // a dropped permit destroys a unit of origin capacity.
+        state.return_permit(prepared.permit);
     }
 
     #[test]
