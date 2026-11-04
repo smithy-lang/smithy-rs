@@ -1,0 +1,5 @@
+{
+    "description": "Equal definitions in two files: the last one is kept and provides the locations of the shape, its members, and its default from syntactic sugar.",
+    "steps": [{"addFile": "a.smithy"}, {"addFile": "b.smithy"}],
+    "locations": ["ex#R", "ex#R$x", "ex#R$x@smithy.api#default"]
+}

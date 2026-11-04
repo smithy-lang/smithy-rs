@@ -1,0 +1,8 @@
+{
+    "description": "The same list trait applied twice in code: values created in code are never at the same location, so the arrays are concatenated instead of deduplicated.",
+    "steps": [
+        {"addFile": "t.json"},
+        {"addTrait": "ex#T", "trait": "smithy.api#tags", "value": ["a"]},
+        {"addTrait": "ex#T", "trait": "smithy.api#tags", "value": ["a"]}
+    ]
+}
