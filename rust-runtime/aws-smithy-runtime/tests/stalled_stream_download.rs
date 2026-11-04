@@ -262,13 +262,8 @@ mod download_test_tools {
     use tokio::sync::mpsc::Receiver;
 
     fn response(body: SdkBody) -> HttpResponse {
-        HttpResponse::try_from(
-            http_02x::Response::builder()
-                .status(200)
-                .body(body)
-                .unwrap(),
-        )
-        .unwrap()
+        HttpResponse::try_from(http_1x::Response::builder().status(200).body(body).unwrap())
+            .unwrap()
     }
 
     pub fn operation(
@@ -342,7 +337,7 @@ mod download_test_tools {
 
     /// Simulate a client eagerly consuming all the data sent to it from the server.
     pub async fn eagerly_consume(body: SdkBody) -> Result<(), BoxError> {
-        pin_mut!(body);
+        let mut body = std::pin::pin!(body);
         while let Some(result) = poll_fn(|cx| body.as_mut().poll_frame(cx)).await {
             if let Err(err) = result {
                 return Err(err);
@@ -358,7 +353,7 @@ mod download_test_tools {
     /// This implementation will take longer than the grace period to consume
     /// the next piece of data.
     pub async fn slowly_consume(time: TickAdvanceTime, body: SdkBody) -> Result<(), BoxError> {
-        pin_mut!(body);
+        let mut body = std::pin::pin!(body);
         while let Some(result) = poll_fn(|cx| body.as_mut().poll_frame(cx)).await {
             if let Err(err) = result {
                 return Err(err);
@@ -374,7 +369,7 @@ mod download_test_tools {
     pub async fn consume_on_signal(mut rx: Receiver<()>, body: SdkBody) -> Result<(), BoxError> {
         // Wait to start polling until a signal has been received
         let _ = rx.recv().await;
-        pin_mut!(body);
+        let mut body = std::pin::pin!(body);
         while let Some(result) = poll_fn(|cx| body.as_mut().poll_frame(cx)).await {
             if let Err(err) = result {
                 return Err(err);

@@ -1,0 +1,42 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#GetSprocket": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#GetSprocketInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "smithy.example#GetSprocketInput": {
+            "type": "structure",
+            "members": {
+                "sprocketId": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#SprocketResource": {
+            "type": "resource",
+            "identifiers": {
+                "sprocketId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "read": {
+                "target": "smithy.example#GetSprocket"
+            }
+        }
+    }
+}

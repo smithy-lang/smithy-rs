@@ -1,0 +1,29 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#MyConstrainedList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#length": {
+                        "min": 1,
+                        "max": 100
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 3,
+                    "max": 10
+                }
+            }
+        },
+        "smithy.example#MyList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            }
+        }
+    }
+}

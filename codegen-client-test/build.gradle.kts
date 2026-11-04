@@ -43,6 +43,7 @@ data class ClientTest(
     val dependsOn: List<String> = emptyList(),
     val addMessageToErrors: Boolean = true,
     val renameErrors: Boolean = true,
+    val modelRoot: String = "../codegen-core/common-test-models",
 ) {
     fun toCodegenTest(): CodegenTest = CodegenTest(
         serviceShapeName,
@@ -57,10 +58,10 @@ data class ClientTest(
         append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
     }.toString()
 
-    private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
+    private fun imports(): List<String> = dependsOn.map { "$modelRoot/$it" }
 }
 
-val allCodegenTests = listOf(
+val commonCodegenTests = listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
     ClientTest("com.amazonaws.bignumbers#BigNumberService", "big_numbers", dependsOn = listOf("big-numbers.smithy")),
     ClientTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
@@ -127,6 +128,11 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
 ).map(ClientTest::toCodegenTest)
 
+apply(from = rootProject.file("codegen-server-test/integration-tests/protocol-compat/client-sdk.gradle.kts"))
+val clientCompatibilityCodegenTests: List<CodegenTest> by extra
+
+val allCodegenTests = commonCodegenTests + clientCompatibilityCodegenTests
+
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
@@ -138,7 +144,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "copyCheckedInCargoLockfile")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, useNextest = true)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

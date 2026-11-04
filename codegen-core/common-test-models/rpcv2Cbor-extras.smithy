@@ -4,6 +4,7 @@ namespace smithy.protocoltests.rpcv2Cbor
 
 use smithy.framework#ValidationException
 use smithy.protocols#rpcv2Cbor
+use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use smithy.test#httpMalformedRequestTests
 use aws.auth#sigv4
@@ -17,6 +18,7 @@ service RpcV2CborService {
         ComplexStructOperation
         EmptyStructOperation
         SingleMemberStructOperation
+        BigDecimalOperation
         RecursiveUnionOperation,
         StreamingOperation
         StreamingOperationWithInitialData
@@ -130,10 +132,60 @@ operation SingleMemberStructOperation {
     output: SingleMemberStruct
 }
 
+operation BigDecimalOperation {
+    input: BigDecimalStructure
+    output: BigDecimalStructure
+}
+
+structure BigDecimalStructure {
+    value: BigDecimal
+}
+
 operation RecursiveUnionOperation {
     input: RecursiveOperationInputOutput
     output: RecursiveOperationInputOutput
 }
+
+apply BigDecimalOperation @httpRequestTests([
+    {
+        id: "RpcV2CborBigDecimalRequest",
+        documentation: "Serializes a BigDecimal using CBOR tag 4",
+        protocol: rpcv2Cbor,
+        method: "POST",
+        uri: "/service/RpcV2CborService/operation/BigDecimalOperation",
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor",
+            "Accept": "application/cbor"
+        },
+        requireHeaders: ["Content-Length"],
+        bodyMediaType: "application/cbor",
+        // 273.15 is tag 4([-2, 27315]), following RFC 8949 section 3.4.4.
+        body: "v2V2YWx1ZcSCIRlqs/8=",
+        params: {
+            value: 273.15
+        }
+    }
+])
+
+apply BigDecimalOperation @httpResponseTests([
+    {
+        id: "RpcV2CborBigDecimalResponse",
+        documentation: "Deserializes a BigDecimal encoded using CBOR tag 4",
+        protocol: rpcv2Cbor,
+        code: 200,
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor"
+        },
+        bodyMediaType: "application/cbor",
+        // 273.15 is tag 4([-2, 27315]), following RFC 8949 section 3.4.4.
+        body: "v2V2YWx1ZcSCIRlqs/8=",
+        params: {
+            value: 273.15
+        }
+    }
+])
 
 apply EmptyStructOperation @httpMalformedRequestTests([
     {

@@ -1,0 +1,64 @@
+# Each PR review finding, exercised through generated code: one service per protocol set.
+[package]
+name = "protocol-compat"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Cross-protocol behavior tests: schemaSerde and legacy servers, plus one server serving every protocol driven by generated clients."
+
+[dependencies]
+bytes = "1"
+http-body-util = "0.1"
+aws-smithy-http-server = { path = "../../../rust-runtime/aws-smithy-http-server" }
+http = "1"
+tower = { version = "0.5", features = ["util"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+futures-util = "0.3"
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+multi-protocol-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/multi-protocol-server-sdk/rust-server-codegen" }
+compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
+compat-rest-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-cbor-server-sdk/rust-server-codegen" }
+compat-rest-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-awsjson-server-sdk/rust-server-codegen" }
+compat-rest-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-xml-server-sdk/rust-server-codegen" }
+compat-awsjson-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-server-sdk/rust-server-codegen" }
+compat-cbor-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-cbor-server-sdk/rust-server-codegen" }
+compat-all-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-all-server-sdk/rust-server-codegen" }
+compat-rest-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-legacy-server-sdk/rust-server-codegen" }
+compat-awsjson-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson-legacy-server-sdk/rust-server-codegen" }
+compat-cbor-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-cbor-legacy-server-sdk/rust-server-codegen" }
+compat-document-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-document-legacy-server-sdk/rust-server-codegen" }
+compat-document-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-document-server-sdk/rust-server-codegen" }
+
+[dev-dependencies]
+compat-awsjson11-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson11-server-sdk/rust-server-codegen" }
+compat-awsjson11-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-awsjson11-legacy-server-sdk/rust-server-codegen" }
+compat-xml-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-xml-server-sdk/rust-server-codegen" }
+compat-xml-legacy-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-xml-legacy-server-sdk/rust-server-codegen" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
+aws-smithy-schema = { path = "../../../rust-runtime/aws-smithy-schema" }
+aws-smithy-json = { path = "../../../rust-runtime/aws-smithy-json" }
+aws-smithy-cbor = { path = "../../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-xml = { path = "../../../rust-runtime/aws-smithy-xml" }
+compat-rest-server-sdk = { path = "../../build/smithyprojections/codegen-server-test/compat-rest-server-sdk/rust-server-codegen" }
+bytes = "1"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+minicbor = { version = "2.2.1", features = ["alloc", "half"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros", "net"] }
+futures-util = "0.3"
+multi-protocol-client = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-rpcv2cbor = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-rpcv2cbor/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson10 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson10/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-awsjson11 = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-awsjson11/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restjson = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restjson/rust-client-codegen", features = ["behavior-version-latest"] }
+multi-protocol-client-restxml = { path = "../../../codegen-client-test/build/smithyprojections/codegen-client-test/multi-protocol-client-restxml/rust-client-codegen", features = ["behavior-version-latest"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+
+# Manual compatibility coverage resolves independently of the CI integration workspace.
+[workspace]
+resolver = "3"

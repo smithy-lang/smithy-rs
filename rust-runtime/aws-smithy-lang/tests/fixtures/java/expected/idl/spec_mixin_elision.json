@@ -1,0 +1,31 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#IdBearer": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "smithy.example#IdRequired": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#IdBearer"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#IdRequired$id": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#required": {}
+            }
+        }
+    }
+}

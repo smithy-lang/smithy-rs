@@ -293,7 +293,7 @@ sealed class QuerySensitivity(
                     } else {
                         writable {
                             val matches = queryKeys.joinToString("|") { it.dq() }
-                            rust("matches!(name, $matches);")
+                            rust("matches!(_name, $matches);")
                         }
                     }
             }
@@ -302,7 +302,7 @@ sealed class QuerySensitivity(
             rustTemplate(
                 """
                 {
-                    |name: &str| {
+                    |_name: &str| {
                         let key = $allKeysSensitive;
                         let value = #{Value:W};
                         #{SmithyHttpServer}::instrumentation::sensitivity::uri::QueryMarker { key, value }

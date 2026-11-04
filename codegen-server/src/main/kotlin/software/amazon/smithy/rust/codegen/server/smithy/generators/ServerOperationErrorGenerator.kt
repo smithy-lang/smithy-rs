@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
@@ -19,12 +20,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 /**
  * Generates a unified error enum for [operation]. [ErrorGenerator] handles generating the individual variants,
@@ -34,7 +39,15 @@ open class ServerOperationErrorGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val operationOrEventStream: Shape,
+    private val schemaSerde: Boolean = false,
+    runtimeConfig: RuntimeConfig? = null,
 ) {
+    private val runtimeConfig =
+        runtimeConfig ?: if (schemaSerde) {
+            throw CodegenException("Schema operation errors require the codegen context's runtime configuration")
+        } else {
+            RuntimeConfig()
+        }
     private val symbol = symbolProvider.toSymbol(operationOrEventStream)
 
     private fun operationErrors(): List<StructureShape> =
@@ -103,6 +116,62 @@ open class ServerOperationErrorGenerator(
                     rust("Some(_inner)")
                 }
             }
+        }
+
+        if (schemaSerde && operationOrEventStream is OperationShape) {
+            val schema = RuntimeType.smithySchema(runtimeConfig)
+            val serializable = schema.resolve("serde::SerializableStruct")
+            val server = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            val httpModeledError = server.resolve("schema::HttpModeledError")
+            writer.rustBlock("impl #T for ${errorSymbol.name}", serializable) {
+                rustBlock("fn schema(&self) -> &#T<'_>", schema.resolve("Schema")) {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::schema(_inner)", serializable) }
+                }
+
+                rustBlock("fn serialize_members(&self, serializer: &mut dyn #T) -> #T<(), #T>", schema.resolve("serde::ShapeSerializer"), RuntimeType.std.resolve("result::Result"), schema.resolve("serde::SerdeError")) {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::serialize_members(_inner, serializer)", serializable) }
+                }
+            }
+            writer.rustBlock("impl #T for ${errorSymbol.name}", httpModeledError) {
+                rustBlock("fn status_code(&self) -> u16") {
+                    delegateToVariants(errors, errorSymbol) { rust("#T::status_code(_inner)", httpModeledError) }
+                }
+                rustTemplate(
+                    """
+                    fn operation_schema(&self) -> #{Option}<&#{Server}::schema::OperationSchema<'_>> {
+                        #{Some}(<crate::operation_shape::${symbol.name.toPascalCase()} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
+                    }
+                    """,
+                    *RuntimeType.preludeScope,
+                    "Server" to server,
+                )
+            }
+            writer.rustTemplate(
+                """
+                        impl<P> #{IntoResponse}<P> for ${errorSymbol.name} {
+                            fn into_response(self) -> #{Response} {
+                                let mut response = #{Response}::new(#{Empty}());
+                                *response.status_mut() = #{Http}::StatusCode::from_u16(#{HttpModeledError}::status_code(&self))
+                                    .expect("modeled error status is valid");
+                                response.extensions_mut().insert(#{ModeledErrorExtension}::new(
+                                    #{InternHeaderName}(#{SerializableStruct}::schema(&self).shape_id().shape_name())));
+                                response
+                            }
+                            fn into_response_with_protocol(self, protocol: &dyn #{ServerProtocol}) -> #{Response} {
+                                protocol.serialize_error(&self)
+                            }
+                        }
+                """,
+                "IntoResponse" to server.resolve("response::IntoResponse"),
+                "Response" to server.resolve("response::Response"),
+                "Empty" to server.resolve("body::empty"),
+                "Http" to RuntimeType.http(runtimeConfig),
+                "HttpModeledError" to server.resolve("schema::HttpModeledError"),
+                "ModeledErrorExtension" to server.resolve("extension::ModeledErrorExtension"),
+                "SerializableStruct" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerializableStruct"),
+                "ServerProtocol" to server.resolve("schema::ServerProtocol"),
+                "InternHeaderName" to RuntimeType.smithySchema(runtimeConfig).resolve("intern_header_name"),
+            )
         }
 
         for (error in errors) {

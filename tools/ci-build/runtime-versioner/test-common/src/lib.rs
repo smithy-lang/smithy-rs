@@ -4,6 +4,7 @@
  */
 
 use camino::{Utf8Path, Utf8PathBuf};
+use std::fs;
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -70,6 +71,38 @@ impl TestBase {
 
     pub fn change_branch(&self, branch_name: &str) {
         change_branch(&self.root, branch_name);
+    }
+
+    /// Rewrites the `[package]` version of a crate in the cloned working tree.
+    ///
+    /// This makes it possible to construct version topologies at test time instead of
+    /// adding a branch to the archived fixture repository. The audit compares the working
+    /// tree against a release tag, so an uncommitted change is enough.
+    pub fn set_crate_version(&self, crate_dir: &str, version: &str) {
+        let manifest_path = self.root.join(crate_dir).join("Cargo.toml");
+        let contents = fs::read_to_string(&manifest_path)
+            .unwrap_or_else(|err| panic!("failed to read {manifest_path}: {err}"));
+        // The `[package]` table comes first in these manifests, so the first `version`
+        // key is the package version.
+        let mut replaced = false;
+        let updated = contents
+            .lines()
+            .map(|line| {
+                if !replaced && line.starts_with("version = ") {
+                    replaced = true;
+                    format!("version = \"{version}\"")
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            replaced,
+            "no package version found in {manifest_path} to replace"
+        );
+        fs::write(&manifest_path, format!("{updated}\n"))
+            .unwrap_or_else(|err| panic!("failed to write {manifest_path}: {err}"));
     }
 
     pub fn run_versioner(&self, args: &[&str], expect_failure: bool) -> VersionerOutput {

@@ -140,3 +140,20 @@ if (System.getProperties().containsKey("ktlintPreCommitArgs")) {
         jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
     }
 }
+
+// Manual server compatibility coverage stays outside the default CI task graph.
+tasks.register("generateServerCompatibilitySdk") {
+    group = "verification"
+    description = "Generates the optional server and client SDKs used by the compatibility suites."
+    dependsOn(":codegen-server-test:assemble", ":codegen-client-test:assemble")
+}
+
+tasks.register("serverCompatibilityTest") {
+    group = "verification"
+    description = "Runs Kotlin, generated protocol, and Rust integration server compatibility comparisons."
+    dependsOn(
+        ":codegen-server:compatibilityTest",
+        ":codegen-server-test:compatibilityProtocolTest",
+        ":codegen-server-test:protocolCompatibilityTest",
+    )
+}
