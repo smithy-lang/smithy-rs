@@ -129,10 +129,17 @@ const SERVER_SPECIFIC_RUNTIMES: &[&str] = &[
     "aws-smithy-legacy-http-server",
 ];
 
+// Names of `aws-smithy-*` runtime crates that no generated SDK depends on. They are absent from `CrateSet.kt`,
+// so their dependencies, including dev-dependencies, never appear in the SDK lockfile. Remove a crate from this
+// list if it is added to `AWS_SDK_SMITHY_RUNTIME` in
+// https://github.com/smithy-lang/smithy-rs/blob/main/buildSrc/src/main/kotlin/CrateSet.kt
+const NON_SDK_SMITHY_RUNTIMES: &[&str] = &["aws-smithy-lang"];
+
 fn new_dependency_for_aws_sdk(crate_name: &str) -> bool {
     AWS_SDK_RUNTIMES.contains(&crate_name)
         || (crate_name.starts_with("aws-smithy-")
-            && !SERVER_SPECIFIC_RUNTIMES.contains(&crate_name))
+            && !SERVER_SPECIFIC_RUNTIMES.contains(&crate_name)
+            && !NON_SDK_SMITHY_RUNTIMES.contains(&crate_name))
 }
 
 // Recursively traverses a chain of dependencies originating from a potential new dependency, populating
@@ -410,6 +417,34 @@ name = "inventory"
 version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f958d3d68f4167080a18141e10381e7634563984a537f2a49a30fd8e53ac5767"
+"#,
+        )
+        .unwrap();
+
+        assert!(audit_runtime_lockfile_covered_by_sdk_lockfile(
+            &runtime_lockfile,
+            &sdk_dependency_set(),
+            None,
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn new_dependency_introduced_by_non_sdk_smithy_runtime() {
+        let runtime_lockfile = Lockfile::from_str(
+            r#"
+[[package]]
+name = "aws-smithy-lang"
+version = "0.1.0"
+dependencies = [
+ "ui_test",
+]
+
+[[package]]
+name = "ui_test"
+version = "0.30.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ada249620d81f010b9a1472b63a5077ac7c722dd0f4bacf6528b313d0b8c15d8"
 "#,
         )
         .unwrap();
