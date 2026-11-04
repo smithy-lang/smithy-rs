@@ -1,0 +1,22 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "a": {
+            "nested": {
+                "a": null,
+                "b": true
+            }
+        },
+        "n": 1.5,
+        "z": [
+            3,
+            1,
+            2
+        ]
+    },
+    "shapes": {
+        "ex#A": {
+            "type": "string"
+        }
+    }
+}

@@ -288,6 +288,12 @@ grep -A 5 "AssertionError\|Exception" codegen-core/build/reports/tests/test/clas
 cd rust-runtime && cargo test --quiet -p aws-smithy-types
 ```
 
+**SDK subset generation:** `aws-config` depends on the STS, SSO, SSO OIDC, and Signin crates, so a buildable subset must include them alongside the target service:
+
+```bash
+./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso,+ssooidc,+signin,+{service_name}
+```
+
 **Protocol tests:**
 
 ```bash
@@ -297,6 +303,8 @@ cargo test --quiet
 ```
 
 **Note: Always use `--quiet` with cargo commands to reduce noise and focus on actual errors.**
+
+**Test workspace:** Kotlin codegen tests generate crates into `~/.local/share/smithy-test-workspace/smithy-test<random digits>/` (or `$XDG_DATA_HOME/smithy-test-workspace/`). `./gradlew clean` doesn't remove it, so it may need to be cleaned up if disk space runs low.
 
 ## Viewing Generated Code
 

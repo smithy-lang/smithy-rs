@@ -14,19 +14,16 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
-import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
@@ -37,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -102,6 +98,16 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         val unionShape: UnionShape,
         val unmarshallerVariableName: String,
     ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
+
+    /**
+     * Event stream bodies are read inside the handler. Wrapping the body here is the only way to
+     * put a bound on those reads.
+     */
+    data class WrapEventStreamRequestBody(
+        val operationShape: OperationShape,
+        val unionShape: UnionShape,
+        val bodyVariableName: String,
+    ) : HttpBindingSection("WrapEventStreamRequestBody")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -137,6 +143,13 @@ class HttpBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
+    private val headerValueParser =
+        HttpHeaderValueParserGenerator(
+            codegenContext,
+            symbolProvider,
+            defaultTimestampFormat,
+            customizations,
+        )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
@@ -163,7 +176,7 @@ class HttpBindingGenerator(
                 "Output" to outputT,
                 "header_util" to headerUtil,
             ) {
-                rust("let headers = header_map.get_all(${binding.locationName.dq()});")
+                rust("let headers = header_map.get_all_bytes(${binding.locationName.dq()});")
                 deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
             }
         }
@@ -177,7 +190,7 @@ class HttpBindingGenerator(
         val inner =
             protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "inner") { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName<'a>(headers: impl #{Iterator}<Item = &'a str>) -> std::result::Result<Option<#{Value}>, #{header_util}::ParseError>",
+                    "pub fn $fnName<'a>(headers: impl #{Iterator}<Item = &'a [u8]>) -> std::result::Result<Option<#{Value}>, #{header_util}::ParseError>",
                     *preludeScope,
                     "Value" to symbolProvider.toSymbol(model.expectShape(target.value.target)),
                     "header_util" to headerUtil,
@@ -196,11 +209,11 @@ class HttpBindingGenerator(
                 rust(
                     """
                     let headers = #T::headers_for_prefix(
-                        header_map.iter().map(|(k, _)| k),
+                        header_map.iter_bytes().map(|(k, _)| k),
                         ${binding.locationName.dq()}
                     );
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
-                        let values = header_map.get_all(header_name);
+                        let values = header_map.get_all_bytes(header_name);
                         #T(values).map(|v| (key.to_string(), v.expect(
                             "we have checked there is at least one value for this header name; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"
                         )))
@@ -294,12 +307,27 @@ class HttpBindingGenerator(
         }
 
         rustTemplate(
+            "let body = std::mem::replace(body, #{SdkBody}::taken());",
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
+
+        // Allow customizations to wrap the body before the receiver reads from it (e.g. to
+        // apply message timeouts)
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.WrapEventStreamRequestBody(
+                    operationShape,
+                    targetShape,
+                    "body",
+                ),
+            )(this)
+        }
+
+        rustTemplate(
             """
-            let body = std::mem::replace(body, #{SdkBody}::taken());
             let receiver = #{receiver:W};
             Ok(receiver)
             """,
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "receiver" to
                 writable {
                     if (codegenTarget == CodegenTarget.SERVER) {
@@ -390,117 +418,8 @@ class HttpBindingGenerator(
         targetShape: Shape,
         memberShape: MemberShape,
     ) {
-        val rustType = symbolProvider.toSymbol(targetShape).rustType().stripOuter<RustType.Option>()
-        // Normally, we go through a flow that looks for `,`s but that's wrong if the output
-        // is just a single string (which might include `,`s.).
-        // MediaType doesn't include `,` since it's base64, send that through the normal path
-        if (targetShape is StringShape && !targetShape.hasTrait<MediaTypeTrait>()) {
-            rust("#T::one_or_none(headers)", headerUtil)
-            return
-        }
-        val (coreType, coreShape) =
-            if (targetShape is CollectionShape) {
-                val coreShape = model.expectShape(targetShape.member.target)
-                symbolProvider.toSymbol(coreShape).rustType() to coreShape
-            } else {
-                rustType to targetShape
-            }
-        val parsedValue = safeName()
-        if (coreShape.isTimestampShape()) {
-            val timestampFormat =
-                index.determineTimestampFormat(
-                    memberShape,
-                    HttpBinding.Location.HEADER,
-                    defaultTimestampFormat,
-                )
-            val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
-            rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::many_dates(headers, #T)?",
-                headerUtil,
-                timestampFormatType,
-            )
-            for (customization in customizations) {
-                customization.section(HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders(memberShape))(this)
-            }
-            rust(";")
-        } else if (coreShape.isPrimitive()) {
-            rust(
-                "let $parsedValue = #T::read_many_primitive::<${coreType.render()}>(headers)?;",
-                headerUtil,
-            )
-        } else {
-            rust(
-                "let $parsedValue: Vec<${coreType.render()}> = #T::read_many_from_str(headers)?;",
-                headerUtil,
-            )
-            if (coreShape.hasTrait<MediaTypeTrait>()) {
-                rustTemplate(
-                    """
-                    let $parsedValue: std::result::Result<Vec<_>, _> = $parsedValue
-                        .iter().map(|s|
-                            #{base_64_decode}(s).map_err(|_|#{header}::ParseError::new("failed to decode base64"))
-                            .and_then(|bytes|String::from_utf8(bytes).map_err(|_|#{header}::ParseError::new("base64 encoded data was not valid utf-8")))
-                        ).collect();
-                    """,
-                    "base_64_decode" to RuntimeType.base64Decode(runtimeConfig),
-                    "header" to headerUtil,
-                )
-                rust("let $parsedValue = $parsedValue?;")
-            }
-        }
-        when (rustType) {
-            is RustType.Vec ->
-                rust(
-                    """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue)
-                    } else {
-                        None
-                    })
-                    """,
-                )
-
-            is RustType.HashSet ->
-                rust(
-                    """
-                    Ok(if !$parsedValue.is_empty() {
-                        Some($parsedValue.into_iter().collect())
-                    } else {
-                        None
-                    })
-                    """,
-                )
-
-            else -> {
-                if (targetShape is ListShape) {
-                    // This is a constrained list shape and we must therefore be generating a server SDK.
-                    check(codegenTarget == CodegenTarget.SERVER)
-                    check(rustType is RustType.Opaque)
-                    rust(
-                        """
-                        Ok(if !$parsedValue.is_empty() {
-                            Some(#T($parsedValue))
-                        } else {
-                            None
-                        })
-                        """,
-                        symbolProvider.toSymbol(targetShape),
-                    )
-                } else {
-                    check(targetShape is SimpleShape)
-                    rustTemplate(
-                        """
-                        if $parsedValue.len() > 1 {
-                            Err(#{header_util}::ParseError::new(format!("expected one item but found {}", $parsedValue.len())))
-                        } else {
-                            let mut $parsedValue = $parsedValue;
-                            Ok($parsedValue.pop())
-                        }
-                        """,
-                        "header_util" to headerUtil,
-                    )
-                }
-            }
+        with(headerValueParser) {
+            renderHeaderValueParser(targetShape, memberShape)
         }
     }
 

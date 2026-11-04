@@ -8,28 +8,75 @@
 use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
-/// CBOR serializer that implements the ShapeSerializer trait.
+/// Tracks the kind of CBOR container currently being written.
+///
+/// In RPC v2 CBOR a structure is a map keyed by member name, but list elements
+/// are positional and map values follow a key that is written separately. A
+/// member schema carries a `member_name` (e.g. a list's `member` or a map's
+/// `value` member), so without tracking the surrounding container that name
+/// would be wrongly emitted as a key when the member appears as a list element
+/// or map value. Member-name keys are therefore only emitted in [`Container::Struct`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Container {
+    Struct,
+    List,
+    Map,
+}
+
+/// Callback for writing members into the currently open structure map.
+///
+/// Runs after the map and its container state are opened, before modeled members.
+/// The schema is the value's structure or union schema, obtained through
+/// [`SerializableStruct::schema`]. Any error is returned immediately without
+/// writing modeled members.
+pub type StructPrefix = fn(&Schema<'_>, &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
+
+/// CBOR serializer that implements the [`ShapeSerializer`] trait.
 ///
 /// Wraps the existing optimized `Encoder` which uses `minicbor` with
 /// infallible writes to `Vec<u8>`.
 pub struct CborSerializer {
     encoder: crate::Encoder,
+    container_stack: Vec<Container>,
+    struct_prefix: Option<StructPrefix>,
+    use_definite_lengths: bool,
 }
 
 impl CborSerializer {
     pub(crate) fn new() -> Self {
         Self {
             encoder: crate::Encoder::new(Vec::new()),
+            container_stack: Vec::new(),
+            struct_prefix: None,
+            use_definite_lengths: false,
         }
     }
 
-    /// Writes the member name as a CBOR text string key if this schema is a struct member.
+    pub(crate) fn with_definite_lengths(mut self, value: bool) -> Self {
+        self.use_definite_lengths = value;
+        self
+    }
+
+    /// Installs a callback that writes members into each currently open structure
+    /// map before its modeled members. The callback receives the value's schema,
+    /// preserving the supplied member schema for field naming. Errors stop
+    /// serialization immediately. By default, no callback is installed.
+    pub fn with_struct_prefix(mut self, prefix: StructPrefix) -> Self {
+        self.struct_prefix = Some(prefix);
+        self
+    }
+
+    /// Writes the member name as a CBOR text string key, but only for structure
+    /// members. List elements and map values are not keyed by member name even
+    /// though their schemas carry one (see [`Container`]).
     #[inline]
-    fn write_member_key(&mut self, schema: &Schema) {
-        if let Some(name) = schema.member_name() {
-            self.encoder.str(name);
+    fn write_member_key(&mut self, schema: &Schema<'_>) {
+        if self.container_stack.last() == Some(&Container::Struct) {
+            if let Some(name) = schema.member_name() {
+                self.encoder.str(name);
+            }
         }
     }
 }
@@ -43,77 +90,142 @@ impl FinishSerializer for CborSerializer {
 impl ShapeSerializer for CborSerializer {
     fn write_struct(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Struct);
+        if let Some(prefix) = self.struct_prefix {
+            prefix(value.schema(), self)?;
+        }
         value.serialize_members(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
     fn write_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_array();
+        self.container_stack.push(Container::List);
         write_elements(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
     fn write_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Map);
         write_entries(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
-    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_list_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        if !self.use_definite_lengths {
+            return self.write_list(schema, write_elements);
+        }
+        self.write_member_key(schema);
+        self.encoder.array(length);
+        self.container_stack.push(Container::List);
+        let result = write_elements(self);
+        self.container_stack.pop();
+        result
+    }
+
+    fn write_map_with_length(
+        &mut self,
+        schema: &Schema<'_>,
+        length: usize,
+        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        if !self.use_definite_lengths {
+            return self.write_map(schema, write_entries);
+        }
+        self.write_member_key(schema);
+        self.encoder.map(length);
+        self.container_stack.push(Container::Map);
+        let result = write_entries(self);
+        self.container_stack.pop();
+        result
+    }
+
+    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.boolean(value);
         Ok(())
     }
 
-    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.byte(value);
         Ok(())
     }
 
-    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.short(value);
         Ok(())
     }
 
-    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.integer(value);
         Ok(())
     }
 
-    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_integer_list(
+        &mut self,
+        schema: &Schema<'_>,
+        values: &[i32],
+    ) -> Result<(), SerdeError> {
+        self.write_member_key(schema);
+        if self.use_definite_lengths {
+            self.encoder.array(values.len());
+        } else {
+            self.encoder.begin_array();
+        }
+        // Integer writes cannot fail or call back into the serializer, so
+        // neither per-element dispatch nor a new container state is needed.
+        for value in values {
+            self.encoder.integer(*value);
+        }
+        if !self.use_definite_lengths {
+            self.encoder.end();
+        }
+        Ok(())
+    }
+
+    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.long(value);
         Ok(())
     }
 
-    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.float(value);
         Ok(())
     }
 
-    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.double(value);
         Ok(())
@@ -121,49 +233,53 @@ impl ShapeSerializer for CborSerializer {
 
     fn write_big_integer(
         &mut self,
-        _schema: &Schema,
-        _value: &BigInteger,
+        schema: &Schema<'_>,
+        value: &BigInteger,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big integer not yet supported (smithy-rs#4611)".into(),
-        })
+        self.write_member_key(schema);
+        self.encoder.big_integer(value);
+        Ok(())
     }
 
     fn write_big_decimal(
         &mut self,
-        _schema: &Schema,
-        _value: &BigDecimal,
+        schema: &Schema<'_>,
+        value: &BigDecimal,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big decimal not yet supported (smithy-rs#4611)".into(),
-        })
+        self.write_member_key(schema);
+        self.encoder.big_decimal(value);
+        Ok(())
     }
 
-    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.str(value);
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
         self.write_member_key(schema);
-        self.encoder.blob_bytes(value);
+        self.encoder.blob_bytes(value.as_ref());
         Ok(())
     }
 
-    fn write_timestamp(&mut self, schema: &Schema, value: &DateTime) -> Result<(), SerdeError> {
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.timestamp(value);
         Ok(())
     }
 
-    fn write_document(&mut self, _schema: &Schema, _value: &Document) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "document types are not supported by rpcv2Cbor protocol".into(),
-        })
+    fn write_document(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &Document,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported(
+            "document types are not supported by rpcv2Cbor protocol",
+        ))
     }
 
-    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.null();
         Ok(())
@@ -224,6 +340,22 @@ mod tests {
     }
 
     #[test]
+    fn test_write_big_integer() {
+        let value = "18446744073709551616".parse().unwrap();
+        let bytes = round_trip(|s| s.write_big_integer(&BIG_INTEGER, &value).unwrap());
+        let mut dec = crate::Decoder::new(&bytes);
+        assert_eq!(dec.big_integer().unwrap(), value);
+    }
+
+    #[test]
+    fn test_write_big_decimal() {
+        let value = "273.15".parse().unwrap();
+        let bytes = round_trip(|s| s.write_big_decimal(&BIG_DECIMAL, &value).unwrap());
+        let mut dec = crate::Decoder::new(&bytes);
+        assert_eq!(dec.big_decimal().unwrap(), value);
+    }
+
+    #[test]
     fn test_write_string() {
         let bytes = round_trip(|s| s.write_string(&STRING, "hello").unwrap());
         let mut dec = crate::Decoder::new(&bytes);
@@ -233,7 +365,7 @@ mod tests {
     #[test]
     fn test_write_blob() {
         let blob = Blob::new(b"binary data");
-        let bytes = round_trip(|s| s.write_blob(&BLOB, blob.as_ref()).unwrap());
+        let bytes = round_trip(|s| s.write_blob(&BLOB, blob.clone()).unwrap());
         let mut dec = crate::Decoder::new(&bytes);
         assert_eq!(dec.blob().unwrap(), blob);
     }
@@ -277,6 +409,223 @@ mod tests {
     }
 
     #[test]
+    fn known_collection_lengths_are_opt_in() {
+        let schema = Schema::new(shape_id!("test", "List"), ShapeType::List);
+        for (enabled, expected) in [
+            (false, vec![0x9f, 1, 2, 3, 0xff]),
+            (true, vec![0x83, 1, 2, 3]),
+        ] {
+            let codec = CborCodec::new(
+                crate::codec::CborCodecSettings::default().use_definite_lengths(enabled),
+            );
+            let mut ser = codec.create_serializer();
+            ser.write_integer_list(&schema, &[1, 2, 3]).unwrap();
+            assert_eq!(ser.finish(), expected);
+        }
+    }
+
+    #[test]
+    fn integer_list_helper_matches_generic_writes_in_each_container() {
+        static VALUES: Schema = Schema::new_member(
+            shape_id!("test", "Value", "values"),
+            ShapeType::List,
+            "values",
+            0,
+        );
+        static NESTED: Schema = Schema::new_member(
+            shape_id!("test", "Value", "nested"),
+            ShapeType::List,
+            "nested",
+            1,
+        );
+        static MAP: Schema =
+            Schema::new_member(shape_id!("test", "Value", "map"), ShapeType::Map, "map", 2);
+        static AFTER: Schema = Schema::new_member(
+            shape_id!("test", "Value", "after"),
+            ShapeType::Integer,
+            "after",
+            3,
+        );
+        static VALUE: Schema = Schema::new_struct(
+            shape_id!("test", "Value"),
+            ShapeType::Structure,
+            &[&VALUES, &NESTED, &MAP, &AFTER],
+        );
+
+        struct Value<'a> {
+            values: &'a [i32],
+            helper: bool,
+        }
+        impl Value<'_> {
+            fn write_values(
+                &self,
+                ser: &mut dyn ShapeSerializer,
+                schema: &Schema<'_>,
+            ) -> Result<(), SerdeError> {
+                if self.helper {
+                    ser.write_integer_list(schema, self.values)
+                } else {
+                    ser.write_list_with_length(schema, self.values.len(), &|ser| {
+                        for value in self.values {
+                            ser.write_integer(&INTEGER, *value)?;
+                        }
+                        Ok(())
+                    })
+                }
+            }
+        }
+        impl SerializableStruct for Value<'_> {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                self.write_values(ser, &VALUES)?;
+                ser.write_list_with_length(&NESTED, 1, &|ser| self.write_values(ser, &VALUES))?;
+                ser.write_map_with_length(&MAP, 1, &|ser| {
+                    ser.write_string(&STRING, "key")?;
+                    self.write_values(ser, &VALUES)
+                })?;
+                ser.write_integer(&AFTER, 17)
+            }
+        }
+
+        let integers = [i32::MIN, -25, -1, 0, 23, 24, i32::MAX];
+        for enabled in [false, true] {
+            let codec = CborCodec::new(
+                crate::codec::CborCodecSettings::default().use_definite_lengths(enabled),
+            );
+            for length in [0, 1, 23, 24, 255, 256] {
+                let values: Vec<_> = integers.into_iter().cycle().take(length).collect();
+                let mut generic = codec.create_serializer();
+                generic
+                    .write_struct(
+                        &VALUE,
+                        &Value {
+                            values: &values,
+                            helper: false,
+                        },
+                    )
+                    .unwrap();
+                let mut helper = codec.create_serializer();
+                helper
+                    .write_struct(
+                        &VALUE,
+                        &Value {
+                            values: &values,
+                            helper: true,
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(
+                    helper.finish(),
+                    generic.finish(),
+                    "enabled={enabled}, length={length}"
+                );
+
+                // Independently compare the top-level array with the direct encoder.
+                let mut helper = codec.create_serializer();
+                helper.write_integer_list(&VALUES, &values).unwrap();
+                let mut encoder = crate::Encoder::new(Vec::new());
+                if enabled {
+                    encoder.array(length);
+                } else {
+                    encoder.begin_array();
+                }
+                for value in &values {
+                    encoder.integer(*value);
+                }
+                if !enabled {
+                    encoder.end();
+                }
+                assert_eq!(helper.finish(), encoder.into_writer());
+            }
+        }
+    }
+
+    #[test]
+    fn definite_collections_match_legacy_encoder_at_length_boundaries() {
+        let list = Schema::new(shape_id!("test", "List"), ShapeType::List);
+        let map = Schema::new(shape_id!("test", "Map"), ShapeType::Map);
+        let codec =
+            CborCodec::new(crate::codec::CborCodecSettings::default().use_definite_lengths(true));
+        for length in [0, 1, 23, 24, 255, 256] {
+            let mut ser = codec.create_serializer();
+            ser.write_list_with_length(&list, length, &|ser| {
+                for _ in 0..length {
+                    ser.write_null(&STRING)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+            let mut legacy = crate::Encoder::new(Vec::new());
+            legacy.array(length);
+            for _ in 0..length {
+                legacy.null();
+            }
+            assert_eq!(ser.finish(), legacy.into_writer());
+
+            let mut ser = codec.create_serializer();
+            ser.write_map_with_length(&map, length, &|ser| {
+                for i in 0..length {
+                    ser.write_string(&STRING, &i.to_string())?;
+                    ser.write_null(&STRING)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+            let mut legacy = crate::Encoder::new(Vec::new());
+            legacy.map(length);
+            for i in 0..length {
+                legacy.str(&i.to_string()).null();
+            }
+            assert_eq!(ser.finish(), legacy.into_writer());
+        }
+    }
+
+    #[test]
+    fn definite_nested_collections_preserve_keys_and_unknown_lengths() {
+        static VALUES: Schema = Schema::new_member(
+            shape_id!("test", "Value", "values"),
+            ShapeType::List,
+            "values",
+            0,
+        );
+        static MAP: Schema = Schema::new(shape_id!("test", "Map"), ShapeType::Map);
+        static VALUE: Schema =
+            Schema::new_struct(shape_id!("test", "Value"), ShapeType::Structure, &[&VALUES]);
+        struct Value;
+        impl SerializableStruct for Value {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_list_with_length(&VALUES, 2, &|ser| {
+                    ser.write_map_with_length(&MAP, 1, &|ser| {
+                        ser.write_string(&STRING, "key")?;
+                        ser.write_null(&STRING)
+                    })?;
+                    ser.write_list(&VALUES, &|ser| ser.write_integer(&INTEGER, 7))
+                })
+            }
+        }
+        let codec =
+            CborCodec::new(crate::codec::CborCodecSettings::default().use_definite_lengths(true));
+        let mut ser = codec.create_serializer();
+        ser.write_struct(&VALUE, &Value).unwrap();
+        let mut legacy = crate::Encoder::new(Vec::new());
+        legacy
+            .begin_map()
+            .str("values")
+            .array(2)
+            .map(1)
+            .str("key")
+            .null();
+        legacy.begin_array().integer(7).end().end();
+        assert_eq!(ser.finish(), legacy.into_writer());
+    }
+
+    #[test]
     fn test_write_struct() {
         static NAME_MEMBER: Schema =
             Schema::new_member(shape_id!("test", "Struct"), ShapeType::String, "name", 0);
@@ -290,6 +639,10 @@ mod tests {
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &STRUCT_SCHEMA
+            }
+
             fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
                 s.write_string(&NAME_MEMBER, "Alice")?;
                 s.write_integer(&AGE_MEMBER, 30)?;
@@ -305,6 +658,105 @@ mod tests {
         assert_eq!(dec.str().unwrap().as_ref(), "Alice");
         assert_eq!(dec.str().unwrap().as_ref(), "age");
         assert_eq!(dec.integer().unwrap(), 30);
+    }
+
+    mod struct_prefix {
+        use super::*;
+
+        static NAME: Schema = Schema::new_member(
+            shape_id!("test", "Value", "name"),
+            ShapeType::String,
+            "name",
+            0,
+        );
+        static VALUE: Schema =
+            Schema::new_struct(shape_id!("test", "Value"), ShapeType::Structure, &[&NAME]);
+        static MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "Container", "value"),
+            ShapeType::Structure,
+            "value",
+            0,
+        );
+        static PREFIX: Schema = Schema::new_member(
+            shape_id!("test", "Value", "prefix"),
+            ShapeType::String,
+            "prefix",
+            1,
+        );
+
+        struct Value;
+        impl SerializableStruct for Value {
+            fn schema(&self) -> &Schema<'_> {
+                &VALUE
+            }
+
+            fn serialize_members(
+                &self,
+                serializer: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                serializer.write_string(&NAME, "Alice")
+            }
+        }
+
+        #[test]
+        fn absent_by_default() {
+            let mut serializer = CborCodec::default().create_serializer();
+            serializer.write_struct(&VALUE, &Value).unwrap();
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected.begin_map().str("name").str("Alice").end();
+            assert_eq!(serializer.finish(), expected.into_writer());
+        }
+
+        #[test]
+        fn prefix_precedes_members_and_receives_value_schema() {
+            let mut serializer = CborCodec::default().create_serializer().with_struct_prefix(
+                |schema, serializer| {
+                    let expected = &VALUE;
+                    assert_eq!(schema.shape_id(), expected.shape_id());
+                    assert_eq!(schema.member_name(), expected.member_name());
+                    serializer.write_string(&PREFIX, schema.shape_id().as_str())
+                },
+            );
+            serializer
+                .write_list(
+                    &Schema::new(shape_id!("test", "Values"), ShapeType::List),
+                    &|serializer| serializer.write_struct(&MEMBER, &Value),
+                )
+                .unwrap();
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected
+                .begin_array()
+                .begin_map()
+                .str("prefix")
+                .str(VALUE.shape_id().as_str())
+                .str("name")
+                .str("Alice")
+                .end()
+                .end();
+            assert_eq!(serializer.finish(), expected.into_writer());
+        }
+
+        #[test]
+        fn prefix_failure_prevents_modeled_members() {
+            struct UnreachableMembers;
+            impl SerializableStruct for UnreachableMembers {
+                fn schema(&self) -> &Schema<'_> {
+                    &VALUE
+                }
+
+                fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                    panic!("modeled members must not be serialized after prefix failure")
+                }
+            }
+            let mut serializer = CborCodec::default()
+                .create_serializer()
+                .with_struct_prefix(|_, _| Err(SerdeError::custom("prefix failed")));
+            let error = serializer
+                .write_struct(&VALUE, &UnreachableMembers)
+                .unwrap_err();
+            assert!(error.to_string().contains("prefix failed"));
+            assert_eq!(serializer.finish(), vec![0xbf]);
+        }
     }
 
     #[test]
@@ -323,5 +775,264 @@ mod tests {
         assert!(len.is_none());
         assert_eq!(dec.str().unwrap().as_ref(), "key1");
         assert_eq!(dec.str().unwrap().as_ref(), "val1");
+    }
+
+    // --- Tagged-union request serialization over CBOR.
+    //
+    // A tagged union serializes as a single-entry CBOR map keyed by the active
+    // variant name (`{variantName: value}`), nested inside the surrounding
+    // indefinite-length map of the request. This mirrors a `CreateConnection`-
+    // style request whose input carries tagged-union members. The union's
+    // `serialize_members` writes exactly the active variant (mirroring the
+    // generated `renderSerializableUnion`). Verified at the wire-byte level
+    // (exact bytes via the Encoder) and by full serialize -> deserialize
+    // round-trip, including a scalar variant, a struct variant, two union
+    // members in one input, and indefinite-length map acceptance.
+    mod tagged_union_serialization {
+        use crate::codec::{CborCodec, CborDeserializer, CborSerializer};
+        use aws_smithy_schema::codec::{Codec, FinishSerializer};
+        use aws_smithy_schema::serde::{
+            SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
+        };
+        use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+        fn serialize(f: impl FnOnce(&mut CborSerializer)) -> Vec<u8> {
+            let codec = CborCodec::default();
+            let mut ser = codec.create_serializer();
+            f(&mut ser);
+            ser.finish()
+        }
+
+        // Union `Endpoint { arn: String, config: EndpointConfig }`.
+        static EP_ARN: Schema =
+            Schema::new_member(shape_id!("test", "Endpoint"), ShapeType::String, "arn", 0);
+        static EP_CONFIG: Schema = Schema::new_member(
+            shape_id!("test", "Endpoint"),
+            ShapeType::Structure,
+            "config",
+            1,
+        );
+        static ENDPOINT_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "Endpoint"),
+            ShapeType::Union,
+            &[&EP_ARN, &EP_CONFIG],
+        );
+
+        // Struct `EndpointConfig { name: String }`.
+        static EC_NAME: Schema = Schema::new_member(
+            shape_id!("test", "EndpointConfig"),
+            ShapeType::String,
+            "name",
+            0,
+        );
+        static ENDPOINT_CONFIG_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "EndpointConfig"),
+            ShapeType::Structure,
+            &[&EC_NAME],
+        );
+
+        // Input `CreateConnectionInput { attachPoint: Endpoint, remoteAccount: Endpoint }`.
+        static CC_ATTACH: Schema = Schema::new_member(
+            shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Union,
+            "attachPoint",
+            0,
+        );
+        static CC_REMOTE: Schema = Schema::new_member(
+            shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Union,
+            "remoteAccount",
+            1,
+        );
+        static CREATE_CONNECTION_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Structure,
+            &[&CC_ATTACH, &CC_REMOTE],
+        );
+
+        #[derive(Debug, Clone, PartialEq)]
+        struct EndpointConfig {
+            name: String,
+        }
+        impl SerializableStruct for EndpointConfig {
+            fn schema(&self) -> &Schema<'_> {
+                &ENDPOINT_CONFIG_SCHEMA
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&EC_NAME, &self.name)
+            }
+        }
+
+        #[derive(Debug, Clone, PartialEq)]
+        enum Endpoint {
+            Arn(String),
+            Config(EndpointConfig),
+        }
+        impl SerializableStruct for Endpoint {
+            fn schema(&self) -> &Schema<'_> {
+                &ENDPOINT_SCHEMA
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                // Exactly the active variant is written (mirrors renderSerializableUnion).
+                match self {
+                    Endpoint::Arn(v) => s.write_string(&EP_ARN, v),
+                    Endpoint::Config(v) => s.write_struct(&EP_CONFIG, v),
+                }
+            }
+        }
+
+        #[derive(Debug, Clone, PartialEq)]
+        struct CreateConnectionInput {
+            attach_point: Endpoint,
+            remote_account: Endpoint,
+        }
+        impl SerializableStruct for CreateConnectionInput {
+            fn schema(&self) -> &Schema<'_> {
+                &CREATE_CONNECTION_SCHEMA
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_struct(&CC_ATTACH, &self.attach_point)?;
+                s.write_struct(&CC_REMOTE, &self.remote_account)
+            }
+        }
+
+        // deserialize mirrors renderDeserializeUnion / struct deserialize.
+        fn deser_endpoint_config(
+            d: &mut dyn ShapeDeserializer,
+        ) -> Result<EndpointConfig, SerdeError> {
+            let mut name = String::new();
+            d.read_struct(&ENDPOINT_CONFIG_SCHEMA, &mut |m, de| {
+                if m.member_name() == Some("name") {
+                    name = de.read_string(m)?;
+                }
+                Ok(())
+            })?;
+            Ok(EndpointConfig { name })
+        }
+        fn deser_endpoint(d: &mut dyn ShapeDeserializer) -> Result<Endpoint, SerdeError> {
+            let mut out: Option<Endpoint> = None;
+            d.read_struct(&ENDPOINT_SCHEMA, &mut |m, de| {
+                out = Some(match m.member_index() {
+                    Some(0) => Endpoint::Arn(de.read_string(m)?),
+                    Some(1) => Endpoint::Config(deser_endpoint_config(de)?),
+                    _ => return Err(SerdeError::custom("unknown variant")),
+                });
+                Ok(())
+            })?;
+            out.ok_or_else(|| SerdeError::custom("expected a union variant"))
+        }
+        fn deser_create_connection(
+            d: &mut dyn ShapeDeserializer,
+        ) -> Result<CreateConnectionInput, SerdeError> {
+            let mut ap: Option<Endpoint> = None;
+            let mut ra: Option<Endpoint> = None;
+            d.read_struct(&CREATE_CONNECTION_SCHEMA, &mut |m, de| {
+                match m.member_index() {
+                    Some(0) => ap = Some(deser_endpoint(de)?),
+                    Some(1) => ra = Some(deser_endpoint(de)?),
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            Ok(CreateConnectionInput {
+                attach_point: ap.ok_or_else(|| SerdeError::custom("missing attachPoint"))?,
+                remote_account: ra.ok_or_else(|| SerdeError::custom("missing remoteAccount"))?,
+            })
+        }
+
+        #[test]
+        fn scalar_variant_wire_bytes() {
+            let bytes = serialize(|s| {
+                s.write_struct(&ENDPOINT_SCHEMA, &Endpoint::Arn("dxcon-abc".to_string()))
+                    .unwrap()
+            });
+            // A single-entry indefinite-length map keyed by the variant name.
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected.begin_map().str("arn").str("dxcon-abc").end();
+            assert_eq!(
+                bytes,
+                expected.into_writer(),
+                "tagged union must be a single-entry map keyed by the active variant name"
+            );
+            assert_eq!(bytes[0], 0xBF, "must use an indefinite-length map (0xBF)");
+            assert_eq!(
+                *bytes.last().unwrap(),
+                0xFF,
+                "must be terminated by a break (0xFF)"
+            );
+        }
+
+        #[test]
+        fn struct_variant_wire_bytes() {
+            let bytes = serialize(|s| {
+                s.write_struct(
+                    &ENDPOINT_SCHEMA,
+                    &Endpoint::Config(EndpointConfig {
+                        name: "eth0".to_string(),
+                    }),
+                )
+                .unwrap()
+            });
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected
+                .begin_map()
+                .str("config")
+                .begin_map()
+                .str("name")
+                .str("eth0")
+                .end()
+                .end();
+            assert_eq!(bytes, expected.into_writer());
+        }
+
+        #[test]
+        fn two_union_members_in_one_input_wire_bytes() {
+            let input = CreateConnectionInput {
+                attach_point: Endpoint::Arn("ap".to_string()),
+                remote_account: Endpoint::Config(EndpointConfig {
+                    name: "ra".to_string(),
+                }),
+            };
+            let bytes = serialize(|s| s.write_struct(&CREATE_CONNECTION_SCHEMA, &input).unwrap());
+            let mut expected = crate::Encoder::new(Vec::new());
+            expected
+                .begin_map()
+                .str("attachPoint")
+                .begin_map()
+                .str("arn")
+                .str("ap")
+                .end()
+                .str("remoteAccount")
+                .begin_map()
+                .str("config")
+                .begin_map()
+                .str("name")
+                .str("ra")
+                .end()
+                .end()
+                .end();
+            assert_eq!(bytes, expected.into_writer());
+        }
+
+        #[test]
+        fn tagged_unions_round_trip() {
+            let input = CreateConnectionInput {
+                attach_point: Endpoint::Arn("dxcon-1".to_string()),
+                remote_account: Endpoint::Config(EndpointConfig {
+                    name: "primary".to_string(),
+                }),
+            };
+            let bytes = serialize(|s| s.write_struct(&CREATE_CONNECTION_SCHEMA, &input).unwrap());
+            // 128 = codec default max_depth.
+            let mut de = CborDeserializer::new(&bytes, 128);
+            let decoded = deser_create_connection(&mut de).unwrap();
+            assert_eq!(
+                decoded, input,
+                "serialize -> deserialize must round-trip the tagged unions"
+            );
+        }
     }
 }

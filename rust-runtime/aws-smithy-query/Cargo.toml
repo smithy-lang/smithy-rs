@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-query"
-version = "0.62.1"
+version = "0.64.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 description = "AWSQuery and EC2Query Smithy protocol logic for smithy-rs."
 edition = "2021"
@@ -17,6 +17,10 @@ urlencoding = "2.1"
 
 [dev-dependencies]
 criterion = "0.5.1"
+
+[[bench]]
+name = "collections"
+harness = false
 
 [[bench]]
 name = "serde"

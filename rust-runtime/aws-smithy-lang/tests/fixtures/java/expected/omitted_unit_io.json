@@ -1,0 +1,23 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Ping": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#Pong": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        }
+    }
+}

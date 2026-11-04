@@ -100,7 +100,7 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
     val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
     inputs.property("stableCrateVersion", stableCrateVersion)
-    inputs.property("unstableCrateVersion", stableCrateVersion)
+    inputs.property("unstableCrateVersion", unstableCrateVersion)
 
     val cargoTomls = mutableListOf<File>()
     for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {

@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -17,12 +18,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
  * Regression test for the schema-serde event-stream response deserializer
  * populating `_request_id` from the `x-amzn-requestid` response header.
  *
- * restJson1 is on [SchemaSerdeAllowlist] (see
- * `codegen-client/.../customizations/SchemaDecorator.kt`), so the generated
- * client hits `deserializeStreamingEventStreamSchema` in
- * [ResponseDeserializerGenerator] rather than the legacy streaming path.
+ * This exercises the schema-serde streaming path
+ * (`deserializeStreamingEventStreamSchema` in [ResponseDeserializerGenerator]).
+ * The model lives in the dedicated schema-exclusive test namespace so it takes
+ * that path regardless of production rollout state, and the test fails loudly
+ * (rather than skipping) if it ever stops doing so.
  *
- * Before the fix (PR #4628), the schema-serde event-stream path skipped the
+ * Before the fix, the schema-serde event-stream path skipped the
  * `MutateOutput` customization emitted by [BaseRequestIdDecorator], so
  * `output.request_id()` always returned `None` even when the service set
  * `x-amzn-requestid`.
@@ -34,7 +36,7 @@ class EventStreamRequestIdTest {
         val model =
             """
             $PREFIX
-            namespace test
+            namespace smithy.rust.codegen.test.schemaheaders
 
             use aws.api#service
             use aws.auth#sigv4
@@ -101,6 +103,9 @@ class EventStreamRequestIdTest {
     @Test
     fun `request_id is populated on event stream responses`() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
+            check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(context)) {
+                "this test must exercise the schema-exclusive event-stream path"
+            }
             rustCrate.integrationTest("event_stream_request_id") {
                 tokioTest("request_id_is_set_from_x_amzn_requestid_header") {
                     val rc = context.runtimeConfig

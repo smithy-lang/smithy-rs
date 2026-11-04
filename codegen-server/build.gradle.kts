@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-
 plugins {
     id("smithy-rs.kotlin-conventions")
     id("smithy-rs.publishing-conventions")
@@ -30,4 +28,50 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
+}
+
+// Embed the artifact version so generated schema crates can record it separately from the source commit.
+val generatedResourcesDir = layout.buildDirectory.dir("generated/resources")
+val generateServerCodegenVersion by tasks.registering {
+    val codegenVersion = project.version.toString()
+    inputs.property("codegenVersion", codegenVersion)
+    outputs.dir(generatedResourcesDir)
+    doLast {
+        val versionFile =
+            generatedResourcesDir.get()
+                .file("software/amazon/smithy/rust/codegen/server/smithy/codegen-release.txt").asFile
+        versionFile.parentFile.mkdirs()
+        versionFile.writeText(codegenVersion)
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(generatedResourcesDir)
+}
+
+tasks.processResources {
+    dependsOn(generateServerCodegenVersion)
+}
+
+tasks.named("sourcesJar").configure {
+    dependsOn(generateServerCodegenVersion)
+}
+
+// CI keeps focused codegen regressions; full legacy/schema comparisons run separately.
+tasks.test {
+    if (providers.gradleProperty("excludeServerCompatibilityTests").map { it.toBoolean() }.getOrElse(false)) {
+        useJUnitPlatform {
+            excludeTags("server-compatibility")
+        }
+    }
+}
+
+val compatibilityTest by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Runs the server legacy/schema compatibility comparisons excluded from CI."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("server-compatibility")
+    }
 }

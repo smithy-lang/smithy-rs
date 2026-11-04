@@ -1,0 +1,40 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#S": {
+      "type": "service",
+      "version": "1",
+      "operations": [
+        {
+          "target": "ex#Op"
+        }
+      ],
+      "rename": {
+        "other#Name": "OtherName"
+      }
+    },
+    "ex#Op": {
+      "type": "operation",
+      "input": {
+        "target": "ex#In"
+      }
+    },
+    "ex#In": {
+      "type": "structure",
+      "members": {
+        "a": {
+          "target": "ex#Name"
+        },
+        "b": {
+          "target": "other#Name"
+        }
+      }
+    },
+    "ex#Name": {
+      "type": "string"
+    },
+    "other#Name": {
+      "type": "string"
+    }
+  }
+}

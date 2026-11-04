@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "1.9.4"
+version = "1.10.2"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -10,15 +10,16 @@ rust-version = "1.94.1"
 
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
-http-02x = ["dep:http-02x", "dep:http-body-04x"]
+# `aws-smithy-types/http-body-0-4-x` gives `SdkBody: http_body_04x::Body`, which the
+# `AwsChunkedBody` 0.4 impl needs. Previously inherited transitively from `aws-smithy-runtime`.
+http-02x = ["dep:http-02x", "dep:http-body-04x", "aws-smithy-types/http-body-0-4-x"]
 http-1x = []
 test-util = ["dep:regex-lite"]
 sigv4a = ["aws-sigv4/sigv4a"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-# TODO(httpRefactor): Remove the http0-compat feature
-aws-sigv4 = { path = "../aws-sigv4", features = ["http0-compat"] }
+aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
@@ -37,7 +38,7 @@ percent-encoding = "2.3.1"
 pin-project-lite = "0.2.14"
 regex-lite = { version = "0.1.5", optional = true }
 tracing = "0.1.44"
-uuid = { version = "1" }
+uuid = { version = "1.1.2" }
 
 [dev-dependencies]
 arbitrary = "1.3"
@@ -51,11 +52,11 @@ convert_case = "0.6.0"
 futures-util = { version = "0.3.29", default-features = false }
 http-body-util = "0.1.3"
 proptest = "1.2"
-serde = { version = "1", features = ["derive"]}
-serde_json = "1"
+serde = { version = "1.0.228", features = ["derive"]}
+serde_json = "1.0.146"
 tokio = { version = "1.49.0", features = ["macros", "rt", "time"] }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-tracing-test = "0.2.4"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-test = "0.2.5"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -6,8 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
@@ -95,7 +93,7 @@ class CborSerializerGeneratorTest {
     }
 
     @Test
-    fun `throws CodegenException when serializing BigDecimal with CBOR`() {
+    fun `generates serializer for BigDecimal with CBOR`() {
         val model = OperationNormalizer.transform(modelWithBigDecimal)
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
@@ -108,24 +106,19 @@ class CborSerializerGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        val exception =
-            assertThrows<CodegenException> {
-                project.lib {
-                    unitTest(
-                        "cbor_serializer",
-                        """
-                        let input = crate::test_input::TestOpInput::builder().build();
-                        let _serialized = ${format(operationGenerator!!)}(&input);
-                        """,
-                    )
-                }
+        project.lib {
+            unitTest(
+                "cbor_big_decimal_serializer",
+                """
+                let input = crate::test_input::TestOpInput::builder().build().unwrap();
+                let _serialized = ${format(operationGenerator!!)}(&input);
+                """,
+            )
+        }
 
-                model.lookup<OperationShape>("test#TestOp").inputShape(model).also { input ->
-                    input.renderWithModelBuilder(model, symbolProvider, project)
-                }
-                project.compileAndTest()
-            }
-
-        assert(exception.message!!.contains("BigDecimal is not supported with Concise Binary Object Representation (CBOR)"))
+        model.lookup<OperationShape>("test#TestOp").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
     }
 }

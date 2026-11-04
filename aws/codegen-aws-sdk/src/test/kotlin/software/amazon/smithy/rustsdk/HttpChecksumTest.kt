@@ -172,12 +172,21 @@ internal class HttpChecksumTest {
             // Note about the `//#{PresigningMarker}` below. The `RequestChecksumInterceptor` relies on the `PresigningMarker` type from
             // the presigning inlineable. The decorator for that inlineable doesn't play nicely with the test model from the SEP, so we
             // use this as a kind of blunt way to include the presigning inlineable without actually wiring it up with the model.
-            // We also have to ensure the `http-1x` feature the presigning inlineable expects is present on the generated crate.
+            // We also have to ensure the `http-1x` and `http-02x` features the presigning inlineable
+            // expects are present on the generated crate. `presigning.rs` is `#[cfg]`-gated on
+            // `http-02x` for its deprecated http 0.2.x conversions.
             rustCrate.mergeFeature(
                 Feature(
                     "http-1x",
                     default = false,
                     listOf("aws-smithy-runtime-api/http-1x"),
+                ),
+            )
+            rustCrate.mergeFeature(
+                Feature(
+                    "http-02x",
+                    default = false,
+                    listOf("dep:http", "aws-smithy-runtime-api/http-02x"),
                 ),
             )
 

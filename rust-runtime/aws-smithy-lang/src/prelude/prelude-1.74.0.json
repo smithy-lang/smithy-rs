@@ -1,0 +1,2579 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.api#AuthTraitReference": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "A string that must target an auth trait.",
+                "smithy.api#idRef": {
+                    "selector": "[trait|authDefinition]"
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#BigDecimal": {
+            "type": "bigDecimal"
+        },
+        "smithy.api#BigInteger": {
+            "type": "bigInteger"
+        },
+        "smithy.api#Blob": {
+            "type": "blob"
+        },
+        "smithy.api#Boolean": {
+            "type": "boolean"
+        },
+        "smithy.api#Byte": {
+            "type": "byte"
+        },
+        "smithy.api#ClosureId": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "An identifier for a closure. This matches the shape id format.",
+                "smithy.api#idRef": {
+                    "failWhenMissing": false
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#CommonMark": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "A string containing CommonMark-formatted text.",
+                "smithy.api#externalDocumentation": {
+                    "CommonMark Specification": "https://commonmark.org/"
+                },
+                "smithy.api#mediaType": "text/markdown; charset=UTF-8; variant=CommonMark",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Document": {
+            "type": "document"
+        },
+        "smithy.api#Double": {
+            "type": "double"
+        },
+        "smithy.api#EnumConstantBodyName": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "The optional name or label of the enum constant value.\n\nThis property is used in code generation to provide a label for\neach enum value. No two enums can have the same 'name' value.",
+                "smithy.api#pattern": "^[a-zA-Z_]+[a-zA-Z_0-9]*$",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#EnumDefinition": {
+            "type": "structure",
+            "members": {
+                "value": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the enum value that is sent over the wire.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "name": {
+                    "target": "smithy.api#EnumConstantBodyName",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the name that is used in code to represent this variant."
+                    }
+                },
+                "documentation": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Provides optional documentation about the enum constant value."
+                    }
+                },
+                "tags": {
+                    "target": "smithy.api#NonEmptyStringList",
+                    "traits": {
+                        "smithy.api#documentation": "Applies a list of tags to the enum constant."
+                    }
+                },
+                "deprecated": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "Whether the enum value should be considered deprecated."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "An enum definition for the enum trait.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Example": {
+            "type": "structure",
+            "members": {
+                "title": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "documentation": {
+                    "target": "smithy.api#String"
+                },
+                "input": {
+                    "target": "smithy.api#Document"
+                },
+                "output": {
+                    "target": "smithy.api#Document"
+                },
+                "error": {
+                    "target": "smithy.api#ExampleError"
+                },
+                "allowConstraintErrors": {
+                    "target": "smithy.api#Boolean"
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ExampleError": {
+            "type": "structure",
+            "members": {
+                "shapeId": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#idRef": {
+                            "selector": "structure[trait|error]"
+                        }
+                    }
+                },
+                "content": {
+                    "target": "smithy.api#Document"
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Float": {
+            "type": "float"
+        },
+        "smithy.api#HttpApiKeyLocations": {
+            "type": "enum",
+            "members": {
+                "HEADER": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "header"
+                    }
+                },
+                "QUERY": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "query"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#IdempotentErrors": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#idRef": {
+                        "selector": "[trait|error]"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Identifier": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "A string matching the `Identifier` ABNF production used for shape names.",
+                "smithy.api#pattern": "^(_+[a-zA-Z0-9]|[a-zA-Z])\\w*$",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Integer": {
+            "type": "integer"
+        },
+        "smithy.api#LocalMixinTrait": {
+            "type": "string",
+            "traits": {
+                "smithy.api#idRef": {
+                    "selector": "[trait|trait]",
+                    "failWhenMissing": true,
+                    "errorMessage": "Strings provided to the localTraits property of a mixin trait\nmust target a valid trait."
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#LocalMixinTraitList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#LocalMixinTrait"
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Long": {
+            "type": "long"
+        },
+        "smithy.api#Namespaces": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#documentation": "A list of Smithy namespaces.",
+                "smithy.api#private": {},
+                "smithy.api#uniqueItems": {}
+            }
+        },
+        "smithy.api#NonEmptyString": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#NonEmptyStringList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#NonEmptyStringMap": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "value": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#PrimitiveBoolean": {
+            "type": "boolean",
+            "traits": {
+                "smithy.api#default": false
+            }
+        },
+        "smithy.api#PrimitiveByte": {
+            "type": "byte",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#PrimitiveDouble": {
+            "type": "double",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#PrimitiveFloat": {
+            "type": "float",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#PrimitiveInteger": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#PrimitiveLong": {
+            "type": "long",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#PrimitiveShort": {
+            "type": "short",
+            "traits": {
+                "smithy.api#default": 0
+            }
+        },
+        "smithy.api#Reference": {
+            "type": "structure",
+            "members": {
+                "resource": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The shape ID of the referenced resource.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "ids": {
+                    "target": "smithy.api#NonEmptyStringMap",
+                    "traits": {
+                        "smithy.api#documentation": "Defines a mapping of each resource identifier name to a structure member\nname that provides its value. Each key in the map MUST refer to one of the\nidentifier names in the identifiers property of the resource, and each\nvalue in the map MUST refer to a valid structure member name that targets\na string shape."
+                    }
+                },
+                "service": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Providing a service makes the reference specific to a particular binding\nof the resource to a service. When omitted, the reference is late-bound to\na service, meaning the reference is assumed to be a reference to the\nresource bound to the service currently in use by the client or server."
+                    }
+                },
+                "rel": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the semantics of the relationship. The rel property SHOULD\ncontain a link relation as defined in RFC 5988#section-4."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Renames": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#documentation": "The id of the shape to rename.",
+                    "smithy.api#idRef": {
+                        "failWhenMissing": true,
+                        "selector": ":not(:is(member, service, resource, operation))",
+                        "errorMessage": "Renames must target shapes that are in the model and must not target services, resources, operations, or members."
+                    }
+                }
+            },
+            "value": {
+                "target": "smithy.api#Identifier",
+                "traits": {
+                    "smithy.api#documentation": "The new name for the shape."
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Disambiguates shape name conflicts in a closure. Map keys are\nshape ids contained in the closure, and map values are the\ndisambiguated shape names (without a namespace) to use in the\ncontext of the closure. Each given map value MUST match the\n`Identifier` production used for shape ids. Renaming a shape\ndoes not give the shape a new shape id.\n\n- No renamed shape name can case-insensitively match any other\n  renamed shape name or the name of a non-renamed shape contained\n  in the closure.\n- Member shapes MAY NOT be renamed.\n- Service, resource, and operation shapes MAY NOT be renamed.\n  Renaming shapes is intended for incidental naming conflicts,\n  not for renaming the fundamental concepts of an API.\n- Shapes from other namespaces marked as private MAY be renamed.\n- A rename MUST use a name that is case-sensitively different\n  from the original shape id name.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#RequestCompressionEncodingsList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines the priority-ordered list of compression algorithms supported by\nthe service operation.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ResourceDeletionBinding": {
+            "type": "structure",
+            "members": {
+                "resource": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The shape ID of the deleted resource.",
+                        "smithy.api#idRef": {
+                            "selector": "resource",
+                            "failWhenMissing": true
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "identifiers": {
+                    "target": "smithy.api#ResourceMemberBindings",
+                    "traits": {
+                        "smithy.api#documentation": "Explicit map of resource identifier name to a JMESPath locator for its\nvalue in the operation input."
+                    }
+                },
+                "identifiersFrom": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Structural JMESPath pointing at a nested structure or projection from\nwhose members identifiers are inferred by name."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "A binding that associates a deleted resource with an operation and optionally\ndeclares where to find its identifiers. Deletion binds no properties: a\nresource is deleted by its identifier alone.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ResourceLifecycleBinding": {
+            "type": "structure",
+            "members": {
+                "resource": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The shape ID of the affected resource.",
+                        "smithy.api#idRef": {
+                            "selector": "resource",
+                            "failWhenMissing": true
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "identifiers": {
+                    "target": "smithy.api#ResourceMemberBindings",
+                    "traits": {
+                        "smithy.api#documentation": "Explicit map of resource identifier name to a JMESPath locator for its\nvalue in the operation input or output."
+                    }
+                },
+                "identifiersFrom": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Structural JMESPath pointing at a nested structure or projection from\nwhose members identifiers are inferred by name."
+                    }
+                },
+                "properties": {
+                    "target": "smithy.api#ResourceMemberBindings",
+                    "traits": {
+                        "smithy.api#documentation": "Explicit map of resource property name to a JMESPath locator for its\nvalue in the operation input or output."
+                    }
+                },
+                "propertiesFrom": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Structural JMESPath pointing at a nested structure or projection from\nwhose members properties are inferred by name."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "A binding that associates a resource with an operation lifecycle effect\nand optionally declares where to find resource identifiers.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ResourceMemberBinding": {
+            "type": "structure",
+            "members": {
+                "path": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "A JMESPath expression that locates the value in the operation input or\noutput.",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Locates the value of a single resource identifier or property within an\noperation's input or output using a JMESPath expression.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ResourceMemberBindings": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "value": {
+                "target": "smithy.api#ResourceMemberBinding"
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Severity": {
+            "type": "enum",
+            "members": {
+                "NOTE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "A minor infraction occurred.",
+                        "smithy.api#enumValue": "NOTE"
+                    }
+                },
+                "WARNING": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "An infraction occurred that needs attention.",
+                        "smithy.api#enumValue": "WARNING"
+                    }
+                },
+                "DANGER": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "An infraction occurred that must be resolved.",
+                        "smithy.api#enumValue": "DANGER"
+                    }
+                },
+                "ERROR": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "An unrecoverable infraction occurred.",
+                        "smithy.api#enumValue": "ERROR"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ShapeClosure": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#ClosureId",
+                    "traits": {
+                        "smithy.api#documentation": "The namespaced identifier of the closure. Used by consumers to refer\nto this closure. The id follows the same format as a shape id, MUST\nbe unique across all closures in the model, and MUST NOT refer to a\nshape that exists in the model.\n\nThis identifier is not intended to be semantically significant. The\nrequirement for a namespace is intended to reduce the chance for naming\ncollisions, not to suggest the namespace that any generated artifacts\nmust be generated into.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "includeNamespaces": {
+                    "target": "smithy.api#Namespaces",
+                    "traits": {
+                        "smithy.api#default": [],
+                        "smithy.api#documentation": "Namespaces whose shapes are included in the closure."
+                    }
+                },
+                "includeBySelector": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "A Smithy selector whose matched shapes are included in the closure.",
+                        "smithy.api#length": {
+                            "min": 1
+                        }
+                    }
+                },
+                "rename": {
+                    "target": "smithy.api#Renames",
+                    "traits": {
+                        "smithy.api#default": {},
+                        "smithy.api#documentation": "Disambiguates shape name conflicts in the closure. Map keys are\nshape ids contained in the closure, and map values are the\ndisambiguated shape names (without a namespace) to use in the\ncontext of the closure. Each given map value MUST match the\n`Identifier` production used for shape ids. Renaming a shape\ndoes not give the shape a new shape id.\n\n- No renamed shape name can case-insensitively match any other\n  renamed shape name or the name of a non-renamed shape contained\n  in the closure.\n- Member shapes MAY NOT be renamed.\n- Service, resource, and operation shapes MAY NOT be renamed.\n  Renaming shapes is intended for incidental naming conflicts,\n  not for renaming the fundamental concepts of an API.\n- Shapes from other namespaces marked as private MAY be renamed.\n- A rename MUST use a name that is case-sensitively different\n  from the original shape id name."
+                    }
+                },
+                "documentation": {
+                    "target": "smithy.api#CommonMark",
+                    "traits": {
+                        "smithy.api#documentation": "Documentation for the shape closure in CommonMark format."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "A defined closure of shapes that consumers like code generators can\nreference by id.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#ShapeClosures": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ShapeClosure"
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines named closures of shapes that consumers like code generators can\nreference by id.",
+                "smithy.api#metadata": {
+                    "key": "shapeClosures"
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Short": {
+            "type": "short"
+        },
+        "smithy.api#String": {
+            "type": "string"
+        },
+        "smithy.api#StructurallyExclusive": {
+            "type": "enum",
+            "members": {
+                "MEMBER": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Only a single member of a shape can be marked with the trait.",
+                        "smithy.api#enumValue": "member"
+                    }
+                },
+                "TARGET": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Only a single member of a shape can target a shape marked with\nthis trait.",
+                        "smithy.api#enumValue": "target"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Timestamp": {
+            "type": "timestamp"
+        },
+        "smithy.api#TraitChangeType": {
+            "type": "enum",
+            "members": {
+                "UPDATE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Emit when a trait is modified.",
+                        "smithy.api#enumValue": "update"
+                    }
+                },
+                "ADD": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Emit when a trait or value is added that previously did not exist.",
+                        "smithy.api#enumValue": "add"
+                    }
+                },
+                "REMOVE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Emit when a trait or value is removed.",
+                        "smithy.api#enumValue": "remove"
+                    }
+                },
+                "PRESENCE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Emit when a trait is added or removed.",
+                        "smithy.api#enumValue": "presence"
+                    }
+                },
+                "ANY": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Emit when any change occurs.",
+                        "smithy.api#enumValue": "any"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#TraitDiffRule": {
+            "type": "structure",
+            "members": {
+                "path": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Defines a JSON Pointer to the value to evaluate."
+                    }
+                },
+                "change": {
+                    "target": "smithy.api#TraitChangeType",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the type of change that is not allowed.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "severity": {
+                    "target": "smithy.api#Severity",
+                    "traits": {
+                        "smithy.api#default": "ERROR",
+                        "smithy.api#documentation": "Defines the severity of the change. Defaults to ERROR if not defined."
+                    }
+                },
+                "message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Provides a reason why the change is potentially backward incompatible."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#TraitDiffRules": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#TraitDiffRule"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#TraitShapeId": {
+            "type": "string",
+            "traits": {
+                "smithy.api#idRef": {
+                    "failWhenMissing": true,
+                    "selector": "[trait|trait]"
+                },
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#TraitShapeIdList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#TraitShapeId"
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#TraitValidator": {
+            "type": "structure",
+            "members": {
+                "selector": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "A Smithy selector that receives only the shape to which the `traitValidators` trait is applied.\nAny shape yielded by the selector is considered incompatible with the trait.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "A message to use when a matching shape is found."
+                    }
+                },
+                "severity": {
+                    "target": "smithy.api#Severity",
+                    "traits": {
+                        "smithy.api#default": "ERROR",
+                        "smithy.api#documentation": "The severity to use when a matching shape is found."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#Unit": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#unitType": {}
+            }
+        },
+        "smithy.api#UnstableFeatureInfo": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The message to customers about the unstable feature."
+                    }
+                },
+                "reason": {
+                    "target": "smithy.api#UnstableReason",
+                    "traits": {
+                        "smithy.api#documentation": "The reason why this feature is unstable."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "The metadata describing a single unstable feature.",
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#UnstableReason": {
+            "type": "enum",
+            "members": {
+                "PREVIEW": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "This feature is under preview.",
+                        "smithy.api#enumValue": "PREVIEW"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#private": {}
+            }
+        },
+        "smithy.api#addedDefault": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the default trait was added to a member.",
+                "smithy.api#trait": {
+                    "selector": "structure > member [trait|default]",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#auth": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#AuthTraitReference"
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines the ordered list of supported authentication schemes.",
+                "smithy.api#trait": {
+                    "selector": ":is(service, operation)"
+                },
+                "smithy.api#uniqueItems": {}
+            }
+        },
+        "smithy.api#authDefinition": {
+            "type": "structure",
+            "members": {
+                "traits": {
+                    "target": "smithy.api#TraitShapeIdList",
+                    "traits": {
+                        "smithy.api#documentation": "The list of traits that auth implementations must understand in order\nto successfully use the scheme."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Marks a trait as an auth scheme defining trait.\n\nThe targeted trait must only be applied to service shapes or operation\nshapes, must be a structure, and must have the `trait` trait.",
+                "smithy.api#trait": {
+                    "selector": "structure[trait|trait]",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#box": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Used only in Smithy 1.0 to indicate that a shape is boxed.\n\nThis trait cannot be used in Smithy 2.0 models. When a boxed shape is the\ntarget of a member, the member may or may not contain a value, and the\nmember has no default value.",
+                "smithy.api#trait": {
+                    "selector": ":test(boolean, byte, short, integer, long, float, double,\nmember > :test(boolean, byte, short, integer, long, float, double))"
+                }
+            }
+        },
+        "smithy.api#clientOptional": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Requires that non-authoritative generators like clients treat a structure\nmember as nullable regardless of if the member is also marked with the\nrequired trait.",
+                "smithy.api#trait": {
+                    "selector": "structure > member"
+                }
+            }
+        },
+        "smithy.api#cors": {
+            "type": "structure",
+            "members": {
+                "origin": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#default": "*",
+                        "smithy.api#documentation": "The origin from which browser script-originating requests will be\nallowed.\n\nThe `origin` and `origins` members are mutually exclusive."
+                    }
+                },
+                "origins": {
+                    "target": "smithy.api#NonEmptyStringMap",
+                    "traits": {
+                        "smithy.api#documentation": "A map of named origins from which browser script-originating requests\nwill be allowed. Each key is a user-defined name for the origin, and\neach value is the origin URL. This allows for environment-aware origin\nselection (e.g., selecting an origin based on a deployment stage).\n\nThe `origin` and `origins` members are mutually exclusive."
+                    }
+                },
+                "maxAge": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#default": 600,
+                        "smithy.api#documentation": "The maximum number of seconds for which browsers are allowed to cache\nthe results of a preflight OPTIONS request.\n\nDefaults to 600, the maximum age permitted by several browsers.\nSet to -1 to disable caching entirely."
+                    }
+                },
+                "additionalAllowedHeaders": {
+                    "target": "smithy.api#NonEmptyStringList",
+                    "traits": {
+                        "smithy.api#documentation": "The names of headers that should be included in the\nAccess-Control-Allow-Headers header in responses to preflight OPTIONS\nrequests. This list will be used in addition to the names of all\nrequest headers bound to an input data member via the httpHeader, as\nwell as any headers required by the protocol or authentication scheme."
+                    }
+                },
+                "additionalExposedHeaders": {
+                    "target": "smithy.api#NonEmptyStringList",
+                    "traits": {
+                        "smithy.api#documentation": "The names of headers that should be included in the\nAccess-Control-Expose-Headers header in all responses sent by the\nservice. This list will be used in addition to the names of all\nrequest headers bound to an output data member via the httpHeader,\nas well as any headers required by the protocol or authentication\nscheme."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines how a service supports cross-origin resource sharing.",
+                "smithy.api#trait": {
+                    "selector": "service",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#createsResources": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ResourceLifecycleBinding"
+            },
+            "traits": {
+                "smithy.api#documentation": "Declares which resources an operation creates and where to find their\nidentifiers in the operation output.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "path": "/member",
+                            "message": "Removing a resource from @createsResources breaks consumers that depend on this lifecycle declaration."
+                        },
+                        {
+                            "change": "update",
+                            "path": "/member/resource",
+                            "message": "Changing the resource in a @createsResources entry is a breaking change."
+                        }
+                    ]
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#default": {
+            "type": "document",
+            "traits": {
+                "smithy.api#documentation": "Provides a structure member with a default value. When added to root\nlevel shapes, requires that every targeting structure member defines the\nsame default value on the member or sets a default of null.\n\nThis trait can currently only be used in Smithy 2.0 models.",
+                "smithy.api#trait": {
+                    "selector": ":is(simpleType, list, map, structure > member :test(> :is(simpleType, list, map)))"
+                }
+            }
+        },
+        "smithy.api#deletesResources": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ResourceDeletionBinding"
+            },
+            "traits": {
+                "smithy.api#documentation": "Declares which resources an operation deletes and where to find their\nidentifiers in the operation input.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "path": "/member",
+                            "message": "Removing a resource from @deletesResources breaks consumers that depend on this lifecycle declaration."
+                        },
+                        {
+                            "change": "update",
+                            "path": "/member/resource",
+                            "message": "Changing the resource in a @deletesResources entry is a breaking change."
+                        }
+                    ]
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#deprecated": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The reason for deprecation."
+                    }
+                },
+                "since": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "A description of when the shape was deprecated (e.g., a date or\nversion)."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Marks a shape or member as deprecated.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#documentation": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Adds documentation to a shape or member using CommonMark syntax.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#endpoint": {
+            "type": "structure",
+            "members": {
+                "hostPrefix": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "A host prefix pattern for the operation.\n\nLabels defined in the host pattern are used to bind top-level\noperation input members to the host.",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Configures a custom operation endpoint.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#enum": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#EnumDefinition"
+            },
+            "traits": {
+                "smithy.api#deprecated": {
+                    "message": "The enum trait is replaced by the enum shape in Smithy 2.0",
+                    "since": "2.0"
+                },
+                "smithy.api#documentation": "Constrains the acceptable values of a string to a fixed set\nof constant values.",
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#trait": {
+                    "selector": "string :not(enum)",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#enumValue": {
+            "type": "document",
+            "traits": {
+                "smithy.api#documentation": "Defines the value of an enum member.",
+                "smithy.api#tags": [
+                    "diff.error.const"
+                ],
+                "smithy.api#trait": {
+                    "selector": ":is(enum, intEnum) > member"
+                }
+            }
+        },
+        "smithy.api#error": {
+            "type": "enum",
+            "members": {
+                "CLIENT": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "client"
+                    }
+                },
+                "SERVER": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "server"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that a structure shape represents an error.\n\nAll shapes referenced by the errors list of an operation MUST be targeted\nwith this trait.",
+                "smithy.api#trait": {
+                    "selector": "structure",
+                    "conflicts": [
+                        "smithy.api#trait"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#eventHeader": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Marks a member as a header of an event.",
+                "smithy.api#trait": {
+                    "selector": "structure >\n:test(member > :test(boolean, byte, short, integer, long, blob, string, timestamp))",
+                    "conflicts": [
+                        "smithy.api#eventPayload"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#eventPayload": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Marks a member as the payload of an event.",
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member > :test(blob, string, structure, union))",
+                    "conflicts": [
+                        "smithy.api#eventHeader"
+                    ],
+                    "structurallyExclusive": "member",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#examples": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#Example"
+            },
+            "traits": {
+                "smithy.api#documentation": "Provides example inputs and outputs for operations.",
+                "smithy.api#trait": {
+                    "selector": "operation"
+                }
+            }
+        },
+        "smithy.api#externalDocumentation": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "value": {
+                "target": "smithy.api#NonEmptyString"
+            },
+            "traits": {
+                "smithy.api#documentation": "Provides a link to additional documentation.",
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#hostLabel": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Binds a top-level operation input structure member to a label\nin the hostPrefix of an endpoint trait.",
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member[trait|required] > string)",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#http": {
+            "type": "structure",
+            "members": {
+                "method": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The HTTP method of the operation.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "uri": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The URI pattern of the operation.\n\nLabels defined in the URI pattern are used to bind operation input\nmembers to the URI.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "code": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#default": 200,
+                        "smithy.api#range": {
+                            "min": 100,
+                            "max": 999
+                        }
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Configures the HTTP bindings of an operation.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        },
+                        {
+                            "path": "/method",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/uri",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/code",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/code",
+                            "change": "presence",
+                            "severity": "DANGER",
+                            "message": "Adding or removing is backward compatible only if the value is the default value of 200"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpApiKeyAuth": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the name of the HTTP header or query string parameter that\ncontains the API key.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "in": {
+                    "target": "smithy.api#HttpApiKeyLocations",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the location of where the key is serialized. This value can\nbe set to `\"header\"` or `\"query\"`.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "scheme": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the security scheme to use in the ``Authorization`` header.\nThis can only be set if the \"in\" property is set to ``header``."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#authDefinition": {},
+                "smithy.api#documentation": "An HTTP-specific authentication scheme that sends an arbitrary API key in\na header or query string parameter.",
+                "smithy.api#trait": {
+                    "selector": "service",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpBasicAuth": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#authDefinition": {},
+                "smithy.api#documentation": "HTTP Basic Authentication as defined in [RFC 2617](https://tools.ietf.org/html/rfc2617.html).",
+                "smithy.api#externalDocumentation": {
+                    "RFC 2617": "https://tools.ietf.org/html/rfc2617.html"
+                },
+                "smithy.api#trait": {
+                    "selector": "service",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpBearerAuth": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#authDefinition": {},
+                "smithy.api#documentation": "HTTP Bearer Authentication as defined in [RFC 6750](https://tools.ietf.org/html/rfc6750.html).",
+                "smithy.api#externalDocumentation": {
+                    "RFC 6750": "https://tools.ietf.org/html/rfc6750.html"
+                },
+                "smithy.api#trait": {
+                    "selector": "service",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpChecksumRequired": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Marks an operation as requiring checksum in its HTTP request.\nBy default, the checksum used for a service is a MD5 checksum\npassed in the Content-MD5 header.",
+                "smithy.api#trait": {
+                    "selector": "operation"
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#httpDigestAuth": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#authDefinition": {},
+                "smithy.api#documentation": "HTTP Digest Authentication as defined in [RFC 2617](https://tools.ietf.org/html/rfc2617.html).",
+                "smithy.api#externalDocumentation": {
+                    "RFC 2617": "https://tools.ietf.org/html/rfc2617.html"
+                },
+                "smithy.api#trait": {
+                    "selector": "service",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpError": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#documentation": "Defines an HTTP response code for an operation error.",
+                "smithy.api#trait": {
+                    "selector": "structure[trait|error]",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpHeader": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Binds a structure member to an HTTP header.",
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member > :test(boolean, number, string, timestamp,\nlist > member > :test(boolean, number, string, timestamp)))",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpPrefixHeaders",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpLabel": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Binds an operation input structure member to an HTTP label.",
+                "smithy.api#trait": {
+                    "selector": "structure > member[trait|required] :test(> :test(string, number, boolean, timestamp))",
+                    "conflicts": [
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpPrefixHeaders",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpPayload": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Binds a single structure member to the body of an HTTP request.",
+                "smithy.api#trait": {
+                    "selector": "structure > member",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpPrefixHeaders",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "structurallyExclusive": "member",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpPrefixHeaders": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Binds a map of key-value pairs to prefixed HTTP headers.",
+                "smithy.api#trait": {
+                    "selector": "structure > member\n:test(> map :not([trait|sparse]) > member[id|member=value] > string)",
+                    "structurallyExclusive": "member",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpQuery": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Binds an operation input structure member to a query string parameter.",
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#trait": {
+                    "selector": "structure > member\n:test(> :test(string, number, boolean, timestamp),\n> list > member > :test(string, number, boolean, timestamp))",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpPrefixHeaders",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpQueryParams": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Binds an operation input structure member to the HTTP query string.",
+                "smithy.api#trait": {
+                    "selector": "structure > member\n:test(> map > member[id|member=value] > :test(string, list > member > string))",
+                    "structurallyExclusive": "member",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpResponseCode",
+                        "smithy.api#httpPrefixHeaders"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#httpResponseCode": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the structure member represents the HTTP response\nstatus code. The value MAY differ from the HTTP status code provided\non the response.",
+                "smithy.api#trait": {
+                    "selector": "structure :not([trait|input]) > member :test(> integer)",
+                    "structurallyExclusive": "member",
+                    "conflicts": [
+                        "smithy.api#httpLabel",
+                        "smithy.api#httpQuery",
+                        "smithy.api#httpHeader",
+                        "smithy.api#httpPrefixHeaders",
+                        "smithy.api#httpPayload",
+                        "smithy.api#httpQueryParams"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#idRef": {
+            "type": "structure",
+            "members": {
+                "selector": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#default": "*",
+                        "smithy.api#documentation": "Defines the selector that the resolved shape, if found, MUST match."
+                    }
+                },
+                "failWhenMissing": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "When set to `true`, the shape ID MUST target a shape that can be\nfound in the model."
+                    }
+                },
+                "errorMessage": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Defines a custom error message to use when the shape ID cannot be\nfound or does not match the selector.\n\nA default message is generated when errorMessage is not defined."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that a string value MUST contain a valid shape ID.\n\nThe provided shape ID MAY be absolute or relative to the shape to which\nthe trait is applied. A relative shape ID that does not resolve to a\nshape defined in the same namespace resolves to a shape defined in the\nprelude if the prelude shape is not marked with the private trait.",
+                "smithy.api#trait": {
+                    "selector": ":test(string, member > string)"
+                }
+            }
+        },
+        "smithy.api#idempotencyToken": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Defines the input member of an operation that is used by the server to\nidentify and discard replayed requests.",
+                "smithy.api#notProperty": {},
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member > string)",
+                    "structurallyExclusive": "member",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#idempotent": {
+            "type": "structure",
+            "members": {
+                "exists": {
+                    "target": "smithy.api#IdempotentErrors",
+                    "traits": {
+                        "smithy.api#documentation": "Describes the errors returned when the operation is called and the\nresource already exists. Applicable to create lifecycle operations.\nAn empty list indicates the operation returns a successful response."
+                    }
+                },
+                "notFound": {
+                    "target": "smithy.api#IdempotentErrors",
+                    "traits": {
+                        "smithy.api#documentation": "Describes the errors returned when the operation is called and the\nresource does not exist. Applicable to delete lifecycle operations.\nAn empty list indicates the operation returns a successful response."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that the intended effect on the server of multiple identical\nrequests with an operation is the same as the effect for a single such\nrequest.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "conflicts": [
+                        "smithy.api#readonly"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#input": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Specializes a structure for use only as the input of a single operation.",
+                "smithy.api#trait": {
+                    "selector": "structure",
+                    "conflicts": [
+                        "smithy.api#output",
+                        "smithy.api#error"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#internal": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Shapes marked with the internal trait are meant only for internal use and\nmust not be exposed to customers.",
+                "smithy.api#trait": {
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "severity": "WARNING",
+                            "message": "Removing the @internal trait makes a shape externally visible."
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#jsonName": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Allows a serialized object property name to differ from a structure member\nname used in the model.",
+                "smithy.api#trait": {
+                    "selector": ":is(structure, union) > member",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#length": {
+            "type": "structure",
+            "members": {
+                "min": {
+                    "target": "smithy.api#Long",
+                    "traits": {
+                        "smithy.api#documentation": "Integer value that represents the minimum inclusive length of a shape."
+                    }
+                },
+                "max": {
+                    "target": "smithy.api#Long",
+                    "traits": {
+                        "smithy.api#documentation": "Integer value that represents the maximum inclusive length of a shape."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Constrains a shape to minimum and maximum number of elements or size.",
+                "smithy.api#trait": {
+                    "selector": ":test(list, map, string, blob, member > :is(list, map, string, blob))"
+                }
+            }
+        },
+        "smithy.api#longPoll": {
+            "type": "structure",
+            "members": {
+                "timeoutMillis": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "The amount of time in milliseconds that a client should wait for a response.",
+                        "smithy.api#range": {
+                            "min": 1
+                        },
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that the service may not respond immediately to requests for the targeted\noperation. This can allow services more time to prepare more detailed responses or\nallow them to hold the request open as it waits for information to become\navailable.\n\nWhen making requests for an operation targeted by this trait, clients should\nwait for at least the amount of time indicated by the `timeoutMillis` member.\nIf the client's default timeout is longer, it may use the longer value.\n\nClients may allow users to configure timeouts. If a user configures a timeout\nvalue on a client, the client must use the user-configured value regardless of\nwhether it is greater or less than `timeoutMillis`. Similarly, if the user\nconfigures a timeout value for a request, clients must use that value.",
+                "smithy.api#trait": {
+                    "selector": "operation"
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#mediaType": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Describes the contents of a blob shape using a media type as defined by\nRFC 6838 (e.g., \"video/quicktime\").",
+                "smithy.api#trait": {
+                    "selector": ":is(blob, string)",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#metadata": {
+            "type": "structure",
+            "members": {
+                "key": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The metadata key to validate. Each key MUST only be defined once.",
+                        "smithy.api#length": {
+                            "min": 1
+                        },
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines a type for a metadata key.\n\nIf a matching key is defined in the model, its value will be validated\naccording to the targeted shape.\n\nThe type for any metadata key MUST only be defined once.",
+                "smithy.api#trait": {
+                    "selector": "dataType :not([trait|input]) :not([trait|output])"
+                }
+            }
+        },
+        "smithy.api#mixin": {
+            "type": "structure",
+            "members": {
+                "localTraits": {
+                    "target": "smithy.api#LocalMixinTraitList"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Makes a structure or union a mixin.",
+                "smithy.api#trait": {
+                    "selector": ":not(member)"
+                }
+            }
+        },
+        "smithy.api#nestedProperties": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Adjusts the resource property mapping of a lifecycle operation to the\ntargeted member.",
+                "smithy.api#notProperty": {},
+                "smithy.api#trait": {
+                    "selector": "operation -[input, output]-> structure > member :test(> structure, > list > member > structure)",
+                    "structurallyExclusive": "member",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#noReplace": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the put lifecycle operation of a resource can only be used\nto create a resource and cannot replace an existing resource.",
+                "smithy.api#trait": {
+                    "selector": "resource:test(-[put]->)"
+                }
+            }
+        },
+        "smithy.api#notProperty": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Explicitly excludes a member from resource property mapping or enables\nanother trait to carry the same implied meaning.",
+                "smithy.api#notProperty": {},
+                "smithy.api#trait": {
+                    "selector": ":is(operation -[input, output]-> structure > member, operation -[input, output]-> structure > member > list > member > structure > member, [trait|trait])",
+                    "breakingChanges": [
+                        {
+                            "change": "add"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#optionalAuth": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that an operation can be called without authentication.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#output": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Specializes a structure for use only as the output of a single operation.",
+                "smithy.api#trait": {
+                    "selector": "structure",
+                    "conflicts": [
+                        "smithy.api#input",
+                        "smithy.api#error"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#paginated": {
+            "type": "structure",
+            "members": {
+                "inputToken": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The name of the operation input member that represents the continuation\ntoken.\n\nWhen this value is provided as operation input, the service returns\nresults from where the previous response left off. This input member\nMUST NOT be required and MUST target a string shape."
+                    }
+                },
+                "outputToken": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The name of the operation output member that represents the\ncontinuation token.\n\nWhen this value is present in operation output, it indicates that there\nare more results to retrieve. To get the next page of results, the\nclient uses the output token as the input token of the next request.\nThis output member MUST NOT be required and MUST target a string shape."
+                    }
+                },
+                "items": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The name of a top-level output member of the operation that is the data\nthat is being paginated across many responses.\n\nThe named output member, if specified, MUST target a list or map."
+                    }
+                },
+                "pageSize": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The name of an operation input member that limits the maximum number of\nresults to include in the operation output. This input member MUST NOT\nbe required and MUST target an integer shape."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "The paginated trait indicates that an operation intentionally limits the\nnumber of results returned in a single response and that multiple\ninvocations might be necessary to retrieve all results.",
+                "smithy.api#trait": {
+                    "selector": ":is(service, operation)",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        },
+                        {
+                            "path": "/inputToken",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/outputToken",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/items",
+                            "change": "remove"
+                        },
+                        {
+                            "path": "/items",
+                            "change": "add",
+                            "severity": "NOTE"
+                        },
+                        {
+                            "path": "/items",
+                            "change": "update",
+                            "severity": "NOTE"
+                        },
+                        {
+                            "path": "/pageSize",
+                            "change": "update"
+                        },
+                        {
+                            "path": "/pageSize",
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#pattern": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Restricts string shape values to a specified regular expression.",
+                "smithy.api#trait": {
+                    "selector": ":test(string, member > string)",
+                    "breakingChanges": [
+                        {
+                            "change": "add",
+                            "severity": "WARNING",
+                            "message": "The @pattern trait should only be added if the string already had adhered to the pattern."
+                        },
+                        {
+                            "change": "update",
+                            "severity": "NOTE",
+                            "message": "Changes to the @pattern trait should generally make the string more permissive, not less."
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#private": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Prevents models defined in a different namespace from referencing the\ntargeted shape.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#property": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Configures a structure member's resource property mapping behavior.",
+                "smithy.api#trait": {
+                    "selector": "structure > member",
+                    "conflicts": [
+                        "smithy.api#resourceIdentifier"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        },
+                        {
+                            "change": "update"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#protocolDefinition": {
+            "type": "structure",
+            "members": {
+                "traits": {
+                    "target": "smithy.api#TraitShapeIdList",
+                    "traits": {
+                        "smithy.api#documentation": "The list of traits that protocol implementations must understand in\norder to successfully use the protocol."
+                    }
+                },
+                "noInlineDocumentSupport": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#deprecated": {
+                            "message": "Use the `@traitValidators` trait instead"
+                        },
+                        "smithy.api#documentation": "Set to true if inline documents are not supported by this protocol."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Marks a trait as a protocol defining trait.\n\nThe targeted trait must only be applied to service shapes, must be a\nstructure, and must have the `trait` trait.",
+                "smithy.api#trait": {
+                    "selector": "structure[trait|trait]",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#putsResources": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ResourceLifecycleBinding"
+            },
+            "traits": {
+                "smithy.api#documentation": "Declares which resources an operation creates or replaces (put semantics)\nand where to find their identifiers in the operation input.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "path": "/member",
+                            "message": "Removing a resource from @putsResources breaks consumers that depend on this lifecycle declaration."
+                        },
+                        {
+                            "change": "update",
+                            "path": "/member/resource",
+                            "message": "Changing the resource in a @putsResources entry is a breaking change."
+                        }
+                    ]
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#range": {
+            "type": "structure",
+            "members": {
+                "min": {
+                    "target": "smithy.api#BigDecimal",
+                    "traits": {
+                        "smithy.api#documentation": "Specifies the allowed inclusive minimum value."
+                    }
+                },
+                "max": {
+                    "target": "smithy.api#BigDecimal",
+                    "traits": {
+                        "smithy.api#documentation": "Specifies the allowed inclusive maximum value."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Restricts allowed values of byte, short, integer, long, float, double,\nbigDecimal, and bigInteger shapes within an acceptable lower and upper\nbound.",
+                "smithy.api#trait": {
+                    "selector": ":test(number, member > number)"
+                }
+            }
+        },
+        "smithy.api#readonly": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that an operation is effectively read-only.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "conflicts": [
+                        "smithy.api#idempotent"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#readsResources": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ResourceLifecycleBinding"
+            },
+            "traits": {
+                "smithy.api#documentation": "Declares which resources an operation reads outside the standard lifecycle\nbinding, and where to find their identifiers in the operation input.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "severity": "DANGER",
+                            "path": "/member",
+                            "message": "Removing a resource from @readsResources may break consumers that depend on this lifecycle declaration."
+                        },
+                        {
+                            "change": "update",
+                            "severity": "DANGER",
+                            "path": "/member/resource",
+                            "message": "Changing the resource in a @readsResources entry may break consumers."
+                        }
+                    ]
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#recommended": {
+            "type": "structure",
+            "members": {
+                "reason": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Provides a reason why the member is recommended."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that a structure member SHOULD be set.",
+                "smithy.api#trait": {
+                    "selector": "structure > member",
+                    "conflicts": [
+                        "smithy.api#required"
+                    ]
+                }
+            }
+        },
+        "smithy.api#references": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#Reference"
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines the resource shapes that are referenced by a string shape or a\nstructure shape and the members of the structure that provide values for\nthe identifiers of the resource.",
+                "smithy.api#trait": {
+                    "selector": ":is(structure, string)"
+                }
+            }
+        },
+        "smithy.api#requestCompression": {
+            "type": "structure",
+            "members": {
+                "encodings": {
+                    "target": "smithy.api#RequestCompressionEncodingsList",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that an operation supports compressing requests from clients to\nservices.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "severity": "DANGER",
+                            "message": "Trait was removed so newly generated clients will no longer compress requests, but the service MUST continue to support removed compression algorithms in `encodings`."
+                        },
+                        {
+                            "change": "remove",
+                            "path": "/encodings",
+                            "message": "`encodings` was removed, but is required for the requestCompression trait."
+                        },
+                        {
+                            "change": "add",
+                            "severity": "NOTE",
+                            "path": "/encodings/member",
+                            "message": "Members of `encodings` were added. Once a compression algorithm is added, the service MUST support the compression algorithm."
+                        },
+                        {
+                            "change": "remove",
+                            "severity": "DANGER",
+                            "path": "/encodings/member",
+                            "message": "Members of `encodings` were removed so newly generated clients will no longer compress requests for removed compression algorithms. The service MUST continue to support old clients by supporting removed compression algorithms."
+                        },
+                        {
+                            "change": "update",
+                            "severity": "DANGER",
+                            "path": "/encodings/member",
+                            "message": "Members of `encodings` were updated so newly generated clients will no longer compress requests for compression algorithms prior to the updates. The service MUST continue to support old clients by supporting compression algorithms prior to the updates."
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#required": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Marks a structure member as required, meaning a value for the member MUST\nbe present.",
+                "smithy.api#trait": {
+                    "selector": "structure > member"
+                }
+            }
+        },
+        "smithy.api#requiresLength": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the streaming blob must be finite and has a known size.",
+                "smithy.api#trait": {
+                    "selector": "blob[trait|streaming]",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#resourceIdentifier": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Indicates that the targeted structure member provides an identifier for\na resource.",
+                "smithy.api#length": {
+                    "min": 1
+                },
+                "smithy.api#notProperty": {},
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member[trait|required] > string)",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#retryable": {
+            "type": "structure",
+            "members": {
+                "throttling": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#documentation": "Classifies the retry as throttling."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that an error MAY be retried by the client.",
+                "smithy.api#trait": {
+                    "selector": "structure[trait|error]",
+                    "breakingChanges": [
+                        {
+                            "change": "remove"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#sensitive": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the data stored in the shape is sensitive and MUST be\nhandled with care.",
+                "smithy.api#trait": {
+                    "selector": ":not(:test(service, operation, resource, member))"
+                }
+            }
+        },
+        "smithy.api#since": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Defines the version or date in which a shape or member was added to the\nmodel.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#sparse": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Marks a list or map as sparse.",
+                "smithy.api#trait": {
+                    "selector": ":is(list, map)",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#streaming": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the data stored in the shape is very large and should not\nbe stored in memory, or that the size of the data stored in the shape is\nunknown at the start of a request. If the target is a union then the shape\nrepresents a stream of events.",
+                "smithy.api#trait": {
+                    "selector": ":is(blob, union)",
+                    "structurallyExclusive": "target",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#suppress": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#length": {
+                        "min": 1
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Suppresses validation events by ID for a given shape.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#tags": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            },
+            "traits": {
+                "smithy.api#documentation": "Tags a shape with arbitrary tag names that can be used to filter and\ngroup shapes in the model.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#timestampFormat": {
+            "type": "enum",
+            "members": {
+                "DATE_TIME": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Date time as defined by the date-time production in RFC3339 section 5.6\nwith no UTC offset (for example, 1985-04-12T23:20:50.52Z).",
+                        "smithy.api#enumValue": "date-time"
+                    }
+                },
+                "EPOCH_SECONDS": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Also known as Unix time, the number of seconds that have elapsed since\n00:00:00 Coordinated Universal Time (UTC), Thursday, 1 January 1970,\nwith decimal precision (for example, 1515531081.1234).",
+                        "smithy.api#enumValue": "epoch-seconds"
+                    }
+                },
+                "HTTP_DATE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "An HTTP date as defined by the IMF-fixdate production in\nRFC 9110#section-5.6.7 (for example, Tue, 29 Apr 2014 18:30:38 GMT).",
+                        "smithy.api#enumValue": "http-date"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {
+                    "selector": ":test(timestamp, member > timestamp)",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#title": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Defines a proper name for a shape.\n\nThis title can be used in automatically generated documentation\nand other contexts to provide a user-friendly for shapes.",
+                "smithy.api#trait": {}
+            }
+        },
+        "smithy.api#trait": {
+            "type": "structure",
+            "members": {
+                "selector": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The valid places in a model that the trait can be applied."
+                    }
+                },
+                "structurallyExclusive": {
+                    "target": "smithy.api#StructurallyExclusive",
+                    "traits": {
+                        "smithy.api#documentation": "Whether or not only a single member in a shape can have this trait.\nThis only has an effect on members of structure shapes."
+                    }
+                },
+                "conflicts": {
+                    "target": "smithy.api#NonEmptyStringList",
+                    "traits": {
+                        "smithy.api#documentation": "The traits that this trait conflicts with."
+                    }
+                },
+                "breakingChanges": {
+                    "target": "smithy.api#TraitDiffRules",
+                    "traits": {
+                        "smithy.api#documentation": "Defines the backward compatibility rules of the trait."
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Makes a shape a trait.",
+                "smithy.api#trait": {
+                    "selector": ":is(simpleType, list, map, structure, union)",
+                    "breakingChanges": [
+                        {
+                            "change": "presence"
+                        },
+                        {
+                            "path": "/structurallyExclusive",
+                            "change": "any"
+                        },
+                        {
+                            "path": "/conflicts",
+                            "change": "update",
+                            "severity": "NOTE",
+                            "message": "Adding more conflicts to a trait could cause previously written models to fail validation."
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#traitValidators": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#documentation": "The validation event ID to emit when the constraint finds an incompatible shape.",
+                    "smithy.api#length": {
+                        "min": 1
+                    }
+                }
+            },
+            "value": {
+                "target": "smithy.api#TraitValidator",
+                "traits": {
+                    "smithy.api#documentation": "The validator to apply."
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "A meta-trait used to apply validation to a specific shape in the model that a trait is applied to.\n\n`traitValidators` is a map of validation event IDs to validators to apply to a shape.\nSelectors are used to identify shapes that are incompatible with a constrained trait.\nThe shape with the targeted trait applied MUST be a valid entry point for the selector.\n\nThe following example defines a protocol that does not support document types. Each matching member found in the\nclosure of an attached shape emits a validation event:\n\n```\n@trait(selector: \"service\")\n@traitValidators(\n    \"myCustomProtocol.NoDocuments\": {\n        selector: \"~> member :test(> document)\"\n        message: \"This protocol does not support document types\"\n    }\n)\n@protocolDefinition\nstructure myCustomProtocol {}\n```",
+                "smithy.api#trait": {
+                    "selector": "[trait|trait]"
+                }
+            }
+        },
+        "smithy.api#uniqueItems": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Indicates that the items in a list MUST be unique.",
+                "smithy.api#trait": {
+                    "selector": "list :not(> member ~> :is(float, double, document))",
+                    "conflicts": [
+                        "smithy.api#sparse"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "presence",
+                            "severity": "WARNING"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#unitType": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Specializes a structure as a unit type that has no meaningful value.\nThis trait can only be applied to smithy.api#Unit, which ensures that\nonly a single Unit shape can be created.",
+                "smithy.api#trait": {
+                    "selector": "[id=smithy.api#Unit]"
+                }
+            }
+        },
+        "smithy.api#unstable": {
+            "type": "structure",
+            "members": {
+                "featureId": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "The id of the unstable feature this shape belongs to. When set, it must be defined as a key in the\n`unstableFeatures` trait of an enclosing service.",
+                        "smithy.api#length": {
+                            "max": 100
+                        }
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Indicates that the shape is unstable and could change in the future.",
+                "smithy.api#trait": {
+                    "breakingChanges": [
+                        {
+                            "path": "/featureId",
+                            "change": "add",
+                            "message": "The `@unstable` trait's `featureId` cannot be added to an existing shape. A preview feature must be declared when the shape is first introduced."
+                        },
+                        {
+                            "path": "/featureId",
+                            "change": "update",
+                            "message": "The `@unstable` trait's `featureId` cannot be changed after setting."
+                        },
+                        {
+                            "path": "/featureId",
+                            "change": "remove",
+                            "message": "The `@unstable` trait's `featureId` cannot be removed after setting. Please remove the whole `unstable` trait if the shape is GA."
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#unstableFeatures": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#documentation": "The id of the unstable feature.",
+                    "smithy.api#length": {
+                        "max": 100
+                    }
+                }
+            },
+            "value": {
+                "target": "smithy.api#UnstableFeatureInfo",
+                "traits": {
+                    "smithy.api#documentation": "The metadata describing the unstable feature."
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Defines the preview features offered by a service, keyed by `featureId`. Applied to the service shape.",
+                "smithy.api#trait": {
+                    "selector": "service"
+                }
+            }
+        },
+        "smithy.api#updatesResources": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#ResourceLifecycleBinding"
+            },
+            "traits": {
+                "smithy.api#documentation": "Declares which resources an operation updates outside the standard lifecycle\nbinding, and where to find their identifiers in the operation input.",
+                "smithy.api#trait": {
+                    "selector": "operation",
+                    "breakingChanges": [
+                        {
+                            "change": "remove",
+                            "severity": "DANGER",
+                            "path": "/member",
+                            "message": "Removing a resource from @updatesResources may break consumers that depend on this lifecycle declaration."
+                        },
+                        {
+                            "change": "update",
+                            "severity": "DANGER",
+                            "path": "/member/resource",
+                            "message": "Changing the resource in a @updatesResources entry may break consumers."
+                        }
+                    ]
+                },
+                "smithy.api#unstable": {}
+            }
+        },
+        "smithy.api#xmlAttribute": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Serializes an object property as an XML attribute rather than a nested XML\nelement.",
+                "smithy.api#trait": {
+                    "selector": "structure > :test(member > :test(boolean, number, string, timestamp))",
+                    "conflicts": [
+                        "smithy.api#xmlNamespace"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#xmlFlattened": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "Unwraps the values of a list, set, or map into the containing\nstructure/union.",
+                "smithy.api#trait": {
+                    "selector": ":is(structure, union) > :test(member > :test(list, map))",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#xmlName": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Changes the serialized element or attribute name of a structure, union,\nor member.",
+                "smithy.api#pattern": "^[a-zA-Z_][a-zA-Z_0-9-]*(:[a-zA-Z_][a-zA-Z_0-9-]*)?$",
+                "smithy.api#trait": {
+                    "selector": ":is(structure, union, member)",
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        },
+        "smithy.api#xmlNamespace": {
+            "type": "structure",
+            "members": {
+                "uri": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The namespace URI for scoping this XML element.",
+                        "smithy.api#required": {}
+                    }
+                },
+                "prefix": {
+                    "target": "smithy.api#NonEmptyString",
+                    "traits": {
+                        "smithy.api#documentation": "The prefix for the given namespace.",
+                        "smithy.api#pattern": "^[a-zA-Z_][a-zA-Z_0-9-]*$"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Adds an xmlns namespace definition URI to an XML element.",
+                "smithy.api#trait": {
+                    "selector": ":is(service, member, simpleType, list, map, structure, union)",
+                    "conflicts": [
+                        "smithy.api#xmlAttribute"
+                    ],
+                    "breakingChanges": [
+                        {
+                            "change": "any"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

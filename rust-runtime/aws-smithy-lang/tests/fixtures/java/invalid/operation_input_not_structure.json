@@ -1,0 +1,11 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Op": {
+      "type": "operation",
+      "input": {
+        "target": "smithy.api#String"
+      }
+    }
+  }
+}
