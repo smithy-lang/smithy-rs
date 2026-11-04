@@ -12,7 +12,8 @@
 //! [`SchemaHandle`]s and [`SliceHandle`]s. Batches may run after the storage is shared
 //! between threads, so a lazily built set can add schemas while other threads read earlier
 //! ones. Reading a handle back is `unsafe`, because the storage cannot check that a handle
-//! is its own (INV-9).
+//! is its own (INV-9). Publishing a handle where it will be read back is `unsafe` for the
+//! same reason.
 //!
 //! # Why `unsafe` is needed
 //!
@@ -96,19 +97,23 @@
 //!   are `'static`. It never reads the references it holds, so release order inside storage
 //!   does not matter, and references may already dangle when the storage drops.
 //! - **INV-6 complete publication.** A handle is only returned once its pointee and everything
-//!   the pointee references are fully built; callers publish handles (in `OnceLock`s) only
-//!   after that.
+//!   the pointee references are fully built; handles are published (in a [`SchemaSlot`] or a
+//!   [`RecordSlot`](super::plan::RecordSlot)) only after that.
 //! - **INV-7 happens-before.** A handle read on another thread was published through a
-//!   [`SchemaSlot`] (a release store read with an acquire load), a `OnceLock`, or the batch
-//!   mutex, each of which orders the pointee's construction before the read. Readers never
-//!   inspect the allocation vectors.
+//!   [`SchemaSlot`] (a release store read with an acquire load), a
+//!   [`RecordSlot`](super::plan::RecordSlot) (a `OnceLock`), or the batch mutex, each of which
+//!   orders the pointee's construction before the read. Readers never inspect the allocation
+//!   vectors.
 //! - **INV-8 serialized batches.** [`Storage::with_builder`] holds a mutex for the whole batch,
 //!   so batches never interleave. The mutex is recovered after a panic, which is sound because
 //!   a batch only appends allocations (INV-2, INV-3) and its caller only publishes complete
 //!   values (INV-6).
 //! - **INV-9 handle provenance.** A handle passed to [`Storage::schema`], [`Storage::slice`],
-//!   or [`Builder::published_schema`] was returned by this same storage. A foreign handle would be undefined behavior rather than a wrong lookup, so
-//!   debug builds tag every handle with its storage and check it.
+//!   or [`Builder::published_schema`] was returned by this same storage. A foreign handle
+//!   would be undefined behavior rather than a wrong lookup, so debug builds tag every handle
+//!   with its storage and check it. Publishing a handle ([`SchemaSlot::set`],
+//!   [`RecordSlot::set`](super::plan::RecordSlot::set)) is `unsafe` too, so that a foreign
+//!   handle cannot be stored for a later read without an `unsafe` block.
 
 use aws_smithy_schema::Schema;
 use std::cell::RefCell;
@@ -224,10 +229,15 @@ impl SchemaSlot {
         })
     }
 
-    /// Publishes `handle`. Only call once the schema is complete (INV-6), from a batch, so
-    /// that a slot is never filled twice (INV-8); filling it twice would only leave the
-    /// first schema unused (INV-3).
-    pub(super) fn set(&self, handle: SchemaHandle) {
+    /// Publishes `handle`, whose schema must be complete (INV-6). A slot is filled at most
+    /// once (INV-8); filling it twice would only leave the first schema unused (INV-3).
+    ///
+    /// # Safety
+    ///
+    /// INV-9: `handle` must have been allocated by the same storage as every other handle in
+    /// this slot's plan. Handles read from a slot are turned back into references without
+    /// that being checked in release builds.
+    pub(super) unsafe fn set(&self, handle: SchemaHandle) {
         debug_assert!(self.get().is_none(), "a slot was filled twice");
         #[cfg(debug_assertions)]
         self.tag.store(handle.tag, Ordering::Relaxed);

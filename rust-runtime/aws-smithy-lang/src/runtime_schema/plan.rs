@@ -112,7 +112,7 @@ pub(super) struct OperationPlan {
     /// Effective errors, in order, as indexes in [`Plan::roots`].
     pub(super) errors: Box<[u32]>,
     /// Published only when its schemas and error slice are complete (INV-6).
-    pub(super) record: OnceLock<OperationRecord>,
+    pub(super) record: RecordSlot,
 }
 
 /// The schemas of a materialized operation.
@@ -121,6 +121,34 @@ pub(super) struct OperationRecord {
     pub(super) input: SchemaHandle,
     pub(super) output: SchemaHandle,
     pub(super) errors: SliceHandle,
+}
+
+/// An operation's published [`OperationRecord`]: empty until filled once, then read without
+/// locking.
+///
+/// Wraps a `OnceLock` only so that filling it is `unsafe`, like [`SchemaSlot::set`]: its
+/// handles are turned back into references without checking where they came from.
+#[derive(Debug, Default)]
+pub(super) struct RecordSlot(OnceLock<OperationRecord>);
+
+impl RecordSlot {
+    /// The record, if published.
+    pub(super) fn get(&self) -> Option<&OperationRecord> {
+        self.0.get()
+    }
+
+    /// Publishes `record`, whose schemas and error slice must be complete (INV-6). A record is
+    /// published at most once (INV-8); publishing it twice would keep the first record and
+    /// leave the second unused (INV-3).
+    ///
+    /// # Safety
+    ///
+    /// INV-9: every handle in `record` must have been allocated by the same storage as every
+    /// other handle in this slot's plan.
+    pub(super) unsafe fn set(&self, record: OperationRecord) {
+        let published = self.0.set(record);
+        debug_assert!(published.is_ok(), "an operation was built twice");
+    }
 }
 
 /// The slot of a selected root or member schema.
@@ -660,7 +688,7 @@ pub(super) fn plan<'m>(
                     .iter()
                     .map(|&position| root_index(position))
                     .collect(),
-                record: OnceLock::new(),
+                record: RecordSlot::default(),
             },
         );
     }

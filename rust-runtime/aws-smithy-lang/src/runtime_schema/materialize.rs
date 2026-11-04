@@ -12,13 +12,13 @@
 //! plan slot at once, so a batch that panics leaves complete slots that a later batch reuses
 //! (INV-6). Operation records are published last, after their schemas and error slice.
 //!
-//! Everything here is safe code except reading published handles back, which relies on the
-//! plan only holding handles from this storage (INV-9).
+//! Everything here is safe code except reading published handles back and publishing new
+//! ones, which rely on the plan only holding handles from this storage (INV-9).
 
 use super::facts::{OperationFacts, TraitFacts};
-use super::owner::{Builder, SchemaHandle, SchemaSlot};
+use super::owner::{Builder, SchemaHandle};
 use super::plan::{
-    has_member_schemas, member_id, root_id, schema_type, OperationRecord, Plan, Prepared,
+    has_member_schemas, member_id, root_id, schema_type, OperationRecord, Plan, Prepared, Slot,
 };
 use crate::diagnostic::DiagnosticSet;
 use crate::shape::{MemberView, ShapeView};
@@ -92,10 +92,19 @@ impl<'p, 'b> Batch<'p, 'b> {
         unsafe { self.builder.published_schema(handle) }
     }
 
-    fn publish(slot: &SchemaSlot, handle: SchemaHandle) {
-        // Batches are serialized and every slot is checked before it is built, so the slot
-        // is empty (INV-8).
-        slot.set(handle);
+    /// Allocates `schema` and publishes it in `slot` of this batch's plan, which must be empty
+    /// (INV-8) and is filled only now that the schema is complete (INV-6).
+    fn publish(&self, slot: Slot, schema: Schema<'b>) -> &'b Schema<'b> {
+        let cell = match slot {
+            Slot::Root(root) => &self.plan.roots[root].schema,
+            Slot::Member(member) => &self.plan.members[member].schema,
+        };
+        let (handle, schema) = self.builder.alloc(schema);
+        // SAFETY: INV-9: `handle` was just allocated by `self.builder`, and `cell` is a slot
+        // of `self.plan`, which holds only handles from that builder's storage (the contract
+        // of `Batch::new`).
+        unsafe { cell.set(handle) };
+        schema
     }
 
     fn root_shape(&self, root: usize) -> ShapeView<'b> {
@@ -245,8 +254,7 @@ impl<'p, 'b> Batch<'p, 'b> {
             2 => schema = schema.with_map_members(built(self, 0), built(self, 1)),
             _ => {}
         }
-        let (handle, _) = self.builder.alloc(schema);
-        Self::publish(&member_plan.schema, handle);
+        self.publish(Slot::Member(member), schema);
     }
 
     /// The schema of a root, building it and its members if needed. Does not build the roots
@@ -275,9 +283,7 @@ impl<'p, 'b> Batch<'p, 'b> {
             // (`traitSetterChain`); match them.
             _ => Schema::new(id, shape_type),
         };
-        let (handle, schema) = self.builder.alloc(schema);
-        Self::publish(&root_plan.schema, handle);
-        schema
+        self.publish(Slot::Root(root), schema)
     }
 
     /// Builds `seeds` and every root their members reach, transitively.
@@ -388,8 +394,11 @@ impl<'p, 'b> Batch<'p, 'b> {
             errors,
         };
         // Published only now that every schema it refers to is complete (INV-6).
-        let published = operation_plan.record.set(record);
-        debug_assert!(published.is_ok(), "an operation was built twice");
+        // SAFETY: INV-9: `input` and `errors` were allocated by `self.builder`, and `output`
+        // was either allocated by it or read from a slot of `self.plan`. `self.plan` holds
+        // only handles from that builder's storage (the contract of `Batch::new`), and the
+        // record is published in `self.plan`.
+        unsafe { operation_plan.record.set(record) };
         record
     }
 
