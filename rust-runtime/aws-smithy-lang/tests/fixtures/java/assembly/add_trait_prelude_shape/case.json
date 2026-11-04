@@ -1,0 +1,4 @@
+{
+    "description": "A trait applied in code to smithy.api#String, one of the prelude's own shapes: rejected.",
+    "steps": [{"addTrait": "smithy.api#String", "trait": "smithy.api#sensitive", "value": {}}]
+}

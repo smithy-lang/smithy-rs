@@ -1,0 +1,4 @@
+{
+    "description": "A model and a shape built in code define the same shape: shapes of models are registered after shapes built in code, so the model's wins, whatever the call order.",
+    "steps": [{"addModel": "model.json"}, {"addShapes": "code.json"}]
+}

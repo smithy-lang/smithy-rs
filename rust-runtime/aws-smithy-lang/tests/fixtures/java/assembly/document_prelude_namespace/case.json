@@ -1,0 +1,5 @@
+{
+    "description": "A JSON AST document that redefines smithy.api#String as an integer with a trait, and adds a structure and a trait to smithy.api: the prelude replaces the redefinition without a diagnostic, and the new shapes are kept.",
+    "steps": [{"addFile": "f.json"}],
+    "locations": ["smithy.api#Foo", "smithy.api#Foo$x", "smithy.api#Bar", "ex#Uses@smithy.api#Bar"]
+}

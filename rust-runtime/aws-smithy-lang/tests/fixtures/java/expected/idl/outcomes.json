@@ -15,6 +15,32 @@
                 "SyntacticShapeIdTarget"
             ]
         },
+        "invalid/merge_conflicting_trait": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "b.json",
+                "line": 4,
+                "column": 77,
+                "message": "Conflicting `smithy.api#documentation` trait found on shape `ex#Doc`. The previous trait was defined at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/merge_conflicting_trait/a.json [4, 77]`, and a conflicting trait was defined at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/merge_conflicting_trait/b.json [4, 77]`."
+            }
+        },
+        "invalid/merge_conflicting_value_assignment": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.smithy",
+                "line": 5,
+                "column": 1,
+                "message": "Conflicting shape definition for `ex#Record` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/merge_conflicting_value_assignment/b.smithy [6, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/merge_conflicting_value_assignment/a.smithy [5, 1]`. Members differ: [value] vs [value]"
+            }
+        },
         "invalid/missing_elided_identifier": {
             "accepted": false,
             "errors": [
@@ -470,6 +496,11 @@
             "dangers": []
         },
         "valid/focused_target_elision": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_trait_merge": {
             "accepted": true,
             "errors": [],
             "dangers": []
