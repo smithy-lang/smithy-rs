@@ -22,7 +22,7 @@ use super::syntax::{
     PropertySyntax, PropertyValueSyntax, ShapeBodySyntax, ShapeIdSyntax, ShapeKindSyntax,
     ShapeSyntax, Span, StatementSyntax, TraitValueSyntax,
 };
-use crate::assembler::{merge_nodes, LoadedDocument};
+use crate::assembler::{merge_trait_values, LoadedDocument};
 use crate::ast_converter::AstConverter;
 use crate::diagnostic::{
     escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, Position,
@@ -340,7 +340,7 @@ impl<'a> Lowerer<'a> {
             format!("{}/traits/{}", pointer(), escape_pointer_token(&id)),
             value.position(),
         );
-        let merged = merge_nodes(previous, value, |_, _| {
+        let merged = merge_trait_values(previous, value, |_, _| {
             Diagnostic::error(
                 DiagnosticCode::TraitConflict,
                 format!("conflicting `{id}` trait values"),

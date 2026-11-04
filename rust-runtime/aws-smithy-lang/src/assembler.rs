@@ -671,7 +671,7 @@ impl From<Document> for LoadedDocument {
 /// - Every trait in a JSON AST document, every IDL trait annotation and documentation comment,
 ///   every [`add_trait`](ModelAssembler::add_trait), and every trait of a shape built in code or
 ///   taken from a model is an applied trait. Applied traits are merged per target (shape or
-///   member) with [`merge_nodes`], across every definition of the shape.
+///   member) with [`merge_trait_values`], across every definition of the shape.
 /// - The IDL syntactic sugar for default and enum values (`member: T = value` and enum
 ///   `NAME = value`) is part of the
 ///   definition, as in the reference implementation, whose IDL loader sets them on the shape
@@ -813,7 +813,11 @@ impl Merge {
     /// promises; registering shapes built in code and models first changed it.
     fn restore_input_order(&mut self) {
         if let Some(order) = self.input_order.take() {
-            self.shapes.sort_by_cached_key(|id, _| order[id]);
+            self.shapes.sort_by_cached_key(|id, _| {
+                *order
+                    .get(id)
+                    .expect("every shape added to `shapes` records its input order")
+            });
         }
     }
 
@@ -960,7 +964,7 @@ impl Merge {
                 );
                 continue;
             }
-            if location != kept_location {
+            if !is_same_location(location, kept_location) {
                 self.diagnostics.push(
                     Diagnostic::note(
                         DiagnosticCode::DuplicateDefinition,
@@ -994,7 +998,7 @@ impl Merge {
             self.metadata.insert(key, value);
             return;
         };
-        let merged = merge_nodes(previous, value, |previous, value| {
+        let merged = merge_metadata_values(previous, value, |previous, value| {
             Diagnostic::error(
                 DiagnosticCode::MetadataConflict,
                 format!(
@@ -1107,7 +1111,7 @@ impl Merge {
             }
             return true;
         };
-        let merged = merge_nodes(previous, value, |previous, value| {
+        let merged = merge_trait_values(previous, value, |previous, value| {
             Diagnostic::error(
                 DiagnosticCode::TraitConflict,
                 format!(
@@ -1249,26 +1253,59 @@ fn trait_map<'a>(
     }
 }
 
-/// Merges a repeated metadata or trait value, following Smithy's reference implementation
-/// loader:
+/// Returns `true` if two values were loaded from the same place, like the reference
+/// implementation's `LoaderUtils.isSameLocation`: values without a location (created in code)
+/// are never at the same location, even as each other.
+fn is_same_location(a: &SourceLocation, b: &SourceLocation) -> bool {
+    !a.is_none() && a == b
+}
+
+/// Merges a repeated trait value, following the reference implementation's loader:
 ///
 /// - the same value from the same location (the same input added twice) is ignored;
-/// - two arrays are concatenated;
+/// - two arrays are concatenated, and the result keeps the previous value's location (or the new
+///   value's, if the previous one has none);
 /// - an equal value is ignored;
 /// - anything else is a conflict.
 ///
 /// Returns `Ok(None)` when `previous` is kept unchanged.
-pub(crate) fn merge_nodes(
+pub(crate) fn merge_trait_values(
     previous: &Node,
     value: Node,
     conflict: impl FnOnce(&Node, &Node) -> Diagnostic,
 ) -> Result<Option<Node>, Diagnostic> {
-    if previous == &value && previous.source_location() == value.source_location() {
+    let location = if previous.source_location().is_none() {
+        value.source_location().clone()
+    } else {
+        previous.source_location().clone()
+    };
+    merge_nodes(previous, value, location, conflict)
+}
+
+/// Merges a repeated metadata value, following the reference implementation's loader. Like
+/// [`merge_trait_values`], except that a concatenated array keeps the new value's location.
+fn merge_metadata_values(
+    previous: &Node,
+    value: Node,
+    conflict: impl FnOnce(&Node, &Node) -> Diagnostic,
+) -> Result<Option<Node>, Diagnostic> {
+    let location = value.source_location().clone();
+    merge_nodes(previous, value, location, conflict)
+}
+
+/// The rules shared by [`merge_trait_values`] and [`merge_metadata_values`]. A concatenated
+/// array gets `location`.
+fn merge_nodes(
+    previous: &Node,
+    value: Node,
+    location: SourceLocation,
+    conflict: impl FnOnce(&Node, &Node) -> Diagnostic,
+) -> Result<Option<Node>, Diagnostic> {
+    if previous == &value && is_same_location(previous.source_location(), value.source_location()) {
         return Ok(None);
     }
     match (previous.as_array(), value.as_array()) {
         (Some(previous), Some(_)) => {
-            let location = value.source_location().clone();
             let NodeValue::Array(mut elements) = value.into_value() else {
                 unreachable!("checked above")
             };

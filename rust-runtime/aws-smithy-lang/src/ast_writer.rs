@@ -87,6 +87,12 @@ impl AstWriter {
     ///
     /// Output written with this option reloads into an equivalent model, with or without the
     /// prelude: with the prelude, the written prelude shapes are replaced by the prelude's own.
+    ///
+    /// A model assembled with
+    /// [`ModelAssembler::disable_prelude`](crate::ModelAssembler::disable_prelude) that defines
+    /// its own `smithy.api` shapes must be written with this option to round-trip: without it,
+    /// those shapes are left out, and references to them (such as `smithy.api#String`) no
+    /// longer resolve when the output is reloaded without the prelude.
     pub fn include_prelude(mut self, include: bool) -> Self {
         self.include_prelude = include;
         self

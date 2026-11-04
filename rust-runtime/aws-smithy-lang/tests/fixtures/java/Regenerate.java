@@ -269,17 +269,42 @@ public final class Regenerate {
         } else if (step.getStringMember("addFile").isPresent()) {
             assembler.addImport(dir.resolve(step.expectStringMember("addFile").getValue()));
         } else if (step.getStringMember("putMetadata").isPresent()) {
-            assembler.putMetadata(step.expectStringMember("putMetadata").getValue(), step.expectMember("value"));
+            assembler.putMetadata(step.expectStringMember("putMetadata").getValue(),
+                    withoutLocations(step.expectMember("value")));
         } else if (step.getStringMember("addTrait").isPresent()) {
             ShapeId target = ShapeId.from(step.expectStringMember("addTrait").getValue());
             ShapeId traitId = ShapeId.from(step.expectStringMember("trait").getValue());
-            Node value = step.expectMember("value");
+            Node value = withoutLocations(step.expectMember("value"));
             Trait trait = traitFactory.createTrait(traitId, target, value)
                     .orElseGet(() -> new DynamicTrait(traitId, value));
             assembler.addTrait(target, trait);
         } else {
             throw new IllegalArgumentException("Unknown step in " + dir + ": " + Node.printJson(step));
         }
+    }
+
+    /**
+     * A copy of {@code node} without source locations, like a value created in code. Values in
+     * {@code case.json} carry the locations of that file, which would otherwise keep two equal
+     * values created in code from being treated as created in code.
+     */
+    private static Node withoutLocations(Node node) {
+        if (node.isArrayNode()) {
+            return ArrayNode.fromNodes(node.expectArrayNode().getElements().stream()
+                    .map(Regenerate::withoutLocations)
+                    .collect(Collectors.toList()));
+        } else if (node.isObjectNode()) {
+            ObjectNode.Builder builder = ObjectNode.builder();
+            node.expectObjectNode().getStringMap().forEach((k, v) -> builder.withMember(k, withoutLocations(v)));
+            return builder.build();
+        } else if (node.isStringNode()) {
+            return Node.from(node.expectStringNode().getValue());
+        } else if (node.isNumberNode()) {
+            return Node.from(node.expectNumberNode().getValue());
+        } else if (node.isBooleanNode()) {
+            return Node.from(node.expectBooleanNode().getValue());
+        }
+        return Node.nullNode();
     }
 
     /**

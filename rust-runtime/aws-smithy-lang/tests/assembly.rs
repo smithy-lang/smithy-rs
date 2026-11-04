@@ -432,6 +432,41 @@ fn prelude_shapes_are_replaced_by_the_prelude() {
 }
 
 #[test]
+fn values_created_in_code_are_never_at_the_same_location() {
+    // Like the reference implementation's `LoaderUtils.isSameLocation`, two values without a
+    // location are not treated as the same input added twice, so equal arrays concatenate.
+    let tags = Node::from(vec![Node::from("a")]);
+    let model = expect_model(
+        Model::assembler()
+            .add_json_str("t.json", doc(r#""ex#T":{"type":"string"}"#))
+            .add_trait("ex#T", TAGS, tags.clone())
+            .add_trait("ex#T", TAGS, tags.clone())
+            .assemble(),
+    );
+    let t = model
+        .expect_shape(&ShapeId::from_static("ex#T"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert_eq!(
+        t.get_trait(&TAGS),
+        Some(&Node::from(vec![Node::from("a"), Node::from("a")]))
+    );
+    // The same holds for metadata: a model whose metadata was added in code, added twice.
+    let built = expect_model(Model::assembler().put_metadata("k", tags).assemble());
+    let twice = expect_model(
+        Model::assembler()
+            .add_model(&built)
+            .add_model(&built)
+            .assemble(),
+    );
+    assert_eq!(
+        twice.metadata_value("k"),
+        Some(&Node::from(vec![Node::from("a"), Node::from("a")]))
+    );
+}
+
+#[test]
 fn shapes_keep_the_order_of_their_inputs() {
     // Shapes and models added in code are merged before documents, but the model lists every
     // shape in the order of the input that first added it.

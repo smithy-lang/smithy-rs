@@ -6,6 +6,11 @@
             "errors": [],
             "locations": {}
         },
+        "add_trait_equal_arrays": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
         "add_trait_prelude_shape": {
             "accepted": false,
             "errors": [
@@ -129,7 +134,19 @@
                 "smithy.api#Foo": "a.smithy"
             }
         },
+        "merged_trait_location": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#T@smithy.api#tags": "a.json"
+            }
+        },
         "metadata_order": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "metadata_same_location_after_merge": {
             "accepted": true,
             "errors": [],
             "locations": {}
