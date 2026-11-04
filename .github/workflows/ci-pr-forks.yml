@@ -30,7 +30,6 @@ jobs:
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 90
     steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -96,7 +95,6 @@ jobs:
       !contains(needs.*.result, 'cancelled') &&
       github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
     steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
