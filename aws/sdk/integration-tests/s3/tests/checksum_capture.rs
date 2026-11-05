@@ -89,6 +89,7 @@ async fn get_and_read(client: &Client, captures: &[&ChecksumCapture]) -> Option<
 fn validated() -> Option<ChecksumOutcome> {
     Some(ChecksumOutcome::Validated {
         algorithm: ResponseChecksumAlgorithm::Crc32,
+        computed: HELLO_WORLD_CRC32.into(),
     })
 }
 

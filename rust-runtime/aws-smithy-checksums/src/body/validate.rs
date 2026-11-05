@@ -34,7 +34,12 @@ fn verify(
 ) -> Result<(), aws_smithy_types::body::Error> {
     let actual_checksum = checksum.finalize();
     if *precalculated_checksum == actual_checksum {
-        complete(completion, ValidationEnd::Matched);
+        complete(
+            completion,
+            ValidationEnd::Matched {
+                actual: actual_checksum,
+            },
+        );
         Ok(())
     } else {
         complete(
@@ -162,7 +167,10 @@ impl ChecksumBody<SdkBody> {
 #[non_exhaustive]
 pub enum ValidationEnd {
     /// The data ended and the checksum matched.
-    Matched,
+    Matched {
+        /// The checksum calculated from the body, equal to the precalculated one.
+        actual: Bytes,
+    },
     /// The data ended and the checksum did not match.
     Mismatched {
         /// The precalculated checksum the body was validated against.
@@ -295,6 +303,13 @@ mod tests {
         "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl()
     }
 
+    /// The end a body of `TEXT` reports when its CRC32 matches.
+    fn text_matched() -> ValidationEnd {
+        ValidationEnd::Matched {
+            actual: calculate_crc32_checksum(TEXT),
+        }
+    }
+
     /// Records every call to a completion callback.
     #[derive(Default)]
     struct Recorded(Arc<Mutex<Vec<ValidationEnd>>>);
@@ -339,10 +354,10 @@ mod tests {
         body.frame().await.unwrap().unwrap();
         recorded.assert_ends(&[]);
         assert!(body.frame().await.is_none());
-        recorded.assert_ends(&[ValidationEnd::Matched]);
+        recorded.assert_ends(&[text_matched()]);
 
         drop(body);
-        recorded.assert_ends(&[ValidationEnd::Matched]);
+        recorded.assert_ends(&[text_matched()]);
     }
 
     #[tokio::test]
@@ -434,7 +449,7 @@ mod tests {
         body.frame().await.unwrap().unwrap();
         let trailers = body.frame().await.unwrap().unwrap();
         assert!(trailers.is_trailers());
-        recorded.assert_ends(&[ValidationEnd::Matched]);
+        recorded.assert_ends(&[text_matched()]);
     }
 
     #[tokio::test]

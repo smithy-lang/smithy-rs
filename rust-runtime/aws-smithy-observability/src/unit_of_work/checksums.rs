@@ -11,7 +11,8 @@
 
 use super::{sealed, AsHandle, Capture};
 use aws_smithy_runtime_api::client::unit_of_work::checksums::{
-    ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver,
+    ChecksumEvent, ChecksumEventKind, ChecksumSkip, ObserveResponseChecksum,
+    SharedResponseChecksumObserver,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -112,6 +113,8 @@ pub enum ChecksumOutcome {
     Validated {
         /// The algorithm the body was validated with.
         algorithm: ResponseChecksumAlgorithm,
+        /// The checksum computed from the body, in base64.
+        computed: String,
     },
     /// The body was read to its end, and its checksum did not match.
     Mismatch {
@@ -263,7 +266,7 @@ enum Decision {
 enum Ending {
     Dropped,
     Errored,
-    Matched,
+    Matched { computed: String },
     Mismatched { expected: String, computed: String },
 }
 
@@ -274,7 +277,7 @@ impl Ending {
         match self {
             Self::Dropped => 0,
             Self::Errored => 1,
-            Self::Matched => 2,
+            Self::Matched { .. } => 2,
             Self::Mismatched { .. } => 3,
         }
     }
@@ -289,7 +292,10 @@ impl Ending {
                 algorithm,
                 cause: IncompleteCause::BodyError,
             },
-            Self::Matched => ChecksumOutcome::Validated { algorithm },
+            Self::Matched { computed } => ChecksumOutcome::Validated {
+                algorithm,
+                computed: computed.clone(),
+            },
             Self::Mismatched { expected, computed } => ChecksumOutcome::Mismatch {
                 algorithm,
                 expected: expected.clone(),
@@ -434,28 +440,28 @@ fn lock(slot: &Mutex<ChecksumSlot>) -> MutexGuard<'_, ChecksumSlot> {
 struct SlotObserver(Arc<Mutex<ChecksumSlot>>);
 
 impl ObserveResponseChecksum for SlotObserver {
-    fn validating(&self, algorithm: &'static str) {
-        lock(&self.0).validating(ResponseChecksumAlgorithm::from_name(algorithm))
-    }
-
-    fn not_validated(&self, reason: ChecksumSkip) {
-        lock(&self.0).not_validated(not_validated_reason(reason))
-    }
-
-    fn matched(&self) {
-        lock(&self.0).ended(Ending::Matched)
-    }
-
-    fn mismatched(&self, expected: String, computed: String) {
-        lock(&self.0).ended(Ending::Mismatched { expected, computed })
-    }
-
-    fn errored(&self) {
-        lock(&self.0).ended(Ending::Errored)
-    }
-
-    fn dropped(&self) {
-        lock(&self.0).ended(Ending::Dropped)
+    fn on_event(&self, event: &ChecksumEvent<'_>) {
+        let mut slot = lock(&self.0);
+        match event.kind() {
+            ChecksumEventKind::Validating(data) => {
+                slot.validating(ResponseChecksumAlgorithm::from_name(data.algorithm()))
+            }
+            ChecksumEventKind::NotValidated(data) => {
+                slot.not_validated(not_validated_reason(data.reason()))
+            }
+            ChecksumEventKind::Matched(data) => slot.ended(Ending::Matched {
+                computed: data.computed().to_owned(),
+            }),
+            ChecksumEventKind::Mismatched(data) => slot.ended(Ending::Mismatched {
+                expected: data.expected().to_owned(),
+                computed: data.computed().to_owned(),
+            }),
+            ChecksumEventKind::Errored => slot.ended(Ending::Errored),
+            ChecksumEventKind::Dropped => slot.ended(Ending::Dropped),
+            // A kind added by a later aws-smithy-runtime-api. Only `Matched` makes the record
+            // read `Validated`, so ignoring it never reports a match.
+            _ => {}
+        }
     }
 }
 
@@ -496,6 +502,9 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::Intercept;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_runtime_api::client::unit_of_work::checksums::{
+        Match, Mismatch, NotValidated, Validating,
+    };
     use ResponseChecksumAlgorithm::Crc32;
 
     /// One call to a generated client, with its hooks run the way the orchestrator runs them.
@@ -539,12 +548,18 @@ mod tests {
         /// body's completion callback holds.
         fn validating(&self, algorithm: &'static str) -> Vec<SharedResponseChecksumObserver> {
             let observers = self.observers();
-            observers.iter().for_each(|o| o.validating(algorithm));
+            send(
+                &observers,
+                ChecksumEventKind::Validating(Validating::new(algorithm)),
+            );
             observers
         }
 
         fn not_validated(&self, skip: ChecksumSkip) {
-            self.observers().iter().for_each(|o| o.not_validated(skip));
+            send(
+                &self.observers(),
+                ChecksumEventKind::NotValidated(NotValidated::new(skip)),
+            );
         }
 
         fn end(&mut self, captures: &[&Capture], succeeded: bool) {
@@ -573,15 +588,22 @@ mod tests {
 
     impl End {
         fn report(self, body: &[SharedResponseChecksumObserver]) {
-            for o in body {
-                match self {
-                    End::Drop => o.dropped(),
-                    End::Error => o.errored(),
-                    End::Match => o.matched(),
-                    End::Mismatch => o.mismatched("expected==".into(), "computed==".into()),
+            let kind = match self {
+                End::Drop => ChecksumEventKind::Dropped,
+                End::Error => ChecksumEventKind::Errored,
+                End::Match => ChecksumEventKind::Matched(Match::new("computed==")),
+                End::Mismatch => {
+                    ChecksumEventKind::Mismatched(Mismatch::new("expected==", "computed=="))
                 }
-            }
+            };
+            send(body, kind);
         }
+    }
+
+    /// Sends one event to every observer, as the SDK's response-checksum producer does.
+    fn send(observers: &[SharedResponseChecksumObserver], kind: ChecksumEventKind<'_>) {
+        let event = ChecksumEvent::new(1, kind);
+        observers.iter().for_each(|o| o.on_event(&event));
     }
 
     fn handle_and_capture() -> (ChecksumCapture, Capture) {
@@ -592,6 +614,13 @@ mod tests {
 
     fn not_validated(reason: NotValidatedReason) -> Option<ChecksumOutcome> {
         Some(ChecksumOutcome::NotValidated { reason })
+    }
+
+    fn validated() -> Option<ChecksumOutcome> {
+        Some(ChecksumOutcome::Validated {
+            algorithm: Crc32,
+            computed: "computed==".into(),
+        })
     }
 
     fn mismatch() -> Option<ChecksumOutcome> {
@@ -648,10 +677,7 @@ mod tests {
         assert_eq!(checksum.try_outcome(), None);
 
         End::Match.report(&body);
-        assert_eq!(
-            checksum.try_outcome(),
-            Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-        );
+        assert_eq!(checksum.try_outcome(), validated());
     }
 
     #[test]
@@ -664,10 +690,7 @@ mod tests {
         assert_eq!(checksum.try_outcome(), None);
 
         call.end(&[&capture], true);
-        assert_eq!(
-            checksum.try_outcome(),
-            Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-        );
+        assert_eq!(checksum.try_outcome(), validated());
     }
 
     #[test]
@@ -709,15 +732,14 @@ mod tests {
 
     #[test]
     fn the_strongest_ending_of_an_attempt_wins() {
-        let validated = Some(ChecksumOutcome::Validated { algorithm: Crc32 });
         let body_error = Some(ChecksumOutcome::Incomplete {
             algorithm: Crc32,
             cause: IncompleteCause::BodyError,
         });
         for (ends, expected) in [
-            ([End::Match, End::Drop], validated.clone()),
-            ([End::Drop, End::Match], validated.clone()),
-            ([End::Error, End::Match], validated),
+            ([End::Match, End::Drop], validated()),
+            ([End::Drop, End::Match], validated()),
+            ([End::Error, End::Match], validated()),
             ([End::Match, End::Mismatch], mismatch()),
             ([End::Mismatch, End::Match], mismatch()),
             ([End::Drop, End::Error], body_error),
@@ -802,10 +824,7 @@ mod tests {
         call.attempt(&[&capture]);
         End::Match.report(&call.validating("crc32"));
         call.end(&[&capture], true);
-        assert_eq!(
-            checksum.try_outcome(),
-            Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-        );
+        assert_eq!(checksum.try_outcome(), validated());
     }
 
     #[test]
@@ -836,10 +855,7 @@ mod tests {
         drop(call);
         End::Match.report(&body);
         for checksum in [first, second] {
-            assert_eq!(
-                checksum.try_outcome(),
-                Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-            );
+            assert_eq!(checksum.try_outcome(), validated());
         }
     }
 
@@ -855,10 +871,7 @@ mod tests {
         call.end(&[&capture], true);
         End::Match.report(&body);
         for checksum in [first, second] {
-            assert_eq!(
-                checksum.try_outcome(),
-                Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-            );
+            assert_eq!(checksum.try_outcome(), validated());
         }
     }
 
@@ -879,10 +892,7 @@ mod tests {
 
             call.end(&captures, true);
             End::Match.report(&body);
-            assert_eq!(
-                checksum.try_outcome(),
-                Some(ChecksumOutcome::Validated { algorithm: Crc32 })
-            );
+            assert_eq!(checksum.try_outcome(), validated());
         }
     }
 

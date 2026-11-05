@@ -20,7 +20,7 @@
 //! // Attach `capture` to one call with `.customize().interceptor(capture)`, send the call, and
 //! // read the response body to its end. Then:
 //! match checksum.try_outcome() {
-//!     Some(ChecksumOutcome::Validated { algorithm }) => {
+//!     Some(ChecksumOutcome::Validated { algorithm, .. }) => {
 //!         println!("validated with {}", algorithm.as_str())
 //!     }
 //!     Some(ChecksumOutcome::Mismatch { .. }) => println!("the body does not match its checksum"),

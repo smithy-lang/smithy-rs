@@ -15,43 +15,138 @@ use std::sync::Arc;
 
 /// Receives the response checksum validation events of one operation.
 ///
-/// A generated client's response checksum validation calls these methods. Each attempt that
-/// reaches the checksum decision produces either [`not_validated`](Self::not_validated), or
-/// [`validating`](Self::validating) followed by one ending per wrapped body:
-/// [`matched`](Self::matched), [`mismatched`](Self::mismatched), [`errored`](Self::errored) or
-/// [`dropped`](Self::dropped). Methods are called on the task that drives the attempt or reads the
-/// body, and must not block.
-///
-/// Every method has a default that does nothing, so that events can be added.
+/// A generated client's response checksum validation calls [`on_event`](Self::on_event). Each
+/// attempt that reaches the checksum decision produces either a
+/// [`NotValidated`](ChecksumEventKind::NotValidated) event, or a
+/// [`Validating`](ChecksumEventKind::Validating) event followed by one ending per wrapped body:
+/// [`Matched`](ChecksumEventKind::Matched), [`Mismatched`](ChecksumEventKind::Mismatched),
+/// [`Errored`](ChecksumEventKind::Errored) or [`Dropped`](ChecksumEventKind::Dropped). Events are
+/// sent on the task that drives the attempt or reads the body, and `on_event` must not block.
 pub trait ObserveResponseChecksum: Send + Sync + fmt::Debug {
-    /// A validator was attached to the response body.
-    ///
-    /// `algorithm` is the lowercase name of the checksum algorithm: `"crc32"`, `"crc32c"`,
-    /// `"crc64nvme"`, `"sha1"` or `"sha256"` today. Later releases may add names.
-    fn validating(&self, algorithm: &'static str) {
-        let _ = algorithm;
+    /// Receives one event.
+    fn on_event(&self, event: &ChecksumEvent<'_>);
+}
+
+/// One response checksum validation event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChecksumEvent<'a> {
+    attempt: u32,
+    kind: ChecksumEventKind<'a>,
+}
+
+impl<'a> ChecksumEvent<'a> {
+    /// Creates an event that happened during `attempt`, numbered from 1.
+    pub fn new(attempt: u32, kind: ChecksumEventKind<'a>) -> Self {
+        Self { attempt, kind }
     }
 
+    /// The attempt the event happened during, numbered from 1.
+    pub fn attempt(&self) -> u32 {
+        self.attempt
+    }
+
+    /// What happened.
+    pub fn kind(&self) -> &ChecksumEventKind<'a> {
+        &self.kind
+    }
+}
+
+/// What happened in a [`ChecksumEvent`]. Later releases may add kinds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ChecksumEventKind<'a> {
     /// The response will not be validated.
-    fn not_validated(&self, reason: ChecksumSkip) {
-        let _ = reason;
-    }
-
+    NotValidated(NotValidated),
+    /// A validator was attached to the response body.
+    Validating(Validating),
     /// The body's data ended and its checksum matched.
-    fn matched(&self) {}
+    Matched(Match<'a>),
+    /// The body's data ended and its checksum did not match. This is sent before the body
+    /// yields its mismatch error.
+    Mismatched(Mismatch<'a>),
+    /// The body yielded an error before its data ended.
+    Errored,
+    /// The body was dropped before its data ended.
+    Dropped,
+}
 
-    /// The body's data ended and its checksum did not match.
-    ///
-    /// Both values are base64. This is called before the body yields its mismatch error.
-    fn mismatched(&self, expected: String, computed: String) {
-        let _ = (expected, computed);
+/// The data of a [`ChecksumEventKind::NotValidated`] event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NotValidated {
+    reason: ChecksumSkip,
+}
+
+impl NotValidated {
+    /// Creates the data for a response that will not be validated because of `reason`.
+    pub fn new(reason: ChecksumSkip) -> Self {
+        Self { reason }
     }
 
-    /// The body yielded an error before its data ended.
-    fn errored(&self) {}
+    /// Why the response will not be validated.
+    pub fn reason(&self) -> ChecksumSkip {
+        self.reason
+    }
+}
 
-    /// The body was dropped before its data ended.
-    fn dropped(&self) {}
+/// The data of a [`ChecksumEventKind::Validating`] event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Validating {
+    algorithm: &'static str,
+}
+
+impl Validating {
+    /// Creates the data for a body that is validated with `algorithm`.
+    pub fn new(algorithm: &'static str) -> Self {
+        Self { algorithm }
+    }
+
+    /// The lowercase name of the checksum algorithm: `"crc32"`, `"crc32c"`, `"crc64nvme"`,
+    /// `"sha1"` or `"sha256"` today. Later releases may add names.
+    pub fn algorithm(&self) -> &'static str {
+        self.algorithm
+    }
+}
+
+/// The data of a [`ChecksumEventKind::Matched`] event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Match<'a> {
+    computed: &'a str,
+}
+
+impl<'a> Match<'a> {
+    /// Creates the data for a body whose checksum matched. `computed` is base64.
+    pub fn new(computed: &'a str) -> Self {
+        Self { computed }
+    }
+
+    /// The checksum computed from the body, in base64.
+    pub fn computed(&self) -> &'a str {
+        self.computed
+    }
+}
+
+/// The data of a [`ChecksumEventKind::Mismatched`] event.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Mismatch<'a> {
+    expected: &'a str,
+    computed: &'a str,
+}
+
+impl<'a> Mismatch<'a> {
+    /// Creates the data for a body whose checksum did not match. Both values are base64.
+    pub fn new(expected: &'a str, computed: &'a str) -> Self {
+        Self { expected, computed }
+    }
+
+    /// The checksum from the response header, in base64.
+    pub fn expected(&self) -> &'a str {
+        self.expected
+    }
+
+    /// The checksum computed from the body, in base64.
+    pub fn computed(&self) -> &'a str {
+        self.computed
+    }
 }
 
 /// Why a response's checksum will not be validated.
@@ -88,28 +183,8 @@ impl SharedResponseChecksumObserver {
 }
 
 impl ObserveResponseChecksum for SharedResponseChecksumObserver {
-    fn validating(&self, algorithm: &'static str) {
-        self.0.validating(algorithm)
-    }
-
-    fn not_validated(&self, reason: ChecksumSkip) {
-        self.0.not_validated(reason)
-    }
-
-    fn matched(&self) {
-        self.0.matched()
-    }
-
-    fn mismatched(&self, expected: String, computed: String) {
-        self.0.mismatched(expected, computed)
-    }
-
-    fn errored(&self) {
-        self.0.errored()
-    }
-
-    fn dropped(&self) {
-        self.0.dropped()
+    fn on_event(&self, event: &ChecksumEvent<'_>) {
+        self.0.on_event(event)
     }
 }
 
@@ -119,7 +194,10 @@ impl Storable for SharedResponseChecksumObserver {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver};
+    use super::{
+        ChecksumEvent, ChecksumEventKind, ChecksumSkip, Match, Mismatch, NotValidated,
+        ObserveResponseChecksum, SharedResponseChecksumObserver, Validating,
+    };
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use std::sync::{Arc, Mutex};
 
@@ -138,28 +216,20 @@ mod tests {
     }
 
     impl ObserveResponseChecksum for Recorder {
-        fn validating(&self, algorithm: &'static str) {
-            self.record(format!("validating {algorithm}"));
-        }
-
-        fn not_validated(&self, reason: ChecksumSkip) {
-            self.record(format!("not_validated {reason:?}"));
-        }
-
-        fn matched(&self) {
-            self.record("matched");
-        }
-
-        fn mismatched(&self, expected: String, computed: String) {
-            self.record(format!("mismatched {expected} {computed}"));
-        }
-
-        fn errored(&self) {
-            self.record("errored");
-        }
-
-        fn dropped(&self) {
-            self.record("dropped");
+        fn on_event(&self, event: &ChecksumEvent<'_>) {
+            let kind = match event.kind() {
+                ChecksumEventKind::NotValidated(data) => {
+                    format!("not_validated {:?}", data.reason())
+                }
+                ChecksumEventKind::Validating(data) => format!("validating {}", data.algorithm()),
+                ChecksumEventKind::Matched(data) => format!("matched {}", data.computed()),
+                ChecksumEventKind::Mismatched(data) => {
+                    format!("mismatched {} {}", data.expected(), data.computed())
+                }
+                ChecksumEventKind::Errored => "errored".to_string(),
+                ChecksumEventKind::Dropped => "dropped".to_string(),
+            };
+            self.record(format!("{} {kind}", event.attempt()));
         }
     }
 
@@ -171,22 +241,27 @@ mod tests {
         layer.store_append(SharedResponseChecksumObserver::new(second.clone()));
         let cfg = ConfigBag::of_layers(vec![layer]);
 
+        let kinds = [
+            ChecksumEventKind::Validating(Validating::new("crc32")),
+            ChecksumEventKind::NotValidated(NotValidated::new(ChecksumSkip::NoChecksum)),
+            ChecksumEventKind::Matched(Match::new("computed")),
+            ChecksumEventKind::Mismatched(Mismatch::new("expected", "computed")),
+            ChecksumEventKind::Errored,
+            ChecksumEventKind::Dropped,
+        ];
         for observer in cfg.load::<SharedResponseChecksumObserver>() {
-            observer.validating("crc32");
-            observer.not_validated(ChecksumSkip::NoChecksum);
-            observer.matched();
-            observer.mismatched("expected".into(), "computed".into());
-            observer.errored();
-            observer.dropped();
+            for kind in &kinds {
+                observer.on_event(&ChecksumEvent::new(2, kind.clone()));
+            }
         }
 
         let expected = [
-            "validating crc32",
-            "not_validated NoChecksum",
-            "matched",
-            "mismatched expected computed",
-            "errored",
-            "dropped",
+            "2 validating crc32",
+            "2 not_validated NoChecksum",
+            "2 matched computed",
+            "2 mismatched expected computed",
+            "2 errored",
+            "2 dropped",
         ];
         assert_eq!(first.events(), expected);
         assert_eq!(second.events(), expected);

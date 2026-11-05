@@ -14,9 +14,11 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::{dyn_dispatch_hint, Intercept};
+use aws_smithy_runtime_api::client::retries::RequestAttempts;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::unit_of_work::checksums::{
-    ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver,
+    ChecksumEvent, ChecksumEventKind, ChecksumSkip, Match, Mismatch, NotValidated,
+    ObserveResponseChecksum, SharedResponseChecksumObserver, Validating,
 };
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::body::SdkBody;
@@ -142,28 +144,42 @@ where
             .load::<SharedResponseChecksumObserver>()
             .cloned()
             .collect();
+        // Only an attempt with observers looks up its number, so an attempt without one still
+        // costs a single config-bag miss.
+        let attempt = if observers.is_empty() {
+            1
+        } else {
+            cfg.load::<RequestAttempts>()
+                .map_or(1, RequestAttempts::attempts)
+        };
         // An error response is never validated: a mismatch would replace its modeled error with a
         // body error that is retried as transient.
         if !response.status().is_success() {
-            observers
-                .iter()
-                .for_each(|o| o.not_validated(ChecksumSkip::ErrorResponse));
+            notify(
+                &observers,
+                attempt,
+                ChecksumEventKind::NotValidated(NotValidated::new(ChecksumSkip::ErrorResponse)),
+            );
             return Ok(());
         }
 
         if !validation_enabled {
-            observers
-                .iter()
-                .for_each(|o| o.not_validated(ChecksumSkip::Disabled));
+            notify(
+                &observers,
+                attempt,
+                ChecksumEventKind::NotValidated(NotValidated::new(ChecksumSkip::Disabled)),
+            );
             return Ok(());
         }
 
         match check_headers_for_precalculated_checksum(response.headers(), self.response_algorithms)
         {
             Ok((checksum_algorithm, precalculated_checksum)) => {
-                observers
-                    .iter()
-                    .for_each(|o| o.validating(checksum_algorithm.as_str()));
+                notify(
+                    &observers,
+                    attempt,
+                    ChecksumEventKind::Validating(Validating::new(checksum_algorithm.as_str())),
+                );
 
                 let mut body = SdkBody::taken();
                 mem::swap(&mut body, response.body_mut());
@@ -173,6 +189,7 @@ where
                     checksum_algorithm,
                     precalculated_checksum,
                     observers,
+                    attempt,
                 );
                 mem::swap(&mut body, response.body_mut());
             }
@@ -185,7 +202,11 @@ where
                 } else {
                     skip
                 };
-                observers.iter().for_each(|o| o.not_validated(skip));
+                notify(
+                    &observers,
+                    attempt,
+                    ChecksumEventKind::NotValidated(NotValidated::new(skip)),
+                );
             }
         }
 
@@ -195,12 +216,14 @@ where
 
 /// Given an `SdkBody`, a `aws_smithy_checksums::ChecksumAlgorithm`, and a pre-calculated checksum,
 /// return an `SdkBody` where the body will processed with the checksum algorithm and checked
-/// against the pre-calculated checksum. When validation ends, `observers` hear how it ended.
+/// against the pre-calculated checksum. When validation ends, `observers` hear how it ended, in an
+/// event of `attempt`.
 pub(crate) fn wrap_body_with_checksum_validator(
     body: SdkBody,
     checksum_algorithm: ChecksumAlgorithm,
     precalculated_checksum: bytes::Bytes,
     observers: Vec<SharedResponseChecksumObserver>,
+    attempt: u32,
 ) -> SdkBody {
     use aws_smithy_checksums::body::validate;
 
@@ -214,27 +237,43 @@ pub(crate) fn wrap_body_with_checksum_validator(
             return SdkBody::from_body_1_x(body);
         }
         let observers = observers.clone();
-        SdkBody::from_body_1_x(body.with_completion(move |end| report_end(&observers, end)))
+        SdkBody::from_body_1_x(
+            body.with_completion(move |end| report_end(&observers, attempt, end)),
+        )
     })
+}
+
+/// Sends one event to every observer.
+fn notify(observers: &[SharedResponseChecksumObserver], attempt: u32, kind: ChecksumEventKind<'_>) {
+    let event = ChecksumEvent::new(attempt, kind);
+    observers.iter().for_each(|o| o.on_event(&event));
 }
 
 fn report_end(
     observers: &[SharedResponseChecksumObserver],
+    attempt: u32,
     end: aws_smithy_checksums::body::validate::ValidationEnd,
 ) {
     use aws_smithy_checksums::body::validate::ValidationEnd;
     use aws_smithy_types::base64;
 
-    for o in observers {
-        match &end {
-            ValidationEnd::Matched => o.matched(),
-            ValidationEnd::Mismatched { expected, actual } => {
-                o.mismatched(base64::encode(expected), base64::encode(actual))
-            }
-            ValidationEnd::Dropped => o.dropped(),
-            // An ending added by a later `aws-smithy-checksums` is never reported as a match.
-            _ => o.errored(),
+    match &end {
+        ValidationEnd::Matched { actual } => {
+            let computed = base64::encode(actual);
+            notify(
+                observers,
+                attempt,
+                ChecksumEventKind::Matched(Match::new(&computed)),
+            );
         }
+        ValidationEnd::Mismatched { expected, actual } => {
+            let (expected, computed) = (base64::encode(expected), base64::encode(actual));
+            let kind = ChecksumEventKind::Mismatched(Mismatch::new(&expected, &computed));
+            notify(observers, attempt, kind);
+        }
+        ValidationEnd::Dropped => notify(observers, attempt, ChecksumEventKind::Dropped),
+        // An ending added by a later `aws-smithy-checksums` is never reported as a match.
+        _ => notify(observers, attempt, ChecksumEventKind::Errored),
     }
 }
 
@@ -443,6 +482,7 @@ mod tests {
                 algorithm,
                 precalculated,
                 Vec::new(),
+                1,
             );
 
             let error = ByteStream::new(body).collect().await.unwrap_err();
@@ -469,6 +509,7 @@ mod tests {
                 checksum_algorithm,
                 precalculated_checksum.clone(),
                 Vec::new(),
+                1,
             )
         });
 
@@ -525,9 +566,11 @@ mod tests {
         use aws_smithy_runtime_api::box_error::BoxError;
         use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
         use aws_smithy_runtime_api::client::interceptors::Intercept;
+        use aws_smithy_runtime_api::client::retries::RequestAttempts;
         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
         use aws_smithy_runtime_api::client::unit_of_work::checksums::{
-            ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver,
+            ChecksumEvent, ChecksumEventKind, ObserveResponseChecksum,
+            SharedResponseChecksumObserver,
         };
         use aws_smithy_runtime_api::http::{Response, StatusCode};
         use aws_smithy_types::body::SdkBody;
@@ -553,41 +596,38 @@ mod tests {
         /// Records the events it receives. It stands in for any observer, including one from a
         /// second copy of `aws-smithy-observability`.
         #[derive(Clone, Debug, Default)]
-        struct Recorder(Arc<Mutex<Vec<String>>>);
+        struct Recorder(Arc<Mutex<Vec<(u32, String)>>>);
 
         impl Recorder {
-            fn record(&self, event: String) {
-                self.0.lock().unwrap().push(event);
+            fn events(&self) -> Vec<String> {
+                let recorded = self.0.lock().unwrap();
+                recorded.iter().map(|(_, event)| event.clone()).collect()
             }
 
-            fn events(&self) -> Vec<String> {
-                self.0.lock().unwrap().clone()
+            fn attempts(&self) -> Vec<u32> {
+                let recorded = self.0.lock().unwrap();
+                recorded.iter().map(|(attempt, _)| *attempt).collect()
             }
         }
 
         impl ObserveResponseChecksum for Recorder {
-            fn validating(&self, algorithm: &'static str) {
-                self.record(format!("validating {algorithm}"));
-            }
-
-            fn not_validated(&self, reason: ChecksumSkip) {
-                self.record(format!("not_validated {reason:?}"));
-            }
-
-            fn matched(&self) {
-                self.record("matched".into());
-            }
-
-            fn mismatched(&self, expected: String, computed: String) {
-                self.record(format!("mismatched {expected} {computed}"));
-            }
-
-            fn errored(&self) {
-                self.record("errored".into());
-            }
-
-            fn dropped(&self) {
-                self.record("dropped".into());
+            fn on_event(&self, event: &ChecksumEvent<'_>) {
+                let recorded = match event.kind() {
+                    ChecksumEventKind::Validating(data) => {
+                        format!("validating {}", data.algorithm())
+                    }
+                    ChecksumEventKind::NotValidated(data) => {
+                        format!("not_validated {:?}", data.reason())
+                    }
+                    ChecksumEventKind::Matched(data) => format!("matched {}", data.computed()),
+                    ChecksumEventKind::Mismatched(data) => {
+                        format!("mismatched {} {}", data.expected(), data.computed())
+                    }
+                    ChecksumEventKind::Errored => "errored".to_string(),
+                    ChecksumEventKind::Dropped => "dropped".to_string(),
+                    other => format!("unknown {other:?}"),
+                };
+                self.0.lock().unwrap().push((event.attempt(), recorded));
             }
         }
 
@@ -609,6 +649,7 @@ mod tests {
                 validation_enabled: false,
             });
             layer.store_put(validation);
+            layer.store_put(RequestAttempts::new(2));
             let mut cfg = ConfigBag::of_layers(vec![layer]);
             for observer in observers {
                 cfg.interceptor_state()
@@ -650,7 +691,14 @@ mod tests {
 
             ByteStream::new(body).collect().await.unwrap();
             for recorder in [first, second] {
-                assert_eq!(recorder.events(), ["validating crc32", "matched"]);
+                assert_eq!(
+                    recorder.events(),
+                    [
+                        "validating crc32".to_string(),
+                        format!("matched {HELLO_WORLD_CRC32}"),
+                    ]
+                );
+                assert_eq!(recorder.attempts(), [2, 2]);
             }
         }
 
@@ -759,7 +807,13 @@ mod tests {
             );
 
             ByteStream::new(body).collect().await.unwrap();
-            assert_eq!(recorder.events(), ["validating crc32", "matched"]);
+            assert_eq!(
+                recorder.events(),
+                [
+                    "validating crc32".to_string(),
+                    format!("matched {HELLO_WORLD_CRC32}"),
+                ]
+            );
         }
 
         #[tokio::test]
