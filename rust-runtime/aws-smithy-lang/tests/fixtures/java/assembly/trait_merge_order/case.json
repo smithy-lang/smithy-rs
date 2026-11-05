@@ -1,0 +1,8 @@
+{
+    "description": "JSON AST traits merge as documents load, then add_trait traits, then IDL traits, whatever the input order.",
+    "steps": [
+        {"addFile": "a.smithy"},
+        {"addFile": "b.json"},
+        {"addTrait": "ex#T", "trait": "smithy.api#tags", "value": ["added"]}
+    ]
+}
