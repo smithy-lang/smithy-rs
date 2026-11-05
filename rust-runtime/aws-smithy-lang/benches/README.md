@@ -210,10 +210,17 @@ taskset -c 2 cargo bench --features runtime-schema --bench model -- '^schema/' -
   operation.
 - `schema/service`: `RuntimeSchemaSet::builder(&model).for_service(..)`, with the
   model's knowledge index already built.
-- `schema/service_cold_knowledge`: the same on a freshly parsed model, so it
-  includes building the knowledge index that service selection uses.
+- `schema/service_cold_knowledge`: the same on a freshly parsed model. Service
+  selection originally used the knowledge index, so this included building it;
+  it now walks the service's declarations and matches `schema/service`.
+- `schema/filtered/{model}/{n}`: `for_service_operations(..)` with the service's
+  first `n` operations in service order.
 - `schema/operation_lookup`: `RuntimeSchemaSet::operation` plus reading the input
   schema.
+- `schema/operation_descriptor`: `RuntimeSchemaSet::operation`, reading every
+  `OperationSchema` field (ID, input, output, errors).
+- `schema/schema_lookup/{model}/{root,member}`: `RuntimeSchemaSet::schema` for the
+  first operation input with members, and for its first member.
 
 Same machine and fixture commit as above, crate commit `052d4dddc` plus the
 uncommitted `runtime_schema` module:
@@ -229,3 +236,155 @@ first computed effective errors with `OperationKnowledge::errors_in`, which
 walks the service's containment graph once per operation; EC2's 769 operations
 made `schema/service` 27.3 ms. Deriving the same errors from the service's
 common errors and each operation's own errors brought it to 9.2 ms.
+
+### Shared `OperationSchema` and filtered service scope
+
+Compares the commit before the change (`77cd8e531`) with the change, run back to
+back on the same unpinned 16-core x86_64 machine with the command above (no
+`taskset`), so absolute numbers differ from the table above:
+
+| Benchmark | Model | Before | After |
+| --------- | ----- | -----: | ----: |
+| `schema/service` | SQS / S3 / EC2 | 0.16 / 1.37 / 10.62 ms | 0.16 / 1.40 / 10.44 ms |
+| `schema/service_cold_knowledge` | SQS / S3 / EC2 | 0.42 / 2.76 / 23.07 ms | 0.17 / 1.41 / 11.22 ms |
+| `schema/filtered/1` | SQS / S3 / EC2 | — | 14 / 29 / 213 µs |
+| `schema/filtered/10` | SQS / S3 / EC2 | — | 68 / 211 / 319 µs |
+| `schema/operation_lookup` | SQS / S3 / EC2 | 43 / 42 / 48 ns | 45 / 45 / 53 ns |
+| `schema/operation_descriptor` | SQS / S3 / EC2 | — | 53 / 54 / 58 ns |
+
+Walking the service and resource declarations instead of building the
+relationship index halves a service build on a freshly loaded model. Selecting
+one EC2 operation costs about 2% of the full service; most of what remains is
+finding and sorting the service's 769 contained operations. Lookup is 4–10%
+slower because `OperationSchema` holds an `aws_smithy_schema::ShapeId` by value
+(four borrowed strings) where the previous descriptor held a reference to the
+model's ID.
+
+### Plan and append-only storage
+
+A set is now planned first (selection, trait validation, cycle checks), then materialized
+into append-only storage whose slots can be filled after the set is shared; public sets are
+still materialized completely before `build` returns. Compares the previous commit
+(`cd5ffacab`) with the change, both pinned to one core (`taskset -c 5`) and run twice,
+alternating, on the same 16-core x86_64 machine:
+
+| Benchmark | Model | Before | After |
+| --------- | ----- | -----: | ----: |
+| `schema/all` | SQS / S3 / EC2 | 131 µs / 1.31 / 9.4–10.1 ms | 133 µs / 1.18–1.20 / 8.3–8.7 ms |
+| `schema/service` | SQS / S3 / EC2 | 161 µs / 1.38 / 10.0–11.8 ms | 162 µs / 1.26 / 8.6–8.8 ms |
+| `schema/operation_lookup` | SQS / S3 / EC2 | 45–46 / 44–46 / 51 ns | 47–48 / 46 / 49–51 ns |
+| `schema/schema_lookup/root` | SQS / S3 / EC2 | 36 / 36 / 37–39 ns | 42 / 45–46 / 46–47 ns |
+| `schema/schema_lookup/member` | SQS / S3 / EC2 | 42–43 / 44 / 41–42 ns | 62 / 66–67 / 66–68 ns |
+
+Building no longer inserts every root and member ID into a hash map, which pays for the
+plan and the slots. `schema` instead finds a root with the model's own lookup and a table
+from model position to plan index, then a member by comparing names (up to 8 members) or
+hashing the member name in the model: one more step than the removed map, so root lookups
+are about 6–9 ns slower and member lookups about 22 ns. Operation lookup, the request
+path, is unchanged. The plan takes 24 bytes per root, 16 per member, 72 per operation
+plus its errors, and 4 per model shape, about 0.34 MB for EC2 (4,041 roots, 10,259
+members, 769 operations, 4,951 shapes), less than the removed map of 14,300 IDs.
+
+### Lazy materialization
+
+`Materialization::Lazy` sets, built with `for_service`, measured on the same machine pinned to
+one core (`taskset -c 5`), except the threaded `contended_*` cases, which run unpinned. The
+eager `schema/service` from the same run is the comparison:
+
+| Benchmark | SQS | S3 | EC2 |
+| --------- | --: | -: | --: |
+| `schema/service` (eager) | 162 µs | 1.30 ms | 8.97 ms |
+| `schema/service_plan` (lazy, nothing built) | 93 µs | 0.64 ms | 4.58 ms |
+| `schema/materialize_all` (lazy, then everything) | 182 µs | 1.47 ms | 9.71 ms |
+| `schema/first_operation/p50` | 4.6 µs | 9.2 µs | 13.5 µs |
+| `schema/first_operation/p90` | 7.8 µs | 25.9 µs | 18.4 µs |
+| `schema/first_operation/max` | 17.3 µs | 35.4 µs | 169 µs |
+| `schema/overlapping_operation` | 2.3 µs | 25.9 µs | 3.9 µs |
+
+`first_operation` ranks the service's operations by how many shapes they reach (with
+`Walker`) and measures the median, 90th-percentile, and largest; it measures the lookup
+only, after the set is built. `overlapping_operation` is the second operation in service
+order after the first. All are well within the design's EC2 targets (100 µs, 250 µs, 1 ms).
+
+A lazy plan costs 51% of an eager EC2 build, above the provisional 35% target: selection,
+trait validation, and cycle checks are half the work, and allocation the other half. In the
+profile, hashing shape IDs (selection and model lookups) is the largest part of planning,
+then trait decoding. `materialize_all` after a lazy build costs 1.08–1.14 times an eager
+build, within the 1.5 times target, because it decodes traits a second time and builds
+members by searching rather than in the planner's order.
+
+First lookups contending on one lock, EC2, including spawning the threads (unpinned):
+
+| Threads | `contended_same` | `contended_distinct` |
+| ------: | ---------------: | -------------------: |
+| 2 | 86 µs | 112 µs |
+| 4 | 118 µs | 153 µs |
+| 8 | 184 µs | 237 µs |
+
+Threads asking for the same operation wait for one build and then share it; threads asking
+for different ones are serialized by the lock, so the time grows with their total work.
+
+### Positional planning
+
+Selection now hashes each reference once, to find its model position, and indexes dense
+tables by position afterwards (previously it hashed shape IDs into an `IndexMap` of
+selected roots and looked each member target up again while planning). A lazy plan no
+longer keeps the trait facts that only an eager build reuses. Same machine, pinned, two
+runs:
+
+| Benchmark | Model | Phase 3 | Now |
+| --------- | ----- | ------: | --: |
+| `schema/all` | SQS / S3 / EC2 | 136 µs / 1.19 / 8.34 ms | 97 µs / 1.00 / 6.1–6.5 ms |
+| `schema/service` | SQS / S3 / EC2 | 162 µs / 1.30 / 8.97 ms | 113 µs / 1.03 / 6.7–7.6 ms |
+| `schema/service_plan` | SQS / S3 / EC2 | 93 µs / 0.64 / 4.58 ms | 46 µs / 0.37 / 2.57–2.81 ms |
+| `schema/materialize_all` | SQS / S3 / EC2 | 182 µs / 1.47 / 9.71 ms | 129 µs / 1.22 / 7.6–8.2 ms |
+| `schema/first_operation` EC2 | p50 / p90 / max | 13.5 / 18.4 / 169 µs | 11.3 / 16.9 / 166 µs |
+
+The EC2 lazy plan is now 38–42% of an eager service build (target 35%); what remains is
+trait decoding, hashing to find model positions, and the model lookups behind them, each
+needed to validate. A test of the prefix of applied trait IDs before matching them made no
+measurable difference and was not kept. `materialize_all` is 1.1–1.2 times an eager build.
+Warm lookups are unchanged: `operation_lookup` 46–51 ns, `operation_descriptor` 54–59 ns,
+`schema_lookup` roots 42–44 ns and members 64–67 ns.
+
+### Memory
+
+`benches/schema_memory.rs` installs a counting allocator (so it is a separate binary from
+`model.rs`) and prints allocations, allocated bytes, peak live bytes, and retained bytes for
+each step:
+
+```text
+cargo bench -p aws-smithy-lang --features runtime-schema --bench schema_memory
+```
+
+EC2 (S3 and SQS are proportionally smaller; the binary prints all three):
+
+| Case | Schemas | Allocations | Peak | Retained |
+| ---- | ------: | ----------: | ---: | -------: |
+| model | – | 459,098 | 35.20 MiB | 29.38 MiB |
+| eager all shapes | 15,069 | 17,536 | 7.66 MiB | 5.66 MiB |
+| eager service | 15,069 | 17,540 | 7.66 MiB | 5.66 MiB |
+| lazy service, nothing built | 0 | 69 | 0.94 MiB | 367.5 KiB |
+| lazy, 1 operation selected | 0 | 31 | 51.0 KiB | 20.0 KiB |
+| first operation, p50 / p90 / max | 33 / 44 / 630 | 47 / 61 / 749 | – | 12.0 / 15.9 / 229.7 KiB |
+| 10 consecutive / spread operations | 231 / 327 | 321 / 423 | – | 83.4 / 118.9 KiB |
+| lazy service, then everything | 15,069 | 17,541 | 5.66 MiB | 5.66 MiB |
+| 10 lazy build/use/drop cycles | – | 175,410 | 5.66 MiB | 0 |
+
+A lazy set that has built everything retains exactly what an eager one does (the gate is
+at most 15% more), and builds the same 15,069 schemas. Its plan retains 367.5 KiB before
+anything is built, against 5.66 MiB for an eager set, and an eager build peaks 2 MiB above
+what it retains, from the planner's facts. `size_of::<OperationSchema>()` is 96 bytes; it is
+built by value and never allocated. Repeated cycles retain nothing.
+
+### Compile time and size
+
+Release `libaws_smithy_lang.rlib`, `cd5ffacab` → now: with `runtime-schema` 8,723,562 →
+8,804,230 bytes (+80.7 KB, under the 100 KiB gate; the Phase 2 overrun of +139 KB is gone),
+without it 8,330,126 → 8,330,502. Of the growth, 9.4 KB is code in `runtime_schema` symbols;
+other `aws_smithy_lang` code grows 11.8 KB and inlined dependency code shrinks 10.9 KB, so
+most of it is crate metadata.
+
+Rebuilding only `aws-smithy-lang` (dependencies built, `lib.rs` touched, median of five):
+release 7.79 → 7.75 s, `cargo check` 0.77 → 0.80 s (+4%), and a debug incremental rebuild
+after editing the materializer (`build.rs` before) 1.20 → 1.25 s (+4%, within the 5% gate).

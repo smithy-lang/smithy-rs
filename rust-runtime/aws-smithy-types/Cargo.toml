@@ -69,7 +69,7 @@ tokio = { version = "1.49.0", features = [
 tokio-stream = "0.1.5"
 tempfile = "3.16.0"
 
-criterion = "0.8.2"
+criterion = { version = "0.8.2", features = ["async_tokio"] }
 
 [package.metadata.docs.rs]
 all-features = true
@@ -87,6 +87,11 @@ stable = true
 [[bench]]
 name = "base64"
 harness = false
+
+[[bench]]
+name = "bytestream_from_file"
+harness = false
+required-features = ["rt-tokio"]
 
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
 version = "1.0.229"

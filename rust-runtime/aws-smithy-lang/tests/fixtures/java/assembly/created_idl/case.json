@@ -1,0 +1,5 @@
+{
+    "description": "A shape built in code, then an IDL definition, whose traits are applied last: the shape's traits come first, and it is the later, kept definition.",
+    "steps": [{"addShapes": "code.json"}, {"addFile": "f.smithy"}],
+    "locations": ["ex#S", "ex#S$m"]
+}

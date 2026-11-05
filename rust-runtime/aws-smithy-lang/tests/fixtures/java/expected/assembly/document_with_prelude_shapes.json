@@ -1,0 +1,133 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Failure": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#error": "client"
+            }
+        },
+        "ex#ListThings": {
+            "type": "operation",
+            "input": {
+                "target": "ex#ListThingsInput"
+            },
+            "output": {
+                "target": "ex#ListThingsOutput"
+            },
+            "errors": [
+                {
+                    "target": "ex#Failure"
+                }
+            ],
+            "traits": {
+                "smithy.api#paginated": {},
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#ListThingsInput": {
+            "type": "structure",
+            "members": {
+                "token": {
+                    "target": "smithy.api#String"
+                },
+                "size": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#default": 10,
+                        "smithy.api#range": {
+                            "min": 1,
+                            "max": 100
+                        }
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#ListThingsOutput": {
+            "type": "structure",
+            "members": {
+                "token": {
+                    "target": "smithy.api#String"
+                },
+                "things": {
+                    "target": "ex#ThingList",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#Ping": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#Thing": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#length": {
+                            "min": 1
+                        },
+                        "smithy.api#required": {}
+                    }
+                },
+                "created": {
+                    "target": "smithy.api#Timestamp",
+                    "traits": {
+                        "smithy.api#timestampFormat": "date-time"
+                    }
+                },
+                "enabled": {
+                    "target": "smithy.api#PrimitiveBoolean",
+                    "traits": {
+                        "smithy.api#default": false
+                    }
+                }
+            }
+        },
+        "ex#ThingList": {
+            "type": "list",
+            "member": {
+                "target": "ex#Thing"
+            }
+        },
+        "ex#Things": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "ex#ListThings"
+                },
+                {
+                    "target": "ex#Ping"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "A service.",
+                "smithy.api#paginated": {
+                    "inputToken": "token",
+                    "outputToken": "token",
+                    "pageSize": "size"
+                }
+            }
+        }
+    }
+}

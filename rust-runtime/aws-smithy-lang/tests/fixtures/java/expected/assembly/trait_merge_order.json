@@ -1,0 +1,15 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#T": {
+            "type": "string",
+            "traits": {
+                "smithy.api#tags": [
+                    "json",
+                    "added",
+                    "idl"
+                ]
+            }
+        }
+    }
+}
