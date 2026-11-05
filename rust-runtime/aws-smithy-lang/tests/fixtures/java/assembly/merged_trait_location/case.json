@@ -1,0 +1,5 @@
+{
+    "description": "A list trait defined by two files is concatenated, and the merged trait keeps the location of the first value.",
+    "steps": [{"addFile": "a.json"}, {"addFile": "b.json"}],
+    "locations": ["ex#T@smithy.api#tags"]
+}

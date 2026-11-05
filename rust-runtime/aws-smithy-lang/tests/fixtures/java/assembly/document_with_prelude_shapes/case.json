@@ -1,0 +1,5 @@
+{
+    "description": "A model serialized with its prelude shapes, as the smithy-build model plugin writes it with includePreludeShapes: it loads without a diagnostic. model.json is generated from model.smithy.",
+    "serializeWithPrelude": {"from": "model.smithy", "to": "model.json"},
+    "steps": [{"addFile": "model.json"}]
+}

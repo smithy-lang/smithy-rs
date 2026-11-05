@@ -1,0 +1,5 @@
+{
+    "description": "add_trait replaces a default value set with IDL syntactic sugar instead of conflicting with it.",
+    "steps": [{"addFile": "a.smithy"}, {"addTrait": "ex#R$x", "trait": "smithy.api#default", "value": "b"}],
+    "locations": ["ex#R$x@smithy.api#default"]
+}
