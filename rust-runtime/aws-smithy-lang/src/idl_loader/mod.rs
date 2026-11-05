@@ -195,7 +195,14 @@ impl<'a> Parser<'a> {
                     .error("shape and `apply` statements require a namespace"));
             }
             if self.peek_keyword("apply") {
-                statements.push(StatementSyntax::Apply(self.apply(annotations)?));
+                // Like the reference implementation, documentation comments before `apply`
+                // are dropped, but traits are a syntax error.
+                if !annotations.traits.is_empty() {
+                    return Err(self
+                        .cursor
+                        .error("traits cannot be applied to an `apply` statement"));
+                }
+                statements.push(StatementSyntax::Apply(self.apply()?));
             } else {
                 statements.push(StatementSyntax::Shape(self.shape(annotations)?));
             }
@@ -298,30 +305,10 @@ impl<'a> Parser<'a> {
     fn annotations(&mut self) -> Result<Annotations, IdlParseError> {
         let documentation = self.cursor.documentation();
         let mut traits = Vec::new();
-        loop {
-            if !self.cursor.consume("@") {
-                break;
-            }
-            let start = self.cursor.pos - 1;
-            let id = self.cursor.shape_id()?;
-            self.cursor.sp0();
-            let at = Span::new(start, start + 1);
-            let value = if self.cursor.starts_with("(") {
-                let open = self.cursor.expect("(", "`(`")?;
-                match self.cursor.trait_value(open, 0)? {
-                    TraitValueSyntax::Omitted { .. } => TraitValueSyntax::Omitted { at },
-                    explicit => explicit,
-                }
-            } else {
-                TraitValueSyntax::Omitted { at }
-            };
-            traits.push(TraitSyntax {
-                id,
-                value,
-                span: Span::new(start, self.cursor.pos),
-            });
+        while self.cursor.starts_with("@") {
+            traits.push(self.trait_application()?);
             // Documentation is only applied when it precedes every trait. A late `///`
-            // block is ordinary trivia, matching Smithy Java.
+            // block is ordinary trivia, as in the reference implementation.
             let _ = self.cursor.documentation();
         }
         Ok(Annotations {
@@ -330,17 +317,52 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn apply(&mut self, leading: Annotations) -> Result<ApplySyntax, IdlParseError> {
+    /// One trait application, starting at its `@`.
+    fn trait_application(&mut self) -> Result<TraitSyntax, IdlParseError> {
         let start = self.cursor.pos;
+        self.cursor.expect("@", "`@`")?;
+        let id = self.cursor.shape_id()?;
+        self.cursor.sp0();
+        let at = Span::new(start, start + 1);
+        let value = if self.cursor.starts_with("(") {
+            let open = self.cursor.expect("(", "`(`")?;
+            match self.cursor.trait_value(open, 0)? {
+                TraitValueSyntax::Omitted { .. } => TraitValueSyntax::Omitted { at },
+                explicit => explicit,
+            }
+        } else {
+            TraitValueSyntax::Omitted { at }
+        };
+        Ok(TraitSyntax {
+            id,
+            value,
+            span: Span::new(start, self.cursor.pos),
+        })
+    }
+
+    /// `apply Target @trait` or `apply Target { @trait ... }`, positioned at `apply`.
+    ///
+    /// Like the reference implementation, the single form applies exactly one trait, a block may
+    /// be empty, and documentation comments inside a block are dropped. The statement counts
+    /// toward `max_shapes`, as a JSON AST `apply` entry does.
+    fn apply(&mut self) -> Result<ApplySyntax, IdlParseError> {
+        let start = self.cursor.pos;
+        self.count_shape(start)?;
         self.cursor.keyword("apply");
         self.cursor.sp1()?;
         let target = self.cursor.shape_id()?;
-        let mut trailing = self.annotations()?;
-        let singular_end = trailing.traits.last().map(|value| value.span.end);
-        if self.cursor.consume("{") {
+        let before = self.cursor.pos;
+        self.cursor.ws0();
+        if self.cursor.pos == before {
+            return Err(self
+                .cursor
+                .error("expected whitespace after the `apply` target"));
+        }
+        let traits = if self.cursor.starts_with("@") {
+            vec![self.trait_application()?]
+        } else if self.cursor.consume("{") {
+            // A block's documentation comments document nothing.
             let block = self.annotations()?;
-            trailing.documentation = trailing.documentation.or(block.documentation);
-            trailing.traits.extend(block.traits);
             if !self.cursor.consume("}") {
                 return Err(self.cursor.error(if self.cursor.eof() {
                     "expected `}` after applied traits"
@@ -348,21 +370,14 @@ impl<'a> Parser<'a> {
                     "expected a trait application or `}` in `apply`"
                 }));
             }
-        } else if let Some(end) = singular_end {
-            self.cursor.pos = end;
-        }
-        let mut traits = leading.traits;
-        traits.extend(trailing.traits);
-        if traits.is_empty() {
+            block.traits
+        } else {
             return Err(self
                 .cursor
-                .error("an `apply` statement requires at least one trait"));
-        }
+                .error("expected a trait application or `{` after the `apply` target"));
+        };
         Ok(ApplySyntax {
-            annotations: Annotations {
-                documentation: leading.documentation.or(trailing.documentation),
-                traits,
-            },
+            traits,
             target,
             span: Span::new(start, self.cursor.pos),
         })

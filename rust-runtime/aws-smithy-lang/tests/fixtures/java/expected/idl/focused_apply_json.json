@@ -1,0 +1,42 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Later": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#tags": [
+                            "a-apply",
+                            "b-inline",
+                            "b-apply-after"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Applied in an earlier file.",
+                "smithy.api#tags": [
+                    "a-apply",
+                    "b-inline"
+                ]
+            }
+        },
+        "ex#Same": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#tags": [
+                            "before",
+                            "inline"
+                        ]
+                    }
+                }
+            }
+        }
+    }
+}

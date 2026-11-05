@@ -467,6 +467,48 @@ fn values_created_in_code_are_never_at_the_same_location() {
 }
 
 #[test]
+fn idl_apply_outside_the_prelude_namespace_cannot_target_it() {
+    // Like the reference implementation, an IDL `apply` outside `smithy.api` cannot target a
+    // shape in it, even one a document added, and even without the prelude.
+    let added = doc(r#""smithy.api#Added":{"type":"string"}"#);
+    for prelude in [true, false] {
+        let mut assembler = Model::assembler();
+        if !prelude {
+            assembler = assembler.disable_prelude();
+        }
+        let validated = assembler
+            .add_json_str("a.json", added.clone())
+            .add_idl_str(
+                "b.smithy",
+                "$version: \"2\"\nnamespace ex\napply smithy.api#Added @smithy.api#sensitive\n",
+            )
+            .assemble();
+        assert_eq!(
+            codes(&validated),
+            [(Severity::Error, DiagnosticCode::PreludeConflict)],
+            "prelude: {prelude}"
+        );
+    }
+    // From inside the namespace, it can.
+    let model = expect_model(
+        Model::assembler()
+            .disable_prelude()
+            .add_json_str("a.json", added)
+            .add_idl_str(
+                "b.smithy",
+                "$version: \"2\"\nnamespace smithy.api\napply Added @smithy.api#sensitive\n",
+            )
+            .assemble(),
+    );
+    let added = model
+        .expect_shape(&ShapeId::from_static("smithy.api#Added"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert!(added.has_trait(&ShapeId::from_static("smithy.api#sensitive")));
+}
+
+#[test]
 fn shapes_keep_the_order_of_their_inputs() {
     // Shapes and models added in code are merged before documents, but the model lists every
     // shape in the order of the input that first added it.
@@ -861,45 +903,33 @@ fn shapes_built_in_code_merge_like_created_shapes() {
         r#""members":{"m":{"target":"smithy.api#String","traits":{"smithy.api#tags":["file"]}}}"#;
     let shape_traits = r#""traits":{"smithy.api#tags":["file"]}"#;
 
-    // A JSON AST definition with traits: its first trait in document order touches the shape
-    // built in code, whose traits follow; then the rest of the document's traits. The
-    // document's definition is the later, kept one.
+    // A JSON AST definition with traits: the shape built in code's traits first, then the
+    // document's, whatever the key order in the JSON object. The document's definition is the
+    // later, kept one.
     let traits_first = doc(&format!(
         r#""ex#S":{{"type":"structure",{shape_traits},{member}}}"#
     ));
-    let model = expect_model(
-        Model::assembler()
-            .add_json_str("f.json", traits_first)
-            .add_shape(built("code"))
-            .assemble(),
-    );
-    assert_eq!(
-        tags_of(&model, "ex#S").as_deref(),
-        Some(r#"["file","code"]"#)
-    );
-    assert_eq!(
-        tags_of(&model, "ex#S$m").as_deref(),
-        Some(r#"["code","file"]"#)
-    );
-    let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
-    assert_eq!(shape.source_location().source(), "f.json");
     let members_first = doc(&format!(
         r#""ex#S":{{"type":"structure",{member},{shape_traits}}}"#
     ));
-    let model = expect_model(
-        Model::assembler()
-            .add_shape(built("code"))
-            .add_json_str("f.json", members_first)
-            .assemble(),
-    );
-    assert_eq!(
-        tags_of(&model, "ex#S").as_deref(),
-        Some(r#"["code","file"]"#)
-    );
-    assert_eq!(
-        tags_of(&model, "ex#S$m").as_deref(),
-        Some(r#"["file","code"]"#)
-    );
+    for document in [traits_first, members_first] {
+        let model = expect_model(
+            Model::assembler()
+                .add_json_str("f.json", document)
+                .add_shape(built("code"))
+                .assemble(),
+        );
+        assert_eq!(
+            tags_of(&model, "ex#S").as_deref(),
+            Some(r#"["code","file"]"#)
+        );
+        assert_eq!(
+            tags_of(&model, "ex#S$m").as_deref(),
+            Some(r#"["code","file"]"#)
+        );
+        let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
+        assert_eq!(shape.source_location().source(), "f.json");
+    }
 
     // A definition without applied traits (here an IDL one, whose traits are applied last):
     // the shape built in code is the later, kept definition.
