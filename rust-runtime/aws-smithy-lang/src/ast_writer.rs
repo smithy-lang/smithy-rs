@@ -28,6 +28,7 @@
 use crate::diagnostic::WriteError;
 use crate::model::Model;
 use crate::node::{Node, NodeSer, NodeValue};
+use crate::prelude;
 use crate::shape::{MemberShape, Shape, TraitMap};
 use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
@@ -66,7 +67,8 @@ pub struct AstWriter {
 }
 
 impl AstWriter {
-    /// A writer producing compact, insertion-ordered output without prelude shapes.
+    /// A writer producing compact, insertion-ordered output without shapes in the prelude
+    /// namespace.
     pub fn new() -> Self {
         Self::default()
     }
@@ -77,8 +79,20 @@ impl AstWriter {
         self
     }
 
-    /// Also writes prelude shapes. Output written this way can only be reloaded with
+    /// Also writes shapes in the prelude namespace: the prelude's own shapes, and any shapes the
+    /// model's documents added to `smithy.api`. Without this option, like the reference
+    /// implementation's `ModelSerializer`, every shape in the namespace is left out, including
+    /// those of a model assembled with
     /// [`ModelAssembler::disable_prelude`](crate::ModelAssembler::disable_prelude).
+    ///
+    /// Output written with this option reloads into an equivalent model, with or without the
+    /// prelude: with the prelude, the written prelude shapes are replaced by the prelude's own.
+    ///
+    /// A model assembled with
+    /// [`ModelAssembler::disable_prelude`](crate::ModelAssembler::disable_prelude) that defines
+    /// its own `smithy.api` shapes must be written with this option to round-trip: without it,
+    /// those shapes are left out, and references to them (such as `smithy.api#String`) no
+    /// longer resolve when the output is reloaded without the prelude.
     pub fn include_prelude(mut self, include: bool) -> Self {
         self.include_prelude = include;
         self
@@ -133,7 +147,13 @@ struct DocumentSer<'a> {
 impl Serialize for DocumentSer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let data = self.model.data();
-        let mut shapes: Vec<&Shape> = data.shapes.values().collect();
+        // Like the reference implementation's `ModelSerializer`, shapes in the prelude namespace
+        // are left out unless the prelude is included, even those a document added to it.
+        let mut shapes: Vec<&Shape> = data
+            .shapes
+            .values()
+            .filter(|shape| self.include_prelude || !prelude::is_prelude_shape(shape.id()))
+            .collect();
         if self.include_prelude {
             shapes.extend(data.prelude.into_iter().flat_map(IndexMap::values));
         }
@@ -582,7 +602,9 @@ mod tests {
             .to_string(&model)
             .unwrap();
         assert!(with_prelude.contains(r#""smithy.api#String":{"type":"string""#));
-        assert!(Model::from_json_str("t", &with_prelude).is_err());
+        // As in the reference implementation, the prelude replaces the written prelude shapes.
+        let reloaded = Model::from_json_str("t", &with_prelude).unwrap();
+        assert!(model.equivalent(&reloaded));
         let bare = ModelAssembler::new()
             .disable_prelude()
             .add_json_str("t", with_prelude.clone())
@@ -590,6 +612,27 @@ mod tests {
             .into_result()
             .unwrap();
         assert_eq!(bare.len(), model.len());
+        // Like the reference implementation, every shape in the prelude namespace is left out
+        // unless the prelude is included, even without the prelude.
+        assert_eq!(
+            AstWriter::new().to_string(&bare).unwrap(),
+            AstWriter::new().to_string(&model).unwrap()
+        );
+
+        // The same holds for shapes a document adds to the prelude namespace.
+        let added = load(
+            r#"{"smithy":"2.0","shapes":{"smithy.api#Foo":{"type":"string"},"a#B":{"type":"string"}}}"#,
+        );
+        assert_eq!(
+            AstWriter::new().to_string(&added).unwrap(),
+            r#"{"smithy":"2.0","shapes":{"a#B":{"type":"string"}}}"#
+        );
+        let with_prelude = AstWriter::new()
+            .include_prelude(true)
+            .to_string(&added)
+            .unwrap();
+        assert!(with_prelude.contains(r#""smithy.api#Foo":{"type":"string"}"#));
+        assert!(added.equivalent(&load(&with_prelude)));
 
         let empty = load(r#"{"smithy":"2.0"}"#);
         assert_eq!(

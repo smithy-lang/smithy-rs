@@ -1,0 +1,4 @@
+{
+    "description": "Shapes built in code in the prelude namespace are ignored, including one that redefines smithy.api#String as an integer: @length stays valid on a member targeting it.",
+    "steps": [{"addShapes": "prelude.json", "disablePrelude": true}, {"addFile": "f.json"}]
+}

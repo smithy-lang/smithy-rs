@@ -296,6 +296,13 @@ fn unoptimized_bdd_matches_java() {
 }
 
 #[test]
+// Skipped on Windows: the compiler is platform-independent Rust with no OS calls, Linux CI
+// (`check-rust-runtimes`) runs this test, and in a Windows debug build it takes long enough
+// to push the Windows job past its timeout.
+#[cfg_attr(
+    windows,
+    ignore = "slow (1-2 minutes on Linux, several on Windows); runs in Linux CI"
+)]
 fn cost_optimized_bdd_matches_java() {
     let options = CompileOptions::default();
     for fixture in fixtures() {
@@ -343,6 +350,13 @@ fn compiled_bdd_matches_java() {
 
 /// Runs every stage from the rule set, checking each against Java's. Sifting dominates.
 #[test]
+// Skipped on Windows: the compiler is platform-independent Rust with no OS calls, Linux CI
+// (`check-rust-runtimes`) runs this test, and in a Windows debug build it takes long enough
+// to push the Windows job past its timeout.
+#[cfg_attr(
+    windows,
+    ignore = "slow (1-2 minutes on Linux, several on Windows); runs in Linux CI"
+)]
 fn pipeline_matches_java() {
     let options = CompileOptions::default();
     for fixture in fixtures() {
@@ -388,6 +402,13 @@ fn s3_rewrite_matches_java() {
 /// `tests/endpoint_bdd_java.rs` checks the `aws-s3-rewritten` fixture records); other
 /// services compile as without a service.
 #[test]
+// Skipped on Windows: the compiler is platform-independent Rust with no OS calls, Linux CI
+// (`check-rust-runtimes`) runs this test, and in a Windows debug build it takes long enough
+// to push the Windows job past its timeout.
+#[cfg_attr(
+    windows,
+    ignore = "slow (1-2 minutes on Linux, several on Windows); runs in Linux CI"
+)]
 fn compile_for_service_matches_checked_in_bdds() {
     let fixtures = fixtures();
     let fixture = |name: &str| fixtures.iter().find(|f| f.name == name).unwrap();

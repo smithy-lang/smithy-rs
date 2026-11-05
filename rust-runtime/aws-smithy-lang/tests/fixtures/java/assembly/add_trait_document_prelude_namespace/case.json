@@ -1,0 +1,4 @@
+{
+    "description": "A trait applied in code to smithy.api#Foo, a shape a document added to the prelude namespace: accepted and merged with the document's own traits. Only the prelude's own shapes reject traits applied in code (see add_trait_prelude_shape).",
+    "steps": [{"addFile": "f.json"}, {"addTrait": "smithy.api#Foo", "trait": "smithy.api#sensitive", "value": {}}]
+}
