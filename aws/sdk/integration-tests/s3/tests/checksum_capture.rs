@@ -8,14 +8,15 @@
 #![cfg(feature = "test-util")]
 
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::config::{Credentials, Region, ResponseChecksumValidation};
 use aws_sdk_s3::types::ChecksumMode;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::{NeverClient, ReplayEvent, StaticReplayClient};
-use aws_smithy_observability::unit_of_work::{
-    Capture, ChecksumCapture, ChecksumOutcome, IncompleteCause, NotValidatedReason,
+use aws_smithy_observability::unit_of_work::checksums::{
+    ChecksumCapture, ChecksumOutcome, IncompleteCause, NotValidatedReason,
     ResponseChecksumAlgorithm,
 };
+use aws_smithy_observability::unit_of_work::Capture;
 use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::RetryConfig;
@@ -136,7 +137,7 @@ async fn an_error_response_with_a_checksum_header_keeps_its_modeled_error() {
     assert_eq!(http_client.actual_requests().count(), 1);
     assert_eq!(
         checksum.try_outcome(),
-        not_validated(NotValidatedReason::NoResponse)
+        not_validated(NotValidatedReason::ErrorResponse)
     );
 }
 
@@ -229,6 +230,16 @@ async fn two_captures_on_one_call_both_validate() {
 }
 
 #[tokio::test]
+async fn the_same_handle_in_two_captures_records_the_call_once() {
+    let http_client = StaticReplayClient::new(vec![hello_world(200, HELLO_WORLD_CRC32)]);
+    let checksum = ChecksumCapture::new();
+
+    let body_error = get_and_read(&client(http_client), &[&checksum, &checksum]).await;
+    assert_eq!(body_error, None);
+    assert_eq!(checksum.try_outcome(), validated());
+}
+
+#[tokio::test]
 async fn a_client_level_capture_never_reports_one_call_for_another() {
     let http_client = StaticReplayClient::new(vec![
         hello_world(200, HELLO_WORLD_CRC32),
@@ -267,5 +278,31 @@ async fn a_cancelled_call_reads_no_response() {
     assert_eq!(
         checksum.try_outcome(),
         not_validated(NotValidatedReason::NoResponse)
+    );
+}
+
+#[tokio::test]
+async fn validation_turned_off_on_the_client_reads_disabled() {
+    let http_client = StaticReplayClient::new(vec![hello_world(200, HELLO_WORLD_CRC32)]);
+    let checksum = ChecksumCapture::new();
+    let client = client_with(
+        Config::builder()
+            .http_client(http_client)
+            .response_checksum_validation(ResponseChecksumValidation::WhenRequired),
+    );
+
+    let output = client
+        .get_object()
+        .bucket("test-bucket")
+        .key("test.txt")
+        .customize()
+        .interceptor(Capture::new().with(&checksum))
+        .send()
+        .await
+        .unwrap();
+    output.body.collect().await.unwrap();
+    assert_eq!(
+        checksum.try_outcome(),
+        not_validated(NotValidatedReason::Disabled)
     );
 }

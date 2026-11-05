@@ -135,7 +135,8 @@ macro_rules! get_object {
 /// A validated GetObject with nothing attached, in the previous release and in this build, and
 /// in this build with a checksum capture attached.
 fn get_object(c: &mut Criterion) {
-    use aws_smithy_observability::unit_of_work::{Capture, ChecksumCapture};
+    use aws_smithy_observability::unit_of_work::checksums::ChecksumCapture;
+    use aws_smithy_observability::unit_of_work::Capture;
 
     let previous_client = get_object_client!(previous_s3, previous_http_client);
     let current_client = get_object_client!(aws_sdk_s3, aws_smithy_http_client);

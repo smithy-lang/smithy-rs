@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 };
 use aws_smithy_runtime_api::client::interceptors::{dyn_dispatch_hint, Intercept};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_runtime_api::client::unit_of_work::{
+use aws_smithy_runtime_api::client::unit_of_work::checksums::{
     ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver,
 };
 use aws_smithy_runtime_api::http::Headers;
@@ -136,18 +136,21 @@ where
         };
 
         let response = context.response_mut();
-        // An error response is never validated: a mismatch would replace its modeled error with a
-        // body error that is retried as transient.
-        if !response.status().is_success() {
-            return Ok(());
-        }
-
         // Observers are registered by callers that want to know how validation went, such as a
         // `Capture` from `aws-smithy-observability`. Usually there are none.
         let observers: Vec<SharedResponseChecksumObserver> = cfg
             .load::<SharedResponseChecksumObserver>()
             .cloned()
             .collect();
+        // An error response is never validated: a mismatch would replace its modeled error with a
+        // body error that is retried as transient.
+        if !response.status().is_success() {
+            observers
+                .iter()
+                .for_each(|o| o.not_validated(ChecksumSkip::ErrorResponse));
+            return Ok(());
+        }
+
         if !validation_enabled {
             observers
                 .iter()
@@ -344,7 +347,7 @@ mod tests {
         wrap_body_with_checksum_validator,
     };
     use aws_smithy_checksums::ChecksumAlgorithm;
-    use aws_smithy_runtime_api::client::unit_of_work::ChecksumSkip;
+    use aws_smithy_runtime_api::client::unit_of_work::checksums::ChecksumSkip;
     use aws_smithy_runtime_api::http::Headers;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
@@ -523,7 +526,7 @@ mod tests {
         use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
         use aws_smithy_runtime_api::client::interceptors::Intercept;
         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-        use aws_smithy_runtime_api::client::unit_of_work::{
+        use aws_smithy_runtime_api::client::unit_of_work::checksums::{
             ChecksumSkip, ObserveResponseChecksum, SharedResponseChecksumObserver,
         };
         use aws_smithy_runtime_api::http::{Response, StatusCode};
@@ -713,6 +716,23 @@ mod tests {
                     ResponseChecksumValidation::WhenSupported,
                     "not_validated UnsupportedAlgorithm",
                 ),
+                // A header for an algorithm the SDK computes decides, even when it can't be used.
+                (
+                    &[
+                        ("x-amz-checksum-md5", "AAAAAAAAAAAAAAAAAAAAAA=="),
+                        ("x-amz-checksum-crc32", "i9aeUg==-3"),
+                    ],
+                    ResponseChecksumValidation::WhenSupported,
+                    "not_validated PartLevelChecksum",
+                ),
+                (
+                    &[
+                        ("x-amz-checksum-md5", "AAAAAAAAAAAAAAAAAAAAAA=="),
+                        ("x-amz-checksum-crc32", "not base64!"),
+                    ],
+                    ResponseChecksumValidation::WhenSupported,
+                    "not_validated InvalidChecksumHeader",
+                ),
                 (
                     &[CRC32_HEADER],
                     ResponseChecksumValidation::WhenRequired,
@@ -743,7 +763,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn an_error_response_is_neither_reported_nor_validated() {
+        async fn an_error_response_is_reported_but_never_validated() {
             for status in [404, 503] {
                 let recorder = Recorder::default();
                 let body = produce(
@@ -758,7 +778,11 @@ mod tests {
                     .collect()
                     .await
                     .unwrap_or_else(|e| panic!("{status} was validated: {e}"));
-                assert!(recorder.events().is_empty(), "{status}");
+                assert_eq!(
+                    recorder.events(),
+                    ["not_validated ErrorResponse"],
+                    "{status}"
+                );
             }
         }
 
