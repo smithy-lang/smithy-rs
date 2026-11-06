@@ -24,7 +24,7 @@ let config = aws_sdk_dynamodb::Config::builder()
     .build();
 ```
 
-Prefer setting a longer value over calling `set_read_timeout(None)`. Disabling a single timeout also clears the 3.1 second connect timeout default, because a `TimeoutConfig` with no field in the "set" state stops the config merge from reading lower-priority layers. That behavior predates this change.
+Prefer setting a longer value over calling `set_read_timeout(None)`. If a disable is the *only* thing your `TimeoutConfig` specifies, it also clears the 3.1 second connect timeout default, because a config with no field in the "set" state stops the merge from reading lower-priority layers. Setting any other timeout alongside the disable avoids that. The behavior predates this change.
 
 A read timeout failure is classified as a transient error and is retried, so a single unresponsive connection costs one attempt rather than the operation.
 
