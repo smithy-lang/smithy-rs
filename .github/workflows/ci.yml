@@ -535,7 +535,10 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     needs: detect-changes
-    runs-on: ubuntu-latest
+    # Ubuntu 26.04 ships Docker 29.4.2, whose seccomp profile blocks the
+    # `socketcall` syscall used by i686 glibc. Remove this pin when the runner
+    # includes Docker 29.4.3 or newer: https://github.com/moby/moby/issues/52506
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       CROSS_CONFIG: Cross.toml
