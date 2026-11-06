@@ -74,7 +74,7 @@ impl BehaviorVersion {
     /// For more information about behavior versions and how they affect SDK behavior, see the
     /// [AWS SDK for Rust Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/behavior-versions.html).
     #[deprecated(
-        since = "1.20.0",
+        since = "1.21.0",
         note = "Superseded by v2026_11_15, which applies a default read timeout to AWS SDK clients."
     )]
     pub fn v2026_01_12() -> Self {
