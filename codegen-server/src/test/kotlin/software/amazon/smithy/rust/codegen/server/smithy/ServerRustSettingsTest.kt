@@ -123,6 +123,26 @@ internal class ServerRustSettingsTest {
         }
     }
 
+    /**
+     * Codegen reads these settings only through the parsed [ServerRustSettings], plus
+     * [ServerCodegenConfig.nonDefaultSettings] for Cargo metadata. Equal results here mean an explicit
+     * default generates exactly the server that omitting the setting does, so generated-server tests
+     * only need to compile the omitted variant.
+     */
+    @Test
+    fun `explicit default codegen settings parse exactly like omitted settings`() {
+        for ((omitted, explicit) in listOf(
+            "" to """"schemaSerde": false""",
+            "" to """"http-1x": false""",
+            "" to """"schemaSerde": false, "http-1x": false""",
+            """"http-1x": true""" to """"http-1x": true, "schemaSerde": false""",
+        )) {
+            settings(explicit) shouldBe settings(omitted)
+            ServerCodegenConfig.nonDefaultSettings(Node.parse("{$explicit}").expectObjectNode()) shouldBe
+                ServerCodegenConfig.nonDefaultSettings(Node.parse("{$omitted}").expectObjectNode())
+        }
+    }
+
     @Test
     fun `protocol settings are empty by default`() {
         settings("").protocolSettings() shouldBe emptyMap()
@@ -151,8 +171,8 @@ internal class ServerRustSettingsTest {
                         settings(
                             "\"schemaSerde\":$schemaSerde",
                             """{"protocols":{
-                                "common":{"request":{"header":{"readTimeout":"10s"}}},
-                                "aws.protocols#restJson1":{"request":{"header":{"readTimeout":$value}}}
+                            "common":{"request":{"header":{"readTimeout":"10s"}}},
+                            "aws.protocols#restJson1":{"request":{"header":{"readTimeout":$value}}}
                             }}""",
                         )
                     }
