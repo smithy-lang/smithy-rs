@@ -1,4 +1,36 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 6th, 2026
+==================
+**New this release:**
+- :tada: (client, [smithy-rs#4718](https://github.com/smithy-lang/smithy-rs/issues/4718), [smithy-rs#4990](https://github.com/smithy-lang/smithy-rs/issues/4990)) Add `aws_smithy_observability::unit_of_work`, which tells a caller whether a response body was
+    validated against its checksum. Attach a `Capture` carrying a `checksums::ChecksumCapture` with
+    `.customize().interceptor(..)`, read the body, then call `try_outcome()`: it reads `Validated` with
+    the algorithm and computed checksum, `Mismatch` with both checksums, `NotValidated` with a reason,
+    or `Incomplete`. The SDK reports through a new stable contract in `aws-smithy-runtime-api`
+    (`client::unit_of_work::checksums`), so a capture keeps working when the caller and the SDK resolve
+    different releases of `aws-smithy-observability`. `aws-smithy-checksums` adds
+    `ChecksumBody::with_completion`.
+- :tada: (all) Add `OperationSchema` to `aws-smithy-schema`, that relates an operation's shape
+    ID to its input, output, and error schemas and is built with a `const`
+    `OperationSchema::builder`, so it can be declared as a `static`. It also documents
+    `ShapeId::from_parts` as a supported constructor for shape IDs that borrow
+    runtime-owned strings.
+- :bug: (client, [smithy-rs#4986](https://github.com/smithy-lang/smithy-rs/issues/4986), @xiazhvera) Fix `RequestChecksumCalculation::WhenRequired` ignoring a caller-set checksum algorithm. With `RequestChecksumCalculation::WhenRequired` and trait `requestChecksumRequired: false`, the SDK now calculates a request checksum when the caller sets the modeled request algorithm member. If the member is not set, no checksum is calculated as before.
+- :bug: (all, [smithy-rs#2833](https://github.com/smithy-lang/smithy-rs/issues/2833), @Regalias3) `ByteStream::from_path` and `ByteStream::read_from()` now read files with a 64 KiB buffer by default, up from 4 KiB. On a 64 MiB file this makes reads about 5x faster (174 to 899 MiB/s in the new `bytestream_from_file` benchmark). Each open file stream uses about 60 KiB more memory. To keep the old behavior, call `ByteStream::read_from().buffer_size(4096)`.
+- (all, [smithy-rs#4916](https://github.com/smithy-lang/smithy-rs/issues/4916), @FalkWoldmann) Removed the `num-integer` dependency from `aws-smithy-types`. `DateTime` now uses `div_euclid` and `rem_euclid` from std, which give the same results here since all divisors are positive.
+- :bug: (all, [smithy-rs#4863](https://github.com/smithy-lang/smithy-rs/issues/4863), @Regalias3) `BigDecimal` now compares and hashes by numeric value instead of by spelling. `"1e2"` equals `"100"`, `"1.0"` equals `"1.00"`, `"+5"` equals `"5"`, and every spelling of zero, such as `"-0.0"` and `"0"`, is equal. `AsRef<str>` still returns the original string, so serialization doesn't change.
+- :bug: (all, [smithy-rs#4960](https://github.com/smithy-lang/smithy-rs/issues/4960), @franco2002lu) Fix `DateTime` epoch-seconds formatting and parsing of timestamps before 1970 that have fractional seconds. Formatting -0.75 seconds produced `-1.25`, and parsing `-0.75` produced 0.75. Timestamps at or after 1970 are unaffected.
+- :bug: (client, [smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484), @thomasqueirozb) Clients for services with operations modeled with `@requestCompression` (such as `aws-sdk-cloudwatch`) no longer enable the `http-body-0-4-x` feature of `aws-smithy-types`. The request compression interceptor only uses `http-body` 1.x, so these clients no longer pull in `http` 0.2 and `http-body` 0.4.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4916](https://github.com/smithy-lang/smithy-rs/issues/4916))
+- @Regalias3 ([smithy-rs#2833](https://github.com/smithy-lang/smithy-rs/issues/2833), [smithy-rs#4863](https://github.com/smithy-lang/smithy-rs/issues/4863))
+- @franco2002lu ([smithy-rs#4960](https://github.com/smithy-lang/smithy-rs/issues/4960))
+- @thomasqueirozb ([smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484))
+- @xiazhvera ([smithy-rs#4986](https://github.com/smithy-lang/smithy-rs/issues/4986))
+
+
 October 29th, 2026
 ==================
 **Breaking Changes:**
