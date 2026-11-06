@@ -28,13 +28,16 @@ class TimeoutDefaults(artifact: ObjectNode) {
          *
          * The artifact exempts these because Go's and Java's timeouts span the whole response
          * lifecycle, so they would fire partway through a healthy bidirectional stream. Rust's
-         * `read_timeout` closes when response headers arrive, and every operation in these four
+         * `read_timeout` closes when response headers arrive, and every operation in these three
          * services sends headers promptly — Transcribe Streaming measured at 778ms — so the
          * exemption would remove blackhole protection without preventing any false positive.
          *
-         * Design section 2.3 has the derivation and the per-operation audit behind it. Changing
-         * this set is a behavior change; `TimeoutDefaultsTest` checks each name still resolves to
-         * an exempt artifact entry, because a drifted name fails silently.
+         * `SageMaker Runtime HTTP2` has the same shape and is deliberately *not* here: its server
+         * is a customer-deployed model container, so prompt headers are not knowable. Design
+         * section 2.3 has that reasoning, the derivation, and the per-operation audit.
+         *
+         * Changing this set is a behavior change; `TimeoutDefaultsTest` checks each name still
+         * resolves to an exempt artifact entry, because a drifted name fails silently.
          */
         val RUST_GENERAL_DEFAULT_OVERRIDES =
             setOf(
@@ -42,29 +45,6 @@ class TimeoutDefaults(artifact: ObjectNode) {
                 "ConnectHealth",
                 "Polly",
             )
-
-        /**
-         * `SageMaker Runtime HTTP2` keeps the artifact's full exemption, unlike the other
-         * bidirectional event streams above.
-         *
-         * Its operation, `InvokeEndpointWithBidirectionalStream`, has the same shape as
-         * ConnectHealth's and Transcribe Streaming's, and the appendix classifies all three the
-         * same way. But that classification rests on the server acknowledging the stream before it
-         * has input, which holds for an AWS-operated service and is not knowable here: a SageMaker
-         * endpoint is a **customer-deployed model container**. AWS documents the sibling unary
-         * operation, `SageMaker Runtime`'s `InvokeEndpoint`, as taking up to 60 seconds, so the
-         * backing resource is slow by design, and a container built for "conversation-like
-         * interaction" may well defer its first response until it has received input.
-         *
-         * The costs are asymmetric. A false positive is terminal rather than slow — the wait
-         * recurs on every attempt, so retries cannot rescue it — whereas staying exempt only
-         * forgoes blackhole protection on a new, low-traffic service, which a caller can also bound
-         * with an operation timeout.
-         *
-         * Promote it into the override set once `InvokeEndpointWithBidirectionalStream` is measured
-         * against a real endpoint and shows prompt headers.
-         */
-        const val EXEMPT_PENDING_MEASUREMENT = "SageMaker Runtime HTTP2"
 
         /**
          * Overrides whose service model smithy-rs does not vendor.
