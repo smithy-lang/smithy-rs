@@ -7,8 +7,11 @@ package software.amazon.smithy.rustsdk
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import java.time.Duration
 import kotlin.io.path.Path
 import kotlin.io.path.readText
@@ -110,6 +113,40 @@ class TimeoutDefaultsTest {
                 """{ "generalDefaultMillis": 300000, "services": { "Thing": 0 } }""",
             ).expectObjectNode()
         shouldThrow<IllegalArgumentException> { TimeoutDefaults(bad) }
+    }
+
+    @Test
+    fun `the artifact path is reachable from codegen settings`() {
+        val settings =
+            testClientRustSettings(
+                customizationConfig =
+                    ObjectNode.builder().withMember(
+                        "awsSdk",
+                        ObjectNode.builder()
+                            .withMember("timeoutDefaultsConfigPath", artifactPath.toString())
+                            .build(),
+                    ).build(),
+            )
+        val path = SdkSettings.from(settings).timeoutDefaultsConfigPath
+        path shouldNotBe null
+        // Loading through the settings path must produce the same answers as loading directly,
+        // which is what proves the build wiring reaches the real artifact.
+        val viaSettings = TimeoutDefaults(Node.parse(path!!.readText()).expectObjectNode())
+        viaSettings.readTimeoutFor("S3") shouldBe null
+        viaSettings.readTimeoutFor("Polly") shouldBe fiveMinutes
+    }
+
+    /**
+     * An absent key must yield null rather than throwing.
+     *
+     * `SdkSettings.defaultsConfigPath` gets this wrong — it is written `?.value.let { Paths.get(it) }`
+     * rather than `?.value?.let`, so it calls `Paths.get(null)` and throws when the `awsSdk` object
+     * is absent. It is only safe today because nothing reads it. This test pins the correct form for
+     * the key this design adds.
+     */
+    @Test
+    fun `an absent artifact path yields null rather than throwing`() {
+        SdkSettings.from(testClientRustSettings()).timeoutDefaultsConfigPath shouldBe null
     }
 
     @Test
