@@ -141,7 +141,12 @@ impl LoginCredentialsProvider {
         now: SystemTime,
     ) -> Result<LoginToken, LoginTokenError> {
         let dpop_auth_scheme = dpop::DPoPAuthScheme::new(&cached_token.dpop_key)?;
-        let client_config = SignInClientConfigBuilder::from(&inner.sdk_config)
+        let mut config_builder = SignInClientConfigBuilder::from(&inner.sdk_config);
+        if let Some(region) = &cached_token.sign_in_region {
+            tracing::debug!(region = %region, "using signInRegion from cached Login token for refresh");
+            config_builder.set_region(Some(region.clone()));
+        }
+        let client_config = config_builder
             .auth_scheme_resolver(dpop::DPoPAuthSchemeOptionResolver)
             .push_auth_scheme(dpop_auth_scheme)
             .build();
@@ -303,6 +308,8 @@ mod test {
         response: Option<MockResponse>,
         #[serde(default)]
         response_code: Option<u16>,
+        #[serde(default)]
+        expected_request_uri: Option<String>,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -382,11 +389,13 @@ mod test {
             let env = Env::from_slice(&[("HOME", "/home/user")]);
 
             // Setup mock HTTP client
+            let captured_requests: CapturedRequests = Default::default();
             let http_client = if self.mock_api_calls.is_empty() {
                 crate::test_case::no_traffic_client()
             } else {
                 aws_smithy_runtime_api::client::http::SharedHttpClient::new(TestHttpClient::new(
                     &self.mock_api_calls,
+                    captured_requests.clone(),
                 ))
             };
 
@@ -404,6 +413,35 @@ mod test {
 
             // Call provider once and validate result against all outcomes
             let result = dbg!(provider.provide_credentials().await);
+
+            // Validate the request URI and the DPoP proof's `htu` claim
+            let captured = captured_requests.lock().unwrap().clone();
+            for (idx, mock) in self.mock_api_calls.iter().enumerate() {
+                let Some(expected_uri) = &mock.expected_request_uri else {
+                    continue;
+                };
+                let (uri, dpop) = captured
+                    .get(idx)
+                    .unwrap_or_else(|| panic!("no request captured for mock call {idx}"));
+                assert_eq!(
+                    expected_uri, uri,
+                    "request URI mismatch for mock call {idx}"
+                );
+                let dpop = dpop
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("no DPoP header on request {idx}"));
+                let payload_b64 = dpop.split('.').nth(1).expect("DPoP JWT has a payload");
+                let payload = base64_simd::URL_SAFE_NO_PAD
+                    .decode_to_vec(payload_b64)
+                    .expect("valid base64url DPoP payload");
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&payload).expect("valid JSON DPoP payload");
+                assert_eq!(
+                    Some(expected_uri.as_str()),
+                    payload["htu"].as_str(),
+                    "DPoP htu mismatch for mock call {idx}"
+                );
+            }
 
             for outcome in &self.outcomes {
                 match outcome {
@@ -443,6 +481,12 @@ mod test {
                                 "refreshToken mismatch for {}",
                                 filename
                             );
+                            assert_eq!(
+                                expected.get("signInRegion"),
+                                actual.get("signInRegion"),
+                                "signInRegion mismatch for {}",
+                                filename
+                            );
                         }
                     }
                 }
@@ -450,16 +494,20 @@ mod test {
         }
     }
 
+    /// Request URI and `DPoP` header of each request the test connector received
+    type CapturedRequests = Arc<Mutex<Vec<(String, Option<String>)>>>;
+
     #[derive(Debug, Clone)]
     struct TestHttpClient {
         inner: SharedHttpConnector,
     }
 
     impl TestHttpClient {
-        fn new(mock_calls: &[MockApiCall]) -> Self {
+        fn new(mock_calls: &[MockApiCall], requests: CapturedRequests) -> Self {
             Self {
                 inner: SharedHttpConnector::new(TestHttpConnector {
                     mock_calls: mock_calls.to_vec(),
+                    requests,
                 }),
             }
         }
@@ -478,10 +526,15 @@ mod test {
     #[derive(Debug, Clone)]
     struct TestHttpConnector {
         mock_calls: Vec<MockApiCall>,
+        requests: CapturedRequests,
     }
 
     impl HttpConnector for TestHttpConnector {
-        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+        fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+            self.requests.lock().unwrap().push((
+                request.uri().to_string(),
+                request.headers().get("dpop").map(str::to_owned),
+            ));
             if let Some(mock) = self.mock_calls.first() {
                 if let Some(code) = mock.response_code {
                     return HttpConnectorFuture::ready(Ok(HttpResponse::new(
