@@ -5,6 +5,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import java.time.Duration
 
 /**
@@ -60,13 +61,55 @@ class TimeoutDefaults(artifact: ObjectNode) {
         }
 
     /**
+     * Normalized key to original key, for the drift check in [readTimeoutFor].
+     *
+     * Built eagerly so that two keys normalizing alike fail when the artifact loads rather than at
+     * whichever service happens to resolve first. That shape means a rename where both the old and
+     * the new key were added, which leaves one of them permanently dead.
+     */
+    private val normalizedKeys: Map<String, String> =
+        perService.keys.groupBy { normalize(it) }.mapValues { (_, keys) ->
+            if (keys.size > 1) {
+                PANIC(
+                    "the timeout-defaults artifact has ${keys.size} keys that differ only by case " +
+                        "or punctuation: ${keys.sorted()}. At most one can ever match a service " +
+                        "sdkId, so the rest are dead entries. Fix this in the shared artifact.",
+                )
+            }
+            keys.single()
+        }
+
+    /**
      * The default read timeout for [sdkId], or `null` if no read timeout should be applied.
      *
      * [sdkId] is the `aws.api#service` `sdkId` trait value, matched exactly — the artifact is keyed
      * by the same string the other SDKs key their maps by.
+     *
+     * A service with no entry takes the general default. That is the common case and not an error;
+     * only 83 of several hundred services are listed. An *almost* matching key is an error.
      */
-    fun readTimeoutFor(sdkId: String): Duration? =
-        if (perService.containsKey(sdkId)) perService[sdkId] else generalDefault
+    fun readTimeoutFor(sdkId: String): Duration? {
+        if (perService.containsKey(sdkId)) {
+            return perService[sdkId]
+        }
+        // No exact entry. Make sure that is genuine absence and not a key that drifted out of
+        // alignment with this service's sdkId, which would silently downgrade the service to the
+        // general default, or silently strip its exemption. This is the Rust counterpart of Java's
+        // build-time `validateArtifactKeys`; the test of that name explains why it runs in this
+        // direction rather than Java's.
+        normalizedKeys[normalize(sdkId)]?.let { drifted ->
+            PANIC(
+                "the timeout-defaults artifact has the key '$drifted', which differs from the " +
+                    "actual service sdkId '$sdkId' only by case or punctuation. The entry can " +
+                    "never apply, so '$sdkId' would silently take the general default. Correct " +
+                    "the key in aws/sdk/aws-models/sdk-timeout-defaults.json to match exactly.",
+            )
+        }
+        return generalDefault
+    }
+
+    /** Case- and punctuation-insensitive form of a key, for drift detection only. */
+    private fun normalize(key: String) = key.lowercase().filter { it.isLetterOrDigit() }
 
     private fun millis(value: Long): Duration {
         require(value > 0) {
