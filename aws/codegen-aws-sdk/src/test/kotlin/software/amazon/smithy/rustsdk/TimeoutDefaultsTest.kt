@@ -159,16 +159,8 @@ class TimeoutDefaultsTest {
      * artifact listing both at different tiers is correct rather than a defect.
      *
      * They have separate models — `sagemaker-runtime` and `sagemaker-runtime-http2` — separate
-     * `sdkId`s, and disjoint operations. AWS split the bidirectional streaming operation into its
-     * own service because the protocol binding differs. So:
-     *
-     * - `SageMaker Runtime HTTP2`: one operation, `InvokeEndpointWithBidirectionalStream`, a
-     *   bidirectional event stream. Fully exempt in the artifact, overridden by Rust for the same
-     *   reason as Transcribe Streaming and ConnectHealth.
-     * - `SageMaker Runtime`: `InvokeEndpoint`, `InvokeEndpointAsync`,
-     *   `InvokeEndpointWithResponseStream`. Its longest case is a 60-second model invocation, and
-     *   its event stream is output-only, which the guidance's own criteria exclude from full
-     *   exemption. Hence the 15-minute tier.
+     * `sdkId`s, and disjoint operations, so the artifact listing both at different tiers is correct
+     * rather than a duplicate. Rust takes both values unchanged.
      *
      * An earlier revision of this test asserted the HTTP2 key matched no service and called it a
      * dead entry. That was wrong: the model exists, smithy-rs just does not vendor it.
@@ -182,9 +174,7 @@ class TimeoutDefaultsTest {
         val defaults = load()
         // The HTTP/1.1 service keeps its own tier.
         defaults.readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
-        // The HTTP/2 service keeps the artifact's exemption. It has the same bidirectional shape as
-        // the overridden services, and is deliberately not overridden: its server is a
-        // customer-deployed model container, so prompt headers are not knowable. See design 2.3.
+        // The HTTP/2 service keeps the artifact's exemption.
         defaults.readTimeoutFor("SageMaker Runtime HTTP2") shouldBe null
         // Neither is overridden.
         TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime"

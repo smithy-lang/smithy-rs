@@ -32,9 +32,7 @@ class TimeoutDefaults(artifact: ObjectNode) {
          * services sends headers promptly — Transcribe Streaming measured at 778ms — so the
          * exemption would remove blackhole protection without preventing any false positive.
          *
-         * `SageMaker Runtime HTTP2` has the same shape and is deliberately *not* here: its server
-         * is a customer-deployed model container, so prompt headers are not knowable. Design
-         * section 2.3 has that reasoning, the derivation, and the per-operation audit.
+         * Every other service takes its artifact value unchanged.
          *
          * Changing this set is a behavior change; `TimeoutDefaultsTest` checks each name still
          * resolves to an exempt artifact entry, because a drifted name fails silently.
