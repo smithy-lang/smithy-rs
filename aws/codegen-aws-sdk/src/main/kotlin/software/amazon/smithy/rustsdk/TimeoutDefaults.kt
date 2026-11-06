@@ -45,15 +45,22 @@ class TimeoutDefaults(artifact: ObjectNode) {
             )
 
         /**
-         * Overrides whose service model smithy-rs does not vendor, so codegen tests cannot exercise
-         * them here. They resolve normally in a full SDK build, where every model is present.
+         * Overrides whose service model smithy-rs does not vendor.
          *
-         * `SageMaker Runtime HTTP2` is a distinct service from `SageMaker Runtime`, with its own
-         * model (`sagemaker-runtime-http2`), its own `sdkId`, and a single operation,
-         * `InvokeEndpointWithBidirectionalStream`. The artifact lists both, at different tiers,
-         * which is correct: the HTTP/2 service is a bidirectional event stream and fully exempt,
-         * while `SageMaker Runtime`'s longest case is a 60-second model invocation and takes the
-         * 15-minute tier.
+         * This is a *provenance* note, not a coverage gap. Resolution is exercised for all four
+         * overrides by `TimeoutDefaultsTest`, and the generated-code path by
+         * `DefaultReadTimeoutDecoratorTest`, which builds synthetic models and so needs no real
+         * model for any particular service. What these two lack is a real generated crate in this
+         * repo to inspect, and their operation shapes were read from the public `aws-sdk-js-v3`
+         * model set rather than from a model a smithy-rs build consumes.
+         *
+         * Recorded because assuming an absent model means an absent service is exactly the mistake
+         * that produced a since-retracted claim that `SageMaker Runtime HTTP2` was not a real
+         * service. It is: own model (`sagemaker-runtime-http2`), own `sdkId`, one operation,
+         * `InvokeEndpointWithBidirectionalStream`. The artifact lists it separately from
+         * `SageMaker Runtime` and at a different tier, and is right to — the HTTP/2 service is a
+         * bidirectional event stream, while `SageMaker Runtime`'s longest case is a 60-second model
+         * invocation with an output-only event stream.
          */
         val OVERRIDES_WITHOUT_VENDORED_MODELS =
             setOf(

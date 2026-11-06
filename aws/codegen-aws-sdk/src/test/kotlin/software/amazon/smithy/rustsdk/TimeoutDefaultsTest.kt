@@ -191,9 +191,15 @@ class TimeoutDefaultsTest {
     }
 
     /**
-     * Two overrides have no vendored model, so `DefaultReadTimeoutDecoratorTest` cannot exercise
-     * them end to end here. Pinned so the gap is visible rather than assumed, and so that vendoring
-     * either model later prompts adding a generated-code test for it.
+     * Which overrides have no vendored model — a provenance record, not a coverage gap.
+     *
+     * Resolution is covered for all four overrides above, and the generated-code path is covered by
+     * `DefaultReadTimeoutDecoratorTest`, which builds synthetic models and so needs no real model
+     * for any given service. These two simply have no real generated crate here to inspect, and
+     * their operation shapes came from the public `aws-sdk-js-v3` model set.
+     *
+     * Pinned because treating an absent model as an absent service is what produced a
+     * since-retracted claim that `SageMaker Runtime HTTP2` was not a real service.
      */
     @Test
     fun `the overrides without vendored models are the ones we expect`() {
