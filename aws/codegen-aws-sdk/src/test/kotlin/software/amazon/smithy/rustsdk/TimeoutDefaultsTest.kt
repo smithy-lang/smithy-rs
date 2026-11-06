@@ -6,8 +6,10 @@ package software.amazon.smithy.rustsdk
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
@@ -72,13 +74,15 @@ class TimeoutDefaultsTest {
     /**
      * Guards against a typo in the override set silently doing nothing.
      *
-     * Each override names a service the artifact marks fully exempt. If a name drifts — a trailing
+     * Each override names a key the artifact marks fully exempt. If the name drifts — a trailing
      * space, a case change, a rename upstream — the override stops applying and the service
-     * silently keeps its exemption. That is a behavior regression with no other signal. Same
-     * hazard Java's build-time `validateArtifactKeys` covers.
+     * silently keeps its exemption, with no other signal.
+     *
+     * Note this only proves the *key* exists. Whether any real service carries that `sdkId` is a
+     * separate question; see `the SageMaker Runtime HTTP2 artifact key matches no known service`.
      */
     @Test
-    fun `every Rust override names a service the artifact actually exempts`() {
+    fun `every Rust override names an artifact key the artifact actually exempts`() {
         val services = artifact().expectObjectMember("services")
         for (service in TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES) {
             val entry =
@@ -93,6 +97,98 @@ class TimeoutDefaultsTest {
             }
         }
     }
+
+    /**
+     * A drifted key must fail the build rather than silently resolve to the general default.
+     *
+     * This is the Rust equivalent of Java's build-time `validateArtifactKeys`, adapted to the fact
+     * that smithy-rs vendors a subset of service models. Java generates every service, so it can
+     * assert "every key matches a known sdkId". Here that would reject ~59 of 83 keys whose models
+     * simply are not in this repo, and it would also reject legitimately forward-looking keys.
+     *
+     * So the check runs the other way: for each service actually being generated, if its exact
+     * `sdkId` is not a key but a key differs only by case or punctuation, that key was meant to
+     * cover this service and no longer does. That is unambiguous drift, and it is detectable with
+     * any subset of models.
+     */
+    @Test
+    fun `a key that differs from a real sdkId only by punctuation is rejected`() {
+        val drifted =
+            Node.parse(
+                """{ "generalDefaultMillis": 300000, "services": { "SomeService": -1 } }""",
+            ).expectObjectNode()
+        val defaults = TimeoutDefaults(drifted)
+        val e = shouldThrow<RuntimeException> { defaults.readTimeoutFor("Some Service") }
+        e.message!! shouldContain "SomeService"
+        e.message!! shouldContain "Some Service"
+    }
+
+    @Test
+    fun `a service genuinely absent from the artifact still falls through to the general default`() {
+        val defaults =
+            TimeoutDefaults(
+                Node.parse(
+                    """{ "generalDefaultMillis": 300000, "services": { "SomeService": -1 } }""",
+                ).expectObjectNode(),
+            )
+        defaults.readTimeoutFor("Totally Unrelated") shouldBe fiveMinutes
+    }
+
+    @Test
+    fun `two keys that normalize alike are rejected when the artifact loads`() {
+        val ambiguous =
+            Node.parse(
+                """{ "generalDefaultMillis": 300000, "services": { "Foo Bar": -1, "FooBar": 900000 } }""",
+            ).expectObjectNode()
+        shouldThrow<RuntimeException> { TimeoutDefaults(ambiguous) }
+    }
+
+    @Test
+    fun `the real artifact has no drifted or ambiguous keys for any vendored service`() {
+        val defaults = load()
+        // Every service model vendored in this repo must resolve without tripping the drift check.
+        for (sdkId in vendoredSdkIds()) {
+            withClue("resolving $sdkId must not trip the drift check") {
+                defaults.readTimeoutFor(sdkId)
+            }
+        }
+    }
+
+    /**
+     * Records a defect in the shared artifact rather than desired behavior.
+     *
+     * The artifact carries both `"SageMaker Runtime"` (900000) and `"SageMaker Runtime HTTP2"` (-1),
+     * but the real service `sdkId` is `"SageMaker Runtime"` — no public model carries the HTTP2
+     * spelling. So that exemption is inert in Go and Java too, and the Rust override of it is
+     * equally inert: SageMaker Runtime resolves through the `"SageMaker Runtime"` key to 15 minutes.
+     *
+     * Kept in the override set because the artifact's own entry is forward-looking, and asserted
+     * here so that if a service with that `sdkId` ever appears, this test fails and tells us the
+     * override has become live.
+     */
+    @Test
+    fun `the SageMaker Runtime HTTP2 artifact key matches no known service`() {
+        "SageMaker Runtime HTTP2" shouldBe
+            TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.first { it.contains("HTTP2") }
+        vendoredSdkIds() shouldNotContain "SageMaker Runtime HTTP2"
+        // The service that does exist takes the 15-minute tier, not the exemption.
+        load().readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
+    }
+
+    /** `sdkId` of every service model vendored in this repo. */
+    private fun vendoredSdkIds(): List<String> =
+        Path("../sdk/aws-models").toFile().listFiles { f: java.io.File ->
+            f.name.endsWith(".json") && !f.name.startsWith("sdk-")
+        }!!.mapNotNull { f ->
+            val shapes = Node.parse(f.readText()).expectObjectNode().expectObjectMember("shapes")
+            shapes.members.values.firstNotNullOfOrNull { shape ->
+                shape.asObjectNode().orElse(null)
+                    ?.takeIf { it.getStringMember("type").orElse(null)?.value == "service" }
+                    ?.getObjectMember("traits")?.orElse(null)
+                    ?.getObjectMember("aws.api#service")?.orElse(null)
+                    ?.getStringMember("sdkId")?.orElse(null)?.value
+            }
+        }
 
     @Test
     fun `the artifact has the shape the design audited`() {
@@ -149,12 +245,20 @@ class TimeoutDefaultsTest {
         SdkSettings.from(testClientRustSettings()).timeoutDefaultsConfigPath shouldBe null
     }
 
+    /**
+     * Lookup is exact, and a near miss is loud.
+     *
+     * An earlier version of this test asserted that `"s3"` falls through to the general default,
+     * which is what the resolver did before the drift check existed. Falling through is the wrong
+     * behavior: it is indistinguishable from a renamed service silently losing its exemption, which
+     * for S3 would mean quietly applying a 5-minute deadline to `PutObject`. The resolver now
+     * refuses rather than guessing in either direction.
+     */
     @Test
-    fun `lookup is exact rather than normalized`() {
+    fun `lookup is exact, and a near miss fails rather than falling through`() {
         val defaults = load()
-        // Guards against a resolver that lowercases or strips spaces and then matches the wrong
-        // entry. "s3" is not a key, so it must fall through to the general default.
-        defaults.readTimeoutFor("s3") shouldBe fiveMinutes
         defaults.readTimeoutFor("S3") shouldBe null
+        val e = shouldThrow<RuntimeException> { defaults.readTimeoutFor("s3") }
+        e.message!! shouldContain "only by case or punctuation"
     }
 }
