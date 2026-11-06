@@ -15,3 +15,10 @@ echo "### Checking whether the features are properly feature-gated"
 
 echo "### Checking feature powerset"
 cargo hack check --feature-powerset --exclude-all-features
+
+# Doctests on nightly, because only nightly rustdoc checks the error code of a
+# `compile_fail,E0004` doctest; stable accepts any compile error, so a doctest that broke for
+# another reason would still pass. That doctest checks that `DocumentV2` is `#[non_exhaustive]`.
+# `check-rust-runtimes` runs the doctests on stable.
+echo "### Running doctests on nightly"
+cargo +"${RUST_NIGHTLY_VERSION:?}" test --doc

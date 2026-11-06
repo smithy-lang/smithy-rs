@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.9.2"
+version = "1.10.0"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -370,6 +370,7 @@ dependencies = [
  "http-body 0.4.6",
  "http-body 1.1.0",
  "http-body-util",
+ "indexmap",
  "itoa",
  "pin-project-lite",
  "ryu",
