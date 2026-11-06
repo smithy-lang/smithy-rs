@@ -61,9 +61,9 @@ class TimeoutDefaultsTest {
     }
 
     @Test
-    fun `the four Rust overrides take the general default despite being exempt in the artifact`() {
+    fun `the Rust overrides take the general default despite being exempt in the artifact`() {
         val defaults = load()
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 4
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 3
         for (service in TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES) {
             withClue("$service is overridden back to the general default; see design section 2.3") {
                 defaults.readTimeoutFor(service) shouldBe fiveMinutes
@@ -157,20 +157,26 @@ class TimeoutDefaultsTest {
     /**
      * Records a defect in the shared artifact rather than desired behavior.
      *
-     * The artifact carries both `"SageMaker Runtime"` (900000) and `"SageMaker Runtime HTTP2"` (-1),
-     * but the real service `sdkId` is `"SageMaker Runtime"` — no public model carries the HTTP2
-     * spelling. So that exemption is inert in Go and Java too, and the Rust override of it is
-     * equally inert: SageMaker Runtime resolves through the `"SageMaker Runtime"` key to 15 minutes.
+     * The artifact carries both `"SageMaker Runtime"` (900000) and `"SageMaker Runtime HTTP2"`
+     * (-1). The exemption is the intent for the second entry, but no public model has that `sdkId`,
+     * and all three SDKs key this table by `sdkId` — so the exemption binds to no client in Go or
+     * Java either and is not in force anywhere. The service that does exist resolves through
+     * `"SageMaker Runtime"` and takes the 15-minute tier.
      *
-     * Kept in the override set because the artifact's own entry is forward-looking, and asserted
-     * here so that if a service with that `sdkId` ever appears, this test fails and tells us the
-     * override has become live.
+     * Rust does **not** override this entry; see `TimeoutDefaults.UNREACHABLE_EXEMPT_KEY` for why.
+     * Asserted here so that if a service with that `sdkId` ever appears, this test fails and the
+     * exemption gets re-derived against its real operations rather than silently taking effect.
      */
     @Test
-    fun `the SageMaker Runtime HTTP2 artifact key matches no known service`() {
-        "SageMaker Runtime HTTP2" shouldBe
-            TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.first { it.contains("HTTP2") }
-        vendoredSdkIds() shouldNotContain "SageMaker Runtime HTTP2"
+    fun `the SageMaker Runtime HTTP2 artifact key is exempt but matches no known service`() {
+        val key = TimeoutDefaults.UNREACHABLE_EXEMPT_KEY
+        // The artifact's intent for this entry is full exemption.
+        artifact().expectObjectMember("services")
+            .expectNumberMember(key).value.toLong() shouldBe -1L
+        // Which Rust leaves alone.
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain key
+        // But no service carries that sdkId, so the exemption reaches nothing.
+        vendoredSdkIds() shouldNotContain key
         // The service that does exist takes the 15-minute tier, not the exemption.
         load().readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
     }

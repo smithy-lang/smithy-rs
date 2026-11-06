@@ -41,8 +41,28 @@ class TimeoutDefaults(artifact: ObjectNode) {
                 "Transcribe Streaming",
                 "ConnectHealth",
                 "Polly",
-                "SageMaker Runtime HTTP2",
             )
+
+        /**
+         * Deliberately *not* overridden, though an earlier revision of this design did: the
+         * artifact exempts `"SageMaker Runtime HTTP2"`, and that exemption stands here.
+         *
+         * Two reasons. The exemption is the artifact's stated intent for that entry, and nothing
+         * found here justifies contradicting it: the audit row that appeared to clear the service
+         * was built from the `"SageMaker Runtime"` model's operations — `InvokeEndpoint`,
+         * `InvokeEndpointAsync`, `InvokeEndpointWithResponseStream` — not from the HTTP/2 client's.
+         * The one operation the guidance attributes to it,
+         * `InvokeEndpointWithBidirectionalStream`, is in no public model, so there is nothing to
+         * audit yet.
+         *
+         * Separately, the key matches no service `sdkId` in any public model, so the entry binds to
+         * no client in Go or Java either and the exemption is not actually in force anywhere. An
+         * override would therefore have been inert today and would have silently stripped the
+         * exemption from an unaudited service if that client ever shipped.
+         *
+         * `TimeoutDefaultsTest` pins the unreachability so this is revisited if it changes.
+         */
+        const val UNREACHABLE_EXEMPT_KEY = "SageMaker Runtime HTTP2"
     }
 
     private val generalDefault: Duration = millis(artifact.expectNumberMember("generalDefaultMillis").value.toLong())
