@@ -6,6 +6,7 @@
 //! [`DocumentV2`], the document type for the whole Smithy data model.
 
 mod coercion;
+mod conversion;
 
 use super::{DocumentError, DocumentObject};
 use crate::{BigDecimal, BigInteger, DateTime, Number};
@@ -24,6 +25,10 @@ use std::borrow::Cow;
 /// Smithy types that JSON can't encode natively ([`DocumentV2::Blob`],
 /// [`DocumentV2::Timestamp`], [`DocumentV2::BigInteger`], [`DocumentV2::BigDecimal`]). Its
 /// objects keep insertion order.
+///
+/// `From` converts a `Document` to a `DocumentV2` without losing information.
+/// [`DocumentV2::to_document_lossy`] and [`DocumentV2::try_to_document`] convert back. The
+/// first encodes the variants that `Document` lacks, and the second returns an error for them.
 ///
 /// `Document` keeps its six variants, because released code matches it exhaustively and a new
 /// variant would break that code. `DocumentV2` is `#[non_exhaustive]` so that future additions
@@ -433,10 +438,7 @@ impl From<u64> for DocumentV2 {
 /// value.
 impl From<i64> for DocumentV2 {
     fn from(value: i64) -> Self {
-        match u64::try_from(value) {
-            Ok(value) => DocumentV2::Number(Number::PosInt(value)),
-            Err(_) => DocumentV2::Number(Number::NegInt(value)),
-        }
+        DocumentV2::Number(signed_number(value))
     }
 }
 
@@ -470,6 +472,15 @@ where
             Some(inner) => inner.into(),
             None => DocumentV2::Null,
         }
+    }
+}
+
+/// Returns `value` as a [`Number::PosInt`] if it's non-negative, and as a [`Number::NegInt`]
+/// otherwise.
+fn signed_number(value: i64) -> Number {
+    match u64::try_from(value) {
+        Ok(value) => Number::PosInt(value),
+        Err(_) => Number::NegInt(value),
     }
 }
 

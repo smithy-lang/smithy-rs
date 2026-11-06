@@ -17,6 +17,8 @@
 //! 4. `DiscriminatedDocument<DocumentV2>` wraps a `DocumentV2`, and code bounded by
 //!    `DocumentTrait` accepts both wrappers. One `DocumentSettings` implementation works with
 //!    both.
+//! 5. `From` converts an owned or borrowed `Document` to a `DocumentV2`, and
+//!    `to_document_lossy` and `try_to_document` convert back.
 //!
 //! The `Document` contract is in `document_api_contract.rs` and must not change. The released
 //! `DiscriminatedDocument` call forms are in `discriminated_document_contract.rs`.
@@ -24,9 +26,10 @@
 use aws_smithy_types::document::document_object::{Iter, IterMut, Keys, Values, ValuesMut};
 use aws_smithy_types::document::{self, DocumentObject, DocumentTrait};
 use aws_smithy_types::{
-    BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, DocumentSettings,
-    DocumentV2, Number,
+    BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, DocumentError,
+    DocumentSettings, DocumentV2, Number,
 };
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -169,4 +172,54 @@ fn discriminators_must_be_absolute() {
     assert!(DiscriminatedDocument::new_v2(DocumentV2::Null)
         .try_with_discriminator("Shape")
         .is_err());
+}
+
+#[test]
+fn documents_upgrade_with_from_and_into() {
+    let document = Document::Object(HashMap::from([(
+        "list".to_owned(),
+        Document::Array(vec![Document::Bool(true), Document::Null]),
+    )]));
+    let expected = DocumentV2::Object(DocumentObject::from([(
+        "list".to_owned(),
+        DocumentV2::Array(vec![DocumentV2::Bool(true), DocumentV2::Null]),
+    )]));
+
+    assert_eq!(DocumentV2::from(&document), expected);
+    let borrowed: DocumentV2 = (&document).into();
+    assert_eq!(borrowed, expected);
+    let owned: DocumentV2 = document.clone().into();
+    assert_eq!(owned, expected);
+    assert_eq!(DocumentV2::from(document), expected);
+}
+
+#[test]
+fn documents_downgrade_with_named_methods() {
+    let document = DocumentV2::Array(vec![
+        DocumentV2::String("s".to_owned()),
+        DocumentV2::Blob(b"hi".to_vec()),
+    ]);
+
+    let lossy: Document = document.to_document_lossy();
+    assert_eq!(
+        lossy,
+        Document::Array(vec![
+            Document::String("s".to_owned()),
+            Document::String("aGk=".to_owned()),
+        ])
+    );
+
+    let result: Result<Document, DocumentError> = document.try_to_document();
+    match result {
+        Err(DocumentError::TypeMismatch { message, .. }) => {
+            assert_eq!(message, "Document can't represent the blob at $[1]")
+        }
+        other => panic!("expected a type mismatch, got {other:?}"),
+    }
+
+    let representable = DocumentV2::from(Document::Bool(true));
+    assert_eq!(
+        representable.try_to_document().unwrap(),
+        Document::Bool(true)
+    );
 }
