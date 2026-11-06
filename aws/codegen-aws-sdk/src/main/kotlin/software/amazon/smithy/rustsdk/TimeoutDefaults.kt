@@ -41,8 +41,30 @@ class TimeoutDefaults(artifact: ObjectNode) {
                 "Transcribe Streaming",
                 "ConnectHealth",
                 "Polly",
-                "SageMaker Runtime HTTP2",
             )
+
+        /**
+         * `SageMaker Runtime HTTP2` keeps the artifact's full exemption, unlike the other
+         * bidirectional event streams above.
+         *
+         * Its operation, `InvokeEndpointWithBidirectionalStream`, has the same shape as
+         * ConnectHealth's and Transcribe Streaming's, and the appendix classifies all three the
+         * same way. But that classification rests on the server acknowledging the stream before it
+         * has input, which holds for an AWS-operated service and is not knowable here: a SageMaker
+         * endpoint is a **customer-deployed model container**. AWS documents the sibling unary
+         * operation, `SageMaker Runtime`'s `InvokeEndpoint`, as taking up to 60 seconds, so the
+         * backing resource is slow by design, and a container built for "conversation-like
+         * interaction" may well defer its first response until it has received input.
+         *
+         * The costs are asymmetric. A false positive is terminal rather than slow — the wait
+         * recurs on every attempt, so retries cannot rescue it — whereas staying exempt only
+         * forgoes blackhole protection on a new, low-traffic service, which a caller can also bound
+         * with an operation timeout.
+         *
+         * Promote it into the override set once `InvokeEndpointWithBidirectionalStream` is measured
+         * against a real endpoint and shows prompt headers.
+         */
+        const val EXEMPT_PENDING_MEASUREMENT = "SageMaker Runtime HTTP2"
 
         /**
          * Overrides whose service model smithy-rs does not vendor.
@@ -62,11 +84,7 @@ class TimeoutDefaults(artifact: ObjectNode) {
          * bidirectional event stream, while `SageMaker Runtime`'s longest case is a 60-second model
          * invocation with an output-only event stream.
          */
-        val OVERRIDES_WITHOUT_VENDORED_MODELS =
-            setOf(
-                "ConnectHealth",
-                "SageMaker Runtime HTTP2",
-            )
+        val OVERRIDES_WITHOUT_VENDORED_MODELS = setOf("ConnectHealth")
     }
 
     private val generalDefault: Duration = millis(artifact.expectNumberMember("generalDefaultMillis").value.toLong())

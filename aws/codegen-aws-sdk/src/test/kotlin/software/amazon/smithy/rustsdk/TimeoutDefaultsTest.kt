@@ -6,7 +6,6 @@ package software.amazon.smithy.rustsdk
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
-import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -64,7 +63,7 @@ class TimeoutDefaultsTest {
     @Test
     fun `the Rust overrides take the general default despite being exempt in the artifact`() {
         val defaults = load()
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 4
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 3
         for (service in TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES) {
             withClue("$service is overridden back to the general default; see design section 2.3") {
                 defaults.readTimeoutFor(service) shouldBe fiveMinutes
@@ -181,13 +180,33 @@ class TimeoutDefaultsTest {
         services.expectNumberMember("SageMaker Runtime").value.toLong() shouldBe 900_000L
 
         val defaults = load()
-        // The HTTP/2 service is overridden to the general default, like the other bidirectional
-        // event streams.
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldContain "SageMaker Runtime HTTP2"
-        defaults.readTimeoutFor("SageMaker Runtime HTTP2") shouldBe fiveMinutes
-        // The HTTP/1.1 service keeps its own tier and is not overridden.
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime"
+        // The HTTP/1.1 service keeps its own tier.
         defaults.readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
+        // The HTTP/2 service keeps the artifact's exemption; see EXEMPT_PENDING_MEASUREMENT.
+        defaults.readTimeoutFor("SageMaker Runtime HTTP2") shouldBe null
+        // Neither is overridden.
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime"
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime HTTP2"
+    }
+
+    /**
+     * `SageMaker Runtime HTTP2` is exempt despite having the same operation shape as the overridden
+     * services, and that asymmetry is deliberate rather than an oversight.
+     *
+     * The appendix classifies its single bidirectional operation the same way it classifies
+     * ConnectHealth's and Transcribe Streaming's — no phase-A hazard, headers prompt. For those two
+     * the server is AWS code; for SageMaker it is a customer-deployed model container, and AWS
+     * documents the sibling unary operation as taking up to 60 seconds. So the "headers prompt"
+     * premise is the thing in doubt, and a false positive here would be terminal rather than slow.
+     *
+     * Asserted so the exemption is not quietly removed when someone notices the shape similarity.
+     */
+    @Test
+    fun `the service exempt pending measurement is not in the override set`() {
+        val key = TimeoutDefaults.EXEMPT_PENDING_MEASUREMENT
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain key
+        artifact().expectObjectMember("services").expectNumberMember(key).value.toLong() shouldBe -1L
+        load().readTimeoutFor(key) shouldBe null
     }
 
     /**
