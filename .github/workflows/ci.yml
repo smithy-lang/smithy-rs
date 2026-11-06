@@ -1,8 +1,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This is the shared CI workflow that is run by both `ci-pr.yml` and `ci-main.yml` depending
-# on if a pull request is being checked, or if the `main` branch is being checked after merge.
+# This is the shared CI workflow that is run by `ci-pr.yml`, `ci-merge-queue.yml`, and `ci-main.yml`
+# depending on if a pull request, a merge queue group, or the `main` branch after merge is being checked.
 
 name: Test
 
@@ -273,9 +273,22 @@ jobs:
           // used by the cargo-semver-checks job. Query the API rather than trusting
           // the event payload so label changes made after the workflow started are
           // observed. Do not catch lookup errors: authorization must fail closed.
+          let pullNumber;
           if (context.eventName === 'pull_request') {
+            pullNumber = context.payload.pull_request.number;
+          } else if (context.eventName === 'merge_group') {
+            // A merge group tests one queued pull request. Its head ref is
+            // `refs/heads/gh-readonly-queue/<base>/pr-<number>-<parent sha>`.
+            const headRef = context.payload.merge_group.head_ref;
+            const match = /\/pr-(\d+)-[0-9a-f]+$/.exec(headRef);
+            if (!match) {
+              throw new Error(`cannot find the pull request number in merge group ref ${headRef}`);
+            }
+            pullNumber = Number(match[1]);
+          }
+          if (pullNumber !== undefined) {
             const response = await github.rest.pulls.get({
-              pull_number: context.payload.pull_request.number,
+              pull_number: pullNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
             });
@@ -291,8 +304,8 @@ jobs:
           }
 
           // A merged commit has no PR label context. At that point the breaking
-          // transition has already passed PR authorization, so main, scheduled,
-          // and explicit manual CI continue to test the coordinated graph.
+          // transition has already passed PR and merge queue authorization, so main,
+          // scheduled, and explicit manual CI continue to test the coordinated graph.
           core.setOutput('allowed', 'true');
           core.info('non-PR CI run; enabling the accepted compatibility transition');
     - name: Run check-semver-hazards
@@ -457,6 +470,8 @@ jobs:
         workspaces: |
           .
           tools
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       if: needs.detect-changes.outputs.rust == 'true'
       with:
@@ -505,6 +520,8 @@ jobs:
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: aws/rust-runtime/aws-config
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
@@ -584,6 +601,8 @@ jobs:
         workspaces: |
           .
           tools
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       if: needs.detect-changes.outputs.rust == 'true'
       with:
