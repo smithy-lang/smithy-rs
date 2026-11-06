@@ -30,6 +30,7 @@ aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 # That method returns `http_02x::Request` and so is gated behind the pre-1.x test utilities.
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "rustls-ring", "test-util", "wire-mock", "legacy-test-util"] }
 aws-smithy-mocks = { path = "../../build/aws-sdk/sdk/aws-smithy-mocks" }
+aws-smithy-observability = { path = "../../build/aws-sdk/sdk/aws-smithy-observability" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
