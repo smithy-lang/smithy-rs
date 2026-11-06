@@ -98,7 +98,7 @@ impl H1IdleProbeSet {
 }
 
 /// Identity of one retained HTTP/1 demand-to-supplier match.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::client::pool) struct H1MatchId(u64);
 
 impl H1MatchId {
@@ -280,14 +280,14 @@ pub(super) enum PreparedH1Match {
 
 #[cfg(test)]
 impl PreparedH1Match {
-    fn match_id(&self) -> H1MatchId {
+    pub(super) fn match_id(&self) -> H1MatchId {
         match self {
             Self::ProbeIdle(prepared) => prepared.match_id,
             Self::Reserve(prepared) => prepared.match_id,
         }
     }
 
-    fn supplier(&self) -> PartitionId {
+    pub(super) fn supplier(&self) -> PartitionId {
         match self {
             Self::ProbeIdle(prepared) => prepared.supplier,
             Self::Reserve(prepared) => prepared.supplier,
@@ -301,6 +301,17 @@ pub(super) struct PreparedH1Cancellation {
     match_id: H1MatchId,
     /// Cell that owns the reservation.
     supplier: PartitionId,
+}
+
+#[cfg(test)]
+impl PreparedH1Cancellation {
+    pub(super) fn match_id(&self) -> H1MatchId {
+        self.match_id
+    }
+
+    pub(super) fn supplier(&self) -> PartitionId {
+        self.supplier
+    }
 }
 
 impl H1SupplyIndex {
@@ -994,6 +1005,229 @@ impl H1Supply {
                     "H1 cancellation was queued more than once"
                 );
             }
+        }
+    }
+}
+
+/// Admission-side phase of one retained match, without probe bookkeeping.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum H1MatchPhase {
+    ProbingIdle,
+    Reserving,
+    WaitingForSender,
+    Resolving,
+    Cancelling,
+}
+
+/// Facts about one retained match.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct H1MatchAudit {
+    pub(super) requester: PartitionId,
+    pub(super) supplier: PartitionId,
+    pub(super) demand: DemandId,
+    pub(super) kind: H1MatchKind,
+    pub(super) phase: H1MatchPhase,
+    pub(super) cancelled: bool,
+    /// Distinct suppliers checked so far while probing.
+    pub(super) probed_suppliers: usize,
+}
+
+#[cfg(test)]
+impl H1Match {
+    fn audit(&self) -> H1MatchAudit {
+        let (phase, probed_suppliers) = match self.state {
+            H1MatchState::ProbingIdle { probed } => (H1MatchPhase::ProbingIdle, probed.len),
+            H1MatchState::Reserving => (H1MatchPhase::Reserving, 0),
+            H1MatchState::WaitingForSender => (H1MatchPhase::WaitingForSender, 0),
+            H1MatchState::Resolving => (H1MatchPhase::Resolving, 0),
+            H1MatchState::Cancelling => (H1MatchPhase::Cancelling, 0),
+        };
+        H1MatchAudit {
+            requester: self.requester,
+            supplier: self.supplier,
+            demand: self.demand,
+            kind: self.kind,
+            phase,
+            cancelled: self.cancelled,
+            probed_suppliers,
+        }
+    }
+}
+
+/// Facts about one indexed supplier cell.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct H1SupplierAudit {
+    pub(super) eligibility_group: EligibilityGroup,
+    pub(super) revision: u64,
+    pub(super) status: H1SupplyStatus,
+    pub(super) reserved_by: Option<H1MatchId>,
+    pub(super) linked: bool,
+}
+
+/// Complete HTTP/1 supply and match state reported for cross-structure checks.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct H1SupplyAudit {
+    /// Every indexed supplier, sorted by identity.
+    pub(super) suppliers: Vec<(PartitionId, H1SupplierAudit)>,
+    /// Every retained match, sorted by identity.
+    pub(super) matches: Vec<(H1MatchId, H1MatchAudit)>,
+    /// Requester index, sorted by requester.
+    pub(super) by_requester: Vec<(PartitionId, H1MatchId)>,
+    /// Lazy cancellation queue in order.
+    pub(super) cancellations: Vec<H1MatchId>,
+    /// Origin-wide reclaim order from head to tail.
+    pub(super) reclaim_order: Vec<PartitionId>,
+}
+
+/// State-level operations for the admission property-test harness.
+///
+/// Production reaches these transitions through detached actions that own
+/// cell-side resources. The harness holds identities instead and drives the
+/// same transitions directly, so each forwarder exists only under `test`.
+#[cfg(test)]
+impl H1Supply {
+    pub(super) fn apply_revision_for_test(
+        &mut self,
+        supplier: PartitionId,
+        eligibility_group: EligibilityGroup,
+        revision: SupplyRevision<H1SupplyStatus>,
+    ) {
+        self.apply_revision(supplier, eligibility_group, revision);
+    }
+
+    /// Applies a probe miss and prepares the next crossing, if any.
+    pub(super) fn probe_missed_for_test(
+        &mut self,
+        match_id: H1MatchId,
+        demand: &DemandSchedule,
+        outcome: H1SupplyOutcome,
+    ) -> Option<PreparedH1Match> {
+        self.prepare_next_idle_probe(match_id, demand, outcome)
+    }
+
+    /// Records that a probe found an idle sender; the match is now resolving.
+    pub(super) fn probe_found_candidate_for_test(&mut self, match_id: H1MatchId) -> bool {
+        self.settle_idle_probe_candidate(match_id).is_some()
+    }
+
+    /// Records the supplier cell's reservation decision.
+    pub(super) fn reservation_settled_for_test(
+        &mut self,
+        match_id: H1MatchId,
+        resolved: bool,
+    ) -> bool {
+        self.settle_reservation(match_id, resolved).is_some()
+    }
+
+    /// Begins resolving a returned sender against its retained match.
+    pub(super) fn begin_resolution_for_test(
+        &mut self,
+        match_id: H1MatchId,
+    ) -> Option<H1MatchAudit> {
+        self.begin_resolution(match_id)
+            .map(|retained| retained.audit())
+    }
+
+    /// Removes one retained match and applies its terminal supplier outcome.
+    pub(super) fn settle_match_for_test(
+        &mut self,
+        match_id: H1MatchId,
+        outcome: H1SupplyOutcome,
+    ) -> Option<H1MatchAudit> {
+        self.settle_match(match_id, outcome)
+            .map(|retained| retained.audit())
+    }
+
+    /// Returns the retained match for one requester, if any.
+    pub(super) fn match_for_requester(&self, requester: &PartitionId) -> Option<H1MatchAudit> {
+        let match_id = self.by_requester.get(requester)?;
+        self.matches.get(match_id).map(H1Match::audit)
+    }
+
+    /// Returns one retained match by identity, if it is still retained.
+    pub(super) fn match_audit(&self, match_id: H1MatchId) -> Option<H1MatchAudit> {
+        self.matches.get(&match_id).map(H1Match::audit)
+    }
+
+    /// Returns the oldest selectable peer supplier in `group`, as borrow
+    /// selection would see it.
+    pub(super) fn selectable_peer_supplier(
+        &self,
+        group: &EligibilityGroup,
+        requester: PartitionId,
+    ) -> Option<PartitionId> {
+        self.index
+            .first_borrow_supplier_excluding(group, requester, None)
+    }
+
+    /// Returns whether reclaim could select a supplier other than `requester`.
+    pub(super) fn has_peer_reclaim_supplier(&self, requester: PartitionId) -> bool {
+        self.index
+            .first_peer_supplier(&self.index.reclaim_order, requester, true)
+            .is_some()
+    }
+
+    /// Returns whether reclaim could select any supplier at all.
+    pub(super) fn has_any_reclaim_supplier(&self) -> bool {
+        self.index.reclaim_order.head().is_some()
+    }
+
+    pub(super) fn audit(&self) -> H1SupplyAudit {
+        let mut suppliers: Vec<_> = self
+            .index
+            .records
+            .iter()
+            .map(|(supplier, record)| {
+                (
+                    *supplier,
+                    H1SupplierAudit {
+                        eligibility_group: record.eligibility_group.clone(),
+                        revision: record.revision,
+                        status: record.status,
+                        reserved_by: record.reserved_by,
+                        linked: record.index_state.is_linked(),
+                    },
+                )
+            })
+            .collect();
+        suppliers.sort_by_key(|(supplier, _)| *supplier);
+        let mut matches: Vec<_> = self
+            .matches
+            .iter()
+            .map(|(match_id, retained)| (*match_id, retained.audit()))
+            .collect();
+        matches.sort_by_key(|(match_id, _)| *match_id);
+        let mut by_requester: Vec<_> = self
+            .by_requester
+            .iter()
+            .map(|(requester, match_id)| (*requester, *match_id))
+            .collect();
+        by_requester.sort_by_key(|(requester, _)| *requester);
+        let mut reclaim_order = Vec::with_capacity(self.index.reclaim_order.len());
+        let mut current = self.index.reclaim_order.head();
+        while let Some(supplier) = current {
+            reclaim_order.push(supplier);
+            current = match &self
+                .index
+                .records
+                .get(&supplier)
+                .expect("ordered H1 supplier disappeared")
+                .index_state
+            {
+                H1SupplyIndexState::Linked { reclaim, .. } => reclaim.next,
+                H1SupplyIndexState::Unlinked => None,
+            };
+        }
+        H1SupplyAudit {
+            suppliers,
+            matches,
+            by_requester,
+            cancellations: self.cancellations.iter().copied().collect(),
+            reclaim_order,
         }
     }
 }

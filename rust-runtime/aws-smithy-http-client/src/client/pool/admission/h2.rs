@@ -673,6 +673,128 @@ impl H2Supply {
     }
 }
 
+/// Facts about one indexed HTTP/2 supplier cell.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct H2SupplierAudit {
+    pub(super) eligibility_group: EligibilityGroup,
+    pub(super) revision: u64,
+    pub(super) status: H2SupplyStatus,
+    /// Whether the cell is linked in its eligibility-group supplier order.
+    pub(super) group_linked: bool,
+    /// Whether the cell is linked in the origin-wide idle reclaim order.
+    pub(super) reclaim_linked: bool,
+}
+
+/// Complete HTTP/2 supply state reported for cross-structure checks.
+#[cfg(test)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct H2SupplyAudit {
+    /// Every indexed supplier, sorted by identity.
+    pub(super) suppliers: Vec<(PartitionId, H2SupplierAudit)>,
+    /// Groups admission currently considers route-ready, sorted.
+    pub(super) route_ready_groups: Vec<EligibilityGroup>,
+    /// Group selected by the most recent route, for rotation checks.
+    pub(super) last_route_group: Option<EligibilityGroup>,
+    /// Origin-wide idle reclaim order from head to tail.
+    pub(super) reclaim_order: Vec<PartitionId>,
+    /// Exact reclaim reservation crossing to its cell, if any.
+    pub(super) reclaiming: Option<PreparedH2Reclaim>,
+}
+
+/// State-level operations for the admission property-test harness.
+///
+/// Production reaches these transitions through detached actions that own
+/// cell-side resources. The harness holds identities instead and drives the
+/// same transitions directly, so each forwarder exists only under `test`.
+#[cfg(test)]
+impl H2Supply {
+    pub(super) fn apply_revision_for_test(
+        &mut self,
+        supplier: PartitionId,
+        eligibility_group: EligibilityGroup,
+        revision: SupplyRevision<H2SupplyStatus>,
+        demand: &DemandSchedule,
+    ) {
+        self.apply_revision(supplier, eligibility_group, revision, demand);
+    }
+
+    /// Withdraws one exact generation after a route found it stale.
+    pub(super) fn remove_exact_generation_for_test(
+        &mut self,
+        supplier: &PartitionId,
+        generation: H2GenerationId,
+        demand: &DemandSchedule,
+    ) {
+        self.remove_exact_generation(supplier, generation, demand);
+    }
+
+    /// Completes the outstanding reclaim crossing.
+    pub(super) fn settle_reclaim_for_test(
+        &mut self,
+        prepared: &PreparedH2Reclaim,
+        revision: Option<SupplyRevision<H2SupplyStatus>>,
+        demand: &DemandSchedule,
+    ) {
+        self.settle_reclaim(prepared, revision, demand);
+    }
+
+    /// Returns the peer generation route selection would offer to `requester`.
+    pub(super) fn routeable_peer_generation(
+        &self,
+        group: &EligibilityGroup,
+        requester: PartitionId,
+    ) -> Option<(PartitionId, H2GenerationId)> {
+        let supplier = self.index.first_peer_supplier(group, requester)?;
+        let generation = self.index.records.get(&supplier)?.generation()?;
+        Some((supplier, generation))
+    }
+
+    /// Returns whether an idle generation is selectable for reclaim.
+    pub(super) fn has_reclaim_generation(&self) -> bool {
+        self.reclaiming.is_none() && self.index.reclaim_order.head().is_some()
+    }
+
+    pub(super) fn audit(&self) -> H2SupplyAudit {
+        let mut suppliers: Vec<_> = self
+            .index
+            .records
+            .iter()
+            .map(|(supplier, record)| {
+                (
+                    *supplier,
+                    H2SupplierAudit {
+                        eligibility_group: record.eligibility_group.clone(),
+                        revision: record.revision,
+                        status: record.status,
+                        group_linked: record.group_index.links().is_some(),
+                        reclaim_linked: record.reclaim_links.is_some(),
+                    },
+                )
+            })
+            .collect();
+        suppliers.sort_by_key(|(supplier, _)| *supplier);
+        let mut reclaim_order = Vec::with_capacity(self.index.reclaim_order.len());
+        let mut current = self.index.reclaim_order.head();
+        while let Some(supplier) = current {
+            reclaim_order.push(supplier);
+            current = self
+                .index
+                .records
+                .get(&supplier)
+                .and_then(|record| record.reclaim_links.as_ref())
+                .and_then(|links| links.next);
+        }
+        H2SupplyAudit {
+            suppliers,
+            route_ready_groups: self.index.route_ready_groups.iter().cloned().collect(),
+            last_route_group: self.index.last_route_group.clone(),
+            reclaim_order,
+            reclaiming: self.reclaiming.clone(),
+        }
+    }
+}
+
 /// Identity-only route installation with a terminal admission fallback.
 pub(in crate::client::pool) struct H2RouteGuard {
     /// Admission owner of the assigned demand and indexed supply.
