@@ -1,0 +1,4 @@
+{
+    "description": "A model whose document added smithy.api#Foo, added to another assembler: like shapes built in code, its shapes in the prelude namespace are not carried over.",
+    "steps": [{"addModel": "model.json"}]
+}
