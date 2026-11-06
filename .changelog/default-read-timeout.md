@@ -1,7 +1,7 @@
 ---
 applies_to: ["aws-sdk-rust"]
 authors: ["yinychen"]
-references: ["smithy-rs#PENDING"]
+references: ["smithy-rs#5004"]
 breaking: false
 new_feature: true
 bug_fix: false
