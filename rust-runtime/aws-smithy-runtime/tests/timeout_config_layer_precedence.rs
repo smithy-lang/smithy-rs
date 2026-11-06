@@ -213,6 +213,44 @@ fn unrelated_caller_setting_does_not_suppress_the_service_default() {
     );
 }
 
+/// A per-operation value reinstates a timeout the client disabled.
+///
+/// `Disabled` blocks layers *below* it, not above, so "disabled on the client" is not absolute.
+/// That is the intended precedence — per-operation config is more specific than client config —
+/// and it means `config_override` can re-enable a timeout for one call.
+#[test]
+fn operation_override_reinstates_a_client_level_disable() {
+    let mut disabled = TimeoutConfig::builder();
+    disabled.set_read_timeout(None);
+    let override_ = TimeoutConfig::builder()
+        .read_timeout(Duration::from_secs(7))
+        .build();
+    let tc = resolve(Some(SERVICE_READ), Some(disabled.build()), Some(override_));
+    assert_eq!(
+        tc.read_timeout(),
+        Some(Duration::from_secs(7)),
+        "a per-operation value must beat a client-level disable"
+    );
+    assert_eq!(tc.connect_timeout(), Some(CONNECT));
+}
+
+/// Setting any other timeout alongside a disable avoids the truncation below.
+///
+/// This is the bound on that sharp edge: `has_timeouts()` becomes true as soon as *one* field is
+/// `Set`, so the merge chain is absorbed normally and only the explicitly disabled field is lost.
+#[test]
+fn disabling_read_alongside_another_timeout_preserves_other_defaults() {
+    let mut caller = TimeoutConfig::builder().connect_timeout(Duration::from_secs(1));
+    caller.set_read_timeout(None);
+    let tc = resolve(Some(SERVICE_READ), Some(caller.build()), None);
+    assert_eq!(tc.read_timeout(), None, "the disable still applies");
+    assert_eq!(
+        tc.connect_timeout(),
+        Some(Duration::from_secs(1)),
+        "and nothing else is collaterally lost"
+    );
+}
+
 /// Documents a pre-existing sharp edge, not desired behavior.
 ///
 /// `MergeTimeoutConfig::merge_iter` stops absorbing lower-priority layers once the accumulated
@@ -220,6 +258,9 @@ fn unrelated_caller_setting_does_not_suppress_the_service_default() {
 /// `Disabled` is not `Set` — so a `TimeoutConfig` whose only non-`Unset` field is *disabled* also
 /// truncates the chain. The trigger is therefore broader than "an empty config": it is "no field
 /// is `Set`".
+///
+/// It is also narrower than it first appears. It fires only when the caller sets *nothing else*;
+/// see `disabling_read_alongside_another_timeout_preserves_other_defaults`.
 ///
 /// Both variants below already drop the 3.1s connect default **today**, with no per-service read
 /// default in play, so this is not a behavior this design introduces. It is confirmed by running
