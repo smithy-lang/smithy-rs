@@ -556,8 +556,7 @@ mod tests {
         let bytes = make_deser(|s| s.write_timestamp(&TIMESTAMP, &ts).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
         let decoded = de.read_timestamp(&TIMESTAMP).unwrap();
-        // Millisecond truncation
-        assert_eq!(decoded.subsec_nanos() % 1_000_000, 0);
+        assert_eq!(decoded, DateTime::from_millis(1_700_000_000_123));
     }
 
     #[test]
