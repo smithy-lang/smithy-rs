@@ -137,6 +137,10 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
             // `set` is recognized only to explain that it is unsupported.
             "syntax_set_shape" => UnsupportedFeature,
             "missing_elided_identifier" => InvalidProperty,
+            // Two definitions of a shape whose `= value` assignments differ.
+            "merge_conflicting_value_assignment" => ShapeConflict,
+            // Two definitions that apply different values of a non-list trait.
+            "merge_conflicting_trait" => TraitConflict,
             "unsupported_version" => UnsupportedVersion,
             other if other.starts_with("syntax_") => IdlSyntax,
             other => panic!("{other}: map Java's generic `Model` event to a Rust code"),
@@ -278,7 +282,12 @@ fn rejected_fixtures_match_java() {
             .iter()
             .map(|e| rust_code(outcome.stem(), e))
             .collect();
-        if codes(err.diagnostics()) != expected {
+        // The recorded outcomes list only ERROR events; notes and warnings may accompany them.
+        let errors = err
+            .diagnostics()
+            .iter()
+            .filter(|d| d.severity() == Severity::Error);
+        if codes(errors) != expected {
             failures.push(format!(
                 "{name}: Java events {:?}, Rust diagnostics {:?}",
                 outcome.errors,

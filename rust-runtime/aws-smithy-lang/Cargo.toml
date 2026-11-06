@@ -36,6 +36,12 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["clie
 aws-smithy-types = { path = "../aws-smithy-types" }
 criterion = "0.8.2"
 proptest = "1.11.0"
+ui_test = { version = "0.30.7", default-features = false, features = ["rustc"] }
+
+[[test]]
+name = "compile_fail"
+harness = false
+required-features = ["runtime-schema"]
 
 [[bench]]
 name = "model"
@@ -44,6 +50,11 @@ harness = false
 [[bench]]
 name = "idl"
 harness = false
+
+[[bench]]
+name = "schema_memory"
+harness = false
+required-features = ["runtime-schema"]
 
 [package.metadata.docs.rs]
 all-features = true

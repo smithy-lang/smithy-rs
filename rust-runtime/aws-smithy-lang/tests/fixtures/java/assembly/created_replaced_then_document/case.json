@@ -1,0 +1,5 @@
+{
+    "description": "A structure built in code is replaced by a string built in code with the same ID; a document then defines the same string.",
+    "steps": [{"addShapes": "structure.json"}, {"addShapes": "string.json"}, {"addFile": "f.json"}],
+    "locations": ["ex#S"]
+}
