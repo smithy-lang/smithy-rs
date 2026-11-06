@@ -74,3 +74,4 @@
   - [RFC-0048: Server protocol claims and multiprotocol dispatch](./rfcs/rfc0048_server_protocol_claims.md)
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
+  - [Merge queue](./contributing/merge_queue.md)
