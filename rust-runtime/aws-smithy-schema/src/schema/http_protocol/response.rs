@@ -30,7 +30,7 @@ use crate::{Schema, ShapeType};
 use aws_smithy_runtime_api::http::{Headers, NonUtf8HeaderHandling, Response};
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentV2};
 
 /// Reads the non-UTF-8 header policy out of a request's config, defaulting to
 /// [`NonUtf8HeaderHandling::Reject`].
@@ -525,6 +525,10 @@ where
         self.body.read_document(schema)
     }
 
+    fn read_document_v2(&mut self, schema: &Schema<'_>) -> Result<DocumentV2, SerdeError> {
+        self.body.read_document_v2(schema)
+    }
+
     fn is_null(&self) -> bool {
         self.body.is_null()
     }
@@ -755,6 +759,10 @@ mod tests {
         fn read_document(&mut self, _s: &Schema<'_>) -> Result<Document, SerdeError> {
             Ok(Document::Null)
         }
+        // Distinguishable from the trait default, which would upgrade `read_document`'s `Null`.
+        fn read_document_v2(&mut self, _s: &Schema<'_>) -> Result<DocumentV2, SerdeError> {
+            Ok(DocumentV2::Blob(FROM_BODY.as_bytes().to_vec()))
+        }
         fn is_null(&self) -> bool {
             false
         }
@@ -894,6 +902,18 @@ mod tests {
     }
 
     const NO_BODY_MEMBERS: &[&Schema<'static>] = &[];
+
+    /// The composite forwards `read_document_v2` to the body codec. Inheriting the trait default
+    /// would read through the codec's `read_document` instead.
+    #[test]
+    fn read_document_v2_reaches_the_body_codec() {
+        let h = headers(&[]);
+        let log = RefCell::new(BodyLog::default());
+        let value = output(NO_BODY_MEMBERS, &log, &h, 200, Some(b"{}"))
+            .read_document_v2(&crate::prelude::DOCUMENT)
+            .unwrap();
+        assert_eq!(value, DocumentV2::Blob(FROM_BODY.as_bytes().to_vec()));
+    }
 
     // ---------------------------------------------------------------------------------
     // routing

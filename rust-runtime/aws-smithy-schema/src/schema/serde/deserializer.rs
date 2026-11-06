@@ -7,8 +7,8 @@
 
 use super::error::SerdeError;
 use crate::Schema;
-use aws_smithy_types::Document;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+use aws_smithy_types::{Document, DocumentV2};
 
 /// Deserializes Smithy shapes from a serial format.
 ///
@@ -141,6 +141,22 @@ pub trait ShapeDeserializer {
     /// no lifetime). Implementations construct the value from their
     /// underlying source representation.
     fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError>;
+
+    /// Reads a [`DocumentV2`] value.
+    ///
+    /// The default implementation calls [`read_document`](Self::read_document)
+    /// and converts the result with `DocumentV2::from`, which is lossless. It
+    /// can't recover what `read_document` already discarded, so it never
+    /// produces a blob, timestamp, big integer, or big decimal variant.
+    ///
+    /// Override this method if the format can read those values. A
+    /// deserializer that wraps or routes to another deserializer must forward
+    /// this method to it, the same way it forwards `read_document`.
+    /// Inheriting the default would read through the inner deserializer's
+    /// `read_document` and lose those variants.
+    fn read_document_v2(&mut self, schema: &Schema<'_>) -> Result<DocumentV2, SerdeError> {
+        self.read_document(schema).map(DocumentV2::from)
+    }
 
     /// Checks if the current value is null.
     ///

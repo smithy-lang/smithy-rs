@@ -1108,6 +1108,14 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
         self.body.write_document(schema, value)
     }
 
+    fn write_document_v2(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &aws_smithy_types::DocumentV2,
+    ) -> Result<(), SerdeError> {
+        self.body.write_document_v2(schema, value)
+    }
+
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.body.write_null(schema)
     }
@@ -1318,6 +1326,7 @@ impl ShapeSerializer for ListElementCollector {
         write_big_integer(&aws_smithy_types::BigInteger),
         write_big_decimal(&aws_smithy_types::BigDecimal),
         write_document(&aws_smithy_types::Document),
+        write_document_v2(&aws_smithy_types::DocumentV2),
         write_null(),
     }
 }
@@ -1415,6 +1424,7 @@ impl ShapeSerializer for MapEntryCollector {
         write_blob(aws_smithy_types::Blob),
         write_timestamp(&aws_smithy_types::DateTime),
         write_document(&aws_smithy_types::Document),
+        write_document_v2(&aws_smithy_types::DocumentV2),
         write_null(),
     }
 }
@@ -1659,6 +1669,14 @@ mod tests {
         ) -> Result<(), SerdeError> {
             Ok(())
         }
+        fn write_document_v2(
+            &mut self,
+            _: &Schema<'_>,
+            _: &aws_smithy_types::DocumentV2,
+        ) -> Result<(), SerdeError> {
+            self.output.extend_from_slice(b"document_v2");
+            Ok(())
+        }
         fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1815,6 +1833,45 @@ mod tests {
             TestCodec,
             "application/test",
         )
+    }
+
+    /// The router forwards `write_document_v2` to the body codec. Inheriting the trait default
+    /// would reject the blob, which the body codec can write.
+    #[test]
+    fn document_v2_body_member_reaches_the_body_codec() {
+        static DOC_MEMBER: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "DocStruct"),
+            ShapeType::Document,
+            "doc",
+            0,
+        );
+        static DOC_STRUCT: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "DocStruct"),
+            ShapeType::Structure,
+            &[&DOC_MEMBER],
+        );
+
+        struct DocStruct;
+        impl SerializableStruct for DocStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &DOC_STRUCT
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                let blob = aws_smithy_types::DocumentV2::Blob(b"bytes".to_vec());
+                s.write_document_v2(&DOC_MEMBER, &blob)
+            }
+        }
+
+        let request = make_protocol()
+            .serialize_request(
+                &DocStruct,
+                &DOC_STRUCT,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(request.body().bytes().unwrap(), b"{document_v2}");
     }
 
     /// A REST protocol resolves its route from the operation's `@http` template, so a path that

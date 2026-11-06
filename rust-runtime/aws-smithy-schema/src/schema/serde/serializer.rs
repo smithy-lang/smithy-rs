@@ -7,8 +7,8 @@
 
 use super::error::SerdeError;
 use crate::Schema;
-use aws_smithy_types::Document;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+use aws_smithy_types::{Document, DocumentError, DocumentV2};
 
 /// Serializes Smithy shapes to a target format.
 ///
@@ -169,6 +169,34 @@ pub trait ShapeSerializer {
     /// output representation.
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError>;
 
+    /// Writes a [`DocumentV2`] value.
+    ///
+    /// The default implementation converts `value` with
+    /// [`DocumentV2::try_to_document`] and passes the result to
+    /// [`write_document`](Self::write_document), so a serializer written
+    /// before `DocumentV2` existed can still write every value that
+    /// [`Document`] can represent. If the value contains a blob, a timestamp,
+    /// a big integer, or a big decimal at any depth, the default returns
+    /// [`SerdeError::UnsupportedOperation`] instead. It doesn't fall back to
+    /// [`DocumentV2::to_document_lossy`], because that protocol-neutral
+    /// downgrade isn't necessarily the protocol's encoding of the value.
+    ///
+    /// Override this method if the format can write those values. A
+    /// serializer that wraps or routes to another serializer must forward
+    /// this method to it, the same way it forwards `write_document`.
+    /// Inheriting the default would convert the value before the inner
+    /// serializer sees it.
+    fn write_document_v2(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &DocumentV2,
+    ) -> Result<(), SerdeError> {
+        match value.try_to_document() {
+            Ok(document) => self.write_document(schema, &document),
+            Err(err) => Err(unrepresentable_document_v2(err)),
+        }
+    }
+
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError>;
 
@@ -255,6 +283,20 @@ pub trait ShapeSerializer {
             Ok(())
         })
     }
+}
+
+/// The error the default [`ShapeSerializer::write_document_v2`] returns for a
+/// value that [`Document`] can't represent.
+#[cold]
+fn unrepresentable_document_v2(err: DocumentError) -> SerdeError {
+    // `try_to_document` reports the first value `Document` can't hold, with its path.
+    let detail = match err {
+        DocumentError::TypeMismatch { message, .. } => message,
+        other => other.to_string(),
+    };
+    SerdeError::unsupported(format!(
+        "this serializer writes DocumentV2 values through write_document, and {detail}"
+    ))
 }
 
 /// Trait for structures that can be serialized via a schema.
