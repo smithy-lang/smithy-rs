@@ -65,7 +65,8 @@ class TimeoutDefaults(artifact: ObjectNode) {
      * [sdkId] is the `aws.api#service` `sdkId` trait value, matched exactly — the artifact is keyed
      * by the same string the other SDKs key their maps by.
      */
-    fun readTimeoutFor(sdkId: String): Duration? = if (perService.containsKey(sdkId)) perService[sdkId] else generalDefault
+    fun readTimeoutFor(sdkId: String): Duration? =
+        if (perService.containsKey(sdkId)) perService[sdkId] else generalDefault
 
     private fun millis(value: Long): Duration {
         require(value > 0) {
