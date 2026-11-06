@@ -6,6 +6,7 @@ package software.amazon.smithy.rustsdk
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -63,7 +64,7 @@ class TimeoutDefaultsTest {
     @Test
     fun `the Rust overrides take the general default despite being exempt in the artifact`() {
         val defaults = load()
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 3
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 4
         for (service in TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES) {
             withClue("$service is overridden back to the general default; see design section 2.3") {
                 defaults.readTimeoutFor(service) shouldBe fiveMinutes
@@ -155,30 +156,50 @@ class TimeoutDefaultsTest {
     }
 
     /**
-     * Records a defect in the shared artifact rather than desired behavior.
+     * `SageMaker Runtime` and `SageMaker Runtime HTTP2` are two different services, and the
+     * artifact listing both at different tiers is correct rather than a defect.
      *
-     * The artifact carries both `"SageMaker Runtime"` (900000) and `"SageMaker Runtime HTTP2"`
-     * (-1). The exemption is the intent for the second entry, but no public model has that `sdkId`,
-     * and all three SDKs key this table by `sdkId` — so the exemption binds to no client in Go or
-     * Java either and is not in force anywhere. The service that does exist resolves through
-     * `"SageMaker Runtime"` and takes the 15-minute tier.
+     * They have separate models — `sagemaker-runtime` and `sagemaker-runtime-http2` — separate
+     * `sdkId`s, and disjoint operations. AWS split the bidirectional streaming operation into its
+     * own service because the protocol binding differs. So:
      *
-     * Rust does **not** override this entry; see `TimeoutDefaults.UNREACHABLE_EXEMPT_KEY` for why.
-     * Asserted here so that if a service with that `sdkId` ever appears, this test fails and the
-     * exemption gets re-derived against its real operations rather than silently taking effect.
+     * - `SageMaker Runtime HTTP2`: one operation, `InvokeEndpointWithBidirectionalStream`, a
+     *   bidirectional event stream. Fully exempt in the artifact, overridden by Rust for the same
+     *   reason as Transcribe Streaming and ConnectHealth.
+     * - `SageMaker Runtime`: `InvokeEndpoint`, `InvokeEndpointAsync`,
+     *   `InvokeEndpointWithResponseStream`. Its longest case is a 60-second model invocation, and
+     *   its event stream is output-only, which the guidance's own criteria exclude from full
+     *   exemption. Hence the 15-minute tier.
+     *
+     * An earlier revision of this test asserted the HTTP2 key matched no service and called it a
+     * dead entry. That was wrong: the model exists, smithy-rs just does not vendor it.
      */
     @Test
-    fun `the SageMaker Runtime HTTP2 artifact key is exempt but matches no known service`() {
-        val key = TimeoutDefaults.UNREACHABLE_EXEMPT_KEY
-        // The artifact's intent for this entry is full exemption.
-        artifact().expectObjectMember("services")
-            .expectNumberMember(key).value.toLong() shouldBe -1L
-        // Which Rust leaves alone.
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain key
-        // But no service carries that sdkId, so the exemption reaches nothing.
-        vendoredSdkIds() shouldNotContain key
-        // The service that does exist takes the 15-minute tier, not the exemption.
-        load().readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
+    fun `SageMaker Runtime and SageMaker Runtime HTTP2 are distinct services at distinct tiers`() {
+        val services = artifact().expectObjectMember("services")
+        services.expectNumberMember("SageMaker Runtime HTTP2").value.toLong() shouldBe -1L
+        services.expectNumberMember("SageMaker Runtime").value.toLong() shouldBe 900_000L
+
+        val defaults = load()
+        // The HTTP/2 service is overridden to the general default, like the other bidirectional
+        // event streams.
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldContain "SageMaker Runtime HTTP2"
+        defaults.readTimeoutFor("SageMaker Runtime HTTP2") shouldBe fiveMinutes
+        // The HTTP/1.1 service keeps its own tier and is not overridden.
+        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime"
+        defaults.readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
+    }
+
+    /**
+     * Two overrides have no vendored model, so `DefaultReadTimeoutDecoratorTest` cannot exercise
+     * them end to end here. Pinned so the gap is visible rather than assumed, and so that vendoring
+     * either model later prompts adding a generated-code test for it.
+     */
+    @Test
+    fun `the overrides without vendored models are the ones we expect`() {
+        val vendored = vendoredSdkIds().toSet()
+        val missing = TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.filterNot { it in vendored }
+        missing.toSet() shouldBe TimeoutDefaults.OVERRIDES_WITHOUT_VENDORED_MODELS
     }
 
     /** `sdkId` of every service model vendored in this repo. */

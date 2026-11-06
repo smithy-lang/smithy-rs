@@ -41,28 +41,25 @@ class TimeoutDefaults(artifact: ObjectNode) {
                 "Transcribe Streaming",
                 "ConnectHealth",
                 "Polly",
+                "SageMaker Runtime HTTP2",
             )
 
         /**
-         * Deliberately *not* overridden, though an earlier revision of this design did: the
-         * artifact exempts `"SageMaker Runtime HTTP2"`, and that exemption stands here.
+         * Overrides whose service model smithy-rs does not vendor, so codegen tests cannot exercise
+         * them here. They resolve normally in a full SDK build, where every model is present.
          *
-         * Two reasons. The exemption is the artifact's stated intent for that entry, and nothing
-         * found here justifies contradicting it: the audit row that appeared to clear the service
-         * was built from the `"SageMaker Runtime"` model's operations — `InvokeEndpoint`,
-         * `InvokeEndpointAsync`, `InvokeEndpointWithResponseStream` — not from the HTTP/2 client's.
-         * The one operation the guidance attributes to it,
-         * `InvokeEndpointWithBidirectionalStream`, is in no public model, so there is nothing to
-         * audit yet.
-         *
-         * Separately, the key matches no service `sdkId` in any public model, so the entry binds to
-         * no client in Go or Java either and the exemption is not actually in force anywhere. An
-         * override would therefore have been inert today and would have silently stripped the
-         * exemption from an unaudited service if that client ever shipped.
-         *
-         * `TimeoutDefaultsTest` pins the unreachability so this is revisited if it changes.
+         * `SageMaker Runtime HTTP2` is a distinct service from `SageMaker Runtime`, with its own
+         * model (`sagemaker-runtime-http2`), its own `sdkId`, and a single operation,
+         * `InvokeEndpointWithBidirectionalStream`. The artifact lists both, at different tiers,
+         * which is correct: the HTTP/2 service is a bidirectional event stream and fully exempt,
+         * while `SageMaker Runtime`'s longest case is a 60-second model invocation and takes the
+         * 15-minute tier.
          */
-        const val UNREACHABLE_EXEMPT_KEY = "SageMaker Runtime HTTP2"
+        val OVERRIDES_WITHOUT_VENDORED_MODELS =
+            setOf(
+                "ConnectHealth",
+                "SageMaker Runtime HTTP2",
+            )
     }
 
     private val generalDefault: Duration = millis(artifact.expectNumberMember("generalDefaultMillis").value.toLong())
