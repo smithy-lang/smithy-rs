@@ -1,0 +1,16 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "exampleSyntacticShapeId": "smithy.api#required",
+        "foo": {
+            "String": "smithy.api#String"
+        },
+        "greeting": "hello",
+        "stringList": [
+            "a",
+            "b",
+            "c"
+        ]
+    },
+    "shapes": {}
+}

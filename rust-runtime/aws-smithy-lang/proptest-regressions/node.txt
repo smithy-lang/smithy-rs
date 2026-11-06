@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc afe0558527195a2d2c675b3e6270041e9a6b1d51f728cc7d6835328b1df25293 # shrinks to node = Object(NodeObject({"": Object(NodeObject({"": Number(Number(-3.090862039901235e299))}))}))

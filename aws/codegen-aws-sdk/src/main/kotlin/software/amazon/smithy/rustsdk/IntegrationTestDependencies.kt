@@ -134,6 +134,7 @@ class IntegrationTestDependencies(
                         )
                         addDependency(Http1x.toDevDependency())
                         addDependency(Bytes.toDevDependency())
+                        addDependency(CargoDependency.smithyCbor(runtimeConfig).toDevDependency())
                     }
                     if (hasBenches) {
                         addDependency(Criterion)

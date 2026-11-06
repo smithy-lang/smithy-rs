@@ -152,7 +152,7 @@ class RegionDecorator : ClientCodegenDecorator {
                     codegenContext: ClientCodegenContext,
                     parameter: Parameter,
                 ): Writable? {
-                    if (endpointTestsValidatesRegionAlready(codegenContext)) {
+                    if (skipsRegionHostLabelValidation(codegenContext)) {
                         return null
                     }
 
@@ -273,10 +273,10 @@ fun usesRegion(codegenContext: ClientCodegenContext) =
             .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
 /**
- * Test if region is already validated via endpoint rules tests. Validating region when building parameters
- * will break endpoint tests which validate during resolution and expect specific errors.
+ * S3 and S3 Control don't get the Region host-label check in `ParamsBuilder::build()`. Adding it would change how
+ * their requests handle an invalid Region.
  */
-fun endpointTestsValidatesRegionAlready(codegenContext: ClientCodegenContext): Boolean =
+private fun skipsRegionHostLabelValidation(codegenContext: ClientCodegenContext): Boolean =
     codegenContext.serviceShape.id in
         setOf(
             ShapeId.from("com.amazonaws.s3#AmazonS3"),

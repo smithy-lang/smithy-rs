@@ -1,0 +1,255 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#Service": {
+      "type": "service",
+      "operations": [
+        {
+          "target": "ex#DirectOp"
+        },
+        {
+          "target": "ex#SharedOp"
+        }
+      ],
+      "resources": [
+        {
+          "target": "ex#Thing"
+        }
+      ],
+      "errors": [
+        {
+          "target": "ex#Throttled"
+        },
+        {
+          "target": "ex#Common"
+        }
+      ]
+    },
+    "ex#Hidden": {
+      "type": "service",
+      "resources": [
+        {
+          "target": "ex#Outer"
+        }
+      ]
+    },
+    "ex#Other": {
+      "type": "service",
+      "resources": [
+        {
+          "target": "ex#Shared"
+        }
+      ]
+    },
+    "ex#Thing": {
+      "type": "resource",
+      "identifiers": {
+        "id": {
+          "target": "smithy.api#String"
+        }
+      },
+      "create": {
+        "target": "ex#CreateThing"
+      },
+      "put": {
+        "target": "ex#PutThing"
+      },
+      "read": {
+        "target": "ex#GetThing"
+      },
+      "update": {
+        "target": "ex#UpdateThing"
+      },
+      "delete": {
+        "target": "ex#DeleteThing"
+      },
+      "list": {
+        "target": "ex#ListThings"
+      },
+      "operations": [
+        {
+          "target": "ex#ThingAction"
+        },
+        {
+          "target": "ex#SharedOp"
+        }
+      ],
+      "collectionOperations": [
+        {
+          "target": "ex#BatchThing"
+        }
+      ],
+      "resources": [
+        {
+          "target": "ex#Child"
+        },
+        {
+          "target": "ex#Shared"
+        }
+      ]
+    },
+    "ex#Child": {
+      "type": "resource",
+      "operations": [
+        {
+          "target": "ex#ChildOp"
+        }
+      ],
+      "resources": [
+        {
+          "target": "ex#Shared"
+        }
+      ]
+    },
+    "ex#Shared": {
+      "type": "resource",
+      "read": {
+        "target": "ex#SharedRead"
+      }
+    },
+    "ex#Outer": {
+      "type": "resource",
+      "resources": [
+        {
+          "target": "ex#Inner"
+        }
+      ]
+    },
+    "ex#Inner": {
+      "type": "resource",
+      "read": {
+        "target": "ex#DeepOp"
+      }
+    },
+    "ex#DirectOp": {
+      "type": "operation"
+    },
+    "ex#SharedOp": {
+      "type": "operation"
+    },
+    "ex#CreateThing": {
+      "type": "operation",
+      "input": {
+        "target": "ex#SharedInput"
+      }
+    },
+    "ex#PutThing": {
+      "type": "operation",
+      "input": {
+        "target": "ex#SharedInput"
+      }
+    },
+    "ex#GetThing": {
+      "type": "operation",
+      "input": {
+        "target": "ex#GetThingInput"
+      },
+      "output": {
+        "target": "ex#GetThingOutput"
+      },
+      "errors": [
+        {
+          "target": "ex#NotFound"
+        },
+        {
+          "target": "ex#Common"
+        }
+      ]
+    },
+    "ex#UpdateThing": {
+      "type": "operation",
+      "errors": [
+        {
+          "target": "ex#NotFound"
+        }
+      ]
+    },
+    "ex#DeleteThing": {
+      "type": "operation"
+    },
+    "ex#ListThings": {
+      "type": "operation"
+    },
+    "ex#ThingAction": {
+      "type": "operation"
+    },
+    "ex#BatchThing": {
+      "type": "operation"
+    },
+    "ex#ChildOp": {
+      "type": "operation"
+    },
+    "ex#SharedRead": {
+      "type": "operation"
+    },
+    "ex#DeepOp": {
+      "type": "operation"
+    },
+    "ex#Unbound": {
+      "type": "operation",
+      "errors": [
+        {
+          "target": "ex#NotFound"
+        }
+      ]
+    },
+    "ex#SharedInput": {
+      "type": "structure"
+    },
+    "ex#GetThingInput": {
+      "type": "structure",
+      "members": {
+        "zeta": {
+          "target": "smithy.api#String"
+        },
+        "alpha": {
+          "target": "smithy.api#String"
+        },
+        "mid": {
+          "target": "smithy.api#Integer"
+        }
+      }
+    },
+    "ex#GetThingOutput": {
+      "type": "structure",
+      "members": {
+        "thing": {
+          "target": "smithy.api#String"
+        }
+      }
+    },
+    "ex#MarkedInput": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "ex#MarkedOutput": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "ex#Plain": {
+      "type": "structure"
+    },
+    "ex#Throttled": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#error": "client"
+      }
+    },
+    "ex#Common": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#error": "server"
+      }
+    },
+    "ex#NotFound": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#error": "client"
+      }
+    }
+  }
+}

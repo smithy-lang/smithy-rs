@@ -1,0 +1,417 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+use crate::diagnostic::Position;
+use crate::node::Number;
+use std::sync::Arc;
+
+/// A half-open UTF-8 byte range in an IDL input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct Span {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+}
+
+impl Span {
+    pub(crate) fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Spanned<T> {
+    pub(crate) value: T,
+    pub(crate) span: Span,
+}
+
+impl<T> Spanned<T> {
+    pub(crate) fn new(value: T, span: Span) -> Self {
+        Self { value, span }
+    }
+}
+
+/// Maps UTF-8 byte offsets to Smithy's one-based character columns.
+///
+/// Columns on ASCII lines are byte differences. On other lines, the last computed position is
+/// cached so the mostly increasing lookups made while lowering scan each line once, rather than
+/// once per value on it (which is quadratic for long single-line trait values).
+#[derive(Debug, Clone)]
+pub(crate) struct LineIndex {
+    starts: Vec<usize>,
+    /// Whether each line contains only ASCII, so byte and character columns agree.
+    ascii: Vec<bool>,
+    /// The last non-ASCII lookup: `(line, byte offset, column)`.
+    last: std::cell::Cell<(usize, usize, usize)>,
+}
+
+impl LineIndex {
+    pub(crate) fn new(input: &str) -> Self {
+        let mut starts = vec![0];
+        let mut ascii = Vec::new();
+        let mut line_ascii = true;
+        let bytes = input.as_bytes();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            match bytes[offset] {
+                b'\n' => {
+                    starts.push(offset + 1);
+                    ascii.push(std::mem::replace(&mut line_ascii, true));
+                }
+                b'\r' => {
+                    if bytes.get(offset + 1) == Some(&b'\n') {
+                        offset += 1;
+                    }
+                    starts.push(offset + 1);
+                    ascii.push(std::mem::replace(&mut line_ascii, true));
+                }
+                byte => line_ascii &= byte.is_ascii(),
+            }
+            offset += 1;
+        }
+        ascii.push(line_ascii);
+        Self {
+            starts,
+            ascii,
+            last: std::cell::Cell::new((usize::MAX, 0, 0)),
+        }
+    }
+
+    pub(crate) fn position(&self, input: &str, offset: usize) -> Position {
+        let mut offset = offset.min(input.len());
+        while offset > 0 && !input.is_char_boundary(offset) {
+            offset -= 1;
+        }
+        let line = self.starts.partition_point(|&start| start <= offset) - 1;
+        let line_start = self.starts[line];
+        let column = if self.ascii[line] {
+            offset - line_start + 1
+        } else {
+            // Resume from the cached position when it precedes `offset` on this line.
+            let (cached_line, cached_offset, cached_column) = self.last.get();
+            let (from, base) = if cached_line == line && cached_offset <= offset {
+                (cached_offset, cached_column)
+            } else {
+                (line_start, 1)
+            };
+            let column = base + input[from..offset].chars().count();
+            self.last.set((line, offset, column));
+            column
+        };
+        Position {
+            line: u32::try_from(line + 1).unwrap_or(u32::MAX),
+            column: u32::try_from(column).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ParseErrorKind {
+    Syntax,
+    DuplicateKey,
+    ResourceLimit,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct IdlParseError {
+    pub(crate) offset: usize,
+    pub(crate) kind: ParseErrorKind,
+    pub(crate) message: String,
+}
+
+impl IdlParseError {
+    pub(crate) fn syntax(offset: usize, message: impl Into<String>) -> Self {
+        Self {
+            offset,
+            kind: ParseErrorKind::Syntax,
+            message: message.into(),
+        }
+    }
+
+    pub(crate) fn duplicate(offset: usize, key: &str) -> Self {
+        Self {
+            offset,
+            kind: ParseErrorKind::DuplicateKey,
+            message: format!("duplicate key `{key}`"),
+        }
+    }
+
+    pub(crate) fn resource(offset: usize, message: impl Into<String>) -> Self {
+        Self {
+            offset,
+            kind: ParseErrorKind::ResourceLimit,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct ShapeIdSyntax {
+    pub(crate) value: String,
+    pub(crate) absolute: bool,
+    pub(crate) member: Option<String>,
+    pub(crate) span: Span,
+}
+
+impl ShapeIdSyntax {
+    pub(crate) fn root_name(&self) -> &str {
+        let root = self
+            .value
+            .rsplit_once('#')
+            .map_or(self.value.as_str(), |(_, name)| name);
+        root.split_once('$').map_or(root, |(name, _)| name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NodeSyntax {
+    Null(Span),
+    Bool(bool, Span),
+    Number(Spanned<Number>),
+    String(Spanned<String>),
+    SyntacticShapeId(ShapeIdSyntax),
+    Array(Vec<NodeSyntax>, Span),
+    Object(Vec<(Spanned<String>, NodeSyntax)>, Span),
+}
+
+impl NodeSyntax {
+    pub(crate) fn span(&self) -> Span {
+        match self {
+            Self::Null(span)
+            | Self::Bool(_, span)
+            | Self::Array(_, span)
+            | Self::Object(_, span) => *span,
+            Self::Number(value) => value.span,
+            Self::String(value) => value.span,
+            Self::SyntacticShapeId(value) => value.span,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum TraitValueSyntax {
+    Omitted { at: Span },
+    Explicit(NodeSyntax),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TraitSyntax {
+    pub(crate) id: ShapeIdSyntax,
+    pub(crate) value: TraitValueSyntax,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Annotations {
+    pub(crate) documentation: Option<Spanned<String>>,
+    pub(crate) traits: Vec<TraitSyntax>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum MemberNameSyntax {
+    Named(Spanned<String>),
+    Elided(Spanned<String>),
+}
+
+impl MemberNameSyntax {
+    pub(crate) fn span(&self) -> Span {
+        match self {
+            Self::Named(value) | Self::Elided(value) => value.span,
+        }
+    }
+
+    pub(crate) fn value(&self) -> &str {
+        match self {
+            Self::Named(value) | Self::Elided(value) => &value.value,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MemberSyntax {
+    pub(crate) annotations: Annotations,
+    pub(crate) name: MemberNameSyntax,
+    pub(crate) target: Option<ShapeIdSyntax>,
+    pub(crate) value: Option<NodeSyntax>,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum PropertyValueSyntax {
+    Node(NodeSyntax),
+    InlineStructure {
+        annotations: Annotations,
+        members: Vec<MemberSyntax>,
+        resource: Option<ShapeIdSyntax>,
+        mixins: Vec<ShapeIdSyntax>,
+        span: Span,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PropertySyntax {
+    pub(crate) name: Spanned<String>,
+    pub(crate) value: PropertyValueSyntax,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShapeKindSyntax {
+    Blob,
+    Boolean,
+    Document,
+    String,
+    Byte,
+    Short,
+    Integer,
+    Long,
+    Float,
+    Double,
+    BigInteger,
+    BigDecimal,
+    Timestamp,
+    List,
+    Map,
+    Structure,
+    Union,
+    Enum,
+    IntEnum,
+    Service,
+    Resource,
+    Operation,
+    /// Smithy 1.0 `set`, retained only for a precise unsupported diagnostic.
+    Set,
+}
+
+impl ShapeKindSyntax {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Blob => "blob",
+            Self::Boolean => "boolean",
+            Self::Document => "document",
+            Self::String => "string",
+            Self::Byte => "byte",
+            Self::Short => "short",
+            Self::Integer => "integer",
+            Self::Long => "long",
+            Self::Float => "float",
+            Self::Double => "double",
+            Self::BigInteger => "bigInteger",
+            Self::BigDecimal => "bigDecimal",
+            Self::Timestamp => "timestamp",
+            Self::List => "list",
+            Self::Map => "map",
+            Self::Structure => "structure",
+            Self::Union => "union",
+            Self::Enum => "enum",
+            Self::IntEnum => "intEnum",
+            Self::Service => "service",
+            Self::Resource => "resource",
+            Self::Operation => "operation",
+            Self::Set => "set",
+        }
+    }
+
+    pub(crate) fn is_simple(self) -> bool {
+        matches!(
+            self,
+            Self::Blob
+                | Self::Boolean
+                | Self::Document
+                | Self::String
+                | Self::Byte
+                | Self::Short
+                | Self::Integer
+                | Self::Long
+                | Self::Float
+                | Self::Double
+                | Self::BigInteger
+                | Self::BigDecimal
+                | Self::Timestamp
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ShapeBodySyntax {
+    None,
+    Members(Vec<MemberSyntax>),
+    Properties(Vec<PropertySyntax>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ShapeSyntax {
+    pub(crate) annotations: Annotations,
+    pub(crate) kind: ShapeKindSyntax,
+    pub(crate) name: Spanned<String>,
+    pub(crate) resource: Option<ShapeIdSyntax>,
+    pub(crate) mixins: Vec<ShapeIdSyntax>,
+    pub(crate) body: ShapeBodySyntax,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ApplySyntax {
+    pub(crate) annotations: Annotations,
+    pub(crate) target: ShapeIdSyntax,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum StatementSyntax {
+    Shape(ShapeSyntax),
+    Apply(ApplySyntax),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MetadataSyntax {
+    pub(crate) key: Spanned<String>,
+    pub(crate) value: NodeSyntax,
+    pub(crate) span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct IdlDocument {
+    pub(crate) source: Arc<str>,
+    pub(crate) text: Arc<str>,
+    pub(crate) lines: LineIndex,
+    pub(crate) controls: Vec<(Spanned<String>, NodeSyntax)>,
+    pub(crate) metadata: Vec<MetadataSyntax>,
+    pub(crate) namespace: Option<Spanned<String>>,
+    pub(crate) uses: Vec<ShapeIdSyntax>,
+    pub(crate) statements: Vec<StatementSyntax>,
+}
+
+impl IdlDocument {
+    pub(crate) fn position(&self, span: Span) -> Position {
+        self.lines.position(&self.text, span.start)
+    }
+}
+
+#[cfg(test)]
+mod line_index_tests {
+    use super::LineIndex;
+
+    #[test]
+    fn columns_count_characters_in_any_lookup_order() {
+        let input = "ab\r\néé x é\ny";
+        let index = LineIndex::new(input);
+        let at = |offset| {
+            let p = index.position(input, offset);
+            (p.line, p.column)
+        };
+        assert_eq!(at(1), (1, 2));
+        // Line 2 starts at byte 4: `é` is two bytes.
+        assert_eq!(at(8), (2, 3));
+        assert_eq!(at(9), (2, 4));
+        // Backwards on the same line, then forwards again.
+        assert_eq!(at(6), (2, 2));
+        assert_eq!(at(4), (2, 1));
+        assert_eq!(at(11), (2, 6));
+        // Inside a multi-byte character rounds down to its start.
+        assert_eq!(at(5), (2, 1));
+        assert_eq!(at(input.len() - 1), (3, 1));
+        assert_eq!(at(input.len() + 10), (3, 2));
+    }
+}

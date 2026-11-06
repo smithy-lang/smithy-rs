@@ -58,35 +58,135 @@ object SchemaSerdeAllowlist {
      */
     private val allowedServiceNamespaces: Set<String> =
         setOf(
-            // awsJson1_1 — first service on the schema path. Its model lives at
-            // `aws/sdk/aws-models/ssm.json` so CI generates and tests it.
+            // awsJson1_1 phased rollout
             "com.amazonaws.ssm",
+            "com.amazonaws.servicediscovery",
+            "com.amazonaws.globalaccelerator",
+            "com.amazonaws.appstream",
+            "com.amazonaws.route53domains",
+            "com.amazonaws.comprehend",
+            "com.amazonaws.iotsecuretunneling",
+            "com.amazonaws.licensemanager",
+            "com.amazonaws.configservice",
+            "com.amazonaws.pi",
+            "com.amazonaws.codedeploy",
+            "com.amazonaws.codecommit",
+            "com.amazonaws.marketplacemetering",
+            "com.amazonaws.translate",
+            "com.amazonaws.transcribe",
+            "com.amazonaws.organizations",
+            "com.amazonaws.cognitoidentity",
+            "com.amazonaws.datasync",
+            "com.amazonaws.sagemaker",
+            "com.amazonaws.athena",
+            "com.amazonaws.storagegateway",
+            "com.amazonaws.codepipeline",
+            "com.amazonaws.ecrpublic",
+            "com.amazonaws.lightsail",
+            "com.amazonaws.fsx",
+            "com.amazonaws.codebuild",
+            "com.amazonaws.firehose",
+            "com.amazonaws.workspaces",
+            "com.amazonaws.acmpca",
+            "com.amazonaws.transfer",
+            "com.amazonaws.cloudhsmv2",
+            "com.amazonaws.acm",
+            "com.amazonaws.kinesis",
+            "com.amazonaws.route53resolver",
+            "com.amazonaws.ecs",
+            "com.amazonaws.cognitoidentityprovider",
+            // Phase 5
+            "com.amazonaws.ecr",
+            "com.amazonaws.kms",
+            "com.amazonaws.cloudwatchlogs",
+            "com.amazonaws.secretsmanager",
+            // awsJson1_0 phased rollout
+            "com.amazonaws.swf",
+            // Phase 2
+            "com.amazonaws.opensearchserverless",
+            "com.amazonaws.proton",
+            "com.amazonaws.cloudcontrol",
+            "com.amazonaws.paymentcryptography",
+            // rpcv2Cbor phased rollout
+            "com.amazonaws.marketplaceentitlementservice",
+            // Phase 2
+            "com.amazonaws.cloudwatch",
+            // restJson1 phased rollout
+            "com.amazonaws.wisdom",
+            // Phase 2
+            "com.amazonaws.cleanrooms",
+            "com.amazonaws.glacier",
+            "com.amazonaws.mediapackage",
+            "com.amazonaws.networkmanager",
+            "com.amazonaws.neptunegraph",
+            "com.amazonaws.securitylake",
+            "com.amazonaws.marketplacecatalog",
+            "com.amazonaws.iot",
+            "com.amazonaws.outposts",
+            "com.amazonaws.managedblockchainquery",
+            "com.amazonaws.mediaconnect",
+            "com.amazonaws.vpclattice",
+            "com.amazonaws.grafana",
+            "com.amazonaws.lexruntimev2",
+            "com.amazonaws.ivs",
+            "com.amazonaws.amp",
+            "com.amazonaws.schemas",
+            "com.amazonaws.connectcases",
+            "com.amazonaws.medialive",
+            "com.amazonaws.ram",
+            "com.amazonaws.accessanalyzer",
+            "com.amazonaws.signer",
+            "com.amazonaws.lexmodelsv2",
+            "com.amazonaws.imagebuilder",
+            "com.amazonaws.emrcontainers",
+            "com.amazonaws.mediaconvert",
+            "com.amazonaws.quicksight",
+            "com.amazonaws.pipes",
+            "com.amazonaws.drs",
+            "com.amazonaws.guardduty",
+            "com.amazonaws.inspector2",
+            "com.amazonaws.pinpoint",
+            "com.amazonaws.appsync",
+            "com.amazonaws.groundstation",
+            "com.amazonaws.resourcegroups",
+            "com.amazonaws.bedrockagent",
+            "com.amazonaws.transcribestreaming",
+            "com.amazonaws.bedrockagentruntime",
+            "com.amazonaws.ssooidc",
+            "com.amazonaws.connect",
+            "com.amazonaws.mq",
+            "com.amazonaws.amplify",
+            "com.amazonaws.fis",
+            "com.amazonaws.bedrock",
+            "com.amazonaws.appconfig",
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
+            // Dedicated fixture namespace for the example client with runtime protocol selection.
+            "smithy.rust.codegen.test.multiprotocol",
             // Test model namespaces, listed explicitly until protocols are fully enabled.
             // restJson1
-            // "aws.protocoltests.restjson",  // RestJson, RestJsonExtras
-            // "com.amazonaws.ebs",
-            // "com.amazonaws.simple",
-            // "com.amazonaws.bignumbers",
+            "aws.protocoltests.restjson",
+            "com.amazonaws.ebs",
+            "com.amazonaws.simple",
+            "com.amazonaws.bignumbers",
             // awsJson1_0 / awsJson1_1
-            // "aws.protocoltests.json10",
+            "aws.protocoltests.json10",
             // restXml
             // "aws.protocoltests.restxml",  // RestXml, RestXmlExtras
             // "aws.protocoltests.restxml.xmlns",
             // "aws.protocoltests.restxmlunwrapped",
             // rpcv2Cbor
-            // "smithy.protocoltests.rpcv2Cbor",  // RpcV2Protocol, RpcV2CborService
-            // "aws.protocoltests.rpcv2cbor",  // Query- and NonQueryCompatibleRpcV2Protocol
+            "smithy.protocoltests.rpcv2Cbor",
+            "aws.protocoltests.rpcv2cbor",
             // naming obstacle courses (protocol-independent codegen coverage)
             // "crate",
             // "casing",
             // "naming_obs_structs",
             // Namespaces holding services on more than one protocol — uncommenting enables all
             // of them, not just the one being rolled out:
-            // "aws.protocoltests.misc",  // MiscService restJson1, QueryCompatService awsJson1_0
-            // "com.aws.example",  // two PokemonService shapes, restJson1 and awsJson1_0
+            "aws.protocoltests.misc",
+            "com.aws.example",
             // "aws.protocoltests.json",  // TestService awsJson1_1, RequiredValueJson awsJson1_0, RequiredValueXml restXml
         )
 

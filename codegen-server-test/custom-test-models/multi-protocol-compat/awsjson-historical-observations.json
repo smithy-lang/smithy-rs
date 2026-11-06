@@ -1,0 +1,1321 @@
+{
+  "httpVersion": "1.x",
+  "cases": [
+    {
+      "id": "MultiAwsjson10StructurePayloadPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "230",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10StructurePayloadEmpty",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"body\":{\"label\":\"empty\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11StructurePayloadPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "230",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "230",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11StructurePayloadEmpty",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"body\":{\"label\":\"empty\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"label\":\"empty\"}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10UnionPayloadPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"body\":{\"text\":\"chosen\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10UnionPayloadOverride",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "53",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11UnionPayloadPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"body\":{\"text\":\"chosen\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"text\":\"chosen\"}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11UnionPayloadOverride",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "53",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "53",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"body\":{\"record\":{\"name\":\"union-record\",\"count\":3}}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10ResponseBindingsAbsent",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "29",
+        "content-type": "application/x-amz-json-1.0",
+        "etag": "\"abc\""
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\""
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\""
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10ResponseBindingsPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "73",
+        "content-type": "application/x-amz-json-1.0",
+        "etag": "\"abc\"",
+        "x-meta-one": "1",
+        "x-meta-two": "2"
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":299}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":299}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":299}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":299}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10ResponseBindingsOverride",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "73",
+        "content-type": "application/x-amz-json-1.0",
+        "etag": "\"abc\"",
+        "x-meta-one": "1",
+        "x-meta-two": "2"
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":202}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":202}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":202}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":202}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11ResponseBindingsAbsent",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "29",
+        "content-type": "application/x-amz-json-1.1",
+        "etag": "\"abc\""
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\""
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\""
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "29",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11ResponseBindingsPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "73",
+        "content-type": "application/x-amz-json-1.1",
+        "etag": "\"abc\"",
+        "x-meta-one": "1",
+        "x-meta-two": "2"
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":299}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":299}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":299}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":299}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11ResponseBindingsOverride",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "73",
+        "content-type": "application/x-amz-json-1.1",
+        "etag": "\"abc\"",
+        "x-meta-one": "1",
+        "x-meta-two": "2"
+      },
+      "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":202}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":202}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1",
+          "etag": "\"abc\"",
+          "x-meta-one": "1",
+          "x-meta-two": "2"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"two\":\"2\",\"one\":\"1\"},\"code\":202}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "73",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"name\":\"n\",\"etag\":\"\\\"abc\\\"\",\"metadata\":{\"one\":\"1\",\"two\":\"2\"},\"code\":202}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10RichDataPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "388",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11RichDataPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "388",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "388",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"record\":{\"payload\":{\"label\":\"fixture\",\"child\":{\"name\":\"child\",\"count\":7,\"active\":true},\"items\":[{\"name\":\"first\",\"count\":1,\"active\":false}],\"lookup\":{\"key\":{\"name\":\"mapped\",\"count\":2}},\"choice\":{\"text\":\"chosen\"},\"bytes\":\"YWJj\",\"timestamp\":0},\"children\":[{\"name\":\"extra\",\"count\":9}],\"choices\":[{\"text\":\"list-choice\"},{\"record\":{\"name\":\"union-record\",\"count\":3}}],\"blobs\":[\"YWJj\",\"eHl6\"]}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10ModeledDefaultsDefault",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "43",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10ModeledDefaultsOverride",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "45",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11ModeledDefaultsDefault",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "43",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "43",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"builder\",\"count\":17,\"color\":\"red\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11ModeledDefaultsOverride",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "45",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "45",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"text\":\"explicit\",\"count\":23,\"color\":\"blue\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10NullableValuesAbsent",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "2",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10NullableValuesEmpty",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"values\":[],\"entries\":{}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10NullableValuesPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "69",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11NullableValuesAbsent",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "2",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11NullableValuesEmpty",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "26",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"values\":[],\"entries\":{}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "26",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[],\"entries\":{}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11NullableValuesPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "69",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"one\":\"value\",\"nil\":null}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"nil\":null,\"one\":\"value\"}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "69",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"values\":[\"first\",null,\"last\"],\"entries\":{\"one\":\"value\",\"nil\":null}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10DocumentValuesAbsent",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "2",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10DocumentValuesEmpty",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "15",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"document\":{}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10DocumentValuesPopulated",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "52",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"document\":{\"count\":7,\"kind\":\"fixture\",\"nil\":null}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{\"count\":7,\"kind\":\"fixture\",\"nil\":null}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{\"count\":7,\"kind\":\"fixture\",\"nil\":null}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":{\"count\":7,\"kind\":\"fixture\",\"nil\":null}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10DocumentValuesOverride",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 201,
+      "headers": {
+        "content-length": "17",
+        "content-type": "application/x-amz-json-1.0"
+      },
+      "body": "{\"document\":null}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":null}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":null}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"document\":null}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11DocumentValuesAbsent",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "2",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "2",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11DocumentValuesEmpty",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "15",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"document\":{}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "15",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11DocumentValuesPopulated",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "52",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"document\":{\"count\":7,\"kind\":\"fixture\",\"nil\":null}}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{\"kind\":\"fixture\",\"nil\":null,\"count\":7}}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{\"nil\":null,\"kind\":\"fixture\",\"count\":7}}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "52",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":{\"kind\":\"fixture\",\"nil\":null,\"count\":7}}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11DocumentValuesOverride",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 201,
+      "headers": {
+        "content-length": "17",
+        "content-type": "application/x-amz-json-1.1"
+      },
+      "body": "{\"document\":null}",
+      "schemaSerdeFalse": {
+        "code": 201,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":null}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 201,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":null}"
+      },
+      "smithySpecs": {
+        "code": 200,
+        "headers": {
+          "content-length": "17",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"document\":null}"
+      }
+    },
+    {
+      "id": "MultiAwsjson10RichFailureError",
+      "protocol": "aws.protocols#awsJson1_0",
+      "code": 422,
+      "headers": {
+        "content-length": "192",
+        "content-type": "application/x-amz-json-1.0",
+        "x-error-meta-reason": "fixture",
+        "x-error-tag": "error-tag"
+      },
+      "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"smithy.rust.codegen.test.multiprotocol#RichFailure\"}",
+      "schemaSerdeFalse": {
+        "code": 422,
+        "headers": {
+          "content-length": "192",
+          "content-type": "application/x-amz-json-1.0",
+          "x-error-meta-reason": "fixture",
+          "x-error-tag": "error-tag"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"smithy.rust.codegen.test.multiprotocol#RichFailure\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 422,
+        "headers": {
+          "content-length": "192",
+          "content-type": "application/x-amz-json-1.0",
+          "x-error-meta-reason": "fixture",
+          "x-error-tag": "error-tag"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"smithy.rust.codegen.test.multiprotocol#RichFailure\"}"
+      },
+      "smithySpecs": {
+        "code": 400,
+        "headers": {
+          "content-length": "192",
+          "content-type": "application/x-amz-json-1.0"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"smithy.rust.codegen.test.multiprotocol#RichFailure\"}"
+      }
+    },
+    {
+      "id": "MultiAwsjson11RichFailureError",
+      "protocol": "aws.protocols#awsJson1_1",
+      "code": 422,
+      "headers": {
+        "content-length": "153",
+        "content-type": "application/x-amz-json-1.1",
+        "x-error-meta-reason": "fixture",
+        "x-error-tag": "error-tag"
+      },
+      "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"RichFailure\"}",
+      "schemaSerdeFalse": {
+        "code": 422,
+        "headers": {
+          "content-length": "153",
+          "content-type": "application/x-amz-json-1.1",
+          "x-error-meta-reason": "fixture",
+          "x-error-tag": "error-tag"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"RichFailure\"}"
+      },
+      "schemaSerdeHistorical": {
+        "code": 422,
+        "headers": {
+          "content-length": "153",
+          "content-type": "application/x-amz-json-1.1",
+          "x-error-meta-reason": "fixture",
+          "x-error-tag": "error-tag"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"RichFailure\"}"
+      },
+      "smithySpecs": {
+        "code": 400,
+        "headers": {
+          "content-length": "153",
+          "content-type": "application/x-amz-json-1.1"
+        },
+        "body": "{\"message\":\"rejected\",\"details\":{\"name\":\"diagnostic\",\"count\":9,\"active\":false},\"etag\":\"error-tag\",\"metadata\":{\"reason\":\"fixture\"},\"__type\":\"RichFailure\"}"
+      }
+    }
+  ],
+  "referenceCheckout": "mainline",
+  "referenceRevision": "10424bd8c126013544c7439c51d3aa4c9fc5cab1",
+  "schemaSerdeSetting": "omitted; mainline does not implement schemaSerde",
+  "valueConstruction": "Absent document is explicitly None; explicit null is Some(Document::Null). Constrained labels use try_into; empty modeled-default output uses its generated builder.",
+  "schemaSerdeFalseComparison": {
+    "responseCount": 36,
+    "revision": "98a23acc7c4dd99c3b78766c12f676d1b12fcc42",
+    "statusAndCompleteHeadersMatch": true,
+    "jsonBodiesMatch": true,
+    "omittedDocumentTestInstantiation": "Both legacy generators construct Some(Document::Null); observation tests explicitly construct None."
+  },
+  "threeWayComparison": {
+    "responseCount": 36,
+    "statusAndCompleteHeadersMatch": true,
+    "jsonBodiesMatch": true
+  },
+  "specificationReview": {
+    "date": "2026-10-25",
+    "sources": [
+      "https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html",
+      "https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html",
+      "https://smithy.io/2.0/spec/http-bindings.html#default-http-status-codes"
+    ],
+    "javaReferenceRevision": "9c5875c6195e6515538f6757b68e02295374c462",
+    "javaJsonMemberCrossCheck": {
+      "tests": 2,
+      "providers": [
+        "Jackson",
+        "Smithy"
+      ],
+      "passed": true,
+      "cases": [
+        "Unwritten document member serializes as {}",
+        "Explicit writeNull(document member) serializes as {\"document\":null}"
+      ],
+      "scope": "JSON codec member serialization; not an AWS JSON server status/header oracle"
+    }
+  }
+}

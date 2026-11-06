@@ -1,4 +1,385 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 29th, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (server, [smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906), @fahadzub) Upgrade `aws-smithy-http-server` to 0.69.0 with schema-based serialization and
+    multi-protocol routing for HTTP 1.x servers. Enable schema serde with
+    `codegen.schemaSerde: true` and regenerate your server SDK. Review these migration
+    changes when upgrading:
+
+    - Protocol types such as `RestJson1` now carry configuration. Replace unit-struct
+      construction with `RestJson1::default()`. For request-specific serialization,
+      use the protocol selected by routing so its configuration is preserved.
+    - The HTTP 1.x server runtime uses Tower 0.5. Update application dependencies
+      and middleware that use Tower utility types to Tower 0.5.
+      `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro` 0.4.0
+      target server 0.69; upgrade the server and metrics crates together.
+    - Schema serde calls `IntoResponse<P>::into_response_with_protocol` to frame
+      errors using the selected protocol. Its default preserves the existing
+      `into_response` conversion and the `FromParts<P>::Rejection: IntoResponse<P>`
+      bound. Override the contextual method when an error needs protocol-specific
+      framing. Generated-serde callers continue using `into_response`. Use
+      `response::ModeledRejection<E>` for modeled extractor errors and the shared
+      `runtime_error::RuntimeError` for framework errors.
+    - AWS JSON routing uses the modeled operation name in both serde modes:
+      `getFoo` uses `X-Amz-Target: Service.getFoo`. To also accept the former generated
+      spelling `Service.GetFoo`, set `capitalizeRoutes: true` in the
+      `aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` section of
+      `customizationConfig.protocols`.
+    - Schema-serde RPC v2 CBOR streaming blob inputs use `ByteStream` instead of
+      `Blob`. The CBOR document is collected and decoded before the handler is
+      invoked; the stream contains the decoded blob bytes.
+
+**New this release:**
+- :bug: (server, [smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472), @franco2002lu) Exclude `@internal` enum values from the enum value set in server constraint violation messages. Previously, rejecting an invalid enum value listed every value, including internal ones that should not be exposed to callers. Internal values are still accepted as valid input.
+- (server, [smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934), @xz0803) Improve server routing performance for REST protocols. `RestRouter` now holds its `RequestSpec`s behind an `Arc`, so cloning the router shares each route's path regex and its match cache instead of rebuilding the cache: on every request for `aws_smithy_http_server::serve`, and on every connection for `aws-smithy-legacy-http-server`.
+- :bug: (client, [smithy-rs#4967](https://github.com/smithy-lang/smithy-rs/issues/4967)) Generated endpoint rule-set tests no longer run the validators in `ParamsBuilder::build()`, so a test case with an
+    invalid `Region` reaches the rules instead of panicking with `invalid params`. Requests still run the validators.
+- :bug: (server, @fahadzub) Encode shared runtime validation messages and initial request frame rejection messages
+    as CBOR maps for rpcv2Cbor, so clients can decode the message. Modeled validation errors,
+    including custom validation types, retain their own schema and serialized fields.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @fahadzub ([smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906))
+- @franco2002lu ([smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472))
+- @xz0803 ([smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934))
+
+
+October 27th, 2026
+==================
+**Breaking Changes:**
+- :bug::warning::tada: (server) Servers now apply request-body read deadlines and yield while reading ready event-stream frames. The built-in `aws-smithy-http-server::serve` loop also limits concurrent connections and request-header reads. These defaults can change existing server behavior.
+
+    Service teams can override all the defaults below, using the configuration location supported by each setting:
+
+    - **Request reads:** Set request-body size limits, body-read deadlines, read poll budgets, and event-stream deadlines in the service's `smithy-build-template.json`, inside the `rust-server-codegen` plugin configuration at `customizationConfig.protocols.common.request.body`, then regenerate the SDK. Generated serde uses these settings for every application built from that SDK.
+    - **Application startup:** Set connection limits, HTTP/2 keep-alive settings, and graceful-shutdown timeouts in application Rust code on the `serve` builder. These changes do not require SDK regeneration.
+    - **Both locations:** Set `request.header.readTimeout` in that JSON configuration or call `.header_read_timeout(...)` on the generated `sdk::serve(...)` builder. An explicit Rust builder call takes precedence over the generated JSON setting.
+
+    Rust builder overrides take effect when the server is constructed; they do not provide live reconfiguration of a running server.
+
+    Both server runtimes use the same typed request-read configuration; header-deadline enforcement through the generated `serve` function requires the current runtime (`codegen.http-1x: true`).
+
+    Shared configuration types are exposed under `aws_smithy_http_server::config` and `aws_smithy_legacy_http_server::config`. Generated code uses these paths. Configuration lives separately from schema routing and serialization.
+
+    | Parameter relative to `customizationConfig.protocols.common` | Default         | Behavior                                                                                                                                                                                                                       |
+    | ------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+    | `request.header.readTimeout`                                          | `"1m"`          | Request-head deadline automatically applied by generated `sdk::serve(listener, app.into_make_service())`; covers the first HTTP/1 or HTTP/2 request head and later HTTP/1 heads. Later HTTP/2 streams have no header deadline. |
+    | `request.body.maxBytes`                                        | `0` (unlimited) | Maximum bytes buffered for a non-streaming request body.                                                                                                                                                                       |
+    | `request.body.readTimeouts.defaultNonPayload`                  | `"5m"`          | Whole-body read deadline for non-streaming operations without an `@httpPayload` input member.                                                                                                                                  |
+    | `request.body.readTimeouts.defaultPayload`                     | `"1h"`          | Whole-body read deadline for non-streaming operations with an `@httpPayload` input member.                                                                                                                                     |
+    | `request.body.readTimeouts.perOperation`                       | `{}`            | Maps full operation shape IDs to duration overrides; omitted operations inherit the applicable body-read default. Streaming inputs do not support whole-body deadlines.                                                        |
+    | `request.body.readPollBudget`                                  | `32`            | Consecutive ready event-stream HTTP body frames read before yielding to the executor.                                                                                                                                          |
+    | `request.body.eventStreamTimeouts.initialMessage`                         | Disabled        | Bounds the entire first RPC frame before the handler runs, including waiting for its first bytes; this also covers the first ordinary event of a stream-only RPC input. Does not apply to REST streams. |
+    | `request.body.eventStreamTimeouts.messageCompletion`                      | Disabled        | Deadline from a frame's first bytes until the complete frame is read. Covers all REST frames and RPC frames after the first; never covers the first RPC frame, even if `initialMessage` is disabled. |
+    | `request.body.eventStreamTimeouts.idle`                                   | Disabled        | Deadline while waiting for a frame's first bytes. Covers the first REST frame and gaps between frames; never covers the first RPC frame, even if `initialMessage` is disabled. |
+    | `request.body.eventStreamTimeouts.perOperation`                           | `{}`            | Maps full event-stream input operation shape IDs to objects containing `initialMessage`, `messageCompletion`, and/or `idle`; omitted fields inherit the corresponding service setting.                                         |
+
+    Timeout values accept duration strings with `ms`, `s`, `m`, or `h` units, such as `"250ms"` or `"10s"`. Numeric `0` or a zero-duration string such as `"0s"` disables a timeout. Positive numeric values, negative durations, and fractional durations are rejected. Set `request.body.maxBytes` or `request.body.readPollBudget` to `0` to disable that limit. The nested `request.body.maxBytes` setting takes precedence over the deprecated `codegen.requestBodyMaxBytes` setting. The old key remains supported when the nested setting is absent; using it emits a warning pointing to `customizationConfig.protocols.common.request.body.maxBytes`. Omitted settings use runtime defaults, so a runtime update can change them without regenerating the service. Deadlines require a Tokio runtime with its time driver enabled.
+
+    RPC operations read their first frame before invoking the handler, whether it is
+    an `initial-request` message or the first ordinary event of a stream-only input.
+    Only `initialMessage` bounds this read, and its deadline does not reset as bytes
+    arrive. If it is disabled, enabling `messageCompletion` or `idle` leaves the first
+    RPC frame without an event-stream read deadline. Configure a nonzero
+    `initialMessage` to bound senders that withhold bytes or send an incomplete first
+    frame. Header deadlines do not cover body reads, and whole-body deadlines do not
+    apply to streaming inputs.
+
+    `request.body.maxBytes` accepts integer byte counts or quoted whole-number sizes such as `"100 KB"`, `"100MB"`, or `"1 MiB"`. `KB`, `MB`, `GB`, and `TB` use powers of 1000; `KiB`, `MiB`, `GiB`, and `TiB` use powers of 1024. `B` means bytes. Units are case-sensitive, and surrounding whitespace or whitespace between the amount and unit is optional. Numeric `0` or a zero-size string such as `"0 MB"` means unlimited. Negative values, fractions, unknown units, and amounts exceeding `9_223_372_036_854_775_807` bytes fail generation. Generated Rust stores byte counts as `Option<NonZeroUsize>`; the target must be able to represent the configured count.
+
+    For example, the following settings go inside the `rust-server-codegen` plugin configuration, alongside its `service`, `module`, and other required settings. `customizationConfig` is a sibling of `codegen`, not nested inside it:
+
+    ```json
+    {
+      "codegen": {
+        "http-1x": true
+      },
+      "customizationConfig": {
+        "protocols": {
+          "common": {
+            "request": {
+              "header": {
+                "readTimeout": "10s"
+              },
+              "body": {
+                "maxBytes": "1 MiB",
+                "readTimeouts": {
+                  "defaultNonPayload": "2m",
+                  "defaultPayload": "30m",
+                  "perOperation": {
+                    "example#Upload": "10m"
+                  }
+                },
+                "readPollBudget": 16,
+                "eventStreamTimeouts": {
+                  "initialMessage": "10s",
+                  "messageCompletion": "30s",
+                  "idle": "5m",
+                  "perOperation": {
+                    "example#PublishEvents": {
+                      "idle": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    ```
+
+    Replace the example operation IDs with full shape IDs from the service model. Body overrides replace the applicable body deadline; event-stream overrides replace only the specified fields and inherit the remaining service values. Set an individual timeout to `0` or `"0s"` to disable it. These JSON settings are selected during SDK generation; they are not read dynamically when the server starts.
+
+    Generated request-body allowances and event-stream deadlines are separate sections of the typed `ServiceConfig`, populated from JSON. Body configuration is immutable for each generated SDK.
+
+    The generated `sdk::serve(listener, app.into_make_service())` preserves the runtime function's arguments and `Serve` return type and applies this header timeout automatically. Calling `.header_read_timeout(...)` on the returned builder overrides the generated setting, including when enabling or disabling it. Calling the runtime's `aws_smithy_http_server::serve` directly uses its own default. Legacy servers (`codegen.http-1x: false`) have no generated `serve` function and manage their own Hyper accept loop; their typed configuration stores the setting but does not enforce it.
+
+    Configure the remaining transport limits and runtime overrides in the service application's Rust startup code through the `serve` builder; these do not require SDK regeneration:
+
+    | Builder option                                                   | Default                                                                   | Override                                                                                                                                                                                                                                                                                                         |
+    | ---------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | `.max_connections(max)`                                          | `16_384` concurrent connections                                           | `0` or `.disable_connection_limit()` disables the limit.                                                                                                                                                                                                                                                         |
+    | `.header_read_timeout(timeout)`                                  | Generated `request.header.readTimeout`, or 1m when omitted                         | Overrides the JSON setting. `None` or `Some(Duration::ZERO)` disables the deadline.                                                                                                                                                                                                                              |
+    | `.configure_hyper(callback)`                                     | HTTP/2 keep-alive ping interval and acknowledgment timeout are both `20s` | Set `.http2().timer(hyper_util::rt::TokioTimer::new()).keep_alive_interval(Some(duration)).keep_alive_timeout(duration)` on the custom builder; `keep_alive_interval(None)` disables pings. The callback replaces the default Hyper builder; `.header_read_timeout(...)` still controls HTTP/1 header deadlines. |
+    | `.with_graceful_shutdown(signal).with_shutdown_timeout(timeout)` | No shutdown timeout; waits indefinitely                                   | Sets how long graceful shutdown waits for connections to finish. Omit `.with_shutdown_timeout(...)` to keep the indefinite wait.                                                                                                                                                                                 |
+
+    For example, a service can override the generated header setting and connection limit at startup:
+
+    ```rust,ignore
+    use std::time::Duration;
+
+    sdk::serve(listener, app.into_make_service())
+        .max_connections(4096)
+        .header_read_timeout(Some(Duration::from_secs(120)))
+        .with_graceful_shutdown(shutdown_signal())
+        .with_shutdown_timeout(Duration::from_secs(60))
+        .await?;
+    ```
+
+    Header deadlines cover the first request head for HTTP/1 and HTTP/2, and subsequent HTTP/1 request heads. The first deadline starts after connection service creation and includes protocol negotiation and header parsing; it does not reset as bytes arrive. It ends before Tower readiness, middleware, or body reads. Later HTTP/2 streams have no header deadline; HTTP/2 keep-alive pings do not provide one. With both protocols enabled, `serve` supports HTTP/1 upgrades; HTTP/1-only upgrades require a custom serve loop. Upgraded connections retain their connection permits.
+
+    A body-read or RPC initial-message timeout returns `408` before the handler runs, including when input becomes ready at or after expiry. Deadlines do not limit handler execution. Event-stream completion and idle timeouts surface from `recv()` with `event_stream_message_timeout::MessageTimeoutError` in the source chain. They are resumable: calling `recv()` again grants another timeout window without closing the connection. Bound retries to retain the protection.
+
+    Server runtime versions move to `0.69.0` (`aws-smithy-http-server`) and `0.68.0` (`aws-smithy-legacy-http-server`); server metrics and its macro move to `0.4.0`, and the Python server runtime moves to `0.70.0`.
+
+**New this release:**
+- :bug::tada: (all) Fix signed-exponent parsing in schema-based JSON documents. Add independent
+    validation controls and opt-in number allowances, null-member dispatch, and
+    arbitrary-precision normalization for legacy server compatibility. Align float
+    serialization with legacy behavior.
+- :bug::tada: (all) Fix schema-based XML decoding of nested and recursive collections and use tokenizer
+    boundaries to extract elements correctly around comments, CDATA, processing
+    instructions, and quoted attributes. Flattened collections now retain the configured
+    recursion-depth limit. Add independent document and root-name validation settings,
+    opt-in filtering of wrapped collection element names, and a modeled-error root-name
+    override. Default XML recovery behavior is preserved.
+
+    Preserve list-item XML names for union targets, including renamed and flattened
+    items, while retaining the target XML name for standalone union serialization.
+
+    Defer scalar leaf-text extraction errors until the consumer reads the value.
+    Transport adapters can skip body copies of HTTP-bound members without
+    interpreting their scalar contents; reading a scalar with nested elements still
+    returns an error. Avoid cloning inherited list-item names during union
+    serialization.
+
+    Complete opt-in document validation for scalar and collection roots as well as
+    structures. Reject duplicate attribute names and invalid entity or character
+    references even in skipped content, and reject malformed closing tags or trailing
+    content for direct list, map, and scalar reads. Default XML recovery is unchanged.
+- :tada: (client) Connection-pool integration now supports a public `pool::HttpsBuilder` alias,
+    `Builder::has_explicit_partitions()`, and the documented `DriverSpawner::from_fn`
+    callback constructor without requiring `test-util`. These APIs let external
+    composition layers retain native transport configuration and supply connection
+    task placement.
+
+    `pool::HttpsBuilder::build_https()` is now available independently of TLS provider
+    features. External composition layers can accept a caller-configured HTTPS builder
+    without forwarding native provider features. Selecting a TLS provider still requires
+    enabling its native feature.
+- :bug: (client, [smithy-rs#4318](https://github.com/smithy-lang/smithy-rs/issues/4318), @yychen23) Interceptor finalizer hooks now run when an operation or attempt timeout elapses. `modify_before_attempt_completion`, `read_after_attempt`, `modify_before_completion`, and `read_after_execution` are documented to always run, but a timeout cancelled the future they lived inside, so they were skipped: an attempt timeout dropped the attempt-level pair, an operation timeout landing mid-attempt dropped all four, and one landing during retry backoff dropped the execution-level pair. Each hook now also observes the timeout rather than an empty context, so the two mutating finalizers can act on it. Hook invocation on a plain transport error is unchanged.
+
+    Consumers that compensated for the missing invocations may now see different counts, since the hooks fire where they previously did not. A finalizer that returns an error will also now surface that error to the caller on a timeout, in place of `SdkError::TimeoutError`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @yychen23 ([smithy-rs#4318](https://github.com/smithy-lang/smithy-rs/issues/4318))
+
+
+October 21st, 2026
+==================
+**New this release:**
+- :tada: (all) Add an opt-in structure-prefix callback to schema-based CBOR serialization.
+    The callback receives the value's schema and can write fields before modeled
+    members, enabling RPC v2 CBOR error discriminators while retaining member names.
+
+    Add opt-in definite-length encoding for lists and maps with known lengths, plus
+    integer-list serialization that matches ordinary integer writes. ShapeSerializer
+    provides default length-aware methods that delegate to existing implementations,
+    so other codecs preserve their behavior.
+- :bug: (all, [smithy-rs#4924](https://github.com/smithy-lang/smithy-rs/issues/4924)) Enforce the event stream protocol's header value length limit when encoding messages. String and byte array header values longer than 32,767 bytes are now rejected instead of encoded. `aws_sigv4::event_stream::sign_message` now returns an error instead of panicking when a message cannot be encoded.
+
+
+October 20th, 2026
+==================
+**New this release:**
+- :bug: (client, [smithy-rs#4921](https://github.com/smithy-lang/smithy-rs/issues/4921)) Validate `@hostLabel` members are valid host labels. A `@hostLabel` value goes straight into the
+    request authority, checked only by `http::uri::Authority::from_str` against the whole expanded
+    prefix. That parser accepts a colon, and `http::Uri` then reads everything after it as an
+    unparseable port and discards it. A label containing a colon therefore truncates the resolved host
+    and drops the service suffix.
+
+    The generated code now runs each host label through `is_valid_host_label` before building the
+    prefix. Accepted labels narrow to `[a-zA-Z0-9-]{1,63}`. A value holding `_` or `.` used to pass and
+    now fails.
+
+
+October 19th, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (server, [smithy-rs#4887](https://github.com/smithy-lang/smithy-rs/issues/4887), @jeffzha) Add `MetricsPool` support to `aws-smithy-http-server-metrics`. The metrics layer
+    now stores a `SmithyMetricsPool` producer handle in the request extensions.
+    Independently-owned middleware and libraries that cannot name the service's
+    metrics entry type can pull it out and contribute heterogeneous child metrics
+    that flatten into the single per-request entry when the request finishes.
+    Structs annotated with `#[smithy_metrics]` gain the backing pool automatically
+    through a single hidden flattened field.
+
+    This is a breaking change on two fronts.
+
+    `#[smithy_metrics]` now injects a hidden `__smithy_metrics` field, so existing
+    explicit struct literals no longer compile and `__smithy_metrics` is reserved as
+    a field name. Construct these structs with `..Default::default()` (or
+    `Default::default()`) instead of naming every field:
+
+    ```rust
+    #[smithy_metrics]
+    #[metrics]
+    struct RequestMetrics {
+        requests: u64,
+    }
+
+    fn new_metrics() -> RequestMetrics {
+        RequestMetrics {
+            requests: 1,
+            ..Default::default()
+        }
+    }
+    ```
+
+    The default-metrics entry type was also renamed `DefaultMetrics` -> `SmithyMetrics`.
+
+- :warning::tada: (all) Added schema extensions to `aws-smithy-schema`, so that codecs, protocols, and
+    other runtime components can compute data derived from a schema once and cache
+    it on the schema. A component declares a `static`
+    `aws_smithy_schema::extension::SchemaExtensionKey<T>` with a function that
+    derives the value, and `Schema::extension(&KEY)` computes it the first time a
+    schema is asked for it and returns the cached value afterwards. Every schema has
+    this cache, whether it was generated, written by hand, or built from a model at
+    runtime, and cached values are freed when their schema is dropped.
+
+    A provider computes its value from the schema through ordinary accessors and
+    must not request extensions itself: on a recursive shape that could lead back to
+    the schema being initialized. A provider that requests an extension that is not
+    yet cached panics instead of deadlocking.
+
+    Because of the cache, `Schema` now has interior mutability and a destructor.
+    Its constructors and `with_*` setters are still `const fn`, so schemas can still
+    be declared as `static`s and referenced from `const`s
+    (`const S: &Schema<'static> = &MY_SCHEMA;`). Code generated by smithy-rs is
+    unaffected. These constant-evaluation patterns no longer compile:
+
+    - Borrowing a temporary schema in a `const` or `static`, for example
+      `const S: &Schema<'static> = &Schema::new(..);`, or `&Self::MEMBER` where
+      `MEMBER` is an associated `const` schema (E0492).
+    - Calling a method on a schema `static` in a `const` initializer, for example
+      `const B: bool = prelude::STRING.has_http_response_binding();` (E0080).
+    - Creating and dropping a schema inside a `const fn` (E0493).
+
+    Declare schemas as `static`s instead. A schema declared as a by-value `const`
+    still compiles, but every use of it is a fresh copy with an empty cache.
+- :warning::tada: (all, @fahadzub) `aws_smithy_schema::serde::SerializableStruct` has a new required method,
+    `fn schema(&self) -> &Schema<'_>`, which returns the schema of the structure or
+    union itself. Generated structures and unions implement it by returning their
+    `SCHEMA`. Hand-written implementations must add it. `prelude::UNIT` provides a
+    schema for `smithy.api#Unit`.
+- :warning::tada: (all) Added runtime Smithy schemas, protocol-agnostic shape serialization and
+    deserialization, runtime-selectable client protocols, and generated type and
+    error registries. `DiscriminatedDocument`, `DocumentSettings`, and
+    `DocumentError` provide schema-aware document conversion and discriminator-based
+    type lookup.
+
+    The released `aws_smithy_types::Document` API remains source-compatible: it is
+    still an exhaustively matchable six-variant enum, and `Document::Object` still
+    contains `HashMap<String, Document>`. Schema-aware document conversion carries
+    blobs as base64 strings, timestamps as epoch-second numbers, and arbitrary
+    precision numbers as strings rather than adding variants to `Document`.
+
+    Some runtime crates in this release move to a new Cargo compatibility line, so
+    this is a coordinated transition: the affected crates must be taken together.
+    Requirements that pin the previous compatibility line are not made compatible.
+    In particular, a previously published `aws-config` continues to pin the previous
+    line, and a partial update that upgrades only some of these crates is not
+    supported. Upgrade the affected crates together.
+- :warning: (all) **Behavior change:** `BigInteger::from_str` and `BigDecimal::from_str` now
+    perform structural validation instead of only checking that every character is
+    permitted. Inputs without a single numeric reading, such as `"--5"`,
+    `"1.2.3"`, `"1e"`, and `"1e+"`, now return
+    `BigNumberError::InvalidFormat`. `BigInteger` also rejects a leading `+`.
+
+    The accepted grammars are:
+
+    ```text
+    BigInteger := '-'? DIGIT+
+    BigDecimal := ('+' | '-')? ( DIGIT+ ( '.' DIGIT* )? | '.' DIGIT+ )
+                  ( ('e' | 'E') ('+' | '-')? DIGIT+ )?
+    ```
+
+    `BigDecimal` therefore continues to accept forms such as `"+123"`, `".5"`,
+    and `"1."`. An exponent or resulting scale outside the supported range returns
+    `BigNumberError::ExponentOutOfRange`. Leading-zero forms remain accepted. When
+    arbitrary-precision values are emitted as raw JSON numbers, the JSON codec
+    separately rejects forms invalid under RFC 8259 and suggests
+    `JsonCodecSettings::use_string_for_arbitrary_precision`.
+
+**New this release:**
+- :tada: (all) `ShapeDeserializer::read_struct` in the JSON and CBOR codecs now reports a key
+    that names no member of the structure or union being read, rather than skipping
+    it silently. Generated structure code ignores the call; union code uses it to
+    decide how an unknown variant is handled. The `__type` discriminator and
+    `null`-valued keys are not reported.
+- :tada: (client) Added a `disableSchemaSerde` client codegen setting that opts a single service
+    out of schema-based serialization and deserialization even when its protocol has
+    schema serde enabled, falling back to the legacy per-shape `protocol_serde`
+    path. The setting can only turn schema serde off; it is a temporary per-service
+    escape hatch during the phased rollout.
+- :bug::tada: (all) Bound schema-based CBOR container capacity hints and list/map preallocation by
+    remaining input bytes, retaining the allocation cap for truncated containers.
+    Expose the current byte offset from schema-based CBOR deserializers without
+    advancing decoding.
+- :bug: (all) The schema-based union deserializer now enforces the same union rules as the
+    token-based parser. A second key in a union object is an error. An unknown key
+    becomes the unknown variant on clients and an `unexpected union variant` error
+    on servers. This fixes the schema path for malformed restJson1 unions containing
+    multiple known or mixed known and unknown fields.
+- :bug: (client) The opt-in connection pool now retries a connection that fails in the network before any request is sent: a refused or reset connect, a local socket error, a DNS failure, or the connection closing during the TLS handshake. These failures were not retried at all. A TLS rejection, a proxy's refusal, and a configuration error still fail at once.
+- (all, [smithy-rs#2410](https://github.com/smithy-lang/smithy-rs/issues/2410), @FalkWoldmann) Removed the `pin-utils` dependency from `aws-smithy-async`, `aws-smithy-http`, `aws-smithy-legacy-http`, `aws-smithy-runtime` and `aws-smithy-types`. The remaining `pin_mut!` uses now use `std::pin::pin!`, and three of the crates didn't use it at all.
+- :bug: (all) Escape `gen` in generated code. `gen` is a reserved keyword since the Rust 2024
+    edition, so shape members named `gen` now map to the raw identifier `r#gen`
+    instead of producing code that fails to compile on edition 2024.
+- (client, [smithy-rs#3396](https://github.com/smithy-lang/smithy-rs/issues/3396), @hippi345) Add documentation to `PaginationStream` explaining why it does not implement the `futures::stream::Stream` trait (0.x dependency constraint) and linking to `PaginationStreamExt` for users who need Stream trait compatibility.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#2410](https://github.com/smithy-lang/smithy-rs/issues/2410))
+- @fahadzub
+- @hippi345 ([smithy-rs#3396](https://github.com/smithy-lang/smithy-rs/issues/3396))
+- @jeffzha ([smithy-rs#4887](https://github.com/smithy-lang/smithy-rs/issues/4887))
+
+
 September 30th, 2026
 ====================
 

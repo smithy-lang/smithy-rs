@@ -1,0 +1,26 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#M": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#tags": [
+                        "code",
+                        "file"
+                    ]
+                }
+            },
+            "value": {
+                "target": "smithy.api#String",
+                "traits": {
+                    "smithy.api#tags": [
+                        "file",
+                        "code"
+                    ]
+                }
+            }
+        }
+    }
+}

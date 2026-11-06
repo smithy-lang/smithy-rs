@@ -139,9 +139,7 @@ class InlineDependency(
                 CargoDependency.Tokio.toDevDependency(),
                 CargoDependency.smithyCompression(runtimeConfig),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
-                CargoDependency.smithyTypes(runtimeConfig)
-                    .withFeature("http-body-0-4-x")
-                    .withFeature("http-body-1-x"),
+                CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
             )
 
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =
