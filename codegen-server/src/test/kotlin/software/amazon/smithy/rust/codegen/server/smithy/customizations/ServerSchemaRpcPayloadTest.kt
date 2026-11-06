@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.nio.file.Files
+import java.nio.file.Path
 
 /**
  * Uses one generated set of schema types for structured and union @httpPayload outputs across
@@ -266,7 +268,9 @@ internal class ServerSchemaRpcPayloadTest {
     }
 
     private val protocols = listOf("awsJson1_0", "awsJson1_1", "rpcv2Cbor", "restJson1", "restXml")
-    private val observations = Files.createTempDirectory("smithy-shared-rpc-payload-")
+
+    @TempDir
+    private lateinit var observations: Path
 
     private fun snapshotName(
         protocol: String,
