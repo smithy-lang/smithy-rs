@@ -7,6 +7,22 @@
 
 mod coercion;
 mod conversion;
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+mod de;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+mod ser;
+#[cfg(test)]
+#[cfg(all(
+    aws_sdk_unstable,
+    feature = "serde-serialize",
+    feature = "serde-deserialize"
+))]
+mod serde_tests;
+
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+pub use de::from_document_v2;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+pub use ser::to_document_v2;
 
 use super::{DocumentError, DocumentObject};
 use crate::{BigDecimal, BigInteger, DateTime, Number};
@@ -29,6 +45,15 @@ use std::borrow::Cow;
 /// `From` converts a `Document` to a `DocumentV2` without losing information.
 /// [`DocumentV2::to_document_lossy`] and [`DocumentV2::try_to_document`] convert back. The
 /// first encodes the variants that `Document` lacks, and the second returns an error for them.
+///
+/// With `--cfg aws_sdk_unstable` and the `serde-serialize` or `serde-deserialize` feature,
+/// `DocumentV2` implements serde's `Serialize` or `Deserialize`, and `document::to_document_v2`
+/// and `document::from_document_v2` convert between `DocumentV2` and other serde types, like
+/// `Document`'s `to_document` and `from_document`. Serde has no timestamp or decimal type, and
+/// human-readable formats such as JSON have no blob type. Blobs, timestamps, and
+/// arbitrary-precision numbers that pass through serde therefore come back as strings, except
+/// for blobs and 128-bit integers in a binary format such as CBOR. Reading them back as native
+/// variants requires a protocol codec, which knows the schema.
 ///
 /// `Document` keeps its six variants, because released code matches it exhaustively and a new
 /// variant would break that code. `DocumentV2` is `#[non_exhaustive]` so that future additions
@@ -482,6 +507,30 @@ fn signed_number(value: i64) -> Number {
         Ok(value) => Number::PosInt(value),
         Err(_) => Number::NegInt(value),
     }
+}
+
+/// Returns a 128-bit integer as a [`DocumentV2::Number`] if it fits in 64 bits, and as a
+/// [`DocumentV2::BigInteger`] otherwise.
+#[cfg(any(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    all(aws_sdk_unstable, feature = "serde-deserialize")
+))]
+fn wide_integer<T>(value: T) -> Result<DocumentV2, crate::document::DocError>
+where
+    T: std::fmt::Display + Copy + TryInto<u64> + TryInto<i64>,
+{
+    if let Ok(value) = TryInto::<u64>::try_into(value) {
+        return Ok(DocumentV2::Number(Number::PosInt(value)));
+    }
+    if let Ok(value) = TryInto::<i64>::try_into(value) {
+        return Ok(DocumentV2::Number(Number::NegInt(value)));
+    }
+    // An integer's decimal text always parses, so this doesn't fail in practice.
+    value
+        .to_string()
+        .parse()
+        .map(DocumentV2::BigInteger)
+        .map_err(crate::document::DocError::custom)
 }
 
 /// Returns the Smithy name of a [`DocumentV2`] variant, for error messages.

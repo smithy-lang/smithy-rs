@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Error types for [`Document`](super::Document) serialization and deserialization.
+//! Error types for [`Document`](super::Document) and [`DocumentV2`](super::DocumentV2)
+//! serialization and deserialization.
 
 use std::fmt::{self, Debug, Display};
 
-/// An error that occurred during [`Document`](super::Document) serialization
-/// or deserialization.
+/// An error that occurred during [`Document`](super::Document) or
+/// [`DocumentV2`](super::DocumentV2) serialization or deserialization.
 pub struct DocError {
     err: Box<ErrorCode>,
 }

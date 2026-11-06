@@ -226,8 +226,8 @@ impl<'de> MapAccess<'de> for MapDeserializer {
 /// may be any `Deserialize` type (e.g., `HashMap<u32, _>`). This deserializer parses
 /// the string back into the requested primitive type when needed, mirroring how
 /// `serde_json` handles non-string map keys.
-struct MapKeyDeserializer {
-    key: String,
+pub(in crate::document) struct MapKeyDeserializer {
+    pub(in crate::document) key: String,
 }
 
 impl<'de> de::Deserializer<'de> for MapKeyDeserializer {

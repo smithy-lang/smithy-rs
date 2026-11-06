@@ -19,6 +19,9 @@
 //!    both.
 //! 5. `From` converts an owned or borrowed `Document` to a `DocumentV2`, and
 //!    `to_document_lossy` and `try_to_document` convert back.
+//! 6. With `--cfg aws_sdk_unstable` and both serde features, `DocumentV2` and `DocumentObject`
+//!    implement serde's traits, and `document::to_document_v2` and
+//!    `document::from_document_v2` convert other serde types.
 //!
 //! The `Document` contract is in `document_api_contract.rs` and must not change. The released
 //! `DiscriminatedDocument` call forms are in `discriminated_document_contract.rs`.
@@ -222,4 +225,32 @@ fn documents_downgrade_with_named_methods() {
         representable.try_to_document().unwrap(),
         Document::Bool(true)
     );
+}
+
+#[cfg(all(
+    aws_sdk_unstable,
+    feature = "serde-serialize",
+    feature = "serde-deserialize"
+))]
+#[test]
+fn serde_helpers_convert_other_types() {
+    use aws_smithy_types::document::{from_document_v2, to_document_v2, DocError};
+
+    fn implements_serde<T: serde::Serialize + serde::de::DeserializeOwned>() {}
+    implements_serde::<DocumentV2>();
+    implements_serde::<DocumentObject>();
+
+    let document: Result<DocumentV2, DocError> = to_document_v2(&("a", 1u128 << 100));
+    let document = document.unwrap();
+    assert_eq!(
+        document,
+        DocumentV2::Array(vec![
+            DocumentV2::String("a".to_owned()),
+            DocumentV2::BigInteger(
+                BigInteger::from_str("1267650600228229401496703205376").unwrap()
+            ),
+        ])
+    );
+    let value: Result<(String, u128), DocError> = from_document_v2(document);
+    assert_eq!(value.unwrap(), ("a".to_owned(), 1 << 100));
 }

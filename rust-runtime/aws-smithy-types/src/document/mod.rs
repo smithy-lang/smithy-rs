@@ -27,6 +27,10 @@ pub use discriminated::{DiscriminatedDocument, DocumentTrait};
 ))]
 pub use doc_error::DocError;
 pub use document_object::DocumentObject;
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+pub use document_v2::from_document_v2;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+pub use document_v2::to_document_v2;
 pub use document_v2::DocumentV2;
 pub use error::DocumentError;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]

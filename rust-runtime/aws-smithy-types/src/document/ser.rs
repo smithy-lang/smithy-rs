@@ -412,7 +412,7 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
 }
 
 /// Serializer for map keys — only string-like keys are supported.
-struct MapKeySerializer;
+pub(in crate::document) struct MapKeySerializer;
 
 fn key_must_be_a_string() -> DocError {
     DocError::key_must_be_a_string()
