@@ -1,0 +1,279 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rustsdk
+
+import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+
+/**
+ * End-to-end behavior of the per-service default read timeout in generated clients.
+ *
+ * These assert the *resolved* `TimeoutConfig` an operation actually sees, read out of the config bag
+ * by an interceptor, rather than the presence of a string in generated source. The value has to
+ * survive codegen, the `ServiceRuntimePlugin` layer, and the config-bag merge, and only the resolved
+ * value proves all three.
+ *
+ * The scenarios are the three buckets from design section 2.3 plus the Rust override:
+ *
+ * | `sdkId`    | artifact | expected        |
+ * |------------|----------|-----------------|
+ * | `dontcare` | absent   | 5 min (general) |
+ * | `SQS`      | 900000   | 15 min          |
+ * | `S3`       | -1       | none            |
+ * | `Polly`    | -1       | 5 min, overridden |
+ */
+class DefaultReadTimeoutDecoratorTest {
+    /** The shared SDK test model with a substituted `sdkId`, so one model shape covers every bucket. */
+    private fun modelWithSdkId(sdkId: String) =
+        """
+        namespace test
+
+        use aws.api#service
+        use aws.auth#sigv4
+        use aws.protocols#restJson1
+        use smithy.rules#endpointRuleSet
+
+        @service(sdkId: "$sdkId")
+        @restJson1
+        @sigv4(name: "dontcare")
+        @auth([sigv4])
+        @endpointRuleSet({
+            "version": "1.0",
+            "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+            "parameters": {
+                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+            }
+        })
+        service TestService {
+            version: "2023-01-01",
+            operations: [SomeOperation]
+        }
+
+        @http(uri: "/SomeOperation", method: "GET")
+        @optionalAuth
+        operation SomeOperation {}
+        """.asSmithyModel()
+
+    private fun scope(rc: RuntimeConfig) =
+        arrayOf(
+            "tokio_test" to writable { Attribute.TokioTest.render(this) },
+            "infallible_client_fn" to
+                CargoDependency.smithyHttpClientTestUtil(rc)
+                    .toType().resolve("test_util::infallible_client_fn"),
+        )
+
+    /**
+     * Emits a harness that captures the resolved `TimeoutConfig` for one request and returns its
+     * `read_timeout`, so each assertion below is a single comparison.
+     */
+    private fun RustWriter.harness(
+        moduleName: String,
+        rc: RuntimeConfig,
+    ) {
+        rustTemplate(
+            """
+            use aws_smithy_runtime_api::box_error::BoxError;
+            use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
+            use aws_smithy_runtime_api::client::interceptors::Intercept;
+            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+            use aws_smithy_types::body::SdkBody;
+            use aws_smithy_types::config_bag::ConfigBag;
+            use aws_smithy_types::timeout::TimeoutConfig;
+            use std::sync::{Arc, Mutex};
+            use std::time::Duration;
+            use #{infallible_client_fn};
+
+            ##[derive(Debug, Clone, Default)]
+            struct CaptureTimeoutConfig {
+                captured: Arc<Mutex<Option<TimeoutConfig>>>,
+            }
+
+            impl Intercept for CaptureTimeoutConfig {
+                fn name(&self) -> &'static str {
+                    "CaptureTimeoutConfig"
+                }
+
+                fn read_before_attempt(
+                    &self,
+                    _context: &BeforeTransmitInterceptorContextRef<'_>,
+                    _runtime_components: &RuntimeComponents,
+                    cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
+                    *self.captured.lock().unwrap() = cfg.load::<TimeoutConfig>().cloned();
+                    Ok(())
+                }
+            }
+
+            /// Sends one request through `builder` and returns the resolved `TimeoutConfig`.
+            async fn resolve(builder: $moduleName::config::Builder) -> TimeoutConfig {
+                let capture = CaptureTimeoutConfig::default();
+                let http_client = infallible_client_fn(|_req| {
+                    ::http_1x::Response::builder().body(SdkBody::empty()).unwrap()
+                });
+                let config = builder
+                    .http_client(http_client)
+                    .interceptor(capture.clone())
+                    .build();
+                let client = $moduleName::Client::from_conf(config);
+                let _ = client.some_operation().send().await;
+                let captured = capture.captured.lock().unwrap().clone();
+                captured.expect("the interceptor must have observed a TimeoutConfig")
+            }
+            """,
+            *scope(rc),
+        )
+    }
+
+    @Test
+    fun `a service absent from the artifact gets the general default, gated on the behavior version`() {
+        awsSdkIntegrationTest(modelWithSdkId("dontcare")) { ctx, crate ->
+            val moduleName = ctx.moduleUseName()
+            crate.integrationTest("default_read_timeout_general") {
+                harness(moduleName, ctx.runtimeConfig)
+                rustTemplate(
+                    """
+                    #{tokio_test}
+                    async fn general_default_is_five_minutes() {
+                        let resolved = resolve($moduleName::Config::builder()).await;
+                        assert_eq!(
+                            resolved.read_timeout(),
+                            Some(Duration::from_secs(300)),
+                            "a service with no artifact entry takes the 5-minute general default"
+                        );
+                        assert_eq!(
+                            resolved.connect_timeout(),
+                            Some(Duration::from_millis(3100)),
+                            "the read default must not displace the connect default"
+                        );
+                    }
+
+                    #{tokio_test}
+                    ##[allow(deprecated)]
+                    async fn absent_on_the_previous_behavior_version() {
+                        use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+                        let resolved = resolve(
+                            $moduleName::Config::builder()
+                                .behavior_version(BehaviorVersion::v2026_01_12()),
+                        )
+                        .await;
+                        assert_eq!(
+                            resolved.read_timeout(),
+                            None,
+                            "callers pinned before v2026_11_15 must keep the old behavior"
+                        );
+                        assert_eq!(
+                            resolved.connect_timeout(),
+                            Some(Duration::from_millis(3100)),
+                            "v2026_01_12 still gets its own connect default"
+                        );
+                    }
+
+                    #{tokio_test}
+                    async fn a_caller_value_wins() {
+                        let resolved = resolve(
+                            $moduleName::Config::builder().timeout_config(
+                                TimeoutConfig::builder()
+                                    .read_timeout(Duration::from_secs(7))
+                                    .build(),
+                            ),
+                        )
+                        .await;
+                        assert_eq!(resolved.read_timeout(), Some(Duration::from_secs(7)));
+                    }
+                    """,
+                    *scope(ctx.runtimeConfig),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a partially exempt service gets the fifteen minute tier`() {
+        awsSdkIntegrationTest(modelWithSdkId("SQS")) { ctx, crate ->
+            val moduleName = ctx.moduleUseName()
+            crate.integrationTest("default_read_timeout_partial") {
+                harness(moduleName, ctx.runtimeConfig)
+                rustTemplate(
+                    """
+                    #{tokio_test}
+                    async fn partial_tier_is_fifteen_minutes() {
+                        let resolved = resolve($moduleName::Config::builder()).await;
+                        assert_eq!(
+                            resolved.read_timeout(),
+                            Some(Duration::from_secs(900)),
+                            "SQS is listed at 900000ms in the artifact"
+                        );
+                    }
+                    """,
+                    *scope(ctx.runtimeConfig),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a fully exempt service gets no read timeout`() {
+        awsSdkIntegrationTest(modelWithSdkId("S3")) { ctx, crate ->
+            val moduleName = ctx.moduleUseName()
+            crate.integrationTest("default_read_timeout_exempt") {
+                harness(moduleName, ctx.runtimeConfig)
+                rustTemplate(
+                    """
+                    #{tokio_test}
+                    async fn exempt_service_has_no_read_timeout() {
+                        let resolved = resolve($moduleName::Config::builder()).await;
+                        assert_eq!(
+                            resolved.read_timeout(),
+                            None,
+                            "S3 is fully exempt (-1) in the artifact"
+                        );
+                        // The exempt path must emit no layer entry at all. An empty TimeoutConfig
+                        // would trip the `has_timeouts()` short-circuit in MergeTimeoutConfig and
+                        // take the connect default down with it.
+                        assert_eq!(
+                            resolved.connect_timeout(),
+                            Some(Duration::from_millis(3100)),
+                            "exempting the read timeout must leave the connect default intact"
+                        );
+                    }
+                    """,
+                    *scope(ctx.runtimeConfig),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `an overridden service takes the general default despite being exempt in the artifact`() {
+        awsSdkIntegrationTest(modelWithSdkId("Polly")) { ctx, crate ->
+            val moduleName = ctx.moduleUseName()
+            crate.integrationTest("default_read_timeout_override") {
+                harness(moduleName, ctx.runtimeConfig)
+                rustTemplate(
+                    """
+                    #{tokio_test}
+                    async fn overridden_service_gets_the_general_default() {
+                        let resolved = resolve($moduleName::Config::builder()).await;
+                        assert_eq!(
+                            resolved.read_timeout(),
+                            Some(Duration::from_secs(300)),
+                            "Polly is -1 in the artifact but overridden to the general default"
+                        );
+                    }
+                    """,
+                    *scope(ctx.runtimeConfig),
+                )
+            }
+        }
+    }
+}
