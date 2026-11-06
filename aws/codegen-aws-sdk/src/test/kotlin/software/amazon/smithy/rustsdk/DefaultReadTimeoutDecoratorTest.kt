@@ -114,6 +114,34 @@ class DefaultReadTimeoutDecoratorTest {
                 }
             }
 
+            /// Sends one request and returns the `read_timeout` the HTTP client was actually handed.
+            ///
+            /// This is the last link in the chain: a resolved `TimeoutConfig` is only useful if it
+            /// reaches the connector as `HttpConnectorSettings`. `http_client_fn` is given the
+            /// settings the orchestrator built, so capturing there proves the whole path from the
+            /// vendored artifact through codegen, the config layer, and the merge.
+            async fn connector_read_timeout(
+                builder: $moduleName::config::Builder,
+            ) -> Option<Duration> {
+                use aws_smithy_runtime_api::client::http::{http_client_fn, HttpClient};
+
+                let inner = infallible_client_fn(|_req| {
+                    ::http_1x::Response::builder().body(SdkBody::empty()).unwrap()
+                });
+                let captured: Arc<Mutex<Option<Option<Duration>>>> = Default::default();
+                let sink = captured.clone();
+                let http_client = http_client_fn(move |settings, components| {
+                    *sink.lock().unwrap() = Some(settings.read_timeout());
+                    inner.http_connector(settings, components)
+                });
+
+                let config = builder.http_client(http_client).build();
+                let client = $moduleName::Client::from_conf(config);
+                let _ = client.some_operation().send().await;
+                let seen = captured.lock().unwrap().take();
+                seen.expect("the HTTP client must have been asked for a connector")
+            }
+
             /// Sends one request through `builder` and returns the resolved `TimeoutConfig`.
             async fn resolve(builder: $moduleName::config::Builder) -> TimeoutConfig {
                 let capture = CaptureTimeoutConfig::default();
@@ -179,6 +207,15 @@ class DefaultReadTimeoutDecoratorTest {
                     }
 
                     #{tokio_test}
+                    async fn the_default_reaches_the_http_connector() {
+                        assert_eq!(
+                            connector_read_timeout($moduleName::Config::builder()).await,
+                            Some(Duration::from_secs(300)),
+                            "the resolved default must arrive as HttpConnectorSettings::read_timeout"
+                        );
+                    }
+
+                    #{tokio_test}
                     async fn a_caller_value_wins() {
                         let resolved = resolve(
                             $moduleName::Config::builder().timeout_config(
@@ -214,6 +251,14 @@ class DefaultReadTimeoutDecoratorTest {
                             "SQS is listed at 900000ms in the artifact"
                         );
                     }
+
+                    #{tokio_test}
+                    async fn the_tier_reaches_the_http_connector() {
+                        assert_eq!(
+                            connector_read_timeout($moduleName::Config::builder()).await,
+                            Some(Duration::from_secs(900))
+                        );
+                    }
                     """,
                     *scope(ctx.runtimeConfig),
                 )
@@ -229,6 +274,15 @@ class DefaultReadTimeoutDecoratorTest {
                 harness(moduleName, ctx.runtimeConfig)
                 rustTemplate(
                     """
+                    #{tokio_test}
+                    async fn no_read_timeout_reaches_the_http_connector() {
+                        assert_eq!(
+                            connector_read_timeout($moduleName::Config::builder()).await,
+                            None,
+                            "an exempt service must hand the connector no read timeout"
+                        );
+                    }
+
                     #{tokio_test}
                     async fn exempt_service_has_no_read_timeout() {
                         let resolved = resolve($moduleName::Config::builder()).await;
@@ -268,6 +322,14 @@ class DefaultReadTimeoutDecoratorTest {
                             resolved.read_timeout(),
                             Some(Duration::from_secs(300)),
                             "Polly is -1 in the artifact but overridden to the general default"
+                        );
+                    }
+
+                    #{tokio_test}
+                    async fn the_override_reaches_the_http_connector() {
+                        assert_eq!(
+                            connector_read_timeout($moduleName::Config::builder()).await,
+                            Some(Duration::from_secs(300))
                         );
                     }
                     """,
