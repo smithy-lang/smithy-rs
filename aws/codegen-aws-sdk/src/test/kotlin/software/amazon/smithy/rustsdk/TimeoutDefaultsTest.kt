@@ -182,31 +182,13 @@ class TimeoutDefaultsTest {
         val defaults = load()
         // The HTTP/1.1 service keeps its own tier.
         defaults.readTimeoutFor("SageMaker Runtime") shouldBe fifteenMinutes
-        // The HTTP/2 service keeps the artifact's exemption; see EXEMPT_PENDING_MEASUREMENT.
+        // The HTTP/2 service keeps the artifact's exemption. It has the same bidirectional shape as
+        // the overridden services, and is deliberately not overridden: its server is a
+        // customer-deployed model container, so prompt headers are not knowable. See design 2.3.
         defaults.readTimeoutFor("SageMaker Runtime HTTP2") shouldBe null
         // Neither is overridden.
         TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime"
         TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain "SageMaker Runtime HTTP2"
-    }
-
-    /**
-     * `SageMaker Runtime HTTP2` is exempt despite having the same operation shape as the overridden
-     * services, and that asymmetry is deliberate rather than an oversight.
-     *
-     * The appendix classifies its single bidirectional operation the same way it classifies
-     * ConnectHealth's and Transcribe Streaming's — no phase-A hazard, headers prompt. For those two
-     * the server is AWS code; for SageMaker it is a customer-deployed model container, and AWS
-     * documents the sibling unary operation as taking up to 60 seconds. So the "headers prompt"
-     * premise is the thing in doubt, and a false positive here would be terminal rather than slow.
-     *
-     * Asserted so the exemption is not quietly removed when someone notices the shape similarity.
-     */
-    @Test
-    fun `the service exempt pending measurement is not in the override set`() {
-        val key = TimeoutDefaults.EXEMPT_PENDING_MEASUREMENT
-        TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES shouldNotContain key
-        artifact().expectObjectMember("services").expectNumberMember(key).value.toLong() shouldBe -1L
-        load().readTimeoutFor(key) shouldBe null
     }
 
     /**
