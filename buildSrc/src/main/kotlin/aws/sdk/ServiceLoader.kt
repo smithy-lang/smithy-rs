@@ -24,6 +24,7 @@ class AwsServices(
     services: List<AwsService>,
     val partitionsConfigPath: File,
     val defaultConfigPath: File,
+    val timeoutDefaultsConfigPath: File,
 ) {
     val services: List<AwsService>
     val moduleNames: Set<String> by lazy { services.map { it.module }.toSortedSet() }
@@ -169,6 +170,7 @@ fun Project.discoverServices(
         },
         models.resolve("sdk-partitions.json"),
         models.resolve("sdk-default-configuration.json"),
+        models.resolve("sdk-timeout-defaults.json"),
     )
 }
 

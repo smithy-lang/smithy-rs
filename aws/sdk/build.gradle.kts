@@ -85,6 +85,8 @@ fun generateSmithyBuild(services: AwsServices): String {
             services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val partitionsConfigPath =
             services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val timeoutDefaultsConfigPath =
+            services.timeoutDefaultsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val integrationTestPath = project.projectDir.resolve("integration-tests")
             .let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         """
@@ -118,6 +120,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": $defaultConfigPath,
                                 "partitionsConfigPath": $partitionsConfigPath,
+                                "timeoutDefaultsConfigPath": $timeoutDefaultsConfigPath,
                                 "integrationTestPath": $integrationTestPath
                             }
                         }
