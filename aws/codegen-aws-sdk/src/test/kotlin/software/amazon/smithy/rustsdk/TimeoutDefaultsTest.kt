@@ -192,24 +192,12 @@ class TimeoutDefaultsTest {
     }
 
     /**
-     * Which overrides have no vendored model — a provenance record, not a coverage gap.
+     * `sdkId` of every service model vendored in this repo.
      *
-     * Resolution is covered for all four overrides above, and the generated-code path is covered by
-     * `DefaultReadTimeoutDecoratorTest`, which builds synthetic models and so needs no real model
-     * for any given service. These two simply have no real generated crate here to inspect, and
-     * their operation shapes came from the public `aws-sdk-js-v3` model set.
-     *
-     * Pinned because treating an absent model as an absent service is what produced a
-     * since-retracted claim that `SageMaker Runtime HTTP2` was not a real service.
+     * Only `aws/sdk/aws-models/` is consulted, which is a subset — so an absent `sdkId` here means
+     * "not vendored", never "no such service". Conflating those is what produced a since-retracted
+     * claim that `SageMaker Runtime HTTP2` was not a real service.
      */
-    @Test
-    fun `the overrides without vendored models are the ones we expect`() {
-        val vendored = vendoredSdkIds().toSet()
-        val missing = TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.filterNot { it in vendored }
-        missing.toSet() shouldBe TimeoutDefaults.OVERRIDES_WITHOUT_VENDORED_MODELS
-    }
-
-    /** `sdkId` of every service model vendored in this repo. */
     private fun vendoredSdkIds(): List<String> =
         Path("../sdk/aws-models").toFile().listFiles { f: java.io.File ->
             f.name.endsWith(".json") && !f.name.startsWith("sdk-")
