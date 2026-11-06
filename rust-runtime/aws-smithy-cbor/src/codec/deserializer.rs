@@ -15,7 +15,7 @@ use crate::data::Type;
 ///
 /// Wraps the existing `Decoder` which handles both definite and
 /// indefinite-length strings/blobs and includes millisecond-precision
-/// timestamp truncation.
+/// timestamp rounding.
 pub struct CborDeserializer<'a> {
     decoder: crate::Decoder<'a>,
     input_len: usize,
