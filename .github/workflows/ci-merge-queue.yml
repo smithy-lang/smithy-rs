@@ -7,7 +7,9 @@
 # fast-forwards `main` to the tested commit. It waits for every status check that the `main`
 # ruleset requires, and a check that is never reported on the merge group holds the queue until
 # its status check timeout. Every required check must therefore come from a job in this workflow.
-# The jobs mirror `ci-pr.yml`, without the PR bot.
+# The jobs mirror `ci-pr.yml`, without the PR bot. `ci.yml` also skips the canaries and the semver
+# hazard check on merge groups: they aren't required checks, so they can't block a merge, and they
+# run again on `main` after the merge.
 #
 # Merge queue setup and the admin bypass for urgent merges are described in
 # design/src/contributing/merge_queue.md.
@@ -102,8 +104,7 @@ jobs:
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
-      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
-      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
+      # The canary secrets aren't passed: `ci.yml` skips the canary on merge groups.
 
   # `Check PR semver compliance` is a required check, so the queue needs it on the merge group too.
   # The merge group's head commit is this pull request's commit on top of `main` and every pull

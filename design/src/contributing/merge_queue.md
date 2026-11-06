@@ -18,9 +18,10 @@ from the queue.
 
 ## What the queue runs
 
-The queue runs `.github/workflows/ci-merge-queue.yml` for each merge group. It runs the same checks
-as pull request CI, plus the canary, but not the PR bot. A full run takes about as long as pull
-request CI, roughly 35 to 60 minutes.
+The queue runs `.github/workflows/ci-merge-queue.yml` for each merge group. It runs the same
+required checks as pull request CI, which takes roughly 35 to 60 minutes. It skips the PR bot, the
+canaries, and the semver hazard check. None of those are required checks, so they couldn't block a
+merge, and `ci-main.yml` runs the canaries and the semver hazard check on `main` after the merge.
 
 The semver check compares the pull request with the merge group's parent commit, which contains
 `main` and every pull request ahead of it. As in pull request CI, a pull request with breaking
@@ -33,11 +34,16 @@ Fix the failure, or re-run it if it was a flake, and add the pull request to the
 
 Pull request CI for forks can't use repository secrets, so it doesn't run the canary or the PR bot,
 and the `Ask maintainer to run the PR bot and canary workflows` check fails. That check isn't
-required. The queue runs the canary with repository secrets, so a maintainer no longer has to invoke
-the canary before merging. The PR bot can still be invoked manually for the codegen diff.
+required. The queue doesn't run the canary either, so a maintainer still invokes the
+[canary](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-canary.yml) manually
+before adding a fork pull request to the queue, and can invoke the
+[PR bot](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-pull-request-bot.yml)
+for the codegen diff.
 
-Because the queue runs fork code with repository secrets, review every commit in a fork pull request
-before adding it to the queue. The ruleset requires approval of the most recent push for this reason.
+The queue runs fork code with repository secrets, such as the ECR credentials for the build image,
+so review
+every commit in a fork pull request before adding it to the queue. The ruleset requires approval of
+the most recent push for this reason.
 
 ## Urgent merges
 
