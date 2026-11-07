@@ -170,7 +170,11 @@ fun Project.discoverServices(
         },
         models.resolve("sdk-partitions.json"),
         models.resolve("sdk-default-configuration.json"),
-        models.resolve("sdk-timeout-defaults.json"),
+        // Unlike the two configuration files above, this one is not part of the `aws-sdk-rust` model
+        // bundle: it is the cross-SDK timeout artifact, vendored by hand into each SDK. It therefore
+        // resolves against this project rather than `models`, which the full-SDK build repoints at
+        // the `aws-sdk-rust` checkout.
+        project.file("sdk-timeout-defaults.json"),
     )
 }
 

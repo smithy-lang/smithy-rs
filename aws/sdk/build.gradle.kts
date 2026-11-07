@@ -146,6 +146,7 @@ tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
     inputs.dir(projectDir.resolve("aws-models"))
+    inputs.file(projectDir.resolve("sdk-timeout-defaults.json"))
     outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
     doFirst {
@@ -371,6 +372,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 tasks.smithyBuild.configure {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
+    inputs.file(projectDir.resolve("sdk-timeout-defaults.json"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
