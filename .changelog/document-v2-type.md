@@ -42,5 +42,7 @@ codec's default format, and arbitrary-precision numbers as their exact text, and
 a number read from JSON becomes a `BigInteger` or `BigDecimal` when no `u64`,
 `i64`, or `f64` holds it exactly. `JsonSerializer::write_discriminated_document_v2`
 and `JsonDeserializer::read_discriminated_document_v2` write and read the
-`__type` discriminator. The CBOR, XML, and query codecs use the default methods
-for now. Generated code doesn't use the new types yet.
+`__type` discriminator. The `aws-smithy-cbor`, `aws-smithy-xml`, and
+`aws-smithy-query` serializers reject every `DocumentV2` value with the same
+error as a `Document`, as their protocols have no document encoding. Generated
+code doesn't use the new types yet.

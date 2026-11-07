@@ -20,7 +20,7 @@ use aws_smithy_types::date_time::Format as TimestampFormat;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
 use aws_smithy_schema::extension::SchemaExtensionKey;
-use aws_smithy_types::Document;
+use aws_smithy_types::{Document, DocumentV2};
 use std::sync::Arc;
 
 /// An `@xmlNamespace` as `(uri, prefix)`.
@@ -949,9 +949,18 @@ impl ShapeSerializer for XmlSerializer {
         _schema: &Schema<'_>,
         _value: &Document,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::custom(
-            "document types are not supported by REST XML",
-        ))
+        Err(documents_unsupported())
+    }
+
+    /// Rejects every value with the [`write_document`](Self::write_document)
+    /// error. The default would convert the value first, and report a
+    /// conversion error for a blob, a timestamp, or a big number.
+    fn write_document_v2(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &DocumentV2,
+    ) -> Result<(), SerdeError> {
+        Err(documents_unsupported())
     }
 
     fn write_null(&mut self, _schema: &Schema<'_>) -> Result<(), SerdeError> {
@@ -960,6 +969,11 @@ impl ShapeSerializer for XmlSerializer {
         // If it is (e.g. sparse collections), we simply emit nothing.
         Ok(())
     }
+}
+
+/// The error for every document value. Nothing is written before it.
+fn documents_unsupported() -> SerdeError {
+    SerdeError::custom("document types are not supported by REST XML")
 }
 
 #[cfg(test)]
@@ -1796,6 +1810,39 @@ mod tests {
             result.unwrap_err().to_string(),
             "document types are not supported by REST XML"
         );
+    }
+
+    #[test]
+    fn write_document_v2_returns_the_write_document_error() {
+        let mut object = aws_smithy_types::document::DocumentObject::new();
+        object.insert("data".to_string(), DocumentV2::Blob(b"hi".to_vec()));
+        // A value `Document` can hold, then values the default method would
+        // fail to convert, at the top level and nested.
+        let values = [
+            DocumentV2::Null,
+            DocumentV2::Blob(b"hi".to_vec()),
+            DocumentV2::Timestamp(DateTime::from_secs(0)),
+            DocumentV2::BigInteger("18446744073709551616".parse().unwrap()),
+            DocumentV2::from(object),
+        ];
+        for value in values {
+            let mut ser = XmlSerializer::new(Arc::new(XmlCodecSettings::default()));
+            // Called the way generated code calls it.
+            let dyn_ser: &mut dyn ShapeSerializer = &mut ser;
+            let err = dyn_ser
+                .write_document_v2(&SCALAR_MEMBER, &value)
+                .unwrap_err();
+            assert!(
+                matches!(err, SerdeError::Custom { .. }),
+                "{value:?}: {err:?}"
+            );
+            assert_eq!(
+                err.to_string(),
+                "document types are not supported by REST XML",
+                "{value:?}"
+            );
+            assert!(ser.finish().is_empty(), "{value:?} wrote output");
+        }
     }
 
     #[test]

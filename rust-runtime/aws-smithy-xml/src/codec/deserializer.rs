@@ -1612,6 +1612,24 @@ mod tests {
         );
     }
 
+    /// `XmlDeserializer` keeps the default `read_document_v2`, which calls
+    /// `read_document` first, so it reports the codec's own error.
+    #[test]
+    fn read_document_v2_returns_the_read_document_error() {
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::from_text(Cow::Borrowed("x"), settings);
+        // Called the way generated code calls it.
+        let dyn_deser: &mut dyn ShapeDeserializer = &mut deser;
+        let err = dyn_deser.read_document_v2(&STRING_MEMBER).unwrap_err();
+        assert!(matches!(err, SerdeError::Custom { .. }), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "document types are not supported by REST XML"
+        );
+        // Nothing was consumed.
+        assert_eq!(dyn_deser.read_string(&STRING_MEMBER).unwrap(), "x");
+    }
+
     // Empty body → error. The XML codec is strict here because XML 1.0
     // requires every document to have a root element. Consumers (e.g., S3
     // HEAD operations) whose output struct has no body-bound members rely

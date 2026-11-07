@@ -7,7 +7,7 @@ use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::extension::SchemaExtensionKey;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentV2};
 use std::fmt::Write;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -534,9 +534,14 @@ impl ShapeSerializer for QueryShapeSerializer {
     }
 
     fn write_document(&mut self, _: &Schema<'_>, _: &Document) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "documents not supported in awsQuery",
-        ))
+        Err(documents_unsupported())
+    }
+
+    /// Rejects every value with the [`write_document`](Self::write_document)
+    /// error. The default would convert the value first, and report a
+    /// conversion error for a blob, a timestamp, or a big number.
+    fn write_document_v2(&mut self, _: &Schema<'_>, _: &DocumentV2) -> Result<(), SerdeError> {
+        Err(documents_unsupported())
     }
 
     fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
@@ -545,6 +550,11 @@ impl ShapeSerializer for QueryShapeSerializer {
         // `@sparse` null is dropped rather than reserving a positional slot.
         Ok(())
     }
+}
+
+/// The error for every document value. Nothing is written before it.
+fn documents_unsupported() -> SerdeError {
+    SerdeError::unsupported("documents not supported in awsQuery")
 }
 
 #[cfg(test)]
@@ -1516,6 +1526,43 @@ mod edge_cases {
         let mut ser = QueryShapeSerializer::new("Op", "1.0");
         let result = ser.write_document(&M, &Document::Null);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn document_v2_returns_the_write_document_error() {
+        static M: Schema<'static> =
+            Schema::new_member(shape_id!("test", "I"), ShapeType::Document, "Doc", 0);
+        let expected = QueryShapeSerializer::new("Op", "1.0")
+            .write_document(&M, &Document::Null)
+            .unwrap_err()
+            .to_string();
+        let mut object = aws_smithy_types::document::DocumentObject::new();
+        object.insert("data".to_string(), DocumentV2::Blob(b"hi".to_vec()));
+        // A value `Document` can hold, then values the default method would
+        // fail to convert, at the top level and nested.
+        let values = [
+            DocumentV2::Null,
+            DocumentV2::Blob(b"hi".to_vec()),
+            DocumentV2::Timestamp(DateTime::from_secs(0)),
+            DocumentV2::BigInteger("18446744073709551616".parse().unwrap()),
+            DocumentV2::from(object),
+        ];
+        for value in values {
+            let mut ser = QueryShapeSerializer::new("Op", "1.0");
+            // Called the way generated code calls it.
+            let dyn_ser: &mut dyn ShapeSerializer = &mut ser;
+            let err = dyn_ser.write_document_v2(&M, &value).unwrap_err();
+            assert!(
+                matches!(err, SerdeError::UnsupportedOperation { .. }),
+                "{value:?}: {err:?}"
+            );
+            assert_eq!(err.to_string(), expected, "{value:?}");
+            assert_eq!(
+                String::from_utf8(ser.finish()).unwrap(),
+                "Action=Op&Version=1.0",
+                "{value:?} wrote output"
+            );
+        }
     }
 
     #[test]

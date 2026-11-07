@@ -1525,3 +1525,33 @@ mod skip_value_contract {
         );
     }
 }
+
+/// `CborDeserializer` keeps the default `read_document_v2`, which calls
+/// `read_document` first, so it reports the codec's own error.
+#[cfg(test)]
+mod document_v2_tests {
+    use super::*;
+    use aws_smithy_schema::prelude::{DOCUMENT, STRING};
+
+    #[test]
+    fn read_document_v2_returns_the_read_document_error() {
+        // The CBOR text string "x".
+        let bytes = [0x61, b'x'];
+        let expected = CborDeserializer::new(&bytes, 128)
+            .read_document(&DOCUMENT)
+            .unwrap_err()
+            .to_string();
+
+        let mut de = CborDeserializer::new(&bytes, 128);
+        // Called the way generated code calls it.
+        let dyn_de: &mut dyn ShapeDeserializer = &mut de;
+        let err = dyn_de.read_document_v2(&DOCUMENT).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::UnsupportedOperation { .. }),
+            "{err:?}"
+        );
+        assert_eq!(err.to_string(), expected);
+        // Nothing was consumed.
+        assert_eq!(dyn_de.read_string(&STRING).unwrap(), "x");
+    }
+}
