@@ -3052,6 +3052,7 @@ fn rest_defers_claims_for_headerless_synthetic_empty_inputs() {
 
 #[tokio::test]
 async fn headerless_rest_claims_depend_on_required_body_members_and_non_null_defaults() {
+    use crate::rejection::MissingContentTypeReason;
     use aws_smithy_schema::{AnnotationTrait, DocumentTrait, TraitMap};
     use aws_smithy_types::Document;
     use std::sync::LazyLock;
@@ -3136,7 +3137,18 @@ async fn headerless_rest_claims_depend_on_required_body_members_and_non_null_def
                 panic!("required body input must defer a rejection");
             };
             assert_eq!(error.kind(), RoutingErrorKind::MissingContentType);
-            assert_eq!(error.expected_content_type().unwrap(), codec);
+            let reason = std::error::Error::source(&error)
+                .and_then(|source| source.downcast_ref::<MissingContentTypeReason>())
+                .expect("missing content type must retain its diagnostic source");
+            let MissingContentTypeReason::UnexpectedMimeType {
+                expected_mime,
+                found_mime,
+            } = reason
+            else {
+                panic!("missing content type must report an unexpected MIME type");
+            };
+            assert_eq!(expected_mime.as_ref(), Some(&codec.parse().unwrap()));
+            assert!(found_mime.is_none());
         }
         for (method, uri) in [("POST", "/defaulted"), ("GET", "/bound/123")] {
             let request = Request::builder().method(method).uri(uri).body(()).unwrap();

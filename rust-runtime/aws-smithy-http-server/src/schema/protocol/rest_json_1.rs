@@ -182,13 +182,7 @@ impl ServerProtocol for RestJson1 {
         use crate::protocol::rest::router::Error;
         use crate::schema::routing::RoutingErrorKind;
         if err.kind() == RoutingErrorKind::MissingContentType {
-            return self.serialize_rejection(
-                crate::rejection::MissingContentTypeReason::UnexpectedMimeType {
-                    expected_mime: err.expected_content_type().and_then(|expected| expected.parse().ok()),
-                    found_mime: None,
-                }
-                .into(),
-            );
+            return IntoResponse::<RestJson1>::into_response(RuntimeError::UnsupportedMediaType);
         }
         let error = match err.kind() {
             RoutingErrorKind::MethodNotAllowed => Error::MethodNotAllowed,
