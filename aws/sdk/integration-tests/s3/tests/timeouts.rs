@@ -214,7 +214,7 @@ async fn test_default_connect_timeout_with_bmv_2026_01_12() {
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 
     // With BehaviorVersion >= v2025_01_17, a 3.1s connect timeout is enabled by default
-    // This test uses v2026_01_12 (the latest) to verify timeout behavior
+    // This test uses v2026_01_12 to verify timeout behavior
     let config = Config::builder()
         .behavior_version(BehaviorVersion::v2026_01_12())
         .region(Region::new("us-east-1"))
@@ -278,5 +278,53 @@ async fn test_old_behavior_version_has_no_default_connect_timeout() {
     assert!(
         result.is_err(),
         "client should hang without default timeout, causing test timeout"
+    );
+}
+
+/// S3 is fully exempt in the shared timeout-defaults artifact, so a real S3 client must be handed
+/// no read timeout at all — including at the behavior version that introduces the default.
+///
+/// The codegen tests assert this against synthetic models. This asserts it against the generated
+/// `aws-sdk-s3` crate, which is what a customer actually gets, and at the point where it matters:
+/// the `HttpConnectorSettings` the orchestrator hands to the HTTP client. The read timeout is
+/// enforced inside the connector, so a value that never reaches the settings is a value that never
+/// applies.
+#[tokio::test]
+async fn test_s3_has_no_default_read_timeout() {
+    use aws_smithy_runtime_api::client::http::{http_client_fn, HttpClient};
+    use std::sync::{Arc, Mutex};
+
+    let captured: Arc<Mutex<Option<Option<Duration>>>> = Default::default();
+    let sink = captured.clone();
+    let inner = NeverClient::new();
+    let http_client = http_client_fn(move |settings, components| {
+        *sink.lock().unwrap() = Some(settings.read_timeout());
+        inner.http_connector(settings, components)
+    });
+
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-1"))
+        .retry_config(RetryConfig::disabled())
+        .http_client(http_client)
+        .build();
+    let client = Client::from_conf(config);
+
+    // `NeverClient` never responds, so bound the call; the settings are captured before the
+    // connector is ever polled.
+    let _ = timeout(
+        Duration::from_millis(300),
+        client.get_object().bucket("test").key("test").send(),
+    )
+    .await;
+
+    let seen = captured
+        .lock()
+        .unwrap()
+        .take()
+        .expect("the HTTP client must have been asked for a connector");
+    assert_eq!(
+        seen, None,
+        "S3 is fully exempt in the artifact, so no default read timeout may be applied"
     );
 }

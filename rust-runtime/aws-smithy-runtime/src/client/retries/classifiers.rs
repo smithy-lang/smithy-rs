@@ -221,6 +221,7 @@ mod test {
     };
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+    use aws_smithy_runtime_api::client::result::ConnectorError;
     use aws_smithy_runtime_api::client::retries::classifiers::{
         ClassifyRetry, RetryAction, RetryReason, SharedRetryClassifier,
     };
@@ -319,6 +320,27 @@ mod test {
             "I am a timeout error".into(),
         )));
         assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error(),);
+    }
+
+    /// A connector-level timeout is retryable.
+    ///
+    /// This is the path a `read_timeout` takes, and it is a different branch of
+    /// `TransientErrorClassifier` from `test_timeout_error` above: that one covers
+    /// `OrchestratorError::timeout` (the operation and operation-attempt timeouts), whereas a read
+    /// timeout surfaces as a `ConnectorError` whose kind is `Timeout`.
+    ///
+    /// The full chain, for reference: `maybe_timeout_future` yields an `HttpTimeoutError`, whose
+    /// `source()` is a `TimedOutError` specifically so that `downcast_error` recognizes it and
+    /// produces `ConnectorError::timeout`. `read_timeout_covers_handshake_through_response_headers`
+    /// in `aws-smithy-http-client` asserts that end; this asserts the classification end.
+    #[test]
+    fn test_connector_timeout_error_is_retryable() {
+        let policy = TransientErrorClassifier::<UnmodeledError>::new();
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.set_output_or_error(Err(OrchestratorError::connector(ConnectorError::timeout(
+            "I am a connector timeout error".into(),
+        ))));
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error());
     }
 
     // A classifier that returns a fixed verdict from `classify_retry` (and thus,
