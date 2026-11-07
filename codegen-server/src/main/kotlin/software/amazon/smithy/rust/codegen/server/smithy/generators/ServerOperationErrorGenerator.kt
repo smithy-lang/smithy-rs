@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
@@ -136,15 +135,6 @@ open class ServerOperationErrorGenerator(
                 rustBlock("fn status_code(&self) -> u16") {
                     delegateToVariants(errors, errorSymbol) { rust("#T::status_code(_inner)", httpModeledError) }
                 }
-                rustTemplate(
-                    """
-                    fn operation_schema(&self) -> #{Option}<&#{Server}::schema::OperationSchema<'_>> {
-                        #{Some}(<crate::operation_shape::${symbol.name.toPascalCase()} as #{Server}::operation::SchemaOperationShape>::SCHEMA)
-                    }
-                    """,
-                    *RuntimeType.preludeScope,
-                    "Server" to server,
-                )
             }
             writer.rustTemplate(
                 """

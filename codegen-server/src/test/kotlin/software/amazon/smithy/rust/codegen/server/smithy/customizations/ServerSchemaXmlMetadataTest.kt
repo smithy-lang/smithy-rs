@@ -27,7 +27,8 @@ import java.nio.file.Files
  * Checks how generated XML metadata wraps a payload's target schema when the member overrides
  * its root name. Rust assertions verify shape identity, member references, namespaces, sensitivity,
  * and cached schema extensions; JSON must ignore the XML-only metadata. HTTP request comparisons
- * also check that XML payload-root handling agrees with the generated legacy implementation.
+ * also check that XML payload-root handling agrees with the generated legacy implementation,
+ * apart from the intentional modeled-error content-type difference.
  */
 internal class ServerSchemaXmlMetadataTest {
     @Test
@@ -189,6 +190,13 @@ internal class ServerSchemaXmlMetadataTest {
                                 let mut headers: #{Vec}<_> = response.headers().iter()
                                     .map(|(name, value)| (name.to_string(), value.to_str().unwrap().to_string()))
                                     .collect();
+                                if path == "/modeled" {
+                                    // Schema errors use the protocol content type; legacy inherits the success output's.
+                                    let expected_content_type = if $schemaSerde { "application/xml" } else { "text/plain" };
+                                    assert_eq!(status, #{Http}::StatusCode::IM_A_TEAPOT);
+                                    assert_eq!(response.headers().get("content-type").unwrap(), expected_content_type);
+                                    headers.retain(|(name, _)| name != "content-type");
+                                }
                                 headers.sort();
                                 let bytes = #{BodyUtil}::BodyExt::collect(#{BodyUtil}::Limited::new(response.into_body(), 1024 * 1024))
                                     .await.unwrap().to_bytes();
@@ -210,7 +218,7 @@ internal class ServerSchemaXmlMetadataTest {
         assertEquals(
             Files.readString(snapshots.resolve("legacy.txt")),
             Files.readString(snapshots.resolve("schema.txt")),
-            "Request status, headers, and body must match the legacy generated server",
+            "Request status, body, and headers (except the modeled-error Content-Type) must match the legacy generated server",
         )
     }
 
