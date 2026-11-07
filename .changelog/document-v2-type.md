@@ -35,5 +35,12 @@ arbitrary-precision numbers as native values and members in order. Numbers read
 from a `DocumentV2` follow its accessors' rules, which truncate fractions.
 `TypeRegistry::deserialize_document` accepts either wrapper, through the new
 sealed `SchemaDocument` trait, and `DocumentShapeSerializer` stores a
-`DocumentV2` value as its `to_document_lossy` conversion. The built-in codecs
-use the default methods for now. Generated code doesn't use the new types yet.
+`DocumentV2` value as its `to_document_lossy` conversion. In `aws-smithy-json`,
+`JsonSerializer` and `JsonDeserializer` implement the new methods: objects keep
+their member order, blobs are written as base64 strings, timestamps in the
+codec's default format, and arbitrary-precision numbers as their exact text, and
+a number read from JSON becomes a `BigInteger` or `BigDecimal` when no `u64`,
+`i64`, or `f64` holds it exactly. `JsonSerializer::write_discriminated_document_v2`
+and `JsonDeserializer::read_discriminated_document_v2` write and read the
+`__type` discriminator. The CBOR, XML, and query codecs use the default methods
+for now. Generated code doesn't use the new types yet.

@@ -236,8 +236,8 @@ impl JsonCodecSettings {
         self.strict_timestamp_formats
     }
 
-    /// Whether `bigInteger` and `bigDecimal` shapes emit as JSON
-    /// strings (when `true`) or as raw JSON numbers
+    /// Whether `bigInteger` and `bigDecimal` shapes, and `DocumentV2`
+    /// big numbers, emit as JSON strings (when `true`) or as raw JSON numbers
     /// (when `false`, the default). The read path is always lenient —
     /// `read_big_integer` and `read_big_decimal` accept either wire form.
     pub fn use_string_for_arbitrary_precision(&self) -> bool {
@@ -355,6 +355,18 @@ pub(crate) fn string_timestamp_format(default: TimestampFormat) -> TimestampForm
     }
 }
 
+/// Whether `id` is a discriminator that
+/// [`DiscriminatedDocument::try_with_discriminator`](aws_smithy_types::DiscriminatedDocument::try_with_discriminator)
+/// accepts: an absolute shape ID such as `namespace#Name`.
+///
+/// `aws-smithy-types` doesn't expose its shape ID check, so this asks it through a throwaway
+/// wrapper. The `DocumentV2` read and write paths both use it, so they accept the same IDs.
+pub(crate) fn is_valid_discriminator(id: &str) -> bool {
+    aws_smithy_types::DiscriminatedDocument::new_v2(aws_smithy_types::DocumentV2::Null)
+        .try_with_discriminator(id)
+        .is_ok()
+}
+
 /// Builder for [`JsonCodecSettings`].
 #[derive(Debug, Clone)]
 pub struct JsonCodecSettingsBuilder {
@@ -465,6 +477,8 @@ impl JsonCodecSettingsBuilder {
     }
 
     /// Default timestamp format when not specified by `@timestampFormat` trait.
+    ///
+    /// `write_document_v2` also writes `DocumentV2` timestamps in this format.
     pub fn default_timestamp_format(mut self, value: TimestampFormat) -> Self {
         self.default_timestamp_format = value;
         self
@@ -506,8 +520,10 @@ impl JsonCodecSettingsBuilder {
     /// serialize as JSON strings (when `true`) or as raw JSON numbers
     /// (when `false`, the default).
     ///
-    /// This is schema-driven: a `Document` carries no schema and has no
-    /// arbitrary-precision variant, so `write_document` is unaffected.
+    /// The setting also applies to the `BigInteger` and `BigDecimal`
+    /// values of a `DocumentV2` written by `write_document_v2`. A
+    /// `Document` has no arbitrary-precision variant, so `write_document`
+    /// is unaffected.
     ///
     /// Set to `true` for interop with receivers using `f64`-routed
     /// JSON parsers that would otherwise lose precision on large

@@ -10,13 +10,15 @@ use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
-    Number,
+    DocumentV2, Number,
 };
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
 
 use std::sync::Arc;
+
+mod document_v2;
 
 /// Maximum recursion depth for deserialization. Payloads nested deeper than
 /// this will produce a [`SerdeError`] instead of risking a stack overflow.
@@ -818,6 +820,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.leave_container()?;
         }
         result
+    }
+
+    fn read_document_v2(&mut self, schema: &Schema<'_>) -> Result<DocumentV2, SerdeError> {
+        self.read_json_value_v2(schema)
     }
 
     fn is_null(&self) -> bool {
