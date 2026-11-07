@@ -26,7 +26,7 @@ import kotlin.io.path.readText
  * four entries Rust deliberately overrides back to the general default.
  */
 class TimeoutDefaultsTest {
-    private val artifactPath = Path("../sdk/aws-models/sdk-timeout-defaults.json")
+    private val artifactPath = Path("../sdk/sdk-timeout-defaults.json")
 
     private fun artifact() = Node.parse(artifactPath.readText()).expectObjectNode()
 

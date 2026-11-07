@@ -73,7 +73,7 @@ fun awsIntegrationTestParams() =
                             .withMember("suppressReadme", true)
                             .withMember("integrationTestPath", "../sdk/integration-tests")
                             .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-partitions.json")
-                            .withMember("timeoutDefaultsConfigPath", "../sdk/aws-models/sdk-timeout-defaults.json")
+                            .withMember("timeoutDefaultsConfigPath", "../sdk/sdk-timeout-defaults.json")
                             .build(),
                     ).build(),
             )

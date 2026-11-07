@@ -11,7 +11,7 @@ import java.time.Duration
 /**
  * Per-service default read timeout, resolved from the shared timeout-defaults artifact.
  *
- * The artifact (`aws/sdk/aws-models/sdk-timeout-defaults.json`) is the cross-SDK source of truth and
+ * The artifact (`aws/sdk/sdk-timeout-defaults.json`) is the cross-SDK source of truth and
  * is also checked into aws-sdk-go-v2 and aws-sdk-java-v2. It carries a general default plus an
  * override per service, where `-1` means "apply no read timeout to this service at all".
  *
@@ -102,7 +102,7 @@ class TimeoutDefaults(artifact: ObjectNode) {
                 "the timeout-defaults artifact has the key '$drifted', which differs from the " +
                     "actual service sdkId '$sdkId' only by case or punctuation. The entry can " +
                     "never apply, so '$sdkId' would silently take the general default. Correct " +
-                    "the key in aws/sdk/aws-models/sdk-timeout-defaults.json to match exactly.",
+                    "the key in aws/sdk/sdk-timeout-defaults.json to match exactly.",
             )
         }
         return generalDefault
