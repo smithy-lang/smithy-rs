@@ -751,3 +751,256 @@ fn round_trip_via_explicit_serializer_and_deserializer() {
 
     assert_eq!(restored, original);
 }
+
+// -- DocumentV2 -----------------------------------------------------------
+//
+// The same fixtures through `from_struct_v2` and `as_shape_v2`, plus conversions between the
+// two document types.
+
+mod v2 {
+    use aws_smithy_types::{DiscriminatedDocument, DocumentV2};
+
+    use super::super::DiscriminatedDocumentV2Ext;
+    use super::*;
+
+    /// Converts `value` to a `DocumentV2` and back.
+    fn round_trip<T>(
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+        deserialize: fn(&mut dyn ShapeDeserializer) -> Result<T, SerdeError>,
+    ) -> T {
+        DiscriminatedDocument::from_struct_v2(schema, value)
+            .unwrap()
+            .as_shape_v2(deserialize)
+            .unwrap()
+    }
+
+    fn all_types() -> AllTypes {
+        AllTypes {
+            a_byte: Some(-12),
+            a_short: Some(1234),
+            an_integer: Some(-987_654),
+            a_long: Some(9_876_543_210),
+            a_float: Some(3.5),
+            a_double: Some(2.123_456_789),
+            a_big_integer: Some("123456789012345678901234567890".parse().unwrap()),
+            a_big_decimal: Some("123456789012345678901234567890.5".parse().unwrap()),
+            a_boolean: Some(true),
+            a_string: Some("hello".into()),
+            a_blob: Some(Blob::new(vec![0x01, 0x02, 0x03, 0xff])),
+            // Nanosecond precision, which an `f64` of epoch seconds can't hold.
+            a_timestamp: Some(DateTime::from_secs_and_nanos(1_700_000_000, 123_456_789)),
+            a_list: Some(vec!["a".into(), "b".into(), "c".into()]),
+            a_map: Some(HashMap::from([
+                ("k1".into(), "v1".into()),
+                ("k2".into(), "v2".into()),
+            ])),
+        }
+    }
+
+    #[test]
+    fn every_simple_type_and_simple_aggregate() {
+        let original = all_types();
+        assert_eq!(
+            round_trip(&ALL_TYPES_SCHEMA, &original, deserialize_all_types),
+            original
+        );
+        let empty = AllTypes::default();
+        assert_eq!(
+            round_trip(&ALL_TYPES_SCHEMA, &empty, deserialize_all_types),
+            empty
+        );
+    }
+
+    #[test]
+    fn native_values_and_member_order_are_kept() {
+        let original = all_types();
+        let document = DiscriminatedDocument::from_struct_v2(&ALL_TYPES_SCHEMA, &original).unwrap();
+        assert_eq!(document.discriminator(), Some("smithy.example#AllTypes"));
+        let members = document.document().as_object().unwrap();
+        // `AllTypes::serialize_members` writes the members in schema order.
+        let expected_order: Vec<_> = ALL_TYPES_SCHEMA
+            .members()
+            .iter()
+            .map(|m| m.member_name().unwrap())
+            .collect();
+        assert_eq!(members.keys().collect::<Vec<_>>(), expected_order);
+        assert_eq!(
+            members["a_blob"],
+            DocumentV2::Blob(vec![0x01, 0x02, 0x03, 0xff])
+        );
+        assert_eq!(
+            members["a_timestamp"],
+            DocumentV2::Timestamp(original.a_timestamp.unwrap())
+        );
+        assert_eq!(
+            members["a_big_integer"],
+            DocumentV2::BigInteger(original.a_big_integer.clone().unwrap())
+        );
+        assert_eq!(
+            members["a_big_decimal"],
+            DocumentV2::BigDecimal(original.a_big_decimal.clone().unwrap())
+        );
+    }
+
+    #[test]
+    fn sparse_list() {
+        let original = SparseListHolder {
+            values: vec![Some("first".into()), None, None, Some("fourth".into())],
+        };
+        assert_eq!(
+            round_trip(
+                &SPARSE_LIST_HOLDER_SCHEMA,
+                &original,
+                deserialize_sparse_list_holder
+            ),
+            original
+        );
+    }
+
+    #[test]
+    fn list_of_structs_and_map_of_structs() {
+        let item = |id: &str, count| Item {
+            id: id.into(),
+            count,
+        };
+        let original = ItemBag {
+            items: vec![item("alpha", 1), item("beta", 22)],
+            named_items: HashMap::from([
+                ("primary".to_string(), item("p", 9)),
+                ("secondary".to_string(), item("s", 81)),
+            ]),
+        };
+        assert_eq!(
+            round_trip(&ITEM_BAG_SCHEMA, &original, deserialize_item_bag),
+            original
+        );
+    }
+
+    #[test]
+    fn recursive_structure() {
+        let leaf = |value| {
+            Some(Box::new(Tree {
+                value,
+                left: None,
+                right: None,
+            }))
+        };
+        let original = Tree {
+            value: 1,
+            left: Some(Box::new(Tree {
+                value: 2,
+                left: leaf(4),
+                right: None,
+            })),
+            right: leaf(3),
+        };
+        assert_eq!(
+            round_trip(&TREE_SCHEMA, &original, deserialize_tree),
+            original
+        );
+    }
+
+    #[test]
+    fn nested_list_of_lists() {
+        let original = MatrixHolder {
+            matrix: vec![vec![1, 2], vec![], vec![3]],
+        };
+        assert_eq!(
+            round_trip(&MATRIX_HOLDER_SCHEMA, &original, deserialize_matrix_holder),
+            original
+        );
+    }
+
+    /// A `Document` built from a shape, upgraded to a `DocumentV2`, reads back as the same
+    /// shape: the V2 deserializer reads the `Document` encodings of blobs, timestamps, and
+    /// arbitrary-precision numbers.
+    #[test]
+    fn upgraded_document_reads_back() {
+        let original = AllTypes {
+            a_timestamp: Some(DateTime::from_secs_f64(1_700_000_000.5)),
+            ..all_types()
+        };
+        let v1 = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
+        let upgraded = DiscriminatedDocument::new_v2(DocumentV2::from(v1.document()));
+        assert_eq!(
+            upgraded.as_shape_v2(deserialize_all_types).unwrap(),
+            original
+        );
+    }
+
+    /// A `DocumentV2` built from a shape, downgraded with `to_document_lossy`, reads back as the
+    /// same shape through the `Document` deserializer.
+    #[test]
+    fn downgraded_document_reads_back() {
+        let original = AllTypes {
+            a_timestamp: Some(DateTime::from_secs_f64(1_700_000_000.5)),
+            ..all_types()
+        };
+        let v2 = DiscriminatedDocument::from_struct_v2(&ALL_TYPES_SCHEMA, &original).unwrap();
+        let downgraded = DiscriminatedDocument::new(v2.document().to_document_lossy());
+        assert_eq!(
+            downgraded.as_shape(deserialize_all_types).unwrap(),
+            original
+        );
+        // It is the same `Document` that the `Document` serializer builds.
+        let v1 = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
+        assert_eq!(downgraded.document(), v1.document());
+    }
+
+    /// A shape holding a document: each serializer accepts both document types, and each
+    /// deserializer returns both.
+    #[test]
+    fn document_members_cross_between_the_document_types() {
+        static M_PAYLOAD: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Holder", "payload"),
+            ShapeType::Document,
+            "payload",
+            0,
+        );
+        static HOLDER_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Holder"),
+            ShapeType::Structure,
+            &[&M_PAYLOAD],
+        );
+
+        struct Holder(DocumentV2);
+        impl SerializableStruct for Holder {
+            fn schema(&self) -> &Schema<'_> {
+                &HOLDER_SCHEMA
+            }
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_document_v2(&M_PAYLOAD, &self.0)
+            }
+        }
+
+        fn read_payload(deser: &mut dyn ShapeDeserializer) -> Result<DocumentV2, SerdeError> {
+            let mut out = None;
+            deser.read_struct(&HOLDER_SCHEMA, &mut |member, sub| {
+                out = Some(sub.read_document_v2(member)?);
+                Ok(())
+            })?;
+            Ok(out.expect("payload is present"))
+        }
+
+        let payload = DocumentV2::Array(vec![
+            DocumentV2::Blob(b"raw".to_vec()),
+            DocumentV2::Timestamp(DateTime::from_secs(5)),
+        ]);
+        let holder = Holder(payload.clone());
+
+        let through_v2 = DiscriminatedDocument::from_struct_v2(&HOLDER_SCHEMA, &holder)
+            .unwrap()
+            .as_shape_v2(read_payload)
+            .unwrap();
+        assert_eq!(through_v2, payload);
+
+        // The `Document` serializer stores the lossy downgrade, and the `Document`
+        // deserializer's default `read_document_v2` upgrades it.
+        let through_v1 = DiscriminatedDocument::from_struct(&HOLDER_SCHEMA, &holder)
+            .unwrap()
+            .as_shape(read_payload)
+            .unwrap();
+        assert_eq!(through_v1, DocumentV2::from(payload.to_document_lossy()));
+    }
+}
