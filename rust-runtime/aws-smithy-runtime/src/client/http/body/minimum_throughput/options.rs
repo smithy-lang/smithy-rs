@@ -173,10 +173,40 @@ impl MinimumThroughputBodyOptionsBuilder {
 
 impl From<StalledStreamProtectionConfig> for MinimumThroughputBodyOptions {
     fn from(value: StalledStreamProtectionConfig) -> Self {
+        let minimum_throughput = value
+            .minimum_throughput_bytes_per_second()
+            .map(Throughput::new_bytes_per_second)
+            .unwrap_or(DEFAULT_MINIMUM_THROUGHPUT);
         MinimumThroughputBodyOptions {
             grace_period: value.grace_period(),
-            minimum_throughput: DEFAULT_MINIMUM_THROUGHPUT,
+            minimum_throughput,
             check_window: DEFAULT_CHECK_WINDOW,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn from_ssp_without_floor_uses_default() {
+        let ssp = StalledStreamProtectionConfig::enabled().build();
+        let opts = MinimumThroughputBodyOptions::from(ssp);
+        assert_eq!(opts.minimum_throughput(), DEFAULT_MINIMUM_THROUGHPUT);
+    }
+
+    #[test]
+    fn from_ssp_with_floor_overrides_default() {
+        let ssp = StalledStreamProtectionConfig::enabled()
+            .minimum_throughput_bytes_per_second(1024)
+            .build();
+        let opts = MinimumThroughputBodyOptions::from(ssp);
+        assert_eq!(
+            opts.minimum_throughput(),
+            Throughput::new_bytes_per_second(1024)
+        );
+    }
+
 }

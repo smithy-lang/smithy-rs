@@ -62,6 +62,35 @@ async fn upload_slow_start() {
     assert_eq!(200, result.await.unwrap().expect("success").as_u16());
 }
 
+/// Scenario: The server reads data continuously, but always below the configured
+///           minimum throughput floor (nonzero but too slow).
+/// Expected: MUST timeout once the below-floor state persists past the grace period.
+#[tokio::test]
+async fn upload_below_floor_nonzero_throughput() {
+    let _logs = show_test_logs();
+
+    // Server reads one NEAT_DATA chunk (21 bytes) every 1 second → ~21 B/s,
+    // below the 1024 B/s floor. After the grace period the upload should abort.
+    let (server, time, sleep) = time_sequence_server(std::iter::repeat(1u64).take(30));
+    let op = operation_with_floor(server, time, sleep, 1024);
+
+    let (body, body_sender) = channel_body();
+    let result = tokio::spawn(async move { op.invoke(body).await });
+
+    let _streamer = tokio::spawn(async move {
+        for _ in 0..30 {
+            body_sender.send(NEAT_DATA).await.ok();
+        }
+        drop(body_sender);
+    });
+
+    let err = result.await.expect("no panics").expect_err("should have timed out");
+    assert_str_contains!(
+        DisplayErrorContext(&err).to_string(),
+        "minimum throughput was specified at 1024 B/s"
+    );
+}
+
 /// Scenario: The upload is going fine, but falls below the minimum throughput.
 /// Expected: MUST timeout.
 #[tokio::test]
@@ -270,6 +299,39 @@ mod upload_test_tools {
         time: TickAdvanceTime,
         sleep: TickAdvanceSleep,
     ) -> Operation<SdkBody, StatusCode, Infallible> {
+        build_operation(
+            http_connector,
+            time,
+            sleep,
+            StalledStreamProtectionConfig::enabled()
+                .grace_period(Duration::from_secs(5))
+                .build(),
+        )
+    }
+
+    pub fn operation_with_floor(
+        http_connector: impl HttpConnector + 'static,
+        time: TickAdvanceTime,
+        sleep: TickAdvanceSleep,
+        floor_bytes_per_second: u64,
+    ) -> Operation<SdkBody, StatusCode, Infallible> {
+        build_operation(
+            http_connector,
+            time,
+            sleep,
+            StalledStreamProtectionConfig::enabled()
+                .grace_period(Duration::from_secs(5))
+                .minimum_throughput_bytes_per_second(floor_bytes_per_second)
+                .build(),
+        )
+    }
+
+    fn build_operation(
+        http_connector: impl HttpConnector + 'static,
+        time: TickAdvanceTime,
+        sleep: TickAdvanceSleep,
+        ssp: StalledStreamProtectionConfig,
+    ) -> Operation<SdkBody, StatusCode, Infallible> {
         Operation::builder()
             .service_name("test")
             .operation_name("test")
@@ -280,11 +342,7 @@ mod upload_test_tools {
             .timeout_config(TimeoutConfig::disabled())
             .serializer(|body: SdkBody| Ok(HttpRequest::new(body)))
             .deserializer::<_, Infallible>(|response| Ok(response.status()))
-            .stalled_stream_protection(
-                StalledStreamProtectionConfig::enabled()
-                    .grace_period(Duration::from_secs(5))
-                    .build(),
-            )
+            .stalled_stream_protection(ssp)
             .interceptor(StalledStreamProtectionInterceptor::default())
             .sleep_impl(sleep)
             .time_source(time)
