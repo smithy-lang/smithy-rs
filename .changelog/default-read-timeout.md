@@ -14,6 +14,8 @@ The value depends on the service: 5 minutes generally, 15 minutes for services t
 
 The variable is a plain on/off switch read when a client is constructed. Only a case-insensitive `true` enables it; any other value leaves it off rather than failing, so a typo cannot stop a client from being built. It carries no duration, and there is no equivalent client-code setting, so nothing has to be supported once the opt-in is retired.
 
+One narrow case to know about if you opt in: a timeout requires an async sleep implementation, so if you depend on an SDK crate with `default-features = false` (which drops `rt-tokio`), set no `sleep_impl` yourself, *and* pin `BehaviorVersion` below `v2026_01_12`, enabling this will fail client construction with "An async sleep implementation is required for timeouts to work". Supply a `sleep_impl`, or enable `rt-tokio`. At `v2026_01_12` and later the default connect timeout already required one, so nothing changes for those callers.
+
 This bounds only the wait for response headers. It does not bound a transfer that has started and then stalls — stalled stream protection already covers that, and remains enabled by default.
 
 A `read_timeout` you configure yourself always takes precedence, whether it is longer, shorter, or disabled, and whether you set it on the client or per operation with `config_override`. To raise the limit rather than remove it:
