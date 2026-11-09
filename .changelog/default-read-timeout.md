@@ -6,7 +6,7 @@ breaking: false
 new_feature: true
 bug_fix: false
 ---
-AWS SDK clients can now apply a default `read_timeout`, bounding the wait from request dispatch until response headers arrive. It is off unless you set `AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026=true`, and is planned to become unconditional in a later release, at which point the variable is retired.
+AWS SDK clients can now apply a default `read_timeout`, bounding the wait from request dispatch until response headers arrive. It is off unless you set `AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026=true`, and is planned to become unconditional in a later release, at which point the variable is retired. See [aws-sdk-rust#1475](https://github.com/awslabs/aws-sdk-rust/discussions/1475) for the per-service values, the full exemption list, and how to opt in.
 
 The value depends on the service: 5 minutes generally, 15 minutes for services that legitimately hold a connection open before replying, and none at all where any bound would break normal usage, such as S3. A `read_timeout` you configure yourself always takes precedence, and a read timeout failure is retried as a transient error.
 
