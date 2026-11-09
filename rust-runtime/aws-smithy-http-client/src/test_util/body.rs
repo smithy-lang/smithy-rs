@@ -17,9 +17,17 @@ use tokio::sync::mpsc;
 ///
 /// Useful for sending data from another thread/task and test scenarios.
 pub(crate) fn channel_body() -> (Sender, SdkBody) {
+    channel_body_with_size_hint(None)
+}
+
+/// Create a `SdkBody` with an associated sender half and a known content length.
+///
+/// The `content_length` will be reported via the body's `size_hint()`, which is
+/// important for HTTP clients that rely on it for content-length headers or HTTP/2 framing.
+pub(crate) fn channel_body_with_size_hint(content_length: Option<u64>) -> (Sender, SdkBody) {
     let (tx, rx) = mpsc::channel(1);
     let sender = Sender { tx };
-    let ch_body = ChannelBody { rx };
+    let ch_body = ChannelBody { rx, content_length };
     (sender, SdkBody::from_body_1_x(ch_body))
 }
 
@@ -54,7 +62,8 @@ impl Sender {
 
 pin_project! {
     struct ChannelBody {
-        rx: mpsc::Receiver<Result<Frame<Bytes>, BoxError>>
+        rx: mpsc::Receiver<Result<Frame<Bytes>, BoxError>>,
+        content_length: Option<u64>,
     }
 }
 
@@ -75,7 +84,10 @@ impl http_body_1x::Body for ChannelBody {
     }
 
     fn size_hint(&self) -> SizeHint {
-        SizeHint::default()
+        match self.content_length {
+            Some(len) => SizeHint::with_exact(len),
+            None => SizeHint::default(),
+        }
     }
 }
 
