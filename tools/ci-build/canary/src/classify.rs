@@ -40,7 +40,7 @@ use std::fmt;
 
 use serde::Serialize;
 
-/// The five verdicts of §3.2.
+/// The five verdicts a leg can report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Verdict {
@@ -87,7 +87,7 @@ impl fmt::Display for Verdict {
     }
 }
 
-/// The leg's commands, in the order §3.4 runs them.
+/// The leg's commands, in the order a leg runs them. See [`crate::leg::commands`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Step {
@@ -613,7 +613,7 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
     }
 
     /// Garbage on stdout must not panic the classifier. A leg that crashes while classifying emits
-    /// nothing, which is the silent failure the design exists to remove.
+    /// nothing, which is the silent failure this whole crate exists to remove.
     #[test]
     fn malformed_json_lines_are_ignored_rather_than_fatal() {
         let (v, _) = classify(&outcome(

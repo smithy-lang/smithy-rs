@@ -9,7 +9,7 @@
 // certificate store* enumerate successfully, and does rustls then complete a
 // real TLS handshake against an AWS endpoint using those roots?
 //
-// That is the whole of design.md 3.1 gap 2's residual "platform axis". The
+// That is the whole of the platform axis that the other legs cannot reach. The
 // platform-specific code is the cert *loading*, not the TLS itself:
 // `aws-smithy-http-client` calls `load_native_certs()`
 // (src/client/tls/rustls_provider.rs:118), which resolves to
@@ -19,8 +19,8 @@
 // rustls does the verification against whatever that returns. So "the handshake
 // completed" is precisely the proof that the platform path worked.
 //
-// WHY THIS NEEDS NO CREDENTIALS, and why that is not the workaround the design
-// rejects. design.md 3.1 gap 5 deleted two credential-free probes -- an
+// WHY THIS NEEDS NO CREDENTIALS, and why that is not the shortcut it resembles.
+// Two other credential-free probes were tried and discarded -- an
 // `InvalidAccessKeyId` key and a `no_credentials()` public-bucket read -- because
 // they were being used to claim *signature acceptance* and *real service
 // responses*, which they cannot prove: they passed identically with and without
@@ -35,8 +35,8 @@
 // diagnostic is for.
 //
 // MEASURED: a broken trust store fails this test by TWO different mechanisms,
-// depending on the profile -- which matters because the design builds both
-// (3.1 gap 6 ships a `--release` leg):
+// depending on the profile -- which matters because the matrix builds both, in
+// the `release-profile` build-axis leg:
 //
 //   debug   -> PANIC inside aws-smithy-http-client at rustls_provider.rs:163,
 //              "TrustStore configured to enable native roots but no valid root
@@ -51,13 +51,13 @@
 //
 // Both were verified by pointing SSL_CERT_FILE and SSL_CERT_DIR at an empty
 // file, so this diagnostic is known to fail when the thing it tests is broken.
-// Worth carrying into the design: on a host with no usable trust store the SDK
-// panics in debug and fails handshakes in release, so the live phase's failure
-// signature is profile-dependent.
+// Worth remembering when reading a failure: on a host with no usable trust store
+// the SDK panics in debug and fails handshakes in release, so the signature is
+// profile-dependent.
 //
-// This does NOT replace running the live phase on Windows and macOS. It is the
-// part of that work which can be settled without an account, so it can run on a
-// fork PR with no secrets (design.md 3.3 notes the live phase cannot).
+// This does NOT replace running a credentialed live phase on Windows. It is the
+// part of that work which can be settled without an account, so unlike the live
+// phase it can run on a fork PR with no secrets.
 
 use aws_sdk_s3::config::{BehaviorVersion, Region};
 

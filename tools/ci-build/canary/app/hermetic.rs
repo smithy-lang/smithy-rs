@@ -5,7 +5,7 @@
 
 // Hermetic assertions. These run under `cargo test` and may use test-util; nothing
 // here is reachable from `cargo build`, which is what keeps COMPILE_FAIL attributable
-// to crates a consumer actually compiles (design.md 3.1, 3.3).
+// to crates a consumer actually compiles.
 //
 // No AWS and nothing off-host: the only sockets are loopback listeners these tests
 // start themselves.
@@ -87,7 +87,7 @@ async fn s3_request_response_round_trip() {
     );
 }
 
-/// Gap 1's refresh half. `lazy()` refreshes when an identity is within
+/// The refresh half of credential caching. `lazy()` refreshes when an identity is within
 /// DEFAULT_BUFFER_TIME (10s, jittered down to 5s) of expiring, so a 2s expiry must
 /// always refetch and a 1h expiry must never do so. Both halves are needed: either
 /// alone is satisfiable by a broken cache.
@@ -140,7 +140,7 @@ async fn provider_calls_over_two_requests(ttl: Duration) -> usize {
     calls.load(Ordering::SeqCst)
 }
 
-/// Gap 2's HTTP half, directly rather than as a side effect: point a real S3 client at
+/// The real HTTP stack, exercised directly rather than as a side effect: point a real S3 client at
 /// a loopback listener with **no `http_client` override**, so the default hyper client
 /// does the work -- real connect, real HTTP/1.1 framing, real connection pool.
 ///
@@ -373,11 +373,11 @@ async fn real_chain_reaches_links_two_three_and_four() {
 }
 
 // ---------------------------------------------------------------------------
-// Gap 2, "induced latency and loss". The design calls this row UNCLOSABLE on the
-// grounds that "neither phase can make S3 slow or lossy on demand" -- which is true
-// of S3 and irrelevant, because the loopback listener above already drives the REAL
-// default hyper client (no `http_client` override). A listener we own can be made
-// arbitrarily slow and can drop connections at will. These two checks test that.
+// Induced latency and loss. The obvious objection is that nothing here can make S3
+// slow or lossy on demand -- true of S3, and irrelevant: the loopback listener above
+// already drives the REAL default hyper client (no `http_client` override), and a
+// listener we own can be made arbitrarily slow and can drop connections at will.
+// These two checks do exactly that.
 // ---------------------------------------------------------------------------
 
 /// A listener that sleeps `delay` before responding, then serves `200`.
@@ -531,10 +531,10 @@ async fn induced_connection_loss_is_retried_and_recovers() {
 }
 
 // ---------------------------------------------------------------------------
-// Gap 4 — API surface. Four checks: presigning and pagination (measured in an
-// earlier prototype but lost when `test-util` moved to [dev-dependencies], so
-// re-added here), plus status-code retry classification and multipart, which
-// were never built.
+// API surface. Four checks: presigning and pagination (measured in an earlier
+// prototype but lost when `test-util` moved to [dev-dependencies], so re-added
+// here), plus status-code retry classification and multipart, which were never
+// built.
 // ---------------------------------------------------------------------------
 
 /// 2025-06-15T00:00:00Z. Pinned so the signature scope and X-Amz-Date are fixed.
@@ -554,7 +554,7 @@ fn canary_s3_config() -> aws_sdk_s3::Config {
         .build()
 }
 
-/// Gap 4's presign, and the structural half of gap 3.
+/// Presigning, and the one place where the signature itself is assertable.
 ///
 /// A presigned URL is pure computation -- no replay client, no network at all.
 /// Unlike a header-signed request it is **byte-stable**, because `SignedHeaders`
@@ -659,7 +659,7 @@ fn list_objects_page(keys: &[&str], next_token: Option<&str>) -> http::Response<
         .unwrap()
 }
 
-/// Gap 4's pagination. The paginator is SDK-driven orchestration: it must read
+/// Pagination. The paginator is SDK-driven orchestration: it must read
 /// `NextContinuationToken` off page 1 and put it on the request for page 2.
 ///
 /// Three assertions, and the third is the one that discriminates: asserting only
@@ -742,7 +742,7 @@ fn s3_error(status: u16, code: &str) -> http::Response<SdkBody> {
         .unwrap()
 }
 
-/// Gap 4's retry **classification** -- distinct from the transport-retry loop
+/// Retry **classification** -- distinct from the transport-retry loop
 /// proven by `induced_connection_loss_is_retried_and_recovers`. That check drops
 /// TCP connections; this one returns well-formed HTTP errors and asks whether the
 /// SDK classifies them correctly.
@@ -845,7 +845,7 @@ async fn status_code_retry_classification_retries_503_but_not_400() {
     );
 }
 
-/// Gap 4's multipart upload. Four canned responses in sequence, which is what
+/// Multipart upload. Four canned responses in sequence, which is what
 /// makes the plumbing observable: the `UploadId` from create must appear on both
 /// part requests and on complete, and the `ETag`s returned by the parts must be
 /// the ones sent to complete. Asserting only "it returned Ok" would pass even if

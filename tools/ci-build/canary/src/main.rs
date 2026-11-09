@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! CLI for the post-publish build canary. See the crate docs for the design pointer.
+//! CLI for the post-publish build canary. See the crate docs for what it is for.
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -65,7 +65,7 @@ enum Command {
         dir: PathBuf,
         /// The release tag this leg was dispatched for. When given, the leg exits 0 without
         /// building if a newer `release-*` tag exists, because a dispatched run outlives the
-        /// cancellation of its dispatcher. Omit outside a release, as in §4.1.
+        /// cancellation of its dispatcher. Omit when running a leg outside a release.
         #[arg(long)]
         tag: Option<String>,
         /// Override the 14-minute self-deadline. For testing only.
