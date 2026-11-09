@@ -27,6 +27,8 @@ Run the same unit-test selection as CI:
 ./gradlew :codegen-server:test -PexcludeServerCompatibilityTests=true
 ```
 
+CI splits that selection across four jobs; add `-PtestShard=i/4` to run only job `i`'s classes.
+
 The normal local `:codegen-server:test` task still includes these comparisons.
 The dedicated `codegen-server-test:test` CI job continues to run native generated
 protocol tests and live event-stream/request-limit integration tests. The extra

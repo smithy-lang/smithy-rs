@@ -199,7 +199,9 @@ impl<'a> ShapeView<'a> {
         self.shape.source_location()
     }
 
-    /// Returns `true` if this shape comes from the injected Smithy prelude.
+    /// Returns `true` if this shape is in the prelude namespace of a model with the injected
+    /// Smithy prelude. Like the reference implementation's `Prelude.isPreludeShape`, this
+    /// includes shapes that a document adds to the namespace.
     ///
     /// Without the prelude (see
     /// [`ModelAssembler::disable_prelude`](crate::ModelAssembler::disable_prelude)), a model may
@@ -663,7 +665,8 @@ macro_rules! refined_view {
                     self.shape.source_location()
                 }
 
-                /// Returns `true` if this is a prelude shape.
+                /// Returns `true` if this shape is in the prelude namespace of a model with the
+                /// injected prelude; see [`ShapeView::is_prelude`].
                 pub fn is_prelude(&self) -> bool {
                     self.shape.is_prelude()
                 }
