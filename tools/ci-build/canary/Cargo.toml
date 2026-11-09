@@ -1,0 +1,22 @@
+[package]
+name = "canary"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = """
+Post-publish build canary for smithy-rs. Expands the scenario table into the leg matrix, renders a
+leg's manifest, runs the leg, and classifies the outcome into a verdict. See
+.kiro/specs/build-canary/ for the design.
+"""
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "1.0.87"
+clap = { version = "4.4.11", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+toml = "0.8"
