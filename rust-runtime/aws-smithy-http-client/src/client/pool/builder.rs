@@ -47,6 +47,12 @@ use tower::Service;
 /// Default duration for retaining an idle reusable connection.
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 
+/// Default TCP keepalive probe interval for newly created sockets.
+///
+/// 30 seconds keeps connections alive well within the idle timeout of
+/// NAT gateways and firewalls without adding meaningful overhead.
+const DEFAULT_TCP_KEEPALIVE: Duration = Duration::from_secs(30);
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 enum TriStateOption<T> {
     /// No option was set by the user, so construction applies its default.
@@ -438,7 +444,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "__rustls")]
                 tls::Provider::Rustls(crypto_mode) => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, alpn_protocols| {
                             let mut connector =
@@ -461,7 +467,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, _alpn_protocols| {
                             let mut connector =
@@ -537,7 +543,7 @@ impl Builder<TlsUnset> {
     {
         validate_default_connector_interfaces(self.partitions.as_deref())?;
         let tcp_nodelay = self.tcp_nodelay;
-        let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+        let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
         let proxy_config = self.proxy_config.clone();
         let transport = if proxy_config.is_disabled() {
             establish::from_interface_connector(move |interface| {
