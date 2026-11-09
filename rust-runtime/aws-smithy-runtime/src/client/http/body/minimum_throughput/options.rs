@@ -188,7 +188,6 @@ impl From<StalledStreamProtectionConfig> for MinimumThroughputBodyOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     #[test]
     fn from_ssp_without_floor_uses_default() {
