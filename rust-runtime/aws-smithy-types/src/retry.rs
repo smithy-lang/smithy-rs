@@ -186,7 +186,7 @@ impl RetryConfigBuilder {
     ///
     /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
     ///
-    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_03` or later) default to
+    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_10` or later) default to
     /// `ReuseAllConnections`, but an explicit setting here still takes effect.
     pub fn reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
         self.set_reconnect_mode(Some(reconnect_mode));
@@ -201,7 +201,7 @@ impl RetryConfigBuilder {
     ///
     /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
     ///
-    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_03` or later) default to
+    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_10` or later) default to
     /// `ReuseAllConnections`, but an explicit setting here still takes effect.
     pub fn set_reconnect_mode(&mut self, reconnect_mode: Option<ReconnectMode>) -> &mut Self {
         self.reconnect_mode = reconnect_mode;
@@ -308,7 +308,7 @@ impl Storable for RetryConfig {
 /// By default, when a transient error is encountered, the connection in use will be poisoned. This
 /// behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
 ///
-/// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_03` or later) default to
+/// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_10` or later) default to
 /// `ReuseAllConnections`, but an explicit setting still takes effect.
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum ReconnectMode {
@@ -480,7 +480,7 @@ impl RetryConfig {
     ///
     /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
     ///
-    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_03` or later) default to
+    /// Clients on Retry Behavior 2.1 (`BehaviorVersion` `v2026_11_10` or later) default to
     /// `ReuseAllConnections`, but an explicit setting here still takes effect.
     pub fn with_reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
         self.reconnect_mode = Some(reconnect_mode);

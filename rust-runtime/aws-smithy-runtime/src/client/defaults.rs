@@ -236,7 +236,7 @@ pub fn default_retry_config_plugin(
 ///
 /// This version respects the behavior version to enable retries by default for newer versions.
 /// For AWS SDK clients with BehaviorVersion >= v2026_01_12, retries are enabled by default.
-/// For all clients with BehaviorVersion >= v2026_11_03, the default config uses Retry Behavior 2.1.
+/// For all clients with BehaviorVersion >= v2026_11_10, the default config uses Retry Behavior 2.1.
 pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<SharedRuntimePlugin> {
     let retry_partition = RetryPartition::new(
         params
@@ -269,7 +269,7 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                     RetryConfig::disabled()
                 };
             #[allow(deprecated)]
-            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_11_03()) {
+            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_11_10()) {
                 retry_config
                     .with_retry_spec(RetrySpec::v2_1())
                     .with_reconnect_mode(ReconnectMode::ReuseAllConnections)

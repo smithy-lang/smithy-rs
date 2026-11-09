@@ -41,7 +41,7 @@ class RetryDefaultOverrideDecorator : ClientCodegenDecorator {
                     """
                     ##[allow(deprecated)]
                     if let #{Some}(existing_rc) = ${section.sdkConfig}.retry_config().cloned() {
-                        if ${section.sdkConfig}.behavior_version().is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_11_03())) {
+                        if ${section.sdkConfig}.behavior_version().is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_11_10())) {
                             let mut rc = existing_rc.with_retry_spec(
                                 #{RetrySpec}::v2_1()
                                     .with_non_throttling_initial_backoff(#{Duration}::from_millis(25))
@@ -82,7 +82,7 @@ private class RetryDefaultOverrideRuntimePluginCustomization(private val codegen
                     ##[allow(deprecated)]
                     if ${section.serviceConfigName}.behavior_version
                         .as_ref()
-                        .is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_11_03()))
+                        .is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_11_10()))
                     {
                         ${section.newLayerName}.store_put(
                             #{RetryConfig}::standard()
