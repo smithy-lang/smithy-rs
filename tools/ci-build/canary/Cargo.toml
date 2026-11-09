@@ -4,8 +4,7 @@ version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = """
 Post-publish build canary for smithy-rs. Expands the scenario table into the leg matrix, renders a
-leg's manifest, runs the leg, and classifies the outcome into a verdict. See
-.kiro/specs/build-canary/ for the design.
+leg's manifest, runs the leg, and classifies the outcome into a verdict.
 """
 edition = "2021"
 license = "Apache-2.0"

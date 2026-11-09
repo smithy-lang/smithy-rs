@@ -7,7 +7,7 @@
 // which is what owns COMPILE_FAIL -- no test-only crate is reachable from here.
 //
 // The hermetic assertions live in tests/hermetic.rs and run under `cargo test`, which
-// is where test-util is allowed. See design.md 3.1 and 3.3.
+// is where test-util is allowed.
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_smithy_types::{Document, Number};

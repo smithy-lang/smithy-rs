@@ -1,17 +1,18 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# The post-publish build canary's legs. Design: .kiro/specs/build-canary/
+# The post-publish build canary's legs.
 #
 # Each leg resolves a consumer-shaped manifest against crates.io, builds it, and runs the hermetic
 # assertions, then reports one of five verdicts. Scenario x toolchain = one leg; every leg has its
 # own lockfile and its own verdict.
 #
-# STAGE A SCOPE. This workflow writes verdicts to the job log and nothing else:
+# SCOPE. This workflow writes verdicts to the job log and nothing else:
 #   - no `id-token: write`, no `role-to-assume`, no secrets
 #   - no CloudWatch metric, no alarm, so nothing here can page anyone
-# Emitting the `Red` metric arrives in Stage C, once the OIDC roles exist. Keeping those apart is
-# deliberate: it means the whole matrix can be exercised before anything is able to wake an oncall.
+# Reporting a verdict as a metric, and alarming on it, land separately and need an OIDC role this
+# workflow does not have. Keeping those apart is deliberate: the whole matrix can be exercised, and
+# its false-positive rate measured, before anything is able to wake an oncall.
 
 name: Build canary
 run-name: ${{ github.workflow }} - ${{ inputs.scenario }}

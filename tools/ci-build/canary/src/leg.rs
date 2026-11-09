@@ -7,7 +7,7 @@
 //!
 //! # The retry policy is chosen by the verdict, not by the step
 //!
-//! This is what lets §3.6.2's table be expressed directly rather than approximated. The same command
+//! This is what lets the table below be expressed directly rather than approximated. The same command
 //! — `cargo generate-lockfile` — gets six minutes of patience when the registry is unreachable and
 //! one minute when cargo has *refused* to resolve, because those are different failures that happen
 //! to share a step.
@@ -51,7 +51,7 @@ pub struct Retry {
 }
 
 impl Retry {
-    /// §3.6.2's table.
+    /// The policy table in this module's documentation.
     pub fn for_verdict(v: Verdict) -> Self {
         match v {
             Verdict::InfraFail => Retry {

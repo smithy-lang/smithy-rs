@@ -3,17 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The scenario table from design §3.4, and its expansion into the leg matrix.
+//! The scenario table, and its expansion into the leg matrix.
 //!
 //! Scenario × toolchain = one leg. Every leg has its own lockfile and its own verdict.
 //!
-//! Ten dependency scenarios run at each surviving toolchain. Six build-axis scenarios are *separate*
-//! scenarios rather than extra dimensions on the ten, so they are not multiplied by the toolchain
-//! axis; they contribute eight legs because `wasm` is two and `--release` is its own.
+//! The ten dependency scenarios run at each surviving toolchain, so they give 10 × 5 = 50 legs. The
+//! ten build-axis legs are *separate* scenarios rather than extra dimensions on those ten, so they
+//! are not multiplied by the toolchain axis and contribute 10 more. **60 legs.**
 //!
-//! Twelve manifests back the whole matrix: one per dependency scenario, plus `wasm` and
-//! `large-generated-clients`. The build-axis legs that only vary target or profile reuse the
-//! `new-project` manifest, which is why manifests (12) and legs (58) differ.
+//! Thirteen manifests back all 60: one per dependency scenario, plus `wasm`, `serialization` and
+//! `large-generated-clients`. The build-axis legs that vary only target or profile reuse the
+//! `new-project` manifest, which is why 13 manifests produce 60 legs.
 
 use serde::Serialize;
 
@@ -106,7 +106,7 @@ pub struct BuildAxisLeg {
     pub reaches: &'static str,
 }
 
-/// The ten dependency scenarios of §3.4.
+/// The ten dependency scenarios.
 ///
 /// The first five are manifests we write. The last five inherit their requirements on us from a
 /// third party's `Cargo.toml`, which is the whole point of those rows — patching their feature set
@@ -178,7 +178,7 @@ pub const SCENARIOS: &[Scenario] = &[
         id: "ssstar",
         deps: &[("ssstar", "0.7")],
         body: Body::Stub,
-        reaches: "a dependent whose requirements on us are frozen — red at admission, see §3.4",
+        reaches: "a dependent whose requirements on us are frozen — red at admission, see above",
     },
 ];
 
@@ -188,16 +188,12 @@ pub const SCENARIOS: &[Scenario] = &[
 /// is a hard constraint rather than a preference. Two consequences of applying it:
 ///
 /// * **macOS is gone.** `macos`, `darwin` and `apple` appear nowhere in `.github/workflows/` or
-///   `tools/ci-scripts/`. The project does not build for macOS, so the canary must not either. This
-///   also settles §5's fourth open question, and removes the one leg the design could never measure.
+///   `tools/ci-scripts/`. The project does not build for macOS, so the canary must not either: a red
+///   macOS leg would name a platform nobody has agreed to support, which is not actionable.
 /// * **musl is aarch64, not x86_64.** CI's musl coverage is `aarch64-unknown-linux-musl`, added by
 ///   `rustup target add` in the existing `Canary (aarch64)` job. The capability under test — static
 ///   linking, musl's own runtime, per-target C and assembly in `aws-lc-sys` and `ring` — is the same,
 ///   so the leg stays and takes the triple CI actually uses.
-///
-/// §3.4's table lists six build-axis *scenarios* and says eight legs. The table sums to seven because
-/// `--release` appears only in the manifest-to-leg mapping and not as a row of its own. With macOS
-/// removed the count is seven either way, but §3.4 still wants a `--release` row.
 pub const BUILD_AXIS: &[BuildAxisLeg] = &[
     BuildAxisLeg {
         id: "musl",
@@ -442,7 +438,7 @@ mod tests {
         assert_eq!(BUILD_AXIS.len(), 10);
     }
 
-    /// The headline number, cross-checked the way §3.4 does it: 10 × 5 + 10.
+    /// The headline number, cross-checked the other way round: 10 × 5 + 10.
     #[test]
     fn five_toolchains_give_sixty_legs() {
         let tcs = today();
@@ -497,7 +493,7 @@ mod tests {
             !BUILD_AXIS.iter().any(|b| b.id == "macos"
                 || b.runner.contains("macos")
                 || b.target.is_some_and(|t| t.contains("apple"))),
-            "CI does not build for macOS, so the canary must not either (§5 question 4)"
+            "CI does not build for macOS, so the canary must not either"
         );
     }
 
@@ -617,8 +613,9 @@ mod tests {
         assert_eq!(legs(&one).len(), 10 + 10);
     }
 
-    /// Four scenarios resolve a client and so carry the app body; the other six are stubs. This is
-    /// the split behind §3.4's measured 8 client-shaped and 12 stub legs at two toolchains.
+    /// Four scenarios resolve a client and so carry the app body; the other six are stubs. The split
+    /// decides how much of the matrix can report a run-phase verdict at all: a stub leg has no
+    /// assertions, so it can only ever say `COMPILE_FAIL`, `RESOLVE_FAIL` or `INFRA_FAIL`.
     #[test]
     fn four_scenarios_are_client_shaped() {
         let app: Vec<_> = SCENARIOS
