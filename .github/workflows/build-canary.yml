@@ -1,0 +1,190 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The post-publish build canary's legs. Design: .kiro/specs/build-canary/
+#
+# Each leg resolves a consumer-shaped manifest against crates.io, builds it, and runs the hermetic
+# assertions, then reports one of five verdicts. Scenario x toolchain = one leg; every leg has its
+# own lockfile and its own verdict.
+#
+# STAGE A SCOPE. This workflow writes verdicts to the job log and nothing else:
+#   - no `id-token: write`, no `role-to-assume`, no secrets
+#   - no CloudWatch metric, no alarm, so nothing here can page anyone
+# Emitting the `Red` metric arrives in Stage C, once the OIDC roles exist. Keeping those apart is
+# deliberate: it means the whole matrix can be exercised before anything is able to wake an oncall.
+
+name: Build canary
+run-name: ${{ github.workflow }} - ${{ inputs.scenario }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Which tier dispatched this. Recorded on the run; does not change the legs.
+        type: choice
+        options: [manual, dispatch, floor]
+        default: manual
+      scenario:
+        description: >
+          Leg id, manifest name, or `all`. One scenario is one or two legs at a couple of minutes
+          where `all` is 60 legs, which is why the filter exists rather than being a convenience.
+        type: string
+        default: all
+      tag:
+        description: >
+          The release tag these legs were dispatched for. When set, a leg exits without building if a
+          newer release-* tag exists -- a dispatched run outlives the cancellation of its dispatcher.
+          Leave empty outside a release.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the scenario so a release's concurrent manifests never cancel each other, while a
+  # repeated dispatch of the same scenario supersedes its predecessor.
+  group: build-canary-${{ inputs.scenario }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: Expand the matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      legs: ${{ steps.expand.outputs.legs }}
+      count: ${{ steps.expand.outputs.count }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Expand
+      id: expand
+      working-directory: tools/ci-build/canary
+      run: |
+        set -euo pipefail
+
+        # The span is clamped at the MSRV the crates under test declare, because a compiler below it
+        # is not a supported configuration -- a failure there is a rust-version error, not a break.
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+        echo "stable=${STABLE}  msrv=${MSRV}"
+
+        cargo run --quiet -- gen-matrix --stable "${STABLE}" --msrv "${MSRV}" > /tmp/all.json
+
+        # Filter by leg id or manifest name. `all` keeps everything.
+        python3 - "${{ inputs.scenario }}" <<'PY' > /tmp/legs.json
+        import json, sys
+        want = sys.argv[1]
+        legs = json.load(open('/tmp/all.json'))
+        if want != 'all':
+            legs = [l for l in legs if want in (l['id'], l['manifest'])]
+            if not legs:
+                ids = sorted({l['id'] for l in json.load(open('/tmp/all.json'))})
+                sys.exit(f"no leg or manifest matched {want!r}. available: {', '.join(ids)}")
+        json.dump(legs, sys.stdout)
+        PY
+
+        echo "legs=$(cat /tmp/legs.json)" >> "$GITHUB_OUTPUT"
+        echo "count=$(python3 -c 'import json;print(len(json.load(open("/tmp/legs.json"))))')" >> "$GITHUB_OUTPUT"
+
+    - name: Summarise
+      run: |
+        {
+          echo "### Build canary matrix"
+          echo ""
+          echo "${{ steps.expand.outputs.count }} legs, tier \`${{ inputs.tier }}\`, scenario \`${{ inputs.scenario }}\`"
+          echo ""
+          echo "| leg | runner | target | toolchain | checks |"
+          echo "|---|---|---|---|---|"
+          echo '${{ steps.expand.outputs.legs }}' | python3 -c "
+        import json,sys
+        for l in json.load(sys.stdin):
+            print('| %s | %s | %s | %s | %s |' % (
+                l['id'], l['runner'], l.get('target') or 'native',
+                l['toolchain_version'], l['checks']))
+        "
+        } >> "$GITHUB_STEP_SUMMARY"
+
+  leg:
+    name: ${{ matrix.leg.id }}
+    needs: matrix
+    # Strictly under the watcher's 15-minute dispatch tick, so a leg can never outlive the tick that
+    # dispatched it and be re-dispatched alongside itself. The leg tracks its own clock and emits
+    # before this is reached -- a job killed here would run no further steps and so report nothing.
+    timeout-minutes: 14
+    runs-on: ${{ matrix.leg.runner }}
+    strategy:
+      # Every leg has its own verdict, so one red leg must not cancel the rest.
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        leg: ${{ fromJSON(needs.matrix.outputs.legs) }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install musl tools
+      if: contains(matrix.leg.target, 'musl')
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+    - name: Run the leg
+      working-directory: tools/ci-build/canary
+      shell: bash
+      env:
+        # Not the default for a `run:` step, and the leg's own pipelines rely on it.
+        STABLE_OVERRIDE: ''
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        # Exits 0 for green or INFRA_FAIL, non-zero for any hard verdict. That is how a floor hour's
+        # exit code carries the stop decision, since `needs:` can see success or failure but never why.
+        cargo run --quiet -- run-leg \
+          --leg '${{ matrix.leg.id }}' \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --dir "${RUNNER_TEMP}/leg" \
+          ${{ inputs.tag && format('--tag {0}', inputs.tag) || '' }} \
+          | tee "${RUNNER_TEMP}/report.json"
+
+    - name: Report the verdict
+      if: always()
+      shell: bash
+      run: |
+        set -uo pipefail
+        REPORT="${RUNNER_TEMP}/report.json"
+        if [[ ! -s "$REPORT" ]]; then
+          echo "::warning title=No report::the leg produced no report, which is itself a defect"
+          exit 0
+        fi
+        python3 - "$REPORT" '${{ matrix.leg.id }}' <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        verdict = r.get('verdict')
+        print(f"### {sys.argv[2]} — {verdict or 'GREEN'}")
+        print()
+        if verdict:
+            d = r.get('diagnosis') or {}
+            print(f"- step: `{r.get('failed_step')}`")
+            print(f"- stopped: `{r.get('stopped')}`")
+            if d.get('codes'):
+                print(f"- codes: {', '.join('`%s`' % c for c in d['codes'])}")
+            if d.get('summary'):
+                print(f"- {d['summary']}")
+            if d.get('target'):
+                print(f"- cargo target: `{d['target']}`")
+        print()
+        print("| step | attempt | ok | verdict |")
+        print("|---|---|---|---|")
+        for a in r['attempts']:
+            print("| `%s` | %d | %s | %s |" % (
+                a['step'], a['attempt'], 'yes' if a['succeeded'] else 'no',
+                a.get('verdict') or ''))
+        PY

@@ -1,0 +1,237 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! CLI for the post-publish build canary. See the crate docs for the design pointer.
+
+use std::path::PathBuf;
+use std::time::Duration;
+
+use anyhow::Context;
+use clap::{Parser, Subcommand};
+
+use canary::leg;
+use canary::manifest;
+use canary::scenarios;
+use canary::toolchain::{self, Version};
+
+#[derive(Parser)]
+#[command(name = "canary", about = "Post-publish build canary for smithy-rs")]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Emit the leg matrix as JSON, for a GitHub Actions `matrix` and for eyeballing.
+    ///
+    /// Takes the toolchain bounds as arguments rather than discovering them, so the matrix is
+    /// reproducible off-runner and testable without a network.
+    GenMatrix {
+        /// The current stable, e.g. `1.99.1`. Normally `rustc +stable --version`.
+        #[arg(long)]
+        stable: String,
+        /// The `rust-version` the crates under test declare, e.g. `1.94.1`. The span is clamped
+        /// here: a compiler below it is not a supported configuration.
+        #[arg(long)]
+        msrv: String,
+        /// Print the matrix indented rather than on one line.
+        #[arg(long)]
+        pretty: bool,
+    },
+    /// Print the toolchain span and what the MSRV clamp dropped. Coverage shrinking unnoticed is
+    /// the failure this guards, so it is worth a command of its own.
+    Toolchains {
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+    },
+    /// Render a leg and run it: the six commands, the retries, the deadline.
+    ///
+    /// Prints the report as JSON on stdout and exits 0 for green or `INFRA_FAIL`, non-zero for any
+    /// hard verdict — which is how a floor hour's exit code carries the stop decision.
+    RunLeg {
+        #[arg(long)]
+        leg: String,
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+        /// Where to render the crate. Created if absent.
+        #[arg(long)]
+        dir: PathBuf,
+        /// The release tag this leg was dispatched for. When given, the leg exits 0 without
+        /// building if a newer `release-*` tag exists, because a dispatched run outlives the
+        /// cancellation of its dispatcher. Omit outside a release, as in §4.1.
+        #[arg(long)]
+        tag: Option<String>,
+        /// Override the 14-minute self-deadline. For testing only.
+        #[arg(long)]
+        budget_secs: Option<u64>,
+    },
+    /// Materialize one leg's crate into a directory, ready to build.
+    GenLeg {
+        /// The leg id, as `gen-matrix` emits it. For example `new-project--stable` or `powerpc64`.
+        #[arg(long)]
+        leg: String,
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+        /// Where to write it.
+        #[arg(long)]
+        out: PathBuf,
+    },
+}
+
+fn main() -> anyhow::Result<()> {
+    match Args::parse().command {
+        Command::GenMatrix {
+            stable,
+            msrv,
+            pretty,
+        } => {
+            let clamped = resolve(&stable, &msrv)?;
+            eprintln!("{}", clamped.report());
+            let legs = scenarios::legs(&clamped.kept);
+            eprintln!("legs: {}", legs.len());
+            let json = if pretty {
+                serde_json::to_string_pretty(&legs)?
+            } else {
+                serde_json::to_string(&legs)?
+            };
+            println!("{json}");
+        }
+        Command::Toolchains { stable, msrv } => {
+            println!("{}", resolve(&stable, &msrv)?.report());
+        }
+        Command::RunLeg {
+            leg,
+            stable,
+            msrv,
+            dir,
+            tag,
+            budget_secs,
+        } => {
+            if let Some(tag) = &tag {
+                if let Some(newest) = newest_release_tag()? {
+                    if &newest != tag {
+                        eprintln!("superseded by {newest}, not building");
+                        return Ok(());
+                    }
+                }
+            }
+            let clamped = resolve(&stable, &msrv)?;
+            let legs = scenarios::legs(&clamped.kept);
+            let found = find_leg(&legs, &leg)?;
+            let scenario = scenarios::manifest(&found.manifest)
+                .ok_or_else(|| anyhow::anyhow!("unknown manifest {:?}", found.manifest))?;
+            manifest::materialize(&manifest::render(found, scenario), &dir)?;
+
+            let budget = budget_secs.map(Duration::from_secs).unwrap_or(leg::BUDGET);
+            let mut exec = leg::RealExec {
+                dir: dir.clone(),
+                verbose: true,
+            };
+            let mut clock = leg::RealClock::default();
+            let report = leg::run(found, &mut exec, &mut clock, budget);
+
+            println!("{}", serde_json::to_string(&report)?);
+            match report.verdict {
+                None => eprintln!("{} GREEN in {:?}", report.leg_id, report.elapsed),
+                Some(v) => eprintln!(
+                    "{} {} at {:?} after {:?} ({:?})",
+                    report.leg_id,
+                    v,
+                    report.failed_step.unwrap(),
+                    report.elapsed,
+                    report.stopped.unwrap(),
+                ),
+            }
+            std::process::exit(report.exit_code());
+        }
+        Command::GenLeg {
+            leg,
+            stable,
+            msrv,
+            out,
+        } => {
+            let clamped = resolve(&stable, &msrv)?;
+            let all = scenarios::legs(&clamped.kept);
+            let found = all.iter().find(|l| l.id == leg).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no leg {leg:?}. {} legs available; try `gen-matrix` to list them",
+                    all.len()
+                )
+            })?;
+            let scenario = scenarios::manifest(&found.manifest).ok_or_else(|| {
+                anyhow::anyhow!("leg {leg:?} names unknown manifest {:?}", found.manifest)
+            })?;
+            let rendered = manifest::render(found, scenario);
+            manifest::materialize(&rendered, &out)?;
+            eprintln!(
+                "leg {} -> {}  (toolchain {} {}, {:?}, checks {:?})",
+                found.id,
+                out.display(),
+                found.toolchain,
+                found.toolchain_version,
+                found.target.as_deref().unwrap_or("native"),
+                found.checks,
+            );
+            println!("{}", serde_json::to_string(found)?);
+        }
+    }
+    Ok(())
+}
+
+fn find_leg<'a>(legs: &'a [scenarios::Leg], id: &str) -> anyhow::Result<&'a scenarios::Leg> {
+    legs.iter().find(|l| l.id == id).ok_or_else(|| {
+        anyhow::anyhow!(
+            "no leg {id:?}. {} legs available; run `gen-matrix` to list them",
+            legs.len()
+        )
+    })
+}
+
+/// The newest `release-*` tag on the remote.
+///
+/// `release-YYYY-MM-DD` sorts lexically into chronological order, so the last line is the current
+/// release. `ls-remote` needs no fetch depth and no credential on a public repo, and `--refs` drops
+/// the `^{}` dereference lines annotated tags produce.
+fn newest_release_tag() -> anyhow::Result<Option<String>> {
+    let out = std::process::Command::new("git")
+        .args([
+            "ls-remote",
+            "--tags",
+            "--refs",
+            "origin",
+            "refs/tags/release-*",
+        ])
+        .output()
+        .context("running git ls-remote")?;
+    if !out.status.success() {
+        // Not fatal: this check is thrift, not correctness. The Tag dimension is what actually
+        // guarantees a straggler's emission cannot page.
+        eprintln!("could not list remote tags; skipping the supersession check");
+        return Ok(None);
+    }
+    let mut tags: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| l.rsplit('/').next().map(str::to_string))
+        .collect();
+    tags.sort();
+    Ok(tags.pop())
+}
+
+fn resolve(stable: &str, msrv: &str) -> anyhow::Result<toolchain::Clamped> {
+    let stable: Version = stable
+        .parse()
+        .with_context(|| format!("--stable {stable:?} is not a version"))?;
+    let msrv: Version = msrv
+        .parse()
+        .with_context(|| format!("--msrv {msrv:?} is not a version"))?;
+    toolchain::resolve(stable, msrv)
+}
