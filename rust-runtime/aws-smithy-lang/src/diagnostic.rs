@@ -47,7 +47,7 @@ pub enum DiagnosticCode {
     InvalidProperty,
     /// The `type` of a shape is not known.
     UnknownShapeType,
-    /// A user document redefines a prelude shape.
+    /// A trait is applied to one of the prelude's own shapes.
     PreludeConflict,
     /// A shape reference does not resolve.
     UnresolvedReference,
