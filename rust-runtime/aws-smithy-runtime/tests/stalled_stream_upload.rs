@@ -84,7 +84,10 @@ async fn upload_below_floor_nonzero_throughput() {
         drop(body_sender);
     });
 
-    let err = result.await.expect("no panics").expect_err("should have timed out");
+    let err = result
+        .await
+        .expect("no panics")
+        .expect_err("should have timed out");
     assert_str_contains!(
         DisplayErrorContext(&err).to_string(),
         "minimum throughput was specified at 1024 B/s"

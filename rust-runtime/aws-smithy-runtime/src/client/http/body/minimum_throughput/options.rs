@@ -207,5 +207,4 @@ mod tests {
             Throughput::new_bytes_per_second(1024)
         );
     }
-
 }
