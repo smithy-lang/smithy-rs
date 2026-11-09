@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizationsOrElse
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -69,6 +70,21 @@ sealed class BuilderSection(name: String) : Section(name) {
 
     /** Hook to add additional fields to the `build()` method */
     data class AdditionalFieldsInBuild(override val shape: StructureShape) : BuilderSection("AdditionalFieldsInBuild")
+
+    /**
+     * Hook to replace the value that `build()` moves from the builder into [member]'s field. The replacement is an
+     * expression of the builder field's type, `Option<T>`. `build()` then applies the member's default or required
+     * check to it, as it does to the builder field. Without a customization, `build()` uses `self.<field>`.
+     */
+    data class MemberValueInBuild(override val shape: StructureShape, val member: MemberShape) :
+        BuilderSection("MemberValueInBuild")
+
+    /**
+     * Hook to add setter calls, such as `.set_foo(self.foo)`, to the end of the chain in the crate-private
+     * `into_builder()` method that [BuilderGenerator.renderIntoBuilderMethod] renders on the structure.
+     */
+    data class AdditionalIntoBuilderSetters(override val shape: StructureShape) :
+        BuilderSection("AdditionalIntoBuilderSetters")
 
     /** Hook to add additional fields to the `Debug` impl */
     data class AdditionalDebugFields(override val shape: StructureShape, val formatterName: String) :
@@ -182,6 +198,7 @@ class BuilderGenerator(
             implBlock: RustWriter,
             symbolProvider: RustSymbolProvider,
             shape: StructureShape,
+            customizations: List<BuilderCustomization> = emptyList(),
         ) {
             val members: List<MemberShape> = shape.allMembers.values.toList()
             symbolProvider.symbolForBuilder(shape).also { builderSymbol ->
@@ -198,6 +215,7 @@ class BuilderGenerator(
                             }
                         write(".$setter(self.$memberName)")
                     }
+                    writeCustomizations(customizations, BuilderSection.AdditionalIntoBuilderSetters(shape))
                 }
             }
         }
@@ -478,7 +496,12 @@ class BuilderGenerator(
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
-                withBlock("$memberName: self.$memberName", ",") {
+                withBlock("$memberName: ", ",") {
+                    writeCustomizationsOrElse(
+                        customizations,
+                        BuilderSection.MemberValueInBuild(shape, member),
+                        writable { rust("self.$memberName") },
+                    )
                     val generator = DefaultValueGenerator(runtimeConfig, symbolProvider, model)
                     val default = generator.defaultValue(member)
                     if (!memberSymbol.isOptional()) {

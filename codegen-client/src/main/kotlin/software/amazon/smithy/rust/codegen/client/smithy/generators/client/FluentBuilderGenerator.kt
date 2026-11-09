@@ -8,6 +8,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.renderDocumentV2FluentMethods
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
@@ -29,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.for
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -356,6 +358,8 @@ class FluentBuilderGenerator(
                 FluentClientSection.FluentBuilderImpl(operation, errorType),
             )
 
+            val documentV2Companions =
+                DocumentV2Index.of(model).companions(inputShape, symbolProvider).associateBy { it.member.id }
             inputShape.members().forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
@@ -373,6 +377,8 @@ class FluentBuilderGenerator(
 
                 val getterName = member.getterName()
                 renderGetterHelper(member, getterName, optionalInputType)
+
+                documentV2Companions[member.id]?.also { renderDocumentV2FluentMethods(it, runtimeConfig) }
             }
         }
     }

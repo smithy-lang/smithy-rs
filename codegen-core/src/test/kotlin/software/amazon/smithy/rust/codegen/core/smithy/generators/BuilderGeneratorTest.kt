@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
@@ -241,6 +242,71 @@ internal class BuilderGeneratorTest {
                     "Struct" to provider.toSymbol(shape),
                 )
             }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `customizations can replace a member's value in build and extend into_builder`() {
+        val model =
+            """
+            namespace com.test
+            structure MyStruct {
+                @required
+                value: String
+                other: String
+            }
+            """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val shape: StructureShape = model.lookup("com.test#MyStruct")
+        val customization =
+            object : BuilderCustomization() {
+                override fun section(section: BuilderSection) =
+                    writable {
+                        when (section) {
+                            is BuilderSection.AdditionalFields -> rust("pub(crate) fallback: Option<String>,")
+                            is BuilderSection.MemberValueInBuild ->
+                                if (section.member.memberName == "value") {
+                                    rust("self.value.or(self.fallback)")
+                                }
+                            is BuilderSection.AdditionalIntoBuilderSetters -> rust(""".other("from into_builder")""")
+                            else -> {}
+                        }
+                    }
+            }
+
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(shape) {
+            generator(model, provider, this, shape).render()
+            implBlock(provider.toSymbol(shape)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, shape)
+                BuilderGenerator.renderIntoBuilderMethod(this, provider, shape, listOf(customization))
+            }
+            unitTest("member_value_in_build") {
+                rust(
+                    """
+                    // The replacement still goes through the required-member check.
+                    let error = MyStruct::builder().build().unwrap_err();
+                    assert!(error.to_string().contains("value"), "{error}");
+
+                    let mut builder = MyStruct::builder();
+                    builder.fallback = Some("fallback".to_string());
+                    assert_eq!(builder.build().unwrap().value, "fallback");
+
+                    let my_struct = MyStruct::builder().value("set").other("other").build().unwrap();
+                    assert_eq!(my_struct.value, "set");
+                    assert_eq!(my_struct.other.as_deref(), Some("other"));
+
+                    // The customization's setter runs after the member setters.
+                    let builder = my_struct.into_builder();
+                    assert_eq!(builder.get_value().as_deref(), Some("set"));
+                    assert_eq!(builder.get_other().as_deref(), Some("from into_builder"));
+                    """,
+                )
+            }
+        }
+        project.withModule(provider.moduleForBuilder(shape)) {
+            BuilderGenerator(model, provider, shape, listOf(customization)).render(this)
         }
         project.compileAndTest()
     }

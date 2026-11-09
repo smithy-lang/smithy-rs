@@ -44,5 +44,4 @@ a number read from JSON becomes a `BigInteger` or `BigDecimal` when no `u64`,
 and `JsonDeserializer::read_discriminated_document_v2` write and read the
 `__type` discriminator. The `aws-smithy-cbor`, `aws-smithy-xml`, and
 `aws-smithy-query` serializers reject every `DocumentV2` value with the same
-error as a `Document`, as their protocols have no document encoding. Generated
-code doesn't use the new types yet.
+error as a `Document`, as their protocols have no document encoding.

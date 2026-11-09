@@ -245,6 +245,8 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         is BuilderSection.AdditionalFieldsInBuild -> {
                             rust("_$fieldName: self._$fieldName,")
                         }
+
+                        else -> {}
                     }
                 }
             }
