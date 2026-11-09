@@ -87,7 +87,7 @@ class AwsQueryCompatible(
         targetProtocol.structuredDataSerializer()
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{DeserializeError}> {

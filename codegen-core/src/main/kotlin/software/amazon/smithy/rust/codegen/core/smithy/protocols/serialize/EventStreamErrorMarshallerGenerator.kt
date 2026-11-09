@@ -6,26 +6,22 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStreamSerdeModule
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
@@ -35,15 +31,22 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class EventStreamErrorMarshallerGenerator(
-    private val model: Model,
-    private val target: CodegenTarget,
-    runtimeConfig: RuntimeConfig,
-    private val symbolProvider: RustSymbolProvider,
+    codegenContext: CodegenContext,
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
     private val useSchemaSerde: Boolean = false,
-) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType, useSchemaSerde) {
+) : EventStreamMarshallerGenerator(
+        codegenContext,
+        unionShape,
+        serializerGenerator,
+        payloadContentType,
+        useSchemaSerde,
+    ) {
+    private val model = codegenContext.model
+    private val target = codegenContext.target
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val symbolProvider = codegenContext.symbolProvider
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
@@ -54,7 +57,6 @@ class EventStreamErrorMarshallerGenerator(
         } else {
             symbolProvider.symbolForEventStreamError(unionShape)
         }
-    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope =
         arrayOf(
@@ -186,6 +188,6 @@ class EventStreamErrorMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller")
+        return RuntimeType("${eventStreamSerdeModule.fullyQualifiedPath()}::${symbol.name.toPascalCase()}ErrorMarshaller")
     }
 }
