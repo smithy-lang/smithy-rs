@@ -35,7 +35,6 @@ jobs:
       # Needed to push the build image to the public GHCR mirror that fork PRs pull from
       packages: write
     steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
       uses: actions/checkout@v4
     - uses: ./.github/actions/free-disk-space
