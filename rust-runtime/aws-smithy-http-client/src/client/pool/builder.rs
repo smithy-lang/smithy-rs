@@ -543,7 +543,10 @@ impl Builder<TlsUnset> {
     {
         validate_default_connector_interfaces(self.partitions.as_deref())?;
         let tcp_nodelay = self.tcp_nodelay;
-        let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
+        let tcp_keepalive = self
+            .tcp_keepalive
+            .clone()
+            .resolve(Some(DEFAULT_TCP_KEEPALIVE));
         let proxy_config = self.proxy_config.clone();
         let transport = if proxy_config.is_disabled() {
             establish::from_interface_connector(move |interface| {
