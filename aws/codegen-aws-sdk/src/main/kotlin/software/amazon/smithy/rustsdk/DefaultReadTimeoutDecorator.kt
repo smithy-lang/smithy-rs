@@ -15,12 +15,19 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.sdkId
 import java.time.Duration
 import kotlin.io.path.readText
 
-/** The behavior version that turns the default read timeout on. */
-private const val BEHAVIOR_VERSION = "v2026_11_15"
+/**
+ * The opt-in that turns the default read timeout on.
+ *
+ * Public distributions ship the default off. A caller opts in by setting this to a truthy value;
+ * the program retires the variable when the default flips on unconditionally, so it is deliberately
+ * not reachable from client code — nothing has to be supported past that point.
+ */
+private const val OPT_IN_ENV_VAR = "AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026"
 
 /**
  * Applies a default read timeout per service, from the shared timeout-defaults artifact.
@@ -39,9 +46,8 @@ private const val BEHAVIOR_VERSION = "v2026_11_15"
  *
  * `rust-runtime/aws-smithy-runtime/tests/timeout_config_layer_precedence.rs` pins all three.
  *
- * Gating in codegen rather than in the runtime's `default_plugins` is deliberate: a runtime-side gate
- * would hand new behavior to anyone who bumps `aws-smithy-runtime` alone, which `cargo update` can do
- * without touching an SDK crate. Emitting the check here pins the decision to the generated crate.
+ * The whole thing is gated on [OPT_IN_ENV_VAR], read at client construction. Retiring the opt-in
+ * later means deleting the `if` and this comment; retiring the feature means deleting the decorator.
  */
 class DefaultReadTimeoutDecorator : ClientCodegenDecorator {
     override val name: String = "DefaultReadTimeout"
@@ -95,9 +101,13 @@ private class DefaultReadTimeoutCustomization(
                 val rc = codegenContext.runtimeConfig
                 rustTemplate(
                     """
-                    if ${section.serviceConfigName}
-                        .behavior_version
-                        .is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::$BEHAVIOR_VERSION()))
+                    // Opt-in for the 2026 default socket timeouts. Only a case-insensitive "true"
+                    // enables it; any other value is ignored rather than rejected, so a typo cannot
+                    // stop a client from being built. Read per client construction, not cached, so
+                    // a process that changes the variable is not stuck with the first answer.
+                    if ::std::env::var(${OPT_IN_ENV_VAR.dq()})
+                        .map(|v| v.eq_ignore_ascii_case("true"))
+                        .unwrap_or_default()
                     {
                         ${section.newLayerName}.store_put(
                             #{TimeoutConfig}::builder()
@@ -106,9 +116,6 @@ private class DefaultReadTimeoutCustomization(
                         );
                     }
                     """,
-                    "BehaviorVersion" to
-                        RuntimeType.smithyRuntimeApiClient(rc)
-                            .resolve("client::behavior_version::BehaviorVersion"),
                     "TimeoutConfig" to RuntimeType.smithyTypes(rc).resolve("timeout::TimeoutConfig"),
                     "Duration" to RuntimeType.Duration,
                 )
