@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
@@ -26,7 +27,22 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
     val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
+
+    /** Preserve the Tower dependency used by existing generated servers and decorators. */
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+    private val schemaTower: CargoDependency = CargoDependency("tower", CratesIo("0.5"), features = setOf("util"))
+
+    /**
+     * Schema routing uses Tower 0.5's Sync service utilities. Generated serde retains
+     * the mainline Tower 0.4 declaration, including its transitive runtime features.
+     */
+    fun tower(codegenContext: CodegenContext): CargoDependency =
+        if ((codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true) {
+            schemaTower
+        } else {
+            Tower
+        }
+
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val TokioTime: CargoDependency =

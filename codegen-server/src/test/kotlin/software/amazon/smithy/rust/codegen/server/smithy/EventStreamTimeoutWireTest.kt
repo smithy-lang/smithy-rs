@@ -102,8 +102,18 @@ internal class EventStreamTimeoutWireTest {
         wireProtocol: String,
         artifacts: Path,
     ) {
-        val payload = if (wireProtocol == "rest") "@httpPayload" else ""
-        val initialFields = if (wireProtocol == "cbor") "metadata: String" else ""
+        val payload =
+            if (wireProtocol == "rest") {
+                "@httpPayload"
+            } else {
+                ""
+            }
+        val initialFields =
+            if (wireProtocol == "cbor") {
+                "metadata: String"
+            } else {
+                ""
+            }
         val model =
             """
             ${'$'}version: "2.0"

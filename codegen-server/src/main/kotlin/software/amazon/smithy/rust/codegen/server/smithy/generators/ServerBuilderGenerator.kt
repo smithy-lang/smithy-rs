@@ -147,12 +147,13 @@ class ServerBuilderGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     private val pubCrateConstrainedShapeSymbolProvider = codegenContext.pubCrateConstrainedShapeSymbolProvider
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val members: List<MemberShape> =
+        shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
-    private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
+    private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
     private val codegenScope =
@@ -232,13 +233,13 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            #{Converter:W}
-            """,
-            "Converter" to
-                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
-        )
+        val converter =
+            if (codegenContext.usesSchemaHttpSerde) {
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForValidationException()
+            } else {
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol)
+            }
+        converter(writer)
     }
 
     private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {
@@ -425,6 +426,11 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
+        // The generated serde deserializers call these setters. Under `schemaSerde` the schema walkers write the
+        // fields directly, leaving these setters unused on the schema HTTP path.
+        if (codegenContext.settings.codegenConfig.schemaSerde) {
+            Attribute.AllowDeadCode.render(writer)
+        }
         // Setter names will never hit a reserved word and therefore never need escaping.
         writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
             rust(

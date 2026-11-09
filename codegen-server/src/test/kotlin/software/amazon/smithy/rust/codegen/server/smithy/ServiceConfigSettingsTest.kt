@@ -128,16 +128,16 @@ internal class ServiceConfigSettingsTest {
     }
 
     @Test
-    fun `per protocol sections fail eagerly with their path and supported alternative`() {
-        for (key in listOf("aws.protocols#restJson1", "aws.protocols#awsJson1_1", "restJson1", "aws.protocols#restJson1${'$'}member")) {
+    fun `invalid protocol keys fail eagerly with their path and supported format`() {
+        for (key in listOf("restJson1", "aws.protocols#restJson1${'$'}member")) {
             for (section in listOf("{}", """{"request":{"body":{"maxBytes":128}}}""")) {
                 for (common in listOf("", """"common":{"request":{"body":{"maxBytes":512}}},""")) {
                     for (codegen in listOf("{}", """{"requestBodyMaxBytes":1024}""")) {
                         val error =
                             assertThrows<CodegenException> { settings("""{"protocols":{$common"$key":$section}}""", codegen) }
                         check(error.message!!.contains("`customizationConfig.protocols.$key`")) { error.message.orEmpty() }
-                        check(error.message!!.contains("not supported in this version")) { error.message.orEmpty() }
-                        check(error.message!!.contains("use `customizationConfig.protocols.common` instead")) { error.message.orEmpty() }
+                        check(error.message!!.contains("full protocol shape ID without a member")) { error.message.orEmpty() }
+                        check(error.message!!.contains("shared `common` key")) { error.message.orEmpty() }
                     }
                 }
             }
@@ -171,7 +171,7 @@ internal class ServiceConfigSettingsTest {
             )
         check(flat.headerReadTimeout == null)
         check(flat.requestBodyMaxBytes() == null)
-        check(flat.requestBodyReadPollBudget() == null)
+        check(flat.requestBodyReadPollBudget == null)
         check(flat.requestBodyReadTimeouts.defaultNonPayloadTimeout == null)
         check(flat.eventStreamTimeouts.idleTimeout == null)
     }

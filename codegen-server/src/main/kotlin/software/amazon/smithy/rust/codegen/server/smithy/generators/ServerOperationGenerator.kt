@@ -16,10 +16,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 
 class ServerOperationGenerator(
     private val operation: OperationShape,
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
@@ -32,6 +34,7 @@ class ServerOperationGenerator(
 
     private val operationName = symbolProvider.toSymbol(operation).name.toPascalCase()
     private val operationId = operation.id
+    private val schemaSerde = (codegenContext as? ServerCodegenContext)?.usesSchemaHttpSerde == true
 
     /** Returns `std::convert::Infallible` if the model provides no errors. */
     private fun operationError(): Writable =
@@ -52,14 +55,36 @@ class ServerOperationGenerator(
         val responseFmt = generator.responseFmt()
 
         val operationIdAbsolute = operationId.toString().replace("#", "##")
+        // OperationShape is shared with generated serde plugins; schema IDs live in SchemaOperationShape::SCHEMA.
+        val shapeIdType = "#{SmithyHttpServer}::shape_id::ShapeId"
+        val id =
+            if (schemaSerde) {
+                writable {
+                    rustTemplate(
+                        """
+                        #{SmithyHttpServer}::shape_id::ShapeId::from_schema(
+                            <Self as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA.shape_id()
+                        )
+                        """,
+                        *codegenScope,
+                    )
+                }
+            } else {
+                writable {
+                    rustTemplate(
+                        "#{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()})",
+                        *codegenScope,
+                    )
+                }
+            }
         writer.rustTemplate(
             """
             pub struct $operationName;
 
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
-                const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()});
+                const ID: $shapeIdType = #{OperationId};
 
-                type Input = crate::input::${operationName}Input;
+                type Input = #{Input:W};
                 type Output = crate::output::${operationName}Output;
                 type Error = #{Error:W};
             }
@@ -77,13 +102,28 @@ class ServerOperationGenerator(
                 }
             }
             """,
+            "Input" to
+                writable {
+                    rust("crate::input::${operationName}Input")
+                },
             "Error" to operationError(),
+            "OperationId" to id,
             "RequestValue" to requestFmt.value,
             "RequestType" to requestFmt.type,
             "ResponseValue" to responseFmt.value,
             "ResponseType" to responseFmt.type,
             *codegenScope,
         )
+        if (schemaSerde) {
+            writer.rustTemplate(
+                """
+                impl #{SmithyHttpServer}::operation::SchemaOperationShape for $operationName {
+                    const SCHEMA: &'static #{SmithyHttpServer}::schema::OperationSchema<'static> = &crate::schema::operations::${ServerServiceSchemaGenerator.operationSchemaConstName(symbolProvider.toSymbol(operation))};
+                }
+                """,
+                *codegenScope,
+            )
+        }
         // Adds newline to end of render
         writer.rust("")
     }

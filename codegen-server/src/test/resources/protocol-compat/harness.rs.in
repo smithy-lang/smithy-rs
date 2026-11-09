@@ -1,0 +1,132 @@
+use #{Json}::{json, Value};
+use std::sync::Mutex;
+use std::io::Write;
+use #{Server}::instrumentation::InstrumentExt;
+use #{Futures}::FutureExt;
+
+static OBSERVED: Mutex<Option<Value>> = Mutex::new(None);
+static TRACE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+
+struct TraceWriter;
+impl std::io::Write for TraceWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        TRACE.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+}
+impl<'a> #{Subscriber}::fmt::MakeWriter<'a> for TraceWriter {
+    type Writer = Self;
+    fn make_writer(&'a self) -> Self { Self }
+}
+fn record_debug(input: &impl std::fmt::Debug) {
+    *OBSERVED.lock().unwrap() = Some(json!(format!("{input:?}")));
+}
+fn record_bindings(input: &crate::input::BindingsInput) {
+    *OBSERVED.lock().unwrap() = Some(json!({
+        "q":input.q, "n":input.n, "b":input.b, "list":input.list,
+        "dates":format!("{:?}", input.dates), "params":input.params,
+        "text":input.text, "number":input.number, "header_list":input.header_list,
+        "media":input.media, "date":format!("{:?}",input.date),
+        "header_dates":format!("{:?}",input.header_dates), "meta":input.meta
+    }));
+}
+#{ObserveBody:W}
+#{ObserveStreaming:W}
+fn modeled_error(input: crate::input::ModeledInput) -> crate::error::Oops {
+    let mut b = crate::error::Oops::builder().message(Some("modeled failure".into()));
+    match input.scenario.as_deref().unwrap_or("default") {
+        "default" => {},
+        "override" => { b = b.code(Some(499)); },
+        "invalid-header" => { b = b.secret(Some("SECRET_HEADER\n".into())); },
+        "headers" => { b = b.content_type(Some("custom/type".into())).error_type(Some("custom-error".into())); },
+        other => panic!("unknown modeled-error scenario {other}"),
+    }
+    b.build()
+}
+fn response_output(input: crate::input::ResponseInput) -> crate::output::ResponseOutput {
+    let mut b = crate::output::ResponseOutput::builder();
+    match input.scenario.as_deref().unwrap_or("empty") {
+        "empty" => {},
+        "empty-headers" => { b = b.text(Some("".into())).list(Some(vec!["".into()])).meta(Some(std::collections::HashMap::from([("empty".into(), "".into())]))); },
+        "zero" => { b = b.number(Some(0)).boolean(Some(false)); },
+        "quotes" => { b = b.list(Some(vec!["a,b".into(), "\"quoted\"".into(), " spaces ".into()])); },
+        "invalid-public" => { b = b.text(Some("PUBLIC_HEADER\n".into())); },
+        "invalid-secret" => { b = b.secret(Some("SECRET_HEADER\n".into())); },
+        "invalid-prefix-key" => { b = b.meta(Some(std::collections::HashMap::from([("SECRET_KEY\n".into(), "SECRET_VALUE".into())]))); },
+        "invalid-prefix-value" => { b = b.meta(Some(std::collections::HashMap::from([("key".into(), "SECRET_VALUE\n".into())]))); },
+        "date" => { b = b.date(Some(#{Types}::DateTime::from_secs(0))); },
+        value if value.starts_with("code-") => { b = b.code(Some(value[5..].parse::<i32>().unwrap())); },
+        other => panic!("unknown response scenario {other}"),
+    }
+    b.build()
+}
+fn decode_hex(value: &str) -> Vec<u8> {
+    assert_eq!(value.len() % 2, 0);
+    (0..value.len()).step_by(2).map(|i| u8::from_str_radix(&value[i..i+2],16).unwrap()).collect()
+}
+
+##[#{Tokio}::test]
+async fn compat_observe() {
+    let subscriber = #{Subscriber}::fmt()
+        .with_max_level(#{Tracing}::Level::TRACE)
+        .without_time().with_ansi(false).with_target(false)
+        .with_writer(TraceWriter).finish();
+    let _guard = #{Tracing}::subscriber::set_default(subscriber);
+    let config = crate::AuditConfig::builder()
+        .http_plugin(#{Server}::plugin::HttpPlugins::new().instrument()).build();
+    let app = crate::Audit::builder(config)
+        #{Handlers:W}
+        .build().expect("all model operations are bound");
+    let cases: Vec<Value> = #{Json}::from_str(include_str!(#{CorpusPath:S})).unwrap();
+    let path = std::env::var("PROTOCOL_COMPAT_OBSERVATIONS").unwrap();
+    let mut observations = std::fs::File::create(path).unwrap();
+    for case in cases {
+        *OBSERVED.lock().unwrap() = None;
+        TRACE.lock().unwrap().clear();
+        let mut request = #{Http}::Request::builder()
+            .method(case["method"].as_str().unwrap_or("POST"))
+            .uri(case["uri"].as_str().unwrap());
+        if case["content_type"] != Value::Bool(false) {
+            request = request.header("content-type",case["content_type"].as_str().unwrap_or("application/json"));
+        }
+        for header in case["headers"].as_array().into_iter().flatten() {
+            let value = if let Some(hex) = header[1].get("hex") {
+                decode_hex(hex.as_str().unwrap())
+            } else { header[1].as_str().unwrap().as_bytes().to_vec() };
+            request = request.header(header[0].as_str().unwrap(), #{Http}::HeaderValue::from_bytes(&value).unwrap());
+        }
+        let body = if let Some(hex) = case.get("body_hex") {
+            decode_hex(hex.as_str().unwrap())
+        } else { case["body"].as_str().unwrap_or("").as_bytes().to_vec() };
+        let request = request.body(#{Server}::body::Body::from(body)).unwrap();
+        let result = std::panic::AssertUnwindSafe(#{Tower}::ServiceExt::oneshot(app.clone(),request)).catch_unwind().await;
+        let response = match result {
+            Ok(response) => response.unwrap(),
+            Err(error) => {
+                let panic = error.downcast_ref::<&str>().copied().or_else(||error.downcast_ref::<String>().map(String::as_str)).unwrap_or("non-string panic");
+                let row = json!({"id":case["id"],"status":null,"headers":{},"body":null,"wire_hex":"",
+                    "input":*OBSERVED.lock().unwrap(),"logs":String::from_utf8(TRACE.lock().unwrap().clone()).unwrap(),
+                    "log_leaks":[],"panic":panic});
+                writeln!(observations,"{row}").unwrap();
+                observations.flush().unwrap();
+                continue;
+            }
+        };
+        let status = response.status().as_u16();
+        let mut headers = std::collections::BTreeMap::<String,Vec<String>>::new();
+        for (name,value) in response.headers() {
+            headers.entry(name.to_string()).or_default().push(format!("{:?}",value));
+        }
+        #{BodyToBytes:W}
+        let wire: String = bytes.iter().map(|b|format!("{b:02x}")).collect();
+        let body: Value = #{Json}::from_slice(&bytes).unwrap_or_else(|_|json!(String::from_utf8_lossy(&bytes)));
+        let logs = String::from_utf8(TRACE.lock().unwrap().clone()).unwrap();
+        let leaks: Vec<_> = case["forbidden_log_markers"].as_array().into_iter().flatten()
+            .filter_map(Value::as_str).filter(|secret|logs.contains(secret)).collect();
+        let row = json!({"id":case["id"],"status":status,"headers":headers,"body":body,"wire_hex":wire,
+            "input":*OBSERVED.lock().unwrap(),"logs":logs,"log_leaks":leaks,"panic":null});
+        writeln!(observations,"{row}").unwrap();
+        observations.flush().unwrap();
+    }
+}

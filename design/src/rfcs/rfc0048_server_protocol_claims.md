@@ -1,0 +1,457 @@
+# RFC: Server protocol claims and multiprotocol dispatch
+
+> Status: RFC
+>
+> Applies to: server (`codegen.schemaSerde = true`, HTTP 1.x)
+
+## Purpose
+
+A service migrating to Rust may have existing RPC callers and newer Smithy
+callers. It must serve both without requiring every caller to migrate together.
+
+Serve every protocol declared on a Smithy service through one
+`MultiProtocolRoutingService`, which implements Tower's `Service`. Each operation
+has one typed handler shared by all protocols. Runtime protocol implementations
+identify requests, select operations, deserialize inputs, and serialize responses
+and errors. Protocol-specific routing and serde stay in runtime crates.
+
+## Response conversion and source compatibility
+
+Schema serde needs to convert errors using the protocol instance selected for each
+request. A service's protocol marker or tuple describes the protocols it serves;
+it does not identify which protocol served this request or carry that instance's
+configuration.
+
+We considered a separate `IntoResponseWithProtocol` trait for this contextual
+conversion, leaving `IntoResponse<P>` for generated serde. That split would let
+schema-only rejections implement contextual conversion without defining a static
+fallback. However, removing the existing `FromParts<P>::Rejection:
+IntoResponse<P>` bound would break downstream generic code that relies on the
+associated-type guarantee:
+
+```rust
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::{request::FromParts, response::{IntoResponse, Response}};
+
+fn rejection_response<P, T: FromParts<P>>(error: T::Rejection) -> Response {
+    error.into_response()
+}
+```
+
+Requiring the new trait in addition to the existing bound would also require
+existing custom rejections to implement another trait before they could be used
+with schema serde.
+
+We therefore retain `IntoResponse<P>` and the rejection bound, and extend the
+existing trait with a default method:
+
+```rust
+# extern crate pokemon_service_server_schema_sdk as sdk;
+# use sdk::server::http;
+use sdk::server::response::{IntoResponse, Response};
+# struct MissingCaller;
+use sdk::server::schema::ServerProtocol;
+
+impl<P> IntoResponse<P> for MissingCaller {
+#     fn into_response(self) -> Response {
+#         http::Response::builder().status(401)
+#             .body(sdk::server::body::to_boxed("missing caller")).unwrap()
+#     }
+    fn into_response_with_protocol(self, _protocol: &dyn ServerProtocol) -> Response {
+        <Self as IntoResponse<P>>::into_response(self)
+    }
+}
+```
+
+Existing implementations that supply only `into_response` remain valid. Their
+contextual default preserves the complete custom response, including status,
+headers, body, and extensions. Errors needing selected-protocol framing override
+the new method. Rejection wrappers forward both methods. Multi-protocol services
+use their protocol tuple as `P`; protocol-independent extractors and rejections
+implement the corresponding traits generically.
+
+Generated serde continues calling `into_response`. Schema upgrades call
+`into_response_with_protocol` with the routed protocol instance. Middleware uses
+`ServiceSerde::SerdeKind` through `ErrorConverter` to choose the same conversion
+on behalf of the service. This preserves the existing middleware converter API.
+
+The tradeoff is that contextual errors must also define a context-free response.
+For schema-generated modeled errors, that fallback is an empty response with the
+modeled status and `ModeledErrorExtension`; the contextual override serializes the
+modeled error through the selected protocol. Old middleware that calls the static
+method directly still compiles, but must use the converter or contextual method
+to obtain schema protocol framing. Handwritten modeled errors can be used as
+extractor rejections through `response::ModeledRejection<E>`. The wrapper
+implements `IntoResponse<P>` for every `P`, including protocol tuples, and
+serializes its `HttpModeledError` through the selected protocol. Extractor authors
+declare `type Rejection = ModeledRejection<MyError>` and return `error.into()`;
+they need no response-conversion implementation. The wrapper's context-free
+fallback returns the modeled status and error extension with an empty body.
+A blanket implementation over `HttpModeledError` itself would overlap downstream
+conversion implementations.
+
+`IntoResponseWithProtocol` remains an option for a future breaking API change.
+Such a change would need an explicit rejection contract, migration instructions
+for generic consumers and custom extractors, and a compatibility adapter for
+existing static conversions. It could then separate contextual conversion from
+the requirement to provide a static fallback. This RFC keeps the existing
+conversion contract for the current migration.
+
+## Service construction
+
+Generated SDKs emit canonical `ServiceSchema`/`OperationSchema` descriptors and
+bind each operation to an HTTP handler route. The route wraps the typed handler
+in `DynUpgrade` or `DynStreamingUpgrade`; it does not choose a protocol at
+construction. The generated service wraps `MultiProtocolRoutingService`.
+
+The generated builder passes four inputs to `MultiProtocolRoutingServiceBuilder`:
+
+1. The service schema, including its declared protocol shape IDs.
+2. Additional protocol registries contributed by codegen decorators.
+3. One `(OperationSchema, handler route)` binding per operation.
+4. `ProtocolOptions`, containing shared `ServiceConfig` and per-protocol settings.
+
+At `.build()`, the runtime resolves declared protocols against
+`ProtocolRegistry::BUILTIN` and the additional registries, validates precedence
+and bindings, and creates each served protocol and its router. Router construction
+receives `RouterBuildContext`, whose `service_protocols()` method exposes the
+service's declared protocol IDs. Built-in routers use the protocol count to
+choose native operation routing for a single-protocol service or protocol
+identification for a multiprotocol service. Protocol factories receive shared
+configuration and their own
+`customizationConfig.protocols.<shape ID>` section. Registered protocols that the
+service does not declare participate in precedence validation but are not served.
+
+The resulting service holds the ordered protocol routers and one shared handler
+table. A router returns an `OperationTarget` identifying an entry in that table.
+The same operation therefore reaches the same handler whether the request is
+JSON, XML, CBOR, or a protocol supplied by another runtime crate.
+
+### Adding a protocol registry
+
+A runtime crate exports a static registry. For example, an
+`example-server-protocols` crate could register a metadata-routed legacy protocol
+using this constructor:
+
+```rust
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::schema::{
+    MetadataRoutedProtocol, ProtocolOrder, ProtocolRegistration,
+};
+
+pub const fn legacy_rpc_registration<P: MetadataRoutedProtocol>() -> ProtocolRegistration {
+    ProtocolRegistration::metadata_routed::<P>("example.protocols#legacyRpc")
+        .with_order(&[ProtocolOrder::Before("smithy.protocols#rpcv2Cbor")])
+}
+```
+
+Once the crate implements `LegacyRpcProtocol`, it exports
+`pub static PROTOCOLS: ProtocolRegistry =
+ProtocolRegistry::new(&[legacy_rpc_registration::<LegacyRpcProtocol>()]);`.
+The protocol's `protocol_id()` must return `example.protocols#legacyRpc`.
+
+Its factory constructs the protocol from `ProtocolBuildContext`; its router
+selects from the supplied operation targets. A protocol that needs body bytes
+instead implements `BodyRoutedProtocol` and registers with `body_routed`.
+Both kinds implement `ServerProtocol` for serde and error framing.
+
+A codegen decorator contributes a registry's `RuntimeType` through
+`ServerCodegenDecorator.protocolRegistries`. This example assumes the runtime
+crate is a sibling of the generated SDK:
+
+```kotlin
+override fun protocolRegistries(
+    codegenContext: ServerCodegenContext,
+): List<RuntimeType> {
+    val registry = CargoDependency(
+        name = "example-server-protocols",
+        location = Local("../"),
+    ).toType().resolve("PROTOCOLS")
+    return listOf(registry)
+}
+```
+
+The generator emits a Rust reference to each registry. Using the dependency's
+`RuntimeType` also adds the runtime crate to the generated `Cargo.toml`.
+Contributions from multiple decorators are combined. The service
+model must declare `example.protocols#legacyRpc`, and codegen must recognize the
+protocol trait; the registry hook supplies its runtime implementation.
+
+For a service with `GetItem` and `PutItem`, the generated builder uses the
+following wiring. This helper accepts the two handler routes after they have
+been wrapped in upgrade services and configured HTTP plugins:
+
+```rust
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::{
+    body::RequestBody,
+    routing::SyncRoute,
+    schema::{
+        ProtocolRegistry,
+        routing::{
+            MultiProtocolRoutingService, MultiProtocolRoutingServiceBuilder,
+            ProtocolOptions, RouterBuildError,
+        },
+    },
+    service::SchemaServiceShape,
+};
+
+fn build_service<S: SchemaServiceShape>(
+    handlers: [SyncRoute<RequestBody>; 2],
+    protocols: &'static ProtocolRegistry,
+    routing_options: ProtocolOptions,
+) -> Result<MultiProtocolRoutingService, RouterBuildError> {
+    let schema = S::SCHEMA;
+    MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
+        schema,
+        [protocols],
+        schema.operations().iter().copied().zip(handlers),
+        routing_options,
+    )
+    .build()
+}
+```
+
+Codegen emits schemas and handlers in the same operation order. With several
+registry contributions, the second argument contains all their references;
+with none, it is an empty iterator. The runtime always consults the built-in
+registry, so generated code supplies only additional registries.
+
+`ProtocolOptions` carries generated configuration defaults into construction.
+The generated `request_body_config` setter can replace body policy; general
+Rust overrides for protocol settings are described in the
+[schema RFC](rfc0047_server_schema_serde.md).
+
+### Protocol precedence
+
+Precedence determines which protocol owns a request that more than one protocol
+can claim. Registrations declare `ProtocolOrder::Before` and
+`ProtocolOrder::After` constraints. The builder combines them into a directed
+acyclic graph (DAG), where an edge `A → B` means “probe A before B.”
+
+- A declaring `Before(B)` and B declaring `After(A)` express the same edge.
+- Ordering is transitive: `A → B → C` places A before C even when the service
+  serves only A and C.
+- Every pair of served protocols must be connected by an ordering path in one
+  direction. Otherwise the builder cannot choose which to probe first.
+- Model declaration order, registry insertion order, and entry order within a
+  registry do not determine precedence.
+
+The graph includes all registrations, including protocols the service does not
+serve. The builder validates that graph, then derives a unique claim order for
+the served protocols. Cycles, references to unregistered protocols, and unordered
+pairs of served protocols fail construction.
+
+Built-in precedence:
+
+```text
+rpcv2Cbor → awsJson1_0 → awsJson1_1 → restJson1 → restXml
+```
+
+The earlier registry example puts `legacyRpc` before this chain. Alternatively,
+to place it between AWS JSON 1.1 and REST JSON, register it with both boundaries:
+
+```rust
+# extern crate aws_smithy_http_server;
+use aws_smithy_http_server::schema::{
+    MetadataRoutedProtocol, ProtocolOrder, ProtocolRegistration,
+};
+
+pub const fn legacy_rpc_registration<P: MetadataRoutedProtocol>() -> ProtocolRegistration {
+    ProtocolRegistration::metadata_routed::<P>("example.protocols#legacyRpc")
+        .with_order(&[
+            ProtocolOrder::After("aws.protocols#awsJson1_1"),
+            ProtocolOrder::Before("aws.protocols#restJson1"),
+        ])
+}
+```
+
+The resulting order is:
+
+```text
+rpcv2Cbor → awsJson1_0 → awsJson1_1 → legacyRpc → restJson1 → restXml
+```
+
+`After(awsJson1_1)` alone would leave `legacyRpc` unordered relative to
+`restJson1` and `restXml`. Both boundaries make the intended placement explicit.
+These constraints choose probe order; a protocol must still claim the request
+before it owns dispatch.
+
+Missing or duplicate registrations, unresolved precedence references, cycles,
+incomparable served protocols, invalid protocol settings, and invalid operation
+bindings fail construction. Registries extend the available implementations;
+they do not replace built-ins or enable undeclared protocols.
+
+## Request flow
+
+```mermaid
+flowchart TD
+    Request["HTTP request"] --> Multi["MultiProtocolRoutingService"]
+    Multi --> Probe["Ask next protocol in precedence order"]
+    Probe --> Claim{"Claim result"}
+    Claim -->|"NoClaim, DeferredClaim, or DeferredRejection"| Next{"More protocols?"}
+    Next -->|Yes| Probe
+    Next -->|No| Deferred{"Deferred claim retained?"}
+    Deferred -->|Yes| Select["Insert SelectedOperation"]
+    Deferred -->|No| Fallback["First deferred rejection, otherwise fallback 404"]
+    Claim -->|"NeedsBodyToClaim"| Collect["Collect once under routing body policy"]
+    Collect -->|"Failure"| BodyError["Current protocol frames collection error"]
+    Collect -->|"Success"| BodyClaim["claim_with_body"]
+    BodyClaim --> Claim
+    Claim -->|Claimed| Route["Resolve operation; body routers collect first"]
+    Claim -->|ClaimedWithRoute| Select
+    Route -->|"Success"| Select
+    Route -->|"Failure"| RouteError["Claiming protocol frames routing error"]
+    Select --> Layers["Handler layers and HTTP plugins"]
+    Layers --> Upgrade["DynUpgrade or DynStreamingUpgrade"]
+    Upgrade --> Input["Selected protocol deserializes input"]
+    Input --> Handler["Shared typed operation handler"]
+    Handler --> Output["Selected protocol serializes output or modeled error"]
+    Output --> Response["HTTP response"]
+```
+
+The first deferred claim and first deferred rejection are retained while probing
+continues. A definite claim takes precedence; if none is made, the deferred claim
+wins over the deferred rejection. Once ownership is
+committed, routing and collection errors are terminal. Collected body bytes and
+trailers are replayed to the selected handler. Streaming-input recognition can
+skip `NeedsBodyToClaim`, as described below.
+
+## Claim contract
+
+Each request is passed to the **served** protocols in precedence order until one
+claims ownership. Claiming answers “is this my request?” Routing then answers
+“which operation does it invoke?”
+
+There are two router interfaces:
+
+- `MetadataProtocolRouter` examines the method, URI, query, and headers without
+  reading the body. Its `claim` returns `RouteClaim`.
+- `BodyProtocolRouter` first examines the same request metadata. Its `claim`
+  returns `BodyRouteClaim`, which can additionally request body collection before
+  deciding ownership. `claim_with_body` returns `RouteClaim`.
+
+Each claim can be:
+
+| Claim                            | Dispatch semantics                                                    |
+| -------------------------------- | --------------------------------------------------------------------- |
+| `ClaimedWithRoute(target)`       | Commit ownership; dispatch directly.                                  |
+| `Claimed`                        | Commit ownership; resolve the operation. A body router first collects the body. Routing errors are terminal. |
+| `DeferredClaim(target)`          | Retain the first provisional operation; continue probing. Dispatch it if no protocol makes a definite claim. |
+| `DeferredRejection(error)`       | Retain the first rejection; continue probing.                         |
+| `NoClaim`                        | Continue probing.                                                     |
+| `NeedsBodyToClaim` (body router) | Collect, then invoke `claim_with_body`.                               |
+
+The first definite claim (`Claimed` or `ClaimedWithRoute`) owns input
+deserialization, output/error serialization, and routing-error framing. It
+supersedes every deferred claim and rejection. If no protocol makes a definite
+claim, dispatch the first deferred claim in precedence order. If no deferred
+claim exists, emit the first deferred rejection through its originating protocol.
+If neither exists, return `404`, body `<UnknownOperationException/>\n`, no
+`Content-Type`.
+The dispatch contract applies to both single-protocol and multiprotocol services.
+Routers decide how to identify requests using the service's protocol list.
+
+`DeferredClaim` offers a known operation without committing ownership, allowing
+a later protocol with a definite identification to take precedence. Body routers
+can make this offer from metadata without collecting the body.
+
+`DeferredRejection` means the request signals a protocol but does not satisfy its
+claim requirements. For example, AWS JSON can retain an unknown-target rejection
+while a later REST protocol matches the request's route and MIME bindings.
+Once a protocol returns
+`Claimed`, subsequent routing, input validation, or deserialization failures
+cannot cause dispatch to try another protocol.
+
+## Protocol count and compatibility
+
+`RouterBuildContext::service_protocols()` returns the protocols served by the
+service in schema order, excluding registered protocols that the service does
+not declare. Built-in metadata routers use this list's length to distinguish
+native operation routing from arbitration between protocols.
+
+| Served protocols | Built-in metadata router behavior |
+| --- | --- |
+| One | Use native operation routing. A successful match returns `ClaimedWithRoute`; a routing failure returns `DeferredRejection`, which the sole protocol frames. |
+| Several | Require protocol identification before claiming. A request may be declined or deferred so another protocol can own it. |
+
+With one served protocol, REST and AWS JSON leave `Content-Type` validation to
+request deserialization. This preserves body-sensitive acceptance rules: for example, a
+REST GET with no body can reach its handler without `Content-Type`, while a
+nonempty document with an incompatible media type can still fail deserialization.
+RPCv2 CBOR uses native routing and header validation, retaining missing or
+unsupported protocol-header errors instead of declining ownership.
+
+Adding a second served protocol makes the built-in routers apply protocol
+identification. Requests previously accepted without identification metadata may
+then reach another protocol or remain unclaimed. This behavior change is part of
+enabling protocol arbitration and must be tested explicitly.
+
+The routing service invokes `claim` regardless of protocol count. Custom metadata
+and body routers can inspect `service_protocols()` during construction and remain
+responsible for their claim behavior; a single-protocol service does not force
+them to accept every request. Body collection and streaming exclusions apply
+regardless of protocol count.
+
+## Strict identification
+
+- **rpcv2Cbor:** `POST`, `Smithy-Protocol: rpc-v2-cbor`, known service/operation URI.
+- **AWS JSON:** `POST /`, known `X-Amz-Target`, version-specific MIME; event-stream
+  MIME is admitted only for event-stream inputs.
+- **REST:** modeled method/URI/query bindings and present input MIME, including
+  payload media types, configured aliases, and modeled `Content-Type` overrides.
+
+Overlapping REST payload MIME and AWS JSON event-stream version ambiguity resolve
+by protocol precedence.
+
+## Body and handler dispatch
+
+Collect routing bodies once under `ServiceRequestBodyConfig::for_routing`;
+reuse immutable `Bytes` across probes and replay bytes/trailers to the handler.
+This policy applies before an operation is selected; upgrade subsequently applies
+the selected operation's collection policy when collecting its input.
+Collection failures terminate dispatch and are framed by the protocol whose
+body-dependent claim or routing step triggered collection.
+
+Body routers receive only operations without streaming input or output. Before
+honoring `NeedsBodyToClaim`, the service asks metadata routers whether they
+recognize a streaming input. Recognition skips that body-dependent probe without
+claiming the request; normal precedence still determines ownership. A claim
+already made from metadata retains priority. Output-only streaming does not
+trigger this safeguard.
+
+Dispatch inserts `SelectedOperation` with the canonical operation schema,
+selected protocol, and operation collection policy. Upgrade consumes that
+selection to invoke the shared typed handler through the selected protocol.
+Upgrade and streaming conversion are defined in
+[Schema-driven server serde](rfc0047_server_schema_serde.md).
+
+Generated schema services use this routing and upgrade path even when they
+declare only one protocol. Services without `schemaSerde` retain generated serde routing
+and upgrade.
+
+## Validation
+
+Compare generated single-protocol services with `schemaSerde` enabled and
+disabled to test backward compatibility through actual handlers. Cover missing
+and incompatible `Content-Type`, empty documents, raw and typed payloads,
+modeled content-type headers, and live streams. Compare routing rejection status,
+headers, and body bytes against native behavior. RPCv2 CBOR retains the schema
+protocol's existing rejection framing, which differs from the
+generated serde Rust router's generic empty 404 for some header failures.
+
+Generated integration tests should send requests in each declared protocol to
+the same typed handler and assert protocol-specific response and error bytes.
+Test the transition from one served protocol to several, including requests
+whose ownership changes under strict identification.
+Registry tests should cover external protocols, combined decorator contributions,
+and construction failures. Dispatch tests should cover overlapping claims,
+deferred rejections, body replay with trailers, collection failures, and streaming
+inputs that must remain live.
+
+## Changes checklist
+
+- [ ] Registry resolution and precedence validation.
+- [ ] Claim dispatch, deferred rejection, body replay, and streaming exclusion.
+- [ ] Sole-protocol compatibility and strict multiprotocol identification tests.
+- [ ] Generated multiprotocol integration tests and protocol-specific wire assertions.

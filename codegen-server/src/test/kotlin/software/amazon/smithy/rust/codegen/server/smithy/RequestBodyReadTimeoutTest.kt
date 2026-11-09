@@ -192,7 +192,7 @@ internal class RequestBodyReadTimeoutTest {
                             assert_eq!(response.status().as_u16(), 408);
                         }
                         """,
-                        "Tower" to RuntimeType.Tower,
+                        "Tower" to ServerCargoDependency.Tower.toType(),
                         "Http" to RuntimeType.http(codegenContext.runtimeConfig),
                         "HttpBody" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBody1x.toType(),
                         "Bytes" to RuntimeType.Bytes,

@@ -1,4 +1,83 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 6th, 2026
+==================
+**New this release:**
+- :tada: (client, [smithy-rs#4718](https://github.com/smithy-lang/smithy-rs/issues/4718), [smithy-rs#4990](https://github.com/smithy-lang/smithy-rs/issues/4990)) Add `aws_smithy_observability::unit_of_work`, which tells a caller whether a response body was
+    validated against its checksum. Attach a `Capture` carrying a `checksums::ChecksumCapture` with
+    `.customize().interceptor(..)`, read the body, then call `try_outcome()`: it reads `Validated` with
+    the algorithm and computed checksum, `Mismatch` with both checksums, `NotValidated` with a reason,
+    or `Incomplete`. The SDK reports through a new stable contract in `aws-smithy-runtime-api`
+    (`client::unit_of_work::checksums`), so a capture keeps working when the caller and the SDK resolve
+    different releases of `aws-smithy-observability`. `aws-smithy-checksums` adds
+    `ChecksumBody::with_completion`.
+- :tada: (all) Add `OperationSchema` to `aws-smithy-schema`, that relates an operation's shape
+    ID to its input, output, and error schemas and is built with a `const`
+    `OperationSchema::builder`, so it can be declared as a `static`. It also documents
+    `ShapeId::from_parts` as a supported constructor for shape IDs that borrow
+    runtime-owned strings.
+- :bug: (client, [smithy-rs#4986](https://github.com/smithy-lang/smithy-rs/issues/4986), @xiazhvera) Fix `RequestChecksumCalculation::WhenRequired` ignoring a caller-set checksum algorithm. With `RequestChecksumCalculation::WhenRequired` and trait `requestChecksumRequired: false`, the SDK now calculates a request checksum when the caller sets the modeled request algorithm member. If the member is not set, no checksum is calculated as before.
+- :bug: (all, [smithy-rs#2833](https://github.com/smithy-lang/smithy-rs/issues/2833), @Regalias3) `ByteStream::from_path` and `ByteStream::read_from()` now read files with a 64 KiB buffer by default, up from 4 KiB. On a 64 MiB file this makes reads about 5x faster (174 to 899 MiB/s in the new `bytestream_from_file` benchmark). Each open file stream uses about 60 KiB more memory. To keep the old behavior, call `ByteStream::read_from().buffer_size(4096)`.
+- (all, [smithy-rs#4916](https://github.com/smithy-lang/smithy-rs/issues/4916), @FalkWoldmann) Removed the `num-integer` dependency from `aws-smithy-types`. `DateTime` now uses `div_euclid` and `rem_euclid` from std, which give the same results here since all divisors are positive.
+- :bug: (all, [smithy-rs#4863](https://github.com/smithy-lang/smithy-rs/issues/4863), @Regalias3) `BigDecimal` now compares and hashes by numeric value instead of by spelling. `"1e2"` equals `"100"`, `"1.0"` equals `"1.00"`, `"+5"` equals `"5"`, and every spelling of zero, such as `"-0.0"` and `"0"`, is equal. `AsRef<str>` still returns the original string, so serialization doesn't change.
+- :bug: (all, [smithy-rs#4960](https://github.com/smithy-lang/smithy-rs/issues/4960), @franco2002lu) Fix `DateTime` epoch-seconds formatting and parsing of timestamps before 1970 that have fractional seconds. Formatting -0.75 seconds produced `-1.25`, and parsing `-0.75` produced 0.75. Timestamps at or after 1970 are unaffected.
+- :bug: (client, [smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484), @thomasqueirozb) Clients for services with operations modeled with `@requestCompression` (such as `aws-sdk-cloudwatch`) no longer enable the `http-body-0-4-x` feature of `aws-smithy-types`. The request compression interceptor only uses `http-body` 1.x, so these clients no longer pull in `http` 0.2 and `http-body` 0.4.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4916](https://github.com/smithy-lang/smithy-rs/issues/4916))
+- @Regalias3 ([smithy-rs#2833](https://github.com/smithy-lang/smithy-rs/issues/2833), [smithy-rs#4863](https://github.com/smithy-lang/smithy-rs/issues/4863))
+- @franco2002lu ([smithy-rs#4960](https://github.com/smithy-lang/smithy-rs/issues/4960))
+- @thomasqueirozb ([smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484))
+- @xiazhvera ([smithy-rs#4986](https://github.com/smithy-lang/smithy-rs/issues/4986))
+
+
+October 29th, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (server, [smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906), @fahadzub) Upgrade `aws-smithy-http-server` to 0.69.0 with schema-based serialization and
+    multi-protocol routing for HTTP 1.x servers. Enable schema serde with
+    `codegen.schemaSerde: true` and regenerate your server SDK. Review these migration
+    changes when upgrading:
+
+    - Protocol types such as `RestJson1` now carry configuration. Replace unit-struct
+      construction with `RestJson1::default()`. For request-specific serialization,
+      use the protocol selected by routing so its configuration is preserved.
+    - The HTTP 1.x server runtime uses Tower 0.5. Update application dependencies
+      and middleware that use Tower utility types to Tower 0.5.
+      `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro` 0.4.0
+      target server 0.69; upgrade the server and metrics crates together.
+    - Schema serde calls `IntoResponse<P>::into_response_with_protocol` to frame
+      errors using the selected protocol. Its default preserves the existing
+      `into_response` conversion and the `FromParts<P>::Rejection: IntoResponse<P>`
+      bound. Override the contextual method when an error needs protocol-specific
+      framing. Generated-serde callers continue using `into_response`. Use
+      `response::ModeledRejection<E>` for modeled extractor errors and the shared
+      `runtime_error::RuntimeError` for framework errors.
+    - AWS JSON routing uses the modeled operation name in both serde modes:
+      `getFoo` uses `X-Amz-Target: Service.getFoo`. To also accept the former generated
+      spelling `Service.GetFoo`, set `capitalizeRoutes: true` in the
+      `aws.protocols#awsJson1_0` or `aws.protocols#awsJson1_1` section of
+      `customizationConfig.protocols`.
+    - Schema-serde RPC v2 CBOR streaming blob inputs use `ByteStream` instead of
+      `Blob`. The CBOR document is collected and decoded before the handler is
+      invoked; the stream contains the decoded blob bytes.
+
+**New this release:**
+- :bug: (server, [smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472), @franco2002lu) Exclude `@internal` enum values from the enum value set in server constraint violation messages. Previously, rejecting an invalid enum value listed every value, including internal ones that should not be exposed to callers. Internal values are still accepted as valid input.
+- (server, [smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934), @xz0803) Improve server routing performance for REST protocols. `RestRouter` now holds its `RequestSpec`s behind an `Arc`, so cloning the router shares each route's path regex and its match cache instead of rebuilding the cache: on every request for `aws_smithy_http_server::serve`, and on every connection for `aws-smithy-legacy-http-server`.
+- :bug: (client, [smithy-rs#4967](https://github.com/smithy-lang/smithy-rs/issues/4967)) Generated endpoint rule-set tests no longer run the validators in `ParamsBuilder::build()`, so a test case with an
+    invalid `Region` reaches the rules instead of panicking with `invalid params`. Requests still run the validators.
+- :bug: (server, @fahadzub) Encode shared runtime validation messages and initial request frame rejection messages
+    as CBOR maps for rpcv2Cbor, so clients can decode the message. Modeled validation errors,
+    including custom validation types, retain their own schema and serialized fields.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @fahadzub ([smithy-rs#4894](https://github.com/smithy-lang/smithy-rs/issues/4894), [smithy-rs#4906](https://github.com/smithy-lang/smithy-rs/issues/4906))
+- @franco2002lu ([smithy-rs#2472](https://github.com/smithy-lang/smithy-rs/issues/2472))
+- @xz0803 ([smithy-rs#4934](https://github.com/smithy-lang/smithy-rs/issues/4934))
+
+
 October 27th, 2026
 ==================
 **Breaking Changes:**

@@ -268,7 +268,11 @@ internal class EventStreamPollBudgetTest {
                         let mut recv = #{Box}::pin(input.events.recv());
                         assert!(recv.as_mut().poll(&mut cx).is_pending());
                         assert_eq!(frames.load(Ordering::SeqCst), $expectedFrames);
-                        assert_eq!(wake.0.load(Ordering::SeqCst), ${if (expectedFrames == 64) 0 else 1});
+                        assert_eq!(wake.0.load(Ordering::SeqCst), ${if (expectedFrames == 64) {
+                            0
+                        } else {
+                            1
+                        }});
                         """,
                         *RuntimeType.preludeScope,
                         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
