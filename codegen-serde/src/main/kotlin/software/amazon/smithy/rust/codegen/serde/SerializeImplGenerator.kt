@@ -408,7 +408,17 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                                 )
                             }
                         if (codegenContext.symbolProvider.toSymbol(member).isOptional()) {
-                            rust("if let Some($field) = &inner.$fieldName { #T }", fieldSerialization)
+                            rustTemplate(
+                                """
+                                if let #{Some}($field) = &inner.$fieldName {
+                                    #{FieldSerialization}
+                                } else if self.settings.serialize_unset_fields {
+                                    s.serialize_field($serializedName, &#{None}::<()>)?;
+                                }
+                                """,
+                                "FieldSerialization" to fieldSerialization,
+                                *RuntimeType.preludeScope,
+                            )
                         } else {
                             rust("let $field = &inner.$fieldName; #T", fieldSerialization)
                         }
