@@ -130,6 +130,11 @@ fn main() -> anyhow::Result<()> {
                 if let Some(newest) = newest_release_tag()? {
                     if &newest != tag {
                         eprintln!("superseded by {newest}, not building");
+                        // Report it rather than exiting quietly. The only check on a leg that dies
+                        // without emitting anything is a check for an absent report, and a
+                        // superseded release trips it on every one of its legs — which would train
+                        // everyone to ignore the one warning that catches a silent leg.
+                        println!("{}", serde_json::to_string(&leg::Report::superseded(&leg))?);
                         return Ok(());
                     }
                 }
