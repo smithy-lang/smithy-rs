@@ -10,20 +10,28 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import java.nio.file.Files
 import kotlin.io.path.extension
 import kotlin.io.path.readText
 
 class DocumentV2DecoratorTest {
-    private val model =
+    /**
+     * The `Foo` model. In [SCHEMA_SERDE_NAMESPACE], which `SchemaSerdeAllowlist` lists, the client uses schema serde
+     * only. Other namespaces use the `protocol_serde` serializers.
+     */
+    private fun model(namespace: String) =
         """
         ${'$'}version: "2"
-        namespace com.example
+        namespace $namespace
 
         use aws.protocols#awsJson1_0
 
@@ -110,7 +118,8 @@ class DocumentV2DecoratorTest {
     @Test
     fun `document members get DocumentV2 companions`() {
         val crateDir =
-            clientIntegrationTest(model) { codegenContext, rustCrate ->
+            clientIntegrationTest(model(SCHEMA_SERDE_NAMESPACE)) { codegenContext, rustCrate ->
+                requireSchemaSerde(codegenContext)
                 val moduleName = codegenContext.moduleUseName()
                 rustCrate.integrationTest("document_v2") {
                     rustTemplate(
@@ -307,5 +316,303 @@ class DocumentV2DecoratorTest {
 
         // Union variants have no companions.
         sources shouldNotContain "doc_v2"
+    }
+
+    @Test
+    fun `schema serde writes and reads the DocumentV2 companion`() {
+        val crateDir =
+            clientIntegrationTest(model(SCHEMA_SERDE_NAMESPACE)) { codegenContext, rustCrate ->
+                requireSchemaSerde(codegenContext)
+                val runtimeConfig = codegenContext.runtimeConfig
+                val smithySchema = RuntimeType.smithySchema(runtimeConfig)
+                rustCrate.testModule {
+                    rustTemplate(
+                        """
+                        use crate::operation::foo::{FooInput, FooOutput};
+                        use crate::types::error::FooError;
+                        use crate::types::{FooChoice, FooData};
+                        use #{Codec};
+                        use #{SerializableStruct};
+                        use #{ShapeDeserializer};
+                        use #{ShapeSerializer};
+                        use #{BigDecimal};
+                        use #{BigInteger};
+                        use #{Document};
+                        use #{DocumentObject};
+                        use #{DocumentV2};
+                        use std::str::FromStr;
+
+                        const BIG: &str = "123456789012345678901234567890";
+
+                        // JSON writes this value as a number, and `Document` holds it as the nearest `f64`.
+                        fn big() -> DocumentV2 {
+                            DocumentV2::BigInteger(BigInteger::from_str(BIG).unwrap())
+                        }
+
+                        fn v1(value: &str) -> Document {
+                            Document::from(value)
+                        }
+
+                        fn json(value: &dyn SerializableStruct) -> String {
+                            let mut ser = #{JsonCodec}::default().create_serializer();
+                            ser.write_struct(value.schema(), value).unwrap();
+                            String::from_utf8(ser.finish()).unwrap()
+                        }
+
+                        fn deser(json: &str) -> impl ShapeDeserializer + '_ {
+                            #{JsonCodec}::default().create_deserializer(json.as_bytes())
+                        }
+
+                        // What reading `json` as a `Document` gives, which is what the public field held before
+                        // `DocumentV2`.
+                        fn read_v1(json: &str) -> Document {
+                            deser(json).read_document(&#{DocumentSchema}).unwrap()
+                        }
+
+                        fn big_v1() -> Document {
+                            read_v1(BIG)
+                        }
+
+                        ##[test]
+                        fn the_document_field_is_written_without_a_companion() {
+                            let input = FooInput::builder().payload(v1("v1")).build().unwrap();
+                            assert_eq!(json(&input), r##"{"payload":"v1"}"##);
+                        }
+
+                        ##[test]
+                        fn the_companion_is_written_in_place_of_the_document_field() {
+                            for builder in [
+                                FooInput::builder().payload_v2(big()),
+                                FooInput::builder().payload(v1("v1")).payload_v2(big()),
+                                FooInput::builder().payload_v2(big()).payload(v1("v1")),
+                            ] {
+                                let input = builder.build().unwrap();
+                                assert_eq!(input.payload, Some(big_v1()));
+                                assert_eq!(json(&input), format!(r##"{{"payload":{BIG}}}"##));
+                            }
+                        }
+
+                        ##[test]
+                        fn clearing_the_companion_writes_the_document_field() {
+                            let input = FooInput::builder()
+                                .payload(v1("v1"))
+                                .payload_v2(big())
+                                .set_payload_v2(None)
+                                .build()
+                                .unwrap();
+                            assert_eq!(json(&input), r##"{"payload":"v1"}"##);
+                        }
+
+                        ##[test]
+                        fn changing_the_public_field_changes_the_output_only_without_a_companion() {
+                            let mut input = FooInput::builder().payload(v1("before")).build().unwrap();
+                            input.payload = Some(v1("after"));
+                            assert_eq!(json(&input), r##"{"payload":"after"}"##);
+
+                            let mut input = FooInput::builder().payload_v2(big()).build().unwrap();
+                            input.payload = Some(v1("after"));
+                            assert_eq!(json(&input), format!(r##"{{"payload":{BIG}}}"##));
+                        }
+
+                        ##[test]
+                        fn object_members_keep_their_order() {
+                            let object = DocumentObject::from([
+                                ("z".to_string(), DocumentV2::from(1u64)),
+                                ("a".to_string(), DocumentV2::from(2u64)),
+                            ]);
+                            let input = FooInput::builder().payload_v2(object.into()).build().unwrap();
+                            assert_eq!(json(&input), r##"{"payload":{"z":1,"a":2}}"##);
+                        }
+
+                        ##[test]
+                        fn collections_write_their_companions() {
+                            let input = FooInput::builder()
+                                .payload_list_v2(big())
+                                .payload_map_v2("key", big())
+                                .set_sparse_payload_list_v2(Some(vec![Some(big()), None]))
+                                .nested_payload_list_v2(vec![big()])
+                                .build()
+                                .unwrap();
+                            assert_eq!(
+                                json(&input),
+                                format!(
+                                    r##"{{"payloadList":[{BIG}],"payloadMap":{{"key":{BIG}}},"sparsePayloadList":[{BIG},null],"nestedPayloadList":[[{BIG}]]}}"##
+                                ),
+                            );
+                        }
+
+                        ##[test]
+                        fn nested_structures_and_errors_write_their_companions() {
+                            let data = FooData::builder().body_v2(big()).type_v2(big()).build().unwrap();
+                            let input = FooInput::builder().data(data).build().unwrap();
+                            assert_eq!(
+                                json(&input),
+                                format!(r##"{{"data":{{"body":{BIG},"type":{BIG}}}}}"##),
+                            );
+
+                            let error = FooError::builder().details_v2(big()).build();
+                            assert_eq!(json(&error), format!(r##"{{"details":{BIG}}}"##));
+                        }
+
+                        ##[test]
+                        fn union_variants_write_the_document() {
+                            let input = FooInput::builder().choice(FooChoice::Doc(v1("v1"))).build().unwrap();
+                            assert_eq!(json(&input), r##"{"choice":{"doc":"v1"}}"##);
+                        }
+
+                        ##[test]
+                        fn a_member_is_read_into_its_companion_and_the_field_matches_read_document() {
+                            let document = r##"{"pi":3.14159265358979323846,"big":123456789012345678901234567890,"small":42}"##;
+                            let output = FooOutput::deserialize(&mut deser(&format!(r##"{{"payload":{document}}}"##))).unwrap();
+
+                            let payload = output.payload_v2().unwrap().as_object().unwrap();
+                            assert_eq!(payload.keys().map(String::as_str).collect::<Vec<_>>(), ["pi", "big", "small"]);
+                            assert_eq!(
+                                payload["pi"],
+                                DocumentV2::BigDecimal(BigDecimal::from_str("3.14159265358979323846").unwrap())
+                            );
+                            assert_eq!(payload["big"], big());
+                            assert_eq!(payload["small"], DocumentV2::from(42u64));
+
+                            // The public field holds what reading a `Document` gives, without a getter call.
+                            assert_eq!(output.payload, Some(read_v1(document)));
+                            assert_eq!(output.payload(), Some(&read_v1(document)));
+
+                            // An explicit null leaves both empty, as it left the field before.
+                            let output = FooOutput::deserialize(&mut deser(r##"{"payload":null}"##)).unwrap();
+                            assert_eq!(output.payload, None);
+                            assert_eq!(output.payload_v2(), None);
+                        }
+
+                        ##[test]
+                        fn collections_nested_structures_and_errors_read_into_their_companions() {
+                            let input = FooInput::deserialize(&mut deser(&format!(
+                                r##"{{"payloadList":[{BIG}],"payloadMap":{{"key":{BIG}}},"sparsePayloadList":[{BIG},null],"nestedPayloadList":[[{BIG}]],"data":{{"body":{BIG}}}}}"##
+                            )))
+                            .unwrap();
+                            assert_eq!(input.payload_list_v2(), Some(&[big()][..]));
+                            assert_eq!(input.payload_list, Some(vec![big_v1()]));
+                            assert_eq!(input.payload_map_v2().unwrap()["key"], big());
+                            assert_eq!(input.payload_map.as_ref().unwrap()["key"], big_v1());
+                            assert_eq!(input.sparse_payload_list_v2(), Some(&[Some(big()), None][..]));
+                            assert_eq!(input.sparse_payload_list, Some(vec![Some(big_v1()), None]));
+                            assert_eq!(input.nested_payload_list_v2(), Some(&[vec![big()]][..]));
+                            assert_eq!(input.nested_payload_list, Some(vec![vec![big_v1()]]));
+                            let data = input.data.unwrap();
+                            assert_eq!(data.body_v2(), Some(&big()));
+                            assert_eq!(data.body, big_v1());
+
+                            let error = FooError::deserialize(&mut deser(&format!(r##"{{"details":{BIG}}}"##))).unwrap();
+                            assert_eq!(error.details_v2(), Some(&big()));
+                            assert_eq!(error.details, Some(big_v1()));
+                        }
+
+                        ##[test]
+                        fn union_variants_read_the_document() {
+                            let input = FooInput::deserialize(&mut deser(&format!(r##"{{"choice":{{"doc":{BIG}}}}}"##))).unwrap();
+                            assert_eq!(input.choice, Some(FooChoice::Doc(big_v1())));
+                        }
+
+                        ##[test]
+                        fn a_value_read_is_written_back_unchanged() {
+                            let text = format!(r##"{{"payload":{{"z":{BIG},"a":0.1234567890123456789}}}}"##);
+                            let input = FooInput::deserialize(&mut deser(&text)).unwrap();
+                            assert_eq!(json(&input), text);
+                        }
+                        """,
+                        "Codec" to smithySchema.resolve("codec::Codec"),
+                        "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                        "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                        "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                        "DocumentSchema" to smithySchema.resolve("prelude::DOCUMENT"),
+                        "JsonCodec" to RuntimeType.smithyJson(runtimeConfig).resolve("codec::JsonCodec"),
+                        "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
+                        "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                        "Document" to RuntimeType.document(runtimeConfig),
+                        "DocumentObject" to RuntimeType.smithyTypes(runtimeConfig).resolve("document::DocumentObject"),
+                        "DocumentV2" to RuntimeType.documentV2(runtimeConfig),
+                    )
+
+                    tokioTest("the_client_sends_the_companion") {
+                        rustTemplate(
+                            """
+                            let (http_client, request) = #{capture_request}(None);
+                            let config = crate::Config::builder()
+                                .endpoint_url("http://localhost:1234")
+                                .http_client(http_client)
+                                .behavior_version_latest()
+                                .build();
+                            let client = crate::Client::from_conf(config);
+                            let _ = client.foo().payload(v1("v1")).payload_v2(big()).send().await;
+                            let request = request.expect_request();
+                            let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+                            assert_eq!(body, format!(r##"{{"payload":{BIG}}}"##));
+                            """,
+                            "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                        )
+                    }
+
+                    tokioTest("the_client_reads_the_companion") {
+                        rustTemplate(
+                            """
+                            let response = #{http_1x}::Response::builder()
+                                .status(200)
+                                .body(#{SdkBody}::from(format!(r##"{{"payload":{BIG}}}"##)))
+                                .unwrap();
+                            let (http_client, _request) = #{capture_request}(Some(response));
+                            let config = crate::Config::builder()
+                                .endpoint_url("http://localhost:1234")
+                                .http_client(http_client)
+                                .behavior_version_latest()
+                                .build();
+                            let client = crate::Client::from_conf(config);
+                            let output = client.foo().send().await.unwrap();
+                            assert_eq!(output.payload_v2(), Some(&big()));
+                            assert_eq!(output.payload, Some(big_v1()));
+                            """,
+                            "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                            "http_1x" to CargoDependency.Http1x.toType(),
+                            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+                        )
+                    }
+                }
+            }
+
+        val sources =
+            Files.walk(crateDir.resolve("src")).use { paths ->
+                paths.filter { it.extension == "rs" }.map { it.readText() }.toList()
+            }.joinToString("\n")
+        // Union variants stay `Document` only.
+        sources shouldContain "ser.write_document(&FOOCHOICE_MEMBER_DOC, val)?;"
+    }
+
+    @Test
+    fun `clients without schema serde get no companions`() {
+        val crateDir =
+            clientIntegrationTest(model("com.example")) { codegenContext, _ ->
+                check(!SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                    "this test must generate a client without schema serde; check that com.example isn't in " +
+                        "SchemaSerdeAllowlist"
+                }
+            }
+
+        val sources =
+            Files.walk(crateDir.resolve("src")).use { paths ->
+                paths.filter { it.extension == "rs" }.map { it.readText() }.toList()
+            }.joinToString("\n")
+        sources shouldNotContain "DocumentV2"
+        sources shouldNotContain "payload_v2"
+        // Structures with documents keep their `Debug` derive.
+        sources shouldContain Regex("""derive\([^)]*::std::fmt::Debug[^)]*\)]\s*pub struct FooData """)
+    }
+
+    private fun requireSchemaSerde(codegenContext: ClientCodegenContext) {
+        check(SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            "this test must generate schema serde; check that $SCHEMA_SERDE_NAMESPACE is still in SchemaSerdeAllowlist"
+        }
+    }
+
+    companion object {
+        private const val SCHEMA_SERDE_NAMESPACE = "smithy.rust.codegen.test.schemaheaders"
     }
 }

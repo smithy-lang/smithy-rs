@@ -5,17 +5,22 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -50,6 +55,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
  * Gives every struct that holds `Document` values a private `DocumentV2` companion, found by
  * [DocumentV2Index], with public `_v2` accessors next to the member's unchanged `Document` API.
  *
+ * Only clients that use schema serde ([SchemaSerdeAllowlist.usesSchemaSerdeExclusively]) get companions: its
+ * serializers write them and its deserializers fill them. The `protocol_serde` serializers and parsers, which schema
+ * serde replaces, use only the `Document` fields, so other clients are generated as before.
+ *
  * - The struct stores the companion in a private `DocumentV2Slot` field and gets a `payload_v2()` getter.
  * - The builder stores it in its own field and gets `payload_v2`, `set_payload_v2`, and `get_payload_v2`.
  *   The `Document` and `DocumentV2` builder fields are independent, so clearing the companion lets the `Document`
@@ -67,17 +76,72 @@ class DocumentV2Decorator : ClientCodegenDecorator {
     override val name: String = "DocumentV2"
     override val order: Byte = 0
 
-    override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider = DocumentV2MetadataProvider(base)
+    override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider {
+        val context = base.moduleProviderContext
+        val settings = context.settings as? ClientRustSettings ?: return base
+        val service = context.serviceShape ?: return base
+        return if (companionsEnabled(settings, base.model, service)) DocumentV2MetadataProvider(base) else base
+    }
 
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = baseCustomizations + DocumentV2StructureCustomization(codegenContext)
+    ): List<StructureCustomization> =
+        if (documentV2CompanionsEnabled(codegenContext)) {
+            baseCustomizations + DocumentV2StructureCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<BuilderCustomization>,
-    ): List<BuilderCustomization> = baseCustomizations + DocumentV2BuilderCustomization(codegenContext)
+    ): List<BuilderCustomization> =
+        if (documentV2CompanionsEnabled(codegenContext)) {
+            baseCustomizations + DocumentV2BuilderCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
+}
+
+/** Whether [codegenContext]'s structures get `DocumentV2` companions. See [DocumentV2Decorator]. */
+internal fun documentV2CompanionsEnabled(codegenContext: ClientCodegenContext): Boolean {
+    val enabled = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+    check(enabled == companionsEnabled(codegenContext.settings, codegenContext.model, codegenContext.serviceShape)) {
+        "`DocumentV2Decorator` decided whether `${codegenContext.serviceShape.id}` uses schema serde from the " +
+            "default protocol choice, which isn't `${codegenContext.protocol}`. Its symbol provider and its " +
+            "customizations would disagree about which structures have `DocumentV2` companions."
+    }
+    return enabled
+}
+
+/**
+ * The companions of [shape]'s members, or none when [codegenContext]'s structures don't get companions. See
+ * [DocumentV2Decorator].
+ */
+internal fun documentV2Companions(
+    codegenContext: ClientCodegenContext,
+    shape: StructureShape,
+): List<DocumentV2Companion> =
+    if (documentV2CompanionsEnabled(codegenContext)) {
+        DocumentV2Index.of(codegenContext.model).companions(shape, codegenContext.symbolProvider)
+    } else {
+        emptyList()
+    }
+
+/**
+ * [documentV2CompanionsEnabled] for the symbol provider, which exists before the codegen context. It picks the
+ * protocol as `ClientCodegenVisitor` does, with the default protocols, and [documentV2CompanionsEnabled] checks that
+ * the two agree.
+ */
+private fun companionsEnabled(
+    settings: ClientRustSettings,
+    model: Model,
+    service: ServiceShape,
+): Boolean {
+    val serviceProtocols = ServiceIndex.of(model).getProtocols(service)
+    val protocol = ClientProtocolLoader.DefaultProtocols.keys.firstOrNull { it in serviceProtocols }
+    return SchemaSerdeAllowlist.usesSchemaSerdeExclusively(settings, service, protocol)
 }
 
 /**
@@ -176,10 +240,12 @@ private class DocumentV2StructureCustomization(private val codegenContext: Clien
         val field = companion.unescapedMemberName
         rustTemplate(
             """
-            /// Returns the [`DocumentV2`](#{DocumentV2}) form of `$field`, if the builder set one.
+            /// Returns the [`DocumentV2`](#{DocumentV2}) form of `$field`, if there is one.
             ///
-            /// When this returns `Some`, the `$field` field holds the same value with each `DocumentV2`
-            /// converted by [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy).
+            /// A value read from a response has it, and so does a value built with the
+            /// `DocumentV2` builder methods. When this returns `Some`, the `$field` field holds
+            /// the same value with each `DocumentV2` converted by
+            /// [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy).
             """,
             *scope,
         )

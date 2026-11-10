@@ -10,10 +10,12 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.AwsQueryTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
@@ -198,11 +200,19 @@ object SchemaSerdeAllowlist {
      * allowlisted, but it cannot opt in. See `ClientCodegenConfig.disableSchemaSerde`.
      */
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
-        !codegenContext.settings.codegenConfig.disableSchemaSerde &&
-            (
-                codegenContext.protocol in allowedProtocols ||
-                    codegenContext.serviceShape.id.namespace in allowedServiceNamespaces
-            )
+        usesSchemaSerdeExclusively(codegenContext.settings, codegenContext.serviceShape, codegenContext.protocol)
+
+    /**
+     * [usesSchemaSerdeExclusively] for code that runs before the codegen context exists, such as a symbol
+     * provider. [protocol] is the protocol the client is generated for, or null when it isn't known.
+     */
+    fun usesSchemaSerdeExclusively(
+        settings: ClientRustSettings,
+        serviceShape: ServiceShape,
+        protocol: ShapeId?,
+    ): Boolean =
+        !settings.codegenConfig.disableSchemaSerde &&
+            (protocol in allowedProtocols || serviceShape.id.namespace in allowedServiceNamespaces)
 
     /**
      * Returns true if schema-based serde is enabled for [protocol].
@@ -232,7 +242,9 @@ class SchemaDecorator : ClientCodegenDecorator {
         baseCustomizations: List<StructureCustomization>,
     ): List<StructureCustomization> =
         if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-            baseCustomizations + SchemaStructureCustomization(codegenContext)
+            // `DocumentV2Decorator`, which the client plugin registers, gives the structures their `DocumentV2`
+            // companions under the same condition.
+            baseCustomizations + SchemaStructureCustomization(codegenContext, documentV2Companions = true)
         } else {
             baseCustomizations
         }

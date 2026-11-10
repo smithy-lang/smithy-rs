@@ -12,9 +12,10 @@ Smithy data model: it adds `Blob`, `Timestamp`, `BigInteger`, and `BigDecimal`
 variants, keeps object entries in insertion order with the new `DocumentObject`
 type, and is `#[non_exhaustive]`. `From` converts a `Document` to a `DocumentV2`
 without loss, and `DocumentV2::to_document_lossy` and
-`DocumentV2::try_to_document` convert back: the first encodes blobs, timestamps,
-and arbitrary-precision numbers as strings and numbers, and the second returns
-an error for them. With `--cfg aws_sdk_unstable` and the `serde-serialize` or
+`DocumentV2::try_to_document` convert back: the first encodes blobs as base64
+strings and timestamps and arbitrary-precision numbers as numbers, as
+`Document` reads them from JSON, and the second returns an error for them. With
+`--cfg aws_sdk_unstable` and the `serde-serialize` or
 `serde-deserialize` feature, `DocumentV2` implements serde's traits, and
 `document::to_document_v2` and `document::from_document_v2` convert between it
 and other serde types, like `to_document` and `from_document` do for `Document`.

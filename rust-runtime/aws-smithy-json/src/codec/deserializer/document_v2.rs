@@ -408,6 +408,51 @@ mod tests {
         }
     }
 
+    /// Generated shapes derive their public `Document` fields from the V2 read with
+    /// `to_document_lossy`, so for every number it must give what `read_document` and the
+    /// token parser that `protocol_serde` uses give.
+    #[test]
+    fn the_lossy_downgrade_of_a_read_matches_read_document() {
+        let inputs = [
+            "0",
+            "-0",
+            "42",
+            "-123",
+            "18446744073709551615",
+            "18446744073709551616",
+            "-9223372036854775808",
+            "-9223372036854775809",
+            "99999999999999999999999",
+            "-99999999999999999999999",
+            "0.1",
+            "-0.0",
+            "1e2",
+            "0.1234567890123456789",
+            "1e400",
+            "-1e400",
+            "1.7976931348623159e308",
+            "1e-400",
+            "3.14159265358979323846264338327950288",
+            "9007199254740993.0",
+            r#"{"a":[18446744073709551616,{"b":1e400}],"c":0.1234567890123456789}"#,
+        ];
+        for settings in strictness() {
+            for input in inputs {
+                let v2 = read_with(settings(), input).unwrap();
+                assert_eq!(
+                    v2.to_document_lossy(),
+                    read_v1(settings(), input).unwrap(),
+                    "{input}"
+                );
+            }
+        }
+        for input in inputs {
+            let mut tokens = crate::deserialize::json_token_iter(input.as_bytes()).peekable();
+            let legacy = crate::deserialize::token::expect_document(&mut tokens).unwrap();
+            assert_eq!(read(input).to_document_lossy(), legacy, "{input}");
+        }
+    }
+
     #[test]
     fn reads_decimals_that_f64_holds_as_floats() {
         for (text, expected) in [
