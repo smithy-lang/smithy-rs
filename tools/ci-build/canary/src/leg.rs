@@ -37,7 +37,7 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::classify::{self, Diagnosis, Step, StepOutcome, Verdict};
-use crate::scenarios::{Checks, Leg, Profile};
+use crate::scenarios::{Body, Checks, Leg, Profile};
 
 /// The leg's own deadline. Strictly under the watcher's 15-minute dispatch tick, so a leg can never
 /// outlive the tick that dispatched it and be re-dispatched alongside itself.
@@ -217,11 +217,20 @@ impl Exec for RealExec {
                 if self.verbose && !stderr.trim().is_empty() {
                     eprintln!("{stderr}");
                 }
+                // Echo stdout too, but not the json: cargo's `--message-format=json` stdout is
+                // machine output and megabytes of it would bury the log. The run phase's stdout is
+                // the test harness's own report — which assertions ran, and how many passed — and
+                // omitting it meant a green leg's log could not be told from one that ran nothing.
+                if self.verbose && !command.json && !stdout.trim().is_empty() {
+                    eprintln!("{stdout}");
+                }
                 StepOutcome {
                     step: command.step,
                     exit_code: o.status.code(),
                     stdout,
                     stderr,
+                    // The runner sets this; the executor does not know the leg.
+                    expects_assertions: false,
                 }
             }
             // The program could not be spawned at all — rustup or cargo missing from PATH. That is
@@ -231,6 +240,7 @@ impl Exec for RealExec {
                 exit_code: None,
                 stdout: String::new(),
                 stderr: format!("failed to spawn {}: {e}", command.program),
+                expects_assertions: false,
             },
         }
     }
@@ -326,7 +336,11 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
         // whose failure mode changes between attempts is governed by the latest one.
         loop {
             attempt += 1;
-            let outcome = exec.run(&command);
+            let mut outcome = exec.run(&command);
+            // Whether this leg has assertions is a property of the leg, not of the command, so the
+            // executor stays ignorant of it and the runner fills it in. Only the app body renders
+            // `tests/hermetic.rs`; a stub body running zero tests is correct, not suspicious.
+            outcome.expects_assertions = leg.body == Body::CanaryApp;
             let classified = classify::classify(&outcome);
             attempts.push(Attempt {
                 step: command.step,
@@ -454,19 +468,36 @@ mod tests {
             StepOutcome {
                 step: command.step,
                 exit_code: Some(code),
-                stdout: if code == 0 {
-                    String::new()
-                } else {
+                stdout: if code != 0 {
                     self.stdout.clone()
+                } else if command.step == Step::Test {
+                    // A successful run phase has to look like one. The classifier now requires
+                    // evidence that assertions actually ran, so a fake that returned nothing here
+                    // would be modelling a leg that proves nothing — and the tests would be
+                    // asserting against a shape the real harness never produces.
+                    HARNESS_TEN_PASSED.to_string()
+                } else {
+                    String::new()
                 },
                 stderr: if code == 0 {
                     String::new()
                 } else {
                     self.stderr.clone()
                 },
+                // Filled in by `run`, which is the only thing that knows the leg.
+                expects_assertions: false,
             }
         }
     }
+
+    /// The measured shape of a client leg's run phase: the bin target with no `#[test]`, the
+    /// hermetic assertions, and the `#[ignore]`d network probe.
+    const HARNESS_TEN_PASSED: &str = "running 0 tests\n\
+         test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n\
+         running 10 tests\n\
+         test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n\
+         running 1 test\n\
+         test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\n";
 
     const COMPILE_ERROR: &str = r#"{"reason":"compiler-message","target":{"name":"canary-build-check"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
 

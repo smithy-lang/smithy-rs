@@ -120,6 +120,9 @@ pub struct StepOutcome {
     /// text output.
     pub stdout: String,
     pub stderr: String,
+    /// Whether this leg's body declares assertions, so a run phase that executed none can be told
+    /// apart from one that had none to execute. A stub body legitimately runs zero tests.
+    pub expects_assertions: bool,
 }
 
 impl StepOutcome {
@@ -146,6 +149,28 @@ pub struct Diagnosis {
 /// Returns `None` for a step that succeeded, so the caller can keep walking the list.
 pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
     if outcome.succeeded() {
+        // A green run phase has to rest on evidence that something ran. `cargo test` exits 0 when
+        // it executes nothing at all, so if the body's assertions ever stopped being rendered, or a
+        // filter excluded them, every client leg would report green having checked nothing — the
+        // exact false green this crate exists to prevent. Found because the first real workflow run
+        // had no way to show, from the job log, whether ten assertions had run or none.
+        if outcome.step == Step::Test
+            && outcome.expects_assertions
+            && assertions_passed(&outcome.stdout) == 0
+        {
+            return Some((
+                Verdict::InfraFail,
+                Diagnosis {
+                    codes: vec![],
+                    summary: Some(
+                        "the run phase passed without executing a single assertion, so this leg \
+                         proves nothing about the release"
+                            .to_string(),
+                    ),
+                    target: None,
+                },
+            ));
+        }
         return None;
     }
     let combined = format!("{}\n{}", outcome.stdout, outcome.stderr);
@@ -225,6 +250,19 @@ fn resolution_was_refused(output: &str) -> bool {
 }
 
 /// The test harness ran and reported a failure, rather than the runner dying before it could.
+/// How many assertions actually passed, summed across the leg's test binaries.
+///
+/// A client leg runs three: the bin target with no `#[test]` at all, the hermetic assertions, and
+/// the network probe which is `#[ignore]`d. So the measured shape is a `0 passed`, a `10 passed` and
+/// a `0 passed; 0 failed; 1 ignored` — and only the total is meaningful.
+fn assertions_passed(stdout: &str) -> u32 {
+    stdout
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("test result: ok. "))
+        .filter_map(|rest| rest.split(" passed").next()?.parse::<u32>().ok())
+        .sum()
+}
+
 fn assertions_ran_and_failed(output: &str) -> bool {
     // Measured shapes:
     //   test result: FAILED. 1 passed; 1 failed; 0 ignored; ...
@@ -442,6 +480,74 @@ mod tests {
             exit_code: Some(101),
             stdout: stdout.to_string(),
             stderr: stderr.to_string(),
+            expects_assertions: true,
+        }
+    }
+
+    /// A successful step, for the rules that only apply when nothing failed.
+    fn green(step: Step, stdout: &str, expects_assertions: bool) -> StepOutcome {
+        StepOutcome {
+            step,
+            exit_code: Some(0),
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+            expects_assertions,
+        }
+    }
+
+    const TEN_PASSED: &str = "running 0 tests\n\
+         test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n\
+         running 10 tests\n\
+         test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n\
+         running 1 test\n\
+         test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\n";
+
+    /// The measured shape of a client leg's run phase: three test binaries, only one of which has
+    /// assertions, and an ignored probe. Only the total matters.
+    #[test]
+    fn a_green_run_phase_with_assertions_has_no_verdict() {
+        assert_eq!(assertions_passed(TEN_PASSED), 10);
+        assert!(classify(&green(Step::Test, TEN_PASSED, true)).is_none());
+    }
+
+    /// The false green this guards. `cargo test` exits 0 when it runs nothing, so if the body's
+    /// assertions stopped being rendered every client leg would report green having checked nothing.
+    #[test]
+    fn a_green_run_phase_that_asserted_nothing_is_infra_not_green() {
+        let nothing = "running 0 tests\n\
+             test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let (v, d) = classify(&green(Step::Test, nothing, true)).expect("must not be green");
+        assert_eq!(v, Verdict::InfraFail);
+        assert!(
+            d.summary
+                .unwrap()
+                .contains("without executing a single assertion"),
+            "and it must say so"
+        );
+    }
+
+    /// A stub leg has no `#[test]` anywhere, so running zero is correct rather than suspicious.
+    #[test]
+    fn a_stub_leg_running_no_assertions_is_still_green() {
+        let nothing = "running 0 tests\n\
+             test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        assert!(classify(&green(Step::Test, nothing, false)).is_none());
+    }
+
+    /// The check is scoped to the run phase. A green build emits json, not harness output, and must
+    /// not be second-guessed for lacking a `test result` line.
+    #[test]
+    fn the_assertion_check_does_not_apply_to_the_compile_steps() {
+        for step in [
+            Step::Build,
+            Step::TestNoRun,
+            Step::Fetch,
+            Step::GenerateLockfile,
+        ] {
+            assert!(
+                classify(&green(step, "", true)).is_none(),
+                "{step:?} has no assertions to run"
+            );
         }
     }
 
