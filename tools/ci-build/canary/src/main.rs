@@ -13,6 +13,7 @@ use clap::{Parser, Subcommand};
 
 use canary::leg;
 use canary::manifest;
+use canary::publish;
 use canary::scenarios;
 use canary::toolchain::{self, Version};
 
@@ -80,6 +81,17 @@ enum Command {
         /// that no scenario produces on purpose get induced.
         #[arg(long)]
         reuse_crate: bool,
+    },
+    /// Report which runtime crates this checkout declares that crates.io does not yet have.
+    ///
+    /// The first tier's end condition: empty means the release has finished publishing and the
+    /// 24-hour floor tier can start. Exits non-zero while anything is outstanding, so a shell loop
+    /// can poll it.
+    PublishStatus {
+        /// The repository root to read `rust-runtime/*/Cargo.toml` from. Defaults to the current
+        /// checkout, which in a release run is the tag.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
     },
     /// Materialize one leg's crate into a directory, ready to build.
     GenLeg {
@@ -181,6 +193,28 @@ fn main() -> anyhow::Result<()> {
                 ),
             }
             std::process::exit(report.exit_code());
+        }
+        Command::PublishStatus { repo } => {
+            let declared = publish::declared(&repo)?;
+            let status = publish::status(&declared, &publish::CratesIo::default())?;
+
+            eprintln!(
+                "{} of {} runtime crates published",
+                status.arrived, status.expected
+            );
+            for c in &status.outstanding {
+                eprintln!("  outstanding: {} {}", c.name, c.version);
+            }
+            for c in &status.yanked {
+                eprintln!(
+                    "  YANKED, so consumers cannot resolve it: {} {}",
+                    c.name, c.version
+                );
+            }
+            println!("{}", serde_json::to_string(&status)?);
+            if !status.is_complete() {
+                std::process::exit(1);
+            }
         }
         Command::GenLeg {
             leg,
