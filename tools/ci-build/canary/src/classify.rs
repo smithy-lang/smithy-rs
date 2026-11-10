@@ -123,6 +123,10 @@ pub struct StepOutcome {
     /// Whether this leg's body declares assertions, so a run phase that executed none can be told
     /// apart from one that had none to execute. A stub body legitimately runs zero tests.
     pub expects_assertions: bool,
+    /// The command was killed for running past the leg's remaining budget. Distinguished from an
+    /// ordinary failure because a killed command's output is arbitrary: it may carry half a
+    /// diagnostic, or none, and neither says anything about the published graph.
+    pub timed_out: bool,
 }
 
 impl StepOutcome {
@@ -173,6 +177,25 @@ pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
         }
         return None;
     }
+    // A killed command is the runner, never the graph, and it has to be decided before anything
+    // reads the output: a `cargo build` killed mid-flight may have already emitted a real-looking
+    // diagnostic, which would otherwise be read as a `COMPILE_FAIL` and page about a break that was
+    // never established.
+    if outcome.timed_out {
+        return Some((
+            Verdict::InfraFail,
+            Diagnosis {
+                codes: vec![],
+                summary: Some(format!(
+                    "{:?} ran past the leg's budget and was killed, so this leg reached no verdict \
+                     about the release",
+                    outcome.step
+                )),
+                target: None,
+            },
+        ));
+    }
+
     let combined = format!("{}\n{}", outcome.stdout, outcome.stderr);
     let verdict = match outcome.step {
         // Cargo could not pick a version. Measured string:
@@ -481,6 +504,7 @@ mod tests {
             stdout: stdout.to_string(),
             stderr: stderr.to_string(),
             expects_assertions: true,
+            timed_out: false,
         }
     }
 
@@ -492,6 +516,7 @@ mod tests {
             stdout: stdout.to_string(),
             stderr: String::new(),
             expects_assertions,
+            timed_out: false,
         }
     }
 
@@ -649,6 +674,30 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         // That is accepted rather than worked around: the verdict already says INFRA_FAIL, which is
         // the attribution a responder needs, and the full stderr is in the job log.
         assert!(!summary.contains("dns error"), "{summary}");
+    }
+
+    /// The containment check for the timeout rule, and the reason it is decided before anything
+    /// reads the output. A `cargo build` killed mid-flight may already have emitted a perfectly
+    /// real-looking diagnostic — here an `E0308` — but it was killed, so the build never finished
+    /// and nothing about the published graph was established. Reading that diagnostic would page
+    /// about a break that was never shown to exist.
+    #[test]
+    fn a_killed_command_is_infra_even_when_it_emitted_a_diagnostic() {
+        let mut o = outcome(Step::Build, COMPILE_ERROR_JSON, "");
+        assert_eq!(
+            classify(&o).unwrap().0,
+            Verdict::CompileFail,
+            "the same output, not killed, is a compile failure"
+        );
+
+        o.timed_out = true;
+        let (verdict, d) = classify(&o).unwrap();
+        assert_eq!(verdict, Verdict::InfraFail);
+        assert!(d.codes.is_empty(), "no codes: the build did not finish");
+        assert!(
+            d.summary.unwrap().contains("ran past the leg's budget"),
+            "and it must say the leg reached no verdict"
+        );
     }
 
     /// Real output, captured by pointing the probe through a dead proxy
