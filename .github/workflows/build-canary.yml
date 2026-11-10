@@ -175,6 +175,7 @@ jobs:
           | tee "${RUNNER_TEMP}/report.json"
 
     - name: Report the verdict
+      id: report
       if: always()
       shell: bash
       env:
@@ -220,3 +221,59 @@ jobs:
                 a['step'], a['attempt'], 'yes' if a['succeeded'] else 'no',
                 a.get('verdict') or ''))
         PY
+
+        # Whether there is anything to collect. A green leg and a superseded one have nothing to
+        # explain; a leg that reached a verdict does. Read from the report rather than the leg's
+        # exit code, which cannot tell green from INFRA_FAIL -- both exit 0 so the window continues.
+        VERDICT="$(python3 -c "
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        print('' if r.get('stopped') == 'superseded' else (r.get('verdict') or ''))
+        " "$REPORT")"
+        echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
+
+    # Only for a leg that reached a verdict. Without this the one artifact that says *what* broke is
+    # discarded with RUNNER_TEMP when the job ends: a page would name `COMPILE_FAIL` and an error
+    # code, and the exact set of published versions that produced it would be gone. Re-resolving
+    # later gives a different graph, because crates.io has moved on -- which is the whole reason a
+    # leg is a snapshot.
+    - name: Collect the evidence
+      if: always() && steps.report.outputs.verdict != ''
+      shell: bash
+      env:
+        LEG_ID: ${{ matrix.leg.id }}
+      run: |
+        set -euo pipefail
+        OUT="${RUNNER_TEMP}/evidence"
+        mkdir -p "$OUT"
+        cp "${RUNNER_TEMP}/report.json" "$OUT/"
+
+        # The rendered crate *is* the reproduction recipe, and it is tiny. `target/` is not copied:
+        # it is hundreds of megabytes of build output that says nothing the log does not.
+        cd "${RUNNER_TEMP}/leg"
+        cp Cargo.toml "$OUT/"
+        # A resolve that never succeeded leaves no lockfile at all, so this is expected to be
+        # missing for a RESOLVE_FAIL leg -- the evidence there is the manifest plus the step's
+        # stderr in the job log.
+        if [[ -f Cargo.lock ]]; then
+          cp Cargo.lock "$OUT/"
+        else
+          echo "no Cargo.lock: the resolve never succeeded" > "$OUT/NO-LOCKFILE.txt"
+        fi
+        for dir in src tests; do
+          [[ -d "$dir" ]] && cp -r "$dir" "$OUT/"
+        done
+
+        echo "collected $(du -sh "$OUT" | cut -f1) for ${LEG_ID}"
+        find "$OUT" -type f | sed "s|$OUT/|  |"
+
+    - name: Upload the evidence
+      if: always() && steps.report.outputs.verdict != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: evidence-${{ matrix.leg.id }}
+        path: ${{ runner.temp }}/evidence
+        # Long enough to investigate a release, short enough not to accumulate. The 24-hour window
+        # plus a working week.
+        retention-days: 14
+        if-no-files-found: error
