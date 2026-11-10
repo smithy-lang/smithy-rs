@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 9th, 2026
+==================
+**New this release:**
+- :tada: (client, [smithy-rs#4965](https://github.com/smithy-lang/smithy-rs/issues/4965)) Retry Behavior 2.1, as described in [aws-sdk-rust#1431](https://github.com/awslabs/aws-sdk-rust/discussions/1431), is now on by default. Customers who want the previous retry behavior should pin `BehaviorVersion` to an older version, such as `v2026_01_12`.
+
+
 November 6th, 2026
 ==================
 **New this release:**
