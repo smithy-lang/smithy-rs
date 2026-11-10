@@ -1,8 +1,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This is the shared CI workflow that is run by both `ci-pr.yml` and `ci-main.yml` depending
-# on if a pull request is being checked, or if the `main` branch is being checked after merge.
+# This is the shared CI workflow that is run by `ci-pr.yml`, `ci-merge-queue.yml`, and `ci-main.yml`
+# depending on if a pull request, a merge queue group, or the `main` branch after merge is being checked.
 
 name: Test
 
@@ -249,8 +249,12 @@ jobs:
         job-timeout-minutes: ${{ matrix.test.timeout || 35 }}
 
   # Separate from the main checks above because it uses aws-sdk-rust from GitHub
+  #
+  # Skipped in the merge queue. It isn't a required check, so it can't block a merge there, and
+  # it runs again on `main` after the merge.
   check-semver-hazards:
     name: Check for semver hazards
+    if: github.event_name != 'merge_group'
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
     steps:
@@ -457,6 +461,8 @@ jobs:
         workspaces: |
           .
           tools
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       if: needs.detect-changes.outputs.rust == 'true'
       with:
@@ -505,6 +511,8 @@ jobs:
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: aws/rust-runtime/aws-config
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
@@ -535,7 +543,10 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     needs: detect-changes
-    runs-on: ubuntu-latest
+    # Ubuntu 26.04 ships Docker 29.4.2, whose seccomp profile blocks the
+    # `socketcall` syscall used by i686 glibc. Remove this pin when the runner
+    # includes Docker 29.4.3 or newer: https://github.com/moby/moby/issues/52506
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       CROSS_CONFIG: Cross.toml
@@ -584,6 +595,8 @@ jobs:
         workspaces: |
           .
           tools
+        # Merge group caches can't be restored by any later run, so only evict usable ones
+        save-if: ${{ github.event_name != 'merge_group' }}
     - uses: dtolnay/rust-toolchain@master
       if: needs.detect-changes.outputs.rust == 'true'
       with:
@@ -643,13 +656,14 @@ jobs:
 
   # Run the canary against generated SDKs
   #
-  # In addition to Matrix Success, this job will also be required to pass for merge.
-  # CI execution from forked repositories will skip this job, and when it does
-  # this skipped job will report its status as "Success".
+  # This job isn't a required check. CI execution from forked repositories skips this job (see
+  # `ask-maintainer-to-run-pr-bot-and-canary`), and so does the merge queue: a non-required check
+  # can't block a merge there, and the canary runs again on `main` after the merge.
+  # A skipped job reports its status as "Success".
   # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
   canary:
     name: Canary
-    if: ${{ inputs.run_canary }}
+    if: ${{ inputs.run_canary && github.event_name != 'merge_group' }}
     needs: generate-full
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
@@ -678,7 +692,8 @@ jobs:
 
   canary-arm:
     name: Canary (aarch64)
-    if: ${{ inputs.run_canary }}
+    # Skipped in the merge queue for the same reason as `canary`
+    if: ${{ inputs.run_canary && github.event_name != 'merge_group' }}
     needs: generate-full
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
