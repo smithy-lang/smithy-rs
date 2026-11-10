@@ -837,7 +837,10 @@ mod tests {
     fn builder_preserves_unset_disabled_and_configured_settings() {
         let mut builder = Builder::default();
         assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
-        assert_eq!(TriStateOption::Set(DEFAULT_TCP_KEEPALIVE), builder.tcp_keepalive);
+        assert_eq!(
+            TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
+            builder.tcp_keepalive
+        );
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
