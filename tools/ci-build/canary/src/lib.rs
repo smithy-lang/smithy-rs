@@ -19,5 +19,6 @@
 pub mod classify;
 pub mod leg;
 pub mod manifest;
+pub mod publish;
 pub mod scenarios;
 pub mod toolchain;
