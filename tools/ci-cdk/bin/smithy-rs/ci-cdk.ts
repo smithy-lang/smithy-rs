@@ -11,6 +11,7 @@
 import "source-map-support/register";
 import { App } from "aws-cdk-lib";
 import { PullRequestCdnStack } from "../../lib/smithy-rs/pull-request-cdn-stack";
+import { BuildCanaryStack } from "../../lib/smithy-rs/build-canary-stack";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
@@ -39,5 +40,13 @@ new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
 new CanaryStack(app, "smithy-rs-canary-stack", {
     lambdaExecutionRole: "smithy-rs-canary-lambda-exec-role",
     oidcProps,
+    env,
+});
+
+// The post-publish build canary's two roles. A separate stack so it can be deployed on its own:
+// it depends only on the OIDC provider, so deploying it leaves the canary and pull-request-CDN
+// stacks untouched.
+new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
+    githubActionsOidcProvider: githubActionsOidcProvider,
     env,
 });
