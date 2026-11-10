@@ -60,6 +60,10 @@ class DocumentV2RegistryTest {
         structure FooData {
             @required
             body: Document
+
+            /// Not the protocol's default timestamp format, so a writer that ignores the member schema fails.
+            @timestampFormat("date-time")
+            at: Timestamp
         }
 
         @error("client")
@@ -199,6 +203,39 @@ class DocumentV2RegistryTest {
                         assert!(Client::error_registry().deserialize_document(&not_an_error).is_err());
                     }
 
+                    fn write(registry: &TypeRegistry, document: &DiscriminatedDocument<DocumentV2>) -> String {
+                        let codec = #{JsonCodec}::new(#{JsonCodecSettings}::builder().use_json_name(false).build());
+                        let mut ser = #{Codec}::create_serializer(&codec);
+                        registry.serialize_document(&mut ser, &#{DocumentSchema}, document).unwrap();
+                        String::from_utf8(ser.finish()).unwrap()
+                    }
+
+                    ##[test]
+                    fn registries_write_documents_by_the_shapes_schema() {
+                        let data = v2_document(
+                            "FooData",
+                            vec![("at", DocumentV2::Timestamp(#{DateTime}::from_secs(5))), ("body", blob())],
+                        );
+                        let written = write(Client::registry(), &data);
+                        // Schema order, and the member's timestamp format rather than the codec's epoch seconds.
+                        assert_eq!(
+                            written,
+                            format!(r##"{{"__type":"{}","body":"AQID","at":"1970-01-01T00:00:05Z"}}"##, shape("FooData"))
+                        );
+                        let codec = #{JsonCodec}::new(#{JsonCodecSettings}::builder().use_json_name(false).build());
+                        let read = #{Codec}::create_deserializer(&codec, written.as_bytes())
+                            .read_discriminated_document_v2()
+                            .unwrap();
+                        let read = Client::registry().deserialize_document(&read).unwrap().downcast::<FooData>().unwrap();
+                        assert_eq!(read.at, Some(#{DateTime}::from_secs(5)));
+                        assert_eq!(read.body, Document::from("AQID"));
+
+                        let error = v2_document("FooError", vec![("message", DocumentV2::from("oops")), ("details", big())]);
+                        let expected = format!(r##"{{"__type":"{}","message":"oops","details":{BIG}}}"##, shape("FooError"));
+                        assert_eq!(write(Client::error_registry(), &error), expected);
+                        assert_eq!(write(Client::registry(), &error), expected);
+                    }
+
                     fn client(body: &str) -> Client {
                         let response = #{http_1x}::Response::builder()
                             .status(400)
@@ -223,6 +260,11 @@ class DocumentV2RegistryTest {
                     }
                     """,
                     "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                    "Codec" to RuntimeType.smithySchema(runtimeConfig).resolve("codec::Codec"),
+                    "DateTime" to RuntimeType.dateTime(runtimeConfig),
+                    "DocumentSchema" to RuntimeType.smithySchema(runtimeConfig).resolve("prelude::DOCUMENT"),
+                    "JsonCodec" to RuntimeType.smithyJson(runtimeConfig).resolve("codec::JsonCodec"),
+                    "JsonCodecSettings" to RuntimeType.smithyJson(runtimeConfig).resolve("codec::JsonCodecSettings"),
                     "DiscriminatedDocument" to smithyTypes.resolve("DiscriminatedDocument"),
                     "Document" to RuntimeType.document(runtimeConfig),
                     "DocumentObject" to smithyTypes.resolve("document::DocumentObject"),

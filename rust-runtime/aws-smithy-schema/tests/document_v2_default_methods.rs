@@ -3,22 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The provided `write_document_v2` and `read_document_v2` methods, seen from a
-//! third-party crate.
+//! The provided `write_document_v2`, `write_typed_document`, and
+//! `read_document_v2` methods, seen from a third-party crate.
 //!
 //! The serializer and deserializer below implement exactly the methods that
 //! `ShapeSerializer` and `ShapeDeserializer` required before `DocumentV2`
 //! existed. That this file compiles is the compatibility check: adding the V2
 //! methods must not break an existing implementation. The tests then pin down
-//! what such an implementation does when it is handed a `DocumentV2`.
+//! what such an implementation does when it is handed a `DocumentV2` or a
+//! typed document.
 
 use aws_smithy_schema::prelude::DOCUMENT;
+use aws_smithy_schema::registry::{RegistryEntry, TypeRegistry};
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
-use aws_smithy_schema::Schema;
+use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use aws_smithy_types::document::DocumentObject;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentV2, Number};
+use aws_smithy_types::type_erasure::TypeErasedBox;
+use aws_smithy_types::{
+    BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentV2, Number,
+};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -374,4 +379,53 @@ fn an_override_is_reached_through_a_trait_object() {
     dynamic.write_document_v2(&DOCUMENT, &blob).unwrap();
     assert_eq!(serializer.documents_v2, vec![blob]);
     assert!(serializer.inner.documents.is_empty());
+}
+
+static EMPTY: Schema<'static> = Schema::new_struct(
+    shape_id!("smithy.example", "Empty"),
+    ShapeType::Structure,
+    &[],
+);
+
+#[derive(Debug)]
+struct Empty;
+
+impl SerializableStruct for Empty {
+    fn schema(&self) -> &Schema<'_> {
+        &EMPTY
+    }
+
+    fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        Ok(())
+    }
+}
+
+#[test]
+fn default_typed_document_write_is_unsupported() {
+    let expected = "unsupported operation: this serializer doesn't write typed documents";
+    let mut serializer = V1Serializer::default();
+    let dynamic: &mut dyn ShapeSerializer = &mut serializer;
+    let err = dynamic.write_typed_document(&DOCUMENT, &Empty).unwrap_err();
+    assert!(
+        matches!(err, SerdeError::UnsupportedOperation { .. }),
+        "{err:?}"
+    );
+    assert_eq!(err.to_string(), expected);
+
+    // The registry passes the error on.
+    let registry = TypeRegistry::builder()
+        .insert(
+            EMPTY.shape_id().clone(),
+            RegistryEntry::new(&EMPTY, |_| Ok(TypeErasedBox::new(Empty)))
+                .with_serializable::<Empty>(),
+        )
+        .build();
+    let document = DiscriminatedDocument::new_v2(DocumentV2::Object(DocumentObject::new()))
+        .try_with_discriminator("smithy.example#Empty")
+        .unwrap();
+    let err = registry
+        .serialize_document(&mut serializer, &DOCUMENT, &document)
+        .unwrap_err();
+    assert_eq!(err.to_string(), expected);
+    assert!(serializer.documents.is_empty());
 }

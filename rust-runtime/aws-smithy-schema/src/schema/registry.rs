@@ -18,7 +18,9 @@
 //!    to a `RegistryEntry`, walks the document via [`DocumentShapeDeserializer`](crate::document::DocumentShapeDeserializer)
 //!    or [`DocumentV2ShapeDeserializer`](crate::document::DocumentV2ShapeDeserializer),
 //!    and returns the typed value as a [`TypeErasedBox`] for the caller to
-//!    downcast.
+//!    downcast. [`TypeRegistry::serialize_document`] goes one step further and
+//!    writes that value to a protocol's serializer, so the document is written
+//!    by its shape's schema.
 //! 2. **Schema lookup by shape ID.** Given a [`ShapeId`] (e.g. one extracted
 //!    from an error envelope discriminator), the registry returns the
 //!    corresponding [`Schema`] so generated code can dispatch on it.
@@ -40,7 +42,7 @@ use aws_smithy_types::DiscriminatedDocument;
 
 use crate::document::{with_deserializer, SchemaDocument};
 use crate::schema::error_envelope::sanitize_error_code;
-use crate::serde::{SerdeError, ShapeDeserializer};
+use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::Schema;
 use crate::ShapeId;
 
@@ -64,6 +66,19 @@ pub type DeserializeFn = fn(&mut dyn ShapeDeserializer) -> Result<TypeErasedBox,
 pub type ErrorDeserializeFn =
     fn(&mut dyn ShapeDeserializer) -> Result<Box<dyn std::error::Error + Send + Sync>, SerdeError>;
 
+/// Views a value that an entry's [`DeserializeFn`] produced as a [`SerializableStruct`], or
+/// returns `None` if it holds another type. Set by [`RegistryEntry::with_serializable`].
+type SerializableFn = fn(&TypeErasedBox) -> Option<&dyn SerializableStruct>;
+
+fn as_serializable<T>(value: &TypeErasedBox) -> Option<&dyn SerializableStruct>
+where
+    T: SerializableStruct + fmt::Debug + Send + Sync + 'static,
+{
+    value
+        .downcast_ref::<T>()
+        .map(|value| value as &dyn SerializableStruct)
+}
+
 /// A single entry in a [`TypeRegistry`], pairing a shape's [`Schema`]
 /// with a [`DeserializeFn`] that constructs the typed value.
 ///
@@ -71,13 +86,16 @@ pub type ErrorDeserializeFn =
 /// reified value can be surfaced as the `source` of an unhandled error; see
 /// [`reify_error`]. They can also carry the wire error code that identifies the
 /// shape when the protocol uses one other than the shape name; see
-/// [`with_error_code`](Self::with_error_code).
+/// [`with_error_code`](Self::with_error_code). An entry built with
+/// [`with_serializable`](Self::with_serializable) can also write its shape; see
+/// [`TypeRegistry::serialize_document`].
 #[derive(Clone, Copy)]
 pub struct RegistryEntry {
     schema: &'static Schema<'static>,
     deserialize: DeserializeFn,
     error_deserialize: Option<ErrorDeserializeFn>,
     error_code: Option<&'static str>,
+    serializable: Option<SerializableFn>,
 }
 
 impl RegistryEntry {
@@ -89,6 +107,7 @@ impl RegistryEntry {
             deserialize,
             error_deserialize: None,
             error_code: None,
+            serializable: None,
         }
     }
 
@@ -105,6 +124,7 @@ impl RegistryEntry {
             deserialize,
             error_deserialize: Some(error_deserialize),
             error_code: None,
+            serializable: None,
         }
     }
 
@@ -118,6 +138,21 @@ impl RegistryEntry {
     pub const fn with_error_code(self, code: &'static str) -> Self {
         Self {
             error_code: Some(code),
+            ..self
+        }
+    }
+
+    /// Lets [`TypeRegistry::serialize_document`] write this entry's shape.
+    ///
+    /// `T` is the type that the entry's [`DeserializeFn`] boxes in its
+    /// [`TypeErasedBox`]. `serialize_document` reads a document with the
+    /// `DeserializeFn`, and writes the value as a `T`.
+    pub const fn with_serializable<T>(self) -> Self
+    where
+        T: SerializableStruct + fmt::Debug + Send + Sync + 'static,
+    {
+        Self {
+            serializable: Some(as_serializable::<T> as SerializableFn),
             ..self
         }
     }
@@ -352,6 +387,68 @@ impl TypeRegistry {
         &self,
         document: &DiscriminatedDocument<impl SchemaDocument>,
     ) -> Result<TypeErasedBox, SerdeError> {
+        let (_, entry) = self.entry_for_document(document)?;
+        with_deserializer(document, entry.deserialize)
+    }
+
+    /// Writes `document` to `serializer` as the shape named by its discriminator as a typed document.
+    ///
+    /// The document is read into that shape as [`deserialize_document`](Self::deserialize_document)
+    /// reads it, with the document's settings, so its keys are matched the same way. The value is
+    /// then written with [`ShapeSerializer::write_typed_document`]. So the protocol's serializer
+    /// writes the members by the shape's schema, applying traits such as `@jsonName` and
+    /// `@timestampFormat` to nested structures too, and writes the discriminator by the
+    /// protocol's convention, such as JSON's `__type` member. The result is what the protocol
+    /// writes for the typed value itself, plus the discriminator.
+    ///
+    /// `schema` is the schema of the position being written, as for any [`ShapeSerializer`]
+    /// method: [`prelude::DOCUMENT`](crate::prelude::DOCUMENT) for a document on its own, or a
+    /// member schema inside a structure.
+    ///
+    /// Members that the shape doesn't model are dropped, as `deserialize_document` drops them.
+    /// Nothing is written unless the read succeeds.
+    ///
+    /// # Errors
+    ///
+    /// - [`SerdeError::InvalidInput`] if the document has no discriminator, and
+    ///   [`SerdeError::UnknownMember`] if the discriminator doesn't match a registered shape, as
+    ///   for `deserialize_document`.
+    /// - [`SerdeError::UnsupportedOperation`] if the matching entry wasn't built with
+    ///   [`RegistryEntry::with_serializable`]. Generated registries build every entry with it.
+    /// - The error of the entry's [`DeserializeFn`] if the document doesn't match the shape.
+    /// - [`SerdeError::Custom`] if the entry's `DeserializeFn` boxes another type than the one
+    ///   given to `with_serializable`.
+    /// - The serializer's error. The default `write_typed_document` returns
+    ///   `SerdeError::UnsupportedOperation`, so a protocol without document support keeps
+    ///   rejecting documents.
+    pub fn serialize_document(
+        &self,
+        serializer: &mut dyn ShapeSerializer,
+        schema: &Schema<'_>,
+        document: &DiscriminatedDocument<impl SchemaDocument>,
+    ) -> Result<(), SerdeError> {
+        let (id, entry) = self.entry_for_document(document)?;
+        let as_serializable = entry.serializable.ok_or_else(|| {
+            SerdeError::unsupported(format!(
+                "the registry entry for {id} can't write its shape; build it with \
+                 RegistryEntry::with_serializable"
+            ))
+        })?;
+        let value = with_deserializer(document, entry.deserialize)?;
+        let value = as_serializable(&value).ok_or_else(|| {
+            SerdeError::custom(format!(
+                "the registry entry for {id} reads a different type than the one it writes"
+            ))
+        })?;
+        serializer.write_typed_document(schema, value)
+    }
+
+    /// Resolves `document`'s discriminator to its entry, with the errors that
+    /// [`deserialize_document`](Self::deserialize_document) documents.
+    fn entry_for_document<'d>(
+        &self,
+        document: &'d DiscriminatedDocument<impl SchemaDocument>,
+    ) -> Result<(&'d str, &RegistryEntry), SerdeError> {
         let id = document.discriminator().ok_or_else(|| {
             SerdeError::invalid_input(
                 "document has no discriminator; cannot resolve shape via TypeRegistry".to_string(),
@@ -361,7 +458,7 @@ impl TypeRegistry {
             .entries
             .get(id)
             .ok_or_else(|| SerdeError::unknown_member(id.to_string()))?;
-        with_deserializer(document, entry.deserialize)
+        Ok((id, entry))
     }
 
     /// Combine `self` and `other` into a new registry containing the union
@@ -1450,6 +1547,261 @@ mod tests {
             widget(&base64.with_settings(Arc::new(JsonishSettings))),
             abcd
         );
+    }
+
+    // -- serialize_document tests ---------------------------------------------------------------
+
+    impl SerializableStruct for Foo {
+        fn schema(&self) -> &Schema<'_> {
+            &FOO_SCHEMA
+        }
+
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            match &self.name {
+                Some(name) => ser.write_string(&M_FOO_NAME, name),
+                None => Ok(()),
+            }
+        }
+    }
+
+    impl SerializableStruct for Widget {
+        fn schema(&self) -> &Schema<'_> {
+            &WIDGET_SCHEMA
+        }
+
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            match &self.data {
+                Some(data) => ser.write_blob(&M_WIDGET_DATA, data.clone()),
+                None => Ok(()),
+            }
+        }
+    }
+
+    /// Records the typed documents written to it and their string and blob members. Every other
+    /// method is an error.
+    #[derive(Default)]
+    struct Recorder {
+        events: Vec<String>,
+    }
+
+    macro_rules! unexpected_writes {
+        ($($method:ident($value:ty)),* $(,)?) => {
+            $(
+                fn $method(&mut self, _: &Schema<'_>, _: $value) -> Result<(), SerdeError> {
+                    Err(SerdeError::custom(stringify!($method)))
+                }
+            )*
+        };
+    }
+
+    impl ShapeSerializer for Recorder {
+        fn write_typed_document(
+            &mut self,
+            schema: &Schema<'_>,
+            value: &dyn SerializableStruct,
+        ) -> Result<(), SerdeError> {
+            self.events.push(format!(
+                "typed {} at {}",
+                value.schema().shape_id().as_str(),
+                schema.shape_id().as_str()
+            ));
+            value.serialize_members(self)
+        }
+
+        fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
+            let name = schema.member_name().unwrap_or_default();
+            self.events.push(format!("{name}={value}"));
+            Ok(())
+        }
+
+        fn write_blob(&mut self, schema: &Schema<'_>, value: Blob) -> Result<(), SerdeError> {
+            let name = schema.member_name().unwrap_or_default();
+            self.events.push(format!("{name}={:?}", value.as_ref()));
+            Ok(())
+        }
+
+        fn write_struct(
+            &mut self,
+            _: &Schema<'_>,
+            _: &dyn SerializableStruct,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::custom("write_struct"))
+        }
+
+        fn write_list(
+            &mut self,
+            _: &Schema<'_>,
+            _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::custom("write_list"))
+        }
+
+        fn write_map(
+            &mut self,
+            _: &Schema<'_>,
+            _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Err(SerdeError::custom("write_map"))
+        }
+
+        fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
+            Err(SerdeError::custom("write_null"))
+        }
+
+        unexpected_writes!(
+            write_boolean(bool),
+            write_byte(i8),
+            write_short(i16),
+            write_integer(i32),
+            write_long(i64),
+            write_float(f32),
+            write_double(f64),
+            write_big_integer(&aws_smithy_types::BigInteger),
+            write_big_decimal(&aws_smithy_types::BigDecimal),
+            write_timestamp(&aws_smithy_types::DateTime),
+            write_document(&Document),
+        );
+    }
+
+    fn serializable_registry() -> TypeRegistry {
+        TypeRegistry::builder()
+            .insert(
+                FOO_SCHEMA.shape_id().clone(),
+                RegistryEntry::new(&FOO_SCHEMA, deserialize_foo).with_serializable::<Foo>(),
+            )
+            .insert(
+                WIDGET_SCHEMA.shape_id().clone(),
+                RegistryEntry::new(&WIDGET_SCHEMA, deserialize_widget)
+                    .with_serializable::<Widget>(),
+            )
+            .build()
+    }
+
+    /// Writes `document` through `registry` and returns what was written, or the error and
+    /// what was written before it.
+    fn serialize(
+        registry: &TypeRegistry,
+        document: &DiscriminatedDocument<impl SchemaDocument>,
+    ) -> Result<Vec<String>, (SerdeError, Vec<String>)> {
+        let mut recorder = Recorder::default();
+        match registry.serialize_document(&mut recorder, &crate::prelude::DOCUMENT, document) {
+            Ok(()) => Ok(recorder.events),
+            Err(err) => Err((err, recorder.events)),
+        }
+    }
+
+    #[test]
+    fn serialize_document_writes_the_typed_value_of_either_document_type() {
+        let registry = serializable_registry();
+        let expected = [
+            "typed smithy.example#Foo at smithy.api#Document",
+            "name=hello",
+        ];
+
+        let v1 = DiscriminatedDocument::new(Document::Object(
+            [
+                ("name".to_string(), Document::from("hello")),
+                ("unknown".to_string(), Document::Bool(true)),
+            ]
+            .into(),
+        ))
+        .with_discriminator("smithy.example#Foo");
+        assert_eq!(serialize(&registry, &v1).unwrap(), expected);
+
+        // A member that `Foo` doesn't have is dropped.
+        let v2 = v2_document(
+            [
+                ("name", DocumentV2::from("hello")),
+                ("unknown", DocumentV2::Bool(true)),
+            ],
+            "smithy.example#Foo",
+        );
+        assert_eq!(serialize(&registry, &v2).unwrap(), expected);
+    }
+
+    #[test]
+    fn serialize_document_reads_with_the_documents_settings() {
+        let registry = serializable_registry();
+        let expected = [
+            "typed smithy.example#Widget at smithy.api#Document",
+            "data=[97, 98, 99, 100]",
+        ];
+
+        let native = v2_document(
+            [("data", DocumentV2::Blob(b"abcd".to_vec()))],
+            "smithy.example#Widget",
+        );
+        assert_eq!(serialize(&registry, &native).unwrap(), expected);
+
+        // A blob from a JSON document is a base64 string, which the settings decode.
+        let from_json = DiscriminatedDocument::new(Document::Object(
+            [("data".to_string(), Document::from("YWJjZA=="))].into(),
+        ))
+        .with_discriminator("smithy.example#Widget")
+        .with_settings(Arc::new(JsonishSettings));
+        assert_eq!(serialize(&registry, &from_json).unwrap(), expected);
+    }
+
+    #[test]
+    fn serialize_document_errors_before_writing() {
+        let registry = serializable_registry().compose(
+            TypeRegistry::builder()
+                .insert_shape(&BAR_SCHEMA, deserialize_bar)
+                // Reads a `Foo` and claims to write a `Widget`.
+                .insert(
+                    A_THING_SCHEMA.shape_id().clone(),
+                    RegistryEntry::new(&A_THING_SCHEMA, deserialize_foo)
+                        .with_serializable::<Widget>(),
+                )
+                .build(),
+        );
+
+        let no_discriminator =
+            DiscriminatedDocument::new_v2(DocumentV2::Object(Default::default()));
+        let cases = [
+            (no_discriminator, "InvalidInput"),
+            (
+                v2_document([], "smithy.example#Unregistered"),
+                "UnknownMember",
+            ),
+            (
+                v2_document([], "smithy.example#Bar"),
+                "UnsupportedOperation",
+            ),
+            (
+                v2_document(
+                    [("name", DocumentV2::Blob(b"x".to_vec()))],
+                    "smithy.example#Foo",
+                ),
+                "TypeMismatch",
+            ),
+            (v2_document([], "a.example#Thing"), "Custom"),
+        ];
+        for (document, variant) in cases {
+            let (err, written) = serialize(&registry, &document).unwrap_err();
+            let debug = format!("{err:?}");
+            assert!(debug.starts_with(variant), "{document:?}: {debug}");
+            assert!(written.is_empty(), "{document:?}: {written:?}");
+        }
+
+        let (err, _) = serialize(&registry, &v2_document([], "smithy.example#Bar")).unwrap_err();
+        assert!(err.to_string().contains("with_serializable"), "{err}");
+    }
+
+    #[test]
+    fn with_serializable_sets_only_the_serializer() {
+        const ENTRY: RegistryEntry =
+            RegistryEntry::new_error(&FOO_SCHEMA, deserialize_foo, error_ctor_primary)
+                .with_serializable::<Foo>()
+                .with_error_code("Custom");
+        assert!(ENTRY.serializable.is_some());
+        assert_eq!(ENTRY.error_code(), Some("Custom"));
+        assert!(ENTRY.error_deserialize_fn().is_some());
+        assert_same_fn(ENTRY.deserialize_fn(), deserialize_foo as DeserializeFn);
+        assert_eq!(ENTRY.schema().shape_id(), FOO_SCHEMA.shape_id());
+        assert!(RegistryEntry::new(&FOO_SCHEMA, deserialize_foo)
+            .serializable
+            .is_none());
     }
 
     // -- Builder + Debug tests ------------------------------------------------------------------

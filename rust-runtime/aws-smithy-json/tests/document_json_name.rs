@@ -3,17 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Reading typed shapes from JSON documents whose members are renamed with `@jsonName`.
+//! Reading/writing typed shapes in JSON documents whose members are renamed with `@jsonName`
 //!
 //! A document that `JsonDeserializer` reads keeps the object keys from the wire and carries the
 //! codec's settings. Reading a structure from it, through `as_shape`, `as_shape_v2`, or
 //! `TypeRegistry::deserialize_document`, must match those keys to members exactly as the codec
 //! matches the fields of a structure it reads directly.
+//!
+//! `TypeRegistry::serialize_document` writes a document by the schema of the shape named in its
+//! discriminator, so the bytes are the ones the codec writes for the structure itself,
+//! plus `__type`, whatever keys the document holds.
 
 use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::document::{DiscriminatedDocumentExt, DiscriminatedDocumentV2Ext};
-use aws_smithy_schema::registry::TypeRegistry;
+use aws_smithy_schema::prelude::DOCUMENT;
+use aws_smithy_schema::registry::{RegistryEntry, TypeRegistry};
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
@@ -161,7 +166,10 @@ fn deserialize_pet(deser: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, S
 
 fn registry() -> TypeRegistry {
     TypeRegistry::builder()
-        .insert_shape(&PET_SCHEMA, deserialize_pet)
+        .insert(
+            PET_SCHEMA.shape_id().clone(),
+            RegistryEntry::new(&PET_SCHEMA, deserialize_pet).with_serializable::<Pet>(),
+        )
         .build()
 }
 
@@ -313,4 +321,82 @@ fn documents_from_a_data_object_use_member_names() {
     }
     assert_eq!(v1.as_shape(Pet::deserialize).unwrap(), pet());
     assert_eq!(v2.as_shape_v2(Pet::deserialize).unwrap(), pet());
+}
+
+/// What `codec` writes for `pet()` as a structure, with a `__type` discriminator.
+fn typed_pet_bytes(codec: &JsonCodec) -> Vec<u8> {
+    let mut ser = codec.create_serializer();
+    ser.write_struct(&PET_SCHEMA, &pet()).unwrap();
+    with_type(&ser.finish())
+}
+
+/// Writes `document` with `codec` through the registry.
+fn serialize_document(
+    codec: &JsonCodec,
+    document: &DiscriminatedDocument<impl aws_smithy_schema::document::SchemaDocument>,
+) -> Vec<u8> {
+    let mut ser = codec.create_serializer();
+    registry()
+        .serialize_document(&mut ser, &DOCUMENT, document)
+        .unwrap();
+    ser.finish()
+}
+
+#[test]
+fn registry_writes_documents_from_a_data_object_with_the_codecs_member_names() {
+    let v1 = DiscriminatedDocument::from_struct(&PET_SCHEMA, &pet()).unwrap();
+    let v2 = DiscriminatedDocument::from_struct_v2(&PET_SCHEMA, &pet()).unwrap();
+    for use_json_name in [true, false] {
+        let codec = codec(use_json_name);
+        let expected = typed_pet_bytes(&codec);
+        for written in [
+            serialize_document(&codec, &v1),
+            serialize_document(&codec, &v2),
+        ] {
+            assert_eq!(
+                std::str::from_utf8(&written).unwrap(),
+                std::str::from_utf8(&expected).unwrap(),
+                "use_json_name: {use_json_name}"
+            );
+            assert_eq!(
+                pets_from_documents(&codec, &written),
+                [pet(), pet()],
+                "use_json_name: {use_json_name}"
+            );
+        }
+    }
+
+    // Written without the registry, the document keeps its member-name keys, and a codec that
+    // honors `@jsonName` reads it back wrong: `first` and `second` swap, and the other renamed
+    // members are skipped.
+    let codec = codec(true);
+    let mut ser = codec.create_serializer();
+    ser.write_discriminated_document_v2(&DOCUMENT, &v2).unwrap();
+    let [from_v1, from_v2] = pets_from_documents(&codec, &ser.finish());
+    let misread = Pet {
+        nickname: None,
+        first: Some("two".to_string()),
+        second: Some("one".to_string()),
+        plain: Some("plain".to_string()),
+        owner: Some(Owner { name: None }),
+    };
+    assert_eq!([from_v1, from_v2], [misread.clone(), misread]);
+}
+
+#[test]
+fn registry_rewrites_a_received_document_for_another_codec() {
+    for (reader, writer) in [(codec(true), codec(false)), (codec(false), codec(true))] {
+        let bytes = typed_pet_bytes(&reader);
+        let v1: DiscriminatedDocument = reader
+            .create_deserializer(&bytes)
+            .read_discriminated_document()
+            .unwrap();
+        let v2: DiscriminatedDocument<DocumentV2> = reader
+            .create_deserializer(&bytes)
+            .read_discriminated_document_v2()
+            .unwrap();
+        let expected = typed_pet_bytes(&writer);
+        assert_eq!(serialize_document(&writer, &v1), expected);
+        assert_eq!(serialize_document(&writer, &v2), expected);
+    }
 }
