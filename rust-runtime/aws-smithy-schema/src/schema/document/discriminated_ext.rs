@@ -82,6 +82,12 @@ pub trait DiscriminatedDocumentExt {
     /// callback is typically the generated `<Type>::deserialize`
     /// function on a shape's data carrier or builder.
     ///
+    /// The document's [`settings`](DiscriminatedDocument::settings),
+    /// if any, are passed to the deserializer. A document read from a
+    /// JSON protocol that honors `@jsonName` is then matched by its
+    /// wire names. A document without settings, such as one from
+    /// [`from_struct`](Self::from_struct), is matched by member names.
+    ///
     /// # Errors
     ///
     /// Returns whatever error the `deserialize` callback returns —

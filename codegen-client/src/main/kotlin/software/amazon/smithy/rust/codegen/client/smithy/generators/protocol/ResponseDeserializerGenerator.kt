@@ -673,10 +673,35 @@ class ResponseDeserializerGenerator(
                 *codegenScope,
             )
         } else {
+            // The operation models no errors, so the service-wide error registry is the only
+            // lookup. As in the `_` arm above, a hit becomes the source of the unhandled error,
+            // and a miss or a failed read leaves the generic error unchanged.
             rustTemplate(
-                "#{Err}(#{OrchestratorError}::operation(#{Error}::erase(#{error_symbol}::generic(generic))))",
+                """
+                let source = generic.code().and_then(|error_code| {
+                    protocol
+                        .deserialize_error_response(response, _cfg)
+                        .ok()
+                        .and_then(|mut deser| {
+                            #{reify_error}(
+                                crate::error_type_registry::REGISTRY.or(&#{TypeRegistry}::new()),
+                                error_code,
+                                &mut *deser,
+                            )
+                        })
+                });
+                let err = match source {
+                    #{Some}(source) => <#{error_symbol} as #{CreateUnhandledError}>::create_unhandled_error(source, #{Some}(generic)),
+                    #{None} => #{error_symbol}::generic(generic),
+                };
+                #{Err}(#{OrchestratorError}::operation(#{Error}::erase(err)))
+                """,
                 *codegenScope,
                 "error_symbol" to errorSymbol,
+                "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
+                "TypeRegistry" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::TypeRegistry"),
+                "CreateUnhandledError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError"),
             )
         }
     }

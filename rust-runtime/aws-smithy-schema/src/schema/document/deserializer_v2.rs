@@ -13,14 +13,15 @@ use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings, DocumentV2,
 };
 
-use super::deserializer::{number_to_timestamp, resolve_member};
+use super::deserializer::{number_to_timestamp, resolve_member, uses_json_name};
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
 
 /// Walks a [`DocumentV2`] tree through the [`ShapeDeserializer`] interface.
 ///
 /// It works like [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer): structure
-/// members are matched by Smithy member name, unknown members are skipped, and attached
+/// members are matched by Smithy member name, or by `@jsonName` when the attached settings'
+/// [`DocumentSettings::use_json_name`] says so, unknown members are skipped, and attached
 /// [`DocumentSettings`] decide how strings and numbers become blobs and timestamps. The
 /// differences:
 ///
@@ -80,7 +81,8 @@ impl<'a> DocumentV2ShapeDeserializer<'a> {
     /// [`DocumentSettings::coerce_string_to_blob`],
     /// [`DocumentSettings::coerce_string_to_timestamp`], or
     /// [`DocumentSettings::coerce_number_to_timestamp`]. Native blobs and timestamps don't use
-    /// the settings.
+    /// the settings. A structure's members are matched by `@jsonName` when
+    /// [`DocumentSettings::use_json_name`] returns `true`.
     pub fn new_with_settings(
         document: &'a DocumentV2,
         settings: Option<Arc<dyn DocumentSettings>>,
@@ -152,9 +154,10 @@ impl ShapeDeserializer for DocumentV2ShapeDeserializer<'_> {
             .cursor
             .as_object()
             .ok_or_else(|| type_mismatch("struct (map)", self.cursor))?;
+        let use_json_name = uses_json_name(self.settings.as_deref());
         for (name, value) in members {
             // Unknown members are skipped, like the JSON deserializer does.
-            if let Some(member_schema) = resolve_member(schema, name) {
+            if let Some(member_schema) = resolve_member(schema, name, use_json_name) {
                 consumer(member_schema, &mut self.child(value))?;
             }
         }
@@ -396,6 +399,97 @@ mod tests {
                 ("name".to_string(), "Iago".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn read_struct_matches_json_names_when_settings_use_them() {
+        static M_NICKNAME: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Pet", "nickname"),
+            ShapeType::String,
+            "nickname",
+            0,
+        )
+        .with_json_name("Nickname");
+        static M_OWNER: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Pet", "owner"),
+            ShapeType::Structure,
+            "owner",
+            1,
+        );
+        static PET_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Pet"),
+            ShapeType::Structure,
+            &[&M_NICKNAME, &M_OWNER],
+        );
+        static M_OWNER_NAME: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Owner", "name"),
+            ShapeType::String,
+            "name",
+            0,
+        )
+        .with_json_name("Name");
+        static OWNER_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Owner"),
+            ShapeType::Structure,
+            &[&M_OWNER_NAME],
+        );
+
+        #[derive(Debug)]
+        struct Naming(bool);
+        impl DocumentSettings for Naming {
+            fn protocol_id(&self) -> &str {
+                "smithy.example#Naming"
+            }
+            fn use_json_name(&self) -> bool {
+                self.0
+            }
+        }
+
+        // The `owner` member has no `@jsonName`, so its member name is its key in both modes.
+        let document = DocumentV2::Object(DocumentObject::from([
+            ("Nickname".to_string(), DocumentV2::from("json name")),
+            (
+                "owner".to_string(),
+                DocumentV2::Object(DocumentObject::from([
+                    ("name".to_string(), DocumentV2::from("member name")),
+                    ("Name".to_string(), DocumentV2::from("json name")),
+                ])),
+            ),
+            ("nickname".to_string(), DocumentV2::from("member name")),
+        ]));
+        let read = |settings: Option<Arc<dyn DocumentSettings>>| {
+            let mut seen = Vec::new();
+            DocumentV2ShapeDeserializer::new_with_settings(&document, settings)
+                .read_struct(&PET_SCHEMA, &mut |member, sub| {
+                    if member.member_index() == Some(1) {
+                        sub.read_struct(&OWNER_SCHEMA, &mut |name, value| {
+                            seen.push(("owner.name", value.read_string(name)?));
+                            Ok(())
+                        })
+                    } else {
+                        seen.push(("nickname", sub.read_string(member)?));
+                        Ok(())
+                    }
+                })
+                .unwrap();
+            seen
+        };
+        let expected = |source: &str| {
+            vec![
+                ("owner.name", source.to_string()),
+                ("nickname", source.to_string()),
+            ]
+        };
+        // Members are visited in the document's order.
+        assert_eq!(
+            read(Some(Arc::new(Naming(true)))),
+            vec![
+                ("nickname", "json name".to_string()),
+                ("owner.name", "json name".to_string()),
+            ]
+        );
+        assert_eq!(read(Some(Arc::new(Naming(false)))), expected("member name"));
+        assert_eq!(read(None), expected("member name"));
     }
 
     #[test]

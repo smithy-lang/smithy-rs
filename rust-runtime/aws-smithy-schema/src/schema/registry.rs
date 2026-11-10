@@ -69,12 +69,15 @@ pub type ErrorDeserializeFn =
 ///
 /// Error-registry entries additionally carry an [`ErrorDeserializeFn`] so the
 /// reified value can be surfaced as the `source` of an unhandled error; see
-/// [`reify_error`].
+/// [`reify_error`]. They can also carry the wire error code that identifies the
+/// shape when the protocol uses one other than the shape name; see
+/// [`with_error_code`](Self::with_error_code).
 #[derive(Clone, Copy)]
 pub struct RegistryEntry {
     schema: &'static Schema<'static>,
     deserialize: DeserializeFn,
     error_deserialize: Option<ErrorDeserializeFn>,
+    error_code: Option<&'static str>,
 }
 
 impl RegistryEntry {
@@ -85,6 +88,7 @@ impl RegistryEntry {
             schema,
             deserialize,
             error_deserialize: None,
+            error_code: None,
         }
     }
 
@@ -100,6 +104,21 @@ impl RegistryEntry {
             schema,
             deserialize,
             error_deserialize: Some(error_deserialize),
+            error_code: None,
+        }
+    }
+
+    /// Sets the wire error code that identifies this shape in error responses.
+    ///
+    /// Use this when the protocol identifies the error by a code other than
+    /// the shape name, such as the `code` of an `@awsQueryError` trait for the
+    /// awsQuery and awsQueryCompatible protocols.
+    /// [`TypeRegistry::entry_for_error_code`] matches this code before it
+    /// matches shape names.
+    pub const fn with_error_code(self, code: &'static str) -> Self {
+        Self {
+            error_code: Some(code),
+            ..self
         }
     }
 
@@ -118,6 +137,12 @@ impl RegistryEntry {
     pub fn error_deserialize_fn(&self) -> Option<ErrorDeserializeFn> {
         self.error_deserialize
     }
+
+    /// The wire error code set with [`with_error_code`](Self::with_error_code),
+    /// if any.
+    pub fn error_code(&self) -> Option<&'static str> {
+        self.error_code
+    }
 }
 
 impl fmt::Debug for RegistryEntry {
@@ -125,6 +150,7 @@ impl fmt::Debug for RegistryEntry {
         // The DeserializeFn pointer is not useful to print; show the shape id.
         f.debug_struct("RegistryEntry")
             .field("shape_id", self.schema.shape_id())
+            .field("error_code", &self.error_code)
             .finish_non_exhaustive()
     }
 }
@@ -232,19 +258,37 @@ impl TypeRegistry {
     ///
     /// `wire_code` is sanitized first (a leading `namespace#` prefix and a
     /// trailing `:url` suffix are stripped), so a bare name, a fully qualified
-    /// name, or a URL-suffixed code all resolve correctly. Matching is by the
-    /// registered shape's name; per-operation and per-service error sets are
-    /// small, so a linear scan is sufficient and needs no extra generated index.
+    /// name, or a URL-suffixed code all resolve correctly.
     ///
-    /// Returns `None` if no registered shape's name matches the code.
-    //
-    // TODO(schema-error): honor an `@awsQueryError` code override once `Schema`
-    // carries that trait — awsQueryCompatible services can emit a custom error
-    // code that differs from the shape name, which this name-based match would miss.
+    /// An entry matches when the code equals its
+    /// [error code](RegistryEntry::with_error_code) or its shape name. A match
+    /// on an error code wins over a match on a shape name. When several entries
+    /// match the same way, the one with the smallest shape ID (compared as
+    /// fully qualified names) wins, so the result doesn't depend on insertion
+    /// or iteration order. To give one registry's entries precedence over
+    /// another's, layer them with [`or`](Self::or).
+    ///
+    /// Per-operation and per-service error sets are small, so this scans every
+    /// entry rather than keeping an index.
+    ///
+    /// Returns `None` if no entry matches the code.
     pub fn entry_for_error_code(&self, wire_code: &str) -> Option<&RegistryEntry> {
         let wire_code = sanitize_error_code(wire_code);
-        self.iter()
-            .find_map(|(id, entry)| (id.shape_name() == wire_code).then_some(entry))
+        let mut by_error_code: Option<(&ShapeId<'static>, &RegistryEntry)> = None;
+        let mut by_shape_name: Option<(&ShapeId<'static>, &RegistryEntry)> = None;
+        for (id, entry) in &self.entries {
+            let best = if entry.error_code == Some(wire_code) {
+                &mut by_error_code
+            } else if id.shape_name() == wire_code {
+                &mut by_shape_name
+            } else {
+                continue;
+            };
+            if best.is_none_or(|(best_id, _)| id.as_str() < best_id.as_str()) {
+                *best = Some((id, entry));
+            }
+        }
+        by_error_code.or(by_shape_name).map(|(_, entry)| entry)
     }
 
     /// Deserialize the given `document` into the shape pointed to by its
@@ -413,6 +457,9 @@ impl ComposedRegistry<'_> {
 
     /// Look up an entry by wire error code, consulting `primary` then
     /// `fallback`. See [`TypeRegistry::entry_for_error_code`].
+    ///
+    /// Any match in `primary`, by error code or by shape name, wins over every
+    /// match in `fallback`.
     ///
     /// This is the operation-scoped error resolution primitive: with an
     /// operation's error registry as `primary` and the service-wide registry
@@ -795,6 +842,108 @@ mod tests {
         // A namespace that happens to share the name's text must not match on
         // the namespace component — matching is on the shape name only.
         assert!(registry.entry_for_error_code("Foo#Nope").is_none());
+    }
+
+    // Structures with the same name in different namespaces.
+    static A_THING_SCHEMA: Schema<'static> =
+        Schema::new_struct(shape_id!("a.example", "Thing"), ShapeType::Structure, &[]);
+    static B_THING_SCHEMA: Schema<'static> =
+        Schema::new_struct(shape_id!("b.example", "Thing"), ShapeType::Structure, &[]);
+
+    fn insert_with_code(
+        builder: TypeRegistryBuilder,
+        schema: &'static Schema<'static>,
+        code: &'static str,
+    ) -> TypeRegistryBuilder {
+        builder.insert(
+            schema.shape_id().clone(),
+            RegistryEntry::new(schema, deserialize_foo).with_error_code(code),
+        )
+    }
+
+    fn matched_shape(entry: Option<&RegistryEntry>) -> Option<&str> {
+        entry.map(|entry| entry.schema().shape_id().as_str())
+    }
+
+    #[test]
+    fn with_error_code_sets_only_the_error_code() {
+        const ENTRY: RegistryEntry =
+            RegistryEntry::new(&FOO_SCHEMA, deserialize_foo).with_error_code("Custom");
+        assert_eq!(ENTRY.error_code(), Some("Custom"));
+        assert_eq!(ENTRY.schema().shape_id(), FOO_SCHEMA.shape_id());
+        assert_same_fn(ENTRY.deserialize_fn(), deserialize_foo as DeserializeFn);
+        assert!(ENTRY.error_deserialize_fn().is_none());
+
+        let error = RegistryEntry::new_error(&FOO_SCHEMA, deserialize_foo, error_ctor_primary);
+        assert_eq!(error.error_code(), None);
+        assert!(error
+            .with_error_code("Custom")
+            .error_deserialize_fn()
+            .is_some());
+        assert_eq!(
+            RegistryEntry::new(&FOO_SCHEMA, deserialize_foo).error_code(),
+            None
+        );
+    }
+
+    #[test]
+    fn entry_for_error_code_matches_error_codes_before_shape_names() {
+        // `Foo` is identified on the wire by `Custom`, and `Bar` by `Foo`.
+        let builder = insert_with_code(TypeRegistry::builder(), &FOO_SCHEMA, "Custom");
+        let registry = insert_with_code(builder, &BAR_SCHEMA, "Foo").build();
+        let shape = |code| matched_shape(registry.entry_for_error_code(code));
+
+        assert_eq!(shape("Custom"), Some("smithy.example#Foo"));
+        assert_eq!(
+            shape("smithy.example#Custom:http://x"),
+            Some("smithy.example#Foo")
+        );
+        // `Foo` is `Bar`'s error code, which wins over the shape named `Foo`.
+        assert_eq!(shape("Foo"), Some("smithy.example#Bar"));
+        // A shape name still matches when no error code does.
+        assert_eq!(shape("Bar"), Some("smithy.example#Bar"));
+        assert_eq!(shape("Nope"), None);
+    }
+
+    #[test]
+    fn entry_for_error_code_breaks_ties_by_shape_id() {
+        // Each registry gets its own hash seed, so iteration order differs
+        // between them, and an order-dependent match would fail some rounds.
+        for _ in 0..32 {
+            let by_name = TypeRegistry::builder()
+                .insert_shape(&B_THING_SCHEMA, deserialize_foo)
+                .insert_shape(&A_THING_SCHEMA, deserialize_foo)
+                .build();
+            assert_eq!(
+                matched_shape(by_name.entry_for_error_code("Thing")),
+                Some("a.example#Thing")
+            );
+
+            let builder = insert_with_code(TypeRegistry::builder(), &B_THING_SCHEMA, "Shared");
+            let by_code = insert_with_code(builder, &A_THING_SCHEMA, "Shared").build();
+            assert_eq!(
+                matched_shape(by_code.entry_for_error_code("Shared")),
+                Some("a.example#Thing")
+            );
+        }
+    }
+
+    #[test]
+    fn composed_registry_prefers_any_primary_match_for_error_codes() {
+        // The primary matches `Foo` by shape name, and the fallback by error code.
+        let primary = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let fallback = insert_with_code(TypeRegistry::builder(), &BAR_SCHEMA, "Foo").build();
+        let composed = primary.or(&fallback);
+        assert_eq!(
+            matched_shape(composed.entry_for_error_code("Foo")),
+            Some("smithy.example#Foo")
+        );
+        assert_eq!(
+            matched_shape(fallback.or(&primary).entry_for_error_code("Foo")),
+            Some("smithy.example#Bar")
+        );
     }
 
     #[test]
