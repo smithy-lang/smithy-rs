@@ -175,7 +175,9 @@ pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
         // By this point `cargo test --no-run` has already succeeded, so the compile is a no-op and
         // the run phase emits no compiler-message at all — measured. The evidence is the harness's.
         Step::Test => {
-            if assertions_ran_and_failed(&combined) {
+            if connector_failed(&combined) {
+                Verdict::InfraFail
+            } else if assertions_ran_and_failed(&combined) {
                 Verdict::RuntimeFail
             } else {
                 Verdict::InfraFail
@@ -183,6 +185,27 @@ pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
         }
     };
     Some((verdict, diagnose(outcome)))
+}
+
+/// An assertion that reaches the network says it could not get a response at all.
+///
+/// Without this, every such failure is a `RUNTIME_FAIL`: a hard verdict, which stops the remaining
+/// hours of the window and pages saying the published crates are broken. An unreachable network is
+/// a property of the runner, so that attribution is wrong and the window should continue.
+///
+/// **The classifier cannot make this call on its own, and does not try.** From outside the harness,
+/// a failed test is a failed test; nothing in the output distinguishes "the network was down" from
+/// "the published client can no longer do TLS". So the *assertion* decides, having had the SDK error
+/// in hand, and says so with this marker. Any assertion that reaches the network opts in by panicking
+/// with it.
+///
+/// The bias this encodes is deliberate. It trades away detection of one unproven defect class — a
+/// broken platform certificate store, which could not be induced and so may not be detectable here
+/// at all — to avoid stopping a 24-hour window on a network blip, which is demonstrably what this
+/// marker fires on. A real break would still page, every hour, with the marker's own text naming the
+/// connector; the recurrence is what would distinguish it, and that lives above a single leg.
+fn connector_failed(output: &str) -> bool {
+    output.contains("CANARY_CONNECTOR_FAIL")
 }
 
 /// Cargo refused to resolve, as opposed to failing to reach the registry.
@@ -350,17 +373,25 @@ fn summarize_test_run(stdout: &str) -> Option<String> {
     }
 
     // The panic message, which is what says *how* it broke. `assertion ... failed` covers
-    // `assert!`/`assert_eq!`; the `panicked at` line covers an explicit panic or an unwrap.
-    let why = stdout
-        .lines()
-        .map(str::trim)
+    // `assert!` and `assert_eq!`. Otherwise take the line *after* `panicked at`, because that is
+    // where Rust puts the message:
+    //
+    //     thread 'NAME' (ID) panicked at FILE:LINE:COL:
+    //     the message
+    //
+    // Reporting the `panicked at` line itself instead gives a thread name and a file position and
+    // no reason — which is what a real connector failure produced before this.
+    let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
+    let why = lines
+        .iter()
         .find(|l| l.starts_with("assertion "))
         .or_else(|| {
-            stdout
-                .lines()
-                .map(str::trim)
-                .find(|l| l.contains("panicked at"))
-        });
+            lines
+                .iter()
+                .position(|l| l.contains("panicked at"))
+                .and_then(|i| lines[i + 1..].iter().find(|l| !l.is_empty()))
+        })
+        .copied();
 
     let names = failed.join(", ");
     Some(truncate(&match why {
@@ -514,6 +545,56 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert!(!summary.contains("dns error"), "{summary}");
     }
 
+    /// Real output, captured by pointing the probe through a dead proxy
+    /// (`HTTPS_PROXY=http://127.0.0.1:1`), which is the only way the connector failure was
+    /// reproducible. An unreachable network must not stop the window or blame the release.
+    #[test]
+    fn a_connector_failure_in_the_run_phase_is_infra_not_runtime() {
+        let stdout = "running 1 test\n\
+             test platform_native_cert_store_completes_a_real_tls_handshake ... FAILED\n\
+             \n\
+             ---- platform_native_cert_store_completes_a_real_tls_handshake stdout ----\n\
+             thread 'platform_native_cert_store_completes_a_real_tls_handshake' (28336) panicked at tests/platform_tls.rs:89:9:\n\
+             CANARY_CONNECTOR_FAIL: no response reached us, so no TLS handshake is demonstrated. \
+             This is the connector -- the network, or the platform's native certificate store -- \
+             and not the service. class=DispatchFailure, err=DispatchFailure(..)\n\
+             \n\
+             test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let (v, d) = classify(&outcome(Step::Test, stdout, "")).unwrap();
+        assert_eq!(
+            v,
+            Verdict::InfraFail,
+            "an unreachable connector is the runner, not the published graph"
+        );
+        let s = d.summary.unwrap();
+        assert!(s.contains("no response reached us"), "{s}");
+        assert!(
+            !s.contains("panicked at"),
+            "the reason, not the file position: {s}"
+        );
+    }
+
+    /// The containment check, and the one that matters most. The marker buys safety from network
+    /// blips by giving up a hard verdict, so it must not generalise: an ordinary assertion failure
+    /// in the same run, or anywhere near it, is still a `RUNTIME_FAIL`.
+    #[test]
+    fn the_connector_marker_does_not_swallow_a_real_assertion_failure() {
+        let stdout = "running 2 tests\n\
+             test s3_request_response_round_trip ... FAILED\n\
+             \n\
+             ---- s3_request_response_round_trip stdout ----\n\
+             thread 's3_request_response_round_trip' (91) panicked at tests/hermetic.rs:80:5:\n\
+             assertion failed: unexpected signature scheme: AWS3-HMAC-SHA1\n\
+             \n\
+             test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let (v, d) = classify(&outcome(Step::Test, stdout, "")).unwrap();
+        assert_eq!(v, Verdict::RuntimeFail);
+        assert!(
+            d.summary.unwrap().contains("unexpected signature scheme"),
+            "and it still names what broke"
+        );
+    }
+
     /// Induced for real by making one assertion fail. The point of naming the assertions
     /// individually is that a page can say which capability broke, and cargo's stderr for this is
     /// only `error: test failed, to rerun pass --test hermetic`. The harness output below is the
@@ -564,8 +645,12 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
              test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
         let (_, d) = classify(&outcome(Step::Test, stdout, "")).unwrap();
         let s = d.summary.unwrap();
-        assert!(s.starts_with("credential_refresh_honours_expiry: "), "{s}");
-        assert!(s.contains("panicked at"), "{s}");
+        assert_eq!(
+            s,
+            "credential_refresh_honours_expiry: called `Result::unwrap()` on an `Err` value: \
+             ConstructionFailure",
+            "the message, not the thread name and file position"
+        );
     }
 
     /// Two assertions failing is one page, and it should name both.
