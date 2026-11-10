@@ -367,6 +367,14 @@ pub enum Stopped {
     /// Too little of the budget remained for another attempt. The leg reports rather than letting
     /// GitHub kill it silently.
     DeadlineReached,
+    /// A newer release tag exists, so this leg was dispatched for a release that has been
+    /// superseded and did not build.
+    ///
+    /// It reports rather than exiting quietly, because "deliberately skipped" and "died without
+    /// reporting" must not look the same. The second is a real defect and the only thing watching
+    /// for it is a check for an absent report — which would be useless if a superseded leg tripped
+    /// it, and every leg of a superseded release does.
+    Superseded,
 }
 
 /// What the leg concluded.
@@ -387,8 +395,30 @@ pub struct Report {
 }
 
 impl Report {
+    /// The report of a leg that did not build because its release has been superseded. Not green
+    /// and not red: it reached no verdict, and must emit no datapoint.
+    pub fn superseded(leg_id: &str) -> Self {
+        Self {
+            leg_id: leg_id.to_string(),
+            verdict: None,
+            failed_step: None,
+            diagnosis: None,
+            stopped: Some(Stopped::Superseded),
+            attempts: vec![],
+            elapsed: Duration::ZERO,
+        }
+    }
+
+    /// Whether this leg reached any conclusion about the release at all.
+    pub fn reached_a_verdict(&self) -> bool {
+        self.stopped != Some(Stopped::Superseded)
+    }
+
+    /// Green means it ran and found nothing wrong. A leg that never built is not green: it has no
+    /// opinion, and once a verdict becomes a datapoint, "no opinion" must write nothing rather than
+    /// write a zero that says the release is fine.
     pub fn is_green(&self) -> bool {
-        self.verdict.is_none()
+        self.verdict.is_none() && self.reached_a_verdict()
     }
 
     /// The process exit code. A floor hour's exit code carries the stop decision, because `needs:`
@@ -996,6 +1026,45 @@ mod tests {
             exec.calls
         );
         assert_eq!(r.exit_code(), 0, "infra must not stop the window");
+    }
+
+    /// A superseded leg has to be distinguishable from both a green one and a silent one.
+    ///
+    /// Found by running the workflow with a stale tag: all 60 legs skipped correctly, and all 60
+    /// tripped the "no report" warning — the only thing watching for a leg that dies without
+    /// saying anything, which is the failure the budget work had just been about. A warning that
+    /// fires 60 times on a correct run is a warning nobody reads.
+    #[test]
+    fn a_superseded_leg_reports_itself_rather_than_going_quiet() {
+        let r = Report::superseded("new-project--stable");
+
+        assert!(!r.reached_a_verdict());
+        assert!(
+            !r.is_green(),
+            "it never built, so it has no opinion about the release"
+        );
+        assert_eq!(r.exit_code(), 0, "and the window must continue");
+        assert!(r.verdict.is_none());
+        assert!(r.attempts.is_empty());
+
+        // The workflow keys its summary off this exact string.
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(json.contains(r#""stopped":"superseded""#), "{json}");
+        assert!(!json.contains("verdict"), "{json}");
+    }
+
+    /// And a leg that did run is still green, so the stricter `is_green` has not broken the
+    /// ordinary case.
+    #[test]
+    fn a_leg_that_ran_and_found_nothing_is_still_green() {
+        let leg = leg_named("new-project--stable");
+        let mut exec = FakeExec::always_ok();
+        let mut clock = FakeClock::default();
+        let r = run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert!(r.reached_a_verdict());
+        assert!(r.is_green());
+        assert_eq!(r.exit_code(), 0);
     }
 
     /// The deadline must produce a verdict rather than let GitHub kill the job, because a killed job
