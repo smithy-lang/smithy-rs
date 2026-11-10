@@ -71,6 +71,15 @@ enum Command {
         /// Override the 14-minute self-deadline. For testing only.
         #[arg(long)]
         budget_secs: Option<u64>,
+        /// Run whatever is already in `--dir` instead of rendering over it.
+        ///
+        /// Local debugging only, and never in a release run: a leg's guarantee is that it resolves
+        /// the published graph afresh, and reusing a directory means reusing whatever lockfile is
+        /// sitting in it. It exists so a leg can be perturbed by hand — a broken assertion, an
+        /// unsatisfiable requirement — and the real pipeline run over it, which is how the verdicts
+        /// that no scenario produces on purpose get induced.
+        #[arg(long)]
+        reuse_crate: bool,
     },
     /// Materialize one leg's crate into a directory, ready to build.
     GenLeg {
@@ -115,6 +124,7 @@ fn main() -> anyhow::Result<()> {
             dir,
             tag,
             budget_secs,
+            reuse_crate,
         } => {
             if let Some(tag) = &tag {
                 if let Some(newest) = newest_release_tag()? {
@@ -127,9 +137,23 @@ fn main() -> anyhow::Result<()> {
             let clamped = resolve(&stable, &msrv)?;
             let legs = scenarios::legs(&clamped.kept);
             let found = find_leg(&legs, &leg)?;
-            let scenario = scenarios::manifest(&found.manifest)
-                .ok_or_else(|| anyhow::anyhow!("unknown manifest {:?}", found.manifest))?;
-            manifest::materialize(&manifest::render(found, scenario), &dir)?;
+            if reuse_crate {
+                eprintln!(
+                    "WARNING: --reuse-crate: running {} as it already exists on disk. The \
+                     published graph is NOT being resolved afresh, so this run proves nothing \
+                     about a release.",
+                    dir.display()
+                );
+                anyhow::ensure!(
+                    dir.join("Cargo.toml").is_file(),
+                    "--reuse-crate needs a crate in {}; run `gen-leg --out` there first",
+                    dir.display()
+                );
+            } else {
+                let scenario = scenarios::manifest(&found.manifest)
+                    .ok_or_else(|| anyhow::anyhow!("unknown manifest {:?}", found.manifest))?;
+                manifest::materialize(&manifest::render(found, scenario), &dir)?;
+            }
 
             let budget = budget_secs.map(Duration::from_secs).unwrap_or(leg::BUDGET);
             let mut exec = leg::RealExec {

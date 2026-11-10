@@ -325,18 +325,70 @@ fn diagnose(outcome: &StepOutcome) -> Diagnosis {
                 .map(str::to_string);
         }
     }
+    if d.summary.is_none() && outcome.step == Step::Test {
+        d.summary = summarize_test_run(&outcome.stdout);
+    }
     if d.summary.is_none() {
-        // No compiler diagnostic: give the responder the last meaningful line of stderr instead, so
-        // an INFRA_FAIL ticket still says something.
-        d.summary = outcome
-            .stderr
-            .lines()
-            .rev()
-            .map(str::trim)
-            .find(|l| !l.is_empty())
-            .map(truncate);
+        d.summary = summarize_stderr(&outcome.stderr);
     }
     d
+}
+
+/// The failing assertion, named, for a run-phase failure.
+///
+/// The run phase emits no `compiler-message`, and cargo's stderr says only
+/// `error: test failed, to rerun pass --test hermetic`, which tells a responder nothing. The
+/// assertions are individually named precisely so a page can say which capability broke, and that
+/// information is on *stdout*, in the harness's own output. Found by inducing `RUNTIME_FAIL`.
+fn summarize_test_run(stdout: &str) -> Option<String> {
+    let failed: Vec<&str> = stdout
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("test ")?.strip_suffix(" ... FAILED"))
+        .collect();
+    if failed.is_empty() {
+        return None;
+    }
+
+    // The panic message, which is what says *how* it broke. `assertion ... failed` covers
+    // `assert!`/`assert_eq!`; the `panicked at` line covers an explicit panic or an unwrap.
+    let why = stdout
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("assertion "))
+        .or_else(|| {
+            stdout
+                .lines()
+                .map(str::trim)
+                .find(|l| l.contains("panicked at"))
+        });
+
+    let names = failed.join(", ");
+    Some(truncate(&match why {
+        Some(why) => format!("{names}: {why}"),
+        None => format!("{names} failed"),
+    }))
+}
+
+/// The one line of stderr worth putting on a ticket, when there is no compiler diagnostic.
+///
+/// Prefer the first `error:` line, because that is the failure itself. Taking the *last* line
+/// instead looks right and is wrong: a cargo resolve failure ends with a `help:` block, so a
+/// `RESOLVE_FAIL` page read `aws-config = { version = "0.0.26-alpha" }` — a suggestion, presented
+/// where the responder expects the error. Found by inducing the verdict rather than by unit tests.
+///
+/// Measured on both tools the canary runs: cargo puts the failure on its first `error:` line and
+/// follows it with context and `help:`, and rustup puts its entire causal chain *inside* one
+/// `error:` line. One rule covers both.
+fn summarize_stderr(stderr: &str) -> Option<String> {
+    let lines = || stderr.lines().map(str::trim).filter(|l| !l.is_empty());
+    // A continuation of some earlier message, never the message itself.
+    let is_aside = |l: &str| l.starts_with("help:") || l.starts_with("note:");
+
+    lines()
+        .find(|l| l.starts_with("error:"))
+        .or_else(|| lines().rfind(|l| !is_aside(l)))
+        .or_else(|| lines().next_back())
+        .map(truncate)
 }
 
 fn truncate(s: &str) -> String {
@@ -440,19 +492,119 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
     }
 
     /// Measured: `RUSTUP_DIST_SERVER=https://nonexistent.invalid.example rustup toolchain install`
-    /// yields a DNS error and no `compiler-message` at all.
+    /// yields a DNS error and no `compiler-message` at all. The stderr below is the real thing,
+    /// measured: rustup packs the whole causal chain into a single `error:` line.
+    const RUSTUP_DNS_FAILURE: &str = "info: syncing channel updates for 1.95.0-x86_64-unknown-linux-gnu\nerror: could not download file from 'https://nonexistent.invalid.example/dist/channel-rust-1.95.0.toml.sha256' to '/home/user/.rustup/tmp/ug1gpzxowfvbc2w9_file': error downloading file: error sending request for url (https://nonexistent.invalid.example/dist/channel-rust-1.95.0.toml.sha256): client error (Connect): dns error: error resolving DNS: failed to lookup address information: Name or service not known";
+
     #[test]
     fn a_dns_failure_while_installing_a_toolchain_is_infra() {
+        let (v, d) = classify(&outcome(Step::InstallToolchain, "", RUSTUP_DNS_FAILURE)).unwrap();
+        assert_eq!(v, Verdict::InfraFail);
+        let summary = d.summary.unwrap();
+        assert!(
+            summary.starts_with("error: could not download file"),
+            "an INFRA_FAIL ticket should still say something: {summary}"
+        );
+        // The `info:` progress line precedes the error, so last-line or first-line-of-stderr would
+        // both be wrong here.
+        assert!(!summary.contains("syncing channel updates"), "{summary}");
+        // rustup's causal tail — "dns error: ..." — sits past the 200-character budget and is cut.
+        // That is accepted rather than worked around: the verdict already says INFRA_FAIL, which is
+        // the attribution a responder needs, and the full stderr is in the job log.
+        assert!(!summary.contains("dns error"), "{summary}");
+    }
+
+    /// Induced for real by making one assertion fail. The point of naming the assertions
+    /// individually is that a page can say which capability broke, and cargo's stderr for this is
+    /// only `error: test failed, to rerun pass --test hermetic`. The harness output below is the
+    /// real thing, trimmed of the passing lines.
+    #[test]
+    fn a_runtime_failure_summary_names_the_assertion_and_why() {
+        let stdout = "running 11 tests\n\
+             test deliberately_broken_for_induction ... FAILED\n\
+             test s3_request_response_round_trip ... ok\n\
+             \n\
+             failures:\n\
+             \n\
+             ---- deliberately_broken_for_induction stdout ----\n\
+             thread 'deliberately_broken_for_induction' (14364) panicked at tests/hermetic.rs:995:5:\n\
+             assertion `left == right` failed: a published crate changed arithmetic\n  \
+               left: 4\n \
+              right: 5\n\
+             \n\
+             test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
         let (v, d) = classify(&outcome(
-            Step::InstallToolchain,
-            "",
-            "error: could not download file\ndns error: failed to lookup address information",
+            Step::Test,
+            stdout,
+            "error: test failed, to rerun pass `--test hermetic`",
         ))
         .unwrap();
-        assert_eq!(v, Verdict::InfraFail);
+        assert_eq!(v, Verdict::RuntimeFail);
+        assert_eq!(
+            d.summary.as_deref(),
+            Some(
+                "deliberately_broken_for_induction: assertion `left == right` failed: \
+                 a published crate changed arithmetic"
+            )
+        );
+    }
+
+    /// A panic with no assertion message still has to name the test, or the page is unactionable.
+    #[test]
+    fn a_runtime_panic_without_an_assertion_still_names_the_test() {
+        let stdout = "running 1 test\n\
+             test credential_refresh_honours_expiry ... FAILED\n\
+             \n\
+             failures:\n\
+             \n\
+             ---- credential_refresh_honours_expiry stdout ----\n\
+             thread 'credential_refresh_honours_expiry' (91) panicked at tests/hermetic.rs:120:14:\n\
+             called `Result::unwrap()` on an `Err` value: ConstructionFailure\n\
+             \n\
+             test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let (_, d) = classify(&outcome(Step::Test, stdout, "")).unwrap();
+        let s = d.summary.unwrap();
+        assert!(s.starts_with("credential_refresh_honours_expiry: "), "{s}");
+        assert!(s.contains("panicked at"), "{s}");
+    }
+
+    /// Two assertions failing is one page, and it should name both.
+    #[test]
+    fn a_runtime_failure_names_every_failing_assertion() {
+        let stdout = "running 2 tests\n\
+             test presigned_url_is_structurally_fixed_and_byte_stable ... FAILED\n\
+             test paginator_follows_the_continuation_token_across_two_pages ... FAILED\n\
+             \n\
+             test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out\n";
+        let (_, d) = classify(&outcome(Step::Test, stdout, "")).unwrap();
+        let s = d.summary.unwrap();
         assert!(
-            d.summary.unwrap().contains("dns error"),
-            "an INFRA_FAIL ticket should still say something"
+            s.contains("presigned_url_is_structurally_fixed_and_byte_stable"),
+            "{s}"
+        );
+        assert!(
+            s.contains("paginator_follows_the_continuation_token_across_two_pages"),
+            "{s}"
+        );
+    }
+
+    /// Induced for real with `aws-config = "999"`, which is where the last-line rule was caught:
+    /// cargo's final line is a `help:` suggestion, so the page named a version to use instead of
+    /// naming the failure.
+    #[test]
+    fn a_resolve_failure_summary_names_the_error_not_cargos_suggestion() {
+        let stderr = "    Updating crates.io index\n\
+                      error: failed to select a version for the requirement `aws-config = \"^999\"`\n\
+                      candidate versions found which didn't match: 1.13.1, 1.13.0, 1.12.0, ...\n\
+                      location searched: crates.io index\n\
+                      required by package `canary-build-check v0.1.0 (/tmp/induce-resolve)`\n\
+                      help: if you are looking for the prerelease package it needs to be specified explicitly\n    \
+                      aws-config = { version = \"0.0.26-alpha\" }";
+        let (v, d) = classify(&outcome(Step::GenerateLockfile, "", stderr)).unwrap();
+        assert_eq!(v, Verdict::ResolveFail);
+        assert_eq!(
+            d.summary.as_deref(),
+            Some("error: failed to select a version for the requirement `aws-config = \"^999\"`")
         );
     }
 
