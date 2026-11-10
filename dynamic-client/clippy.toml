@@ -1,0 +1,9 @@
+# The same disallowed methods as `rust-runtime/clippy.toml`. Clippy finds this file from any crate
+# in the `dynamic-client/` workspace.
+disallowed-methods = [
+    # fully qualified function/method name:
+    "std::time::SystemTime::now",
+    "std::time::SystemTime::elapsed",
+    "std::time::Instant::now",
+    "std::time::Instant::elapsed"
+]

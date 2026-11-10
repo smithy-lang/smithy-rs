@@ -5,6 +5,7 @@
 
 use crate::changelog::ChangelogNext;
 use crate::copyright::CopyrightHeader;
+use crate::dynamic_client::{DynamicClientForbidsUnsafe, DynamicClientMsrv};
 use crate::lib_rs_attr::StandardizedRuntimeCrateLibRsAttributes;
 use crate::lint::{Check, Fix, Lint, LintError, Mode};
 use crate::lint_cargo_toml::{
@@ -24,6 +25,7 @@ use std::{fs, io};
 mod anchor;
 mod changelog;
 mod copyright;
+mod dynamic_client;
 mod lib_rs_attr;
 mod lint;
 mod lint_cargo_toml;
@@ -125,6 +127,7 @@ fn main() -> Result<()> {
             if cargo_toml || all {
                 errs.extend(CrateAuthor.check_all()?);
                 errs.extend(CrateLicense.check_all()?);
+                errs.extend(DynamicClientMsrv::new()?.check_all()?);
             }
 
             if docsrs_metadata || all {
@@ -143,6 +146,7 @@ fn main() -> Result<()> {
             errs.extend(StableCratesExposeStableCrates::new()?.check_all()?);
             errs.extend(SdkExternalLintsExposesStableCrates::new()?.check_all()?);
             errs.extend(StandardizedRuntimeCrateLibRsAttributes.check_all()?);
+            errs.extend(DynamicClientForbidsUnsafe.check_all()?);
             ok(errs)?
         }
         Args::Fix {
@@ -189,8 +193,16 @@ fn aws_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
     Ok(ls(aws_crate_root)?.filter(|path| is_crate(path.as_path())))
 }
 
+// The crates in the `dynamic-client/` workspace. The runtime crate lints check them too.
+fn dynamic_client_crates() -> Result<impl Iterator<Item = PathBuf>> {
+    let dynamic_client_root = repo_root().join("dynamic-client");
+    Ok(ls(dynamic_client_root)?.filter(|path| is_crate(path.as_path())))
+}
+
 fn all_runtime_crates() -> Result<impl Iterator<Item = PathBuf>> {
-    Ok(aws_runtime_crates()?.chain(smithy_rs_crates()?))
+    Ok(aws_runtime_crates()?
+        .chain(smithy_rs_crates()?)
+        .chain(dynamic_client_crates()?))
 }
 
 fn all_cargo_tomls() -> Result<impl Iterator<Item = PathBuf>> {

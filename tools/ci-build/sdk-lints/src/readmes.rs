@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{all_runtime_crates, anchor, Check, Fix, Lint, LintError};
+use crate::{all_runtime_crates, anchor, repo_root, Check, Fix, Lint, LintError};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,7 +44,10 @@ impl Lint for ReadmesHaveFooters {
     }
 
     fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        // Exclude the dynamic client from the footer check for the AWS SDK and the code generator.
+        let dynamic_client_root = repo_root().join("dynamic-client");
         Ok(all_runtime_crates()?
+            .filter(|path| !path.starts_with(&dynamic_client_root))
             .map(|path| path.join("README.md"))
             .collect())
     }

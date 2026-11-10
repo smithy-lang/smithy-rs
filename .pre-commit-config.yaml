@@ -42,3 +42,20 @@ repos:
     pass_filenames: false
     # Show the info messages from the runtime versioner that explain how things will publish
     verbose: true
+  # Clippy and the tests for the dynamic client, at push time
+  - id: dynamic-client
+    name: dynamic-client
+    entry: ./tools/ci-scripts/check-dynamic-client --fast
+    language: system
+    files: ^dynamic-client/
+    pass_filenames: false
+    stages: [pre-push]
+  # All dynamic client checks, including the nightly ones. Run with
+  # `pre-commit run --hook-stage manual dynamic-client-nightly`.
+  - id: dynamic-client-nightly
+    name: dynamic-client-nightly
+    entry: ./tools/ci-scripts/check-dynamic-client
+    language: system
+    files: ^dynamic-client/
+    pass_filenames: false
+    stages: [manual]
