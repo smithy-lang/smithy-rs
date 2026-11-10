@@ -126,7 +126,7 @@ impl Default for Builder<TlsUnset> {
             time_source: None,
             sleep_impl: None,
             tcp_nodelay: true,
-            tcp_keepalive: TriStateOption::NotSet,
+            tcp_keepalive: TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
             max_connections_per_host: None,
             reuse_scope: ConnectionReuseScope::default(),
             partitions: None,
@@ -837,7 +837,7 @@ mod tests {
     fn builder_preserves_unset_disabled_and_configured_settings() {
         let mut builder = Builder::default();
         assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
-        assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
+        assert_eq!(TriStateOption::Set(DEFAULT_TCP_KEEPALIVE), builder.tcp_keepalive);
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
