@@ -185,7 +185,12 @@ pub fn commands(leg: &Leg) -> Vec<Command> {
 
 /// Executes a command. Injected so the retry and deadline logic is testable without sleeping.
 pub trait Exec {
-    fn run(&mut self, command: &Command) -> StepOutcome;
+    /// Run one command, giving up after `remaining`.
+    ///
+    /// The bound is the caller's remaining budget rather than a per-step constant, so there is no
+    /// second number to keep in step with the leg's 14-minute limit. An implementation that exceeds
+    /// it hands the kill decision to GitHub, which reports nothing.
+    fn run(&mut self, command: &Command, remaining: Duration) -> StepOutcome;
 }
 
 /// Elapsed time and sleeping. Injected for the same reason.
@@ -201,47 +206,119 @@ pub struct RealExec {
     pub verbose: bool,
 }
 
+/// How often the bounded wait checks whether the child has finished. Short enough that a leg does
+/// not idle noticeably past its deadline, long enough not to spin.
+const POLL: Duration = Duration::from_millis(200);
+
+/// Read one of the child's pipes to EOF on its own thread.
+///
+/// Both pipes must be drained concurrently with the wait. Polling `try_wait` while the child writes
+/// to a full pipe deadlocks: the child blocks on the write, so it never exits, so the poll never
+/// ends. `cargo build --message-format=json` emits megabytes — far past any pipe buffer — so this is
+/// the ordinary case and not a corner one.
+fn drain<R: std::io::Read + Send + 'static>(src: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut src) = src {
+            let _ = src.read_to_end(&mut buf);
+        }
+        buf
+    })
+}
+
 impl Exec for RealExec {
-    fn run(&mut self, command: &Command) -> StepOutcome {
+    fn run(&mut self, command: &Command, remaining: Duration) -> StepOutcome {
         if self.verbose {
             eprintln!("+ {command}");
         }
-        let output = std::process::Command::new(&command.program)
+        let outcome = |exit_code, stdout: String, stderr: String, timed_out| StepOutcome {
+            step: command.step,
+            exit_code,
+            stdout,
+            stderr,
+            // The runner sets this; the executor does not know the leg.
+            expects_assertions: false,
+            timed_out,
+        };
+
+        let spawned = std::process::Command::new(&command.program)
             .args(&command.args)
             .current_dir(&self.dir)
-            .output();
-        match output {
-            Ok(o) => {
-                let stdout = String::from_utf8_lossy(&o.stdout).into_owned();
-                let stderr = String::from_utf8_lossy(&o.stderr).into_owned();
-                if self.verbose && !stderr.trim().is_empty() {
-                    eprintln!("{stderr}");
-                }
-                // Echo stdout too, but not the json: cargo's `--message-format=json` stdout is
-                // machine output and megabytes of it would bury the log. The run phase's stdout is
-                // the test harness's own report — which assertions ran, and how many passed — and
-                // omitting it meant a green leg's log could not be told from one that ran nothing.
-                if self.verbose && !command.json && !stdout.trim().is_empty() {
-                    eprintln!("{stdout}");
-                }
-                StepOutcome {
-                    step: command.step,
-                    exit_code: o.status.code(),
-                    stdout,
-                    stderr,
-                    // The runner sets this; the executor does not know the leg.
-                    expects_assertions: false,
-                }
-            }
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn();
+
+        let mut child = match spawned {
+            Ok(c) => c,
             // The program could not be spawned at all — rustup or cargo missing from PATH. That is
             // the runner, so it must look like infra rather than be allowed to panic.
-            Err(e) => StepOutcome {
-                step: command.step,
-                exit_code: None,
-                stdout: String::new(),
-                stderr: format!("failed to spawn {}: {e}", command.program),
-                expects_assertions: false,
-            },
+            Err(e) => {
+                return outcome(
+                    None,
+                    String::new(),
+                    format!("failed to spawn {}: {e}", command.program),
+                    false,
+                )
+            }
+        };
+
+        let out_reader = drain(child.stdout.take());
+        let err_reader = drain(child.stderr.take());
+
+        // The bound that makes a hang reportable. Without it this was `output()`, which blocks
+        // until the child exits: a stalled network read in `generate-lockfile` or a toolchain
+        // download meant the leg never returned, GitHub killed the job at `timeout-minutes`, and a
+        // killed job runs no further steps and so emits *nothing*. Nothing is worse than a red
+        // verdict, because an absent datapoint cannot raise an alarm.
+        let started = std::time::Instant::now();
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break Some(status),
+                Err(e) => {
+                    return outcome(None, String::new(), format!("could not wait: {e}"), false)
+                }
+                Ok(None) => {}
+            }
+            if started.elapsed() >= remaining {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            std::thread::sleep(POLL);
+        };
+
+        // Joining after the child is gone: both pipes are closed, so the readers finish promptly
+        // whether it exited or was killed, and whatever it managed to write is still captured.
+        let stdout = String::from_utf8_lossy(&out_reader.join().unwrap_or_default()).into_owned();
+        let stderr = String::from_utf8_lossy(&err_reader.join().unwrap_or_default()).into_owned();
+
+        if self.verbose && !stderr.trim().is_empty() {
+            eprintln!("{stderr}");
+        }
+        // Echo stdout too, but not the json: cargo's `--message-format=json` stdout is machine
+        // output and megabytes of it would bury the log. The run phase's stdout is the test
+        // harness's own report — which assertions ran, and how many passed — and omitting it meant a
+        // green leg's log could not be told from one that ran nothing.
+        if self.verbose && !command.json && !stdout.trim().is_empty() {
+            eprintln!("{stdout}");
+        }
+
+        match status {
+            Some(status) => outcome(status.code(), stdout, stderr, false),
+            None => {
+                if self.verbose {
+                    eprintln!(
+                        "! killed after {:?}: the leg's remaining budget was {remaining:?}",
+                        started.elapsed()
+                    );
+                }
+                let note = format!(
+                    "the canary killed this command after {:?}, which was all of the leg's \
+                     remaining budget",
+                    started.elapsed()
+                );
+                outcome(None, stdout, format!("{stderr}\n{note}"), true)
+            }
         }
     }
 }
@@ -336,7 +413,11 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
         // whose failure mode changes between attempts is governed by the latest one.
         loop {
             attempt += 1;
-            let mut outcome = exec.run(&command);
+            // Each command may use whatever is left of the leg's budget and no more. Deriving it
+            // rather than configuring a per-step timeout means there is no second number to keep
+            // consistent with the 14-minute bound, and the leg cannot overrun however it fails.
+            let remaining = budget.saturating_sub(clock.elapsed());
+            let mut outcome = exec.run(&command, remaining);
             // Whether this leg has assertions is a property of the leg, not of the command, so the
             // executor stays ignorant of it and the runner fills it in. Only the app body renders
             // `tests/hermetic.rs`; a stub body running zero tests is correct, not suspicious.
@@ -431,6 +512,11 @@ mod tests {
         stdout: String,
         stderr: String,
         calls: Vec<Step>,
+        /// A step that hangs: the real executor would kill it for exceeding the remaining budget.
+        hangs: Option<Step>,
+        /// The `remaining` each call was given, so the test can check the budget is being handed
+        /// down rather than silently ignored.
+        budgets: Vec<Duration>,
     }
     impl FakeExec {
         fn always_ok() -> Self {
@@ -439,6 +525,8 @@ mod tests {
                 stdout: String::new(),
                 stderr: String::new(),
                 calls: vec![],
+                hangs: None,
+                budgets: vec![],
             }
         }
         fn failing(step: Step, codes: Vec<i32>, stdout: &str, stderr: &str) -> Self {
@@ -447,12 +535,31 @@ mod tests {
                 stdout: stdout.into(),
                 stderr: stderr.into(),
                 calls: vec![],
+                hangs: None,
+                budgets: vec![],
+            }
+        }
+        fn hanging_on(step: Step) -> Self {
+            Self {
+                hangs: Some(step),
+                ..Self::always_ok()
             }
         }
     }
     impl Exec for FakeExec {
-        fn run(&mut self, command: &Command) -> StepOutcome {
+        fn run(&mut self, command: &Command, remaining: Duration) -> StepOutcome {
             self.calls.push(command.step);
+            self.budgets.push(remaining);
+            if self.hangs == Some(command.step) {
+                return StepOutcome {
+                    step: command.step,
+                    exit_code: None,
+                    stdout: String::new(),
+                    stderr: "killed for running past the budget".into(),
+                    expects_assertions: false,
+                    timed_out: true,
+                };
+            }
             let code = self
                 .script
                 .iter_mut()
@@ -486,6 +593,7 @@ mod tests {
                 },
                 // Filled in by `run`, which is the only thing that knows the leg.
                 expects_assertions: false,
+                timed_out: false,
             }
         }
     }
@@ -684,9 +792,8 @@ mod tests {
         let leg = leg_named("new-project--stable");
         let mut exec = FakeExec {
             script: vec![(Step::Fetch, vec![1, 0]), (Step::Build, vec![1, 1, 1])],
-            stdout: String::new(),
             stderr: "network unreachable".into(),
-            calls: vec![],
+            ..FakeExec::always_ok()
         };
         let mut clock = FakeClock::default();
         let r = run(&leg, &mut exec, &mut clock, BUDGET);
@@ -711,9 +818,8 @@ mod tests {
         let leg = leg_named("new-project--stable");
         let mut exec = FakeExec {
             script: vec![(Step::Build, vec![1, 1, 0])],
-            stdout: String::new(),
             stderr: "runner hiccup".into(),
-            calls: vec![],
+            ..FakeExec::always_ok()
         };
         let mut clock = FakeClock::default();
         let r = run(&leg, &mut exec, &mut clock, BUDGET);
@@ -764,6 +870,132 @@ mod tests {
         assert_eq!(r.verdict, Some(Verdict::ResolveFail));
         assert_eq!(clock.slept, [Duration::from_secs(60)]);
         assert_eq!(r.exit_code(), 1);
+    }
+
+    /// The case the deadline exists for, against the real executor and a real hanging process.
+    ///
+    /// Everything else here uses a fake clock, which proves the retry arithmetic and nothing about
+    /// a command that never returns. This was `Command::output()` — it blocks until the child
+    /// exits, so a stalled network read meant the leg never came back, GitHub killed the job at
+    /// `timeout-minutes`, and a killed job runs no further steps and emits *nothing*. Silence is
+    /// worse than a red verdict, because an absent datapoint cannot raise an alarm.
+    #[cfg(unix)]
+    #[test]
+    fn a_hanging_command_is_killed_and_reported_rather_than_waited_on() {
+        let mut exec = RealExec {
+            dir: std::env::temp_dir(),
+            verbose: false,
+        };
+        let command = Command {
+            step: Step::GenerateLockfile,
+            program: "sleep".into(),
+            args: vec!["120".into()],
+            json: false,
+        };
+
+        let started = std::time::Instant::now();
+        let outcome = exec.run(&command, Duration::from_millis(600));
+        let took = started.elapsed();
+
+        assert!(outcome.timed_out, "it must report that it was killed");
+        assert!(
+            took < Duration::from_secs(10),
+            "it waited {took:?} on a 120-second sleep given 600ms"
+        );
+        assert!(
+            outcome.stderr.contains("killed this command"),
+            "{outcome:?}"
+        );
+
+        // And the verdict blames the runner, not the release.
+        let (verdict, diagnosis) = classify::classify(&outcome).expect("a kill is not a pass");
+        assert_eq!(verdict, Verdict::InfraFail);
+        assert!(
+            diagnosis
+                .summary
+                .unwrap()
+                .contains("ran past the leg's budget"),
+            "the page has to say why there is no verdict"
+        );
+    }
+
+    /// A command that produces more output than a pipe buffer holds must still be waited on
+    /// correctly. Polling `try_wait` without draining the pipes concurrently deadlocks: the child
+    /// blocks writing, so it never exits, so the poll never ends. `cargo build
+    /// --message-format=json` emits megabytes, so this is the ordinary path.
+    #[cfg(unix)]
+    #[test]
+    fn a_command_that_floods_its_pipe_does_not_deadlock() {
+        let mut exec = RealExec {
+            dir: std::env::temp_dir(),
+            verbose: false,
+        };
+        let command = Command {
+            step: Step::Build,
+            program: "sh".into(),
+            // ~2 MiB on stdout, far past the 64 KiB pipe buffer.
+            args: vec![
+                "-c".into(),
+                "i=0; while [ $i -lt 2048 ]; do printf '%01024d\\n' $i; i=$((i+1)); done".into(),
+            ],
+            json: true,
+        };
+
+        let outcome = exec.run(&command, Duration::from_secs(30));
+        assert!(
+            !outcome.timed_out,
+            "it should have finished, not been killed"
+        );
+        assert_eq!(outcome.exit_code, Some(0));
+        assert!(
+            outcome.stdout.len() > 2_000_000,
+            "captured {} bytes; the pipe should have been drained in full",
+            outcome.stdout.len()
+        );
+    }
+
+    /// Each command is handed what is left of the leg's budget, not a fresh constant, so a leg
+    /// cannot overrun however it fails.
+    #[test]
+    fn each_command_gets_only_the_budget_that_remains() {
+        let leg = leg_named("new-project--stable");
+        let mut exec = FakeExec::failing(Step::Fetch, vec![1, 1, 0], "", "network unreachable");
+        let mut clock = FakeClock::default();
+        run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert!(exec.budgets.len() >= 4, "{:?}", exec.budgets);
+        for w in exec.budgets.windows(2) {
+            assert!(
+                w[1] <= w[0],
+                "the budget must only ever shrink: {:?}",
+                exec.budgets
+            );
+        }
+        assert_eq!(exec.budgets[0], BUDGET, "the first command gets all of it");
+        assert!(
+            *exec.budgets.last().unwrap() < BUDGET,
+            "and later ones get less, after the retry waits: {:?}",
+            exec.budgets
+        );
+    }
+
+    /// A hang anywhere in the leg ends it with a verdict, rather than leaving later steps to run on
+    /// a budget that is already spent.
+    #[test]
+    fn a_hanging_step_ends_the_leg_with_infra_fail() {
+        let leg = leg_named("new-project--stable");
+        let mut exec = FakeExec::hanging_on(Step::Build);
+        let mut clock = FakeClock::default();
+        let r = run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert_eq!(r.verdict, Some(Verdict::InfraFail));
+        assert_eq!(r.failed_step, Some(Step::Build));
+        assert!(
+            !exec.calls.contains(&Step::TestNoRun) && !exec.calls.contains(&Step::Test),
+            "nothing after the hang should have run: {:?}",
+            exec.calls
+        );
+        assert_eq!(r.exit_code(), 0, "infra must not stop the window");
     }
 
     /// The deadline must produce a verdict rather than let GitHub kill the job, because a killed job
