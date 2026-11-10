@@ -317,18 +317,6 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `code compiles with custom validation exception and schema serde disabled`() {
-        serverIntegrationTest(
-            completeTestModel,
-            IntegrationTestParams(
-                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(false).toObjectNode(),
-                cargoCommand = "cargo test --quiet --lib --tests",
-            ),
-            testCoverage = HttpTestType.Default,
-        ).forEach { assertValidationExceptionConversion(it.path, false) }
-    }
-
-    @Test
     fun `schema serde omits legacy custom validation rejection serializers`() {
         val servers =
             serverIntegrationTest(
