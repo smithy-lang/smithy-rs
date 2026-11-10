@@ -65,6 +65,13 @@ jobs:
     - name: Expand
       id: expand
       working-directory: tools/ci-build/canary
+      # Inputs come in through `env`, never interpolated into the script. `${{ }}` is substituted
+      # into the command *text* before any shell sees it, so a value carrying a quote and `$(...)`
+      # would execute on the runner. Dispatch inputs need write access today, but this workflow is
+      # due to gain `id-token: write` and a role to assume, and at that point an injection here
+      # reaches AWS.
+      env:
+        SCENARIO: ${{ inputs.scenario }}
       run: |
         set -euo pipefail
 
@@ -77,7 +84,7 @@ jobs:
         cargo run --quiet -- gen-matrix --stable "${STABLE}" --msrv "${MSRV}" > /tmp/all.json
 
         # Filter by leg id or manifest name. `all` keeps everything.
-        python3 - "${{ inputs.scenario }}" <<'PY' > /tmp/legs.json
+        python3 - "${SCENARIO}" <<'PY' > /tmp/legs.json
         import json, sys
         want = sys.argv[1]
         legs = json.load(open('/tmp/all.json'))
@@ -93,15 +100,20 @@ jobs:
         echo "count=$(python3 -c 'import json;print(len(json.load(open("/tmp/legs.json"))))')" >> "$GITHUB_OUTPUT"
 
     - name: Summarise
+      env:
+        SCENARIO: ${{ inputs.scenario }}
+        TIER: ${{ inputs.tier }}
+        COUNT: ${{ steps.expand.outputs.count }}
+        LEGS: ${{ steps.expand.outputs.legs }}
       run: |
         {
           echo "### Build canary matrix"
           echo ""
-          echo "${{ steps.expand.outputs.count }} legs, tier \`${{ inputs.tier }}\`, scenario \`${{ inputs.scenario }}\`"
+          echo "${COUNT} legs, tier \`${TIER}\`, scenario \`${SCENARIO}\`"
           echo ""
           echo "| leg | runner | target | toolchain | checks |"
           echo "|---|---|---|---|---|"
-          echo '${{ steps.expand.outputs.legs }}' | python3 -c "
+          printf '%s' "${LEGS}" | python3 -c "
         import json,sys
         for l in json.load(sys.stdin):
             print('| %s | %s | %s | %s | %s |' % (
@@ -138,26 +150,35 @@ jobs:
       working-directory: tools/ci-build/canary
       shell: bash
       env:
-        # Not the default for a `run:` step, and the leg's own pipelines rely on it.
-        STABLE_OVERRIDE: ''
+        LEG_ID: ${{ matrix.leg.id }}
+        RELEASE_TAG: ${{ inputs.tag }}
       run: |
         set -euo pipefail
         STABLE="$(rustc +stable --version | cut -d' ' -f2)"
         MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
 
+        # Built as an array rather than interpolated, so an empty tag contributes no argument at all
+        # and a non-empty one is a single argv entry whatever it contains.
+        TAG_ARG=()
+        if [[ -n "${RELEASE_TAG}" ]]; then
+          TAG_ARG=(--tag "${RELEASE_TAG}")
+        fi
+
         # Exits 0 for green or INFRA_FAIL, non-zero for any hard verdict. That is how a floor hour's
         # exit code carries the stop decision, since `needs:` can see success or failure but never why.
         cargo run --quiet -- run-leg \
-          --leg '${{ matrix.leg.id }}' \
+          --leg "${LEG_ID}" \
           --stable "${STABLE}" \
           --msrv "${MSRV}" \
           --dir "${RUNNER_TEMP}/leg" \
-          ${{ inputs.tag && format('--tag {0}', inputs.tag) || '' }} \
+          "${TAG_ARG[@]}" \
           | tee "${RUNNER_TEMP}/report.json"
 
     - name: Report the verdict
       if: always()
       shell: bash
+      env:
+        LEG_ID: ${{ matrix.leg.id }}
       run: |
         set -uo pipefail
         REPORT="${RUNNER_TEMP}/report.json"
@@ -165,7 +186,7 @@ jobs:
           echo "::warning title=No report::the leg produced no report, which is itself a defect"
           exit 0
         fi
-        python3 - "$REPORT" '${{ matrix.leg.id }}' <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        python3 - "$REPORT" "$LEG_ID" <<'PY' >> "$GITHUB_STEP_SUMMARY"
         import json, sys
         r = json.load(open(sys.argv[1]))
         verdict = r.get('verdict')
