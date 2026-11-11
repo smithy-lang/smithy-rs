@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Checks the `dynamic-client/` workspace.
+#
+# `--fast` runs clippy and the tests. The pre-commit hook `dynamic-client` uses it at push time.
+#
+# With no argument, the script also builds the docs, checks external types, and checks minimal
+# versions. These three steps need nightly Rust, `cargo-check-external-types`, and
+# `cargo-minimal-versions`. The manual pre-commit hook `dynamic-client-nightly` runs them.
+# `RUST_NIGHTLY_VERSION` picks the nightly toolchain, and defaults to `nightly`.
+
+set -eux
+
+cd "$(git rev-parse --show-toplevel)/dynamic-client"
+
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+
+if [[ "${1:-}" == "--fast" ]]; then
+    exit 0
+fi
+
+nightly="${RUST_NIGHTLY_VERSION:-nightly}"
+
+RUSTDOCFLAGS="--cfg docsrs -Dwarnings" \
+    cargo +"${nightly}" doc --workspace --no-deps --document-private-items --all-features
+
+for crate_path in */; do
+    if [[ -f "${crate_path}/external-types.toml" ]]; then
+        pushd "${crate_path}" &>/dev/null
+        # `cargo-check-external-types` reads rustdoc JSON output, so doc warnings must not fail it.
+        RUSTDOCFLAGS="" \
+            cargo +"${nightly}" check-external-types --all-features --config external-types.toml
+        popd &>/dev/null
+    fi
+done
+
+# `--direct` checks the minimal versions of direct dependencies only.
+cargo +"${nightly}" minimal-versions check --direct --workspace --all-features
