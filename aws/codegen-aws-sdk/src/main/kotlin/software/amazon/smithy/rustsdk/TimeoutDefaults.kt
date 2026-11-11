@@ -16,7 +16,7 @@ import java.time.Duration
  * override per service, where `-1` means "apply no read timeout to this service at all".
  *
  * Rust resolves it at the same per-service granularity the other SDKs use, and overrides exactly
- * four entries — see [RUST_GENERAL_DEFAULT_OVERRIDES].
+ * three entries — see [RUST_GENERAL_DEFAULT_OVERRIDES].
  */
 class TimeoutDefaults(artifact: ObjectNode) {
     companion object {

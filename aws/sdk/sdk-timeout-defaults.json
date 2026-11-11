@@ -7,9 +7,10 @@
     "Units are milliseconds. -1 means no read timeout is applied to that service at all.",
     "A service absent from `services` gets `generalDefaultMillis`.",
     "",
-    "Rust deliberately overrides four of these entries; see DefaultReadTimeoutDecorator.kt and",
-    "section 2.3 of the design. Those overrides live in codegen, not here, so that this file",
-    "remains a faithful copy of the shared data."
+    "Rust applies the general default to three services this list fully exempts, because Rust's",
+    "read timeout closes once response headers arrive and so cannot fire mid-stream. Those",
+    "overrides live in codegen, in TimeoutDefaults.kt, not here, so that this file remains a",
+    "faithful copy of the shared data."
   ],
   "generalDefaultMillis": 300000,
   "services": {
