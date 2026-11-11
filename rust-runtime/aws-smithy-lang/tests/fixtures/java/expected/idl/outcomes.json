@@ -639,7 +639,17 @@
                 "message": "Syntax error at line 1, column 16: Unsupported Smithy version number: 3.0"
             }
         },
+        "unsupported/apply_comment_after_keyword": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
         "unsupported/apply_extra_property": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/apply_newline_after_keyword": {
             "accepted": true,
             "errors": [],
             "dangers": []

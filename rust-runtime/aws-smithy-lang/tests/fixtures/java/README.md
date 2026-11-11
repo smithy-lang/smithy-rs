@@ -42,8 +42,10 @@ ERROR and DANGER event IDs separately and the location and message of its first 
   Rust points at the offending character instead of the start of the enclosing token.
 - `unsupported/`: the reference implementation accepts but this crate deliberately rejects:
   mixins, Smithy 1.0, leading zeroes in numbers (which the IDL grammar forbids but the
-  reference tokenizer accepts), and unknown properties in a JSON AST `apply` entry (the
-  reference implementation warns; this crate rejects unknown properties everywhere).
+  reference tokenizer accepts), unknown properties in a JSON AST `apply` entry (the
+  reference implementation warns; this crate rejects unknown properties everywhere), and a
+  line break or comment between `apply` and its target (the grammar requires spaces,
+  `%s"apply" SP ShapeId`; the reference implementation accepts any whitespace).
 
 Other known differences:
 

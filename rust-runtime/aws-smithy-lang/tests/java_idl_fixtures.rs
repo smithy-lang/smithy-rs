@@ -175,6 +175,9 @@ fn intentional_rejection(fixture: &str) -> DiagnosticCode {
         "version_1" => UnsupportedVersion,
         // The IDL grammar forbids leading zeroes; Java's tokenizer accepts them.
         "strict_leading_zero" => IdlSyntax,
+        // The grammar requires spaces after `apply`; the reference implementation also accepts a
+        // line break or a comment there.
+        "apply_newline_after_keyword" | "apply_comment_after_keyword" => IdlSyntax,
         other => panic!("{other}: document why this crate rejects a model Java accepts"),
     }
 }
