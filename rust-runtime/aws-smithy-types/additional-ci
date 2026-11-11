@@ -15,3 +15,18 @@ echo "### Checking whether the features are properly feature-gated"
 
 echo "### Checking feature powerset"
 cargo hack check --feature-powerset --exclude-all-features
+
+# The serde support for `Document`, `DocumentV2`, and the other types compiles only with
+# `--cfg aws_sdk_unstable`, which the other runtime checks don't set.
+echo "### Testing the unstable serde support"
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_unstable" \
+    cargo nextest run --all-features -E 'test(/serde|::ser::|::de::|^document::test::/)'
+
+# Doctests on nightly, because only nightly rustdoc checks the error code of a
+# `compile_fail,E0004` doctest; stable accepts any compile error, so a doctest that broke for
+# another reason would still pass. That doctest checks that `DocumentV2` is `#[non_exhaustive]`.
+# `check-rust-runtimes` runs the doctests on stable.
+echo "### Running doctests on nightly"
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_unstable" \
+    RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --cfg aws_sdk_unstable" \
+    cargo +"${RUST_NIGHTLY_VERSION:?}" test --doc --all-features

@@ -11,6 +11,8 @@ mod discriminated;
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 mod doc_error;
+pub mod document_object;
+mod document_v2;
 mod error;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod ser;
@@ -18,12 +20,18 @@ mod settings;
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 pub use de::from_document;
-pub use discriminated::DiscriminatedDocument;
+pub use discriminated::{DiscriminatedDocument, DocumentTrait};
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 pub use doc_error::DocError;
+pub use document_object::DocumentObject;
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+pub use document_v2::from_document_v2;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+pub use document_v2::to_document_v2;
+pub use document_v2::DocumentV2;
 pub use error::DocumentError;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 pub use ser::to_document;
