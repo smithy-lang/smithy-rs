@@ -147,6 +147,21 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Record a watcher failure that left a release unchecked.
+    ///
+    /// Reads the report `watch` wrote. Emits only for a failed dispatch: the legs it would have
+    /// asked for are the only thing that produces a verdict, so a dispatch that did not happen is a
+    /// release proceeding with no verification at all. A ceiling reached with crates still
+    /// outstanding emits nothing -- that is a finding to read, not a release left unchecked.
+    EmitWatchFailure {
+        /// The report `watch` wrote.
+        #[arg(long)]
+        report: PathBuf,
+        #[arg(long)]
+        payload_dir: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
     ///
     /// One run per release. Resolves the thirteen manifests on a 15-minute tick and stops when
@@ -394,6 +409,41 @@ fn main() -> anyhow::Result<()> {
                         eprintln!("  {d}");
                     }
                 }
+            }
+            println!("{}", serde_json::to_string(&written)?);
+        }
+        Command::EmitWatchFailure {
+            report,
+            payload_dir,
+            dry_run,
+        } => {
+            let text = std::fs::read_to_string(&report)
+                .with_context(|| format!("reading {}", report.display()))?;
+            let report: watch::WatchReport =
+                serde_json::from_str(&text).context("parsing the watch report")?;
+
+            // Only a failed dispatch. The tag comes from the report rather than an argument, so a
+            // datapoint cannot be recorded against a release the watcher was not watching.
+            if report.stopped != watch::Stopped::DispatchFailed {
+                eprintln!(
+                    "{}: stopped as `{}`, which left the legs dispatched; nothing to record",
+                    report.tag,
+                    serde_json::to_value(report.stopped)?
+                        .as_str()
+                        .unwrap_or("unknown")
+                );
+                println!("[]");
+                return Ok(());
+            }
+
+            let mut emitter = metric::AwsCli {
+                payload_dir,
+                dry_run,
+            };
+            let written =
+                metric::record_watcher_failure(&report.tag, "dispatch-failed", &mut emitter)?;
+            for d in &written {
+                eprintln!("  {d}");
             }
             println!("{}", serde_json::to_string(&written)?);
         }

@@ -141,6 +141,49 @@ pub fn datapoints(tag: &str, leg: &Leg, verdict: Option<Verdict>) -> Vec<Datapoi
     vec![datapoint(tag_only), datapoint(full)]
 }
 
+/// Identifies the watcher as the emitter, rather than a leg.
+pub const WATCHER: &str = "watcher";
+
+/// The datapoints the watcher writes when it fails in a way that leaves a release unchecked.
+///
+/// The watcher is an emitter too, and the case that matters is a failed dispatch: the legs it would
+/// have asked for are the only thing that produces a verdict, so a dispatch that did not happen is
+/// a release proceeding with no post-publish verification at all. That is the condition this whole
+/// canary exists to remove, and it would otherwise be visible only as a red job nobody is watching.
+///
+/// **The alarmed series is byte-identical to a leg's**, which is the point: one alarm covers both,
+/// so the watcher failing and a crate being broken reach the same oncall through the same path. A
+/// test asserts that equality, because an alarm watching `{Tag}` would silently ignore a series
+/// that differed by one dimension.
+///
+/// The diagnosis series is deliberately *not* the leg's shape. A watcher failure has no manifest,
+/// no toolchain and no target, and filling those with placeholders to force a common shape would
+/// put six dimensions of nothing on a ticket. A different kind of emitter gets a different
+/// diagnosis.
+pub fn watcher_datapoints(tag: &str, reason: &str) -> Vec<Datapoint> {
+    vec![
+        datapoint(vec![dimension("Tag", tag)]),
+        datapoint(vec![
+            dimension("Tag", tag),
+            dimension("Component", WATCHER),
+            dimension("Reason", reason),
+        ]),
+    ]
+}
+
+/// Record a watcher failure. Same contract as [`record`]: validated, then emitted, and an emission
+/// failure is an error rather than a shrug.
+pub fn record_watcher_failure(
+    tag: &str,
+    reason: &str,
+    emitter: &mut dyn Emitter,
+) -> anyhow::Result<Vec<Datapoint>> {
+    let datapoints = watcher_datapoints(tag, reason);
+    validate(&datapoints)?;
+    emitter.emit(NAMESPACE, &serde_json::to_string(&datapoints)?)?;
+    Ok(datapoints)
+}
+
 /// Reject anything CloudWatch would reject, before the call rather than after.
 ///
 /// A rejected `PutMetricData` is a verdict that never reached an alarm. Catching the avoidable cases
@@ -461,6 +504,50 @@ mod tests {
             &mut e
         )
         .is_err());
+    }
+
+    /// The property the single alarm depends on. An alarm watches `Red {Tag}` and nothing else, so
+    /// if the watcher's alarmed series differed from a leg's by even one dimension it would land on
+    /// a series nothing evaluates — and a failed dispatch, which leaves a release entirely
+    /// unchecked, would page no one.
+    #[test]
+    fn the_watcher_and_a_leg_share_the_alarmed_series_exactly() {
+        let leg = datapoints(
+            "release-2026-11-09",
+            &leg("new-project--stable"),
+            Some(Verdict::CompileFail),
+        );
+        let watcher = watcher_datapoints("release-2026-11-09", "dispatch-failed");
+        assert_eq!(
+            leg[0], watcher[0],
+            "the alarmed series must be identical, or one alarm cannot cover both"
+        );
+        assert_eq!(leg[0].dimensions.len(), 1, "and it is the tag alone");
+    }
+
+    /// The diagnosis series says who failed and why, without pretending to be a leg.
+    #[test]
+    fn a_watcher_failure_names_itself_and_its_reason() {
+        let mut e = FakeEmitter::default();
+        let written =
+            record_watcher_failure("release-2026-11-09", "dispatch-failed", &mut e).unwrap();
+
+        assert_eq!(written.len(), 2);
+        assert_eq!(
+            written[1].to_string(),
+            "Red=1 {Tag=release-2026-11-09, Component=watcher, Reason=dispatch-failed}"
+        );
+        assert_eq!(e.calls.len(), 1);
+        assert_eq!(e.calls[0].0, NAMESPACE);
+    }
+
+    /// Same refusal as a leg's: an unset tag would be rejected by the API with an error naming the
+    /// request rather than the cause.
+    #[test]
+    fn a_watcher_failure_with_no_tag_is_refused_before_the_call() {
+        let mut e = FakeEmitter::default();
+        assert!(record_watcher_failure("", "dispatch-failed", &mut e).is_err());
+        assert!(e.calls.is_empty());
     }
 
     /// The namespace is duplicated into TypeScript, where it is the *only* bound on the metrics

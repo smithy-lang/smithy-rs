@@ -41,7 +41,7 @@ use std::fmt;
 use std::time::Duration;
 
 use anyhow::Context;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::baseline::{self, BaselineDir, Movement};
 use crate::leg::Clock;
@@ -81,7 +81,7 @@ impl Default for Cadence {
 }
 
 /// What one tick decided.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Tick {
     pub number: u32,
     /// Elapsed time into the run, in seconds, so a tick's place in the window is readable.
@@ -102,7 +102,7 @@ impl Tick {
 }
 
 /// Why the watcher stopped.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Stopped {
     /// Every declared runtime crate has arrived on crates.io. The expected ending.
@@ -116,7 +116,7 @@ pub enum Stopped {
 }
 
 /// What the watcher did across the whole window.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WatchReport {
     pub tag: String,
     pub ticks: Vec<Tick>,
