@@ -19,3 +19,7 @@ toml = "0.8"
 
 [dev-dependencies]
 pretty_assertions = "1.4"
+# Only for `tests/workflows.rs`, which asserts invariants of this canary's GitHub workflows.
+# A dev-dependency rather than a dependency: nothing the canary *runs* reads YAML. Same version as
+# `changelogger` and `smithy-rs-tool-common` already use, so this adds no new crate to the build.
+serde_yaml = "0.9"
