@@ -121,6 +121,11 @@ impl Resolved {
         self.0.get(name).map(Vec::as_slice).unwrap_or_default()
     }
 
+    /// Every resolved package and its versions, in name order.
+    pub fn packages(&self) -> impl Iterator<Item = (&str, &[String])> {
+        self.0.iter().map(|(n, v)| (n.as_str(), v.as_slice()))
+    }
+
     /// The version of the package a *cargo target* belongs to, rendered for a ticket.
     ///
     /// Cargo reports a lib target as `aws_config` where the package is `aws-config`, so the

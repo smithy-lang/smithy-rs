@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
+use canary::baseline;
 use canary::leg;
 use canary::manifest;
 use canary::publish;
@@ -92,6 +93,33 @@ enum Command {
         /// checkout, which in a release run is the tag.
         #[arg(long, default_value = ".")]
         repo: PathBuf,
+    },
+    /// Compare a manifest's freshly resolved graph against the stored baseline.
+    ///
+    /// The dispatch tier's gate: a tick with no publish in it resolves exactly what the previous
+    /// tick did, and running sixty legs to re-prove that buys nothing. Prints the movement as JSON
+    /// on stdout.
+    Baseline {
+        /// The manifest id, as `gen-matrix` emits it in each leg's `manifest` field.
+        #[arg(long)]
+        manifest: String,
+        /// The freshly resolved `Cargo.lock` to compare.
+        #[arg(long)]
+        lockfile: PathBuf,
+        /// The S3 bucket holding the baselines. What the dispatch tier uses.
+        #[arg(long)]
+        bucket: Option<String>,
+        /// A directory holding the baselines instead, for running without a credential. Uses the
+        /// same keys as the bucket, so a local run exercises the real key scheme.
+        #[arg(long)]
+        store_dir: Option<PathBuf>,
+        /// Make the fresh graph the new baseline.
+        ///
+        /// The dispatch tier passes this, so the next tick compares against what it last saw.
+        /// Leave it off to ask the question without answering it for the next tick, which would
+        /// otherwise read as "unchanged" and skip legs that were never run.
+        #[arg(long)]
+        update: bool,
     },
     /// Materialize one leg's crate into a directory, ready to build.
     GenLeg {
@@ -215,6 +243,32 @@ fn main() -> anyhow::Result<()> {
             if !status.is_complete() {
                 std::process::exit(1);
             }
+        }
+        Command::Baseline {
+            manifest,
+            lockfile,
+            bucket,
+            store_dir,
+            update,
+        } => {
+            anyhow::ensure!(
+                scenarios::manifest(&manifest).is_some(),
+                "no manifest {manifest:?}; run `gen-matrix` to see the ids"
+            );
+            let store: Box<dyn baseline::Store> = match (bucket, store_dir) {
+                (Some(bucket), None) => Box::new(baseline::S3 { bucket }),
+                (None, Some(root)) => Box::new(baseline::LocalDir { root }),
+                (Some(_), Some(_)) => {
+                    anyhow::bail!("--bucket and --store-dir name two different stores")
+                }
+                (None, None) => anyhow::bail!("one of --bucket or --store-dir is required"),
+            };
+
+            let fresh = baseline::read_lockfile(&lockfile)?;
+            let movement = baseline::gate(store.as_ref(), &manifest, &fresh, update)?;
+
+            eprintln!("{manifest}: {movement}");
+            println!("{}", serde_json::to_string(&movement)?);
         }
         Command::GenLeg {
             leg,
