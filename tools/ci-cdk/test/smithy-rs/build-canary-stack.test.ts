@@ -6,9 +6,10 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import {
-    ALARM_ENVIRONMENT,
+    BASELINE_PREFIX,
     BuildCanaryStack,
     METRIC_NAMESPACE,
+    ORCHESTRATOR_ENVIRONMENT,
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
@@ -54,10 +55,11 @@ function trustFor(
 const actionsOf = (statements: Statement[]): string[] =>
     statements.flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action]));
 
-test("it should create exactly two roles", () => {
+test("it should create exactly three roles", () => {
     const roles = synth().findResources("AWS::IAM::Role");
     expect(Object.values(roles).map((r) => r.Properties.RoleName).sort()).toEqual([
         "smithy-rs-build-canary-alarms-github-oidc-role",
+        "smithy-rs-build-canary-baselines-github-oidc-role",
         "smithy-rs-build-canary-metrics-github-oidc-role",
     ]);
 });
@@ -92,35 +94,100 @@ test("the alarm role should only manage the canary's own alarms", () => {
     expect(resources).toContain(":alarm:paging-selftest-*");
 });
 
-test("the two permission sets should be disjoint, neither a superset of the other", () => {
-    // The property the split exists for. If the alarm role could write metrics it could fake a
-    // verdict; if the metrics role could touch alarms, then every leg -- and anything else able to
-    // assume it -- could delete the alarm watching it.
-    const template = synth();
-    const metrics = new Set(actionsOf(policyFor(template, "metrics")));
-    const alarms = new Set(actionsOf(policyFor(template, "alarms")));
+test("the baseline role should read and replace baselines, but never delete one", () => {
+    const statements = policyFor(synth(), "baselines");
+    const actions = actionsOf(statements);
 
-    const overlap = [...metrics].filter((a) => alarms.has(a));
-    expect(overlap).toEqual([]);
-    expect([...alarms].some((a) => a.includes("PutMetricData"))).toBe(false);
-    expect([...metrics].some((a) => a.includes("Alarm"))).toBe(false);
+    // Withholding delete is the point: an overwrite is a PutObject, so the orchestrator loses
+    // nothing, and a bug cannot leave a manifest with no baseline -- which would be silent,
+    // because an absent baseline reads as "never seen" and just dispatches.
+    expect(actions.filter((a) => a.includes("Delete"))).toEqual([]);
+    expect(actions.some((a) => a.startsWith("s3:GetObject"))).toBe(true);
+    expect(actions.some((a) => a.startsWith("s3:PutObject"))).toBe(true);
+
+    // Object-level grants must be scoped to the prefix, so a later use of this bucket is not
+    // readable by the orchestrator by default.
+    const objectResources = statements
+        .flatMap((s) => (Array.isArray(s.Resource) ? s.Resource : [s.Resource]))
+        .map((r) => JSON.stringify(r))
+        .filter((r) => r.includes("/"));
+    expect(objectResources.length).toBeGreaterThan(0);
+    for (const resource of objectResources) {
+        expect(resource).toContain(`${BASELINE_PREFIX}/*`);
+    }
 });
 
-test("only the alarm role should be gated on the GitHub environment", () => {
+test("the baseline bucket should be private, encrypted and TLS-only", () => {
+    const template = synth();
+    const buckets = Object.values(template.findResources("AWS::S3::Bucket"));
+    expect(buckets).toHaveLength(1);
+
+    // All four Block Public Access settings on, which is what makes "private" true rather than
+    // merely "no public policy written yet".
+    expect(buckets[0].Properties.PublicAccessBlockConfiguration).toEqual({
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+    });
+    expect(
+        JSON.stringify(buckets[0].Properties.BucketEncryption),
+    ).toContain("AES256");
+
+    // `enforceSSL` renders as a bucket policy denying anything not over TLS.
+    const policies = Object.values(template.findResources("AWS::S3::BucketPolicy"));
+    const policyJson = JSON.stringify(policies);
+    expect(policyJson).toContain("aws:SecureTransport");
+    expect(policyJson).toContain("Deny");
+
+    // And nothing grants anonymous access.
+    expect(policyJson).not.toContain('"Principal":"*"');
+    expect(policyJson).not.toContain("AllUsers");
+    expect(policyJson).not.toContain("AuthenticatedUsers");
+});
+
+test("the baseline should not expire, unlike every other bucket in this app", () => {
+    // A baseline is current state, not an artifact. Expiring it during a quiet fortnight would make
+    // the next tick see nothing and dispatch every leg -- safe, but it defeats the gate.
+    const buckets = Object.values(synth().findResources("AWS::S3::Bucket"));
+    expect(buckets[0].Properties.LifecycleConfiguration).toBeUndefined();
+});
+
+test("a leg's permissions should be disjoint from the orchestrator's", () => {
+    // The property the split exists for. If an orchestrator role could write metrics it could fake
+    // a verdict; if the metrics role could touch alarms or the bucket, then every leg -- and
+    // anything else able to assume it -- could delete the alarm watching it or rewrite the
+    // baseline that decides whether it runs at all.
+    const template = synth();
+    const metrics = new Set(actionsOf(policyFor(template, "metrics")));
+    const orchestrator = new Set([
+        ...actionsOf(policyFor(template, "alarms")),
+        ...actionsOf(policyFor(template, "baselines")),
+    ]);
+
+    expect([...metrics].filter((a) => orchestrator.has(a))).toEqual([]);
+    expect([...orchestrator].some((a) => a.includes("PutMetricData"))).toBe(false);
+    expect([...metrics].some((a) => a.includes("Alarm"))).toBe(false);
+    expect([...metrics].some((a) => a.startsWith("s3:"))).toBe(false);
+});
+
+test("the orchestrator's roles should be gated on the environment, and the legs' must not", () => {
     const template = synth();
 
-    // The environment is the only thing distinguishing the two jobs: both run in this repository
-    // from the same release tag, so their tokens are otherwise identical.
-    expect(trustFor(template, "alarms").StringEquals[`${CLAIM}:environment`]).toBe(
-        ALARM_ENVIRONMENT,
-    );
+    // The environment is the only thing distinguishing the orchestrator from a leg: both run in
+    // this repository from the same release tag, so their tokens are otherwise identical.
+    for (const role of ["alarms", "baselines"]) {
+        expect(trustFor(template, role).StringEquals[`${CLAIM}:environment`]).toBe(
+            ORCHESTRATOR_ENVIRONMENT,
+        );
+    }
 
     // The legs must not need an environment -- conditioning on the claim would *require* every leg
     // to declare one, and they run by hand during the report-only window too.
     expect(trustFor(template, "metrics").StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
 });
 
-test("it should output both role ARNs, which have to be copied into secrets by hand", () => {
+test("it should output everything that has to be copied into a secret by hand", () => {
     const outputs = synth().findOutputs("*");
     const descriptions = Object.values(outputs).map((o) => o.Description);
 
@@ -128,4 +195,6 @@ test("it should output both role ARNs, which have to be copied into secrets by h
         "Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret",
     );
     expect(descriptions).toContain("Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret");
+    expect(descriptions).toContain("Set as the BUILD_CANARY_BASELINE_ROLE_ARN repository secret");
+    expect(descriptions).toContain("Set as the BUILD_CANARY_BASELINE_BUCKET repository secret");
 });

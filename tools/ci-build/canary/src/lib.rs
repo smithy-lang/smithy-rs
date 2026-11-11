@@ -16,6 +16,7 @@
 //! of it can be exercised on a laptop. Reporting a verdict as a metric, and alarming on it, live
 //! outside this crate.
 
+pub mod baseline;
 pub mod classify;
 pub mod leg;
 pub mod lockfile;
