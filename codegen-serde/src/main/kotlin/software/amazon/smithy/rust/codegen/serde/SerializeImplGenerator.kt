@@ -26,7 +26,10 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.documentV2UnionVariants
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -43,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2UnionVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -446,6 +450,29 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                             }
                         }
                     }
+                    // A `DocumentV2` variant is another Rust representation of a modeled member. It serializes as
+                    // that member, with the member's name and index, and holds the value that the original variant
+                    // would hold after `to_document_lossy`. That is the value a structure's `Document` field holds
+                    // when its `DocumentV2` form is set, and the value that deserialization, which builds the
+                    // original variant, reads back.
+                    documentV2Variants(shape).forEach { variant ->
+                        val index = shape.members().indexOf(variant.member)
+                        val fieldName = variant.member.memberName.dq()
+                        withBlock("#T::${variant.variantName}(inner) => {", "},", unionSymbol) {
+                            rustTemplate(
+                                """
+                                let inner = &#{ToDocumentLossy}::to_document_lossy(inner);
+                                // A statement, so that the serializer's borrows of `inner` end before `inner` is dropped.
+                                let result = serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, &#{member});
+                                result
+                                """,
+                                "ToDocumentLossy" to
+                                    RuntimeType.forInlineDependency(InlineDependency.documentV2Slot(codegenContext.runtimeConfig))
+                                        .resolve("ToDocumentLossy"),
+                                "member" to serializeMember(variant.member, "inner"),
+                            )
+                        }
+                    }
                     if (codegenContext.target.renderUnknownVariant()) {
                         rustTemplate(
                             "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => serializer.serialize_str(\"unknown variant!\")",
@@ -456,6 +483,10 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             }
         }
     }
+
+    /** [shape]'s additive `DocumentV2` variants. Only clients that use schema serde have them. */
+    private fun documentV2Variants(shape: UnionShape): List<DocumentV2UnionVariant> =
+        (codegenContext as? ClientCodegenContext)?.let { documentV2UnionVariants(it, shape) }.orEmpty()
 
     private fun serializeDateTime(shape: TimestampShape): RuntimeType =
         RuntimeType.forInlineFun("SerializeDateTime", Companion.PrimitiveShapesModule) {

@@ -165,6 +165,21 @@ internal fun documentV2Companions(
     }
 
 /**
+ * The additive `DocumentV2` variants of [shape], or none when [codegenContext]'s unions don't get them. Code that
+ * matches on a generated union, such as the `serde` implementations from `codegen-serde`, needs arms for these
+ * variants. See [DocumentV2Decorator].
+ */
+fun documentV2UnionVariants(
+    codegenContext: ClientCodegenContext,
+    shape: UnionShape,
+): List<DocumentV2UnionVariant> =
+    if (documentV2CompanionsEnabled(codegenContext)) {
+        DocumentV2Index.of(codegenContext.model).unionVariants(shape, codegenContext.symbolProvider)
+    } else {
+        emptyList()
+    }
+
+/**
  * [documentV2CompanionsEnabled] for the symbol provider, which exists before the codegen context. It picks the
  * protocol as `ClientCodegenVisitor` does, with the default protocols, and [documentV2CompanionsEnabled] checks that
  * the two agree.
