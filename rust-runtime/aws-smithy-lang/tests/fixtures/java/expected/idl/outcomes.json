@@ -41,6 +41,32 @@
                 "message": "Trait `deprecated` applied to unknown shape `smithy.api#String`"
             }
         },
+        "invalid/apply_json_held_member_of_later_definition": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "b.json",
+                "line": 1,
+                "column": 38,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_held_member_of_later_definition/c.json [1, 38]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_held_member_of_later_definition/b.json [1, 38]`. Members differ: [m] vs []"
+            }
+        },
+        "invalid/apply_json_member_of_later_definition": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.json",
+                "line": 1,
+                "column": 38,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_member_of_later_definition/c.json [1, 38]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_member_of_later_definition/a.json [1, 38]`. Members differ: [m] vs []"
+            }
+        },
         "invalid/apply_json_prelude_shape": {
             "accepted": false,
             "errors": [

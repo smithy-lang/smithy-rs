@@ -506,6 +506,7 @@ impl ModelAssembler {
             deferred_traits: Vec::new(),
             deferred_applies: Vec::new(),
             pending_applies: IndexMap::new(),
+            unclaimed: Vec::new(),
             metadata: NodeObject::new(),
             diagnostics: DiagnosticSet::with_limit(loader.max_diagnostics),
             failure: None,
@@ -755,6 +756,9 @@ struct Merge {
     /// root shape ID, in document order. They are merged when the shape is defined, before its
     /// own traits.
     pending_applies: IndexMap<ShapeId, Vec<AppliedTrait>>,
+    /// `apply` traits whose target no definition merged so far has, reported by
+    /// [`report_unclaimed`](Self::report_unclaimed) if no definition has it at the end.
+    unclaimed: Vec<UnclaimedTrait>,
     metadata: NodeObject,
     diagnostics: DiagnosticSet,
     /// The first input-level failure (I/O, syntax, or resource limit).
@@ -777,6 +781,16 @@ struct AppliedTrait {
     /// shape's first IDL definition use it, which keeps them in source order;
     /// [`merge_all`](Merge::merge_all) ignores it. `None` adds the trait last.
     position: Option<usize>,
+}
+
+/// An applied trait whose target no definition had when it was merged.
+struct UnclaimedTrait {
+    /// The shape or member the trait is applied to.
+    target: ShapeId,
+    /// The trait's shape ID.
+    id: ShapeId,
+    /// Where the trait was applied.
+    location: SourceLocation,
 }
 
 impl Merge {
@@ -855,7 +869,7 @@ impl Merge {
             if deferred {
                 self.deferred_applies.push(applied);
             } else if self.shapes.contains_key(target.root_str()) {
-                self.merge_applied_or_report(applied);
+                self.merge_or_record_unclaimed(applied);
             } else {
                 self.pending_applies
                     .entry(target.root())
@@ -865,8 +879,11 @@ impl Merge {
         }
     }
 
-    /// Merges an applied trait, reporting it if nothing defines its target.
-    fn merge_applied_or_report(&mut self, applied: AppliedTrait) {
+    /// Merges an applied trait. If no definition merged so far has its target, the trait is
+    /// recorded in [`unclaimed`](Self::unclaimed) and reported only if no definition has the
+    /// target once every input is merged: like the reference implementation, a later definition
+    /// can still provide it (and then usually conflicts with the earlier one).
+    fn merge_or_record_unclaimed(&mut self, applied: AppliedTrait) {
         let AppliedTrait {
             target,
             id,
@@ -874,10 +891,21 @@ impl Merge {
             position,
         } = applied;
         let location = value.source_location().clone();
-        if !self.merge_applied_trait(&target, id.clone(), value, position)
-            && !self.has_target(&target)
-        {
-            self.unknown_target(&target, &id, location);
+        if !self.merge_applied_trait(&target, id.clone(), value, position) {
+            self.unclaimed.push(UnclaimedTrait {
+                target,
+                id,
+                location,
+            });
+        }
+    }
+
+    /// Reports the [`unclaimed`](Self::unclaimed) traits whose target no definition has.
+    fn report_unclaimed(&mut self) {
+        for unclaimed in std::mem::take(&mut self.unclaimed) {
+            if !self.has_target(&unclaimed.target) {
+                self.unknown_target(&unclaimed.target, &unclaimed.id, unclaimed.location);
+            }
         }
     }
 
@@ -998,7 +1026,7 @@ impl Merge {
                     let own = take_applied_traits(&mut shape, definition_traits);
                     self.shapes.insert(id, shape);
                     for applied in pending {
-                        self.merge_applied_or_report(applied);
+                        self.merge_or_record_unclaimed(applied);
                     }
                     self.merge_all(own);
                 }
@@ -1071,7 +1099,7 @@ impl Merge {
             self.merge_applied_trait(&target, id, value, position);
         }
         for applied in std::mem::take(&mut self.deferred_applies) {
-            self.merge_applied_or_report(applied);
+            self.merge_or_record_unclaimed(applied);
         }
         for AppliedTrait {
             target, id, value, ..
@@ -1079,9 +1107,13 @@ impl Merge {
             .into_values()
             .flatten()
         {
-            let location = value.source_location().clone();
-            self.unknown_target(&target, &id, location);
+            self.unclaimed.push(UnclaimedTrait {
+                target,
+                id,
+                location: value.source_location().clone(),
+            });
         }
+        self.report_unclaimed();
     }
 
     /// Compares every repeated definition with the kept one, now that every applied trait is known.

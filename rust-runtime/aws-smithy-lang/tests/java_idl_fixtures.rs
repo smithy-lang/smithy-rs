@@ -143,6 +143,10 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
             "merge_conflicting_trait" => TraitConflict,
             // An `apply` with a value that conflicts with the shape's own trait.
             "apply_conflict" => TraitConflict,
+            // An `apply` to a member only a later, conflicting definition has: only the conflict
+            // is reported, not the trait.
+            "apply_json_member_of_later_definition"
+            | "apply_json_held_member_of_later_definition" => ShapeConflict,
             // Traits applied to a shape or member that nothing defines. Prelude shapes are not
             // among the shapes an `apply` can target, even from the prelude namespace.
             "apply_unknown_target"
