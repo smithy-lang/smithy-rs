@@ -76,11 +76,17 @@ import software.amazon.smithy.rust.codegen.core.util.shouldRedact
  *   `DocumentV2::to_document_lossy`. Required-member checks and defaults apply to that derived value, so setting
  *   either form satisfies a required member.
  * - `into_builder()` carries the companion.
+ * - A set companion always takes priority over the public `Document` field, whether it was set with a builder method
+ *   or read from a response, and even if the `Document` field was changed afterwards. Every serializer, including the
+ *   `serde` implementations from `codegen-serde`, writes the companion while it is set. There is no record of where a
+ *   companion came from and no comparison against the `Document` field.
  * - Equality and `Debug` output are unchanged: the slot always compares equal, and these structures use the manual
  *   `Debug` impls, which print only the modeled members.
  * - An ordinary union member that directly holds documents gets a second variant such as `JsonV2(DocumentV2)` and
  *   matching `as_json_v2`/`is_json_v2` methods. Both variants use the same Smithy member on the wire. Default
- *   deserialization continues to construct `Json(Document)` until the caller explicitly selects V2 decoding.
+ *   deserialization continues to construct `Json(Document)` until the caller explicitly selects V2 decoding. A union
+ *   value holds one variant, so a `JsonV2` value is always written from its `DocumentV2`, and replacing it with a
+ *   `Json` value replaces it entirely.
  *
  * Fluent builders get the same methods from [renderDocumentV2FluentMethods], which `FluentBuilderGenerator` calls.
  */
@@ -151,10 +157,11 @@ internal fun documentV2CompanionsEnabled(codegenContext: ClientCodegenContext): 
 }
 
 /**
- * The companions of [shape]'s members, or none when [codegenContext]'s structures don't get companions. See
- * [DocumentV2Decorator].
+ * The companions of [shape]'s members, or none when [codegenContext]'s structures don't get companions. Code that
+ * reads a generated structure's `Document` fields, such as the `serde` implementations from `codegen-serde`, must
+ * read a set companion instead. See [DocumentV2Decorator].
  */
-internal fun documentV2Companions(
+fun documentV2Companions(
     codegenContext: ClientCodegenContext,
     shape: StructureShape,
 ): List<DocumentV2Companion> =
@@ -363,9 +370,14 @@ private class DocumentV2StructureCustomization(private val codegenContext: Clien
             /// Returns the [`DocumentV2`](#{DocumentV2}) form of `$field`, if there is one.
             ///
             /// A value read from a response has it, and so does a value built with the
-            /// `DocumentV2` builder methods. When this returns `Some`, the `$field` field holds
-            /// the same value with each `DocumentV2` converted by
+            /// `DocumentV2` builder methods. Reading or building the value sets the `$field` field
+            /// to the same value with each `DocumentV2` converted by
             /// [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy).
+            ///
+            /// While this returns `Some`, it takes priority over the `$field` field: serializing this
+            /// value, for example as part of a request, writes this form, even if `$field` was changed
+            /// afterwards. To send a changed `$field` instead, build a new value without the
+            /// `DocumentV2` form.
             """,
             *scope,
         )

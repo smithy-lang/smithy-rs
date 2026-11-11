@@ -37,7 +37,7 @@ class DocumentUnionDecodeModeTest {
         @restJson1
         service ChoiceService {
             version: "1"
-            operations: [GetChoice, ListChoices, StreamChoices, PutText]
+            operations: [GetChoice, ListChoices, StreamChoices, PutText, SendChoices]
         }
 
         @http(uri: "/choice", method: "POST")
@@ -86,12 +86,48 @@ class DocumentUnionDecodeModeTest {
             }
         }
 
+        // A request-only event stream, so its operation gets no mode.
+        @http(uri: "/send", method: "POST")
+        operation SendChoices {
+            input := {
+                @httpPayload
+                events: InputEvents
+            }
+        }
+
         @streaming
         union Events {
             tick: Tick
+            wrapped: Wrapped
+            direct: Direct
+            failure: StreamFailure
+        }
+
+        @streaming
+        union InputEvents {
+            tick: Tick
+            direct: Direct
         }
 
         structure Tick {
+            choice: Choice
+        }
+
+        // An event whose payload is a structure that holds an affected union.
+        structure Wrapped {
+            @eventPayload
+            holder: Holder
+        }
+
+        // An event whose payload is an affected union.
+        structure Direct {
+            @eventPayload
+            choice: Choice
+        }
+
+        @error("server")
+        structure StreamFailure {
+            message: String
             choice: Choice
         }
 
@@ -330,11 +366,11 @@ class DocumentUnionDecodeModeTest {
                             assert_eq!(choices, vec![Choice::DocV2(v2(1)), Choice::DocV2(v2(2))]);
                         }
 
-                        fn tick_stream(body: &str) -> Vec<u8> {
+                        fn frame(message_type: &str, type_header: &str, type_value: &str, body: &str) -> Vec<u8> {
                             let message = #{Message}::new_from_parts(
                                 vec![
-                                    #{Header}::new(":message-type", #{HeaderValue}::String("event".into())),
-                                    #{Header}::new(":event-type", #{HeaderValue}::String("tick".into())),
+                                    #{Header}::new(":message-type", #{HeaderValue}::String(message_type.to_owned().into())),
+                                    #{Header}::new(type_header.to_owned(), #{HeaderValue}::String(type_value.to_owned().into())),
                                     #{Header}::new(":content-type", #{HeaderValue}::String("application/json".into())),
                                 ],
                                 body.to_owned(),
@@ -342,6 +378,18 @@ class DocumentUnionDecodeModeTest {
                             let mut buffer = Vec::new();
                             #{write_message_to}(&message, &mut buffer).unwrap();
                             buffer
+                        }
+
+                        fn event_frame(event_type: &str, body: &str) -> Vec<u8> {
+                            frame("event", ":event-type", event_type, body)
+                        }
+
+                        fn stream_response(frames: Vec<Vec<u8>>) -> #{http_1x}::Response<#{SdkBody}> {
+                            response(200, &[("content-type", "application/vnd.amazon.eventstream")], frames.concat())
+                        }
+
+                        fn tick_stream(body: &str) -> Vec<u8> {
+                            event_frame("tick", body)
                         }
 
                         #{TokioTest}
@@ -366,6 +414,88 @@ class DocumentUnionDecodeModeTest {
                             let event = output.events.recv().await.unwrap().unwrap();
                             assert_eq!(event.as_tick().unwrap().choice, Some(Choice::DocV2(v2(1))));
                         }
+
+                        #{TokioTest}
+                        async fn event_payload_members_read_through_the_mode() {
+                            // `wrapped`'s `@eventPayload` is a structure that holds an affected union, and
+                            // `direct`'s is an affected union.
+                            let stream = || stream_response(vec![
+                                event_frame("wrapped", r##"{"choice":{"doc":1}}"##),
+                                event_frame("direct", r##"{"docs":[2]}"##),
+                            ]);
+                            let client = client(vec![stream(), stream()]);
+
+                            let mut output = client.stream_choices().send().await.unwrap();
+                            let wrapped = output.events.recv().await.unwrap().unwrap();
+                            let holder = wrapped.as_wrapped().unwrap().holder.as_ref().unwrap();
+                            assert_eq!(holder.choice, Some(Choice::Doc(v1(1))));
+                            let direct = output.events.recv().await.unwrap().unwrap();
+                            assert_eq!(direct.as_direct().unwrap().choice, Some(Choice::Docs(vec![v1(2)])));
+
+                            let mut output = client
+                                .stream_choices()
+                                .document_union_decode_mode(DocumentUnionDecodeMode::V2)
+                                .send()
+                                .await
+                                .unwrap();
+                            let wrapped = output.events.recv().await.unwrap().unwrap();
+                            let holder = wrapped.as_wrapped().unwrap().holder.as_ref().unwrap();
+                            assert_eq!(holder.choice, Some(Choice::DocV2(v2(1))));
+                            let direct = output.events.recv().await.unwrap().unwrap();
+                            assert_eq!(direct.as_direct().unwrap().choice, Some(Choice::DocsV2(vec![v2(2)])));
+                        }
+
+                        #{TokioTest}
+                        async fn event_stream_errors_read_through_the_mode() {
+                            let stream = || stream_response(vec![
+                                event_frame("tick", r##"{"choice":{"doc":1}}"##),
+                                frame("exception", ":exception-type", "failure", r##"{"message":"oops","choice":{"doc":2}}"##),
+                            ]);
+                            let client = client(vec![stream(), stream()]);
+
+                            for (mode, tick, failure) in [
+                                (None, Choice::Doc(v1(1)), Choice::Doc(v1(2))),
+                                (Some(DocumentUnionDecodeMode::V2), Choice::DocV2(v2(1)), Choice::DocV2(v2(2))),
+                            ] {
+                                let mut output = client
+                                    .stream_choices()
+                                    .set_document_union_decode_mode(mode)
+                                    .send()
+                                    .await
+                                    .unwrap();
+                                // Events before the error use the same mode.
+                                let event = output.events.recv().await.unwrap().unwrap();
+                                assert_eq!(event.as_tick().unwrap().choice, Some(tick));
+                                let err = output.events.recv().await.unwrap_err().into_service_error();
+                                let crate::types::error::EventsError::StreamFailure(err) = err else {
+                                    panic!("expected StreamFailure, got {err:?}");
+                                };
+                                assert_eq!(err.message.as_deref(), Some("oops"));
+                                assert_eq!(err.choice, Some(failure));
+                            }
+                        }
+
+                        ##[test]
+                        fn input_events_write_document_v2_variants_under_the_modeled_member() {
+                            use crate::types::{Direct, InputEvents, Tick};
+
+                            let marshaller = crate::event_stream_serde::InputEventsMarshaller::new(
+                                #{SharedClientProtocol}::new(#{AwsRestJsonProtocol}::new()),
+                            );
+                            let payload = |event: InputEvents| {
+                                let message = #{MarshallMessage}::marshall(&marshaller, event).unwrap();
+                                String::from_utf8(message.payload().to_vec()).unwrap()
+                            };
+
+                            // A structure event that holds an affected union, with each variant.
+                            let tick = |choice| InputEvents::Tick(Tick::builder().choice(choice).build());
+                            assert_eq!(payload(tick(Choice::DocV2(big()))), format!(r##"{{"choice":{{"doc":{BIG}}}}}"##));
+                            assert_eq!(payload(tick(Choice::Doc(v1(1)))), r##"{"choice":{"doc":1}}"##);
+
+                            // An affected union as the `@eventPayload`.
+                            let direct = InputEvents::Direct(Direct::builder().choice(Choice::DocsV2(vec![big()])).build());
+                            assert_eq!(payload(direct), format!(r##"{{"docs":[{BIG}]}}"##));
+                        }
                         """,
                         "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
                         "Document" to RuntimeType.document(runtimeConfig),
@@ -384,6 +514,11 @@ class DocumentUnionDecodeModeTest {
                         "HeaderValue" to RuntimeType.smithyTypes(runtimeConfig).resolve("event_stream::HeaderValue"),
                         "write_message_to" to
                             RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::write_message_to"),
+                        "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
+                        "SharedClientProtocol" to
+                            RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
+                        "AwsRestJsonProtocol" to
+                            RuntimeType.smithyJson(runtimeConfig).resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol"),
                         // Renders `#[tokio::test]` and adds the `tokio` dev-dependency it needs.
                         "TokioTest" to writable { Attribute.TokioTest.render(this) },
                     )
@@ -397,6 +532,8 @@ class DocumentUnionDecodeModeTest {
         }
         // An operation whose response can't reach an affected union gets no mode.
         operationSources("put_text") shouldNotContain "document_union_decode_mode"
+        // Neither does one whose only affected union is in its request event stream.
+        operationSources("send_choices") shouldNotContain "document_union_decode_mode"
         operationSources("get_choice") shouldContain "pub fn document_union_decode_mode("
         crateDir.resolve("src/config.rs").readText() shouldContain "pub use ::aws_smithy_schema::serde::DocumentUnionDecodeMode;"
     }

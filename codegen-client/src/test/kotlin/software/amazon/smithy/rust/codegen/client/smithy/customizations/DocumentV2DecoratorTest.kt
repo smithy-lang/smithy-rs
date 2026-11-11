@@ -444,6 +444,12 @@ class DocumentV2DecoratorTest {
                             let mut input = FooInput::builder().payload_v2(big()).build().unwrap();
                             input.payload = Some(v1("after"));
                             assert_eq!(json(&input), format!(r##"{{"payload":{BIG}}}"##));
+
+                            // A companion that was read, rather than set with a builder method, takes priority
+                            // the same way.
+                            let mut input = FooInput::deserialize(&mut deser(&format!(r##"{{"payload":{BIG}}}"##))).unwrap();
+                            input.payload = Some(v1("after"));
+                            assert_eq!(json(&input), format!(r##"{{"payload":{BIG}}}"##));
                         }
 
                         ##[test]
@@ -592,6 +598,19 @@ class DocumentV2DecoratorTest {
                             let text = format!(r##"{{"payload":{{"z":{BIG},"a":0.1234567890123456789}}}}"##);
                             let input = FooInput::deserialize(&mut deser(&text)).unwrap();
                             assert_eq!(json(&input), text);
+                        }
+
+                        ##[test]
+                        fn a_union_value_read_in_v2_mode_is_written_back_unchanged() {
+                            let text = format!(r##"{{"choice":{{"doc":{BIG}}}}}"##);
+                            let mut input = #{DocumentUnionDecodeMode}::V2
+                                .read_with(&mut deser(&text), |d| FooInput::deserialize(d))
+                                .unwrap();
+                            assert_eq!(json(&input), text);
+
+                            // A union value holds one variant, so replacing it leaves no `DocumentV2` copy behind.
+                            input.choice = Some(FooChoice::Doc(v1("v1")));
+                            assert_eq!(json(&input), r##"{"choice":{"doc":"v1"}}"##);
                         }
                         """,
                         "Codec" to smithySchema.resolve("codec::Codec"),

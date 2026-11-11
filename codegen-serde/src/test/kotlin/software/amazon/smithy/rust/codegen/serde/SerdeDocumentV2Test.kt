@@ -42,6 +42,16 @@ class SerdeDocumentV2Test {
         structure Record {
             choice: Choice
             payload: Document
+            payloads: DocumentList
+            payloadMap: DocumentMap
+            @deprecated
+            legacy: Document
+            nested: Nested
+        }
+
+        structure Nested {
+            @required
+            body: Document
         }
 
         union Choice {
@@ -165,17 +175,52 @@ class SerdeDocumentV2Test {
                     )
                 }
 
-                unitTest("structure_companions_serialize_the_public_field") {
+                unitTest("structure_companions_take_priority_over_the_document_fields") {
                     rustTemplate(
                         """
+                        ##![allow(deprecated)]
                         use #{crate}::serde::{SerializationSettings, SerializeConfigured};
-                        use #{crate}::types::Record;
+                        use #{crate}::types::{Nested, Record};
+                        use #{Document};
                         use #{DocumentV2};
 
-                        let record = Record::builder().payload_v2(DocumentV2::Blob(b"hello".to_vec())).build();
-                        let json = #{serde_json}::to_value(record.serialize_ref(&SerializationSettings::default()))
-                            .expect("record should serialize");
-                        assert_eq!(json, #{serde_json}::json!({ "payload": "aGVsbG8=" }));
+                        fn blob() -> DocumentV2 {
+                            DocumentV2::Blob(b"hello".to_vec())
+                        }
+
+                        fn json(record: &Record) -> #{serde_json}::Value {
+                            #{serde_json}::to_value(record.serialize_ref(&SerializationSettings::default()))
+                                .expect("record should serialize")
+                        }
+
+                        let mut record = Record::builder()
+                            .payload_v2(blob())
+                            .payloads_v2(blob())
+                            .payload_map_v2("key", blob())
+                            .legacy_v2(blob())
+                            .nested(Nested::builder().body_v2(blob()).build().expect("nested should build"))
+                            .build();
+                        let expected = #{serde_json}::json!({
+                            "payload": "aGVsbG8=",
+                            "payloads": ["aGVsbG8="],
+                            "payloadMap": { "key": "aGVsbG8=" },
+                            "legacy": "aGVsbG8=",
+                            "nested": { "body": "aGVsbG8=" },
+                        });
+                        assert_eq!(json(&record), expected);
+
+                        // A set companion is written even after its `Document` field changes, as on the wire.
+                        record.payload = Some(Document::from("changed"));
+                        record.payloads = Some(vec![]);
+                        record.payload_map = None;
+                        record.legacy = None;
+                        record.nested.as_mut().unwrap().body = Document::Null;
+                        assert_eq!(json(&record), expected);
+
+                        // Without a companion, the current `Document` field is written.
+                        let mut record = Record::builder().payload(Document::from("before")).build();
+                        record.payload = Some(Document::from("after"));
+                        assert_eq!(json(&record), #{serde_json}::json!({ "payload": "after" }));
                         """,
                         *codegenScope,
                     )

@@ -14,6 +14,8 @@ builder and the operation's fluent builder get `payload_v2`, `set_payload_v2`,
 and `get_payload_v2`. Lists and maps of documents get the same methods with
 `DocumentV2` elements. The `Document` field and methods are unchanged. Requests
 send the `DocumentV2` form when it is set, and the `Document` field otherwise.
+A set `DocumentV2` form takes priority even if the `Document` field is changed
+after the value is built or read from a response.
 Responses are read into the `DocumentV2` form, which keeps numbers that don't
 fit in a `u64`, `i64`, or `f64` exactly, and the order of object members. The
 `Document` field holds its `DocumentV2::to_document_lossy` conversion, which is

@@ -27,6 +27,7 @@ import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.documentV2Companions
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.documentV2UnionVariants
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
@@ -46,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Companion
 import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2UnionVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -400,6 +402,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 )
                 if (!shape.members().isEmpty()) {
                     rust("let inner = &self.value;")
+                    val companions = companionsOf(shape).associateBy { it.member.id }
                     for (member in shape.members()) {
                         val serializedName = member.memberName.dq()
                         val fieldName = codegenContext.symbolProvider.toMemberName(member)
@@ -411,8 +414,28 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                                     "member" to serializeMember(member, field),
                                 )
                             }
+                        val companion = companions[member.id]
+                        if (companion != null) {
+                            // A set `DocumentV2` form takes priority over the `Document` field, even if the field
+                            // was changed after the value was built or read, as in every other serializer. It is
+                            // written as the `Document` value that `to_document_lossy` gives, as a union's
+                            // `DocumentV2` variant is.
+                            rustTemplate(
+                                """
+                                if let #{Some}($field) = inner.${companion.name}() {
+                                    let $field = &#{ToDocumentLossy}::to_document_lossy($field);
+                                    #{fieldSerialization}
+                                } else
+                                """,
+                                *RuntimeType.preludeScope,
+                                "ToDocumentLossy" to toDocumentLossy(),
+                                "fieldSerialization" to fieldSerialization,
+                            )
+                        }
                         if (codegenContext.symbolProvider.toSymbol(member).isOptional()) {
                             rust("if let Some($field) = &inner.$fieldName { #T }", fieldSerialization)
+                        } else if (companion != null) {
+                            rust("{ let $field = &inner.$fieldName; #T }", fieldSerialization)
                         } else {
                             rust("let $field = &inner.$fieldName; #T", fieldSerialization)
                         }
@@ -452,9 +475,8 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     }
                     // A `DocumentV2` variant is another Rust representation of a modeled member. It serializes as
                     // that member, with the member's name and index, and holds the value that the original variant
-                    // would hold after `to_document_lossy`. That is the value a structure's `Document` field holds
-                    // when its `DocumentV2` form is set, and the value that deserialization, which builds the
-                    // original variant, reads back.
+                    // would hold after `to_document_lossy`. A structure's set `DocumentV2` form is written the same
+                    // way, and deserialization, which builds the original variant, reads that value back.
                     documentV2Variants(shape).forEach { variant ->
                         val index = shape.members().indexOf(variant.member)
                         val fieldName = variant.member.memberName.dq()
@@ -466,9 +488,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                                 let result = serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, &#{member});
                                 result
                                 """,
-                                "ToDocumentLossy" to
-                                    RuntimeType.forInlineDependency(InlineDependency.documentV2Slot(codegenContext.runtimeConfig))
-                                        .resolve("ToDocumentLossy"),
+                                "ToDocumentLossy" to toDocumentLossy(),
                                 "member" to serializeMember(variant.member, "inner"),
                             )
                         }
@@ -487,6 +507,15 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
     /** [shape]'s additive `DocumentV2` variants. Only clients that use schema serde have them. */
     private fun documentV2Variants(shape: UnionShape): List<DocumentV2UnionVariant> =
         (codegenContext as? ClientCodegenContext)?.let { documentV2UnionVariants(it, shape) }.orEmpty()
+
+    /** The `DocumentV2` companions of [shape]'s members. Only clients that use schema serde have them. */
+    private fun companionsOf(shape: StructureShape): List<DocumentV2Companion> =
+        (codegenContext as? ClientCodegenContext)?.let { documentV2Companions(it, shape) }.orEmpty()
+
+    /** Converts a `DocumentV2` value, or a list, map, or slice of them, to its `Document` form. */
+    private fun toDocumentLossy(): RuntimeType =
+        RuntimeType.forInlineDependency(InlineDependency.documentV2Slot(codegenContext.runtimeConfig))
+            .resolve("ToDocumentLossy")
 
     private fun serializeDateTime(shape: TimestampShape): RuntimeType =
         RuntimeType.forInlineFun("SerializeDateTime", Companion.PrimitiveShapesModule) {
