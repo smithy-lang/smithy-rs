@@ -142,6 +142,7 @@ impl StepOutcome {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnosis {
     /// Compiler error codes, in order of appearance: `E0308`, `E0432`, …
+    #[serde(default)]
     pub codes: Vec<String>,
     /// The first error's rendered message, truncated.
     pub summary: Option<String>,
@@ -158,7 +159,15 @@ pub struct Diagnosis {
     /// This is the version pair a page is supposed to name. See [`crate::lockfile`] for why it is
     /// taken from the lockfile rather than the compiler's prose, and why it is only ever evidence
     /// alongside a verdict reached some other way.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    ///
+    /// `default` is load-bearing, not tidiness. `skip_serializing_if` omits this when it is empty,
+    /// which is the common case — most compile breaks involve no duplicated crate at all — and
+    /// without a default serde refuses to read such a report back. The leg that wrote it would then
+    /// be counted as having sent no report, which is the signal reserved for a leg that died
+    /// silently. So the record would quietly lose exactly the red legs with the simplest
+    /// diagnoses, while reporting them as a defect in the canary. Found by folding a real run's
+    /// reports, not by a test.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub duplicate_versions: Vec<Duplicated>,
 }
 
@@ -657,6 +666,52 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         let mut o = outcome(Step::Build, "", "");
         o.exit_code = Some(0);
         assert!(classify(&o).is_none());
+    }
+
+    /// Every shape a real `report.json` takes has to read back, because the durable record is built
+    /// by deserializing them and a field that fails to parse is indistinguishable from a leg that
+    /// never reported. The empty-diagnosis case is the one that bit: `skip_serializing_if` omits
+    /// `duplicate_versions` whenever a break involves no duplicated crate, which is most of them.
+    #[test]
+    fn a_diagnosis_round_trips_whether_or_not_it_names_versions() {
+        let bare = Diagnosis {
+            codes: vec!["E0308".into()],
+            summary: Some("mismatched types".into()),
+            target: Some("aws_config".into()),
+            target_version: None,
+            duplicate_versions: vec![],
+        };
+        let json = serde_json::to_string(&bare).unwrap();
+        assert!(
+            !json.contains("duplicate_versions"),
+            "the empty case is omitted on the way out: {json}"
+        );
+        assert_eq!(
+            serde_json::from_str::<Diagnosis>(&json).expect("and must still read back"),
+            bare
+        );
+
+        let full = Diagnosis {
+            target_version: Some("1.10.1".into()),
+            duplicate_versions: vec![crate::lockfile::Duplicated {
+                name: "aws-smithy-schema".into(),
+                versions: vec!["0.2.1".into(), "1.2.0".into()],
+            }],
+            ..bare
+        };
+        let json = serde_json::to_string(&full).unwrap();
+        assert_eq!(serde_json::from_str::<Diagnosis>(&json).unwrap(), full);
+    }
+
+    /// A report written before these fields existed must still read, so that adding a field to the
+    /// diagnosis never silently drops older records.
+    #[test]
+    fn a_diagnosis_without_the_version_fields_still_reads() {
+        let old = r#"{"codes":["E0308"],"summary":"mismatched types","target":"aws_config"}"#;
+        let d: Diagnosis = serde_json::from_str(old).expect("an older report must still parse");
+        assert_eq!(d.codes, ["E0308"]);
+        assert!(d.target_version.is_none());
+        assert!(d.duplicate_versions.is_empty());
     }
 
     /// The enrichment must never cost a verdict. A lockfile that cannot be read, or is not there,
