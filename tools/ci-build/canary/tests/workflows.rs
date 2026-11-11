@@ -194,34 +194,128 @@ fn the_orchestrator_is_armed_by_a_variable_and_not_by_merging() {
     );
 
     let jobs = jobs(&wf);
-    let entry = jobs
-        .get("dispatch-tier")
-        .expect("the orchestrator starts with the dispatch tier");
-    let condition = entry
-        .get("if")
-        .and_then(Value::as_str)
-        .expect("the entry job must be conditional");
 
-    assert!(
-        condition.contains("vars.BUILD_CANARY_ENABLED"),
-        "the entry job is not gated on the arming variable: {condition:?}"
-    );
+    // Found rather than named, so restructuring the orchestrator cannot quietly move the gate off
+    // the entry point. Any job with no `needs` starts when the trigger fires.
+    let entry: Vec<&String> = jobs
+        .iter()
+        .filter(|(_, j)| j.get("needs").is_none())
+        .map(|(name, _)| name)
+        .collect();
+    assert!(!entry.is_empty(), "something must start the workflow");
 
-    // Every later job must key on the entry job having actually run. `always()` alone would also
-    // fire when the entry job was skipped for being unarmed, which would start the day of
-    // dispatching the gate exists to prevent.
-    for later in ["floor-tier", "record"] {
-        let condition = jobs
-            .get(later)
-            .unwrap_or_else(|| panic!("expected a {later} job"))
+    for name in &entry {
+        let condition = jobs[*name]
             .get("if")
             .and_then(Value::as_str)
-            .unwrap_or_else(|| panic!("{later} must be conditional"));
+            .unwrap_or_else(|| panic!("entry job {name} must be conditional"));
         assert!(
-            condition.contains("needs.dispatch-tier.result"),
-            "{later} does not key on whether the dispatch tier ran: {condition:?}"
+            condition.contains("vars.BUILD_CANARY_ENABLED"),
+            "entry job {name} is not gated on the arming variable: {condition:?}"
         );
     }
+
+    // And every other job must key on something upstream, so that an entry job skipped for being
+    // unarmed cannot leave a later tier running on its own.
+    for (name, job) in &jobs {
+        if entry.contains(&name) {
+            continue;
+        }
+        let condition = job
+            .get("if")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{name} must be conditional"));
+        assert!(
+            condition.contains("needs."),
+            "{name} does not key on an upstream job: {condition:?}"
+        );
+    }
+}
+
+/// The alarm has to exist before any leg can report. A verdict that lands first is a datapoint on a
+/// series nothing is evaluating, which is silence where a page should be — so the arming job must
+/// be upstream of the dispatch tier, not beside it.
+#[test]
+fn the_alarm_is_armed_before_any_leg_runs() {
+    let wf = load("post-publish-watch");
+    let jobs = jobs(&wf);
+    let alarms = jobs.get("alarms").expect("an alarms job");
+    let dispatch = jobs.get("dispatch-tier").expect("a dispatch tier");
+
+    let needs = serde_yaml::to_string(
+        dispatch
+            .get("needs")
+            .expect("dispatch-tier needs something"),
+    )
+    .expect("serialisable");
+    assert!(
+        needs.contains("alarms"),
+        "the dispatch tier must wait for the alarm: needs = {needs}"
+    );
+
+    // And the arming job must read the alarm back rather than trusting the API call, because it is
+    // the one job whose own failure no alarm can report.
+    let text = raw("post-publish-watch");
+    assert!(
+        text.contains("describe-alarms --alarm-names"),
+        "the arming job must read the alarm back after creating it"
+    );
+
+    // Severity in reviewed code, not inside the secret. Stage E is meant to be a one-character
+    // edit here.
+    assert!(
+        text.contains("SEVERITY=5"),
+        "the arming severity must be pinned in the workflow"
+    );
+    assert!(
+        alarms.get("environment").and_then(Value::as_str) == Some("canary-orchestrator"),
+        "arming needs the orchestrator environment, since the alarm role is gated on it"
+    );
+}
+
+/// An arming failure must not stop the release being checked. Checking without being able to page
+/// still beats not checking, and the arming failure is loud in its own job. What the dispatch tier
+/// does need is to know *which* release.
+#[test]
+fn an_arming_failure_does_not_stop_the_release_being_checked() {
+    let wf = load("post-publish-watch");
+    let condition = jobs(&wf)
+        .get("dispatch-tier")
+        .expect("a dispatch tier")
+        .get("if")
+        .and_then(Value::as_str)
+        .expect("conditional");
+
+    assert!(
+        condition.contains("always()"),
+        "the dispatch tier must run even when arming failed: {condition:?}"
+    );
+    assert!(
+        condition.contains("needs.alarms.outputs.tag != ''"),
+        "but only when the release is identified: {condition:?}"
+    );
+    // Specifically *not* keyed on the arming job's success.
+    assert!(
+        !condition.contains("needs.alarms.result == 'success'"),
+        "keying on arming success would trade a day of checking for a paging gap: {condition:?}"
+    );
+}
+
+/// The tag is resolved once and read everywhere else. Two independent `case` statements would be
+/// two things to keep in step, and the one that drifted would watch the wrong release.
+#[test]
+fn the_release_tag_has_a_single_source() {
+    let text = raw("post-publish-watch");
+    assert_eq!(
+        text.matches("does not look like release-*").count(),
+        1,
+        "the tag should be validated in exactly one place"
+    );
+    // A job cannot reference its own `needs`, so the producing job must use its own step output.
+    assert!(
+        text.contains("TAG: ${{ steps.resolve.outputs.tag }}"),
+        "the arming job must read its own resolved tag"
+    );
 }
 
 /// The floor tier is 24 hourly cycles. As a matrix, "one at a time" is the only thing making it
