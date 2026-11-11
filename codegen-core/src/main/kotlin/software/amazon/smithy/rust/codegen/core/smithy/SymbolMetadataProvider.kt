@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 /**
  * Attach `meta` to symbols. `meta` is used by the generators (e.g. StructureGenerator) to configure the generated models.
@@ -83,11 +84,12 @@ fun containerDefaultMetadata(
 
     val isSensitive =
         shape.hasTrait<SensitiveTrait>() ||
-            // Checking the shape's direct members for the sensitive trait should suffice.
-            // Whether their descendants, i.e. a member's member, is sensitive does not
-            // affect the inclusion/exclusion of the derived `Debug` trait of _this_ container
-            // shape; any sensitive descendant should still be printed as redacted.
-            shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+            // A member needs redacting when its target is sensitive, or when its target is a
+            // list or map that holds a sensitive shape at any depth. In that case the derived
+            // `Debug` would print the sensitive values, so it is dropped and the generators
+            // render a custom, redacting `Debug` impl instead. `shouldRedact` does not descend
+            // into structures or unions: those get their own redacting `Debug` impl.
+            shape.members().any { it.shouldRedact(model) }
 
     if (isSensitive) {
         derives.remove(RuntimeType.Debug)

@@ -289,7 +289,7 @@ mod tests {
                 assert_eq!(v2, DocumentV2::from(&v1), "{input}");
             }
         }
-        assert!(read("-0.0").as_double().unwrap().is_sign_negative());
+        assert!(read("-0.0").coerce_double().unwrap().is_sign_negative());
     }
 
     /// Both readers accept and reject the same input, apart from the numbers in

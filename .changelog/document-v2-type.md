@@ -32,7 +32,7 @@ returns an error for a value that `Document` can't represent.
 `shape_type_v2`) convert between typed shapes and
 `DiscriminatedDocument<DocumentV2>`, keeping blobs, timestamps, and
 arbitrary-precision numbers as native values and members in order. Numbers read
-from a `DocumentV2` follow its accessors' rules, which truncate fractions.
+from a `DocumentV2` follow its `coerce_*` methods' rules, which truncate fractions.
 `TypeRegistry::deserialize_document` accepts either wrapper, through the new
 sealed `SchemaDocument` trait, and `DocumentShapeSerializer` stores a
 `DocumentV2` value as its `to_document_lossy` conversion. In `aws-smithy-json`,

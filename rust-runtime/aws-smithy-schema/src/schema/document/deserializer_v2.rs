@@ -26,8 +26,8 @@ use crate::Schema;
 ///
 /// - The native [`DocumentV2::Blob`], [`DocumentV2::Timestamp`], [`DocumentV2::BigInteger`],
 ///   and [`DocumentV2::BigDecimal`] variants are read as is.
-/// - Numbers are converted with `DocumentV2`'s own accessors, such as
-///   [`DocumentV2::as_integer`]. Every numeric variant converts to every numeric type, a
+/// - Numbers are converted with `DocumentV2`'s own `coerce_*` methods, such as
+///   [`DocumentV2::coerce_integer`]. Every numeric variant converts to every numeric type, a
 ///   fractional value is truncated toward zero, and an out-of-range value is an error. The
 ///   `Document` deserializer rejects fractional values instead.
 /// - Arbitrary-precision numbers are also read from their text, which is how a [`Document`]
@@ -198,27 +198,27 @@ impl ShapeDeserializer for DocumentV2ShapeDeserializer<'_> {
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        Ok(self.cursor.as_byte()?)
+        Ok(self.cursor.coerce_byte()?)
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        Ok(self.cursor.as_short()?)
+        Ok(self.cursor.coerce_short()?)
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        Ok(self.cursor.as_integer()?)
+        Ok(self.cursor.coerce_integer()?)
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        Ok(self.cursor.as_long()?)
+        Ok(self.cursor.coerce_long()?)
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        Ok(self.cursor.as_float()?)
+        Ok(self.cursor.coerce_float()?)
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        Ok(self.cursor.as_double()?)
+        Ok(self.cursor.coerce_double()?)
     }
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
