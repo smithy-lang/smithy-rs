@@ -401,6 +401,19 @@ pub struct Report {
     pub diagnosis: Option<Diagnosis>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stopped: Option<Stopped>,
+    /// Whether this leg's manifest was deliberately rigged to break. See
+    /// [`crate::scenarios::Scenario::induced`].
+    ///
+    /// Written into the report, not left to be re-derived, because the report is what survives: a
+    /// record read months later has to be able to say that a red release was a test rather than an
+    /// incident, and by then the commit that rigged it has been reverted.
+    ///
+    /// Always serialized, including `false`, so that the record states it positively rather than by
+    /// omission — and `default` so the reports written before this field existed still read back.
+    /// A field that is skipped on the way out and has no default is a report that cannot be read,
+    /// which is indistinguishable from a leg that never reported.
+    #[serde(default)]
+    pub induced: bool,
     pub attempts: Vec<Attempt>,
     pub elapsed: Duration,
 }
@@ -408,6 +421,11 @@ pub struct Report {
 impl Report {
     /// The report of a leg that did not build because its release has been superseded. Not green
     /// and not red: it reached no verdict, and must emit no datapoint.
+    ///
+    /// Takes an id rather than a [`Leg`], because this is decided before the matrix is expanded —
+    /// a superseded leg must be able to say so without resolving a toolchain span first. That is
+    /// why `induced` is `false` here regardless of whether the manifest was rigged: the field
+    /// qualifies a verdict, and this report has none.
     pub fn superseded(leg_id: &str) -> Self {
         Self {
             leg_id: leg_id.to_string(),
@@ -415,6 +433,7 @@ impl Report {
             failed_step: None,
             diagnosis: None,
             stopped: Some(Stopped::Superseded),
+            induced: false,
             attempts: vec![],
             elapsed: Duration::ZERO,
         }
@@ -435,9 +454,18 @@ impl Report {
     /// The process exit code. A floor hour's exit code carries the stop decision, because `needs:`
     /// can only see success or failure and never *why*: green and `INFRA_FAIL` exit 0 so the window
     /// continues, and every hard verdict exits non-zero so the remaining hours are skipped.
+    ///
+    /// A rigged leg exits 0 whatever it found. The stop rule's reasoning — the team has been paged,
+    /// so later hours would dedupe into the same ticket and buy nothing — holds only when the page
+    /// was about something real. When we broke the crate ourselves, the page was about something
+    /// fake and the remaining hours would still catch something real, so a break we rigged must not
+    /// cost a day of checking on a live release. The verdict is still classified, still recorded,
+    /// still emitted and still cuts a ticket; only this one decision changes, because this is the
+    /// only thing the exit code carries.
     pub fn exit_code(&self) -> i32 {
         match self.verdict {
             None => 0,
+            Some(_) if self.induced => 0,
             Some(v) if v.stops_the_window() => 1,
             Some(_) => 0,
         }
@@ -501,6 +529,7 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
                     } else {
                         Stopped::DeadlineReached
                     }),
+                    induced: leg.induced.is_some(),
                     attempts,
                     elapsed: clock.elapsed(),
                 };
@@ -515,6 +544,7 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
         failed_step: None,
         diagnosis: None,
         stopped: None,
+        induced: leg.induced.is_some(),
         attempts,
         elapsed: clock.elapsed(),
     }
@@ -526,14 +556,36 @@ mod tests {
     use crate::scenarios;
     use crate::toolchain::{self, Version};
 
+    /// A leg from the real matrix, with the rigged marker explicitly cleared.
+    ///
+    /// Cleared rather than taken as it comes, because during the stage that tests the paging chain
+    /// one manifest *is* rigged, for one release, and these tests are about retries, budgets and
+    /// classification — none of which care. Taking the live value instead would make five tests
+    /// here and in `metric` fail on the commit that rigs a manifest, so the commit could not land
+    /// and the test release could not happen. Found by rigging one and running the suite.
+    ///
+    /// A test that wants a rigged leg sets the field itself, which is also the clearer way to read
+    /// it.
     fn leg_named(id: &str) -> Leg {
         let tcs = toolchain::resolve(Version::new(1, 99, 1), Version::new(1, 94, 1))
             .unwrap()
             .kept;
-        scenarios::legs(&tcs)
+        let leg = scenarios::legs(&tcs)
             .into_iter()
             .find(|l| l.id == id)
-            .unwrap()
+            .unwrap();
+        Leg {
+            induced: None,
+            ..leg
+        }
+    }
+
+    /// The same leg, rigged. See [`crate::scenarios::Scenario::induced`].
+    fn rigged(id: &str) -> Leg {
+        Leg {
+            induced: Some("rigged to exercise the paging chain".to_string()),
+            ..leg_named(id)
+        }
     }
 
     /// Advances only when the code under test sleeps, so a six-minute retry sequence runs instantly
@@ -1257,18 +1309,23 @@ version = "0.2.12"
         assert!(r.is_green());
     }
 
-    /// Only `INFRA_FAIL` and green exit 0. Everything else stops the floor tier.
-    #[test]
-    fn exit_codes_carry_the_stop_decision() {
-        let mk = |v: Option<Verdict>| Report {
+    fn report_with(verdict: Option<Verdict>, induced: bool) -> Report {
+        Report {
             leg_id: "x".into(),
-            verdict: v,
+            verdict,
             failed_step: None,
             diagnosis: None,
             stopped: None,
+            induced,
             attempts: vec![],
             elapsed: Duration::ZERO,
-        };
+        }
+    }
+
+    /// Only `INFRA_FAIL` and green exit 0. Everything else stops the floor tier.
+    #[test]
+    fn exit_codes_carry_the_stop_decision() {
+        let mk = |v: Option<Verdict>| report_with(v, false);
         assert_eq!(mk(None).exit_code(), 0);
         assert_eq!(mk(Some(Verdict::InfraFail)).exit_code(), 0);
         for v in [
@@ -1279,5 +1336,75 @@ version = "0.2.12"
         ] {
             assert_eq!(mk(Some(v)).exit_code(), 1, "{v} must stop the window");
         }
+    }
+
+    /// Without this, testing the paging chain costs up to twenty-three hours of real checking on a
+    /// live release: the rigged leg fails, the dispatched run concludes `failure`, and the floor
+    /// tier reads that conclusion and skips every remaining hour.
+    ///
+    /// The verdict itself is untouched — still reached, still reported, still emitted, still
+    /// ticketed. Only the stop decision changes.
+    #[test]
+    fn a_rigged_leg_never_stops_the_window_whatever_it_found() {
+        for v in [
+            Verdict::ResolveFail,
+            Verdict::CompileFail,
+            Verdict::HarnessFail,
+            Verdict::RuntimeFail,
+            Verdict::InfraFail,
+        ] {
+            let rigged = report_with(Some(v), true);
+            assert_eq!(
+                rigged.exit_code(),
+                0,
+                "{v} was rigged, so the remaining hours must still run"
+            );
+            assert_eq!(rigged.verdict, Some(v), "and the verdict still stands");
+            assert!(!rigged.is_green(), "a rigged leg is red, not green");
+        }
+    }
+
+    /// The marker rides on the report rather than being re-derived later, because by the time a
+    /// record is read the commit that rigged the manifest has been reverted.
+    #[test]
+    fn the_report_carries_whether_the_leg_was_rigged() {
+        let run_one = |leg: &Leg| {
+            let mut exec = FakeExec::failing(Step::Build, vec![101, 101], COMPILE_ERROR, "");
+            run(leg, &mut exec, &mut FakeClock::default(), BUDGET)
+        };
+
+        let plain = run_one(&leg_named("new-project--stable"));
+        assert!(!plain.induced);
+        assert_eq!(plain.exit_code(), 1, "a real break stops the window");
+
+        let rigged = run_one(&rigged("new-project--stable"));
+        assert!(rigged.induced, "the leg's marker must reach its report");
+        assert_eq!(rigged.verdict, plain.verdict, "same verdict either way");
+        assert_eq!(rigged.exit_code(), 0, "and only the stop decision differs");
+
+        let json = serde_json::to_string(&plain).unwrap();
+        assert!(
+            json.contains(r#""induced":false"#),
+            "stated positively, not by omission: {json}"
+        );
+        assert_eq!(
+            serde_json::from_str::<Report>(&json).unwrap(),
+            plain,
+            "and it round-trips"
+        );
+    }
+
+    /// Reports written before the field existed have to keep reading back. A report that will not
+    /// deserialize is counted as a leg that never reported, which is the signal reserved for a leg
+    /// that died silently — so a parse failure here would file real red legs as canary defects.
+    #[test]
+    fn a_report_written_before_this_field_existed_still_reads_back() {
+        let old = r#"{"leg_id":"ssstar--stable","verdict":"COMPILE_FAIL",
+            "failed_step":"build","stopped":"attempts-exhausted",
+            "attempts":[],"elapsed":{"secs":12,"nanos":0}}"#;
+        let r: Report = serde_json::from_str(old).expect("an older report must still parse");
+        assert_eq!(r.verdict, Some(Verdict::CompileFail));
+        assert!(!r.induced);
+        assert_eq!(r.exit_code(), 1, "and it still stops the window");
     }
 }

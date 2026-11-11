@@ -331,6 +331,17 @@ fn main() -> anyhow::Result<()> {
                     report.stopped.unwrap(),
                 ),
             }
+            // Said in the job log, because that is the first thing anyone opens and a rigged leg
+            // is otherwise indistinguishable from a real break there. Said for a green one too: a
+            // manifest rigged to break that came back green is a finding about the rig.
+            if let Some(why) = &found.induced {
+                eprintln!(
+                    "NOTE: {} builds a manifest deliberately rigged to break ({why}). This \
+                     verdict tests the path from a verdict to a pager; it says nothing about the \
+                     release. Exiting 0 so the rest of the window still runs.",
+                    report.leg_id
+                );
+            }
             std::process::exit(report.exit_code());
         }
         Command::PublishStatus { repo } => {

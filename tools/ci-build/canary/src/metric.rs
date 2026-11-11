@@ -122,15 +122,30 @@ fn datapoint(dimensions: Vec<Dimension>) -> Datapoint {
     }
 }
 
+/// Marks a datapoint as coming from a manifest we rigged. See [`crate::scenarios::Scenario::induced`].
+pub const INDUCED: &str = "Induced";
+
 /// The two datapoints a red leg writes.
 ///
 /// Returns empty for no verdict, which is how a green or superseded leg writes nothing.
+///
+/// # A rigged leg pages on its own series
+///
+/// A rigged leg's alarmed series is `Red {Tag, Induced=true}`, not `Red {Tag}`. The dedupe key a
+/// ticket is cut under comes from the alarm, and there is one alarm per series, so sharing a series
+/// would mean a real break landing during a test collapses into the test's ticket and becomes
+/// invisible — which is the exact failure this whole canary exists to prevent, reintroduced by the
+/// act of testing it.
+///
+/// The consequence is that the release alarm will not fire for a rigged leg, so the orchestrator
+/// arms a second alarm against this series. Without that second alarm a rigged break pages nobody
+/// and proves nothing, which is why the two are written and checked together.
 pub fn datapoints(tag: &str, leg: &Leg, verdict: Option<Verdict>) -> Vec<Datapoint> {
     let Some(verdict) = verdict else {
         return vec![];
     };
-    let tag_only = vec![dimension("Tag", tag)];
-    let full = vec![
+    let mut tag_only = vec![dimension("Tag", tag)];
+    let mut full = vec![
         dimension("Tag", tag),
         dimension("Manifest", &leg.manifest),
         dimension("Verdict", &verdict.to_string()),
@@ -138,6 +153,15 @@ pub fn datapoints(tag: &str, leg: &Leg, verdict: Option<Verdict>) -> Vec<Datapoi
         dimension("Toolchain", &leg.toolchain_version),
         dimension("Target", leg.target.as_deref().unwrap_or(NATIVE)),
     ];
+    if leg.induced.is_some() {
+        // `true` rather than the reason. The reason is prose, it is edited between releases, and a
+        // dimension value is part of a series identity — so carrying it here would start a new
+        // series every time the wording changed. The reason belongs on the report and in the
+        // record, where there is room for it.
+        for dims in [&mut tag_only, &mut full] {
+            dims.push(dimension(INDUCED, "true"));
+        }
+    }
     vec![datapoint(tag_only), datapoint(full)]
 }
 
@@ -311,11 +335,19 @@ mod tests {
         scenarios::legs(&clamped.kept)
     }
 
+    /// A leg from the real matrix, with the rigged marker explicitly cleared — see
+    /// [`crate::leg`]'s fixture for why it is cleared rather than taken as it comes. In short: one
+    /// manifest really is rigged during the stage that tests the paging chain, and a fixture that
+    /// changed meaning then would fail the commit that rigs it.
     fn leg(id: &str) -> Leg {
-        matrix()
+        let leg = matrix()
             .into_iter()
             .find(|l| l.id == id)
-            .unwrap_or_else(|| panic!("no leg {id}"))
+            .unwrap_or_else(|| panic!("no leg {id}"));
+        Leg {
+            induced: None,
+            ..leg
+        }
     }
 
     #[derive(Default)]
@@ -504,6 +536,87 @@ mod tests {
             &mut e
         )
         .is_err());
+    }
+
+    /// A leg whose manifest was rigged, which the real table never has — see
+    /// [`crate::scenarios::Scenario::induced`] for why it is withdrawn before the next release.
+    fn rigged(id: &str) -> Leg {
+        Leg {
+            induced: Some("rigged to exercise the paging chain".to_string()),
+            ..leg(id)
+        }
+    }
+
+    /// A ticket's dedupe key comes from its alarm, and there is one alarm per series, so if a
+    /// rigged leg wrote to `Red {Tag}` then a real break landing in the same release would
+    /// collapse into the test's ticket and disappear — the exact failure the canary exists to
+    /// prevent, reintroduced by the act of testing it.
+    #[test]
+    fn a_rigged_leg_pages_on_its_own_series() {
+        let real = datapoints(
+            "release-x",
+            &leg("new-project--stable"),
+            Some(Verdict::CompileFail),
+        );
+        let test = datapoints(
+            "release-x",
+            &rigged("new-project--stable"),
+            Some(Verdict::CompileFail),
+        );
+
+        assert_ne!(
+            real[0].dimensions, test[0].dimensions,
+            "sharing the alarmed series means sharing the ticket"
+        );
+        assert_eq!(
+            test[0].dimensions,
+            [dimension("Tag", "release-x"), dimension(INDUCED, "true")]
+        );
+        // And the diagnosis copy says so too, so a responder can see it on the ticket rather than
+        // having to find the commit that rigged it.
+        assert!(test[1].dimensions.contains(&dimension(INDUCED, "true")));
+        validate(&test).expect("a rigged leg still has to produce a valid datapoint");
+    }
+
+    /// The release alarm must *not* see a rigged leg. That is the whole mechanism, and it is also
+    /// what makes the second alarm load-bearing rather than decorative: without it a rigged break
+    /// pages nobody and the test proves nothing.
+    #[test]
+    fn the_release_alarm_does_not_see_a_rigged_leg() {
+        let armed = vec![dimension("Tag", "release-x")];
+        let test = datapoints(
+            "release-x",
+            &rigged("ssstar--stable"),
+            Some(Verdict::CompileFail),
+        );
+        assert!(
+            test.iter().all(|d| d.dimensions != armed),
+            "no datapoint from a rigged leg may land on the series the release alarm watches"
+        );
+    }
+
+    /// The marker says `true`, never the reason. A dimension value is part of a series identity, so
+    /// carrying prose that gets reworded between releases would start a new series each time — and
+    /// an alarm armed against the old one would then watch nothing.
+    #[test]
+    fn the_marker_does_not_carry_the_reason() {
+        let a = datapoints(
+            "release-x",
+            &Leg {
+                induced: Some("one wording".into()),
+                ..leg("new-project--stable")
+            },
+            Some(Verdict::RuntimeFail),
+        );
+        let b = datapoints(
+            "release-x",
+            &Leg {
+                induced: Some("a completely different wording".into()),
+                ..leg("new-project--stable")
+            },
+            Some(Verdict::RuntimeFail),
+        );
+        assert_eq!(a, b, "the wording must not change the series");
     }
 
     /// The property the single alarm depends on. An alarm watches `Red {Tag}` and nothing else, so
