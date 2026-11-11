@@ -1,6 +1,6 @@
 ---
 applies_to: ["aws-sdk-rust"]
-authors: ["yinychen"]
+authors: ["yychen23"]
 references: ["smithy-rs#5004"]
 breaking: false
 new_feature: true
