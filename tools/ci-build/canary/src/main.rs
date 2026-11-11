@@ -16,6 +16,7 @@ use canary::leg;
 use canary::manifest;
 use canary::publish;
 use canary::scenarios;
+use canary::summary;
 use canary::toolchain::{self, Version};
 
 #[derive(Parser)]
@@ -106,13 +107,13 @@ enum Command {
         /// The freshly resolved `Cargo.lock` to compare.
         #[arg(long)]
         lockfile: PathBuf,
-        /// The S3 bucket holding the baselines. What the dispatch tier uses.
+        /// The directory holding the baselines, one subdirectory per manifest.
+        ///
+        /// A baseline never outlives the release it was taken during, so this is `RUNNER_TEMP` in
+        /// CI. Wrapping it in `actions/cache` buys survival across a re-run and changes nothing
+        /// here.
         #[arg(long)]
-        bucket: Option<String>,
-        /// A directory holding the baselines instead, for running without a credential. Uses the
-        /// same keys as the bucket, so a local run exercises the real key scheme.
-        #[arg(long)]
-        store_dir: Option<PathBuf>,
+        store_dir: PathBuf,
         /// Make the fresh graph the new baseline.
         ///
         /// The dispatch tier passes this, so the next tick compares against what it last saw.
@@ -120,6 +121,36 @@ enum Command {
         /// otherwise read as "unchanged" and skip legs that were never run.
         #[arg(long)]
         update: bool,
+    },
+    /// Fold a run's leg reports into one durable record, for a release that broke.
+    ///
+    /// Writes `summary.json` into `--out` and prints, on stdout, the key it belongs under and
+    /// whether it is worth archiving at all. A run where nothing blamed the release is not.
+    Summarize {
+        /// The `release-*` tag the legs built against.
+        #[arg(long)]
+        release: String,
+        #[arg(long)]
+        run_id: String,
+        /// A re-run keeps the id and increments this, and both are in the key, so re-running
+        /// cannot overwrite the first attempt's record.
+        #[arg(long, default_value_t = 1)]
+        run_attempt: u32,
+        #[arg(long)]
+        run_url: String,
+        /// `dispatch`, `floor` or `manual`.
+        #[arg(long)]
+        tier: String,
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+        /// The downloaded artifacts, searched recursively for `report.json`.
+        #[arg(long)]
+        reports: PathBuf,
+        /// Where to write `summary.json`. Created if absent.
+        #[arg(long)]
+        out: PathBuf,
     },
     /// Materialize one leg's crate into a directory, ready to build.
     GenLeg {
@@ -247,7 +278,6 @@ fn main() -> anyhow::Result<()> {
         Command::Baseline {
             manifest,
             lockfile,
-            bucket,
             store_dir,
             update,
         } => {
@@ -255,20 +285,72 @@ fn main() -> anyhow::Result<()> {
                 scenarios::manifest(&manifest).is_some(),
                 "no manifest {manifest:?}; run `gen-matrix` to see the ids"
             );
-            let store: Box<dyn baseline::Store> = match (bucket, store_dir) {
-                (Some(bucket), None) => Box::new(baseline::S3 { bucket }),
-                (None, Some(root)) => Box::new(baseline::LocalDir { root }),
-                (Some(_), Some(_)) => {
-                    anyhow::bail!("--bucket and --store-dir name two different stores")
-                }
-                (None, None) => anyhow::bail!("one of --bucket or --store-dir is required"),
-            };
-
+            let store = baseline::BaselineDir::new(store_dir);
             let fresh = baseline::read_lockfile(&lockfile)?;
-            let movement = baseline::gate(store.as_ref(), &manifest, &fresh, update)?;
+            let movement = baseline::gate(&store, &manifest, &fresh, update)?;
 
             eprintln!("{manifest}: {movement}");
             println!("{}", serde_json::to_string(&movement)?);
+        }
+        Command::Summarize {
+            release,
+            run_id,
+            run_attempt,
+            run_url,
+            tier,
+            stable,
+            msrv,
+            reports,
+            out,
+        } => {
+            let clamped = resolve(&stable, &msrv)?;
+            let legs = scenarios::legs(&clamped.kept);
+            let reports = summary::read_reports(&reports)?;
+            let run = summary::Run {
+                release,
+                run_id,
+                run_attempt,
+                run_url,
+                tier,
+            };
+            let key_prefix = summary::key_prefix(&run)?;
+            let record = summary::summarize(run, &legs, &reports);
+
+            std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
+            let path = out.join("summary.json");
+            std::fs::write(&path, serde_json::to_string_pretty(&record)?)
+                .with_context(|| format!("writing {}", path.display()))?;
+
+            eprintln!(
+                "{} of {} legs red; outcomes {:?}",
+                record.red.len(),
+                record.legs_total,
+                record.outcomes
+            );
+            for leg in &record.red {
+                eprintln!("  {} {} {}", leg.leg_id, leg.verdict, describe(leg));
+            }
+            if !record.unreported.is_empty() {
+                eprintln!(
+                    "  WARNING: {} leg(s) sent no report, which is a canary defect: {}",
+                    record.unreported.len(),
+                    record.unreported.join(", ")
+                );
+            }
+            if !record.had_a_hard_verdict() {
+                eprintln!("nothing blamed the release, so there is nothing to archive");
+            }
+
+            // The decision, for the step that does the upload. Keeping it on stdout as JSON means
+            // the workflow never has to parse prose, and the record itself is the file in --out.
+            println!(
+                "{}",
+                serde_json::json!({
+                    "key_prefix": key_prefix,
+                    "record": record.had_a_hard_verdict(),
+                    "summary": path,
+                })
+            );
         }
         Command::GenLeg {
             leg,
@@ -302,6 +384,16 @@ fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The one-line version of a red leg for the job log: what broke, and between which versions.
+fn describe(leg: &summary::RedLeg) -> String {
+    let Some(d) = &leg.diagnosis else {
+        return String::new();
+    };
+    let mut parts: Vec<String> = d.summary.clone().into_iter().collect();
+    parts.extend(d.duplicate_versions.iter().map(ToString::to_string));
+    parts.join(" | ")
 }
 
 fn find_leg<'a>(legs: &'a [scenarios::Leg], id: &str) -> anyhow::Result<&'a scenarios::Leg> {
