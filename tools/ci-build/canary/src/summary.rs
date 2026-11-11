@@ -12,11 +12,11 @@
 //! after a release broke there is no log, no artifact, and no run. The red-leg evidence this
 //! repository uploads is kept 14 days, shorter still.
 //!
-//! The action item this canary answers came from a break going unnoticed for 21 hours. The question
-//! that gets asked afterwards is not "what does this run say" — someone is already looking at the
-//! run — it is "how often does this happen, and to what". That question is asked months later, by
-//! which time every trace has been deleted. So a release that broke gets one small object written
-//! somewhere durable, and the ability to answer it survives.
+//! This canary exists because a break once went unnoticed for 21 hours. The question that gets
+//! asked afterwards is not "what does this run say" — someone is already looking at the run — it is
+//! "how often does this happen, and to what". That question is asked months later, by which time
+//! every trace has been deleted. So a release that broke gets one small object written somewhere
+//! durable, and the ability to answer it survives.
 //!
 //! This is not about keeping the diagnosis private. The job log is public and carries it already,
 //! for as long as the log exists.
