@@ -46,6 +46,7 @@ Smithy Rust will use this model to produce the following API:
 # extern crate aws_smithy_http_server;
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 # use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonServiceConfig, PokemonService};
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
@@ -61,7 +62,7 @@ let pokemon_service = PokemonService::builder(config)
     /* other operation setters */
     .build()
     .expect("failed to create an instance of the Pokémon service");
-# let pokemon_service: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = pokemon_service;
+# let pokemon_service: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = pokemon_service;
 ```
 
 ## Operations
@@ -613,18 +614,19 @@ Both builder methods take care of:
 
 1. Pair each handler with the routing information for the corresponding operation;
 2. Collect all `(routing_info, handler)` pairs into a `Router`;
-3. Transform the `Router` implementation into a HTTP service via `RouterService`;
-4. Wrap the `RouterService` in a newtype given by the service name, `PokemonService`.
+3. Transform the `Router` implementation into a HTTP service via `RoutingService`;
+4. Wrap the `RoutingService` in a `MetricsService`, which sets up per-request state for [standard server metrics](../rfcs/rfc0049_integrated_server_metrics.md);
+5. Wrap the `MetricsService` in a newtype given by the service name, `PokemonService`.
 
 The final outcome, an instance of `PokemonService`, looks roughly like this:
 
 ```rust
 # extern crate aws_smithy_http_server;
-# use aws_smithy_http_server::{routing::RoutingService, protocol::rest_json_1::{router::RestRouter, RestJson1}};
+# use aws_smithy_http_server::{metrics::MetricsService, routing::RoutingService, protocol::rest_json_1::{router::RestRouter, RestJson1}};
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
 #[derive(Clone)]
 pub struct PokemonService<S> {
-    router: RoutingService<RestRouter<S>, RestJson1>,
+    svc: MetricsService<RoutingService<RestRouter<S>, RestJson1>>,
 }
 ```
 
@@ -641,26 +643,28 @@ stateDiagram-v2
     [*] --> in : HTTP Request
     UpgradePlugin --> [*]: HTTP Response
     state PokemonService {
-        state RoutingService {
-            in --> UpgradePlugin: HTTP Request
-            in --> C2: HTTP Request
-            in --> C3: HTTP Request
-            in --> C4: HTTP Request
-            state C1 {
-                state HttpPlugin {
-                    state UpgradePlugin {
-                        direction LR
-                        [*] --> S: Model Input
-                        S --> [*] : Model Output
-                        state ModelPlugin {
-                            S
+        state MetricsService {
+            state RoutingService {
+                in --> UpgradePlugin: HTTP Request
+                in --> C2: HTTP Request
+                in --> C3: HTTP Request
+                in --> C4: HTTP Request
+                state C1 {
+                    state HttpPlugin {
+                        state UpgradePlugin {
+                            direction LR
+                            [*] --> S: Model Input
+                            S --> [*] : Model Output
+                            state ModelPlugin {
+                                S
+                            }
                         }
                     }
                 }
+                C2
+                C3
+                C4
             }
-            C2
-            C3
-            C4
         }
 
     }

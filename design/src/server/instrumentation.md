@@ -70,6 +70,7 @@ use aws_smithy_http_server::{
 };
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 
 let http_plugins = HttpPlugins::new().instrument();
@@ -79,7 +80,7 @@ let app = PokemonService::builder(config)
   /* ... */
   .build()
   .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 ```
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->

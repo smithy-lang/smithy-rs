@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -312,12 +313,7 @@ internal class ServerServiceGeneratorTest {
                         // A `Cell` is `Send + Clone` but not `Sync`.
                         let hits = ::std::cell::Cell::new(0u32);
                         // Pins the request body to the router's default, as a real server does.
-                        let _app: crate::SimpleService<
-                            #{Server}::routing::RoutingService<
-                                #{Server}::protocol::rest::router::RestRouter<#{Server}::routing::Route>,
-                                #{Server}::protocol::rest_json_1::RestJson1,
-                            >,
-                        > = crate::SimpleService::builder(config)
+                        let _app: crate::SimpleService<#{Routing}> = crate::SimpleService::builder(config)
                             .operation(move |_input: crate::input::OperationInput| {
                                 let hits = hits.clone();
                                 async move {
@@ -330,6 +326,17 @@ internal class ServerServiceGeneratorTest {
                     """,
                     "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
                     "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
+                    "Routing" to
+                        writable {
+                            val routing =
+                                "#{Server}::routing::RoutingService<" +
+                                    "#{Server}::protocol::rest::router::RestRouter<#{Server}::routing::Route>, " +
+                                    "#{Server}::protocol::rest_json_1::RestJson1>"
+                            rustTemplate(
+                                if (codegenContext.supportsStandardMetrics) "#{Server}::metrics::MetricsService<$routing>" else routing,
+                                "Server" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+                            )
+                        },
                     *RuntimeType.preludeScope,
                 )
             }
