@@ -40,6 +40,7 @@
 use std::fmt;
 use std::time::Duration;
 
+use anyhow::Context;
 use serde::Serialize;
 
 use crate::baseline::{self, BaselineDir, Movement};
@@ -58,6 +59,26 @@ pub const INTERVAL: Duration = Duration::from_secs(15 * 60);
 /// The window should end when the release finishes publishing. This bounds the case where that
 /// signal never arrives — which is itself a finding, not a reason to watch forever.
 pub const CEILING: Duration = Duration::from_secs(3 * 60 * 60);
+
+/// How often to look, and for how long.
+///
+/// Passed in rather than read from the constants directly so that a test can compress a three-hour
+/// window into microseconds, and so the two numbers are visible together at the call site where
+/// their relationship matters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cadence {
+    pub interval: Duration,
+    pub ceiling: Duration,
+}
+
+impl Default for Cadence {
+    fn default() -> Self {
+        Self {
+            interval: INTERVAL,
+            ceiling: CEILING,
+        }
+    }
+}
 
 /// What one tick decided.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -134,8 +155,11 @@ impl fmt::Display for WatchReport {
         )?;
         match self.stopped {
             Stopped::PublishingComplete => f.write_str("publishing finished"),
+            // Deliberately not naming a duration. The ceiling is configurable, and the first
+            // version of this line said "the 3-hour ceiling" while running against an
+            // eight-second one.
             Stopped::CeilingReached => {
-                f.write_str("the 3-hour ceiling was reached with crates still outstanding")
+                f.write_str("the ceiling was reached with crates still outstanding")
             }
             Stopped::DispatchFailed => f.write_str("a dispatch call failed"),
         }
@@ -159,16 +183,32 @@ pub trait PublishWatch {
     fn is_complete(&mut self) -> anyhow::Result<bool>;
 }
 
+/// Everything the watcher needs from outside its own decision: cargo, GitHub, crates.io and the
+/// clock.
+///
+/// One struct rather than four parameters because they always travel together, and because what is
+/// worth reading at a call site is the decision being made, not the list of things it talks to.
+pub struct Seams<'a> {
+    pub resolver: &'a mut dyn Resolver,
+    pub dispatcher: &'a mut dyn Dispatcher,
+    pub publishing: &'a mut dyn PublishWatch,
+    pub clock: &'a mut dyn Clock,
+}
+
 /// Run the watcher over one release's publish window.
 pub fn watch(
     tag: &str,
     manifests: &[String],
     baselines: &BaselineDir,
-    resolver: &mut dyn Resolver,
-    dispatcher: &mut dyn Dispatcher,
-    publishing: &mut dyn PublishWatch,
-    clock: &mut dyn Clock,
+    cadence: Cadence,
+    seams: &mut Seams<'_>,
 ) -> WatchReport {
+    let Seams {
+        resolver,
+        dispatcher,
+        publishing,
+        clock,
+    } = seams;
     let mut ticks = Vec::new();
     let mut number = 0u32;
 
@@ -229,16 +269,182 @@ pub fn watch(
 
         // Checked before sleeping rather than after, so the run cannot overshoot the ceiling by an
         // interval.
-        if clock.elapsed() + INTERVAL >= CEILING {
+        if clock.elapsed() + cadence.interval >= cadence.ceiling {
             break Stopped::CeilingReached;
         }
-        clock.sleep(INTERVAL);
+        clock.sleep(cadence.interval);
     };
 
     WatchReport {
         tag: tag.to_string(),
         ticks,
         stopped,
+    }
+}
+
+/// Resolves a manifest by rendering it and running `cargo generate-lockfile`.
+///
+/// Renders from the manifest's *first* leg. Every leg of a manifest renders the same dependencies —
+/// the body is a property of the scenario, so all its legs share it, and the only per-leg difference
+/// is a comment naming the leg. A test asserts that, because if it stopped being true this resolve
+/// would be answering a question about a different graph than the legs build.
+pub struct CargoResolver {
+    /// One subdirectory per manifest. Reused across ticks, which keeps the registry cache warm.
+    pub root: std::path::PathBuf,
+    /// The leg matrix, to find a leg per manifest.
+    pub legs: Vec<crate::scenarios::Leg>,
+    /// Bound on one resolve, so a stalled registry read cannot hang the tick.
+    pub budget: Duration,
+    pub verbose: bool,
+}
+
+impl Resolver for CargoResolver {
+    fn resolve(&mut self, manifest_id: &str) -> anyhow::Result<String> {
+        let leg = self
+            .legs
+            .iter()
+            .find(|l| l.manifest == manifest_id)
+            .ok_or_else(|| anyhow::anyhow!("no leg uses manifest {manifest_id:?}"))?;
+        let scenario = crate::scenarios::manifest(manifest_id)
+            .ok_or_else(|| anyhow::anyhow!("unknown manifest {manifest_id:?}"))?;
+
+        let dir = self.root.join(manifest_id);
+        crate::manifest::materialize(&crate::manifest::render(leg, scenario), &dir)?;
+
+        // Remove the previous tick's lockfile first. Leaving it in place would let cargo keep the
+        // versions it already recorded, so a tick could resolve the graph it saw fifteen minutes ago
+        // and report that nothing moved -- which is the one wrong answer the gate can give.
+        let lockfile = dir.join("Cargo.lock");
+        if lockfile.exists() {
+            std::fs::remove_file(&lockfile)
+                .with_context(|| format!("removing {}", lockfile.display()))?;
+        }
+
+        // Reuses the leg executor for its bounded wait and its pipe draining, rather than
+        // reimplementing either. No `--offline`: this is the step that reaches the registry on
+        // purpose.
+        let mut exec = crate::leg::RealExec {
+            dir: dir.clone(),
+            verbose: self.verbose,
+        };
+        let command = crate::leg::Command {
+            step: crate::classify::Step::GenerateLockfile,
+            program: "cargo".into(),
+            args: vec!["generate-lockfile".into()],
+            json: false,
+        };
+        let outcome = crate::leg::Exec::run(&mut exec, &command, self.budget);
+        anyhow::ensure!(
+            outcome.succeeded(),
+            "cargo generate-lockfile failed for {manifest_id}: {}",
+            outcome.stderr.trim()
+        );
+
+        std::fs::read_to_string(&lockfile)
+            .with_context(|| format!("reading {}", lockfile.display()))
+    }
+}
+
+/// Asks crates.io whether every declared runtime crate has arrived.
+///
+/// The declared set is read from the checkout once: it is a property of the tag being released, so
+/// re-reading it every tick would be thirteen file reads an hour for an answer that cannot change.
+/// Only the crates.io lookups repeat.
+pub struct CratesIoWatch {
+    declared: Vec<crate::publish::RuntimeCrate>,
+    index: crate::publish::CratesIo,
+}
+
+impl CratesIoWatch {
+    pub fn new(repo_root: &std::path::Path) -> anyhow::Result<Self> {
+        Ok(Self {
+            declared: crate::publish::declared(repo_root)?,
+            index: crate::publish::CratesIo::default(),
+        })
+    }
+
+    /// How many crates the release is waiting on, for the log.
+    pub fn declared_count(&self) -> usize {
+        self.declared.len()
+    }
+}
+
+impl PublishWatch for CratesIoWatch {
+    fn is_complete(&mut self) -> anyhow::Result<bool> {
+        let status = crate::publish::status(&self.declared, &self.index)?;
+        if !status.is_complete() {
+            eprintln!(
+                "  {} of {} published; waiting on {}",
+                status.arrived,
+                status.expected,
+                status
+                    .outstanding
+                    .iter()
+                    .map(|c| format!("{} {}", c.name, c.version))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        Ok(status.is_complete())
+    }
+}
+
+/// Dispatches the leg workflow through the `gh` CLI.
+///
+/// One call per tick carrying every manifest that moved, rather than one call per manifest. The leg
+/// workflow's concurrency key includes the scenario, so two ticks that dispatch different sets
+/// cannot cancel each other, while a repeated dispatch of the same set supersedes its predecessor.
+pub struct GhDispatcher {
+    pub workflow: String,
+    pub repo: String,
+    /// Recorded on the run so a leg's provenance is readable.
+    pub tier: String,
+    /// Print the command instead of running it. For exercising the watcher without dispatching.
+    pub dry_run: bool,
+}
+
+impl GhDispatcher {
+    /// The argv, separated from running it so it can be asserted without a token.
+    fn argv(&self, manifests: &[String], tag: &str) -> Vec<String> {
+        vec![
+            "workflow".into(),
+            "run".into(),
+            self.workflow.clone(),
+            "--repo".into(),
+            self.repo.clone(),
+            // The legs build the release, so they run from its tag. This needs the workflow to
+            // exist on the default branch, which is what dispatching against any other ref
+            // requires.
+            "--ref".into(),
+            tag.to_string(),
+            "-f".into(),
+            format!("tier={}", self.tier),
+            "-f".into(),
+            format!("scenario={}", manifests.join(",")),
+            "-f".into(),
+            format!("tag={tag}"),
+        ]
+    }
+}
+
+impl Dispatcher for GhDispatcher {
+    fn dispatch(&mut self, manifests: &[String], tag: &str) -> anyhow::Result<()> {
+        let argv = self.argv(manifests, tag);
+        if self.dry_run {
+            eprintln!("  would dispatch: gh {}", argv.join(" "));
+            return Ok(());
+        }
+        let out = std::process::Command::new("gh")
+            .args(&argv)
+            .output()
+            .context("running gh workflow run")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh workflow run failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        eprintln!("  dispatched {} manifest(s)", manifests.len());
+        Ok(())
     }
 }
 
@@ -385,10 +591,13 @@ mod tests {
             "release-2026-11-09",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.ticks[0].dispatched.len(), 13, "not diff-gated");
@@ -411,10 +620,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.ticks.len(), 4, "three incomplete, then complete");
@@ -449,10 +661,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.ticks[0].dispatched.len(), 3, "first sight");
@@ -483,10 +698,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.ticks[0].unresolved, ["manifest-2"]);
@@ -516,10 +734,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.stopped, Stopped::DispatchFailed);
@@ -542,10 +763,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.stopped, Stopped::CeilingReached);
@@ -579,10 +803,13 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.stopped, Stopped::PublishingComplete);
@@ -610,14 +837,114 @@ mod tests {
             "release-x",
             &ms,
             &BaselineDir::new(dir.path()),
-            &mut r,
-            &mut d,
-            &mut p,
-            &mut c,
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
         );
 
         assert_eq!(report.stopped, Stopped::PublishingComplete);
         assert!(report.ticks.len() > 1, "it kept going past the error");
+    }
+
+    /// The precondition `CargoResolver` rests on: resolving a manifest from its first leg is only
+    /// meaningful if every leg of that manifest renders the same dependencies. The body is a
+    /// property of the scenario, so they do — but if that ever stopped being true, the watcher
+    /// would be asking about a different graph than the legs build, and nothing else would notice.
+    #[test]
+    fn every_leg_of_a_manifest_renders_the_same_dependencies() {
+        use std::collections::BTreeMap;
+
+        let clamped = crate::toolchain::resolve(
+            crate::toolchain::Version::new(1, 99, 1),
+            crate::toolchain::Version::new(1, 94, 1),
+        )
+        .expect("a real span");
+        let legs = crate::scenarios::legs(&clamped.kept);
+
+        let mut by_manifest: BTreeMap<&str, Vec<(String, String)>> = BTreeMap::new();
+        for leg in &legs {
+            let scenario = crate::scenarios::manifest(&leg.manifest).expect("a known manifest");
+            let rendered = crate::manifest::render(leg, scenario);
+            // Drop the header comments, which name the leg on purpose.
+            let deps: String = rendered
+                .cargo_toml
+                .lines()
+                .filter(|l| !l.trim_start().starts_with('#'))
+                .collect::<Vec<_>>()
+                .join("\n");
+            by_manifest
+                .entry(&leg.manifest)
+                .or_default()
+                .push((leg.id.clone(), deps));
+        }
+
+        for (manifest, rendered) in by_manifest {
+            let (first_id, first) = &rendered[0];
+            for (id, deps) in &rendered[1..] {
+                assert_eq!(
+                    first, deps,
+                    "{manifest}: {first_id} and {id} render different manifests, so resolving \
+                     from one leg would not describe the other"
+                );
+            }
+        }
+    }
+
+    /// The dispatch argv, asserted rather than run, since running it needs a token.
+    #[test]
+    fn the_dispatch_names_the_moved_manifests_and_the_tag() {
+        let d = GhDispatcher {
+            workflow: "build-canary.yml".into(),
+            repo: "smithy-lang/smithy-rs".into(),
+            tier: "dispatch".into(),
+            dry_run: true,
+        };
+        let argv = d.argv(
+            &["new-project".to_string(), "ssstar".to_string()],
+            "release-2026-11-09",
+        );
+
+        assert_eq!(
+            argv,
+            [
+                "workflow",
+                "run",
+                "build-canary.yml",
+                "--repo",
+                "smithy-lang/smithy-rs",
+                "--ref",
+                "release-2026-11-09",
+                "-f",
+                "tier=dispatch",
+                // Comma-joined, which is what the leg workflow's filter accepts.
+                "-f",
+                "scenario=new-project,ssstar",
+                "-f",
+                "tag=release-2026-11-09",
+            ]
+        );
+        // The legs must build the release, not whatever the default branch happens to be.
+        let after_ref = argv.iter().position(|a| a == "--ref").unwrap() + 1;
+        assert_eq!(argv[after_ref], "release-2026-11-09");
+    }
+
+    /// A dry run must not shell out, so the watcher can be exercised end to end without
+    /// dispatching anything.
+    #[test]
+    fn a_dry_run_dispatch_succeeds_without_running_gh() {
+        let mut d = GhDispatcher {
+            workflow: "build-canary.yml".into(),
+            repo: "nonexistent/repo".into(),
+            tier: "dispatch".into(),
+            dry_run: true,
+        };
+        assert!(d
+            .dispatch(&["new-project".to_string()], "release-x")
+            .is_ok());
     }
 
     #[test]

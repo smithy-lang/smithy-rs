@@ -27,8 +27,11 @@ on:
         default: manual
       scenario:
         description: >
-          Leg id, manifest name, or `all`. One scenario is one or two legs at a couple of minutes
-          where `all` is 60 legs, which is why the filter exists rather than being a convenience.
+          Leg ids or manifest names, comma-separated, or `all`. One scenario is one or two legs at a
+          couple of minutes where `all` is 60 legs, which is why the filter exists rather than being
+          a convenience. The watcher passes the set of manifests whose graph moved on a tick, so
+          every name given must match something -- a typo fails rather than quietly running a
+          subset.
         type: string
         default: all
       tag:
@@ -87,13 +90,28 @@ jobs:
         python3 - "${SCENARIO}" <<'PY' > /tmp/legs.json
         import json, sys
         want = sys.argv[1]
-        legs = json.load(open('/tmp/all.json'))
-        if want != 'all':
-            legs = [l for l in legs if want in (l['id'], l['manifest'])]
-            if not legs:
-                ids = sorted({l['id'] for l in json.load(open('/tmp/all.json'))})
-                sys.exit(f"no leg or manifest matched {want!r}. available: {', '.join(ids)}")
-        json.dump(legs, sys.stdout)
+        all_legs = json.load(open('/tmp/all.json'))
+        if want == 'all':
+            json.dump(all_legs, sys.stdout)
+            raise SystemExit(0)
+
+        # A comma-separated list, not a single value: the watcher dispatches the *set* of manifests
+        # whose graph moved on a tick, and one run carrying four manifests is cheaper than four runs
+        # and keeps their legs on one page.
+        wanted = [w.strip() for w in want.split(',') if w.strip()]
+
+        # Every name has to match something. Checking each one rather than only checking that the
+        # result is non-empty matters once this takes a list: a misspelled manifest among four
+        # correct ones would otherwise run three legs and look like a success, and the manifest
+        # nobody built is exactly the one that would have been red.
+        known = {l['id'] for l in all_legs} | {l['manifest'] for l in all_legs}
+        missing = [w for w in wanted if w not in known]
+        if missing:
+            sys.exit(f"no leg or manifest named {', '.join(missing)}. "
+                     f"available: {', '.join(sorted(known))}")
+
+        json.dump([l for l in all_legs if l['id'] in wanted or l['manifest'] in wanted],
+                  sys.stdout)
         PY
 
         echo "legs=$(cat /tmp/legs.json)" >> "$GITHUB_OUTPUT"
