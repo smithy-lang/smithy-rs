@@ -240,6 +240,41 @@ class UnionGeneratorTest {
     }
 
     @Test
+    fun `impl debug for union should redact text for variant targeting list of sensitive`() {
+        val writer =
+            generateUnion(
+                """
+                @sensitive
+                string Secret
+
+                list SecretList {
+                    member: Secret
+                }
+
+                map SecretMap {
+                    key: String
+                    value: Secret
+                }
+
+                union MyUnion {
+                    foo: PrimitiveInteger,
+                    secrets: SecretList,
+                    secretMap: SecretMap,
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Secrets(vec!["leak".into()])), $REDACTION);
+            let secret_map = std::collections::HashMap::from([("key".to_owned(), "leak".to_owned())]);
+            assert_eq!(format!("{:?}", MyUnion::SecretMap(secret_map)), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
     fun `unit types should not appear in generated enum`() {
         val writer = generateUnion("union MyUnion { a: Unit, b: String }", unknownVariant = true)
         writer.compileAndTest(
