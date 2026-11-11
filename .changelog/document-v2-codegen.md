@@ -21,5 +21,8 @@ the value it held before. When the `DocumentV2` form is set on a builder,
 `build()` sets the `Document` field the same way, and either form satisfies a
 required member. Clearing the `DocumentV2` form with `set_payload_v2(None)` lets
 a value set with the `Document` methods take effect again. Equality and `Debug`
-output still cover only the `Document` fields. Union variants keep only their
-`Document` form. Other clients are unchanged.
+output still cover only the `Document` fields. An ordinary union member that
+directly holds documents also gets an additive variant such as
+`JsonV2(DocumentV2)`, with `as_json_v2` and `is_json_v2` methods. The original
+and V2 variants serialize as the same Smithy member. Responses continue to use
+the original `Json(Document)` variant by default. Other clients are unchanged.

@@ -15,12 +15,16 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
  * The private `DocumentV2` companion of a structure member whose public field holds `Document` values.
@@ -53,22 +57,49 @@ data class DocumentV2Companion(
 }
 
 /**
- * Finds the structure members that get a [DocumentV2Companion].
+ * An additive client union variant whose payload replaces every directly held `Document` with `DocumentV2`.
  *
- * A member gets one when it targets a document, or lists and maps whose elements are documents at any depth. Those
- * are the members whose Rust type holds `aws_smithy_types::Document` values directly, such as `Option<Document>`
- * or `Option<Vec<HashMap<String, Document>>>`.
+ * The synthetic Rust variant is another representation of [member], not another Smithy member. Schema and protocol
+ * serializers must therefore use [member]'s original wire name and schema index for both representations.
+ */
+data class DocumentV2UnionVariant(
+    val member: MemberShape,
+    /** The existing generated Rust variant, such as `Json`. */
+    val originalVariantName: String,
+    /** The additive Rust variant, such as `JsonV2`. */
+    val variantName: String,
+    /** The suffix shared by the additive `as_*` and `is_*` methods, such as `json_v2`. */
+    val accessorName: String,
+    /** The additive variant's payload type, such as `DocumentV2` or `Vec<DocumentV2>`. */
+    val type: RustType,
+)
+
+/**
+ * Finds generated structure companions and additive client union variants for modeled document values.
  *
- * Other members that reach a document don't:
- * - A member that targets a structure, directly or through lists and maps. That structure holds its own companions.
- * - A union member. A union variant can't hold a hidden value, and adding a variant would change which variant
- *   existing code receives, so union variants stay `Document` only.
+ * Structure members get a companion when they target a document, or lists and maps whose elements are documents at
+ * any depth. Those are the members whose Rust type holds `aws_smithy_types::Document` values directly, such as
+ * `Option<Document>` or `Option<Vec<HashMap<String, Document>>>`.
+ *
+ * Union members with the same direct document/list/map forms get a [DocumentV2UnionVariant]. The synthetic Rust
+ * variant is client-only and additive; it serializes as the original Smithy member. Deserialization keeps selecting
+ * the original variant unless a caller explicitly opts into the V2 response mode.
+ *
+ * Members that reach a document through a structure or another union don't get a companion or synthetic leaf
+ * variant. The nested aggregate owns its own representation.
  */
 class DocumentV2Index(model: Model) : KnowledgeIndex {
     private val membersWithCompanions: Map<ShapeId, List<MemberShape>> =
         model.structureShapes
             .associate { structure ->
                 structure.id to structure.members().filter { holdsDocuments(model.expectShape(it.target), model) }
+            }
+            .filterValues { it.isNotEmpty() }
+
+    private val membersWithUnionVariants: Map<ShapeId, List<MemberShape>> =
+        model.unionShapes
+            .associate { union ->
+                union.id to union.members().filter { holdsDocuments(model.expectShape(it.target), model) }
             }
             .filterValues { it.isNotEmpty() }
 
@@ -123,6 +154,73 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
         return companions
     }
 
+    /**
+     * Returns the additive `DocumentV2` variants for [shape], ordered by their existing Rust variant names.
+     *
+     * Throws a [CodegenException] when a synthetic variant or accessor would collide with a modeled member. A
+     * document-bearing event-stream union is also rejected: its public event receiver needs a separately designed
+     * representation rather than another ordinary union variant.
+     */
+    fun unionVariants(
+        shape: UnionShape,
+        symbolProvider: RustSymbolProvider,
+    ): List<DocumentV2UnionVariant> {
+        val members = membersWithUnionVariants[shape.id] ?: return emptyList()
+        if (shape.hasTrait<StreamingTrait>()) {
+            throw CodegenException(
+                "`${shape.id}` is an event-stream union with a member that directly holds documents. " +
+                    "DocumentV2 variants are only supported in ordinary client unions.",
+            )
+        }
+
+        val runtimeConfig = symbolProvider.config.runtimeConfig
+        val document = RuntimeType.document(runtimeConfig).toSymbol().rustType()
+        val documentV2 = RuntimeType.documentV2(runtimeConfig).toSymbol().rustType()
+        val modeledVariantOwners = shape.members().associateBy { symbolProvider.toMemberName(it) }
+        val modeledAccessorOwners = shape.members().associateBy { symbolProvider.toSymbol(it).name.toSnakeCase() }
+        val syntheticVariantOwners = mutableMapOf<String, MemberShape>()
+        val syntheticAccessorOwners = mutableMapOf<String, MemberShape>()
+
+        return members
+            .map { member ->
+                val originalVariantName = symbolProvider.toMemberName(member)
+                val variantName = "${originalVariantName.removePrefix("r##")}V2"
+                val accessorName = "${symbolProvider.toSymbol(member).name.toSnakeCase()}_v2"
+
+                fun collision(
+                    generatedName: String,
+                    kind: String,
+                    owner: MemberShape?,
+                ) {
+                    if (owner != null) {
+                        throw CodegenException(
+                            "`${shape.id}` member `${member.memberName}` needs a DocumentV2 $kind named " +
+                                "`$generatedName`, but member `${owner.memberName}` already uses that name. " +
+                                "Rename one of the members, or extend `DocumentV2Index` to choose a different name.",
+                        )
+                    }
+                }
+
+                collision(variantName, "variant", modeledVariantOwners[variantName])
+                collision(accessorName, "accessor", modeledAccessorOwners[accessorName])
+                collision(variantName, "variant", syntheticVariantOwners.putIfAbsent(variantName, member))
+                collision(accessorName, "accessor", syntheticAccessorOwners.putIfAbsent(accessorName, member))
+
+                DocumentV2UnionVariant(
+                    member = member,
+                    originalVariantName = originalVariantName,
+                    variantName = variantName,
+                    accessorName = accessorName,
+                    type =
+                        symbolProvider
+                            .toSymbol(member)
+                            .rustType()
+                            .stripOuter<RustType.Option>()
+                            .withDocumentV2(document, documentV2, member),
+                )
+            }.sortedBy { it.originalVariantName }
+    }
+
     companion object {
         fun of(model: Model): DocumentV2Index = model.getKnowledge(DocumentV2Index::class.java, ::DocumentV2Index)
 
@@ -146,12 +244,14 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
                 this == document -> documentV2
                 this is RustType.Option -> RustType.Option(this.member.withDocumentV2(document, documentV2, member))
                 this is RustType.Vec -> RustType.Vec(this.member.withDocumentV2(document, documentV2, member))
+                this is RustType.HashSet -> RustType.HashSet(this.member.withDocumentV2(document, documentV2, member))
+                this is RustType.Box -> RustType.Box(this.member.withDocumentV2(document, documentV2, member))
                 this is RustType.HashMap ->
                     RustType.HashMap(key, this.member.withDocumentV2(document, documentV2, member))
                 else ->
                     throw CodegenException(
                         "`${member.id}` holds documents, but its Rust type contains `${render()}`, which " +
-                            "`DocumentV2Index` doesn't know how to give a `DocumentV2` companion.",
+                            "`DocumentV2Index` doesn't know how to represent with `DocumentV2`.",
                     )
             }
     }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
@@ -49,6 +50,17 @@ internal class DocumentV2IndexTest {
 
         union Choice {
             doc: Document
+            docs: DocumentList
+            sparseDocs: SparseDocumentList
+            documentMap: DocumentMap
+            nestedDocuments: DocumentMapList
+            data: Data
+            nestedChoice: NestedChoice
+            text: String
+        }
+
+        union NestedChoice {
+            choice: Choice
             text: String
         }
 
@@ -127,6 +139,74 @@ internal class DocumentV2IndexTest {
 
         val data = model.lookup<StructureShape>("com.example#Data")
         index.companions(data, symbolProvider).map { it.name } shouldBe listOf("body_v2")
+    }
+
+    @Test
+    fun `union members holding documents get additive V2 variants`() {
+        val choice = model.lookup<UnionShape>("com.example#Choice")
+        val variants = index.unionVariants(choice, symbolProvider)
+
+        variants.map { it.member.memberName } shouldBe
+            listOf("doc", "docs", "documentMap", "nestedDocuments", "sparseDocs")
+        variants.associate { it.member.memberName to it.variantName } shouldBe
+            mapOf(
+                "doc" to "DocV2",
+                "docs" to "DocsV2",
+                "documentMap" to "DocumentMapV2",
+                "nestedDocuments" to "NestedDocumentsV2",
+                "sparseDocs" to "SparseDocsV2",
+            )
+        variants.associate { it.member.memberName to it.accessorName } shouldBe
+            mapOf(
+                "doc" to "doc_v2",
+                "docs" to "docs_v2",
+                "documentMap" to "document_map_v2",
+                "nestedDocuments" to "nested_documents_v2",
+                "sparseDocs" to "sparse_docs_v2",
+            )
+        variants.associate { it.member.memberName to it.type.render() } shouldBe
+            mapOf(
+                "doc" to "::aws_smithy_types::DocumentV2",
+                "docs" to "::std::vec::Vec::<::aws_smithy_types::DocumentV2>",
+                "documentMap" to
+                    "::std::collections::HashMap::<::std::string::String, ::aws_smithy_types::DocumentV2>",
+                "nestedDocuments" to
+                    "::std::vec::Vec::<::std::collections::HashMap::<::std::string::String, " +
+                    "::aws_smithy_types::DocumentV2>>",
+                "sparseDocs" to
+                    "::std::vec::Vec::<::std::option::Option<::aws_smithy_types::DocumentV2>>",
+            )
+    }
+
+    @Test
+    fun `union traversal stops at structure and union boundaries`() {
+        val choice = model.lookup<UnionShape>("com.example#Choice")
+        index.unionVariants(choice, symbolProvider).map { it.member.memberName } shouldBe
+            listOf("doc", "docs", "documentMap", "nestedDocuments", "sparseDocs")
+
+        val nestedChoice = model.lookup<UnionShape>("com.example#NestedChoice")
+        index.unionVariants(nestedChoice, symbolProvider) shouldBe emptyList()
+    }
+
+    @Test
+    fun `a synthetic union variant collision is an error`() {
+        val model =
+            """
+            namespace com.example
+            union Choice {
+                doc: Document
+                docV2: String
+            }
+            """.asSmithyModel()
+        val choice = model.lookup<UnionShape>("com.example#Choice")
+
+        val error =
+            assertThrows<CodegenException> {
+                DocumentV2Index.of(model).unionVariants(choice, testSymbolProvider(model))
+            }
+        error.message!! shouldContain
+            "`com.example#Choice` member `doc` needs a DocumentV2 variant named `DocV2`, but member `docV2` " +
+            "already uses that name"
     }
 
     @Test

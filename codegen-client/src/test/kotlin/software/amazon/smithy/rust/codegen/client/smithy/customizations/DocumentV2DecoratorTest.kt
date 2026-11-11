@@ -87,8 +87,16 @@ class DocumentV2DecoratorTest {
 
         union FooChoice {
             doc: Document
+            docs: DocumentList
+            documentMap: DocumentMap
+            @deprecated
+            legacyDoc: Document
+            secret: SecretDocument
             text: String
         }
+
+        @sensitive
+        document SecretDocument
 
         @error("client")
         structure FooError {
@@ -265,9 +273,28 @@ class DocumentV2DecoratorTest {
                         }
 
                         ##[test]
-                        fn union_variants_stay_document_only() {
-                            let choice = FooChoice::Doc(v1("v1"));
-                            assert_eq!(choice.as_doc(), Ok(&v1("v1")));
+                        fn union_variants_have_an_additive_document_v2_form() {
+                            let legacy = FooChoice::Doc(v1("v1"));
+                            assert_eq!(legacy.as_doc(), Ok(&v1("v1")));
+                            assert!(!legacy.is_doc_v2());
+
+                            let choice = FooChoice::DocV2(blob());
+                            assert_eq!(choice.as_doc_v2(), Ok(&blob()));
+                            assert!(choice.is_doc_v2());
+                            assert_eq!(choice.as_doc(), Err(&choice));
+
+                            let docs = FooChoice::DocsV2(vec![blob()]);
+                            assert_eq!(docs.as_docs_v2(), Ok(&vec![blob()]));
+
+                            let document_map = FooChoice::DocumentMapV2(
+                                [("key".to_owned(), blob())].into_iter().collect()
+                            );
+                            assert_eq!(document_map.as_document_map_v2().unwrap()["key"], blob());
+
+                            assert_eq!(
+                                format!("{:?}", FooChoice::SecretV2(blob())),
+                                "*** Sensitive Data Redacted ***"
+                            );
                         }
 
                         ##[test]
@@ -314,8 +341,13 @@ class DocumentV2DecoratorTest {
         legacyMethods.shouldNotBeEmpty()
         legacyMethods.forEach { it.groupValues[1].isNotEmpty() shouldBe true }
 
-        // Union variants have no companions.
-        sources shouldNotContain "doc_v2"
+        // A deprecated member's additive union variant and accessors are deprecated too.
+        val legacyUnionItems =
+            Regex(
+                """(?m)^\s*(#\[deprecated[^]]*]\s*)?(?:LegacyDocV2\(|pub fn (?:as_|is_)legacy_doc_v2\()""",
+            ).findAll(sources).toList()
+        legacyUnionItems.shouldNotBeEmpty()
+        legacyUnionItems.forEach { it.groupValues[1].isNotEmpty() shouldBe true }
     }
 
     @Test
@@ -455,9 +487,29 @@ class DocumentV2DecoratorTest {
                         }
 
                         ##[test]
-                        fn union_variants_write_the_document() {
+                        fn union_variants_write_both_document_forms_under_the_modeled_member() {
                             let input = FooInput::builder().choice(FooChoice::Doc(v1("v1"))).build().unwrap();
                             assert_eq!(json(&input), r##"{"choice":{"doc":"v1"}}"##);
+
+                            let input = FooInput::builder().choice(FooChoice::DocV2(big())).build().unwrap();
+                            assert_eq!(json(&input), format!(r##"{{"choice":{{"doc":{BIG}}}}}"##));
+
+                            let input = FooInput::builder()
+                                .choice(FooChoice::DocsV2(vec![big()]))
+                                .build()
+                                .unwrap();
+                            assert_eq!(json(&input), format!(r##"{{"choice":{{"docs":[{BIG}]}}}}"##));
+
+                            let input = FooInput::builder()
+                                .choice(FooChoice::DocumentMapV2(
+                                    [("key".to_owned(), big())].into_iter().collect()
+                                ))
+                                .build()
+                                .unwrap();
+                            assert_eq!(
+                                json(&input),
+                                format!(r##"{{"choice":{{"documentMap":{{"key":{BIG}}}}}}}"##)
+                            );
                         }
 
                         ##[test]
@@ -508,9 +560,11 @@ class DocumentV2DecoratorTest {
                         }
 
                         ##[test]
-                        fn union_variants_read_the_document() {
+                        fn union_variants_read_the_document_v1_form_by_default() {
                             let input = FooInput::deserialize(&mut deser(&format!(r##"{{"choice":{{"doc":{BIG}}}}}"##))).unwrap();
-                            assert_eq!(input.choice, Some(FooChoice::Doc(big_v1())));
+                            let choice = input.choice.unwrap();
+                            assert_eq!(choice, FooChoice::Doc(big_v1()));
+                            assert!(!choice.is_doc_v2());
                         }
 
                         ##[test]
@@ -582,8 +636,10 @@ class DocumentV2DecoratorTest {
             Files.walk(crateDir.resolve("src")).use { paths ->
                 paths.filter { it.extension == "rs" }.map { it.readText() }.toList()
             }.joinToString("\n")
-        // Union variants stay `Document` only.
+        // Both Rust variants serialize with the original member schema. Deserialization remains V1 by default.
         sources shouldContain "ser.write_document(&FOOCHOICE_MEMBER_DOC, val)?;"
+        sources shouldContain "ser.write_document_v2(&FOOCHOICE_MEMBER_DOC, val)?;"
+        sources shouldContain "Some(0) => Self::Doc(deser.read_document(member)?),"
     }
 
     @Test

@@ -47,17 +47,23 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Companion
 import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2UnionVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 /**
- * Gives every struct that holds `Document` values a private `DocumentV2` companion, found by
- * [DocumentV2Index], with public `_v2` accessors next to the member's unchanged `Document` API.
+ * Gives generated structures and ordinary client unions additive `DocumentV2` representations, found by
+ * [DocumentV2Index], while keeping their existing `Document` API and default response behavior.
  *
- * Only clients that use schema serde ([SchemaSerdeAllowlist.usesSchemaSerdeExclusively]) get companions: its
- * serializers write them and its deserializers fill them. The `protocol_serde` serializers and parsers, which schema
- * serde replaces, use only the `Document` fields, so other clients are generated as before.
+ * Only clients that use schema serde ([SchemaSerdeAllowlist.usesSchemaSerdeExclusively]) get these APIs. Its
+ * serializers understand both document forms. The `protocol_serde` serializers and parsers, which schema serde
+ * replaces, use only `Document`, so other clients are generated as before.
  *
  * - The struct stores the companion in a private `DocumentV2Slot` field and gets a `payload_v2()` getter.
  * - The builder stores it in its own field and gets `payload_v2`, `set_payload_v2`, and `get_payload_v2`.
@@ -69,6 +75,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
  * - `into_builder()` carries the companion.
  * - Equality and `Debug` output are unchanged: the slot always compares equal, and these structures use the manual
  *   `Debug` impls, which print only the modeled members.
+ * - An ordinary union member that directly holds documents gets a second variant such as `JsonV2(DocumentV2)` and
+ *   matching `as_json_v2`/`is_json_v2` methods. Both variants use the same Smithy member on the wire. Default
+ *   deserialization continues to construct `Json(Document)` until the caller explicitly selects V2 decoding.
  *
  * Fluent builders get the same methods from [renderDocumentV2FluentMethods], which `FluentBuilderGenerator` calls.
  */
@@ -99,6 +108,16 @@ class DocumentV2Decorator : ClientCodegenDecorator {
     ): List<BuilderCustomization> =
         if (documentV2CompanionsEnabled(codegenContext)) {
             baseCustomizations + DocumentV2BuilderCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
+
+    override fun unionCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<UnionCustomization>,
+    ): List<UnionCustomization> =
+        if (documentV2CompanionsEnabled(codegenContext)) {
+            baseCustomizations + DocumentV2UnionCustomization(codegenContext)
         } else {
             baseCustomizations
         }
@@ -175,6 +194,76 @@ private class DocumentV2MetadataProvider(private val base: RustSymbolProvider) :
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
 
     override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
+}
+
+/** Adds the client-only V2 representation of each directly document-bearing union member. */
+private class DocumentV2UnionCustomization(private val codegenContext: ClientCodegenContext) : UnionCustomization() {
+    private val index = DocumentV2Index.of(codegenContext.model)
+    private val scope =
+        arrayOf(
+            *preludeScope,
+            "DocumentV2" to RuntimeType.documentV2(codegenContext.runtimeConfig),
+        )
+
+    override fun section(section: UnionSection): Writable =
+        writable {
+            val variants = index.unionVariants(section.shape, codegenContext.symbolProvider)
+            when (section) {
+                is UnionSection.AdditionalVariants -> variants.forEach { renderVariant(it) }
+                is UnionSection.AdditionalMethods -> variants.forEach { renderMethods(it) }
+                is UnionSection.AdditionalDebugArms -> variants.forEach { renderDebugArm(section, it) }
+            }
+        }
+
+    private fun RustWriter.renderVariant(variant: DocumentV2UnionVariant) {
+        docsTemplate(
+            "Contains the [`DocumentV2`](#{DocumentV2}) representation of the modeled " +
+                "`${variant.member.memberName}` member.",
+            *scope,
+        )
+        deprecatedShape(variant.member)
+        rustTemplate("${variant.variantName}(#{Type}),", "Type" to variant.type)
+    }
+
+    private fun RustWriter.renderMethods(variant: DocumentV2UnionVariant) {
+        docsTemplate(
+            "Tries to extract the [`DocumentV2`](#{DocumentV2}) representation of the modeled " +
+                "`${variant.member.memberName}` member. Returns `Err(&Self)` for every other variant.",
+            *scope,
+        )
+        deprecatedShape(variant.member)
+        rustBlockTemplate(
+            "pub fn as_${variant.accessorName}(&self) -> #{Result}<&#{Type}, &Self>",
+            *preludeScope,
+            "Type" to variant.type,
+        ) {
+            rustTemplate(
+                "if let Self::${variant.variantName}(value) = self { #{Ok}(value) } else { #{Err}(self) }",
+                *preludeScope,
+            )
+        }
+
+        rust("/// Returns true if this is [`${variant.variantName}`](Self::${variant.variantName}).")
+        deprecatedShape(variant.member)
+        rustBlock("pub fn is_${variant.accessorName}(&self) -> bool") {
+            rust("self.as_${variant.accessorName}().is_ok()")
+        }
+    }
+
+    private fun RustWriter.renderDebugArm(
+        section: UnionSection.AdditionalDebugArms,
+        variant: DocumentV2UnionVariant,
+    ) {
+        val unionName = section.unionSymbol.name
+        if (variant.member.shouldRedact(codegenContext.model)) {
+            rust("$unionName::${variant.variantName}(_) => f.debug_tuple($REDACTION).finish(),")
+        } else {
+            rust(
+                "$unionName::${variant.variantName}(value) => " +
+                    "f.debug_tuple(${variant.variantName.dq()}).field(&value).finish(),",
+            )
+        }
+    }
 }
 
 private fun documentV2Scope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {

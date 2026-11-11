@@ -326,9 +326,16 @@ class ClientCodegenVisitor(
      */
     override fun unionShape(shape: UnionShape) {
         rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
-            UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
+            UnionGenerator(
+                model,
+                symbolProvider,
+                this,
+                shape,
+                renderUnknownVariant = true,
+                customizations = codegenDecorator.unionCustomizations(codegenContext, emptyList()),
+            ).render()
             if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-                SchemaGenerator(codegenContext, this, shape).renderInOwnModule()
+                SchemaGenerator(codegenContext, this, shape, documentV2UnionVariants = true).renderInOwnModule()
             }
         }
         if (shape.isEventStream()) {
