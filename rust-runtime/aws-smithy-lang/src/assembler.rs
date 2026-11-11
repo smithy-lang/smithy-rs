@@ -982,7 +982,14 @@ impl Merge {
         if !self.shapes.contains_key(&id) {
             self.add_definition_traits(&id, definition_traits);
             self.record_input_order(&id);
-            match self.pending_applies.shift_remove(&id) {
+            // `get_mut` and `take` keep this O(1); `shift_remove` is O(n), which makes loading
+            // quadratic when `apply` entries come before their targets.
+            match self
+                .pending_applies
+                .get_mut(&id)
+                .map(std::mem::take)
+                .filter(|pending| !pending.is_empty())
+            {
                 None => {
                     self.shapes.insert(id, shape);
                 }
