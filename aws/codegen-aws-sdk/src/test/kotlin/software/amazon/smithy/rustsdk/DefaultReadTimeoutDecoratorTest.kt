@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
  * survive codegen, the `ServiceRuntimePlugin` layer, and the config-bag merge, and only the resolved
  * value proves all three.
  *
- * The scenarios are the three buckets from design section 2.3 plus the Rust override:
+ * The scenarios are the three value buckets the artifact can produce, plus a Rust override:
  *
  * | `sdkId`    | artifact | expected        |
  * |------------|----------|-----------------|

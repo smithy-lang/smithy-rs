@@ -21,9 +21,9 @@ import kotlin.io.path.readText
 /**
  * Resolution of the per-service default read timeout from the shared timeout-defaults artifact.
  *
- * The three outcomes under test are the three buckets in section 2.3 of the design: the general
+ * The three outcomes under test are the three value buckets the artifact can produce: the general
  * 5-minute default, the 15-minute partial tier, and full exemption (no timeout at all). Plus the
- * four entries Rust deliberately overrides back to the general default.
+ * three entries Rust deliberately overrides back to the general default.
  */
 class TimeoutDefaultsTest {
     private val artifactPath = Path("../sdk/sdk-timeout-defaults.json")
@@ -65,7 +65,7 @@ class TimeoutDefaultsTest {
         val defaults = load()
         TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES.size shouldBe 3
         for (service in TimeoutDefaults.RUST_GENERAL_DEFAULT_OVERRIDES) {
-            withClue("$service is overridden back to the general default; see design section 2.3") {
+            withClue("$service is exempt in the artifact but overridden back to the general default") {
                 defaults.readTimeoutFor(service) shouldBe fiveMinutes
             }
         }
