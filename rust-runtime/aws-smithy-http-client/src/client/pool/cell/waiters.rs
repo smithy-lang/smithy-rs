@@ -52,6 +52,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use std::task::{Context, Poll, Waker};
 
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod prop_tests;
+#[cfg(all(test, not(smithy_http_client_loom)))]
+mod test_util;
+
 /// Local waiter identity within one cell.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::client::pool) struct WaiterId(pub(in crate::client::pool) u64);
