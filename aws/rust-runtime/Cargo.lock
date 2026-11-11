@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.10.3"
+version = "1.10.4"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.65.0"
+version = "0.65.1"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -280,9 +280,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "tracing",
 ]
 
 [[package]]
@@ -304,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.16.2"
+version = "1.16.3"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -325,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.19.2"
+version = "1.21.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -359,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.9.3"
+version = "1.9.4"
 dependencies = [
  "base64-simd",
  "bytes",
