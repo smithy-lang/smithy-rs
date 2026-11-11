@@ -5,7 +5,7 @@
 
 //! Errors from building a dynamic client.
 
-use aws_smithy_lang::LoadError;
+use aws_smithy_lang::{LoadError, ShapeId};
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -20,6 +20,9 @@ pub struct BuildError {
 pub(crate) enum BuildErrorKind {
     MissingModel,
     ModelLoadFailed { path: PathBuf, source: LoadError },
+    NoService,
+    AmbiguousService { services: Vec<ShapeId> },
+    UnknownService { id: ShapeId, services: Vec<ShapeId> },
 }
 
 impl BuildError {
@@ -35,10 +38,39 @@ impl BuildError {
         }
     }
 
+    pub(crate) fn no_service() -> Self {
+        Self {
+            kind: BuildErrorKind::NoService,
+        }
+    }
+
+    pub(crate) fn ambiguous_service(services: Vec<ShapeId>) -> Self {
+        Self {
+            kind: BuildErrorKind::AmbiguousService { services },
+        }
+    }
+
+    pub(crate) fn unknown_service(id: ShapeId, services: Vec<ShapeId>) -> Self {
+        Self {
+            kind: BuildErrorKind::UnknownService { id, services },
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn kind(&self) -> &BuildErrorKind {
         &self.kind
     }
+}
+
+// Writes `a#A`, `b#B`.
+fn write_ids(f: &mut fmt::Formatter<'_>, ids: &[ShapeId]) -> fmt::Result {
+    for (i, id) in ids.iter().enumerate() {
+        if i > 0 {
+            f.write_str(", ")?;
+        }
+        write!(f, "`{id}`")?;
+    }
+    Ok(())
 }
 
 impl fmt::Display for BuildError {
@@ -50,6 +82,20 @@ impl fmt::Display for BuildError {
             BuildErrorKind::ModelLoadFailed { path, .. } => {
                 write!(f, "failed to load the model from `{}`", path.display())
             }
+            BuildErrorKind::NoService => write!(f, "the model has no service shape"),
+            BuildErrorKind::AmbiguousService { services } => {
+                write!(f, "the model has several services: ")?;
+                write_ids(f, services)?;
+                write!(f, "; pick one with `service(..)`")
+            }
+            BuildErrorKind::UnknownService { id, services } => {
+                write!(f, "the model has no service `{id}`")?;
+                if !services.is_empty() {
+                    write!(f, "; its services are ")?;
+                    write_ids(f, services)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -59,6 +105,9 @@ impl Error for BuildError {
         match &self.kind {
             BuildErrorKind::MissingModel => None,
             BuildErrorKind::ModelLoadFailed { source, .. } => Some(source),
+            BuildErrorKind::NoService => None,
+            BuildErrorKind::AmbiguousService { .. } => None,
+            BuildErrorKind::UnknownService { .. } => None,
         }
     }
 }

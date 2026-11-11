@@ -1,0 +1,9 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "example.weather#Forecast": {
+            "type": "structure",
+            "members": {}
+        }
+    }
+}

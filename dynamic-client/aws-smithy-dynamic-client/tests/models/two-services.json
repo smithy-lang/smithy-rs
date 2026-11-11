@@ -1,0 +1,13 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "example.weather#Weather": {
+            "type": "service",
+            "version": "2006-03-01"
+        },
+        "example.cafe#Cafe": {
+            "type": "service",
+            "version": "2024-01-01"
+        }
+    }
+}
