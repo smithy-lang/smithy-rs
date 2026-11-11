@@ -18,6 +18,7 @@ use canary::publish;
 use canary::scenarios;
 use canary::summary;
 use canary::toolchain::{self, Version};
+use canary::watch;
 
 #[derive(Parser)]
 #[command(name = "canary", about = "Post-publish build canary for smithy-rs")]
@@ -121,6 +122,46 @@ enum Command {
         /// otherwise read as "unchanged" and skip legs that were never run.
         #[arg(long)]
         update: bool,
+    },
+    /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
+    ///
+    /// One run per release. Resolves the thirteen manifests on a 15-minute tick and stops when
+    /// every declared runtime crate has arrived, or at a three-hour ceiling.
+    Watch {
+        /// The release tag being watched. Legs are dispatched against it.
+        #[arg(long)]
+        tag: String,
+        /// The repository root, to read the declared runtime crates from.
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+        /// Where to render and resolve the manifests. One subdirectory each, reused across ticks so
+        /// the registry cache stays warm.
+        #[arg(long)]
+        work_dir: PathBuf,
+        /// Where the per-manifest baselines live. `RUNNER_TEMP` in CI; see the baseline module for
+        /// why this is a directory and not a bucket.
+        #[arg(long)]
+        baselines: PathBuf,
+        /// Print the dispatch commands instead of running them. Exercises everything else --
+        /// rendering, resolving, the gate, the end condition -- without asking for any legs.
+        #[arg(long)]
+        dry_run: bool,
+        /// The workflow to dispatch.
+        #[arg(long, default_value = "build-canary.yml")]
+        workflow: String,
+        /// The repository to dispatch in.
+        #[arg(long, default_value = "smithy-lang/smithy-rs")]
+        gh_repo: String,
+        /// Override the 15-minute tick. For testing only.
+        #[arg(long)]
+        interval_secs: Option<u64>,
+        /// Override the 3-hour ceiling. For testing only.
+        #[arg(long)]
+        ceiling_secs: Option<u64>,
     },
     /// Fold a run's leg reports into one durable record, for a release that broke.
     ///
@@ -291,6 +332,80 @@ fn main() -> anyhow::Result<()> {
 
             eprintln!("{manifest}: {movement}");
             println!("{}", serde_json::to_string(&movement)?);
+        }
+        Command::Watch {
+            tag,
+            repo,
+            stable,
+            msrv,
+            work_dir,
+            baselines,
+            dry_run,
+            workflow,
+            gh_repo,
+            interval_secs,
+            ceiling_secs,
+        } => {
+            let clamped = resolve(&stable, &msrv)?;
+            let legs = scenarios::legs(&clamped.kept);
+            let manifests: Vec<String> = scenarios::manifests()
+                .iter()
+                .map(|s| s.id.to_string())
+                .collect();
+
+            let mut publishing = watch::CratesIoWatch::new(&repo)?;
+            eprintln!(
+                "watching {tag}: {} manifests, {} declared runtime crates, tick {}s, ceiling {}s",
+                manifests.len(),
+                publishing.declared_count(),
+                interval_secs.unwrap_or_else(|| watch::INTERVAL.as_secs()),
+                ceiling_secs.unwrap_or_else(|| watch::CEILING.as_secs()),
+            );
+            if dry_run {
+                eprintln!("--dry-run: no legs will actually be dispatched");
+            }
+
+            let mut resolver = watch::CargoResolver {
+                root: work_dir,
+                legs,
+                // Generous relative to a measured resolve of about a second, because the bound is
+                // here to turn a stalled registry read into an error rather than to be tight.
+                budget: Duration::from_secs(300),
+                verbose: true,
+            };
+            let mut dispatcher = watch::GhDispatcher {
+                workflow,
+                repo: gh_repo,
+                tier: "dispatch".to_string(),
+                dry_run,
+            };
+            let default = watch::Cadence::default();
+            let cadence = watch::Cadence {
+                interval: interval_secs
+                    .map(Duration::from_secs)
+                    .unwrap_or(default.interval),
+                ceiling: ceiling_secs
+                    .map(Duration::from_secs)
+                    .unwrap_or(default.ceiling),
+            };
+            let mut clock = leg::RealClock::default();
+
+            let report = watch::watch(
+                &tag,
+                &manifests,
+                &baseline::BaselineDir::new(baselines),
+                cadence,
+                &mut watch::Seams {
+                    resolver: &mut resolver,
+                    dispatcher: &mut dispatcher,
+                    publishing: &mut publishing,
+                    clock: &mut clock,
+                },
+            );
+
+            eprintln!("{report}");
+            println!("{}", serde_json::to_string(&report)?);
+            std::process::exit(report.exit_code());
         }
         Command::Summarize {
             release,
