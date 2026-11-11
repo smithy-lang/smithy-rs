@@ -228,58 +228,87 @@ jobs:
                 a.get('verdict') or ''))
         PY
 
-        # Whether there is anything to collect. A green leg and a superseded one have nothing to
-        # explain; a leg that reached a verdict does. Read from the report rather than the leg's
-        # exit code, which cannot tell green from INFRA_FAIL -- both exit 0 so the window continues.
-        VERDICT="$(python3 -c "
+        # Two separate questions, because three outcomes have to be told apart and one flag cannot.
+        #
+        # `verdict` is non-empty only for a leg that blamed something, and decides whether the
+        # rendered crate is worth keeping. Read from the report rather than from the leg's exit
+        # code, which cannot tell green from INFRA_FAIL -- both exit 0 so the window continues.
+        #
+        # `superseded` marks a leg that never built because a newer release exists. It is not green
+        # and not red, and nothing downstream should collect anything for it.
+        eval "$(python3 -c "
         import json, sys
         r = json.load(open(sys.argv[1]))
-        print('' if r.get('stopped') == 'superseded' else (r.get('verdict') or ''))
+        superseded = r.get('stopped') == 'superseded'
+        print('VERDICT=%s' % ('' if superseded else (r.get('verdict') or '')))
+        print('SUPERSEDED=%s' % ('true' if superseded else 'false'))
         " "$REPORT")"
         echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
+        echo "superseded=${SUPERSEDED}" >> "$GITHUB_OUTPUT"
 
     # Only for a leg that reached a verdict. Without this the one artifact that says *what* broke is
     # discarded with RUNNER_TEMP when the job ends: a page would name `COMPILE_FAIL` and an error
     # code, and the exact set of published versions that produced it would be gone. Re-resolving
     # later gives a different graph, because crates.io has moved on -- which is the whole reason a
     # leg is a snapshot.
+    # Two different things, collected under two different conditions.
+    #
+    # The report goes up for *every* leg, green included, because the durable record folded together
+    # at the end of a run has to be able to tell a green leg from one that died without saying
+    # anything. Inferring success from silence would bury the only evidence of a canary defect in
+    # the one artifact meant to outlive the run. It is about a kilobyte.
+    #
+    # The rendered crate goes up only for a leg that reached a verdict: it is the reproduction
+    # recipe, and a green leg has nothing to reproduce.
     - name: Collect the evidence
-      if: always() && steps.report.outputs.verdict != ''
+      if: always() && steps.report.outputs.superseded != 'true'
       shell: bash
       env:
         LEG_ID: ${{ matrix.leg.id }}
+        VERDICT: ${{ steps.report.outputs.verdict }}
       run: |
         set -euo pipefail
         OUT="${RUNNER_TEMP}/evidence"
         mkdir -p "$OUT"
-        cp "${RUNNER_TEMP}/report.json" "$OUT/"
 
-        # The rendered crate *is* the reproduction recipe, and it is tiny. `target/` is not copied:
-        # it is hundreds of megabytes of build output that says nothing the log does not.
-        cd "${RUNNER_TEMP}/leg"
-        cp Cargo.toml "$OUT/"
-        # A resolve that never succeeded leaves no lockfile at all, so this is expected to be
-        # missing for a RESOLVE_FAIL leg -- the evidence there is the manifest plus the step's
-        # stderr in the job log.
-        if [[ -f Cargo.lock ]]; then
-          cp Cargo.lock "$OUT/"
+        # An absent report is already warned about by the previous step. Write a placeholder so the
+        # upload still happens: an artifact saying "this leg produced nothing" is itself the
+        # finding, and `if-no-files-found: error` would otherwise fail the step and lose it.
+        if [[ -s "${RUNNER_TEMP}/report.json" ]]; then
+          cp "${RUNNER_TEMP}/report.json" "$OUT/"
         else
-          echo "no Cargo.lock: the resolve never succeeded" > "$OUT/NO-LOCKFILE.txt"
+          echo "the leg produced no report, which is a defect in the canary" > "$OUT/NO-REPORT.txt"
         fi
-        for dir in src tests; do
-          [[ -d "$dir" ]] && cp -r "$dir" "$OUT/"
-        done
+
+        if [[ -n "$VERDICT" ]]; then
+          # `target/` is not copied: hundreds of megabytes of build output that says nothing the
+          # log does not.
+          cd "${RUNNER_TEMP}/leg"
+          cp Cargo.toml "$OUT/"
+          # A resolve that never succeeded leaves no lockfile at all, so this is expected to be
+          # missing for a RESOLVE_FAIL leg -- the evidence there is the manifest plus the step's
+          # stderr in the job log.
+          if [[ -f Cargo.lock ]]; then
+            cp Cargo.lock "$OUT/"
+          else
+            echo "no Cargo.lock: the resolve never succeeded" > "$OUT/NO-LOCKFILE.txt"
+          fi
+          for dir in src tests; do
+            [[ -d "$dir" ]] && cp -r "$dir" "$OUT/"
+          done
+        fi
 
         echo "collected $(du -sh "$OUT" | cut -f1) for ${LEG_ID}"
         find "$OUT" -type f | sed "s|$OUT/|  |"
 
     - name: Upload the evidence
-      if: always() && steps.report.outputs.verdict != ''
+      if: always() && steps.report.outputs.superseded != 'true'
       uses: actions/upload-artifact@v4
       with:
         name: evidence-${{ matrix.leg.id }}
         path: ${{ runner.temp }}/evidence
         # Long enough to investigate a release, short enough not to accumulate. The 24-hour window
-        # plus a working week.
+        # plus a working week. Shorter than the record written to the archive, which is the point of
+        # that record: the diagnosis has to outlive the thing holding the lockfile.
         retention-days: 14
         if-no-files-found: error

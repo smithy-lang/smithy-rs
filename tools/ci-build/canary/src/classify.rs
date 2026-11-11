@@ -38,12 +38,12 @@
 
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::lockfile::{Duplicated, Resolved};
 
 /// The five verdicts a leg can report.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Verdict {
     /// The graph could not be resolved at all.
@@ -90,7 +90,7 @@ impl fmt::Display for Verdict {
 }
 
 /// The leg's commands, in the order a leg runs them. See [`crate::leg::commands`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Step {
     GenerateLockfile,
@@ -139,7 +139,7 @@ impl StepOutcome {
 
 /// What a responder needs in order to know where to look, carried on the dimensioned metric and
 /// into the ticket.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnosis {
     /// Compiler error codes, in order of appearance: `E0308`, `E0432`, …
     pub codes: Vec<String>,

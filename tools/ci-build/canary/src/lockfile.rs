@@ -45,12 +45,12 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::publish::{AWS_SDK_RUNTIME, ENTIRE_SMITHY_RUNTIME};
 
 /// One crate under test that resolved to more than one version in the same graph.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Duplicated {
     pub name: String,
     /// Every version present, in ascending order.

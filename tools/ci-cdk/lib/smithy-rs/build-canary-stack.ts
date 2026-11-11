@@ -38,13 +38,13 @@ export const ALARM_PREFIXES = ["build-canary", "paging-selftest"];
 export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
 
 /**
- * The key prefix under which the baselines live, as `baselines/<manifest-id>/Cargo.lock`.
+ * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
  *
  * **The Rust side must use the same prefix.** Unlike {@link METRIC_NAMESPACE}, this one is checked:
- * a test in the canary crate reads this file and compares, because a disagreement here would make
- * every read miss and silently turn the dispatch gate into "dispatch on every tick".
+ * a test in the canary crate reads this file and compares, because a disagreement would make every
+ * write denied and the archive silently empty.
  */
-export const BASELINE_PREFIX = "baselines";
+export const RECORD_PREFIX = "runs";
 
 export interface Properties extends StackProps {
     githubActionsOidcProvider: OpenIdConnectProvider;
@@ -55,10 +55,10 @@ export interface Properties extends StackProps {
  *
  * The split that matters is leg versus orchestrator. Every leg needs to write a metric, and legs
  * run on whatever ref the release was cut from, sixty at a time. The orchestrator is one job per
- * release: it arms the alarm, polls publish status, and decides which legs to dispatch. One role
- * doing both would mean every leg — and anything else in the repository able to assume that role —
- * also held permission to delete the alarm watching it and to rewrite the baselines the dispatch
- * gate reads, so a branch could quietly disable the thing that pages the oncall.
+ * release: it arms the alarm, polls publish status, decides which legs to dispatch, and files the
+ * record at the end. One role doing both would mean every leg — and anything else in the repository
+ * able to assume that role — also held permission to delete the alarm watching it and to write into
+ * the archive, so a branch could quietly disable the thing that pages the oncall.
  *
  * The leg's permission set is therefore disjoint from the orchestrator's, and neither is a superset
  * of the other: the metrics role cannot touch alarms or the bucket, and neither orchestrator role
@@ -71,20 +71,20 @@ export interface Properties extends StackProps {
  *
  * The orchestrator's two roles share that environment, because a GitHub job declares exactly one.
  * So the boundary between *them* is not isolation — anything able to assume one can assume the
- * other — it is least privilege per step: the step that writes a baseline holds no alarm
- * permission, so a bug in it cannot delete an alarm. Said plainly so nobody reads more into the
- * split than is there. If the orchestrator is ever divided into separate jobs, the two roles can
- * take separate environments without any change to their grants.
+ * other — it is least privilege per step: the step that files a record holds no alarm permission,
+ * so a bug in it cannot delete an alarm. Said plainly so nobody reads more into the split than is
+ * there. If the orchestrator is ever divided into separate jobs, the two roles can take separate
+ * environments without any change to their grants.
  */
 export class BuildCanaryStack extends Stack {
     /** Assumed by every leg, to record its verdict. */
     public readonly metricsRole: GitHubOidcRole;
     /** Assumed only from the orchestrator environment, to arm and disarm the alarm. */
     public readonly alarmRole: GitHubOidcRole;
-    /** Assumed only from the orchestrator environment, to read and replace the baselines. */
-    public readonly baselineRole: GitHubOidcRole;
-    /** The last resolved graph per manifest, which the dispatch gate diffs against. */
-    public readonly baselineBucket: Bucket;
+    /** Assumed only from the orchestrator environment, to add a record to the archive. */
+    public readonly recordRole: GitHubOidcRole;
+    /** One record per release that broke, kept after the workflow run has been deleted. */
+    public readonly recordBucket: Bucket;
 
     constructor(scope: Construct, id: string, props: Properties) {
         super(scope, id, props);
@@ -151,44 +151,47 @@ export class BuildCanaryStack extends Stack {
             }),
         );
 
-        // Holds one object per manifest: the resolved graph as of the last time the orchestrator
-        // looked. The dispatch tier diffs a fresh resolution against it and dispatches only the
-        // manifests whose graph moved, which is what keeps a 15-minute tick from running 60 legs
-        // every time regardless of whether anything was published.
+        // One object per release that broke, written when the run ends and kept indefinitely.
         //
-        // Private, like every bucket in this app. Nothing outside the orchestrator reads it: a
-        // responder investigating a red leg gets the same lockfile from the leg's own uploaded
-        // evidence. The contents are derived entirely from crates.io and so are not themselves
-        // sensitive, which bounds the cost of a mistake but is not a reason to relax the default.
-        this.baselineBucket = new Bucket(this, "baseline-bucket", {
+        // This exists because the evidence in GitHub expires. Artifacts and logs are kept 90 days
+        // by default, and since October 2026 that retention covers the workflow runs themselves, so
+        // three months after a release broke there is no log, no artifact and no run. The red-leg
+        // evidence this repository uploads is kept 14 days. The question asked after an incident is
+        // "how often does this happen, and to what", and it is asked long after every trace has
+        // been deleted.
+        //
+        // Not about privacy: the job log is public and carries the same diagnosis for as long as it
+        // exists. Private anyway, because that is the default and there is no reason to relax it.
+        this.recordBucket = new Bucket(this, "record-bucket", {
             blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
             encryption: BucketEncryption.S3_MANAGED,
             // Not in the other buckets in this app, which predate it. Adds a bucket policy denying
             // any request not over TLS; the AWS CLI always uses TLS, so there is nothing to break.
             enforceSSL: true,
-            // Deliberately no lifecycle expiration, unlike every other bucket here. The baseline is
-            // current state, not a build artifact: expiring it during a quiet fortnight would make
-            // the next tick see no baseline and dispatch everything. Thirteen objects of about
-            // 70 KB is not worth a rule that can only misfire.
+            // Deliberately no lifecycle expiration, unlike every other bucket here, because
+            // outliving GitHub's retention is the entire purpose. A record is a few hundred
+            // kilobytes and only a release that actually broke gets one.
             versioned: false,
-            removalPolicy: RemovalPolicy.DESTROY,
+            // The records are the only copy of this history once the runs are deleted, so the
+            // bucket outlives the stack. The other buckets here hold reproducible build inputs and
+            // are `DESTROY`; this one is not reproducible.
+            removalPolicy: RemovalPolicy.RETAIN,
         });
 
-        this.baselineRole = new GitHubOidcRole(this, "baselines", {
-            name: "smithy-rs-build-canary-baselines",
+        this.recordRole = new GitHubOidcRole(this, "records", {
+            name: "smithy-rs-build-canary-records",
             ...github,
             environment: ORCHESTRATOR_ENVIRONMENT,
         });
-        // Read and replace, never delete. Overwriting a baseline is a `PutObject`, so withholding
-        // `DeleteObject` costs the orchestrator nothing and means a bug cannot leave a manifest
-        // with no baseline at all — which would be silent, since an absent baseline reads as "never
-        // seen" and simply dispatches.
+        // Write only: no read, no delete, no list. An archive should only ever grow, and the
+        // workflow needs nothing else — a `PutObject` that succeeds is its own confirmation, and
+        // the keys carry the release, the run id and the attempt, so a write cannot land on an
+        // existing record. Withholding read also means a token leaked from a run cannot enumerate
+        // the history.
         //
-        // Scoped to the prefix even though the bucket holds nothing else, so that a later use of
-        // this bucket is not readable by the orchestrator by default.
-        const baselineObjects = `${BASELINE_PREFIX}/*`;
-        this.baselineBucket.grantRead(this.baselineRole.oidcRole, baselineObjects);
-        this.baselineBucket.grantPut(this.baselineRole.oidcRole, baselineObjects);
+        // Scoped to the prefix even though the bucket holds nothing else, so a later use of this
+        // bucket is not writable by the orchestrator by default.
+        this.recordBucket.grantPut(this.recordRole.oidcRole, `${RECORD_PREFIX}/*`);
 
         // The ARNs and the bucket name have to be copied into repository secrets by hand, so emit
         // them rather than making someone dig through the console after deploying.
@@ -200,13 +203,13 @@ export class BuildCanaryStack extends Stack {
             value: this.alarmRole.oidcRole.roleArn,
             description: "Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret",
         });
-        new CfnOutput(this, "baseline-role-arn", {
-            value: this.baselineRole.oidcRole.roleArn,
-            description: "Set as the BUILD_CANARY_BASELINE_ROLE_ARN repository secret",
+        new CfnOutput(this, "record-role-arn", {
+            value: this.recordRole.oidcRole.roleArn,
+            description: "Set as the BUILD_CANARY_RECORD_ROLE_ARN repository secret",
         });
-        new CfnOutput(this, "baseline-bucket-name", {
-            value: this.baselineBucket.bucketName,
-            description: "Set as the BUILD_CANARY_BASELINE_BUCKET repository secret",
+        new CfnOutput(this, "record-bucket-name", {
+            value: this.recordBucket.bucketName,
+            description: "Set as the BUILD_CANARY_RECORD_BUCKET repository secret",
         });
         new CfnOutput(this, "metric-namespace", {
             value: METRIC_NAMESPACE,

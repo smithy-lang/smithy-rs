@@ -23,4 +23,8 @@ pub mod lockfile;
 pub mod manifest;
 pub mod publish;
 pub mod scenarios;
+pub mod summary;
 pub mod toolchain;
+
+#[cfg(test)]
+mod test_support;

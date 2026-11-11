@@ -34,7 +34,7 @@
 use std::fmt;
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::classify::{self, Diagnosis, Step, StepOutcome, Verdict};
 use crate::scenarios::{Body, Checks, Leg, Profile};
@@ -358,7 +358,7 @@ impl Clock for RealClock {
 }
 
 /// One attempt, for the log.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Attempt {
     pub step: Step,
     pub command: String,
@@ -370,7 +370,7 @@ pub struct Attempt {
 }
 
 /// Why the leg stopped retrying.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Stopped {
     /// The step's attempts ran out.
@@ -389,7 +389,7 @@ pub enum Stopped {
 }
 
 /// What the leg concluded.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Report {
     pub leg_id: String,
     /// `None` means green.

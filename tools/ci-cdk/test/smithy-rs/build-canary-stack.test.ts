@@ -6,10 +6,10 @@
 import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import {
-    BASELINE_PREFIX,
     BuildCanaryStack,
     METRIC_NAMESPACE,
     ORCHESTRATOR_ENVIRONMENT,
+    RECORD_PREFIX,
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
@@ -59,8 +59,8 @@ test("it should create exactly three roles", () => {
     const roles = synth().findResources("AWS::IAM::Role");
     expect(Object.values(roles).map((r) => r.Properties.RoleName).sort()).toEqual([
         "smithy-rs-build-canary-alarms-github-oidc-role",
-        "smithy-rs-build-canary-baselines-github-oidc-role",
         "smithy-rs-build-canary-metrics-github-oidc-role",
+        "smithy-rs-build-canary-records-github-oidc-role",
     ]);
 });
 
@@ -94,30 +94,34 @@ test("the alarm role should only manage the canary's own alarms", () => {
     expect(resources).toContain(":alarm:paging-selftest-*");
 });
 
-test("the baseline role should read and replace baselines, but never delete one", () => {
-    const statements = policyFor(synth(), "baselines");
+test("the record role should only ever add to the archive", () => {
+    const statements = policyFor(synth(), "records");
     const actions = actionsOf(statements);
 
-    // Withholding delete is the point: an overwrite is a PutObject, so the orchestrator loses
-    // nothing, and a bug cannot leave a manifest with no baseline -- which would be silent,
-    // because an absent baseline reads as "never seen" and just dispatches.
+    // An archive should only grow. No delete, so history cannot be rewritten; no read or list, so
+    // a token leaked from a run cannot enumerate it. A PutObject that succeeds is its own
+    // confirmation, so nothing is lost by withholding the rest.
     expect(actions.filter((a) => a.includes("Delete"))).toEqual([]);
-    expect(actions.some((a) => a.startsWith("s3:GetObject"))).toBe(true);
+    expect(actions.filter((a) => a.includes("Get"))).toEqual([]);
+    expect(actions.filter((a) => a.includes("List"))).toEqual([]);
     expect(actions.some((a) => a.startsWith("s3:PutObject"))).toBe(true);
 
-    // Object-level grants must be scoped to the prefix, so a later use of this bucket is not
-    // readable by the orchestrator by default.
-    const objectResources = statements
+    // And scoped to the prefix, so a later use of this bucket is not writable by default.
+    for (const resource of statements
         .flatMap((s) => (Array.isArray(s.Resource) ? s.Resource : [s.Resource]))
-        .map((r) => JSON.stringify(r))
-        .filter((r) => r.includes("/"));
-    expect(objectResources.length).toBeGreaterThan(0);
-    for (const resource of objectResources) {
-        expect(resource).toContain(`${BASELINE_PREFIX}/*`);
+        .map((r) => JSON.stringify(r))) {
+        expect(resource).toContain(`${RECORD_PREFIX}/*`);
     }
 });
 
-test("the baseline bucket should be private, encrypted and TLS-only", () => {
+test("the record bucket should outlive the stack, since the records are the only copy", () => {
+    // Every other bucket in this app holds reproducible build inputs and is DESTROY. This one
+    // holds the only remaining history once GitHub has deleted the runs.
+    const buckets = synth().findResources("AWS::S3::Bucket");
+    expect(Object.values(buckets)[0].DeletionPolicy).toBe("Retain");
+});
+
+test("the record bucket should be private, encrypted and TLS-only", () => {
     const template = synth();
     const buckets = Object.values(template.findResources("AWS::S3::Bucket"));
     expect(buckets).toHaveLength(1);
@@ -146,9 +150,9 @@ test("the baseline bucket should be private, encrypted and TLS-only", () => {
     expect(policyJson).not.toContain("AuthenticatedUsers");
 });
 
-test("the baseline should not expire, unlike every other bucket in this app", () => {
-    // A baseline is current state, not an artifact. Expiring it during a quiet fortnight would make
-    // the next tick see nothing and dispatch every leg -- safe, but it defeats the gate.
+test("the records should not expire, unlike every other bucket in this app", () => {
+    // Outliving GitHub's 90-day retention is the entire purpose. A lifecycle rule here would
+    // reintroduce the gap the bucket exists to close.
     const buckets = Object.values(synth().findResources("AWS::S3::Bucket"));
     expect(buckets[0].Properties.LifecycleConfiguration).toBeUndefined();
 });
@@ -162,7 +166,7 @@ test("a leg's permissions should be disjoint from the orchestrator's", () => {
     const metrics = new Set(actionsOf(policyFor(template, "metrics")));
     const orchestrator = new Set([
         ...actionsOf(policyFor(template, "alarms")),
-        ...actionsOf(policyFor(template, "baselines")),
+        ...actionsOf(policyFor(template, "records")),
     ]);
 
     expect([...metrics].filter((a) => orchestrator.has(a))).toEqual([]);
@@ -176,7 +180,7 @@ test("the orchestrator's roles should be gated on the environment, and the legs'
 
     // The environment is the only thing distinguishing the orchestrator from a leg: both run in
     // this repository from the same release tag, so their tokens are otherwise identical.
-    for (const role of ["alarms", "baselines"]) {
+    for (const role of ["alarms", "records"]) {
         expect(trustFor(template, role).StringEquals[`${CLAIM}:environment`]).toBe(
             ORCHESTRATOR_ENVIRONMENT,
         );
@@ -195,6 +199,6 @@ test("it should output everything that has to be copied into a secret by hand", 
         "Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret",
     );
     expect(descriptions).toContain("Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret");
-    expect(descriptions).toContain("Set as the BUILD_CANARY_BASELINE_ROLE_ARN repository secret");
-    expect(descriptions).toContain("Set as the BUILD_CANARY_BASELINE_BUCKET repository secret");
+    expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_ROLE_ARN repository secret");
+    expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_BUCKET repository secret");
 });

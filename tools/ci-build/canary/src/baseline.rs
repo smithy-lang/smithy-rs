@@ -5,21 +5,31 @@
 
 //! The last graph each manifest resolved to, and whether it has moved since.
 //!
-//! The dispatch tier wakes every 15 minutes for the length of a release. Running all sixty legs on
-//! every tick would mostly re-prove the same graph, because a tick with no publish in it resolves
-//! exactly what the previous one did. So each tick resolves the thirteen manifests, compares each
-//! against the baseline, and dispatches legs only for the manifests whose graph actually moved.
+//! The dispatch tier wakes every 15 minutes for the length of a release. A tick with no publish in
+//! it resolves exactly what the previous tick did, so running all sixty legs to re-prove that graph
+//! buys nothing. So each tick resolves the thirteen manifests, compares each against the baseline,
+//! and dispatches legs only where the graph actually moved.
 //!
-//! A baseline therefore has to outlive the job that wrote it, which is why it lives in S3 under a
-//! key that never changes: `baselines/<manifest-id>/Cargo.lock`. A stable key means a read is one
-//! request with no listing, no sorting and no clock, and it means the store holds thirteen objects
-//! forever rather than growing.
+//! # Why this is a directory and not a bucket
+//!
+//! A baseline never has to outlive the release it was taken during. The first tick of a release has
+//! no baseline and dispatches everything, which is the right answer anyway — a release just
+//! published, so the graph has certainly moved — and the floor tier that follows has no gate at all.
+//! So the whole useful life of a baseline is one orchestrator job, which ticks every 15 minutes for
+//! at most three hours.
+//!
+//! That makes this a directory. Where the directory lives is a workflow decision and not a decision
+//! this module has to know about: `RUNNER_TEMP` is enough for a single job, and wrapping it in
+//! `actions/cache` — which caches a directory — adds survival across a manual re-run for one line
+//! of YAML. Cache entries are evicted after seven days without access and under a size cap, neither
+//! of which can reach a baseline being read twelve times an hour, and an evicted entry just
+//! dispatches everything.
 //!
 //! # Why the key is per manifest and not per leg
 //!
-//! Five legs share each manifest, one per compiler version, and they would all resolve the same
-//! graph: the rendered manifests pin `edition = "2021"`, which pins the resolver to v2. Resolver v3
-//! is MSRV-aware and *would* resolve differently per toolchain — which is why the edition is pinned,
+//! Five legs share each manifest, one per compiler version, and they all resolve the same graph: the
+//! rendered manifests pin `edition = "2021"`, which pins the resolver to v2. Resolver v3 is
+//! MSRV-aware and *would* resolve differently per toolchain — which is why the edition is pinned,
 //! and the same pin is what makes one baseline per manifest correct rather than a simplification.
 //!
 //! # What counts as movement
@@ -36,48 +46,40 @@
 //! does not read as sixty legs' worth of movement. The bytes are what get stored, though, so a
 //! responder gets the real file.
 //!
-//! # Failure directions, which are not symmetric
+//! # Every failure dispatches
 //!
-//! A read that fails for any reason — absent, denied, no network — reports [`Movement::NeverSeen`]
-//! and therefore dispatches. That is the safe direction: the tier falls back to the behaviour it
-//! would have had with no gate at all, which costs runner minutes and detects everything.
-//!
-//! A write that fails is an error. This is what keeps a misconfigured bucket from being silent: if
-//! the role cannot reach the bucket, every tick's read would quietly say "never seen" and the gate
-//! would appear to work while doing nothing, forever. The write refuses to let that happen quietly.
+//! A baseline that is absent, unreadable or unparseable reports [`Movement::NeverSeen`], and so
+//! dispatches. That is the safe direction in every case: the tier falls back to the behaviour it
+//! would have had with no gate at all, which costs runner minutes and detects everything. The one
+//! outcome that must never happen by accident is the opposite — reading a broken baseline as
+//! "unchanged" and skipping legs that never ran.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 use anyhow::{bail, Context};
 use serde::Serialize;
 
 use crate::lockfile::Resolved;
 
-/// The key prefix the baselines live under.
+/// The path a manifest's baseline is stored at, relative to the store's root.
 ///
-/// Must equal `BASELINE_PREFIX` in the CDK stack, which is what grants the orchestrator access to
-/// exactly these keys. [`tests::the_prefix_matches_the_cdk_stack`] checks it, because a
-/// disagreement would make every read miss and turn the gate into "dispatch on every tick" without
-/// anything failing.
-pub const PREFIX: &str = "baselines";
-
-/// The key a manifest's baseline is stored under. Stable across ticks and releases.
+/// Stable across ticks: the same manifest yields the same path, which is what lets a read be one
+/// lookup with no listing, no sorting and no clock.
 ///
 /// Manifest ids come from a compile-time table, so a traversal here is not a live attack; it is
-/// rejected anyway because a key is a string being pasted into a path and a bad one would silently
-/// read or write somewhere else.
-pub fn key(manifest_id: &str) -> anyhow::Result<String> {
+/// rejected anyway, because the id is being pasted into a filesystem path and a bad one would
+/// silently read or write somewhere else.
+pub fn relative_path(manifest_id: &str) -> anyhow::Result<PathBuf> {
     let ok = !manifest_id.is_empty()
         && manifest_id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         && !manifest_id.contains("..");
     if !ok {
-        bail!("manifest id {manifest_id:?} is not usable in an object key");
+        bail!("manifest id {manifest_id:?} is not usable as a path component");
     }
-    Ok(format!("{PREFIX}/{manifest_id}/Cargo.lock"))
+    Ok(PathBuf::from(manifest_id).join("Cargo.lock"))
 }
 
 /// One package whose resolution differs between the baseline and now.
@@ -110,8 +112,8 @@ impl fmt::Display for Change {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "movement", rename_all = "kebab-case")]
 pub enum Movement {
-    /// No readable baseline. Dispatch, because nothing is known about this manifest — this is also
-    /// the first tick of the first release, and what a read failure degrades to.
+    /// No usable baseline. Dispatch, because nothing is known about this manifest — this is the
+    /// first tick of a release, and what every read failure degrades to.
     NeverSeen,
     /// The same graph. Do not dispatch; the previous tick already proved this one.
     Unchanged,
@@ -120,9 +122,8 @@ pub enum Movement {
 }
 
 impl Movement {
-    /// Whether legs should be dispatched for this manifest.
-    ///
-    /// Everything except an established, unchanged graph dispatches.
+    /// Whether legs should be dispatched for this manifest. Everything except an established,
+    /// unchanged graph dispatches.
     pub fn should_dispatch(&self) -> bool {
         !matches!(self, Movement::Unchanged)
     }
@@ -186,131 +187,46 @@ pub fn compare(baseline: Option<&str>, fresh: &str) -> anyhow::Result<Movement> 
     })
 }
 
-/// Where baselines are kept.
-pub trait Store {
-    /// The stored baseline, or `None` if there is not one to be had. Implementations report why on
-    /// stderr rather than failing, because dispatching is the safe response to any read failure.
-    fn get(&self, manifest_id: &str) -> anyhow::Result<Option<String>>;
-    /// Replace the baseline. Errors, deliberately: a store that cannot be written to must not look
-    /// like a store that is merely empty.
-    fn put(&self, manifest_id: &str, lockfile: &str) -> anyhow::Result<()>;
-}
-
-/// Baselines in S3, which is what the dispatch tier uses.
+/// Where the baselines are kept: a directory, one subdirectory per manifest.
 ///
-/// Shells out to the AWS CLI rather than taking an SDK dependency, for the same reason
-/// [`crate::publish::CratesIo`] shells out to `curl`: this crate is built and run before the
-/// release it is checking, so a dependency on the SDK would make the canary's own build depend on
-/// the artifacts it exists to validate. The CLI is present on every GitHub runner and picks up the
-/// job's OIDC credentials from the environment with no code here.
-pub struct S3 {
-    pub bucket: String,
-}
-
-impl S3 {
-    /// Reading an object to stdout. `--only-show-errors` suppresses the progress lines, which would
-    /// otherwise have to be told apart from the file itself.
-    fn get_argv(&self, key: &str) -> Vec<String> {
-        vec![
-            "s3".into(),
-            "cp".into(),
-            format!("s3://{}/{key}", self.bucket),
-            "-".into(),
-            "--only-show-errors".into(),
-        ]
-    }
-
-    /// Writing stdin to an object. Overwrites in place, which is what a stable key means.
-    fn put_argv(&self, key: &str) -> Vec<String> {
-        vec![
-            "s3".into(),
-            "cp".into(),
-            "-".into(),
-            format!("s3://{}/{key}", self.bucket),
-            "--only-show-errors".into(),
-        ]
-    }
-}
-
-impl Store for S3 {
-    fn get(&self, manifest_id: &str) -> anyhow::Result<Option<String>> {
-        let key = key(manifest_id)?;
-        let out = Command::new("aws")
-            .args(self.get_argv(&key))
-            .output()
-            .with_context(|| format!("running aws s3 cp to read {key}"))?;
-        if !out.status.success() {
-            // Absent, denied and unreachable are not told apart, and that is the one place this
-            // module is deliberately imprecise: all three mean "no baseline", all three dispatch,
-            // and the stderr below is what distinguishes them for a human. A permissions problem
-            // does not hide here, because `put` on the same tick will fail loudly.
-            eprintln!(
-                "no baseline for {manifest_id} at s3://{}/{key}: {}",
-                self.bucket,
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-            return Ok(None);
-        }
-        Ok(Some(String::from_utf8_lossy(&out.stdout).into_owned()))
-    }
-
-    fn put(&self, manifest_id: &str, lockfile: &str) -> anyhow::Result<()> {
-        let key = key(manifest_id)?;
-        let mut child = Command::new("aws")
-            .args(self.put_argv(&key))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .with_context(|| format!("running aws s3 cp to write {key}"))?;
-        {
-            use std::io::Write;
-            let mut stdin = child.stdin.take().context("aws s3 cp took no stdin")?;
-            stdin
-                .write_all(lockfile.as_bytes())
-                .context("writing the lockfile to aws s3 cp")?;
-            // Dropped here, closing the pipe, or the CLI waits for more input and never exits.
-        }
-        let out = child.wait_with_output().context("waiting for aws s3 cp")?;
-        if !out.status.success() {
-            bail!(
-                "could not write the baseline to s3://{}/{key}: {}",
-                self.bucket,
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        Ok(())
-    }
-}
-
-/// Baselines in a directory, for running the gate on a laptop without a credential.
-///
-/// Uses the same keys as [`S3`], so a local run exercises the real key scheme rather than a
-/// simplified one.
-pub struct LocalDir {
+/// See the module docs for why a directory and not a bucket.
+pub struct BaselineDir {
     pub root: PathBuf,
 }
 
-impl LocalDir {
-    fn path(&self, manifest_id: &str) -> anyhow::Result<PathBuf> {
-        Ok(self.root.join(key(manifest_id)?))
+impl BaselineDir {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
     }
-}
 
-impl Store for LocalDir {
-    fn get(&self, manifest_id: &str) -> anyhow::Result<Option<String>> {
+    fn path(&self, manifest_id: &str) -> anyhow::Result<PathBuf> {
+        Ok(self.root.join(relative_path(manifest_id)?))
+    }
+
+    /// The stored baseline, or `None` if there is not one to be had.
+    ///
+    /// A read that fails for a reason other than absence says so on stderr and still answers
+    /// `None`, because dispatching is the safe response to every read failure and there is nothing
+    /// better to do with the error.
+    pub fn get(&self, manifest_id: &str) -> anyhow::Result<Option<String>> {
         let path = self.path(manifest_id)?;
         match std::fs::read_to_string(&path) {
             Ok(text) => Ok(Some(text)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => {
-                eprintln!("no baseline for {manifest_id} at {}: {e}", path.display());
+                eprintln!(
+                    "no usable baseline for {manifest_id} at {}: {e}",
+                    path.display()
+                );
                 Ok(None)
             }
         }
     }
 
-    fn put(&self, manifest_id: &str, lockfile: &str) -> anyhow::Result<()> {
+    /// Replace the baseline. Errors, deliberately: a store that cannot be written to must not look
+    /// like a store that is merely empty, or every tick would read "never seen" and the gate would
+    /// appear to work while doing nothing.
+    pub fn put(&self, manifest_id: &str, lockfile: &str) -> anyhow::Result<()> {
         let path = self.path(manifest_id)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
@@ -322,11 +238,11 @@ impl Store for LocalDir {
 
 /// Resolve the gate for one manifest: compare, and optionally make the fresh graph the new baseline.
 ///
-/// Updating is the caller's choice because the two tiers want different things. The dispatch tier
+/// Updating is the caller's choice because the two uses want different things. The dispatch tier
 /// updates, so the next tick's comparison is against what it last saw. A one-off run that is only
 /// asking "has anything moved" must not move the baseline, or it would silence the next real tick.
 pub fn gate(
-    store: &dyn Store,
+    store: &BaselineDir,
     manifest_id: &str,
     fresh: &str,
     update: bool,
@@ -347,6 +263,7 @@ pub fn read_lockfile(path: &Path) -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::tempdir;
 
     const BASE: &str = r#"
 version = 4
@@ -371,33 +288,43 @@ version = "1.0.230"
     }
 
     #[test]
-    fn the_key_is_stable_and_per_manifest() {
+    fn the_path_is_stable_and_per_manifest() {
         assert_eq!(
-            key("prior-aws-config-1-10").unwrap(),
-            "baselines/prior-aws-config-1-10/Cargo.lock"
+            relative_path("prior-aws-config-1-10").unwrap(),
+            PathBuf::from("prior-aws-config-1-10/Cargo.lock")
         );
-        // Called twice, a tick apart, it has to be the same string -- that is the whole point.
-        assert_eq!(key("new-project").unwrap(), key("new-project").unwrap());
+        // Called twice, a tick apart, it has to be the same path -- that is the whole point.
+        assert_eq!(
+            relative_path("new-project").unwrap(),
+            relative_path("new-project").unwrap()
+        );
     }
 
-    /// Every id the scenario table actually uses must produce a key inside the granted prefix,
-    /// since the IAM grant is scoped to `baselines/*` and a key outside it would be denied.
+    /// Every id the scenario table actually uses has to be usable as a path component.
     #[test]
-    fn every_real_manifest_id_yields_a_key_under_the_prefix() {
+    fn every_real_manifest_id_yields_a_path() {
         let manifests = crate::scenarios::manifests();
         assert_eq!(manifests.len(), 13, "the table has thirteen manifests");
         for scenario in manifests {
             let id = scenario.id;
-            let k = key(id).unwrap_or_else(|e| panic!("{id}: {e}"));
-            assert!(k.starts_with(&format!("{PREFIX}/")), "{k}");
-            assert!(k.ends_with("/Cargo.lock"), "{k}");
+            let p = relative_path(id).unwrap_or_else(|e| panic!("{id}: {e}"));
+            assert_eq!(p.components().count(), 2, "{p:?} should be <id>/Cargo.lock");
+            assert!(p.ends_with("Cargo.lock"), "{p:?}");
         }
     }
 
     #[test]
-    fn a_key_cannot_escape_the_prefix() {
-        for bad in ["../evil", "a/b", "..", "", "x/../../y", "with space"] {
-            assert!(key(bad).is_err(), "{bad:?} should be rejected");
+    fn a_path_cannot_escape_the_store() {
+        for bad in [
+            "../evil",
+            "a/b",
+            "..",
+            "",
+            "x/../../y",
+            "with space",
+            "/abs",
+        ] {
+            assert!(relative_path(bad).is_err(), "{bad:?} should be rejected");
         }
     }
 
@@ -527,21 +454,16 @@ dependencies = ["serde"]
     }
 
     #[test]
-    fn a_local_round_trip_returns_what_was_written() {
-        let dir = tempdir("roundtrip");
-        let store = LocalDir {
-            root: dir.path().to_path_buf(),
-        };
+    fn a_round_trip_returns_what_was_written() {
+        let dir = tempdir("baseline-roundtrip");
+        let store = BaselineDir::new(dir.path());
 
         assert_eq!(store.get("new-project").unwrap(), None, "nothing yet");
         store.put("new-project", BASE).unwrap();
         assert_eq!(store.get("new-project").unwrap().as_deref(), Some(BASE));
 
-        // Written at the stable key, so a reader does not have to search.
-        assert!(dir
-            .path()
-            .join("baselines/new-project/Cargo.lock")
-            .is_file());
+        // Written at the stable path, so a reader does not have to search.
+        assert!(dir.path().join("new-project/Cargo.lock").is_file());
 
         // And overwriting replaces in place rather than accumulating.
         let fresh = lock(&[("aws-smithy-types", "1.9.5")]);
@@ -551,10 +473,8 @@ dependencies = ["serde"]
 
     #[test]
     fn baselines_for_different_manifests_do_not_collide() {
-        let dir = tempdir("collide");
-        let store = LocalDir {
-            root: dir.path().to_path_buf(),
-        };
+        let dir = tempdir("baseline-collide");
+        let store = BaselineDir::new(dir.path());
         store.put("new-project", BASE).unwrap();
         store
             .put("prior-aws-config-1-10", &lock(&[("aws-config", "1.10.1")]))
@@ -572,10 +492,8 @@ dependencies = ["serde"]
     /// what keeps a one-off query from silencing it.
     #[test]
     fn the_gate_updates_the_baseline_only_when_asked() {
-        let dir = tempdir("gate");
-        let store = LocalDir {
-            root: dir.path().to_path_buf(),
-        };
+        let dir = tempdir("baseline-gate");
+        let store = BaselineDir::new(dir.path());
         let fresh = lock(&[("aws-smithy-types", "1.9.5")]);
 
         // First sight dispatches, and without --update the store stays empty, so a second query
@@ -609,100 +527,5 @@ dependencies = ["serde"]
             gate(&store, "new-project", &bumped, true).unwrap(),
             Movement::Unchanged
         );
-    }
-
-    /// The command lines are asserted rather than run, because running them needs a credential and
-    /// a bucket. This is the part that can be checked here: that the stable key reaches the CLI and
-    /// that nothing destructive is in the argv.
-    #[test]
-    fn the_s3_commands_address_the_stable_key() {
-        let s3 = S3 {
-            bucket: "some-bucket".into(),
-        };
-        let k = key("new-project").unwrap();
-
-        assert_eq!(
-            s3.get_argv(&k),
-            [
-                "s3",
-                "cp",
-                "s3://some-bucket/baselines/new-project/Cargo.lock",
-                "-",
-                "--only-show-errors"
-            ]
-        );
-        assert_eq!(
-            s3.put_argv(&k),
-            [
-                "s3",
-                "cp",
-                "-",
-                "s3://some-bucket/baselines/new-project/Cargo.lock",
-                "--only-show-errors"
-            ]
-        );
-        for argv in [s3.get_argv(&k), s3.put_argv(&k)] {
-            assert!(
-                !argv.iter().any(|a| a.contains("rm") || a.contains("rb")),
-                "the store never deletes: {argv:?}"
-            );
-        }
-    }
-
-    /// The prefix is duplicated into TypeScript, where it scopes the IAM grant. A disagreement
-    /// would be silent in the worst way: every read would miss, every tick would dispatch
-    /// everything, and nothing would fail.
-    #[test]
-    fn the_prefix_matches_the_cdk_stack() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(3)
-            .expect("repo root");
-        let ts =
-            std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
-                .expect("the CDK stack should be readable from the repo");
-
-        let declared = ts
-            .lines()
-            .find_map(|l| {
-                let rest = l.trim().strip_prefix("export const BASELINE_PREFIX = ")?;
-                rest.trim_end_matches(';')
-                    .trim_matches('"')
-                    .to_string()
-                    .into()
-            })
-            .expect("BASELINE_PREFIX not found in the CDK stack");
-
-        assert_eq!(
-            declared, PREFIX,
-            "the Rust key prefix and the IAM grant's prefix have diverged"
-        );
-    }
-
-    /// A unique directory under the system temp dir, removed when the returned guard drops.
-    fn tempdir(tag: &str) -> TempDir {
-        let unique = format!(
-            "canary-baseline-{tag}-{}-{:?}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        let path = std::env::temp_dir().join(unique);
-        std::fs::create_dir_all(&path).expect("temp dir");
-        TempDir(path)
-    }
-
-    struct TempDir(PathBuf);
-    impl TempDir {
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
     }
 }
