@@ -25,6 +25,7 @@ pub mod publish;
 pub mod scenarios;
 pub mod summary;
 pub mod toolchain;
+pub mod watch;
 
 #[cfg(test)]
 mod test_support;
