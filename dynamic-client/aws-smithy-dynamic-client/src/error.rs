@@ -5,6 +5,7 @@
 
 //! Errors from building a dynamic client.
 
+use aws_smithy_lang::runtime_schema::SchemaBuildError;
 use aws_smithy_lang::{LoadError, ShapeId};
 use std::error::Error;
 use std::fmt;
@@ -23,6 +24,7 @@ pub(crate) enum BuildErrorKind {
     NoService,
     AmbiguousService { services: Vec<ShapeId> },
     UnknownService { id: ShapeId, services: Vec<ShapeId> },
+    SchemaBuildFailed { source: SchemaBuildError },
 }
 
 impl BuildError {
@@ -53,6 +55,12 @@ impl BuildError {
     pub(crate) fn unknown_service(id: ShapeId, services: Vec<ShapeId>) -> Self {
         Self {
             kind: BuildErrorKind::UnknownService { id, services },
+        }
+    }
+
+    pub(crate) fn schema_build_failed(source: SchemaBuildError) -> Self {
+        Self {
+            kind: BuildErrorKind::SchemaBuildFailed { source },
         }
     }
 
@@ -96,6 +104,9 @@ impl fmt::Display for BuildError {
                 }
                 Ok(())
             }
+            BuildErrorKind::SchemaBuildFailed { .. } => {
+                write!(f, "failed to build schemas for the service")
+            }
         }
     }
 }
@@ -108,6 +119,7 @@ impl Error for BuildError {
             BuildErrorKind::NoService => None,
             BuildErrorKind::AmbiguousService { .. } => None,
             BuildErrorKind::UnknownService { .. } => None,
+            BuildErrorKind::SchemaBuildFailed { source } => Some(source),
         }
     }
 }

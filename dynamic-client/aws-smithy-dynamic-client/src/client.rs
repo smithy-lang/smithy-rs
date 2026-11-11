@@ -6,9 +6,11 @@
 //! The dynamic client and its builder.
 
 use crate::error::BuildError;
+use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::{Model, ShapeId};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// A client for a Smithy service, built from a model loaded at runtime.
 ///
@@ -23,17 +25,25 @@ use std::path::PathBuf;
 /// # Ok::<(), aws_smithy_dynamic_client::BuildError>(())
 /// ```
 #[derive(Clone, Debug)]
-// TODO(dynamic-client): Remove this `allow` once calls read the model and the service.
-#[allow(dead_code)]
 pub struct DynamicClient {
-    model: Model,
-    service: ShapeId,
+    // The schemas of the selected service, built on first use. The set also holds the model
+    // and the service ID.
+    // TODO(dynamic-client): Remove this `allow` once calls read the schemas.
+    #[allow(dead_code)]
+    schemas: Arc<RuntimeSchemaSet>,
 }
 
 impl DynamicClient {
     /// Returns a builder for a dynamic client.
     pub fn builder() -> Builder {
         Builder::default()
+    }
+
+    #[cfg(test)]
+    fn service(&self) -> &ShapeId {
+        self.schemas
+            .service()
+            .expect("the set is built for a service")
     }
 }
 
@@ -67,14 +77,22 @@ impl Builder {
     ///
     /// Fails when the builder has no model, or when the model file fails to load. Also fails
     /// when the model has no service, or has several and none is specified. Also fails when
-    /// the model has no service with the given ID.
+    /// the model has no service with the given ID, or when the service's shapes are invalid.
     pub fn build(self) -> Result<DynamicClient, BuildError> {
         let path = self.model_file.ok_or_else(BuildError::missing_model)?;
         let model = Model::from_json_file(&path)
             .map_err(|source| BuildError::model_load_failed(path, source))?;
         let service_view = select_service(&model, self.service)?;
         let service = service_view.id().clone();
-        Ok(DynamicClient { model, service })
+        // A lazy set validates the service's shapes now, and builds each schema on first use.
+        let schemas = RuntimeSchemaSet::builder(&model)
+            .for_service(&service)
+            .materialization(Materialization::Lazy)
+            .build()
+            .map_err(BuildError::schema_build_failed)?;
+        Ok(DynamicClient {
+            schemas: Arc::new(schemas),
+        })
     }
 }
 
@@ -111,6 +129,7 @@ mod tests {
     use super::DynamicClient;
     use crate::error::BuildErrorKind;
     use crate::BuildError;
+    use aws_smithy_lang::runtime_schema::Materialization;
     use aws_smithy_lang::ShapeId;
     use std::path::PathBuf;
 
@@ -153,7 +172,7 @@ mod tests {
             .model_file(model("weather.json"))
             .build()
             .unwrap();
-        assert_eq!("example.weather#Weather", client.service.as_str());
+        assert_eq!("example.weather#Weather", client.service().as_str());
     }
 
     #[test]
@@ -163,7 +182,7 @@ mod tests {
             .service(id("example.cafe#Cafe"))
             .build()
             .unwrap();
-        assert_eq!("example.cafe#Cafe", client.service.as_str());
+        assert_eq!("example.cafe#Cafe", client.service().as_str());
     }
 
     #[test]
@@ -189,6 +208,34 @@ mod tests {
             err.kind(),
             BuildErrorKind::UnknownService { id: unknown, services }
                 if *unknown == id("example.cafe#Bakery") && *services == expected
+        ));
+    }
+
+    #[test]
+    fn builds_schemas_lazily_for_dynamodb() {
+        let dynamodb = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../aws/sdk/aws-models/dynamodb.json");
+        let client = DynamicClient::builder()
+            .model_file(dynamodb)
+            .build()
+            .unwrap();
+        assert_eq!(Materialization::Lazy, client.schemas.materialization());
+        assert_eq!(
+            "com.amazonaws.dynamodb#DynamoDB_20120810",
+            client.service().as_str()
+        );
+        assert!(client
+            .schemas
+            .operation_ids()
+            .any(|op| op.as_str() == "com.amazonaws.dynamodb#ListTables"));
+    }
+
+    #[test]
+    fn fails_on_invalid_service_shapes() {
+        let err = build_error("bad-schema.json", None);
+        assert!(matches!(
+            err.kind(),
+            BuildErrorKind::SchemaBuildFailed { .. }
         ));
     }
 

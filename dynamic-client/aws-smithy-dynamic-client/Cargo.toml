@@ -10,7 +10,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
-aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang" }
+aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }
 
 [package.metadata.docs.rs]
 all-features = true
