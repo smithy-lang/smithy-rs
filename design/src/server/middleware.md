@@ -101,27 +101,29 @@ stateDiagram-v2
     UpgradeLayer --> [*]: HTTP Response
     state A {
         state PokemonService {
-            state RoutingService {
-                in --> UpgradeLayer: HTTP Request
-                in --> C2: HTTP Request
-                in --> C3: HTTP Request
-                in --> C4: HTTP Request
-                state B {
-                    state C1 {
-                        state C {
-                            state UpgradeLayer {
-                                direction LR
-                                [*] --> Handler: Model Input
-                                Handler --> [*] : Model Output
-                                state D {
-                                    Handler
+            state MetricsService {
+                state RoutingService {
+                    in --> UpgradeLayer: HTTP Request
+                    in --> C2: HTTP Request
+                    in --> C3: HTTP Request
+                    in --> C4: HTTP Request
+                    state B {
+                        state C1 {
+                            state C {
+                                state UpgradeLayer {
+                                    direction LR
+                                    [*] --> Handler: Model Input
+                                    Handler --> [*] : Model Output
+                                    state D {
+                                        Handler
+                                    }
                                 }
                             }
                         }
+                        C2
+                        C3
+                        C4
                     }
-                    C2
-                    C3
-                    C4
                 }
             }
         }
@@ -131,7 +133,7 @@ stateDiagram-v2
     C4 --> [*]: HTTP Response
 ```
 
-where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP structures and the `RoutingService` is responsible for routing requests to the appropriate operation.
+where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP structures, the `RoutingService` is responsible for routing requests to the appropriate operation, and the `MetricsService` sets up per-request state for [standard server metrics](../rfcs/rfc0049_integrated_server_metrics.md).
 
 ### A. Outer Middleware
 
@@ -149,6 +151,7 @@ The output of the Smithy service builder provides the user with a `Service<http:
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 use tower::Layer;
 
@@ -160,7 +163,7 @@ let app = PokemonService::builder(config)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 
 // Construct `TimeoutLayer`.
 let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
@@ -183,6 +186,7 @@ service builder.
 # use std::time::Duration;
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 # use pokemon_service_server_sdk::{input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct MetricsLayer;
@@ -200,7 +204,7 @@ let app = PokemonService::builder(config)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 ```
 
 Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
@@ -218,6 +222,7 @@ A "HTTP layer" can be applied to specific operations.
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 # use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct LoggingLayer;
@@ -244,7 +249,7 @@ let app = PokemonService::builder(config)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 ```
 
 This middleware transforms the operations HTTP requests and responses.
@@ -263,6 +268,7 @@ A "model layer" can be applied to specific operations.
 # use aws_smithy_http_server::{operation::*, plugin::*};
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 # struct BufferLayer;
 # impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
 # impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
@@ -285,7 +291,7 @@ let app = PokemonService::builder(config)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 ```
 
 In contrast to [position C](#c-operation-specific-http-middleware), this middleware transforms the operations modelled inputs to modelled outputs.
@@ -398,6 +404,7 @@ This allows for:
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
 # use aws_smithy_http_server::routing::{Route, RoutingService};
+# use aws_smithy_http_server::metrics::MetricsService;
 use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins};
 use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 
@@ -411,7 +418,7 @@ let app /* : PokemonService<Route<B>> */ = PokemonService::builder(config)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+# let app: PokemonService<MetricsService<RoutingService<RestRouter<Route>, RestJson1>>>  = app;
 ```
 
 The custom `print` method hides the details of the `Plugin` trait from the average consumer.

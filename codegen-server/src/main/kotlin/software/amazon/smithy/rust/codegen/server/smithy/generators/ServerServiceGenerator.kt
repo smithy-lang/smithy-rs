@@ -70,6 +70,27 @@ class ServerServiceGenerator(
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
     private val schemaSerde = codegenContext.usesSchemaHttpSerde
+    private val supportsStandardMetrics = codegenContext.supportsStandardMetrics
+
+    /** Renders `text` only if the service supports standard metrics. */
+    private fun metricsOnly(text: String) = if (supportsStandardMetrics) text else ""
+
+    /** Wraps the service type `ty` in `MetricsService` if the service supports standard metrics. */
+    private fun withMetricsService(ty: String) =
+        if (supportsStandardMetrics) "#{SmithyHttpServer}::metrics::MetricsService<$ty>" else ty
+
+    /** Wraps the service expression `expr` in `MetricsService` if the service supports standard metrics. */
+    private fun intoMetricsService(expr: String) =
+        if (supportsStandardMetrics) {
+            "#{SmithyHttpServer}::metrics::MetricsService::new($expr, self.standard_metrics_enabled)"
+        } else {
+            expr
+        }
+
+    /** The legacy (non-schema) routing service type, routing to `route`. */
+    private fun legacyRoutingService(route: String) =
+        "#{SmithyHttpServer}::routing::RoutingService<#{Router}<$route>, #{Protocol}>"
+
     private val shapeIdType =
         if (schemaSerde) {
             "#{SchemaShapeId}<'static>"
@@ -271,7 +292,7 @@ class ServerServiceGenerator(
                     /// ## let app: ${if (schemaSerde) {
                         serviceName
                     } else {
-                        "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"
+                        "$serviceName<${withMetricsService(legacyRoutingService("#{SmithyHttpServer}::routing::Route"))}>"
                     }} = app;
                     /// ```
                     ///
@@ -337,7 +358,7 @@ class ServerServiceGenerator(
                     /// ## let app: ${if (schemaSerde) {
                         serviceName
                     } else {
-                        "$serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>>"
+                        "$serviceName<${withMetricsService(legacyRoutingService("#{SmithyHttpServer}::routing::Route"))}>"
                     }} = app;
                     /// ```
                     ///
@@ -487,12 +508,7 @@ class ServerServiceGenerator(
                     /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
                     /// unspecified route is requested.
                     pub fn build(self) -> #{Result}<
-                        $serviceName<
-                            #{SmithyHttpServer}::routing::RoutingService<
-                                #{Router}<L::Service>,
-                                #{Protocol},
-                            >,
-                        >,
+                        $serviceName<${withMetricsService(legacyRoutingService("L::Service"))}>,
                         MissingOperationsError,
                     >
                     where
@@ -515,6 +531,7 @@ class ServerServiceGenerator(
                         };
                         let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
                         let svc = svc.map(|s| s.layer(self.layer));
+                        let svc = ${intoMetricsService("svc")};
                         Ok($serviceName { svc })
                     }
                     """,
@@ -592,7 +609,7 @@ class ServerServiceGenerator(
                     ///
                     /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
                     /// not have a registered handler.
-                    pub fn build_unchecked(self) -> $serviceName<L::Service>
+                    pub fn build_unchecked(self) -> $serviceName<${withMetricsService("L::Service")}>
                     where
                         Body: Send + 'static,
                         L: #{Tower}::Layer<
@@ -604,6 +621,7 @@ class ServerServiceGenerator(
                         let svc = self
                             .layer
                             .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
+                        let svc = ${intoMetricsService("svc")};
                         $serviceName { svc }
                     }
                     """,
@@ -636,6 +654,7 @@ class ServerServiceGenerator(
                     layer: L,
                     http_plugin: HttpPl,
                     model_plugin: ModelPl,
+                    ${metricsOnly("standard_metrics_enabled: bool,")}
                     ${if (schemaSerde) {
                     "routing_options: #{SmithyHttpServer}::schema::routing::ProtocolOptions,"
                 } else {
@@ -704,18 +723,21 @@ class ServerServiceGenerator(
             writable {
                 documentShape(service, model)
 
+                // Applies `layer` to each route, inside `MetricsService` if present.
+                val layerRoutes =
+                    if (supportsStandardMetrics) {
+                        "self.svc.map(|routing| routing.map(|s| s.layer(layer)))"
+                    } else {
+                        "self.svc.map(|s| s.layer(layer))"
+                    }
+
                 rustTemplate(
                     """
                     ///
                     /// See the [root](crate) documentation for more information.
                     ##[derive(Clone)]
                     pub struct $serviceName<
-                        S = #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<
-                                #{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>,
-                            >,
-                            #{Protocol},
-                        >
+                        S = ${withMetricsService(legacyRoutingService("#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>"))}
                     > {
                         // This is the router wrapped by layers.
                         svc: S,
@@ -738,6 +760,7 @@ class ServerServiceGenerator(
                                 layer: config.layers,
                                 http_plugin: config.http_plugins,
                                 model_plugin: config.model_plugins,
+                                ${metricsOnly("standard_metrics_enabled: config.standard_metrics_enabled,")}
                             }
                         }
 
@@ -765,7 +788,8 @@ class ServerServiceGenerator(
                                 #{NotSetFields2:W},
                                 layer: #{Tower}::layer::util::Identity::new(),
                                 http_plugin,
-                                model_plugin
+                                model_plugin,
+                                ${metricsOnly("standard_metrics_enabled: false,")}
                             }
                         }
 
@@ -798,14 +822,7 @@ class ServerServiceGenerator(
                         }
                     }
 
-                    impl<S>
-                        $serviceName<
-                            #{SmithyHttpServer}::routing::RoutingService<
-                                #{Router}<S>,
-                                #{Protocol},
-                            >,
-                        >
-                    {
+                    impl<S> $serviceName<${withMetricsService(legacyRoutingService("S"))}> {
                         /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                         ##[deprecated(
                             since = "0.57.0",
@@ -814,17 +831,12 @@ class ServerServiceGenerator(
                         pub fn layer<L>(
                             self,
                             layer: &L,
-                        ) -> $serviceName<
-                            #{SmithyHttpServer}::routing::RoutingService<
-                                #{Router}<L::Service>,
-                                #{Protocol},
-                            >,
-                        >
+                        ) -> $serviceName<${withMetricsService(legacyRoutingService("L::Service"))}>
                         where
                             L: #{Tower}::Layer<S>,
                         {
                             $serviceName {
-                                svc: self.svc.map(|s| s.layer(layer)),
+                                svc: $layerRoutes,
                             }
                         }
 
@@ -833,14 +845,7 @@ class ServerServiceGenerator(
                         /// This has the effect of erasing all types accumulated via layers.
                         pub fn boxed<B>(
                             self,
-                        ) -> $serviceName<
-                                #{SmithyHttpServer}::routing::RoutingService<
-                                #{Router}<
-                                    #{SmithyHttpServer}::routing::Route<B>,
-                                >,
-                                #{Protocol},
-                            >,
-                        >
+                        ) -> $serviceName<${withMetricsService(legacyRoutingService("#{SmithyHttpServer}::routing::Route<B>"))}>
                         where
                             S: #{Tower}::Service<
                                 #{Http}::Request<B>,
@@ -984,6 +989,7 @@ class ServerServiceGenerator(
                     let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
                         schema, #{Registries}, [#{Handlers}], self.routing_options,
                     ).layer(self.layer).build().map_err(BuildError::Routing)?;
+                    let svc = #{SmithyHttpServer}::metrics::MetricsService::new(svc, self.standard_metrics_enabled);
                     #{Ok}($serviceName { svc })
                 }
                 """,
@@ -1036,7 +1042,7 @@ class ServerServiceGenerator(
 
                 /// A service using runtime schema routing.
                 ##[derive(Clone)]
-                pub struct $serviceName<S = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingService> { svc: S }
+                pub struct $serviceName<S = #{SmithyHttpServer}::metrics::MetricsService<#{SmithyHttpServer}::schema::routing::MultiProtocolRoutingService>> { svc: S }
 
                 impl $serviceName<()> {
                     pub fn builder<L, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(
@@ -1049,6 +1055,7 @@ class ServerServiceGenerator(
                     ""
                 }}
                             layer: config.layers, http_plugin: config.http_plugins, model_plugin: config.model_plugins,
+                            standard_metrics_enabled: config.standard_metrics_enabled,
                             routing_options: Self::routing_options(),
                         }
                     }
@@ -1068,6 +1075,7 @@ class ServerServiceGenerator(
                     ""
                 }}
                             layer: #{Tower}::layer::util::Identity::new(), http_plugin, model_plugin,
+                            standard_metrics_enabled: false,
                             routing_options: Self::routing_options(),
                         }
                     }
@@ -1088,7 +1096,7 @@ class ServerServiceGenerator(
                         self
                     }
                 }
-                impl<S> $serviceName<S> {
+                impl<S> $serviceName<#{SmithyHttpServer}::metrics::MetricsService<S>> {
                     /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                     ///
                     /// On the schema path the routed handlers form a single service, so the layer
@@ -1097,17 +1105,17 @@ class ServerServiceGenerator(
                         since = "0.57.0",
                         note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
                     )]
-                    pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
+                    pub fn layer<L>(self, layer: &L) -> $serviceName<#{SmithyHttpServer}::metrics::MetricsService<L::Service>>
                     where
                         L: #{Tower}::Layer<S>,
                     {
-                        $serviceName { svc: layer.layer(self.svc) }
+                        $serviceName { svc: self.svc.map(|s| layer.layer(s)) }
                     }
 
                     /// Applies [`SyncRoute::new`](#{SmithyHttpServer}::routing::SyncRoute::new) to the routed service.
                     ///
                     /// This has the effect of erasing all types accumulated via layers.
-                    pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::SyncRoute<B>>
+                    pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::metrics::MetricsService<#{SmithyHttpServer}::routing::SyncRoute<B>>>
                     where
                         S: #{Tower}::Service<
                             #{Http}::Request<B>,
@@ -1121,7 +1129,8 @@ class ServerServiceGenerator(
                         ##[allow(deprecated)]
                         self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::SyncRoute::new))
                     }
-
+                }
+                impl<S> $serviceName<S> {
                     pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
                         #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                     }

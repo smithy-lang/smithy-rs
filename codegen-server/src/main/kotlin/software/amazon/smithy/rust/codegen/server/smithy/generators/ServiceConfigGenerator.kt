@@ -165,6 +165,10 @@ class ServiceConfigGenerator(
             "Stack" to tower.toType().resolve("layer::util::Stack"),
         )
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
+    private val supportsStandardMetrics = codegenContext.supportsStandardMetrics
+
+    /** Renders `line` only if the service supports standard metrics. */
+    private fun metricsOnly(line: String) = if (supportsStandardMetrics) line else ""
 
     fun render(writer: RustWriter) {
         val unwrapConfigBuilder =
@@ -206,6 +210,7 @@ class ServiceConfigGenerator(
                 layers: L,
                 http_plugins: H,
                 model_plugins: M,
+                ${metricsOnly("standard_metrics_enabled: bool,")}
             }
 
             impl ${serviceName}Config<(), (), ()> {
@@ -219,6 +224,7 @@ class ServiceConfigGenerator(
                         layers: #{Tower}::layer::util::Identity::new(),
                         http_plugins: #{SmithyHttpServer}::plugin::IdentityPlugin,
                         model_plugins: #{SmithyHttpServer}::plugin::IdentityPlugin,
+                        ${metricsOnly("standard_metrics_enabled: false,")}
                         #{BuilderRequiredMethodFlagsInit:W}
                     }
                 }
@@ -230,6 +236,7 @@ class ServiceConfigGenerator(
                 pub(crate) layers: L,
                 pub(crate) http_plugins: H,
                 pub(crate) model_plugins: M,
+                ${metricsOnly("pub(crate) standard_metrics_enabled: bool,")}
                 #{BuilderRequiredMethodFlagDefinitions:W}
             }
 
@@ -238,12 +245,15 @@ class ServiceConfigGenerator(
             impl<L, H, M> ${serviceName}ConfigBuilder<L, H, M> {
                 #{InjectedMethods:W}
 
+                #{EnableStandardMetrics:W}
+
                 /// Add a [`#{Tower}::Layer`] to the service.
                 pub fn layer<NewLayer>(self, layer: NewLayer) -> ${serviceName}ConfigBuilder<#{Stack}<NewLayer, L>, H, M> {
                     ${serviceName}ConfigBuilder {
                         layers: #{Stack}::new(layer, self.layers),
                         http_plugins: self.http_plugins,
                         model_plugins: self.model_plugins,
+                        ${metricsOnly("standard_metrics_enabled: self.standard_metrics_enabled,")}
                         #{BuilderRequiredMethodFlagsMove1:W}
                     }
                 }
@@ -261,6 +271,7 @@ class ServiceConfigGenerator(
                         layers: self.layers,
                         http_plugins: #{PluginStack}::new(http_plugin, self.http_plugins),
                         model_plugins: self.model_plugins,
+                        ${metricsOnly("standard_metrics_enabled: self.standard_metrics_enabled,")}
                         #{BuilderRequiredMethodFlagsMove2:W}
                     }
                 }
@@ -278,6 +289,7 @@ class ServiceConfigGenerator(
                         layers: self.layers,
                         http_plugins: self.http_plugins,
                         model_plugins: #{PluginStack}::new(model_plugin, self.model_plugins),
+                        ${metricsOnly("standard_metrics_enabled: self.standard_metrics_enabled,")}
                         #{BuilderRequiredMethodFlagsMove3:W}
                     }
                 }
@@ -290,6 +302,7 @@ class ServiceConfigGenerator(
             "BuilderRequiredMethodFlagDefinitions" to builderRequiredMethodFlagsDefinitions(),
             "BuilderRequiredMethodError" to builderRequiredMethodError(),
             "InjectedMethods" to injectedMethods(),
+            "EnableStandardMetrics" to enableStandardMetrics(),
             "BuilderRequiredMethodFlagsMove1" to builderRequiredMethodFlagsMove(),
             "BuilderRequiredMethodFlagsMove2" to builderRequiredMethodFlagsMove(),
             "BuilderRequiredMethodFlagsMove3" to builderRequiredMethodFlagsMove(),
@@ -298,6 +311,25 @@ class ServiceConfigGenerator(
     }
 
     private val isBuilderFallible = configMethods.isBuilderFallible()
+
+    private fun enableStandardMetrics() =
+        writable {
+            if (supportsStandardMetrics) {
+                rustTemplate(
+                    """
+                    /// Enable collection of standard server metrics.
+                    ///
+                    /// Middleware can access the collected metrics with
+                    /// [`RequestExt::on_finish`](#{SmithyHttpServer}::metrics::RequestExt::on_finish).
+                    pub fn enable_standard_metrics(mut self) -> Self {
+                        self.standard_metrics_enabled = true;
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
 
     private fun builderBuildRequiredMethodChecks() =
         configMethods.filter { it.isRequired }.map {
@@ -500,6 +532,7 @@ class ServiceConfigGenerator(
                             layers: self.layers,
                             http_plugins: self.http_plugins,
                             model_plugins: self.model_plugins,
+                            ${metricsOnly("standard_metrics_enabled: self.standard_metrics_enabled,")}
                         }
                         """,
                     )
