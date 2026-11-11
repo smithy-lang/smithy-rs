@@ -124,6 +124,18 @@ pub struct DiscriminatedDocument<D = Document> {
 /// struct MyDocument;
 /// impl DocumentTrait for MyDocument {}
 /// ```
+///
+/// Its supertrait's methods are visible through a `DocumentTrait` bound, but only this crate can
+/// call them. Use [`DiscriminatedDocument::as_blob`] and [`DiscriminatedDocument::as_timestamp`]
+/// instead:
+///
+/// ```compile_fail,E0061
+/// use aws_smithy_types::document::DocumentTrait;
+///
+/// fn blob<D: DocumentTrait>(document: &D) {
+///     let _ = document.coerce_to_blob(None);
+/// }
+/// ```
 pub trait DocumentTrait: sealed::Sealed {}
 
 impl DocumentTrait for Document {}
@@ -135,20 +147,31 @@ mod sealed {
     /// The per-document-type behavior of [`DiscriminatedDocument`].
     ///
     /// The trait is public so that it can be a supertrait of [`DocumentTrait`], and this module
-    /// is private so that no other crate can implement it.
+    /// is private so that no other crate can implement it. A `DocumentTrait` bound still makes
+    /// these methods visible to other crates, so each one takes a [`Token`], which they can't
+    /// create.
     pub trait Sealed {
         /// Implements [`DiscriminatedDocument::as_blob`].
         fn coerce_to_blob<'a>(
             &'a self,
+            _: Token,
             settings: Option<&dyn DocumentSettings>,
         ) -> Result<Cow<'a, [u8]>, DocumentError>;
 
         /// Implements [`DiscriminatedDocument::as_timestamp`].
         fn coerce_to_timestamp(
             &self,
+            _: Token,
             settings: Option<&dyn DocumentSettings>,
         ) -> Result<DateTime, DocumentError>;
     }
+
+    /// An argument of every [`Sealed`] method, so that only this crate can call them.
+    ///
+    /// Other crates can't name this type, because its module is private, so they can't create
+    /// one.
+    #[derive(Debug)]
+    pub struct Token;
 }
 
 impl<D: DocumentTrait> DiscriminatedDocument<D> {
@@ -249,7 +272,8 @@ impl<D: DocumentTrait> DiscriminatedDocument<D> {
     ///
     /// Other variants return [`DocumentError::TypeMismatch`].
     pub fn as_blob(&self) -> Result<Cow<'_, [u8]>, DocumentError> {
-        self.document.coerce_to_blob(self.settings.as_deref())
+        self.document
+            .coerce_to_blob(sealed::Token, self.settings.as_deref())
     }
 
     /// Returns this document's value as a timestamp.
@@ -272,7 +296,8 @@ impl<D: DocumentTrait> DiscriminatedDocument<D> {
     ///
     /// Other variants return [`DocumentError::TypeMismatch`].
     pub fn as_timestamp(&self) -> Result<DateTime, DocumentError> {
-        self.document.coerce_to_timestamp(self.settings.as_deref())
+        self.document
+            .coerce_to_timestamp(sealed::Token, self.settings.as_deref())
     }
 }
 
@@ -317,6 +342,7 @@ impl DiscriminatedDocument<Document> {
 impl sealed::Sealed for Document {
     fn coerce_to_blob<'a>(
         &'a self,
+        _: sealed::Token,
         settings: Option<&dyn DocumentSettings>,
     ) -> Result<Cow<'a, [u8]>, DocumentError> {
         match self {
@@ -330,6 +356,7 @@ impl sealed::Sealed for Document {
 
     fn coerce_to_timestamp(
         &self,
+        _: sealed::Token,
         settings: Option<&dyn DocumentSettings>,
     ) -> Result<DateTime, DocumentError> {
         match self {

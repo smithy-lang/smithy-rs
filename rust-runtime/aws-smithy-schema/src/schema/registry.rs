@@ -1461,7 +1461,7 @@ mod tests {
             }
         );
 
-        // `DocumentV2` reads truncate fractions, like `DocumentV2::as_integer`. The `Document`
+        // `DocumentV2` reads truncate fractions, like `DocumentV2::coerce_integer`. The `Document`
         // path rejects them.
         let bar = registry
             .deserialize_document(&v2_document(
