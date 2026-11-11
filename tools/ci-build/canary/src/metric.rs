@@ -18,7 +18,7 @@
 //! Each distinct dimension set is a distinct series under one metric name, so the two never
 //! interfere. The alarm needs a series it can threshold without caring *which* leg broke; a
 //! responder needs to know exactly that. Trying to serve both from one series would mean either an
-//! alarm per leg — sixty alarms, sixty tickets for one break — or an undimensioned datapoint that
+//! alarm per leg — one alarm and one ticket per leg, for a single break — or an undimensioned one that
 //! says a release is broken and nothing about how.
 //!
 //! # Why `Tag` is a dimension and not a label
@@ -390,7 +390,7 @@ mod tests {
             let mut e = FakeEmitter::default();
             let written = record(
                 "release-2026-11-09",
-                &leg("ssstar--stable"),
+                &leg("aws-esdk--stable"),
                 Some(verdict),
                 &mut e,
             )
@@ -421,7 +421,7 @@ mod tests {
         let mut e = FakeEmitter::default();
         let written = record(
             "release-2026-11-09",
-            &leg("prior-aws-config-1-10--stable-2"),
+            &leg("new-project--stable-2"),
             Some(Verdict::CompileFail),
             &mut e,
         )
@@ -429,8 +429,8 @@ mod tests {
 
         assert_eq!(
             written[1].to_string(),
-            "Red=1 {Tag=release-2026-11-09, Manifest=prior-aws-config-1-10, \
-             Verdict=COMPILE_FAIL, Leg=prior-aws-config-1-10--stable-2, \
+            "Red=1 {Tag=release-2026-11-09, Manifest=new-project, \
+             Verdict=COMPILE_FAIL, Leg=new-project--stable-2, \
              Toolchain=1.97.0, Target=native}"
         );
     }
@@ -499,7 +499,7 @@ mod tests {
         let mut e = FakeEmitter::default();
         record(
             "release-2026-11-09",
-            &leg("ssstar--stable"),
+            &leg("aws-esdk--stable"),
             Some(Verdict::CompileFail),
             &mut e,
         )
@@ -586,7 +586,7 @@ mod tests {
         let armed = vec![dimension("Tag", "release-x")];
         let test = datapoints(
             "release-x",
-            &rigged("ssstar--stable"),
+            &rigged("aws-esdk--stable"),
             Some(Verdict::CompileFail),
         );
         assert!(

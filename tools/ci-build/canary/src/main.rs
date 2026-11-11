@@ -100,7 +100,7 @@ enum Command {
     /// Compare a manifest's freshly resolved graph against the stored baseline.
     ///
     /// The dispatch tier's gate: a tick with no publish in it resolves exactly what the previous
-    /// tick did, and running sixty legs to re-prove that buys nothing. Prints the movement as JSON
+    /// tick did, and running the whole matrix to re-prove that buys nothing. Prints it as JSON
     /// on stdout.
     Baseline {
         /// The manifest id, as `gen-matrix` emits it in each leg's `manifest` field.
@@ -164,7 +164,7 @@ enum Command {
     },
     /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
     ///
-    /// One run per release. Resolves the thirteen manifests on a 15-minute tick and stops when
+    /// One run per release. Resolves every manifest on a 15-minute tick and stops when
     /// every declared runtime crate has arrived, or at a three-hour ceiling.
     Watch {
         /// The release tag being watched. Legs are dispatched against it.

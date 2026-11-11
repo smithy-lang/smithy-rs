@@ -15,7 +15,7 @@
 //! Two of these were written after the thing they check had already gone wrong:
 //!
 //! - The orchestrator's release-tag trigger initially had no arming gate, so merging it would have
-//!   started a 24-hour, 60-leg watch on the next release as a side effect.
+//!   started a 24-hour, full-matrix watch on the next release as a side effect.
 //! - The self-test's ticket-ARN template was validated for *leftover* placeholders rather than
 //!   *missing* ones, so a secret carrying a hardcoded severity would have cut a severity-2 ticket
 //!   from a self-test — which is what the pinned severity exists to prevent.
@@ -208,7 +208,7 @@ fn no_workflow_contains_internal_ticket_routing() {
 }
 
 /// Merging must not arm the canary. The orchestrator triggers on a release tag, so without a gate
-/// landing the file would start a 24-hour, 60-leg watch on the next release — before the
+/// landing the file would start a 24-hour, full-matrix watch on the next release — before the
 /// report-only window that exists to measure its false-positive rate has ever run.
 #[test]
 fn the_orchestrator_is_armed_by_a_variable_and_not_by_merging() {

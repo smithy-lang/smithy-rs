@@ -34,6 +34,10 @@
 //! | `prior-aws-config-1-10--stable` | `aws-smithy-json 0.63.1, 0.65.1`; `aws-smithy-schema 0.2.1, 1.2.0` | blamed `aws_smithy_schema` by name |
 //! | `ssstar--stable` | `aws-smithy-http 0.60.12, 0.64.3` | `unresolved import aws_smithy_http::event_stream` |
 //!
+//! Both rows have since been withdrawn from the scenario table — see `scenarios` for why a leg
+//! that is red on arrival cannot stay switched on. The measurements above are what the two of them
+//! produced while they ran, and they are the reason this module exists.
+//!
 //! # This is evidence, never a verdict
 //!
 //! Two majors of one crate in one graph is legal, intended, and usually harmless: Cargo permits it

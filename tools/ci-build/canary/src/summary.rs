@@ -337,15 +337,15 @@ mod tests {
         }
     }
 
-    /// The shape of the real red run: 60 legs, 20 of them red, the rest green.
+    /// A run with two manifests red at five toolchains each, and the rest green.
     #[test]
     fn it_counts_the_four_buckets_and_they_add_up() {
         let legs = matrix();
-        assert_eq!(legs.len(), 60);
+        assert_eq!(legs.len(), 40);
 
         let red_ids: Vec<String> = legs
             .iter()
-            .filter(|l| l.manifest == "prior-aws-config-1-10" || l.manifest == "ssstar")
+            .filter(|l| l.manifest == "aws-esdk" || l.manifest == "tower-sessions-dynamodb-store")
             .map(|l| l.id.clone())
             .collect();
         assert_eq!(red_ids.len(), 10, "two manifests at five toolchains");
@@ -359,14 +359,14 @@ mod tests {
             .collect();
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.legs_total, 60);
+        assert_eq!(s.legs_total, 40);
         assert_eq!(s.red.len(), 10);
-        assert_eq!(s.green.len(), 50);
+        assert_eq!(s.green.len(), 30);
         assert!(s.superseded.is_empty());
         assert!(s.unreported.is_empty(), "{:?}", s.unreported);
         assert_eq!(
             s.outcomes,
-            BTreeMap::from([("COMPILE_FAIL".into(), 10), ("GREEN".into(), 50)])
+            BTreeMap::from([("COMPILE_FAIL".into(), 10), ("GREEN".into(), 30)])
         );
         assert_eq!(
             s.red.len() + s.green.len() + s.superseded.len() + s.unreported.len(),
@@ -384,7 +384,7 @@ mod tests {
 
         let s = summarize(run(), &legs, &reports);
         assert_eq!(s.unreported, [legs[0].id.clone()]);
-        assert_eq!(s.green.len(), 59);
+        assert_eq!(s.green.len(), 39);
         assert!(!s.green.contains(&legs[0].id));
         assert_eq!(s.outcomes.get("UNREPORTED"), Some(&1));
     }
@@ -397,7 +397,7 @@ mod tests {
         let reports: Vec<Report> = legs.iter().map(|l| Report::superseded(&l.id)).collect();
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.superseded.len(), 60);
+        assert_eq!(s.superseded.len(), 40);
         assert!(s.green.is_empty(), "nothing was proven green");
         assert!(s.red.is_empty());
         assert!(!s.had_a_hard_verdict(), "so there is nothing to record");
@@ -507,7 +507,7 @@ mod tests {
         reports.extend(legs.iter().map(|l| green_report(&l.id)));
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.green.len(), 60);
+        assert_eq!(s.green.len(), 40);
         assert!(s.unreported.is_empty());
     }
 

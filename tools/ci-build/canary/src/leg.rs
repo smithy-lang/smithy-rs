@@ -718,8 +718,9 @@ mod tests {
 
     const COMPILE_ERROR: &str = r#"{"reason":"compiler-message","target":{"name":"canary-build-check"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
 
-    /// The same error as the real `prior-aws-config-1-10--stable` leg reported: the failing target
-    /// is a dependency, not the consumer's own crate.
+    /// The same error the real `prior-aws-config-1-10--stable` leg reported — a row since
+    /// withdrawn from the table for being red, though the diagnosis it produced is why this
+    /// fixture exists: the failing target is a dependency, not the consumer's own crate.
     const COMPILE_ERROR_IN_AWS_CONFIG: &str = r#"{"reason":"compiler-message","target":{"name":"aws_config"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
 
     /// The shape of that leg's real lockfile: `aws-config` once, `aws-smithy-schema` twice, and a
@@ -1216,10 +1217,10 @@ version = "0.2.12"
 
     /// A superseded leg has to be distinguishable from both a green one and a silent one.
     ///
-    /// Found by running the workflow with a stale tag: all 60 legs skipped correctly, and all 60
+    /// Found by running the workflow with a stale tag: every leg skipped correctly, and every one
     /// tripped the "no report" warning — the only thing watching for a leg that dies without
     /// saying anything, which is the failure the budget work had just been about. A warning that
-    /// fires 60 times on a correct run is a warning nobody reads.
+    /// fires once per leg on a correct run is a warning nobody reads.
     #[test]
     fn a_superseded_leg_reports_itself_rather_than_going_quiet() {
         let r = Report::superseded("new-project--stable");

@@ -32,7 +32,7 @@ on:
       scenario:
         description: >
           Leg ids or manifest names, comma-separated, or `all`. One scenario is one or two legs at a
-          couple of minutes where `all` is 60 legs, which is why the filter exists rather than being
+          couple of minutes where `all` is the whole matrix, which is why the filter exists rather than being
           a convenience. The watcher passes the set of manifests whose graph moved on a tick, so
           every name given must match something -- a typo fails rather than quietly running a
           subset.
@@ -155,7 +155,7 @@ jobs:
     permissions:
       contents: read
       # To assume the metrics role and record a verdict. Deliberately not environment-gated: a
-      # condition on the `environment` claim would *require* every one of the sixty legs to declare
+      # condition on the `environment` claim would *require* every single leg to declare
       # one, and they also run by hand outside a release. The namespace condition on the role is
       # what bounds this instead.
       id-token: write

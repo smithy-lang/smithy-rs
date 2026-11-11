@@ -9,7 +9,7 @@
 #
 # Two tiers, deliberately, and nothing else -- no standing poll:
 #
-#   dispatch tier   resolves the 13 manifests every 15 minutes and dispatches only the manifests
+#   dispatch tier   resolves every manifest every 15 minutes and dispatches only the manifests
 #                   whose graph moved. Ends when every declared runtime crate has arrived, or at a
 #                   three-hour ceiling. This is the tier that meets the detection target: a
 #                   dispatched run is created the moment the API call lands, where a scheduled run
@@ -41,7 +41,7 @@ permissions:
   contents: read
   # To dispatch `build-canary.yml`. No workflow in this repository asked for this before, and it is
   # the only write permission here: the legs are dispatched, never run inline, because 24 hours of
-  # 60 legs is 1440 jobs and a matrix is capped at 256 per run.
+  # the full matrix is roughly a thousand jobs, and a matrix is capped at 256 per run.
   actions: write
 concurrency:
   # One watch per release. A newer release supersedes an older watch rather than running beside it:
@@ -61,7 +61,7 @@ jobs:
   alarms:
     name: Arm the alarm
     # Armed by a repository variable, not by merging. Without this, landing this file would start a
-    # 24-hour, 60-leg watch on the next release as a side effect of a merge -- before the
+    # 24-hour, full-matrix watch on the next release as a side effect of a merge -- before the
     # report-only window that exists to measure its false-positive rate has ever run. Set
     # `BUILD_CANARY_ENABLED` to `true` to arm it; a manual dispatch always runs, so it can be
     # exercised before then.
@@ -132,8 +132,8 @@ jobs:
         #
         # 2.5 while the chain is being proven. Not 5, because a Sev5 would show a ticket was cut
         # and nothing about whether anyone is reached. Not 2 yet, because 2 pages immediately at
-        # any hour and the canary has not yet earned that: it still has twenty known-red legs and
-        # no measured false-positive rate. 2.5 pages during business hours, which is enough to
+        # any hour and the canary has not yet earned that: its false-positive rate has never
+        # been measured over a real release. 2.5 pages during business hours, which is enough to
         # prove the notification path exists.
         #
         # Raising this to 2 is the last step of the rollout, and it should happen only once the
