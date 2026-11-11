@@ -6,10 +6,12 @@
 //! Serialization and deserialization interfaces for the Smithy data model.
 
 mod deserializer;
+mod document_union_decode_mode;
 pub mod error;
 mod serializer;
 
 pub use deserializer::{capped_container_size, ShapeDeserializer, MAX_CONTAINER_PREALLOC};
+pub use document_union_decode_mode::DocumentUnionDecodeMode;
 pub use error::SerdeError;
 pub use serializer::{SerializableStruct, ShapeSerializer};
 

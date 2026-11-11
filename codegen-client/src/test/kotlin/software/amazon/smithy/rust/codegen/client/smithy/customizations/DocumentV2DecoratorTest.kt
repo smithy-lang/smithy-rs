@@ -568,6 +568,26 @@ class DocumentV2DecoratorTest {
                         }
 
                         ##[test]
+                        fn union_variants_read_the_document_v2_form_in_v2_mode() {
+                            let read = |json: String| {
+                                #{DocumentUnionDecodeMode}::V2
+                                    .read_with(&mut deser(&json), |d| FooInput::deserialize(d))
+                                    .unwrap()
+                                    .choice
+                                    .unwrap()
+                            };
+                            assert_eq!(read(format!(r##"{{"choice":{{"doc":{BIG}}}}}"##)), FooChoice::DocV2(big()));
+                            assert_eq!(read(format!(r##"{{"choice":{{"docs":[{BIG},1]}}}}"##)), FooChoice::DocsV2(vec![big(), DocumentV2::from(1u64)]));
+                            let FooChoice::DocumentMapV2(map) = read(format!(r##"{{"choice":{{"documentMap":{{"key":{BIG}}}}}}}"##)) else {
+                                panic!("expected DocumentMapV2");
+                            };
+                            assert_eq!(map["key"], big());
+                            assert_eq!(read(r##"{"choice":{"secret":"s"}}"##.into()), FooChoice::SecretV2(DocumentV2::from("s")));
+                            // A member without documents reads the same in either mode.
+                            assert_eq!(read(r##"{"choice":{"text":"t"}}"##.into()), FooChoice::Text("t".into()));
+                        }
+
+                        ##[test]
                         fn a_value_read_is_written_back_unchanged() {
                             let text = format!(r##"{{"payload":{{"z":{BIG},"a":0.1234567890123456789}}}}"##);
                             let input = FooInput::deserialize(&mut deser(&text)).unwrap();
@@ -585,6 +605,7 @@ class DocumentV2DecoratorTest {
                         "Document" to RuntimeType.document(runtimeConfig),
                         "DocumentObject" to RuntimeType.smithyTypes(runtimeConfig).resolve("document::DocumentObject"),
                         "DocumentV2" to RuntimeType.documentV2(runtimeConfig),
+                        "DocumentUnionDecodeMode" to smithySchema.resolve("serde::DocumentUnionDecodeMode"),
                     )
 
                     tokioTest("the_client_sends_the_companion") {
@@ -636,10 +657,12 @@ class DocumentV2DecoratorTest {
             Files.walk(crateDir.resolve("src")).use { paths ->
                 paths.filter { it.extension == "rs" }.map { it.readText() }.toList()
             }.joinToString("\n")
-        // Both Rust variants serialize with the original member schema. Deserialization remains V1 by default.
+        // Both Rust variants serialize with the original member schema, and deserialization picks the variant
+        // from the deserializer's `DocumentUnionDecodeMode`.
         sources shouldContain "ser.write_document(&FOOCHOICE_MEMBER_DOC, val)?;"
         sources shouldContain "ser.write_document_v2(&FOOCHOICE_MEMBER_DOC, val)?;"
-        sources shouldContain "Some(0) => Self::Doc(deser.read_document(member)?),"
+        sources shouldContain "Self::Doc(deser.read_document(member)?)"
+        sources shouldContain "Self::DocV2(deser.read_document_v2(member)?)"
     }
 
     @Test
@@ -658,6 +681,7 @@ class DocumentV2DecoratorTest {
             }.joinToString("\n")
         sources shouldNotContain "DocumentV2"
         sources shouldNotContain "payload_v2"
+        sources shouldNotContain "document_union_decode_mode"
         // Structures with documents keep their `Debug` derive.
         sources shouldContain Regex("""derive\([^)]*::std::fmt::Debug[^)]*\)]\s*pub struct FooData """)
     }

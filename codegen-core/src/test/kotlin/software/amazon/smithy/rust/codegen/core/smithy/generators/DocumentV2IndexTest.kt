@@ -189,6 +189,20 @@ internal class DocumentV2IndexTest {
     }
 
     @Test
+    fun `reachability finds affected unions through structures, lists, and other unions`() {
+        val nestedChoice = model.lookup<UnionShape>("com.example#NestedChoice")
+        index.hasUnionVariants(model.lookup<UnionShape>("com.example#Choice")) shouldBe true
+        index.hasUnionVariants(nestedChoice) shouldBe false
+
+        // `NestedChoice` reaches `Choice` through its own member, and `Holder` through a structure member.
+        index.reachesUnionVariants(nestedChoice) shouldBe true
+        index.reachesUnionVariants(model.lookup<StructureShape>("com.example#Holder")) shouldBe true
+        index.reachesUnionVariants(model.lookup<StructureShape>("com.example#NoDocuments")) shouldBe true
+        // A structure with only direct documents has companions but no affected union.
+        index.reachesUnionVariants(model.lookup<StructureShape>("com.example#Data")) shouldBe false
+    }
+
+    @Test
     fun `a synthetic union variant collision is an error`() {
         val model =
             """

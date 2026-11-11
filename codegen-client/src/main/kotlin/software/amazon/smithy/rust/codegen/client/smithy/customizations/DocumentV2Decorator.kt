@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -18,6 +19,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
@@ -40,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -121,6 +124,19 @@ class DocumentV2Decorator : ClientCodegenDecorator {
         } else {
             baseCustomizations
         }
+
+    /** Re-exports `DocumentUnionDecodeMode` from `crate::config` when an operation's fluent builder accepts it. */
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val operations = TopDownIndex.of(codegenContext.model).getContainedOperations(codegenContext.serviceShape)
+        if (operations.any { DocumentUnionDecodeMode.applies(codegenContext, it) }) {
+            rustCrate.withModule(ClientRustModule.config) {
+                rustTemplate("pub use #{Mode};", "Mode" to DocumentUnionDecodeMode.type(codegenContext.runtimeConfig))
+            }
+        }
+    }
 }
 
 /** Whether [codegenContext]'s structures get `DocumentV2` companions. See [DocumentV2Decorator]. */

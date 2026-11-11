@@ -24,5 +24,11 @@ a value set with the `Document` methods take effect again. Equality and `Debug`
 output still cover only the `Document` fields. An ordinary union member that
 directly holds documents also gets an additive variant such as
 `JsonV2(DocumentV2)`, with `as_json_v2` and `is_json_v2` methods. The original
-and V2 variants serialize as the same Smithy member. Responses continue to use
-the original `Json(Document)` variant by default. Other clients are unchanged.
+and V2 variants serialize as the same Smithy member. Responses use the original
+`Json(Document)` variant by default. An operation whose response can hold such
+a union gets a `document_union_decode_mode` fluent builder method:
+`.document_union_decode_mode(DocumentUnionDecodeMode::V2)` makes that
+invocation's response, including nested unions, modeled errors, every page of
+its paginator, and its event stream events, use the `DocumentV2` variant for
+every such member. `DocumentUnionDecodeMode` is re-exported from the client's
+`config` module. Other clients are unchanged.

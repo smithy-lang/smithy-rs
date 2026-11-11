@@ -20,6 +20,7 @@ import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -103,8 +104,23 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
             }
             .filterValues { it.isNotEmpty() }
 
+    private val walker = DirectedWalker(model)
+    private val reachesUnionVariantsCache = mutableMapOf<ShapeId, Boolean>()
+
     /** Returns true when at least one of [shape]'s members gets a companion. */
     fun hasCompanions(shape: StructureShape): Boolean = membersWithCompanions.containsKey(shape.id)
+
+    /** Returns true when at least one of [shape]'s members gets a [DocumentV2UnionVariant]. */
+    fun hasUnionVariants(shape: UnionShape): Boolean = membersWithUnionVariants.containsKey(shape.id)
+
+    /**
+     * Returns true when reading [shape] can read a union that has a [DocumentV2UnionVariant], at any depth, including
+     * [shape] itself. Reading such a shape depends on the `DocumentUnionDecodeMode`.
+     */
+    fun reachesUnionVariants(shape: Shape): Boolean =
+        reachesUnionVariantsCache.getOrPut(shape.id) {
+            walker.walkShapes(shape).any { it is UnionShape && hasUnionVariants(it) }
+        }
 
     /**
      * Returns the companions of [shape]'s members, in member order.

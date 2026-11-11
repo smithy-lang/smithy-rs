@@ -46,3 +46,10 @@ and `JsonDeserializer::read_discriminated_document_v2` write and read the
 `__type` discriminator. The `aws-smithy-cbor`, `aws-smithy-xml`, and
 `aws-smithy-query` serializers reject every `DocumentV2` value with the same
 error as a `Document`, as their protocols have no document encoding.
+`aws-smithy-schema` also adds `DocumentUnionDecodeMode`, which selects whether a
+generated client union reads a member that holds documents into its original
+variant (`V1`, the default) or its `DocumentV2` variant (`V2`). The new
+`ShapeDeserializer::document_union_decode_mode` method reports the mode and
+returns `V1` by default, so existing implementations keep compiling.
+`DocumentUnionDecodeMode::read_with` makes every value a read reaches report the
+mode, without changes to the deserializers it reads through.

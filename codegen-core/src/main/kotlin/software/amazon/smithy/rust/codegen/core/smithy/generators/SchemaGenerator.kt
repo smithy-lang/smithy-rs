@@ -109,8 +109,9 @@ class SchemaGenerator(
     private val documentV2Companions: Boolean = false,
     /**
      * Whether ordinary client unions have the additive `DocumentV2` variants listed by [DocumentV2Index]. When true,
-     * serialization writes either Rust representation as the same Smithy member. Deserialization remains V1 unless
-     * an explicit V2 response mode selects the additive variant.
+     * serialization writes either Rust representation as the same Smithy member, and deserialization reads the
+     * `DocumentV2` variant when the deserializer's `document_union_decode_mode()` is `V2`, and the original variant
+     * otherwise.
      */
     private val documentV2UnionVariants: Boolean = false,
 ) {
@@ -538,6 +539,7 @@ class SchemaGenerator(
             arrayOf(
                 "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "DocumentUnionDecodeMode" to smithySchema.resolve("serde::DocumentUnionDecodeMode"),
             )
         val union = shape as UnionShape
         val members = union.allMembers.values.toList()
@@ -551,9 +553,27 @@ class SchemaGenerator(
                     if (member.isTargetUnit()) {
                         rust("Some($idx) => { deser.read_struct(member, &mut |_, _| Ok(()))?; Self::$variantName },")
                     } else {
-                        val readExpr = readMethodForShape(target, "member")
-                        val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
-                        rust("Some($idx) => Self::$variantName($wrapped),")
+                        fun boxed(readExpr: String) =
+                            if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
+                        val wrapped = boxed(readMethodForShape(target, "member"))
+                        val variant = unionVariants[member.id]
+                        if (variant == null) {
+                            rust("Some($idx) => Self::$variantName($wrapped),")
+                        } else {
+                            // The mode, not the value, selects the variant, so a caller that asks for
+                            // `DocumentV2` gets it even for a value a `Document` could hold.
+                            val v2Wrapped = boxed(readMethodForShape(target, "member", documentV2 = true))
+                            rustTemplate(
+                                """
+                                Some($idx) => if deser.document_union_decode_mode() == #{DocumentUnionDecodeMode}::V2 {
+                                    Self::${variant.variantName}($v2Wrapped)
+                                } else {
+                                    Self::$variantName($wrapped)
+                                },
+                                """,
+                                *codegenScope,
+                            )
+                        }
                     }
                 }
                 // The deserializer reports a key that names no member with a schema whose
