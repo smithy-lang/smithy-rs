@@ -301,7 +301,7 @@ pub const BUILD_AXIS: &[BuildAxisLeg] = &[
     },
 ];
 
-/// The two manifests that exist only for build-axis legs.
+/// The three manifests that exist only for build-axis legs.
 pub const BUILD_AXIS_MANIFESTS: &[Scenario] = &[
     Scenario {
         id: "wasm",
