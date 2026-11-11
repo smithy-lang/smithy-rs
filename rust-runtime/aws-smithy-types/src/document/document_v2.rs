@@ -46,14 +46,20 @@ use std::borrow::Cow;
 /// [`DocumentV2::to_document_lossy`] and [`DocumentV2::try_to_document`] convert back. The
 /// first encodes the variants that `Document` lacks, and the second returns an error for them.
 ///
+/// The `as_*` methods return a variant's value, and `None` for every other variant, like
+/// `Document`'s. The `coerce_*` methods convert any numeric variant to the requested number
+/// type, and return a [`DocumentError`] when they can't.
+///
 /// With `--cfg aws_sdk_unstable` and the `serde-serialize` or `serde-deserialize` feature,
 /// `DocumentV2` implements serde's `Serialize` or `Deserialize`, and `document::to_document_v2`
 /// and `document::from_document_v2` convert between `DocumentV2` and other serde types, like
 /// `Document`'s `to_document` and `from_document`. Serde has no timestamp or decimal type, and
-/// human-readable formats such as JSON have no blob type. Blobs, timestamps, and
-/// arbitrary-precision numbers that pass through serde therefore come back as strings, except
-/// for blobs and 128-bit integers in a binary format such as CBOR. Reading them back as native
-/// variants requires a protocol codec, which knows the schema.
+/// human-readable formats such as JSON have no blob type. Through a human-readable format such
+/// as JSON, blobs, timestamps, and arbitrary-precision numbers come back as strings. Through a
+/// binary format such as CBOR, a blob comes back as a blob, a timestamp as an array of seconds
+/// and nanoseconds (the way `DateTime` serializes there), and an arbitrary-precision number as
+/// a string. Reading them back as native variants requires a protocol codec, which knows the
+/// schema.
 ///
 /// `Document` keeps its six variants, because released code matches it exhaustively and a new
 /// variant would break that code. `DocumentV2` is `#[non_exhaustive]` so that future additions
@@ -334,28 +340,28 @@ impl DocumentV2 {
     /// [`DocumentError::NumericCoercionOverflow`] if the truncated value is out of range,
     /// [`DocumentError::InvalidInput`] for a non-finite float, and
     /// [`DocumentError::TypeMismatch`] for a non-numeric variant.
-    pub fn as_byte(&self) -> Result<i8, DocumentError> {
+    pub fn coerce_byte(&self) -> Result<i8, DocumentError> {
         coercion::to_signed(self, "byte")
     }
 
     /// Converts this document's numeric value to a Smithy `short` (`i16`).
     ///
-    /// See [`DocumentV2::as_byte`] for the conversion rules.
-    pub fn as_short(&self) -> Result<i16, DocumentError> {
+    /// See [`DocumentV2::coerce_byte`] for the conversion rules.
+    pub fn coerce_short(&self) -> Result<i16, DocumentError> {
         coercion::to_signed(self, "short")
     }
 
     /// Converts this document's numeric value to a Smithy `integer` (`i32`).
     ///
-    /// See [`DocumentV2::as_byte`] for the conversion rules.
-    pub fn as_integer(&self) -> Result<i32, DocumentError> {
+    /// See [`DocumentV2::coerce_byte`] for the conversion rules.
+    pub fn coerce_integer(&self) -> Result<i32, DocumentError> {
         coercion::to_signed(self, "integer")
     }
 
     /// Converts this document's numeric value to a Smithy `long` (`i64`).
     ///
-    /// See [`DocumentV2::as_byte`] for the conversion rules.
-    pub fn as_long(&self) -> Result<i64, DocumentError> {
+    /// See [`DocumentV2::coerce_byte`] for the conversion rules.
+    pub fn coerce_long(&self) -> Result<i64, DocumentError> {
         coercion::to_signed(self, "long")
     }
 
@@ -365,7 +371,7 @@ impl DocumentV2 {
     /// [`DocumentError::NumericCoercionOverflow`] if a finite value is too large for `f32`,
     /// and [`DocumentError::TypeMismatch`] for a non-numeric variant. Non-finite floats are
     /// returned unchanged.
-    pub fn as_float(&self) -> Result<f32, DocumentError> {
+    pub fn coerce_float(&self) -> Result<f32, DocumentError> {
         coercion::to_f32(self)
     }
 
@@ -374,7 +380,7 @@ impl DocumentV2 {
     /// Accepts every numeric variant and rounds to the nearest `f64`. Returns
     /// [`DocumentError::NumericCoercionOverflow`] if an arbitrary-precision value is too large
     /// for `f64`, and [`DocumentError::TypeMismatch`] for a non-numeric variant.
-    pub fn as_double(&self) -> Result<f64, DocumentError> {
+    pub fn coerce_double(&self) -> Result<f64, DocumentError> {
         coercion::to_f64(self)
     }
 

@@ -528,6 +528,19 @@ fn binary_formats_keep_blobs_and_wide_integers() {
             DocumentV2::Number(Number::PosInt(6)),
         ])
     );
+
+    // Arbitrary-precision numbers are written as their text, even when they would fit in a
+    // CBOR bignum.
+    for (value, text) in [
+        (
+            big_integer("340282366920938463463374607431768211455"),
+            "340282366920938463463374607431768211455",
+        ),
+        (big_decimal("0.1"), "0.1"),
+    ] {
+        let read: DocumentV2 = ciborium::de::from_reader(to_cbor(&value).as_slice()).unwrap();
+        assert_eq!(read, DocumentV2::String(text.to_owned()));
+    }
 }
 
 #[test]
