@@ -191,6 +191,13 @@ pub trait Exec {
     /// second number to keep in step with the leg's 14-minute limit. An implementation that exceeds
     /// it hands the kill decision to GitHub, which reports nothing.
     fn run(&mut self, command: &Command, remaining: Duration) -> StepOutcome;
+
+    /// The `Cargo.lock` the leg resolved, if there is one yet.
+    ///
+    /// On the `Exec` seam rather than read directly by [`run`] because the lockfile lives wherever
+    /// the executor is running commands, and `run` deliberately does not know that path. `None`
+    /// before `generate-lockfile` has succeeded, which is every `RESOLVE_FAIL`.
+    fn lockfile(&self) -> Option<String>;
 }
 
 /// Elapsed time and sleeping. Injected for the same reason.
@@ -320,6 +327,10 @@ impl Exec for RealExec {
                 outcome(None, stdout, format!("{stderr}\n{note}"), true)
             }
         }
+    }
+
+    fn lockfile(&self) -> Option<String> {
+        std::fs::read_to_string(self.dir.join("Cargo.lock")).ok()
     }
 }
 
@@ -473,6 +484,13 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
             let no_room = clock.elapsed() + policy.interval >= budget;
 
             if exhausted || no_room {
+                // Only a hard verdict gets the resolved graph attached. An `INFRA_FAIL` is not
+                // about the published crates, so naming versions on it would point a responder at
+                // the release when the runner is what broke.
+                let diagnosis = match verdict.is_hard() {
+                    true => diagnosis.with_resolved_graph(exec.lockfile().as_deref()),
+                    false => diagnosis,
+                };
                 return Report {
                     leg_id: leg.id.clone(),
                     verdict: Some(verdict),
@@ -547,6 +565,9 @@ mod tests {
         /// The `remaining` each call was given, so the test can check the budget is being handed
         /// down rather than silently ignored.
         budgets: Vec<Duration>,
+        /// What `generate-lockfile` is pretending to have written. `None` models the resolve
+        /// failure case, where there is no lockfile at all.
+        lockfile: Option<String>,
     }
     impl FakeExec {
         fn always_ok() -> Self {
@@ -557,6 +578,7 @@ mod tests {
                 calls: vec![],
                 hangs: None,
                 budgets: vec![],
+                lockfile: None,
             }
         }
         fn failing(step: Step, codes: Vec<i32>, stdout: &str, stderr: &str) -> Self {
@@ -567,6 +589,7 @@ mod tests {
                 calls: vec![],
                 hangs: None,
                 budgets: vec![],
+                lockfile: None,
             }
         }
         fn hanging_on(step: Step) -> Self {
@@ -626,6 +649,10 @@ mod tests {
                 timed_out: false,
             }
         }
+
+        fn lockfile(&self) -> Option<String> {
+            self.lockfile.clone()
+        }
     }
 
     /// The measured shape of a client leg's run phase: the bin target with no `#[test]`, the
@@ -638,6 +665,36 @@ mod tests {
          test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\n";
 
     const COMPILE_ERROR: &str = r#"{"reason":"compiler-message","target":{"name":"canary-build-check"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
+
+    /// The same error as the real `prior-aws-config-1-10--stable` leg reported: the failing target
+    /// is a dependency, not the consumer's own crate.
+    const COMPILE_ERROR_IN_AWS_CONFIG: &str = r#"{"reason":"compiler-message","target":{"name":"aws_config"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
+
+    /// The shape of that leg's real lockfile: `aws-config` once, `aws-smithy-schema` twice, and a
+    /// duplicated third-party crate that must not reach the page.
+    const LOCK_WITH_TWO_SCHEMAS: &str = r#"
+version = 4
+
+[[package]]
+name = "aws-config"
+version = "1.10.1"
+
+[[package]]
+name = "aws-smithy-schema"
+version = "1.2.0"
+
+[[package]]
+name = "aws-smithy-schema"
+version = "0.2.1"
+
+[[package]]
+name = "http"
+version = "1.5.0"
+
+[[package]]
+name = "http"
+version = "0.2.12"
+"#;
 
     #[test]
     fn a_full_leg_runs_six_commands_in_order() {
@@ -870,6 +927,83 @@ mod tests {
             "the test steps must never run after a compile failure"
         );
         assert_eq!(r.exit_code(), 1, "a hard verdict stops the window");
+    }
+
+    /// A page has to name the incompatible versions, not only the compiler's code, and the leg is
+    /// the only thing that can do it: the classifier sees a command's output, and the versions are
+    /// in the lockfile on disk.
+    #[test]
+    fn a_hard_verdict_names_the_versions_from_the_lockfile() {
+        let leg = leg_named("new-project--stable");
+        let mut exec =
+            FakeExec::failing(Step::Build, vec![101, 101], COMPILE_ERROR_IN_AWS_CONFIG, "");
+        exec.lockfile = Some(LOCK_WITH_TWO_SCHEMAS.to_string());
+        let mut clock = FakeClock::default();
+        let r = run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert_eq!(r.verdict, Some(Verdict::CompileFail));
+        let d = r.diagnosis.expect("a red leg has a diagnosis");
+        assert_eq!(
+            d.target_version.as_deref(),
+            Some("1.10.1"),
+            "the page should read aws-config 1.10.1, not aws_config"
+        );
+        assert_eq!(
+            d.duplicate_versions
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["aws-smithy-schema 0.2.1 and 1.2.0"],
+            "the duplicated http is not ours and must not reach the page"
+        );
+    }
+
+    /// An `INFRA_FAIL` blames the runner. Naming published versions on it would point the responder
+    /// at the release, which is the misattribution the classifier exists to avoid.
+    #[test]
+    fn an_infra_fail_names_no_versions_even_with_a_lockfile_present() {
+        let leg = leg_named("new-project--stable");
+        let mut exec = FakeExec::failing(Step::Fetch, vec![101, 101, 101], "", "could not connect");
+        exec.lockfile = Some(LOCK_WITH_TWO_SCHEMAS.to_string());
+        let mut clock = FakeClock::default();
+        let r = run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert_eq!(r.verdict, Some(Verdict::InfraFail));
+        let d = r.diagnosis.expect("even an infra failure says something");
+        assert!(d.target_version.is_none(), "{:?}", d.target_version);
+        assert!(
+            d.duplicate_versions.is_empty(),
+            "{:?}",
+            d.duplicate_versions
+        );
+        assert!(
+            d.summary.is_some(),
+            "it still has to say what went wrong on the runner"
+        );
+    }
+
+    /// The degradation path, and the common one: a refused resolution writes no lockfile at all, so
+    /// the enrichment has nothing to read and must leave the real diagnosis intact.
+    #[test]
+    fn a_resolve_failure_has_no_lockfile_and_keeps_its_diagnosis() {
+        let leg = leg_named("new-project--stable");
+        let mut exec = FakeExec::failing(
+            Step::GenerateLockfile,
+            vec![101, 101],
+            "",
+            "error: failed to select a version for the requirement `aws-smithy-types = \"^999\"`",
+        );
+        assert!(exec.lockfile.is_none(), "nothing resolved, nothing written");
+        let mut clock = FakeClock::default();
+        let r = run(&leg, &mut exec, &mut clock, BUDGET);
+
+        assert_eq!(r.verdict, Some(Verdict::ResolveFail));
+        let d = r.diagnosis.unwrap();
+        assert!(d.duplicate_versions.is_empty());
+        assert!(
+            d.summary.unwrap().starts_with("error: failed to select"),
+            "the resolve failure's own message must survive the enrichment"
+        );
     }
 
     /// A deterministic compile error is retried once, immediately — a retry only catches a flaky

@@ -212,7 +212,13 @@ jobs:
             if d.get('summary'):
                 print(f"- {d['summary']}")
             if d.get('target'):
-                print(f"- cargo target: `{d['target']}`")
+                at = f" at `{d['target_version']}`" if d.get('target_version') else ''
+                print(f"- cargo target: `{d['target']}`{at}")
+            # The versions, which is what a responder actually needs: a code and a message say
+            # what the compiler objected to, not which published pair produced it.
+            for dup in d.get('duplicate_versions') or []:
+                versions = ' and '.join(f"`{v}`" for v in dup['versions'])
+                print(f"- **two versions of `{dup['name']}` in one graph**: {versions}")
         print()
         print("| step | attempt | ok | verdict |")
         print("|---|---|---|---|")

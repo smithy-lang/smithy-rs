@@ -44,12 +44,10 @@ use serde::Serialize;
 /// [`tests::the_list_matches_crate_set_kt`] reads the Kotlin and compares, rather than failing at
 /// release time when the canary is the only thing watching.
 ///
-/// Deliberately absent: the six `AWS_SDK_RUNTIME` crates — `aws-config`, `aws-credential-types`,
-/// `aws-runtime`, `aws-runtime-api`, `aws-sigv4`, `aws-types`. They live in `aws/rust-runtime/` and
-/// publish on the SDK's own train, a median 39.6 hours later, so waiting for them would hold the
-/// floor tier open for days. Taking the list from `CrateSet` excludes them by construction, and
-/// also excludes `aws-smithy-fuzz`, which is a directory under `rust-runtime/` but is in no
-/// `CrateSet` list and publishes nothing.
+/// Deliberately absent: the six [`AWS_SDK_RUNTIME`] crates, which publish on the SDK's own train a
+/// median 39.6 hours later, so waiting for them would hold the floor tier open for days. Taking the
+/// list from `CrateSet` excludes them by construction, and also excludes `aws-smithy-fuzz`, which is
+/// a directory under `rust-runtime/` but is in no `CrateSet` list and publishes nothing.
 pub const ENTIRE_SMITHY_RUNTIME: &[&str] = &[
     // SMITHY_RUNTIME_COMMON
     "aws-smithy-async",
@@ -83,6 +81,26 @@ pub const ENTIRE_SMITHY_RUNTIME: &[&str] = &[
     "aws-smithy-http-server-python",
     "aws-smithy-http-server-typescript",
     "aws-smithy-legacy-http-server",
+];
+
+/// The runtime crates that live in `aws/rust-runtime/` and publish on the SDK's own train.
+///
+/// Mirrors `CrateSet.AWS_SDK_RUNTIME`, checked against it by
+/// [`tests::the_sdk_runtime_list_matches_crate_set_kt`].
+///
+/// These are deliberately *not* part of [`ENTIRE_SMITHY_RUNTIME`], because [`status`] must not wait
+/// for them: they arrive a median 39.6 hours after a smithy-rs release, which would hold the first
+/// tier open for days. That exclusion is about what the canary *waits for*, and says nothing about
+/// what can break — a consumer resolving two majors of `aws-types` is broken exactly as thoroughly
+/// as one resolving two majors of `aws-smithy-types`. So [`crate::lockfile`] considers both lists
+/// when attributing a failure.
+pub const AWS_SDK_RUNTIME: &[&str] = &[
+    "aws-config",
+    "aws-credential-types",
+    "aws-runtime",
+    "aws-runtime-api",
+    "aws-sigv4",
+    "aws-types",
 ];
 
 /// A crate and the version the checkout declares for it.
@@ -356,6 +374,49 @@ mod tests {
             "this list has drifted from CrateSet.ENTIRE_SMITHY_RUNTIME"
         );
         assert_eq!(ours.len(), 30, "24 common + 6 server-specific");
+    }
+
+    /// `AWS_SDK_RUNTIME` is duplicated from the same Kotlin and needs the same guard. It is used to
+    /// decide whether a duplicated crate in a consumer's graph is one the canary should name, so a
+    /// crate added to the SDK runtime and not here would go unattributed on a page.
+    #[test]
+    fn the_sdk_runtime_list_matches_crate_set_kt() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .expect("repo root");
+        let kotlin = std::fs::read_to_string(root.join("buildSrc/src/main/kotlin/CrateSet.kt"))
+            .expect("CrateSet.kt should be readable from the repo");
+
+        let start = kotlin
+            .find("val AWS_SDK_RUNTIME =")
+            .expect("AWS_SDK_RUNTIME not found in CrateSet.kt");
+        let body = &kotlin[start..];
+        let end = body.find(").map").expect("list end");
+        let from_kotlin: Vec<String> = body[..end]
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix('"')?.split('"').next())
+            .map(str::to_string)
+            .collect();
+
+        assert_eq!(
+            AWS_SDK_RUNTIME.to_vec(),
+            from_kotlin,
+            "this list has drifted from CrateSet.AWS_SDK_RUNTIME"
+        );
+        assert_eq!(AWS_SDK_RUNTIME.len(), 6);
+    }
+
+    /// The two lists must stay disjoint. They are both used as "is this crate under test", and an
+    /// overlap would mean a crate was being waited for on the smithy train while also being
+    /// documented as arriving on the SDK's.
+    #[test]
+    fn the_two_published_lists_are_disjoint() {
+        let overlap: Vec<&&str> = ENTIRE_SMITHY_RUNTIME
+            .iter()
+            .filter(|c| AWS_SDK_RUNTIME.contains(c))
+            .collect();
+        assert!(overlap.is_empty(), "{overlap:?} is in both lists");
     }
 
     /// Reading the real checkout: the one `publish = false` crate must be dropped, leaving 29.

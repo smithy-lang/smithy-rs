@@ -18,6 +18,7 @@
 
 pub mod classify;
 pub mod leg;
+pub mod lockfile;
 pub mod manifest;
 pub mod publish;
 pub mod scenarios;
