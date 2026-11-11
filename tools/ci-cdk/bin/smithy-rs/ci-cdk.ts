@@ -43,9 +43,10 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
     env,
 });
 
-// The post-publish build canary's two roles. A separate stack so it can be deployed on its own:
-// it depends only on the OIDC provider, so deploying it leaves the canary and pull-request-CDN
-// stacks untouched.
+// The post-publish build canary's three roles and its record bucket. A separate stack so it can be
+// deployed on its own: it depends only on the OIDC provider, so deploying it by name leaves the
+// canary and pull-request-CDN stacks untouched. Deploy it by name rather than with `npm run deploy`,
+// which passes `--all` and would also roll the two existing stacks.
 new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
     githubActionsOidcProvider: githubActionsOidcProvider,
     env,
