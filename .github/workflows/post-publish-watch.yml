@@ -1,0 +1,342 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The post-publish build canary's orchestrator: one run per release.
+#
+# A release sends its crates to crates.io one at a time over minutes, and the graph a consumer
+# resolves changes under them as it goes. This watches that window, then keeps checking for a day
+# afterwards, dispatching the legs in `build-canary.yml` and filing a record if anything broke.
+#
+# Two tiers, deliberately, and nothing else -- no standing poll:
+#
+#   dispatch tier   resolves the 13 manifests every 15 minutes and dispatches only the manifests
+#                   whose graph moved. Ends when every declared runtime crate has arrived, or at a
+#                   three-hour ceiling. This is the tier that meets the detection target: a
+#                   dispatched run is created the moment the API call lands, where a scheduled run
+#                   is created a median 11m42s after its cron time and once took 55m33s.
+#
+#   floor tier      24 hourly cycles of the full matrix, diff-gated by nothing. A clean resolve is
+#                   not durable: index propagation lags a release, so a graph that resolved cleanly
+#                   at minute 15 can resolve differently at minute 75.
+#
+# SCOPE. The dispatch and floor tiers need no AWS credential -- they only ask for legs, and a leg
+# writes its verdict to its own job log. Only the final record job touches AWS, and it degrades to
+# writing the record as an artifact when the bucket is not configured, so this workflow is useful
+# before the stack is deployed.
+name: Post-publish watch
+run-name: Post-publish watch - ${{ inputs.tag || github.ref_name }}
+on:
+  push:
+    tags:
+    - 'release-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >
+          The release tag to watch. Defaults to the ref this run was started from, which is what the
+          tag trigger gives. Set it to re-watch a release by hand.
+        type: string
+        default: ''
+permissions:
+  contents: read
+  # To dispatch `build-canary.yml`. No workflow in this repository asked for this before, and it is
+  # the only write permission here: the legs are dispatched, never run inline, because 24 hours of
+  # 60 legs is 1440 jobs and a matrix is capped at 256 per run.
+  actions: write
+concurrency:
+  # One watch per release. A newer release supersedes an older watch rather than running beside it:
+  # the older release's legs would exit without building anyway, since a leg checks for a newer
+  # release tag before it starts.
+  group: post-publish-watch-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  dispatch-tier:
+    name: Watch the publish window
+    # Armed by a repository variable, not by merging. Without this, landing this file would start a
+    # 24-hour, 60-leg watch on the next release as a side effect of a merge -- before the
+    # report-only window that exists to measure its false-positive rate has ever run. Set
+    # `BUILD_CANARY_ENABLED` to `true` to arm it; a manual dispatch always runs, so it can be
+    # exercised before then.
+    if: vars.BUILD_CANARY_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # The watcher's own ceiling is 180 minutes. The margin covers checkout, the toolchain install,
+    # and the final tick's work, so GitHub never kills the job before the watcher can report.
+    timeout-minutes: 195
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Resolve the tag
+      id: resolve
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        TAG="${INPUT_TAG:-$REF_NAME}"
+        case "$TAG" in
+          release-*) ;;
+          *) echo "::error title=Not a release tag::${TAG} does not look like release-*"; exit 1 ;;
+        esac
+        echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        echo "watching ${TAG}"
+
+    - name: Watch
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ steps.resolve.outputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        # The baselines live in RUNNER_TEMP: a baseline never has to outlive the run that wrote it,
+        # because the first tick of a release has no baseline and dispatches everything anyway.
+        cargo run --quiet -- watch \
+          --tag "${TAG}" \
+          --repo "${GITHUB_WORKSPACE}" \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --work-dir "${RUNNER_TEMP}/manifests" \
+          --baselines "${RUNNER_TEMP}/baselines" \
+          > "${RUNNER_TEMP}/watch.json"
+
+    - name: Summarise the window
+      if: always()
+      env:
+        TAG: ${{ steps.resolve.outputs.tag }}
+      run: |
+        set -uo pipefail
+        REPORT="${RUNNER_TEMP}/watch.json"
+        if [[ ! -s "$REPORT" ]]; then
+          echo "::warning title=No watch report::the dispatch tier produced no report"
+          exit 0
+        fi
+        python3 - "$REPORT" "$TAG" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        print(f"### Dispatch tier — {sys.argv[2]}")
+        print()
+        print(f"- stopped: `{r['stopped']}`")
+        print(f"- ticks: {len(r['ticks'])}")
+        print(f"- dispatches: {sum(len(t['dispatched']) for t in r['ticks'])}")
+        print()
+        print("| tick | at | dispatched | unchanged | unresolved |")
+        print("|---|---|---|---|---|")
+        for t in r['ticks']:
+            print("| %d | %ds | %d | %d | %d |" % (
+                t['number'], t['at_secs'], len(t['dispatched']),
+                len(t['unchanged']), len(t['unresolved'])))
+        PY
+
+  floor-tier:
+    name: Floor hour ${{ matrix.hour }}
+    # Runs even if the dispatch tier failed. A watcher bug must not cost a day of checking, which is
+    # the backstop for everything the dispatch tier cannot see -- a third-party publish, or an index
+    # that propagates late.
+    needs: dispatch-tier
+    # Ran-and-finished, either way. Not `always()`, which would also fire when the dispatch tier was
+    # skipped because the canary is unarmed, and start a day of dispatching that nobody asked for.
+    if: needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure'
+    runs-on: ubuntu-latest
+    # An hour of sleeping plus a few minutes of work. Tight on purpose: without it a stuck step
+    # would hold a runner for the platform's six-hour maximum.
+    timeout-minutes: 70
+    strategy:
+      # One at a time, which is what makes this 24 hourly cycles rather than 24 simultaneous ones.
+      # The hours are interchangeable -- each one sleeps and dispatches the same matrix -- so their
+      # order does not matter, only that one runs at a time.
+      max-parallel: 1
+      # An hour that fails for its own reasons must not cancel the rest: a runner that could not
+      # reach GitHub for one dispatch says nothing about the next. Stopping early when the release
+      # is *known broken* is handled below, deliberately, rather than by failing a job.
+      fail-fast: false
+      matrix:
+        hour: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+               13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    steps:
+    - name: Wait out the hour
+      run: sleep 3600
+
+    - name: Dispatch this hour's legs, unless the release is already known broken
+      env:
+        TAG: ${{ needs.dispatch-tier.outputs.tag }}
+        HOUR: ${{ matrix.hour }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        # Checked after the sleep rather than before, so the answer is current. A leg run takes
+        # minutes, so by the time an hour starts, the previous hour's verdict is long settled.
+        #
+        # A run's conclusion is exactly "some leg reached a hard verdict": a leg exits non-zero for
+        # every verdict that blames the release and zero for INFRA_FAIL, so a registry hiccup leaves
+        # the run green and the window continues. Verified against real runs -- the one with twenty
+        # red legs concluded `failure`, and two supersession runs concluded `success`.
+        RUNS="$(gh run list --repo "$REPO" --workflow build-canary.yml \
+                  --branch "$TAG" --limit 100 --json conclusion,databaseId,status)"
+
+        if printf '%s' "$RUNS" | python3 -c "
+        import json, sys
+        runs = json.load(sys.stdin)
+        broken = [r for r in runs if r['conclusion'] == 'failure']
+        if broken:
+            print('already red: run %d' % broken[0]['databaseId'])
+            raise SystemExit(0)
+        raise SystemExit(1)
+        "; then
+          # Stopping is a deliberate skip, not a failure. The team has already been paged from this
+          # release, and a later hour would dedupe into the same ticket and page nobody, so
+          # continuing buys nothing. Marking the hour failed would instead claim the canary broke.
+          echo "::notice title=Hour ${HOUR} skipped::the release is already known broken"
+          echo "hour ${HOUR}: skipped, the release is already red" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        gh workflow run build-canary.yml \
+          --repo "$REPO" \
+          --ref "$TAG" \
+          -f tier=floor \
+          -f scenario=all \
+          -f tag="$TAG"
+        echo "hour ${HOUR}: dispatched the full matrix against ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  record:
+    name: File the record
+    needs: [dispatch-tier, floor-tier]
+    # `always()` so a red floor hour still gets its record written -- that is the case the record
+    # exists for -- but still only when the dispatch tier actually ran.
+    if: |
+      always()
+      && (needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      # To assume the record role. Harmless when the role is not configured: the step that uses it
+      # is skipped and the record is kept as an artifact instead.
+      id-token: write
+    # The record role is assumed only from this environment, which is also the only thing
+    # distinguishing this job from a leg -- both run in this repository from the same release tag.
+    environment: canary-orchestrator
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Collect every leg report for this release
+      env:
+        TAG: ${{ needs.dispatch-tier.outputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        OUT="${RUNNER_TEMP}/reports"
+        mkdir -p "$OUT"
+
+        # The legs ran in their own dispatched runs, so their artifacts cannot be reached with
+        # `download-artifact`; they have to be fetched per run.
+        gh run list --repo "$REPO" --workflow build-canary.yml --branch "$TAG" \
+          --limit 100 --json databaseId,status \
+          | python3 -c "
+        import json, sys
+        for r in json.load(sys.stdin):
+            if r['status'] == 'completed':
+                print(r['databaseId'])
+        " > "${RUNNER_TEMP}/run-ids.txt"
+
+        echo "fetching artifacts from $(wc -l < "${RUNNER_TEMP}/run-ids.txt") leg run(s)"
+        while read -r id; do
+          # A run whose legs were all superseded uploads nothing, so a failure here is expected and
+          # must not lose the records of the runs that did.
+          gh run download "$id" --repo "$REPO" --dir "${OUT}/${id}" 2>/dev/null \
+            || echo "  run ${id}: no artifacts"
+        done < "${RUNNER_TEMP}/run-ids.txt"
+        echo "collected $(find "$OUT" -name report.json | wc -l) report(s)"
+
+    - name: Fold them into one record
+      id: summarize
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ needs.dispatch-tier.outputs.tag }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        SERVER: ${{ github.server_url }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        cargo run --quiet -- summarize \
+          --release "${TAG}" \
+          --run-id "${RUN_ID}" \
+          --run-attempt "${RUN_ATTEMPT}" \
+          --run-url "${SERVER}/${REPO}/actions/runs/${RUN_ID}" \
+          --tier dispatch \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --reports "${RUNNER_TEMP}/reports" \
+          --out "${RUNNER_TEMP}/record" \
+          > "${RUNNER_TEMP}/decision.json"
+
+        python3 - "${RUNNER_TEMP}/decision.json" <<'PY' >> "$GITHUB_OUTPUT"
+        import json, sys
+        d = json.load(open(sys.argv[1]))
+        print("record=%s" % ("true" if d["record"] else "false"))
+        print("key_prefix=%s" % d["key_prefix"])
+        PY
+        cat "${RUNNER_TEMP}/record/summary.json" >> "$GITHUB_STEP_SUMMARY" || true
+
+    # Always kept, so the record exists even before the bucket does, and so a green release still
+    # leaves the per-leg outcomes readable for a fortnight.
+    - name: Keep the record as an artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: canary-record
+        path: ${{ runner.temp }}/record
+        retention-days: 14
+        if-no-files-found: warn
+
+    - name: Is the archive configured
+      id: archive
+      env:
+        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
+        ROLE: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$BUCKET" && -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Archive not configured::the record is only an artifact for now"
+        fi
+
+    # Only a release that broke gets a permanent record. How often releases are green is a question
+    # for the metric, which has a datapoint per leg per run and is built for counting.
+    - name: Assume the record role
+      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Add it to the archive
+      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
+      env:
+        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
+        KEY_PREFIX: ${{ steps.summarize.outputs.key_prefix }}
+      run: |
+        set -euo pipefail
+        # The role can put and nothing else, and the key carries the release, the run id and the
+        # attempt, so this cannot land on an existing record.
+        aws s3 cp --recursive "${RUNNER_TEMP}/record" "s3://${BUCKET}/${KEY_PREFIX}/" \
+          --only-show-errors
+        echo "archived to s3://${BUCKET}/${KEY_PREFIX}/" >> "$GITHUB_STEP_SUMMARY"
