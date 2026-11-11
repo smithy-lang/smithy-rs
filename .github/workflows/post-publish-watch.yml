@@ -127,10 +127,18 @@ jobs:
         set -o pipefail
         export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3
 
-        # Severity lives here, in reviewed code, rather than inside the secret. Arming at Sev2 is a
-        # one-character change to this line -- which is the point: it should be a reviewed edit,
-        # not a secret rotation nobody sees.
-        SEVERITY=5
+        # Severity lives here, in reviewed code, rather than inside the secret, so that changing
+        # it is a reviewed edit and not a secret rotation nobody sees.
+        #
+        # 2.5 while the chain is being proven. Not 5, because a Sev5 would show a ticket was cut
+        # and nothing about whether anyone is reached. Not 2 yet, because 2 pages immediately at
+        # any hour and the canary has not yet earned that: it still has twenty known-red legs and
+        # no measured false-positive rate. 2.5 pages during business hours, which is enough to
+        # prove the notification path exists.
+        #
+        # Raising this to 2 is the last step of the rollout, and it should happen only once the
+        # false-positive rate has been measured across real releases.
+        SEVERITY=2.5
         ALARM="build-canary-${TAG}"
 
         # Both placeholders must be present *before* substituting. A template that hardcoded the

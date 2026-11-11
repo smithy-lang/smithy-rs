@@ -30,6 +30,31 @@ use serde_yaml::Value;
 
 const WORKFLOWS: &[&str] = &["build-canary", "post-publish-watch", "paging-selftest"];
 
+/// Ticket severities anything here is allowed to cut.
+///
+/// A deliberately short list, because the failure it guards is a typo. `SEVERITY=25` or a severity
+/// left empty by a bad edit would still substitute into the alarm action and cut tickets at
+/// something nobody chose — and the first notice of that would be either a silent ticket or a
+/// paged oncall, depending on which way the typo fell.
+const SANCTIONED_SEVERITIES: &[&str] = &["5", "3", "2.5", "2"];
+
+/// The severity a workflow pins in its script, as written.
+///
+/// Extracted rather than asserted against a literal, because the value legitimately changes as the
+/// rollout proceeds. What must not change is that it is pinned at all.
+fn pinned_severity(text: &str) -> String {
+    let found: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("SEVERITY="))
+        .collect();
+    assert_eq!(
+        found.len(),
+        1,
+        "expected exactly one pinned SEVERITY= line, found {found:?}"
+    );
+    found[0].to_string()
+}
+
 fn workflow_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -261,11 +286,15 @@ fn the_alarm_is_armed_before_any_leg_runs() {
         "the arming job must read the alarm back after creating it"
     );
 
-    // Severity in reviewed code, not inside the secret, so that raising it is a one-character
-    // reviewed edit rather than a secret rotation nobody sees.
+    // Severity in reviewed code, not inside the secret, so that raising it is a reviewed edit
+    // rather than a secret rotation nobody sees. The value legitimately changes as the rollout
+    // proceeds — 2.5 while the chain is being proven, 2 once a false-positive rate has been
+    // measured — so what is asserted is that it is pinned and sane, not what it equals.
+    let severity = pinned_severity(&text);
     assert!(
-        text.contains("SEVERITY=5"),
-        "the arming severity must be pinned in the workflow"
+        SANCTIONED_SEVERITIES.contains(&severity.as_str()),
+        "arming severity {severity:?} is not one of {SANCTIONED_SEVERITIES:?}; a typo here \
+         would cut tickets at a severity nobody chose"
     );
     assert!(
         alarms.get("environment").and_then(Value::as_str) == Some("canary-orchestrator"),
@@ -373,13 +402,27 @@ fn the_floor_tier_is_twenty_four_cycles_run_one_at_a_time() {
 #[test]
 fn the_self_test_pins_its_severity_and_runs_only_by_hand() {
     let text = raw("paging-selftest");
-    assert!(
-        text.contains("SEVERITY=5"),
-        "the self-test must pin severity 5 in the script"
-    );
+
+    // Pinned, not chosen at dispatch time. Cutting high-severity tickets unnecessarily gets an
+    // application's ticketing access revoked, so this should be a reviewed edit rather than a
+    // dropdown choice made at 2am.
     assert!(
         !text.contains("inputs.severity"),
         "severity must not be a dispatch input"
+    );
+    let severity = pinned_severity(&text);
+
+    // The value may change as the rollout proceeds, but never to 2 here. A full Sev2 pages
+    // immediately at any hour, and this workflow exists to cut tickets nobody asked for --
+    // repeatedly, by hand. 2 is correct for the canary once it has earned it; it is never correct
+    // for the self-test.
+    assert_ne!(
+        severity, "2",
+        "the self-test must never cut a full Sev2: it pages immediately and these tickets are fake"
+    );
+    assert!(
+        SANCTIONED_SEVERITIES.contains(&severity.as_str()),
+        "severity {severity:?} is not one of {SANCTIONED_SEVERITIES:?}"
     );
 
     let wf = load("paging-selftest");
