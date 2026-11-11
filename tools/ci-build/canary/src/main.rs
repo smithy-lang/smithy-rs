@@ -14,6 +14,7 @@ use clap::{Parser, Subcommand};
 use canary::baseline;
 use canary::leg;
 use canary::manifest;
+use canary::metric;
 use canary::publish;
 use canary::scenarios;
 use canary::summary;
@@ -122,6 +123,29 @@ enum Command {
         /// otherwise read as "unchanged" and skip legs that were never run.
         #[arg(long)]
         update: bool,
+    },
+    /// Record a leg's verdict as the datapoint an alarm can see.
+    ///
+    /// Writes nothing for a leg that reached no verdict -- green, or superseded. That silence is
+    /// what the alarm's `notBreaching` treatment turns back into `OK`, and writing a zero instead
+    /// would make "it passed" indistinguishable from "it died without reporting".
+    EmitVerdict {
+        /// The leg's `report.json`.
+        #[arg(long)]
+        report: PathBuf,
+        /// The release tag, which is the dimension the alarm watches.
+        #[arg(long)]
+        tag: String,
+        #[arg(long)]
+        stable: String,
+        #[arg(long)]
+        msrv: String,
+        /// Where to write the payload the AWS CLI reads. `RUNNER_TEMP` in CI.
+        #[arg(long)]
+        payload_dir: PathBuf,
+        /// Print the command and payload instead of calling AWS.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
     ///
@@ -332,6 +356,46 @@ fn main() -> anyhow::Result<()> {
 
             eprintln!("{manifest}: {movement}");
             println!("{}", serde_json::to_string(&movement)?);
+        }
+        Command::EmitVerdict {
+            report,
+            tag,
+            stable,
+            msrv,
+            payload_dir,
+            dry_run,
+        } => {
+            let text = std::fs::read_to_string(&report)
+                .with_context(|| format!("reading {}", report.display()))?;
+            let report: leg::Report = serde_json::from_str(&text)
+                .with_context(|| "parsing the leg report".to_string())?;
+
+            let clamped = resolve(&stable, &msrv)?;
+            let legs = scenarios::legs(&clamped.kept);
+            let found = find_leg(&legs, &report.leg_id)?;
+
+            let mut emitter = metric::AwsCli {
+                payload_dir,
+                dry_run,
+            };
+            let written = metric::record(&tag, found, report.verdict, &mut emitter)?;
+
+            match written.is_empty() {
+                true => eprintln!(
+                    "{}: no verdict, so nothing to record{}",
+                    report.leg_id,
+                    match report.reached_a_verdict() {
+                        true => " (green)",
+                        false => " (superseded, which is not green)",
+                    }
+                ),
+                false => {
+                    for d in &written {
+                        eprintln!("  {d}");
+                    }
+                }
+            }
+            println!("{}", serde_json::to_string(&written)?);
         }
         Command::Watch {
             tag,
