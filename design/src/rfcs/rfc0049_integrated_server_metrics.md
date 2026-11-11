@@ -93,7 +93,7 @@ Then, they add [`MetricsLayer`] and [`DefaultMetricsPlugin`] to their service co
 an incomplete set of metrics being published—notably missing a counter for in-flight requests.) This
 example shows a minimal configuration:
 
-```rust
+```rust,ignore
 use aws_smithy_http_server_metrics::DefaultMetricsPlugin;
 use aws_smithy_http_server_metrics::MetricsLayer;
 use metrique::{AttachGlobalEntrySinkExt, ServiceMetrics};
@@ -156,7 +156,7 @@ that the middleware may publish the metrics using the library of their choice.
 Since the request is not yet finished while the middleware is running, middleware registers a
 post-request-completion callback that the service invokes when the request is truly finished.
 
-```rust
+```rust,ignore
 use aws_smithy_http_server::metrics::{RequestMetrics, RequestExt};
 
 // In middleware's Future impl:
@@ -216,7 +216,7 @@ require access to the shared state after passing the HTTP request inward. For ex
 service that needs to access the shared state after the inner service returns would follow this
 pattern:
 
-```rust
+```rust,ignore
 impl Service<http::Request<Incoming>> for MyService {
     type Response = http::Response<BoxBody>;
     type Error = Infallible;
