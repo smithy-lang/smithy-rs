@@ -18,3 +18,9 @@
 //!
 //! The dynamic client reads a Smithy model when the program runs, and calls the model's
 //! operations by name. Inputs and outputs are documents shaped by the model.
+
+pub mod client;
+pub mod error;
+
+pub use client::DynamicClient;
+pub use error::BuildError;
