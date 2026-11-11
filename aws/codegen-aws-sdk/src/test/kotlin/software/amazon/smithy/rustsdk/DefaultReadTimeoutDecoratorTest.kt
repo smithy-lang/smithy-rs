@@ -271,7 +271,7 @@ class DefaultReadTimeoutDecoratorTest {
                             );
                         }
 
-                        // Case-insensitive `true`, matching `AWS_NEW_RETRIES_2026`.
+                        // Case-insensitive `true`.
                         for value in ["true", "True", "TRUE", "tRuE"] {
                             std::env::set_var("AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026", value);
                             assert_eq!(
