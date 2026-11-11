@@ -44,7 +44,7 @@ use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
 use serde::de::{self, DeserializeSeed, MapAccess, Visitor};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::io::Read;
 use std::path::Path;
@@ -68,8 +68,94 @@ pub(crate) const DEFAULT_MAX_DIAGNOSTICS: usize = 1_000;
 pub(crate) struct Document {
     pub(crate) metadata: NodeObject,
     pub(crate) shapes: IndexMap<ShapeId, Shape>,
+    /// The first trait in document order of each shape definition whose first trait is not
+    /// the [usual one](is_usual_first_trait). See [`FirstTrait`].
+    pub(crate) first_traits: HashMap<ShapeId, FirstTrait>,
     /// `apply` entries in document order, so that traits can be applied in document order.
     pub(crate) applies: Vec<DocumentApply>,
+}
+
+/// The trait a JSON AST shape definition applies first, in document order.
+///
+/// The reference implementation applies the traits of a JSON AST definition one at a time, in
+/// document order. When the definition redefines a shape built in code, its first trait is what
+/// touches that shape, and the shape's own traits are merged right after it, before the rest of
+/// the definition's traits (see the assembler's `Merge`). So the order of concatenated values
+/// depends on which trait comes first, which depends on the order of keys in the JSON object:
+/// `traits` before or after `members`, and the order of the members.
+///
+/// A converted [`Shape`] no longer records that key order, so the loader records the first
+/// trait here, and only when it differs from the order Smithy's serializers write.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FirstTrait {
+    /// The shape or member the trait is applied to.
+    pub(crate) target: ShapeId,
+    /// The trait's shape ID.
+    pub(crate) id: ShapeId,
+}
+
+/// Whether `first` is the first trait of `shape` in the order Smithy's serializers write: the
+/// first trait of the first member that has one, otherwise the shape's first trait (members
+/// come before `traits`).
+fn is_usual_first_trait(shape: &Shape, first: &FirstTrait) -> bool {
+    let usual = shape
+        .members()
+        .find_map(|member| Some((member.id(), member.traits.keys().next()?)))
+        .or_else(|| Some((shape.id(), shape.common().traits.keys().next()?)));
+    usual.is_some_and(|(target, id)| *target == first.target && *id == first.id)
+}
+
+/// The first trait of a shape object in document order, before the object is converted.
+struct DocumentFirstTrait {
+    /// The member the trait is applied to, or `None` for the shape itself.
+    member: Option<String>,
+    /// The trait's shape ID, as written.
+    id: String,
+}
+
+impl DocumentFirstTrait {
+    /// Finds the first trait in a shape object, looking at `traits` and every member in key
+    /// order.
+    fn find(node: &Node) -> Option<Self> {
+        let first_key = |traits: Option<&Node>| -> Option<String> {
+            Some(traits?.as_object()?.iter().next()?.0.to_owned())
+        };
+        let member_trait = |member: &Node| first_key(member.as_object()?.get("traits"));
+        for (key, value) in node.as_object()?.iter() {
+            let found = match key {
+                "traits" => first_key(Some(value)).map(|id| Self { member: None, id }),
+                "members" => value.as_object()?.iter().find_map(|(name, member)| {
+                    member_trait(member).map(|id| Self {
+                        member: Some(name.to_owned()),
+                        id,
+                    })
+                }),
+                "member" | "key" | "value" => member_trait(value).map(|id| Self {
+                    member: Some(key.to_owned()),
+                    id,
+                }),
+                _ => None,
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        None
+    }
+
+    /// Resolves the trait against the converted `shape`, or `None` if it is the usual first
+    /// trait (which the assembler derives) or does not resolve.
+    fn unusual(self, shape: &Shape) -> Option<FirstTrait> {
+        let target = match self.member {
+            None => shape.id().clone(),
+            Some(name) => shape.member(&name)?.id().clone(),
+        };
+        let first = FirstTrait {
+            target,
+            id: ShapeId::new(&self.id).ok()?,
+        };
+        (!is_usual_first_trait(shape, &first)).then_some(first)
+    }
 }
 
 /// An `apply` entry of a [`Document`], with where it falls among the document's definitions.
@@ -376,9 +462,13 @@ impl<'de> Visitor<'de> for ShapesSeed<'_, '_> {
             let node = map
                 .next_value_seed(NodeSeed { ctx, depth: 2 })?
                 .with_position(position);
+            let first = DocumentFirstTrait::find(&node);
             match state.converter.convert_entry(&key, node) {
                 Some(Entry::Shape(shape)) => {
                     let mut document = state.document.borrow_mut();
+                    if let Some(first) = first.and_then(|first| first.unusual(&shape)) {
+                        document.first_traits.insert(shape.id().clone(), first);
+                    }
                     document.shapes.insert(shape.id().clone(), shape);
                 }
                 Some(Entry::Apply(apply)) => {

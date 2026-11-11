@@ -903,33 +903,45 @@ fn shapes_built_in_code_merge_like_created_shapes() {
         r#""members":{"m":{"target":"smithy.api#String","traits":{"smithy.api#tags":["file"]}}}"#;
     let shape_traits = r#""traits":{"smithy.api#tags":["file"]}"#;
 
-    // A JSON AST definition with traits: the shape built in code's traits first, then the
-    // document's, whatever the key order in the JSON object. The document's definition is the
-    // later, kept one.
+    // A JSON AST definition with traits: its first trait in document order touches the shape
+    // built in code, whose traits follow; then the rest of the document's traits. The
+    // document's definition is the later, kept one.
     let traits_first = doc(&format!(
         r#""ex#S":{{"type":"structure",{shape_traits},{member}}}"#
     ));
+    let model = expect_model(
+        Model::assembler()
+            .add_json_str("f.json", traits_first)
+            .add_shape(built("code"))
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["file","code"]"#)
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S$m").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
+    assert_eq!(shape.source_location().source(), "f.json");
     let members_first = doc(&format!(
         r#""ex#S":{{"type":"structure",{member},{shape_traits}}}"#
     ));
-    for document in [traits_first, members_first] {
-        let model = expect_model(
-            Model::assembler()
-                .add_json_str("f.json", document)
-                .add_shape(built("code"))
-                .assemble(),
-        );
-        assert_eq!(
-            tags_of(&model, "ex#S").as_deref(),
-            Some(r#"["code","file"]"#)
-        );
-        assert_eq!(
-            tags_of(&model, "ex#S$m").as_deref(),
-            Some(r#"["code","file"]"#)
-        );
-        let shape = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
-        assert_eq!(shape.source_location().source(), "f.json");
-    }
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(built("code"))
+            .add_json_str("f.json", members_first)
+            .assemble(),
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S").as_deref(),
+        Some(r#"["code","file"]"#)
+    );
+    assert_eq!(
+        tags_of(&model, "ex#S$m").as_deref(),
+        Some(r#"["file","code"]"#)
+    );
 
     // A definition without applied traits (here an IDL one, whose traits are applied last):
     // the shape built in code is the later, kept definition.

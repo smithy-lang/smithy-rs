@@ -94,10 +94,7 @@ regenerate after changing `FILE` or moving the pinned Smithy version.
 
 `tests/java_assembly_fixtures.rs` replays the same steps and checks that accepted cases produce
 an equivalent model (including the order of merged arrays and metadata) with the same source
-files, and that rejected cases report corresponding diagnostic codes. Cases listed in its
-`UNORDERED` constant compare merged arrays regardless of order: when a JSON AST document
-redefines a shape built in code, the reference implementation's order depends on JSON object
-key order, which this crate does not reproduce.
+files, and that rejected cases report corresponding diagnostic codes.
 
 ## Regenerating
 

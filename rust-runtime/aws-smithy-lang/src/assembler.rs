@@ -14,7 +14,7 @@ use crate::idl_loader;
 use crate::idl_loader::lower::{self, PendingSyntacticId};
 use crate::idl_loader::resolve::DeclarationIndex;
 use crate::idl_loader::syntax::IdlDocument;
-use crate::json_loader::{Document, JsonLoader, MAX_SUPPORTED_DEPTH};
+use crate::json_loader::{Document, FirstTrait, JsonLoader, MAX_SUPPORTED_DEPTH};
 use crate::knowledge::KnowledgeCache;
 use crate::model::{Model, ModelData};
 use crate::node::{Node, NodeObject, NodeValue};
@@ -714,19 +714,17 @@ impl From<Document> for LoadedDocument {
 /// `assemble_inner`), and follow the reference implementation's rules for such "created"
 /// shapes: a later one with the same ID replaces an earlier one, shapes in the prelude namespace
 /// are ignored, and a shape only joins the merge once a document defines it or a trait is applied
-/// to it. At that point its traits are applied:
+/// to it. At that point its traits are applied, right after whatever touched it, as in the
+/// reference implementation:
 ///
-/// - when an `apply` or [`add_trait`](ModelAssembler::add_trait) touches it: that trait first,
+/// - a trait applied by an `apply` or [`add_trait`](ModelAssembler::add_trait): that trait first,
 ///   then the shape's own traits;
-/// - when a document defines it: the shape's own traits first, then the document's. A JSON AST
-///   definition that applies traits counts as the later definition (it provides the source
-///   locations); a definition without applied traits (a JSON AST shape without traits, or any
-///   IDL shape, whose traits are deferred) counts as the earlier one.
-///
-/// For a JSON AST definition, the reference implementation instead applies the document's first
-/// trait in document order before the shape's own traits, so its order depends on whether
-/// `traits` or `members` comes first in the JSON object. The specification leaves the order of
-/// concatenated values unspecified, and this crate does not reproduce that dependence.
+/// - a JSON AST definition that applies traits: the definition's first trait in document order
+///   (see [`FirstTrait`]), then the shape's own traits, then the rest of the definition's
+///   traits. The definition counts as the later one (it provides the source locations);
+/// - a definition without applied traits (a JSON AST shape without traits, or any IDL shape,
+///   whose traits are deferred): the shape's own traits, and the definition counts as the
+///   earlier one.
 struct Merge {
     prelude: bool,
     /// Every shape: for a shape defined by documents, its kept definition with every applied
@@ -799,6 +797,7 @@ impl Merge {
                     Document {
                         metadata,
                         shapes,
+                        mut first_traits,
                         applies,
                     },
                 diagnostics,
@@ -826,7 +825,8 @@ impl Merge {
                                 ..applied
                             }));
                     }
-                    self.definition(shape, &definition_traits);
+                    let first_trait = first_traits.remove(shape.id());
+                    self.definition(shape, &definition_traits, first_trait);
                 }
                 for entry in applies {
                     self.apply(entry.apply, defer_traits);
@@ -941,11 +941,18 @@ impl Merge {
     }
 
     /// Adds one definition of a shape from a document. `definition_traits` lists which of its
-    /// traits are part of the definition; every other trait is applied.
-    fn definition(&mut self, mut shape: Shape, definition_traits: &HashSet<(ShapeId, ShapeId)>) {
+    /// traits are part of the definition; every other trait is applied. `first_trait` is the
+    /// definition's first trait in document order, for a JSON AST definition where that is not
+    /// the usual one (see [`FirstTrait`]).
+    fn definition(
+        &mut self,
+        mut shape: Shape,
+        definition_traits: &HashSet<(ShapeId, ShapeId)>,
+        first_trait: Option<FirstTrait>,
+    ) {
         let id = shape.id().clone();
         if let Some(created_traits) = self.touch_created(id.as_str()) {
-            let applied = take_applied_traits(&mut shape, definition_traits);
+            let mut applied = take_applied_traits(&mut shape, definition_traits);
             if applied.is_empty() {
                 // Defined before any of its traits are applied: this definition is the
                 // earlier one, and the shape built in code the later one.
@@ -958,9 +965,14 @@ impl Merge {
                 self.merge_all(created_traits);
                 self.duplicates.push(created);
             } else {
-                // As in the reference implementation, a JSON AST definition that applies traits
-                // is the later definition. The shape built in code's traits merge first (see
-                // `Merge`).
+                // As in the reference implementation, which applies a JSON AST definition's
+                // traits in document order before defining the shape: the first trait touches
+                // the shape built in code, whose own traits follow, then the rest of the
+                // definition's traits. The definition is the later one.
+                let AppliedTrait {
+                    target, id, value, ..
+                } = applied.remove(first_trait_index(&applied, first_trait.as_ref()));
+                self.merge_trait(&target, id, value, None);
                 self.merge_all(created_traits);
                 self.merge_all(applied);
                 self.duplicates.push(shape);
@@ -1289,6 +1301,22 @@ fn take_applied_traits(
         split(&target, &mut member.traits);
     }
     applied
+}
+
+/// The index in `applied` (from [`take_applied_traits`], so shape traits before member traits,
+/// each in declaration order) of a JSON AST definition's first trait in document order:
+/// `first` if recorded, otherwise the usual first trait, which is the first member trait or else
+/// the first shape trait (see [`FirstTrait`]).
+fn first_trait_index(applied: &[AppliedTrait], first: Option<&FirstTrait>) -> usize {
+    let found = match first {
+        Some(first) => applied
+            .iter()
+            .position(|applied| applied.target == first.target && applied.id == first.id),
+        None => applied
+            .iter()
+            .position(|applied| applied.target.is_member()),
+    };
+    found.unwrap_or(0)
 }
 
 /// Gives `kept` the source locations of an equal later definition, which the reference
