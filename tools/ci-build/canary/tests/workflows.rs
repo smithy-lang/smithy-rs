@@ -261,8 +261,8 @@ fn the_alarm_is_armed_before_any_leg_runs() {
         "the arming job must read the alarm back after creating it"
     );
 
-    // Severity in reviewed code, not inside the secret. Stage E is meant to be a one-character
-    // edit here.
+    // Severity in reviewed code, not inside the secret, so that raising it is a one-character
+    // reviewed edit rather than a secret rotation nobody sees.
     assert!(
         text.contains("SEVERITY=5"),
         "the arming severity must be pinned in the workflow"
