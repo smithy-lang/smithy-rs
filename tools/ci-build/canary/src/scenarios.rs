@@ -72,6 +72,34 @@ pub struct Scenario {
     pub body: Body,
     /// What this row is for. Kept in the data so the matrix is self-documenting in the job log.
     pub reaches: &'static str,
+    /// Set while a break is deliberately rigged into this manifest, saying why.
+    ///
+    /// `None` on every row in normal operation, and a release where it is set anywhere is a
+    /// release being used to test the paging chain rather than to check the crates.
+    ///
+    /// # What it changes, and what it deliberately does not
+    ///
+    /// A rigged leg still resolves, still builds, still reaches a verdict, still records that
+    /// verdict, and still cuts a ticket. Two things differ:
+    ///
+    /// * **It does not stop the 24-hour window.** The stop rule reads "the team has already been
+    ///   paged, so later hours would dedupe into the same ticket and buy nothing". For a break we
+    ///   rigged ourselves that reasoning inverts: the page was about something fake, and the
+    ///   remaining hours would still catch something real. See [`crate::leg::Report::exit_code`].
+    /// * **It pages on its own series.** `Red {Tag, Induced=true}` rather than `Red {Tag}`, so a
+    ///   real break landing in the same release cuts its own ticket instead of deduping into the
+    ///   test's. See [`crate::metric::datapoints`].
+    ///
+    /// # The cost of being wrong about it
+    ///
+    /// The marker is per *manifest*, so if a release genuinely breaks the rigged manifest while a
+    /// test is running, that real break inherits both changes: it would not stop the window, and it
+    /// would page as induced. The first is the harmless direction — not stopping means more
+    /// checking, never less. The second is real, and it is why the marker is meant to live for one
+    /// release and be withdrawn in a commit, rather than sitting in the table.
+    ///
+    /// Every other manifest is unaffected, which is what bounds the exposure.
+    pub induced: Option<&'static str>,
 }
 
 /// The runner the default (x86_64 Linux) legs use.
@@ -117,6 +145,7 @@ pub const SCENARIOS: &[Scenario] = &[
         deps: &[("aws-config", "1"), ("aws-sdk-s3", "1")],
         body: Body::CanaryApp,
         reaches: "the client path — the break that reached customers",
+        induced: None,
     },
     Scenario {
         id: "server-version-only",
@@ -125,6 +154,7 @@ pub const SCENARIOS: &[Scenario] = &[
         reaches: "the server path — a version-only requirement on immutable crates. Reproduces \
                   September's shape: 0.2 resolves 0.2.2, pulling aws-smithy-json 0.63.1 against \
                   aws-smithy-types 1.9.0",
+        induced: None,
     },
     // The three prior lines all fail E0308 inside aws-config itself, on two majors of
     // aws-smithy-schema in one graph with SharedClientProtocol crossing between them. 1.9.0–1.12.0
@@ -134,42 +164,49 @@ pub const SCENARIOS: &[Scenario] = &[
         deps: &[("aws-config", "~1.12"), ("aws-sdk-s3", "1")],
         body: Body::CanaryApp,
         reaches: "a consumer who has not bumped yet",
+        induced: None,
     },
     Scenario {
         id: "prior-aws-config-1-11",
         deps: &[("aws-config", "~1.11"), ("aws-sdk-s3", "1")],
         body: Body::CanaryApp,
         reaches: "a consumer who has not bumped yet",
+        induced: None,
     },
     Scenario {
         id: "prior-aws-config-1-10",
         deps: &[("aws-config", "~1.10"), ("aws-sdk-s3", "1")],
         body: Body::CanaryApp,
         reaches: "a consumer who has not bumped yet",
+        induced: None,
     },
     Scenario {
         id: "aws-msk-iam-sasl-signer",
         deps: &[("aws-msk-iam-sasl-signer", "1")],
         body: Body::Stub,
         reaches: "a dependent whose requirements on us are frozen",
+        induced: None,
     },
     Scenario {
         id: "aws-rds-signer",
         deps: &[("aws-rds-signer", "0.2")],
         body: Body::Stub,
         reaches: "a dependent whose requirements on us are frozen",
+        induced: None,
     },
     Scenario {
         id: "tower-sessions-dynamodb-store",
         deps: &[("tower-sessions-dynamodb-store", "0.3")],
         body: Body::Stub,
         reaches: "a dependent whose requirements on us are frozen, community-owned",
+        induced: None,
     },
     Scenario {
         id: "aws-esdk",
         deps: &[("aws-esdk", "1")],
         body: Body::Stub,
         reaches: "a dependent whose requirements on us are frozen",
+        induced: None,
     },
     // Red at admission on every toolchain. Both defects are in ssstar's own source: an E0432 from a
     // feature-gated module it imports without enabling the feature, and E0283 ambiguities at
@@ -179,6 +216,7 @@ pub const SCENARIOS: &[Scenario] = &[
         deps: &[("ssstar", "0.7")],
         body: Body::Stub,
         reaches: "a dependent whose requirements on us are frozen — red at admission, see above",
+        induced: None,
     },
 ];
 
@@ -308,12 +346,14 @@ pub const BUILD_AXIS_MANIFESTS: &[Scenario] = &[
         deps: &[("aws-smithy-wasm", "0.2")],
         body: Body::Stub,
         reaches: "the wasm legs",
+        induced: None,
     },
     Scenario {
         id: "large-generated-clients",
         deps: &[("aws-sdk-ec2", "1")],
         body: Body::Stub,
         reaches: "the large-generated-clients leg",
+        induced: None,
     },
     // The cross-compiled legs cannot use the client path, and this is forced rather than chosen.
     // CI excludes `aws-smithy-http-client` on all three exotic targets ("due to FIPS related feature
@@ -338,6 +378,7 @@ pub const BUILD_AXIS_MANIFESTS: &[Scenario] = &[
         body: Body::StubLib,
         reaches: "the cross-compiled legs: encoding and framing, on targets whose endianness or \
                   pointer width differ from every other leg",
+        induced: None,
     },
 ];
 
@@ -360,6 +401,12 @@ pub struct Leg {
     pub body: Body,
     /// Which commands the leg runs, and so which verdicts it can produce.
     pub checks: Checks,
+    /// Inherited from the manifest this leg builds: see [`Scenario::induced`].
+    ///
+    /// Omitted from the matrix JSON when absent, so the ordinary matrix is byte-for-byte what it
+    /// was before this existed, and a rigged release's matrix says so in the job log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub induced: Option<String>,
 }
 
 /// A cross-compiled leg builds but cannot execute, so it runs `cargo build` and stops.
@@ -392,6 +439,7 @@ pub fn legs(toolchains: &[Toolchain]) -> Vec<Leg> {
             profile: Profile::Debug,
             body: s.body,
             checks: checks_for(s.body, None),
+            induced: s.induced.map(str::to_string),
         })
     });
 
@@ -405,6 +453,10 @@ pub fn legs(toolchains: &[Toolchain]) -> Vec<Leg> {
         profile: b.profile,
         body: b.body,
         checks: checks_for(b.body, b.target),
+        // From the manifest, not from the build-axis row, because that is where a rigged break
+        // lives. Four build-axis legs share `new-project`, so rigging it rigs them too — which is
+        // correct: they build the manifest that was rigged.
+        induced: induced(b.manifest).map(str::to_string),
     });
 
     dependency.chain(build_axis).collect()
@@ -418,6 +470,23 @@ pub fn manifests() -> Vec<&'static Scenario> {
 /// Look up a manifest by id.
 pub fn manifest(id: &str) -> Option<&'static Scenario> {
     manifests().into_iter().find(|s| s.id == id)
+}
+
+/// Why a manifest is rigged, if it is. See [`Scenario::induced`].
+pub fn induced(manifest_id: &str) -> Option<&'static str> {
+    manifest(manifest_id).and_then(|s| s.induced)
+}
+
+/// Every rigged manifest, by id.
+///
+/// Exists so the state is readable in one call: during the stage that tests the paging chain this
+/// should name exactly one manifest, and in normal operation none.
+pub fn induced_manifests() -> Vec<&'static str> {
+    manifests()
+        .into_iter()
+        .filter(|s| s.induced.is_some())
+        .map(|s| s.id)
+        .collect()
 }
 
 #[cfg(test)]
@@ -647,6 +716,64 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The withdrawal check. A manifest is rigged for exactly one release and withdrawn in a commit
+    /// before the next; one left behind turns the next release's observation into noise, and two at
+    /// once share nothing useful — both breaks would be in flight at the same time and neither
+    /// would answer the question the other was meant to.
+    ///
+    /// Not an assertion that nothing is rigged, which would block the very commit that rigs one.
+    #[test]
+    fn at_most_one_manifest_is_rigged_at_a_time() {
+        let rigged = induced_manifests();
+        assert!(
+            rigged.len() <= 1,
+            "{rigged:?} are all rigged; one release tests one break, so the others should have \
+             been withdrawn"
+        );
+        for id in &rigged {
+            let why = induced(id).expect("it is in the list because it is rigged");
+            assert!(
+                !why.trim().is_empty(),
+                "{id} is rigged without saying why, and the reason is the only thing that tells \
+                 the next reader this was deliberate"
+            );
+        }
+    }
+
+    /// Four build-axis legs build `new-project`, so rigging that manifest has to rig them too.
+    ///
+    /// Vacuous while nothing is rigged — both sides are `None` — and that is the point: it comes
+    /// alive in exactly the state it guards. Had the build-axis legs been given a hardcoded `None`
+    /// instead of inheriting, `musl`, `aarch64`, `windows` and `release-profile` would each have
+    /// gone red without the marker and stopped the window — reintroducing, on four legs out of
+    /// sixty, the very cost the marker exists to avoid. Verified for real by rigging a manifest and
+    /// reading the matrix back, not by this test.
+    #[test]
+    fn every_leg_of_a_rigged_manifest_inherits_the_marker() {
+        for leg in legs(&today()) {
+            assert_eq!(
+                leg.induced.as_deref(),
+                induced(&leg.manifest),
+                "leg {} and manifest {} disagree about being rigged",
+                leg.id,
+                leg.manifest
+            );
+        }
+    }
+
+    /// The matrix is consumed as a GitHub Actions matrix, so adding a field to it is a change to
+    /// something a workflow reads. Omitted when absent, which keeps the ordinary matrix exactly
+    /// what it was and makes a rigged release's matrix say so in the job log.
+    #[test]
+    fn the_marker_is_absent_from_the_matrix_json_unless_set() {
+        let json = serde_json::to_string(&legs(&today())).unwrap();
+        assert_eq!(
+            json.contains("induced"),
+            !induced_manifests().is_empty(),
+            "the field should appear in the matrix exactly when something is rigged"
+        );
     }
 
     #[test]

@@ -141,6 +141,22 @@ jobs:
         SEVERITY=2.5
         ALARM="build-canary-${TAG}"
 
+        # A second alarm, watching `Red {Tag, Induced=true}`.
+        #
+        # A leg whose manifest was deliberately rigged -- to prove the chain from a verdict to a
+        # pager actually works -- writes to that series instead of the plain one. Two consequences,
+        # and both are the reason this exists. The release alarm cannot see a rigged leg, so without
+        # this alarm a rigged break would page nobody and prove nothing. And a ticket's dedupe key
+        # *is* its alarm name, so a shared alarm would make a real break landing during the test
+        # collapse into the test's ticket and vanish -- the failure the canary exists to prevent,
+        # reintroduced by the act of testing it.
+        #
+        # Armed on every release rather than only while something is rigged. In normal operation it
+        # watches a series nothing writes to and `notBreaching` holds it at OK, so the standing cost
+        # is one alarm. The alternative is a second switch to remember, and forgetting it loses the
+        # one observation a test release exists for.
+        INDUCED_ALARM="build-canary-induced-${TAG}"
+
         # Both placeholders must be present *before* substituting. A template that hardcoded the
         # severity would make the substitution a no-op and leave nothing behind to detect, so this
         # line would claim Sev5 while cutting whatever the secret carried.
@@ -150,12 +166,21 @@ jobs:
             exit 1
           fi
         done
-        ACTION_ARN="${TICKET_ARN_TEMPLATE//\{severity\}/$SEVERITY}"
-        ACTION_ARN="${ACTION_ARN//\{dedupe\}/$ALARM}"
-        if [[ "$ACTION_ARN" == *'{'* || "$ACTION_ARN" != arn:* ]]; then
-          echo "::error title=Bad ARN::the filled template is not a usable alarm action"
-          exit 1
-        fi
+
+        # Filled once per alarm, because the dedupe key is the alarm name -- which is exactly what
+        # gives the two alarms two separate tickets. Errors go to stderr: this is read through a
+        # command substitution, so anything on stdout would be captured as part of the ARN.
+        fill_action() {
+          local arn="${TICKET_ARN_TEMPLATE//\{severity\}/$SEVERITY}"
+          arn="${arn//\{dedupe\}/$1}"
+          if [[ "$arn" == *'{'* || "$arn" != arn:* ]]; then
+            echo "::error title=Bad ARN::the filled template is not a usable alarm action for $1" >&2
+            return 1
+          fi
+          printf '%s' "$arn"
+        }
+        ACTION_ARN="$(fill_action "$ALARM")"
+        INDUCED_ACTION_ARN="$(fill_action "$INDUCED_ALARM")"
 
         # Delete every previous release's alarm. Not an optimisation: an alarm left behind keeps
         # evaluating a series nothing writes to any more, and `notBreaching` holds it at OK forever
@@ -181,27 +206,47 @@ jobs:
           --treat-missing-data notBreaching \
           --alarm-actions "$ACTION_ARN"
 
-        # Read it back. `put-metric-alarm` returning success is not evidence the alarm exists, and
-        # this is the one job no alarm can report the failure of.
-        FOUND="$(aws cloudwatch describe-alarms --alarm-names "$ALARM" \
-                   --query 'length(MetricAlarms)' --output text)"
-        if [[ "$FOUND" != "1" ]]; then
-          echo "::error title=Alarm missing::put-metric-alarm succeeded but the alarm is not there"
-          exit 1
-        fi
+        # The description has to make the test unmistakable from the ticket alone. A deliberate
+        # ticket that reads like a real finding is worse than no test: it spends the responder's
+        # trust, and the next real one is read as another drill.
+        aws cloudwatch put-metric-alarm \
+          --alarm-name "$INDUCED_ALARM" \
+          --alarm-description "THIS IS A TEST. A canary leg for ${TAG} went red on a manifest that was deliberately rigged to break, to prove that a verdict reaches a human. No published crate is implicated by this ticket and no consumer is affected. A real break in this same release would arrive separately, under ${ALARM}. If you were not told to expect this, that itself is the finding: say so, because the alarm should have been withdrawn with the break." \
+          --namespace smithy-rs-build-canary \
+          --metric-name Red \
+          --dimensions "Name=Tag,Value=${TAG}" "Name=Induced,Value=true" \
+          --statistic Maximum --period 60 \
+          --evaluation-periods 1 --datapoints-to-alarm 1 \
+          --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold \
+          --treat-missing-data notBreaching \
+          --alarm-actions "$INDUCED_ACTION_ARN"
+
+        # Read both back. `put-metric-alarm` returning success is not evidence the alarm exists, and
+        # this is the one job no alarm can report the failure of. Half-armed counts as unarmed: the
+        # two alarms are one mechanism, and the tiers below run either way.
+        for NAME in "$ALARM" "$INDUCED_ALARM"; do
+          FOUND="$(aws cloudwatch describe-alarms --alarm-names "$NAME" \
+                     --query 'length(MetricAlarms)' --output text)"
+          if [[ "$FOUND" != "1" ]]; then
+            echo "::error title=Alarm missing::put-metric-alarm succeeded but ${NAME} is not there"
+            exit 1
+          fi
+        done
         echo "armed=true" >> "$GITHUB_OUTPUT"
 
-        {
-          echo "### Armed \`${ALARM}\` at severity ${SEVERITY}"
-          echo ""
-          echo '```'
-        } >> "$GITHUB_STEP_SUMMARY"
-        # The action verbatim, because how spaces in it are encoded is a question only observation
-        # settles.
-        aws cloudwatch describe-alarms --alarm-names "$ALARM" \
-          --query 'MetricAlarms[0].{State:StateValue,Actions:AlarmActions,MissingData:TreatMissingData}' \
-          | tee -a "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        for NAME in "$ALARM" "$INDUCED_ALARM"; do
+          {
+            echo "### Armed \`${NAME}\` at severity ${SEVERITY}"
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # The action verbatim, because how spaces in it are encoded is a question only observation
+          # settles.
+          aws cloudwatch describe-alarms --alarm-names "$NAME" \
+            --query 'MetricAlarms[0].{State:StateValue,Actions:AlarmActions,MissingData:TreatMissingData,Dimensions:Dimensions}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+        done
 
   dispatch-tier:
     name: Watch the publish window

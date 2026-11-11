@@ -105,6 +105,15 @@ pub struct RedLeg {
     /// readable a year later without the lockfile beside it.
     pub diagnosis: Option<Diagnosis>,
     pub elapsed_secs: u64,
+    /// Present, and saying why, when this manifest was deliberately rigged to break.
+    ///
+    /// The one thing a reader of an old record cannot otherwise reconstruct. A rigged release looks
+    /// exactly like a broken one — same verdict, same diagnosis, same ticket — and the commit that
+    /// rigged it was reverted before the next release, so nothing else surviving says which it was.
+    /// Omitted when absent, so it stands out rather than appearing as `false` on every leg of every
+    /// real break.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub induced: Option<String>,
 }
 
 /// What one run of the canary found.
@@ -166,6 +175,7 @@ pub fn summarize(run: Run, legs: &[Leg], reports: &[Report]) -> RunSummary {
                 failed_step: report.failed_step,
                 diagnosis: report.diagnosis.clone(),
                 elapsed_secs: report.elapsed.as_secs(),
+                induced: leg.induced.clone(),
             }),
             // No verdict is green only if the leg actually ran. A superseded leg has no opinion,
             // and the distinction is the same one `Report::is_green` makes.
@@ -268,6 +278,7 @@ mod tests {
             failed_step: None,
             diagnosis: None,
             stopped: None,
+            induced: false,
             attempts: vec![],
             elapsed: Duration::from_secs(60),
         }
@@ -289,6 +300,7 @@ mod tests {
                 }],
             }),
             stopped: Some(Stopped::AttemptsExhausted),
+            induced: false,
             attempts: vec![],
             elapsed: Duration::from_secs(65),
         }
@@ -447,6 +459,44 @@ mod tests {
         // `flatten` on the run has to put the identity at the top level, not under a `run` key.
         assert!(json.contains("\"release\":\"release-2026-11-09\""));
         assert!(json.contains("\"run_attempt\":1"));
+    }
+
+    /// The one thing a reader of an old record cannot reconstruct for themselves.
+    ///
+    /// A rigged release looks exactly like a broken one — same verdict, same diagnosis, same
+    /// ticket — and the commit that rigged it was reverted before the next release, so nothing else
+    /// that survives says which it was. The record is read to answer "how often does this happen",
+    /// and counting our own tests as breaks would answer it wrongly in the direction that matters.
+    #[test]
+    fn the_record_says_when_a_red_leg_was_rigged() {
+        // Cleared explicitly, not taken as it comes: during the stage that tests the paging chain
+        // one manifest really is rigged, and a fixture that changed meaning then would fail the
+        // very commit that rigs it.
+        let plain = Leg {
+            induced: None,
+            ..matrix().remove(0)
+        };
+        let reports = vec![red_report(&plain.id, Verdict::CompileFail)];
+
+        let rigged = Leg {
+            induced: Some("rigged to exercise the paging chain".to_string()),
+            ..plain.clone()
+        };
+        let s = summarize(run(), &[rigged], &reports);
+        assert_eq!(
+            s.red[0].induced.as_deref(),
+            Some("rigged to exercise the paging chain")
+        );
+        assert!(
+            serde_json::to_string(&s).unwrap().contains("rigged"),
+            "and the reason has to survive into the stored JSON"
+        );
+
+        // A real break says nothing at all, rather than `false` on every leg of every red release,
+        // so the marker stands out instead of becoming noise.
+        let s = summarize(run(), &[plain], &reports);
+        assert_eq!(s.red[0].induced, None);
+        assert!(!serde_json::to_string(&s).unwrap().contains("induced"));
     }
 
     /// A report naming a leg the matrix does not have must not stop the record being written.

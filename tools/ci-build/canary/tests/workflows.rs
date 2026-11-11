@@ -302,6 +302,102 @@ fn the_alarm_is_armed_before_any_leg_runs() {
     );
 }
 
+/// A break we rigged ourselves has to page on its own alarm, apart from a real one.
+///
+/// A ticket's dedupe key is the name of the alarm that cut it, and there is one alarm per series.
+/// So if a rigged leg and a real break shared an alarm, a genuine break landing during a test
+/// release would collapse into the test's ticket and become invisible — the exact failure this
+/// canary exists to prevent, reintroduced by the act of testing it.
+///
+/// This is the half that lives in YAML. The other half — that a rigged leg writes to a different
+/// series at all — is asserted in `metric`, and the two have to agree or the alarm watches a series
+/// nothing writes to, which looks identical to a release with nothing wrong.
+#[test]
+fn a_rigged_break_is_armed_apart_from_a_real_one() {
+    let text = raw("post-publish-watch");
+
+    let assigned = |var: &str| -> String {
+        let prefix = format!("{var}=");
+        let found: Vec<&str> = text
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix(&prefix))
+            .collect();
+        assert_eq!(found.len(), 1, "expected one {var}= line, found {found:?}");
+        found[0].trim_matches('"').to_string()
+    };
+    let real = assigned("ALARM");
+    let rigged = assigned("INDUCED_ALARM");
+
+    assert_ne!(
+        real, rigged,
+        "one alarm name means one dedupe key, so a real break would dedupe into the test's ticket"
+    );
+    for name in [&real, &rigged] {
+        // Per release, so a straggler from a superseded release lands on a series whose alarm has
+        // been deleted rather than paging about a release nobody is shipping.
+        assert!(
+            name.contains("${TAG}"),
+            "alarm name {name:?} is not per-release"
+        );
+    }
+
+    // The alarm role is scoped by name prefix, so an alarm outside it is denied at
+    // `put-metric-alarm` — which fails the arming job rather than failing quietly, but only after
+    // the prefix has been got wrong in the first place.
+    let delete_prefix = text
+        .split_whitespace()
+        .skip_while(|w| *w != "--alarm-name-prefix")
+        .nth(1)
+        .expect("the arming job deletes the previous release's alarms by prefix")
+        .to_string();
+    for name in [&real, &rigged] {
+        assert!(
+            name.starts_with(&delete_prefix),
+            "alarm {name:?} is outside {delete_prefix:?}, so it is neither permitted by the role \
+             nor cleaned up by the next release"
+        );
+    }
+
+    // Exactly two alarms are created, and they are those two.
+    let created: Vec<String> = text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("--alarm-name "))
+        .map(|rest| rest.trim().trim_end_matches('\\').trim().to_string())
+        .collect();
+    assert_eq!(
+        created,
+        ["\"$ALARM\"", "\"$INDUCED_ALARM\""],
+        "both alarms must be created, and nothing else"
+    );
+
+    // One of them, and only one, watches the series a rigged leg writes to. The dimension name is
+    // the crate's, so the series the legs emit to and the series the alarm evaluates cannot drift
+    // apart silently.
+    let marker = format!("Name={},Value=true", canary::metric::INDUCED);
+    assert_eq!(
+        text.lines().filter(|l| l.contains(&marker)).count(),
+        1,
+        "exactly one alarm should carry {marker}"
+    );
+
+    // And its description has to say it is a test, because on a Sev2.5 that description is all the
+    // responder sees. A deliberate ticket that reads like a real finding spends the responder's
+    // trust, and the next real one gets read as another drill.
+    let descriptions: Vec<&str> = text
+        .lines()
+        .filter(|l| l.trim().starts_with("--alarm-description "))
+        .collect();
+    assert_eq!(descriptions.len(), 2, "one description per alarm");
+    assert_eq!(
+        descriptions
+            .iter()
+            .filter(|d| d.contains("THIS IS A TEST"))
+            .count(),
+        1,
+        "the rigged alarm's description must announce itself, and the real one must not"
+    );
+}
+
 /// An arming failure must not stop the release being checked. Checking without being able to page
 /// still beats not checking, and the arming failure is loud in its own job. What the dispatch tier
 /// does need is to know *which* release.
