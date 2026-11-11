@@ -7,12 +7,16 @@
 # assertions, then reports one of five verdicts. Scenario x toolchain = one leg; every leg has its
 # own lockfile and its own verdict.
 #
-# SCOPE. This workflow writes verdicts to the job log and nothing else:
-#   - no `id-token: write`, no `role-to-assume`, no secrets
-#   - no CloudWatch metric, no alarm, so nothing here can page anyone
-# Reporting a verdict as a metric, and alarming on it, land separately and need an OIDC role this
-# workflow does not have. Keeping those apart is deliberate: the whole matrix can be exercised, and
-# its false-positive rate measured, before anything is able to wake an oncall.
+# SCOPE. A red leg records its verdict as a CloudWatch datapoint, and that is as far as this goes:
+# nothing here creates an alarm, so nothing here can page anyone. Arming the alarm is a separate
+# step, which is what lets the whole matrix run -- and its false-positive rate be measured -- while
+# still unable to wake an oncall.
+#
+# The emission is off until the metrics role is configured as a secret, so before the stack is
+# deployed this workflow behaves exactly as it did when it had no AWS access at all: it writes
+# verdicts to the job log and nothing else. It needs `id-token: write` to assume that role, which is
+# why every workflow input reaches a `run:` block through `env` and never through `${{ }}`
+# interpolation -- an injection here would now reach AWS.
 
 name: Build canary
 run-name: ${{ github.workflow }} - ${{ inputs.scenario }}
@@ -148,6 +152,13 @@ jobs:
     # before this is reached -- a job killed here would run no further steps and so report nothing.
     timeout-minutes: 14
     runs-on: ${{ matrix.leg.runner }}
+    permissions:
+      contents: read
+      # To assume the metrics role and record a verdict. Deliberately not environment-gated: a
+      # condition on the `environment` claim would *require* every one of the sixty legs to declare
+      # one, and they also run by hand outside a release. The namespace condition on the role is
+      # what bounds this instead.
+      id-token: write
     strategy:
       # Every leg has its own verdict, so one red leg must not cancel the rest.
       fail-fast: false
@@ -269,6 +280,60 @@ jobs:
     # code, and the exact set of published versions that produced it would be gone. Re-resolving
     # later gives a different graph, because crates.io has moved on -- which is the whole reason a
     # leg is a snapshot.
+    # The join to the paging chain. A verdict becomes a datapoint here; everything before this point
+    # writes to a job log, which pages nobody.
+    #
+    # Off until the role is configured, so this is inert before the stack is deployed. Reads the
+    # secret through a step output rather than an `if:` on the secret itself, because an empty
+    # `role-to-assume` fails the credentials action rather than skipping it.
+    - name: Is the metrics role configured
+      id: metrics
+      if: always() && steps.report.outputs.verdict != ''
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Metrics not configured::the verdict stays in the log for now"
+        fi
+
+    - name: Assume the metrics role
+      if: always() && steps.metrics.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        aws-region: us-west-2
+
+    # A green leg and a superseded one record nothing, which is why this is gated on a verdict at
+    # all: that silence is what the alarm's `notBreaching` treatment turns back into OK, and a zero
+    # would make "it passed" indistinguishable from "it died without reporting".
+    - name: Record the verdict
+      if: always() && steps.metrics.outputs.configured == 'true'
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ inputs.tag }}
+        LEG_ID: ${{ matrix.leg.id }}
+      run: |
+        set -euo pipefail
+        # Outside a release there is no tag, and the tag is the dimension the alarm watches. Rather
+        # than invent one -- which would land a datapoint on a series somebody's alarm may be
+        # watching -- record nothing and say so.
+        if [[ -z "${TAG}" ]]; then
+          echo "::notice title=No tag::${LEG_ID} ran outside a release, so its verdict is not recorded"
+          exit 0
+        fi
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+        cargo run --quiet -- emit-verdict \
+          --report "${RUNNER_TEMP}/report.json" \
+          --tag "${TAG}" \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --payload-dir "${RUNNER_TEMP}/metric"
+
     # Two different things, collected under two different conditions.
     #
     # The report goes up for *every* leg, green included, because the durable record folded together
