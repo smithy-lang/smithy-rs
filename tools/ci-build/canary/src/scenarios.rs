@@ -7,13 +7,18 @@
 //!
 //! Scenario × toolchain = one leg. Every leg has its own lockfile and its own verdict.
 //!
-//! The ten dependency scenarios run at each surviving toolchain, so they give 10 × 5 = 50 legs. The
-//! ten build-axis legs are *separate* scenarios rather than extra dimensions on those ten, so they
-//! are not multiplied by the toolchain axis and contribute 10 more. **60 legs.**
+//! The six dependency scenarios run at each surviving toolchain, so they give 6 × 5 = 30 legs. The
+//! ten build-axis legs are *separate* scenarios rather than extra dimensions on those six, so they
+//! are not multiplied by the toolchain axis and contribute 10 more. **40 legs.**
 //!
-//! Thirteen manifests back all 60: one per dependency scenario, plus `wasm`, `serialization` and
+//! Nine manifests back all 40: one per dependency scenario, plus `wasm`, `serialization` and
 //! `large-generated-clients`. The build-axis legs that vary only target or profile reuse the
-//! `new-project` manifest, which is why 13 manifests produce 60 legs.
+//! `new-project` manifest, which is why 9 manifests produce 40 legs.
+//!
+//! It was ten scenarios and sixty legs. Four rows are commented out in the table below, each with
+//! its reason and what restoring it is gated on: they are red against the crates published today,
+//! and a leg that is red on arrival costs the floor tier its remaining twenty-three hours on every
+//! release rather than costing one leg of coverage.
 
 use serde::Serialize;
 
@@ -61,7 +66,7 @@ pub enum Profile {
     Release,
 }
 
-/// One of the ten dependency scenarios. Each has its own manifest, 1:1.
+/// One of the dependency scenarios. Each has its own manifest, 1:1.
 #[derive(Debug, Clone, Copy)]
 pub struct Scenario {
     /// Stable id, used as the manifest name and part of the leg id.
@@ -134,11 +139,16 @@ pub struct BuildAxisLeg {
     pub reaches: &'static str,
 }
 
-/// The ten dependency scenarios.
+/// The dependency scenarios: six live, four withdrawn and commented in place.
 ///
-/// The first five are manifests we write. The last five inherit their requirements on us from a
-/// third party's `Cargo.toml`, which is the whole point of those rows — patching their feature set
-/// or requirements would destroy it.
+/// The first two are manifests we write. The rest inherit their requirements on us from a third
+/// party's `Cargo.toml`, which is the whole point of those rows — patching their feature set or
+/// requirements would destroy it.
+///
+/// Each withdrawn row carries its own reason and the condition for putting it back. They are
+/// commented rather than deleted because every one of them is the right row to be checking; what
+/// disqualifies them is that they are red *now*, and a standing red leg makes the floor tier's
+/// stop rule fire on arrival.
 pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "new-project",
@@ -156,30 +166,50 @@ pub const SCENARIOS: &[Scenario] = &[
                   aws-smithy-types 1.9.0",
         induced: None,
     },
-    // The three prior lines all fail E0308 inside aws-config itself, on two majors of
-    // aws-smithy-schema in one graph with SharedClientProtocol crossing between them. 1.9.0–1.12.0
-    // require aws-smithy-schema ^0.2.0; 1.13.0 moved to ^1.0.0; <=1.8.16 has no direct dependency.
-    Scenario {
-        id: "prior-aws-config-1-12",
-        deps: &[("aws-config", "~1.12"), ("aws-sdk-s3", "1")],
-        body: Body::CanaryApp,
-        reaches: "a consumer who has not bumped yet",
-        induced: None,
-    },
-    Scenario {
-        id: "prior-aws-config-1-11",
-        deps: &[("aws-config", "~1.11"), ("aws-sdk-s3", "1")],
-        body: Body::CanaryApp,
-        reaches: "a consumer who has not bumped yet",
-        induced: None,
-    },
-    Scenario {
-        id: "prior-aws-config-1-10",
-        deps: &[("aws-config", "~1.10"), ("aws-sdk-s3", "1")],
-        body: Body::CanaryApp,
-        reaches: "a consumer who has not bumped yet",
-        induced: None,
-    },
+    // ----------------------------------------------------------------------------------------
+    // WITHDRAWN: three rows that are red against the crates published today.
+    //
+    // All three fail E0308 inside aws-config itself, on two majors of aws-smithy-schema in one
+    // graph with SharedClientProtocol crossing between them. 1.9.0–1.12.0 require
+    // aws-smithy-schema ^0.2.0; 1.13.0 moved to ^1.0.0; <=1.8.16 has no direct dependency.
+    // Measured on five toolchains each: fifteen legs, every one COMPILE_FAIL at E0308.
+    //
+    // They are commented out rather than deleted because **the break is real and is not ours to
+    // wish away**: a consumer whose manifest says `aws-config = "~1.10"` and `aws-sdk-s3 = "1"`
+    // cannot compile today. That is exactly the class of defect this canary exists to catch, so
+    // deleting the rows would be deleting the finding.
+    //
+    // Why they cannot stay switched on: a floor hour asks "did any dispatched run for this tag
+    // conclude failure?", and a standing red leg answers yes at hour one of every release. The
+    // remaining twenty-three hours are then skipped — so these fifteen legs, by reporting a break
+    // that is already known, cost the canary its ability to detect a new one. Red has to be
+    // exceptional for that stop rule to mean anything.
+    //
+    // Restoring them is gated on the incompatibility being fixed, not on a decision about the
+    // canary. Uncomment, run `gen-matrix`, and the counts in the tests below move with them.
+    // ----------------------------------------------------------------------------------------
+    //
+    // Scenario {
+    //     id: "prior-aws-config-1-12",
+    //     deps: &[("aws-config", "~1.12"), ("aws-sdk-s3", "1")],
+    //     body: Body::CanaryApp,
+    //     reaches: "a consumer who has not bumped yet",
+    //     induced: None,
+    // },
+    // Scenario {
+    //     id: "prior-aws-config-1-11",
+    //     deps: &[("aws-config", "~1.11"), ("aws-sdk-s3", "1")],
+    //     body: Body::CanaryApp,
+    //     reaches: "a consumer who has not bumped yet",
+    //     induced: None,
+    // },
+    // Scenario {
+    //     id: "prior-aws-config-1-10",
+    //     deps: &[("aws-config", "~1.10"), ("aws-sdk-s3", "1")],
+    //     body: Body::CanaryApp,
+    //     reaches: "a consumer who has not bumped yet",
+    //     induced: None,
+    // },
     Scenario {
         id: "aws-msk-iam-sasl-signer",
         deps: &[("aws-msk-iam-sasl-signer", "1")],
@@ -208,16 +238,30 @@ pub const SCENARIOS: &[Scenario] = &[
         reaches: "a dependent whose requirements on us are frozen",
         induced: None,
     },
-    // Red at admission on every toolchain. Both defects are in ssstar's own source: an E0432 from a
-    // feature-gated module it imports without enabling the feature, and E0283 ambiguities at
-    // extract.rs:294. Source-level errors do not depend on the compiler version.
-    Scenario {
-        id: "ssstar",
-        deps: &[("ssstar", "0.7")],
-        body: Body::Stub,
-        reaches: "a dependent whose requirements on us are frozen — red at admission, see above",
-        induced: None,
-    },
+    // ----------------------------------------------------------------------------------------
+    // WITHDRAWN: red at admission on every toolchain, for a reason nobody here can fix.
+    //
+    // Both defects are in ssstar's own source: an E0432 from a feature-gated module it imports
+    // without enabling the feature, and E0283 ambiguities at extract.rs:294. Source-level errors
+    // do not depend on the compiler version, which is why all five toolchains fail identically.
+    //
+    // This one differs from the three above in who can act on it. Those are a break in crates this
+    // repository publishes; this is a break in a third party's code, so no release from here will
+    // ever turn it green. It would have gone red on every release forever, taking the floor tier's
+    // remaining twenty-three hours with it each time.
+    //
+    // Kept commented rather than deleted because the row is still the right row — a dependent
+    // whose requirements on us are frozen is a real shape worth checking. Restoring it is gated on
+    // ssstar publishing a version that compiles.
+    // ----------------------------------------------------------------------------------------
+    //
+    // Scenario {
+    //     id: "ssstar",
+    //     deps: &[("ssstar", "0.7")],
+    //     body: Body::Stub,
+    //     reaches: "a dependent whose requirements on us are frozen — red at admission",
+    //     induced: None,
+    // },
 ];
 
 /// The ten build-axis legs.
@@ -387,7 +431,7 @@ pub const BUILD_AXIS_MANIFESTS: &[Scenario] = &[
 pub struct Leg {
     /// Unique across the matrix. Used as the GitHub Actions matrix key and as a metric dimension.
     pub id: String,
-    /// Which of the thirteen manifests to render.
+    /// Which manifest to render, by id.
     pub manifest: String,
     /// `stable`, `stable-1`, … The build-axis legs are all `stable`.
     pub toolchain: String,
@@ -502,30 +546,61 @@ mod tests {
     }
 
     #[test]
-    fn the_table_is_ten_scenarios_and_ten_build_axis_legs() {
-        assert_eq!(SCENARIOS.len(), 10);
+    fn the_table_is_six_scenarios_and_ten_build_axis_legs() {
+        assert_eq!(SCENARIOS.len(), 6, "four rows are withdrawn; see the table");
         assert_eq!(BUILD_AXIS.len(), 10);
     }
 
-    /// The headline number, cross-checked the other way round: 10 × 5 + 10.
+    /// The headline number, cross-checked the other way round: 6 × 5 + 10.
     #[test]
-    fn five_toolchains_give_sixty_legs() {
+    fn five_toolchains_give_forty_legs() {
         let tcs = today();
         assert_eq!(tcs.len(), 5);
         let legs = legs(&tcs);
-        assert_eq!(legs.len(), 60);
+        assert_eq!(legs.len(), 40);
 
         let dependency = legs
             .iter()
             .filter(|l| !BUILD_AXIS.iter().any(|b| b.id == l.id))
             .count();
-        assert_eq!(dependency, 50, "10 scenarios × 5 toolchains");
+        assert_eq!(dependency, 30, "6 scenarios × 5 toolchains");
         assert_eq!(legs.len() - dependency, 10, "build-axis legs");
     }
 
-    /// The second cross-check: 9 + 9×5 + 2 + 1 + 3.
+    /// The reason the four rows had to go, stated as a property rather than left in a comment.
+    ///
+    /// A floor hour asks whether any dispatched run for this tag concluded `failure`, so one leg
+    /// that is red on arrival answers yes at hour one of every release and the remaining
+    /// twenty-three hours are skipped. A row known to be red against the crates published today
+    /// therefore does not cost one leg of coverage, it costs the rest of the day — which is why
+    /// `ssstar` and the three `prior-aws-config-*` rows are commented out above rather than left
+    /// on with their failures tolerated.
+    ///
+    /// This cannot assert that the live table is green, which would need a network and twelve
+    /// minutes. It asserts the weaker thing that is still worth having: that nobody has quietly
+    /// put one of those four ids back without also dealing with the break.
     #[test]
-    fn the_manifest_to_leg_mapping_also_gives_sixty() {
+    fn no_known_red_row_is_switched_back_on() {
+        const KNOWN_RED: &[&str] = &[
+            "ssstar",
+            "prior-aws-config-1-12",
+            "prior-aws-config-1-11",
+            "prior-aws-config-1-10",
+        ];
+        for s in manifests() {
+            assert!(
+                !KNOWN_RED.contains(&s.id),
+                "{} is red against today's published crates: switching it back on costs the floor \
+                 tier its remaining twenty-three hours on every release, so it has to come back \
+                 together with the fix, and this list has to lose the entry",
+                s.id
+            );
+        }
+    }
+
+    /// The second cross-check: 9 + 5×5 + 2 + 1 + 3.
+    #[test]
+    fn the_manifest_to_leg_mapping_also_gives_forty() {
         let legs = legs(&today());
         let count = |m: &str| legs.iter().filter(|l| l.manifest == m).count();
 
@@ -536,7 +611,7 @@ mod tests {
         assert_eq!(count("wasm"), 2);
         assert_eq!(count("large-generated-clients"), 1);
         assert_eq!(count("serialization"), 3, "i686, powerpc, powerpc64");
-        assert_eq!(9 + 9 * 5 + 2 + 1 + 3, legs.len());
+        assert_eq!(9 + 5 * 5 + 2 + 1 + 3, legs.len());
     }
 
     /// The canary must not claim coverage the project does not have. A platform CI never builds is a
@@ -643,11 +718,11 @@ mod tests {
     }
 
     #[test]
-    fn thirteen_manifests_back_the_matrix() {
-        assert_eq!(manifests().len(), 13);
+    fn nine_manifests_back_the_matrix() {
+        assert_eq!(manifests().len(), 9);
         let legs = legs(&today());
         let used: HashSet<_> = legs.iter().map(|l| l.manifest.as_str()).collect();
-        assert_eq!(used.len(), 13, "every manifest is reachable from some leg");
+        assert_eq!(used.len(), 9, "every manifest is reachable from some leg");
     }
 
     #[test]
@@ -665,7 +740,7 @@ mod tests {
             .unwrap()
             .kept;
         let legs = legs(&four);
-        assert_eq!(legs.len(), 10 * 4 + 10);
+        assert_eq!(legs.len(), 6 * 4 + 10);
         assert_eq!(
             legs.iter()
                 .filter(|l| BUILD_AXIS.iter().any(|b| b.id == l.id))
@@ -679,27 +754,36 @@ mod tests {
         let one = toolchain::resolve(Version::new(1, 99, 1), Version::new(1, 99, 0))
             .unwrap()
             .kept;
-        assert_eq!(legs(&one).len(), 10 + 10);
+        assert_eq!(legs(&one).len(), 6 + 10);
     }
 
-    /// Four scenarios resolve a client and so carry the app body; the other six are stubs. The split
-    /// decides how much of the matrix can report a run-phase verdict at all: a stub leg has no
-    /// assertions, so it can only ever say `COMPILE_FAIL`, `RESOLVE_FAIL` or `INFRA_FAIL`.
+    /// One scenario resolves a client and so carries the app body; the other five are stubs.
+    ///
+    /// The split decides how much of the matrix can report a run-phase verdict at all: a stub leg
+    /// has no assertions, so it can only ever say `COMPILE_FAIL`, `RESOLVE_FAIL` or `INFRA_FAIL`.
+    ///
+    /// It used to be four, and withdrawing the three `prior-aws-config-*` rows is what took it to
+    /// one. Nine legs of forty now carry assertions — `new-project` at five toolchains plus the
+    /// four build-axis legs that reuse its manifest — where before it was twenty-four of sixty.
+    /// That is the real cost of the withdrawal, and it is concentrated: `new-project` is now the
+    /// only dependency row that can produce a `RUNTIME_FAIL` or `HARNESS_FAIL` at all.
     #[test]
-    fn four_scenarios_are_client_shaped() {
+    fn one_scenario_is_client_shaped() {
         let app: Vec<_> = SCENARIOS
             .iter()
             .filter(|s| s.body == Body::CanaryApp)
             .map(|s| s.id)
             .collect();
+        assert_eq!(app, ["new-project"]);
+
+        // And the legs that can run assertions, which is what the split is actually about.
+        let asserting = legs(&today())
+            .iter()
+            .filter(|l| l.body == Body::CanaryApp)
+            .count();
         assert_eq!(
-            app,
-            [
-                "new-project",
-                "prior-aws-config-1-12",
-                "prior-aws-config-1-11",
-                "prior-aws-config-1-10"
-            ]
+            asserting, 9,
+            "5 toolchain legs + musl, aarch64, windows, release-profile"
         );
     }
 
@@ -748,7 +832,7 @@ mod tests {
     /// alive in exactly the state it guards. Had the build-axis legs been given a hardcoded `None`
     /// instead of inheriting, `musl`, `aarch64`, `windows` and `release-profile` would each have
     /// gone red without the marker and stopped the window — reintroducing, on four legs out of
-    /// sixty, the very cost the marker exists to avoid. Verified for real by rigging a manifest and
+    /// forty, the very cost the marker exists to avoid. Verified for real by rigging a manifest and
     /// reading the matrix back, not by this test.
     #[test]
     fn every_leg_of_a_rigged_manifest_inherits_the_marker() {

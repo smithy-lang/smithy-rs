@@ -253,12 +253,35 @@ mod tests {
         );
     }
 
-    /// A prior-line scenario constrains `aws-config` deliberately. The body's own requirements must
-    /// never widen it, or the scenario stops testing the thing it exists for.
+    /// A scenario that constrains `aws-config` deliberately must win over the body's own
+    /// requirement, or it stops testing the thing it exists for.
+    ///
+    /// The subject is built here rather than taken from the table. It used to be
+    /// `prior-aws-config-1-12`, which is now withdrawn for being red — and the guard matters more
+    /// than any one row that happens to exercise it: the three withdrawn rows are *meant* to come
+    /// back, and the next narrowing scenario someone writes needs this to already hold. A
+    /// synthetic subject also means the live table no longer has to contain a narrowing row for
+    /// the property to be checked at all.
     #[test]
     fn the_scenarios_requirement_wins_over_the_bodys() {
-        let r = render_named("prior-aws-config-1-12--stable");
-        assert!(r.cargo_toml.contains("aws-config = \"~1.12\""));
+        let narrowing = Scenario {
+            id: "a-pinned-consumer",
+            deps: &[("aws-config", "~1.12"), ("aws-sdk-s3", "1")],
+            body: Body::CanaryApp,
+            reaches: "a consumer who constrains aws-config more narrowly than the body does",
+            induced: None,
+        };
+        let leg = Leg {
+            manifest: narrowing.id.to_string(),
+            ..leg_named("new-project--stable")
+        };
+
+        let r = render(&leg, &narrowing);
+        assert!(
+            r.cargo_toml.contains("aws-config = \"~1.12\""),
+            "{}",
+            r.cargo_toml
+        );
         assert_eq!(
             r.cargo_toml.matches("aws-config =").count(),
             1,
@@ -317,7 +340,7 @@ mod tests {
 
     #[test]
     fn a_stub_leg_is_a_bare_main_with_no_dev_dependencies() {
-        let r = render_named("ssstar--stable");
+        let r = render_named("aws-esdk--stable");
         assert_eq!(
             r.files
                 .keys()
@@ -336,7 +359,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(code, ["fn main() {}"]);
         assert!(!r.cargo_toml.contains("[dev-dependencies]"));
-        assert!(r.cargo_toml.contains("ssstar = \"0.7\""));
+        assert!(r.cargo_toml.contains("aws-esdk = \"1\""));
     }
 
     /// The cross-compiled legs are lib-only so that producing an rlib needs no system linker — a

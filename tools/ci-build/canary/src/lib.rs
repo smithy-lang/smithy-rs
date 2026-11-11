@@ -7,7 +7,7 @@
 //!
 //! Every check this repository runs today builds the workspace *before* publish. This crate covers
 //! what happens after: each release of the smithy runtime crates is checked by resolving and
-//! building thirteen manifests that a consumer would plausibly write, against the published crates
+//! building a set of manifests a consumer would plausibly write, against the published crates
 //! on crates.io, across five compiler versions, for 24 hours — and a failure pages, with a verdict
 //! naming which part broke.
 //!

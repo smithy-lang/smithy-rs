@@ -6,8 +6,8 @@
 //! The last graph each manifest resolved to, and whether it has moved since.
 //!
 //! The dispatch tier wakes every 15 minutes for the length of a release. A tick with no publish in
-//! it resolves exactly what the previous tick did, so running all sixty legs to re-prove that graph
-//! buys nothing. So each tick resolves the thirteen manifests, compares each against the baseline,
+//! it resolves exactly what the previous tick did, so running the whole matrix to re-prove that
+//! graph buys nothing. So each tick resolves every manifest, compares each against the baseline,
 //! and dispatches legs only where the graph actually moved.
 //!
 //! # Why this is a directory and not a bucket
@@ -43,7 +43,7 @@
 //! every tick of the dispatch tier.
 //!
 //! The comparison is on the parsed graph rather than the file's bytes, so a lockfile format change
-//! does not read as sixty legs' worth of movement. The bytes are what get stored, though, so a
+//! does not read as a whole matrix's worth of movement. The bytes are what get stored, though, so a
 //! responder gets the real file.
 //!
 //! # Every failure dispatches
@@ -304,7 +304,7 @@ version = "1.0.230"
     #[test]
     fn every_real_manifest_id_yields_a_path() {
         let manifests = crate::scenarios::manifests();
-        assert_eq!(manifests.len(), 13, "the table has thirteen manifests");
+        assert_eq!(manifests.len(), 9, "the table has nine live manifests");
         for scenario in manifests {
             let id = scenario.id;
             let p = relative_path(id).unwrap_or_else(|e| panic!("{id}: {e}"));
@@ -508,7 +508,7 @@ dependencies = ["serde"]
             "a read-only gate must not silence the next tick"
         );
 
-        // With --update the same graph then reads as unchanged, which is the tick that saves 60 legs.
+        // With --update the same graph then reads as unchanged -- the tick that saves a whole matrix.
         assert_eq!(
             gate(&store, "new-project", &fresh, true).unwrap(),
             Movement::NeverSeen

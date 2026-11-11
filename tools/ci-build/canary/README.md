@@ -106,9 +106,10 @@ afresh.
 Two tiers, because the two questions have different shapes.
 
 The **dispatch tier** covers the publish window, when crates are arriving one at a time and the
-graph is changing under consumers. It ticks every 15 minutes, resolves the thirteen manifests, and
+graph is changing under consumers. It ticks every 15 minutes, resolves every manifest, and
 dispatches legs only for the manifests whose graph actually moved — a tick with no publish in it
-resolves exactly what the previous tick did, so running sixty legs to re-prove it buys nothing. It
+resolves exactly what the previous tick did, so running the whole matrix to re-prove it buys
+nothing. It
 ends when `publish-status` reports that every declared runtime crate has arrived.
 
 The **floor tier** then runs hourly for 24 hours with no gate, because a graph can break without
