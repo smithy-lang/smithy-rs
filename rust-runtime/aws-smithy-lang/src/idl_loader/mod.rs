@@ -322,7 +322,8 @@ impl<'a> Parser<'a> {
         let start = self.cursor.pos;
         self.cursor.expect("@", "`@`")?;
         let id = self.cursor.shape_id()?;
-        self.cursor.sp0();
+        // The grammar has no whitespace between a trait's shape ID and its value
+        // (`Trait = "@" ShapeId [TraitBody]`).
         let at = Span::new(start, start + 1);
         let value = if self.cursor.starts_with("(") {
             let open = self.cursor.expect("(", "`(`")?;

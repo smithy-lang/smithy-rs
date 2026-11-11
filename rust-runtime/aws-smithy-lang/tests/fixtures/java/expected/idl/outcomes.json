@@ -496,6 +496,32 @@
                 "message": "set shapes cannot be used in Smithy version 2.0"
             }
         },
+        "invalid/syntax_space_before_trait_value": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_space_before_trait_value.smithy",
+                "line": 4,
+                "column": 16,
+                "message": "Syntax error at line 4, column 16: Expected IDENTIFIER but found LPAREN('(')"
+            }
+        },
+        "invalid/syntax_space_before_trait_value_apply": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_space_before_trait_value_apply.smithy",
+                "line": 6,
+                "column": 24,
+                "message": "Syntax error at line 6, column 24: Expected a line break, but found LPAREN('(')"
+            }
+        },
         "invalid/syntax_structure_without_body": {
             "accepted": false,
             "errors": [
