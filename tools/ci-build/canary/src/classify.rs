@@ -40,6 +40,8 @@ use std::fmt;
 
 use serde::Serialize;
 
+use crate::lockfile::{Duplicated, Resolved};
+
 /// The five verdicts a leg can report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -146,6 +148,42 @@ pub struct Diagnosis {
     /// The cargo target the first error came from, which distinguishes a break in the consumer's
     /// own code from one in a test target.
     pub target: Option<String>,
+    /// The resolved version of [`Self::target`]'s package, so a page says `aws-config 1.10.1`
+    /// rather than `aws_config`. Absent when there is no lockfile to read, which is every
+    /// `RESOLVE_FAIL`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_version: Option<String>,
+    /// Crates under test that resolved to more than one version in the same graph.
+    ///
+    /// This is the version pair a page is supposed to name. See [`crate::lockfile`] for why it is
+    /// taken from the lockfile rather than the compiler's prose, and why it is only ever evidence
+    /// alongside a verdict reached some other way.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub duplicate_versions: Vec<Duplicated>,
+}
+
+impl Diagnosis {
+    /// Add what the resolved graph says, given the leg's `Cargo.lock`.
+    ///
+    /// Separate from [`classify`] because the classifier sees only a command's output and must stay
+    /// that way: a verdict has to be decided from the evidence the step itself produced, never from
+    /// a file on disk that a later step could have rewritten.
+    ///
+    /// `None` and an unparseable lockfile both leave the fields empty rather than failing the leg.
+    /// A lockfile cargo just wrote should always parse, and if it somehow does not, the cost is a
+    /// less informative ticket — whereas turning that into an error would discard a real verdict
+    /// over a presentation detail.
+    pub fn with_resolved_graph(mut self, lock: Option<&str>) -> Self {
+        let Some(resolved) = lock.and_then(|l| Resolved::parse(l).ok()) else {
+            return self;
+        };
+        self.target_version = self
+            .target
+            .as_deref()
+            .and_then(|t| resolved.version_of_target(t));
+        self.duplicate_versions = resolved.duplicated_crates_under_test();
+        self
+    }
 }
 
 /// Classify a failed step.
@@ -171,7 +209,7 @@ pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
                          proves nothing about the release"
                             .to_string(),
                     ),
-                    target: None,
+                    ..Default::default()
                 },
             ));
         }
@@ -191,7 +229,7 @@ pub fn classify(outcome: &StepOutcome) -> Option<(Verdict, Diagnosis)> {
                      about the release",
                     outcome.step
                 )),
-                target: None,
+                ..Default::default()
             },
         ));
     }
@@ -619,6 +657,24 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         let mut o = outcome(Step::Build, "", "");
         o.exit_code = Some(0);
         assert!(classify(&o).is_none());
+    }
+
+    /// The enrichment must never cost a verdict. A lockfile that cannot be read, or is not there,
+    /// leaves a diagnosis exactly as the classifier built it.
+    #[test]
+    fn an_unreadable_lockfile_leaves_the_diagnosis_untouched() {
+        let (_, d) = classify(&outcome(Step::Build, COMPILE_ERROR_JSON, "")).unwrap();
+        for lock in [None, Some("this is not toml {{{"), Some("")] {
+            let enriched = d.clone().with_resolved_graph(lock);
+            assert_eq!(
+                enriched.summary.as_deref(),
+                Some("mismatched types"),
+                "{lock:?} must not disturb the diagnosis"
+            );
+            assert_eq!(enriched.codes, ["E0308"]);
+            assert!(enriched.target_version.is_none());
+            assert!(enriched.duplicate_versions.is_empty());
+        }
     }
 
     #[test]
