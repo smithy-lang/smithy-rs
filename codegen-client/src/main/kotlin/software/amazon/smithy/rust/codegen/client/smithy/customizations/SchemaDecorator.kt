@@ -95,25 +95,28 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.route53resolver",
             "com.amazonaws.ecs",
             "com.amazonaws.cognitoidentityprovider",
-            // Phase 5
             "com.amazonaws.ecr",
             "com.amazonaws.kms",
             "com.amazonaws.cloudwatchlogs",
             "com.amazonaws.secretsmanager",
+            // Phase 6
+            "com.amazonaws.cloudtrail",
+            "com.amazonaws.resourcegroupstaggingapi",
             // awsJson1_0 phased rollout
             "com.amazonaws.swf",
-            // Phase 2
             "com.amazonaws.opensearchserverless",
             "com.amazonaws.proton",
             "com.amazonaws.cloudcontrol",
             "com.amazonaws.paymentcryptography",
+            // Phase 4
+            "com.amazonaws.sfn",
+            "com.amazonaws.apprunner",
             // rpcv2Cbor phased rollout
             "com.amazonaws.marketplaceentitlementservice",
             // Phase 2
             "com.amazonaws.cloudwatch",
             // restJson1 phased rollout
             "com.amazonaws.wisdom",
-            // Phase 2
             "com.amazonaws.cleanrooms",
             "com.amazonaws.glacier",
             "com.amazonaws.mediapackage",
@@ -159,6 +162,23 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.fis",
             "com.amazonaws.bedrock",
             "com.amazonaws.appconfig",
+            // Phase 4
+            "com.amazonaws.securityhub",
+            "com.amazonaws.account",
+            "com.amazonaws.batch",
+            "com.amazonaws.iotdataplane",
+            "com.amazonaws.appmesh",
+            "com.amazonaws.elasticsearchservice",
+            "com.amazonaws.greengrass",
+            "com.amazonaws.bedrockruntime",
+            "com.amazonaws.dsql",
+            "com.amazonaws.backup",
+            "com.amazonaws.codeguruprofiler",
+            "com.amazonaws.kafka",
+            "com.amazonaws.apigateway",
+            // restXml phased rollout
+            // Phase 1
+            "com.amazonaws.cloudfront",
             // Dedicated namespace for tests that must exercise schema-exclusive generation
             // independently of production service and protocol rollout state.
             "smithy.rust.codegen.test.schemaheaders",
@@ -173,9 +193,9 @@ object SchemaSerdeAllowlist {
             // awsJson1_0 / awsJson1_1
             "aws.protocoltests.json10",
             // restXml
-            // "aws.protocoltests.restxml",  // RestXml, RestXmlExtras
-            // "aws.protocoltests.restxml.xmlns",
-            // "aws.protocoltests.restxmlunwrapped",
+            "aws.protocoltests.restxml",
+            "aws.protocoltests.restxml.xmlns",
+            "aws.protocoltests.restxmlunwrapped",
             // rpcv2Cbor
             "smithy.protocoltests.rpcv2Cbor",
             "aws.protocoltests.rpcv2cbor",
@@ -187,7 +207,7 @@ object SchemaSerdeAllowlist {
             // of them, not just the one being rolled out:
             "aws.protocoltests.misc",
             "com.aws.example",
-            // "aws.protocoltests.json",  // TestService awsJson1_1, RequiredValueJson awsJson1_0, RequiredValueXml restXml
+            "aws.protocoltests.json",
         )
 
     /**
