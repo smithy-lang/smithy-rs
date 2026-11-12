@@ -53,6 +53,32 @@
 //! would have had with no gate at all, which costs runner minutes and detects everything. The one
 //! outcome that must never happen by accident is the opposite — reading a broken baseline as
 //! "unchanged" and skipping legs that never ran.
+//!
+//! # A manifest that will not resolve at all
+//!
+//! The gate above compares graphs, so it only has anything to say when a manifest *resolved*. A
+//! manifest that does not resolve has no graph to compare, and the watcher dispatches it so a leg
+//! reports the failure properly rather than the watcher deciding nothing moved.
+//!
+//! Dispatching it on *every* tick, though, re-runs the same matrix to reach the same verdict. A
+//! three-hour window on a 15-minute tick is twelve ticks, so one manifest that cannot resolve for
+//! the length of a release asked for twelve identical matrices — measured, by running the watcher
+//! against a registry that could not serve six of the manifests: all six appeared in `dispatched`
+//! on all six ticks.
+//!
+//! That is what [`gate_failure`] is for. The failure is recorded, and a failure identical to the
+//! *previous* tick's is not dispatched again. Three properties make it safe:
+//!
+//! - **Only an identical, consecutive failure is suppressed.** A different error dispatches, so a
+//!   failure that changes shape — including one that changes because the publish window moved on —
+//!   is never mistaken for the one already reported.
+//! - **The record carries the tick it was written on**, which is what makes a stale record
+//!   harmless. There is nothing to clear when a manifest recovers: a record from three ticks ago
+//!   cannot suppress anything, because suppression requires the tick immediately before this one.
+//! - **A store that cannot be read or written dispatches**, exactly as for the graph baseline.
+//!
+//! The lockfile baseline is deliberately *not* touched by a failure, so when a manifest recovers,
+//! the recovery is compared against the last graph that actually resolved.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -66,11 +92,25 @@ use crate::lockfile::Resolved;
 ///
 /// Stable across ticks: the same manifest yields the same path, which is what lets a read be one
 /// lookup with no listing, no sorting and no clock.
+pub fn relative_path(manifest_id: &str) -> anyhow::Result<PathBuf> {
+    usable_as_a_path(manifest_id)?;
+    Ok(PathBuf::from(manifest_id).join("Cargo.lock"))
+}
+
+/// The path a manifest's recorded resolve failure is stored at, relative to the store's root.
 ///
+/// A sibling of the lockfile rather than the same file. An error message is not a graph: stored
+/// where a lockfile is expected it would parse to an empty package set, and two unrelated failures
+/// would then compare equal — the one answer that must never be reached by accident.
+pub fn failure_relative_path(manifest_id: &str) -> anyhow::Result<PathBuf> {
+    usable_as_a_path(manifest_id)?;
+    Ok(PathBuf::from(manifest_id).join("resolve-error"))
+}
+
 /// Manifest ids come from a compile-time table, so a traversal here is not a live attack; it is
 /// rejected anyway, because the id is being pasted into a filesystem path and a bad one would
 /// silently read or write somewhere else.
-pub fn relative_path(manifest_id: &str) -> anyhow::Result<PathBuf> {
+fn usable_as_a_path(manifest_id: &str) -> anyhow::Result<()> {
     let ok = !manifest_id.is_empty()
         && manifest_id
             .chars()
@@ -79,7 +119,7 @@ pub fn relative_path(manifest_id: &str) -> anyhow::Result<PathBuf> {
     if !ok {
         bail!("manifest id {manifest_id:?} is not usable as a path component");
     }
-    Ok(PathBuf::from(manifest_id).join("Cargo.lock"))
+    Ok(())
 }
 
 /// One package whose resolution differs between the baseline and now.
@@ -147,6 +187,55 @@ impl fmt::Display for Movement {
     }
 }
 
+/// Whether a manifest's failure to resolve is worth dispatching legs for.
+///
+/// See the module docs: a manifest that will not resolve is a finding, but it is the same finding
+/// on every tick of the window until something about it changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ResolveFailure {
+    /// The first failure, a failure different from the previous tick's, or a failure after a tick
+    /// that resolved. Dispatch: a leg reports it properly, with its retries and its evidence.
+    New,
+    /// The previous tick failed in exactly the same way, and legs were dispatched for it then.
+    /// Dispatching again would re-run the same matrix to reach the same verdict.
+    Repeated,
+}
+
+impl ResolveFailure {
+    /// Whether legs should be dispatched. Only an identical, consecutive repeat is suppressed.
+    pub fn should_dispatch(&self) -> bool {
+        matches!(self, ResolveFailure::New)
+    }
+}
+
+impl fmt::Display for ResolveFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ResolveFailure::New => f.write_str("a resolve failure not seen on the previous tick"),
+            ResolveFailure::Repeated => {
+                f.write_str("the same resolve failure as the previous tick, already dispatched")
+            }
+        }
+    }
+}
+
+/// The stored form of a failure: the tick it happened on, then the error.
+///
+/// The tick number is load-bearing rather than decorative. It is what lets a record be left behind
+/// when a manifest recovers: suppression requires the stored tick to be the one immediately before
+/// the current one, so there is nothing to clear on success and a failed write degrades to
+/// dispatching rather than to skipping.
+fn encode_failure(tick: u32, error: &str) -> String {
+    format!("{tick}\n{error}")
+}
+
+/// Split a stored record back into its tick and its error, or `None` if it is not one.
+fn decode_failure(record: &str) -> Option<(u32, &str)> {
+    let (first, rest) = record.split_once('\n')?;
+    Some((first.trim().parse().ok()?, rest))
+}
+
 /// Compare a freshly resolved lockfile against a stored baseline.
 ///
 /// An absent *or unparseable* baseline is [`Movement::NeverSeen`]: a baseline that cannot be read
@@ -209,31 +298,74 @@ impl BaselineDir {
     /// `None`, because dispatching is the safe response to every read failure and there is nothing
     /// better to do with the error.
     pub fn get(&self, manifest_id: &str) -> anyhow::Result<Option<String>> {
-        let path = self.path(manifest_id)?;
-        match std::fs::read_to_string(&path) {
-            Ok(text) => Ok(Some(text)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => {
-                eprintln!(
-                    "no usable baseline for {manifest_id} at {}: {e}",
-                    path.display()
-                );
-                Ok(None)
-            }
-        }
+        Ok(read_if_present(
+            &self.path(manifest_id)?,
+            "baseline",
+            manifest_id,
+        ))
     }
 
     /// Replace the baseline. Errors, deliberately: a store that cannot be written to must not look
     /// like a store that is merely empty, or every tick would read "never seen" and the gate would
     /// appear to work while doing nothing.
     pub fn put(&self, manifest_id: &str, lockfile: &str) -> anyhow::Result<()> {
-        let path = self.path(manifest_id)?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("creating {}", parent.display()))?;
-        }
-        std::fs::write(&path, lockfile).with_context(|| format!("writing {}", path.display()))
+        write_replacing(&self.path(manifest_id)?, lockfile)
     }
+
+    fn failure_path(&self, manifest_id: &str) -> anyhow::Result<PathBuf> {
+        Ok(self.root.join(failure_relative_path(manifest_id)?))
+    }
+
+    /// The failure recorded for this manifest, or `None`.
+    ///
+    /// Answers `None` on any read failure other than absence, for the same reason [`Self::get`]
+    /// does: without a record the failure reads as new and dispatches, which is the safe direction.
+    pub fn get_failure(&self, manifest_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(read_if_present(
+            &self.failure_path(manifest_id)?,
+            "failure record",
+            manifest_id,
+        ))
+    }
+
+    /// Record that this manifest failed to resolve on this tick, with this error.
+    ///
+    /// Errors, deliberately, like [`Self::put`]: a store that silently accepts nothing would make
+    /// every failure read as new, which is merely wasteful — but the same silence on the read side
+    /// is what would make a failure read as a repeat, so neither side may be guessed at.
+    pub fn put_failure(&self, manifest_id: &str, tick: u32, error: &str) -> anyhow::Result<()> {
+        write_replacing(
+            &self.failure_path(manifest_id)?,
+            &encode_failure(tick, error),
+        )
+    }
+}
+
+/// Read a stored record, treating absence and unreadability alike.
+///
+/// `what` names the record in the message, because "no usable baseline" and "no usable failure
+/// record" lead a reader to different places.
+fn read_if_present(path: &Path, what: &str, manifest_id: &str) -> Option<String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            eprintln!(
+                "no usable {what} for {manifest_id} at {}: {e}",
+                path.display()
+            );
+            None
+        }
+    }
+}
+
+/// Write a record, creating the manifest's directory if this is its first one.
+fn write_replacing(path: &Path, contents: &str) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    std::fs::write(path, contents).with_context(|| format!("writing {}", path.display()))
 }
 
 /// Resolve the gate for one manifest: compare, and optionally make the fresh graph the new baseline.
@@ -253,6 +385,36 @@ pub fn gate(
         store.put(manifest_id, fresh)?;
     }
     Ok(movement)
+}
+
+/// Resolve the gate for a manifest that would not resolve at all.
+///
+/// `tick` is the current tick's number, counting from one. A failure is a [`ResolveFailure::Repeated`]
+/// only when the record says the *immediately preceding* tick failed with the same error — so a
+/// record left behind by a manifest that has since recovered suppresses nothing, and no cleanup is
+/// needed on the success path.
+///
+/// Does not touch the lockfile baseline. A manifest that recovers should be compared against the
+/// last graph that actually resolved, not against nothing.
+pub fn gate_failure(
+    store: &BaselineDir,
+    manifest_id: &str,
+    error: &str,
+    tick: u32,
+    update: bool,
+) -> anyhow::Result<ResolveFailure> {
+    let previous = store.get_failure(manifest_id)?;
+    let repeated = previous
+        .as_deref()
+        .and_then(decode_failure)
+        .is_some_and(|(at, text)| tick.checked_sub(1) == Some(at) && text == error);
+    if update {
+        store.put_failure(manifest_id, tick, error)?;
+    }
+    Ok(match repeated {
+        true => ResolveFailure::Repeated,
+        false => ResolveFailure::New,
+    })
 }
 
 /// Read a lockfile from disk, for the CLI.
@@ -527,5 +689,188 @@ dependencies = ["serde"]
             gate(&store, "new-project", &bumped, true).unwrap(),
             Movement::Unchanged
         );
+    }
+
+    const FAILURE: &str = "error: no matching package named `aws-sdk-s3` found";
+
+    /// What the failure gate exists for: a manifest that cannot resolve for the length of the
+    /// window is one finding, not one per tick.
+    #[test]
+    fn an_identical_failure_on_the_next_tick_does_not_dispatch() {
+        let dir = tempdir("failure-repeat");
+        let store = BaselineDir::new(dir.path());
+
+        let first = gate_failure(&store, "new-project", FAILURE, 1, true).unwrap();
+        assert_eq!(first, ResolveFailure::New);
+        assert!(first.should_dispatch(), "{first}");
+
+        let second = gate_failure(&store, "new-project", FAILURE, 2, true).unwrap();
+        assert_eq!(second, ResolveFailure::Repeated);
+        assert!(!second.should_dispatch(), "{second}");
+
+        // And it stays suppressed for as long as it keeps failing the same way: twelve ticks is a
+        // full three-hour window.
+        for tick in 3..=12 {
+            assert_eq!(
+                gate_failure(&store, "new-project", FAILURE, tick, true).unwrap(),
+                ResolveFailure::Repeated,
+                "tick {tick}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_different_failure_dispatches() {
+        let dir = tempdir("failure-changed");
+        let store = BaselineDir::new(dir.path());
+        gate_failure(&store, "new-project", FAILURE, 1, true).unwrap();
+        assert_eq!(
+            gate_failure(
+                &store,
+                "new-project",
+                "error: something else entirely",
+                2,
+                true
+            )
+            .unwrap(),
+            ResolveFailure::New
+        );
+    }
+
+    /// A failure recorded on a tick that is not the immediately preceding one is a new finding.
+    /// That is how a manifest which recovered and then broke again is handled, with nothing to
+    /// clear on the success path.
+    #[test]
+    fn a_failure_that_skips_a_tick_dispatches() {
+        let dir = tempdir("failure-gap");
+        let store = BaselineDir::new(dir.path());
+        gate_failure(&store, "new-project", FAILURE, 1, true).unwrap();
+        assert_eq!(
+            gate_failure(&store, "new-project", FAILURE, 3, true).unwrap(),
+            ResolveFailure::New,
+            "tick 2 resolved, so this is not the failure already reported"
+        );
+        // From there the consecutive rule applies again.
+        assert_eq!(
+            gate_failure(&store, "new-project", FAILURE, 4, true).unwrap(),
+            ResolveFailure::Repeated
+        );
+    }
+
+    /// The record is for a responder too, who should be able to read what would not resolve.
+    #[test]
+    fn the_failure_record_sits_beside_the_lockfile_and_is_readable() {
+        let dir = tempdir("failure-record");
+        let store = BaselineDir::new(dir.path());
+        store.put_failure("new-project", 7, FAILURE).unwrap();
+
+        let path = dir.path().join("new-project/resolve-error");
+        assert!(path.is_file(), "{path:?}");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(FAILURE), "{text}");
+        assert!(text.starts_with("7\n"), "the tick comes first: {text:?}");
+    }
+
+    /// Unreadable means "no record", which dispatches. The opposite reading — a corrupt record
+    /// counting as a repeat — would skip legs for a failure nobody has seen.
+    #[test]
+    fn an_unusable_failure_record_dispatches() {
+        let dir = tempdir("failure-corrupt");
+        let store = BaselineDir::new(dir.path());
+        for junk in ["", "no newline here", "not-a-number\nerror: x", "\n"] {
+            write_replacing(&dir.path().join("new-project/resolve-error"), junk).unwrap();
+            assert_eq!(
+                gate_failure(&store, "new-project", "error: x", 2, false).unwrap(),
+                ResolveFailure::New,
+                "{junk:?} must not read as a repeat"
+            );
+        }
+    }
+
+    #[test]
+    fn the_failure_gate_records_only_when_asked() {
+        let dir = tempdir("failure-noupdate");
+        let store = BaselineDir::new(dir.path());
+        assert_eq!(
+            gate_failure(&store, "new-project", FAILURE, 1, false).unwrap(),
+            ResolveFailure::New
+        );
+        assert_eq!(
+            store.get_failure("new-project").unwrap(),
+            None,
+            "nothing should have been written"
+        );
+        assert_eq!(
+            gate_failure(&store, "new-project", FAILURE, 2, false).unwrap(),
+            ResolveFailure::New,
+            "a read-only gate must not suppress the next tick"
+        );
+    }
+
+    /// A failure must not disturb the graph baseline: when the manifest recovers, the recovery is
+    /// compared against the last graph that actually resolved.
+    #[test]
+    fn recording_a_failure_leaves_the_graph_baseline_alone() {
+        let dir = tempdir("failure-keeps-baseline");
+        let store = BaselineDir::new(dir.path());
+        store.put("new-project", BASE).unwrap();
+        gate_failure(&store, "new-project", FAILURE, 1, true).unwrap();
+        assert_eq!(store.get("new-project").unwrap().as_deref(), Some(BASE));
+        // So recovering to the same graph is correctly quiet -- those legs already ran.
+        assert_eq!(
+            gate(&store, "new-project", BASE, true).unwrap(),
+            Movement::Unchanged
+        );
+    }
+
+    /// A store that cannot be written to must not be able to answer "repeat". It is the read side
+    /// that degrades silently to `New`; the write side errors, so the caller dispatches.
+    #[test]
+    fn a_failure_store_that_cannot_be_written_errors_rather_than_guessing() {
+        let dir = tempdir("failure-unwritable");
+        // A file where the manifest's own directory would go, so creating it cannot succeed.
+        std::fs::write(dir.path().join("new-project"), "in the way").unwrap();
+        let store = BaselineDir::new(dir.path());
+
+        assert!(store.put_failure("new-project", 1, FAILURE).is_err());
+        assert!(
+            gate_failure(&store, "new-project", FAILURE, 1, true).is_err(),
+            "the gate must propagate it, not answer Repeated"
+        );
+    }
+
+    #[test]
+    fn a_failure_path_cannot_escape_the_store() {
+        for bad in ["../evil", "a/b", "..", "", "/abs", "with space"] {
+            assert!(
+                failure_relative_path(bad).is_err(),
+                "{bad:?} should be rejected"
+            );
+        }
+        assert_eq!(
+            failure_relative_path("new-project").unwrap(),
+            PathBuf::from("new-project/resolve-error")
+        );
+    }
+
+    /// The two records for one manifest must not be the same file: an error message stored where a
+    /// lockfile is expected parses to an empty package set, so two unrelated failures would compare
+    /// equal and a recovery would look like every package appearing at once.
+    #[test]
+    fn the_two_records_are_different_files() {
+        assert_ne!(
+            relative_path("new-project").unwrap(),
+            failure_relative_path("new-project").unwrap()
+        );
+        let dir = tempdir("failure-distinct");
+        let store = BaselineDir::new(dir.path());
+        store.put("new-project", BASE).unwrap();
+        store.put_failure("new-project", 1, FAILURE).unwrap();
+        assert_eq!(store.get("new-project").unwrap().as_deref(), Some(BASE));
+        assert!(store
+            .get_failure("new-project")
+            .unwrap()
+            .unwrap()
+            .contains(FAILURE));
     }
 }

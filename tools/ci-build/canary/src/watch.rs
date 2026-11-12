@@ -47,7 +47,7 @@ use std::time::Duration;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::baseline::{self, BaselineDir, Movement};
+use crate::baseline::{self, BaselineDir, Movement, ResolveFailure};
 use crate::leg::Clock;
 
 /// How often the graph is re-resolved.
@@ -95,7 +95,12 @@ pub struct Tick {
     pub dispatched: Vec<String>,
     /// Manifests whose graph was identical to the previous tick's.
     pub unchanged: Vec<String>,
-    /// Manifests the watcher could not resolve. Dispatched anyway, so a leg reports it properly.
+    /// Manifests the watcher could not resolve.
+    ///
+    /// Dispatched when the failure is new, or differs from the previous tick's, so a leg reports it
+    /// properly. A failure identical to the previous tick's appears here but *not* in
+    /// [`Self::dispatched`]: the legs already ran on it. So a manifest listed here and absent from
+    /// `dispatched` is one that is still failing in the way already reported.
     pub unresolved: Vec<String>,
     /// The dispatch for this tick did not land, so none of [`Self::dispatched`] got legs.
     ///
@@ -258,11 +263,36 @@ pub fn watch(
                     }
                 }
                 Err(e) => {
-                    // Let a leg report this properly, with its retries and its evidence, rather
-                    // than deciding here that nothing moved.
-                    eprintln!("{manifest}: did not resolve, dispatching anyway: {e}");
                     tick.unresolved.push(manifest.clone());
-                    tick.dispatched.push(manifest.clone());
+                    // A leg reports this properly, with its retries and its evidence, rather than
+                    // the watcher deciding here that nothing moved. But only once per failure: a
+                    // manifest that cannot resolve for the length of the window would otherwise
+                    // ask for the same matrix on every tick, and reach the same verdict each time.
+                    // A failure that *differs* from the previous tick's is dispatched, so a graph
+                    // that breaks in a new way during the window is never mistaken for the one
+                    // already reported.
+                    let failure = format!("{e:#}");
+                    match baseline::gate_failure(baselines, manifest, &failure, number, true) {
+                        Ok(ResolveFailure::Repeated) => {
+                            eprintln!(
+                                "{manifest}: still not resolving, {}: {failure}",
+                                ResolveFailure::Repeated
+                            );
+                        }
+                        Ok(ResolveFailure::New) => {
+                            eprintln!("{manifest}: did not resolve, dispatching: {failure}");
+                            tick.dispatched.push(manifest.clone());
+                        }
+                        // The same direction as an unwritable baseline: a store that cannot be
+                        // read or written must never be the reason legs are skipped.
+                        Err(store_err) => {
+                            eprintln!(
+                                "{manifest}: did not resolve ({failure}), and the failure could \
+                                 not be recorded ({store_err}); dispatching"
+                            );
+                            tick.dispatched.push(manifest.clone());
+                        }
+                    }
                 }
             }
         }
@@ -692,8 +722,22 @@ mod tests {
                 .expect("unscripted manifest")
                 .1;
             let i = self.tick.min(versions.len() - 1);
-            Ok(versions[i].clone())
+            let entry = versions[i].clone();
+            // A scripted entry beginning with `!fail:` makes that tick's resolve fail, with the
+            // rest of the entry as the error. One script can then express "fails, recovers, fails
+            // again" and "fails differently every tick", which is what the repeated-failure gate
+            // has to be tested against.
+            match entry.strip_prefix(FAILS) {
+                Some(message) => anyhow::bail!("{message}"),
+                None => Ok(entry),
+            }
         }
+    }
+
+    const FAILS: &str = "!fail:";
+
+    fn fails(message: &str) -> String {
+        format!("{FAILS}{message}")
     }
 
     fn lock(name: &str, version: &str) -> String {
@@ -910,6 +954,177 @@ mod tests {
                 .contains(&"manifest-2".to_string()),
             "it must still be dispatched"
         );
+    }
+
+    /// ...but only once. A manifest that cannot resolve for the length of the window used to ask
+    /// for the same matrix on every tick, reaching the same verdict each time — twelve of them on
+    /// a three-hour window. Found by running the watcher against a registry that could not serve
+    /// six of the manifests: all six appeared in `dispatched` on all six ticks.
+    #[test]
+    fn a_manifest_that_keeps_failing_the_same_way_is_dispatched_once() {
+        let dir = tempdir("watch-repeat-failure");
+        let ms = manifests(2);
+        let mut r = FakeResolver::steady(&ms);
+        r.script[1].1 = vec![fails("error: no matching package named `aws-sdk-s3` found")];
+        let mut d = FakeDispatcher::default();
+        let mut p = FakePublishing::completes_after(4);
+        let mut c = FakeClock::default();
+        let report = watch(
+            "release-x",
+            &ms,
+            &BaselineDir::new(dir.path()),
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
+        );
+
+        assert_eq!(
+            report.ticks.len(),
+            5,
+            "four polls that say incomplete, then the one that completes"
+        );
+        // Still failing, and the report still says so on every tick.
+        for (i, tick) in report.ticks.iter().enumerate() {
+            assert_eq!(tick.unresolved, ["manifest-1"], "tick {}", i + 1);
+        }
+        assert!(report.ticks[0]
+            .dispatched
+            .contains(&"manifest-1".to_string()));
+        for (i, tick) in report.ticks.iter().enumerate().skip(1) {
+            assert!(
+                !tick.dispatched.contains(&"manifest-1".to_string()),
+                "tick {}: the same failure must not be dispatched again",
+                i + 1
+            );
+        }
+        // The other manifest is steady, so after the first tick nothing is asked for at all.
+        assert_eq!(
+            d.calls.len(),
+            1,
+            "one dispatch for the whole window, not one per tick"
+        );
+    }
+
+    /// The suppression must never come from a store that is simply broken. If the failure cannot be
+    /// recorded, the manifest is dispatched on every tick — back to the old behaviour, which is
+    /// wasteful rather than blind.
+    #[test]
+    fn a_failure_that_cannot_be_recorded_is_dispatched_every_tick() {
+        let dir = tempdir("watch-unrecordable-failure");
+        let ms = manifests(2);
+        // A file where manifest-1's own directory would go, so its record cannot be written.
+        std::fs::write(dir.path().join("manifest-1"), "in the way").unwrap();
+        let mut r = FakeResolver::steady(&ms);
+        r.script[1].1 = vec![fails("error: no matching package named `aws-sdk-s3` found")];
+        let mut d = FakeDispatcher::default();
+        let mut p = FakePublishing::completes_after(2);
+        let mut c = FakeClock::default();
+        let report = watch(
+            "release-x",
+            &ms,
+            &BaselineDir::new(dir.path()),
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
+        );
+
+        for (i, tick) in report.ticks.iter().enumerate() {
+            assert!(
+                tick.dispatched.contains(&"manifest-1".to_string()),
+                "tick {}: an unrecordable failure must still get legs",
+                i + 1
+            );
+        }
+    }
+
+    /// A failure that changes shape is a different finding and gets legs. The publish window is
+    /// exactly when a graph can break in a new way, because crates are landing one at a time.
+    #[test]
+    fn a_failure_that_changes_is_dispatched_again() {
+        let dir = tempdir("watch-changed-failure");
+        let ms = manifests(2);
+        let mut r = FakeResolver::steady(&ms);
+        r.script[1].1 = vec![
+            fails("error: no matching package named `aws-sdk-s3` found"),
+            fails("error: failed to select a version for `aws-smithy-types`"),
+            fails("error: failed to select a version for `aws-smithy-types`"),
+        ];
+        let mut d = FakeDispatcher::default();
+        let mut p = FakePublishing::completes_after(3);
+        let mut c = FakeClock::default();
+        let report = watch(
+            "release-x",
+            &ms,
+            &BaselineDir::new(dir.path()),
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
+        );
+
+        let dispatched = |t: usize| {
+            report.ticks[t]
+                .dispatched
+                .contains(&"manifest-1".to_string())
+        };
+        assert!(dispatched(0), "the first failure");
+        assert!(dispatched(1), "a different failure is a different finding");
+        assert!(!dispatched(2), "and that one is now the repeat");
+    }
+
+    /// Fail, recover, fail the same way again. The third tick is a new finding even though its
+    /// error matches the first, because a tick in between resolved. That is what the tick number in
+    /// the record buys: nothing has to be cleared when a manifest recovers, so a store that cannot
+    /// be written cannot leave a stale record behind that suppresses a real failure.
+    #[test]
+    fn a_failure_after_a_recovery_is_dispatched_again() {
+        let dir = tempdir("watch-recovered-failure");
+        let ms = manifests(2);
+        let mut r = FakeResolver::steady(&ms);
+        let same = "error: no matching package named `aws-sdk-s3` found";
+        r.script[1].1 = vec![fails(same), lock("manifest-1", "1.0.0"), fails(same)];
+        let mut d = FakeDispatcher::default();
+        let mut p = FakePublishing::completes_after(3);
+        let mut c = FakeClock::default();
+        let report = watch(
+            "release-x",
+            &ms,
+            &BaselineDir::new(dir.path()),
+            Cadence::default(),
+            &mut Seams {
+                resolver: &mut r,
+                dispatcher: &mut d,
+                publishing: &mut p,
+                clock: &mut c,
+            },
+        );
+
+        let dispatched = |t: usize| {
+            report.ticks[t]
+                .dispatched
+                .contains(&"manifest-1".to_string())
+        };
+        assert!(dispatched(0), "the first failure");
+        assert!(
+            dispatched(1),
+            "the recovery is movement: it has no baseline graph"
+        );
+        assert!(
+            dispatched(2),
+            "and failing again after resolving is a new finding"
+        );
+        assert_eq!(report.ticks[1].unresolved, [] as [String; 0]);
     }
 
     /// The one error the watcher refuses to continue past: legs that were never dispatched emit no
