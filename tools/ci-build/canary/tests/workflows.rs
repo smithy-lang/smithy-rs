@@ -398,6 +398,52 @@ fn a_rigged_break_is_armed_apart_from_a_real_one() {
     );
 }
 
+/// Overlapping dispatches must queue, never cancel.
+///
+/// Two ticks that dispatch different manifest sets land in different concurrency groups and run
+/// side by side. The case this pins down is a repeated dispatch of the *same* set, where
+/// `cancel-in-progress` decides between two outcomes that are not symmetric. Queued, the second run
+/// starts late and still reports every leg. Cancelled, the first run's legs die mid-flight: they
+/// emit no datapoint and leave no report, so they arrive in the record as `unreported` — which is
+/// the signal reserved for a leg that died silently, and is how a deliberate cancellation would get
+/// filed as a defect in the canary.
+///
+/// Asserted because the setting is one word and the comments describing it had already drifted from
+/// it: both this workflow and the watcher's dispatcher claimed a repeat "supersedes its
+/// predecessor", which is what `true` would do. The code was right and the prose was wrong, in the
+/// one place a reader would look to find out what happens when ticks overlap.
+#[test]
+fn a_repeated_dispatch_queues_rather_than_cancelling_its_predecessor() {
+    let wf = load("build-canary");
+    let concurrency = wf
+        .get("concurrency")
+        .expect("the leg workflow must bound its own concurrency");
+
+    assert_eq!(
+        concurrency
+            .get("cancel-in-progress")
+            .and_then(Value::as_bool),
+        Some(false),
+        "cancelling in flight turns a leg that was deliberately superseded into a leg that looks \
+         like it died silently"
+    );
+
+    // And the group has to carry the scenario, or two ticks dispatching *different* sets would
+    // serialise behind each other for no reason.
+    let group = concurrency
+        .get("group")
+        .and_then(Value::as_str)
+        .expect("a concurrency group");
+    assert!(
+        group.contains("inputs.scenario"),
+        "the group must be per scenario set, or unrelated dispatches block each other: {group:?}"
+    );
+    assert!(
+        group.contains("inputs.tag"),
+        "and per release, or one release's dispatches would queue behind another's: {group:?}"
+    );
+}
+
 /// The floor hour's gate has to be able to see the previous release, and to run at all.
 ///
 /// Two ways this degrades silently rather than breaking loudly, both of which have to be ruled out

@@ -50,8 +50,16 @@ permissions:
   contents: read
 
 concurrency:
-  # Keyed on the scenario so a release's concurrent manifests never cancel each other, while a
-  # repeated dispatch of the same scenario supersedes its predecessor.
+  # Keyed on the scenario so a release's concurrent manifests never block each other: two ticks that
+  # dispatch different sets land in different groups and run side by side.
+  #
+  # `cancel-in-progress: false` means a repeated dispatch of the *same* set queues behind the run in
+  # flight rather than replacing it, and that direction is deliberate. A cancelled run's legs die
+  # mid-flight: they emit no datapoint and leave no report, so they arrive in the record as
+  # `unreported` and look exactly like legs that died silently -- the one signal reserved for a real
+  # defect. A queued run merely starts late and still reports everything. Overlap should be rare,
+  # since a leg is bounded inside the watcher's tick by an invariant test, but when it happens late
+  # beats lost.
   group: build-canary-${{ inputs.scenario }}-${{ inputs.tag }}
   cancel-in-progress: false
 
