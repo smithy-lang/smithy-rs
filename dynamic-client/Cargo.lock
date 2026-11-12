@@ -37,6 +37,7 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-lang",
  "aws-smithy-query",
+ "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-xml",
 ]

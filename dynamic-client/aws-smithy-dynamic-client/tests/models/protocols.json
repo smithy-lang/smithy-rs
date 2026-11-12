@@ -36,6 +36,12 @@
         "example.protocols#NoProtocol": {
             "type": "service",
             "version": "2024-01-01"
+        },
+        "example.protocols#QueryWithoutVersion": {
+            "type": "service",
+            "traits": {
+                "aws.protocols#awsQuery": {}
+            }
         }
     }
 }

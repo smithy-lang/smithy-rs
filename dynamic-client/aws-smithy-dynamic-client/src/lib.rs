@@ -20,6 +20,7 @@
 //! operations by name. Inputs and outputs are documents shaped by the model.
 
 pub mod client;
+pub mod config;
 pub mod error;
 mod protocol;
 

@@ -5,12 +5,13 @@
 
 //! The dynamic client and its builder.
 
+use crate::config;
 use crate::error::BuildError;
-use crate::protocol::{detect, protocol_traits};
+use crate::protocol::{detect, protocol_traits, AWS_QUERY};
 use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::{Model, ShapeId};
-use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
+use aws_smithy_schema::protocol::SharedClientProtocol;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -19,10 +20,12 @@ use std::sync::Arc;
 /// Create one with [`DynamicClient::builder`].
 ///
 /// ```no_run
+/// use aws_smithy_dynamic_client::config::{BehaviorVersion, Config};
 /// use aws_smithy_dynamic_client::DynamicClient;
 ///
 /// let client = DynamicClient::builder()
 ///     .model_file("weather.json")
+///     .config(Config::builder().behavior_version(BehaviorVersion::latest()))
 ///     .build()?;
 /// # Ok::<(), aws_smithy_dynamic_client::BuildError>(())
 /// ```
@@ -62,7 +65,7 @@ impl DynamicClient {
 pub struct Builder {
     model_file: Option<PathBuf>,
     service: Option<ShapeId>,
-    protocol: Option<SharedClientProtocol>,
+    config: config::Builder,
 }
 
 impl Builder {
@@ -82,10 +85,11 @@ impl Builder {
         self
     }
 
-    /// Sets the protocol to use, in place of the one detected from the service's protocol
-    /// traits.
-    pub fn protocol(mut self, protocol: impl ClientProtocol + 'static) -> Self {
-        self.protocol = Some(SharedClientProtocol::new(protocol));
+    /// Layers a config over the config set so far. Each field the new config sets wins.
+    ///
+    /// Takes a [`Config`](config::Config) or a [`config::Builder`].
+    pub fn config(mut self, config: impl Into<config::Builder>) -> Self {
+        self.config = self.config.merge(config.into());
         self
     }
 
@@ -97,9 +101,13 @@ impl Builder {
     /// when the model has no service, or has several and none is specified. Also fails when
     /// the model has no service with the given ID, or when the service's shapes are invalid.
     /// Also fails when no protocol is set and no built-in protocol matches a protocol trait
-    /// of the service.
+    /// of the service. Also fails when the config has no behavior version, or when the
+    /// awsQuery protocol is used and the service has no version.
     pub fn build(self) -> Result<DynamicClient, BuildError> {
         let path = self.model_file.ok_or_else(BuildError::missing_model)?;
+        if self.config.behavior_version.is_none() {
+            return Err(BuildError::missing_behavior_version());
+        }
         let model = Model::from_json_file(&path)
             .map_err(|source| BuildError::model_load_failed(path, source))?;
         let service_view = select_service(&model, self.service)?;
@@ -110,7 +118,7 @@ impl Builder {
             .materialization(Materialization::Lazy)
             .build()
             .map_err(BuildError::schema_build_failed)?;
-        let protocol = match self.protocol {
+        let protocol = match self.config.protocol {
             Some(protocol) => protocol,
             None => detect(&service_view).ok_or_else(|| {
                 BuildError::protocol_not_found(
@@ -119,6 +127,12 @@ impl Builder {
                 )
             })?,
         };
+        // An awsQuery request carries the service version as its `Version` parameter.
+        if protocol.protocol_id().to_string() == AWS_QUERY.as_str()
+            && service_view.version().is_none()
+        {
+            return Err(BuildError::missing_service_version(service));
+        }
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
             protocol,
@@ -157,6 +171,7 @@ fn service_ids(model: &Model) -> Vec<ShapeId> {
 #[cfg(test)]
 mod tests {
     use super::DynamicClient;
+    use crate::config::{BehaviorVersion, Config};
     use crate::error::BuildErrorKind;
     use crate::BuildError;
     use aws_smithy_lang::runtime_schema::Materialization;
@@ -173,8 +188,14 @@ mod tests {
         ShapeId::new(id).unwrap()
     }
 
+    // A builder with a behavior version. Every client needs one.
+    fn builder() -> super::Builder {
+        DynamicClient::builder()
+            .config(Config::builder().behavior_version(BehaviorVersion::latest()))
+    }
+
     fn build_error(file: &str, service: Option<&str>) -> BuildError {
-        let mut builder = DynamicClient::builder().model_file(model(file));
+        let mut builder = builder().model_file(model(file));
         if let Some(service) = service {
             builder = builder.service(id(service));
         }
@@ -198,16 +219,13 @@ mod tests {
 
     #[test]
     fn selects_the_only_service() {
-        let client = DynamicClient::builder()
-            .model_file(model("weather.json"))
-            .build()
-            .unwrap();
+        let client = builder().model_file(model("weather.json")).build().unwrap();
         assert_eq!("example.weather#Weather", client.service().as_str());
     }
 
     #[test]
     fn selects_the_specified_service() {
-        let client = DynamicClient::builder()
+        let client = builder()
             .model_file(model("two-services.json"))
             .service(id("example.cafe#Cafe"))
             .build()
@@ -245,10 +263,7 @@ mod tests {
     fn builds_schemas_lazily_for_dynamodb() {
         let dynamodb = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../aws/sdk/aws-models/dynamodb.json");
-        let client = DynamicClient::builder()
-            .model_file(dynamodb)
-            .build()
-            .unwrap();
+        let client = builder().model_file(dynamodb).build().unwrap();
         assert_eq!(Materialization::Lazy, client.schemas.materialization());
         assert_eq!(
             "com.amazonaws.dynamodb#DynamoDB_20120810",
@@ -280,7 +295,7 @@ mod tests {
     }
 
     fn protocols(service: &str) -> super::Builder {
-        DynamicClient::builder()
+        builder()
             .model_file(model("protocols.json"))
             .service(id(service))
     }
@@ -289,10 +304,7 @@ mod tests {
     fn detects_the_protocol_from_the_service_trait() {
         let dynamodb = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../aws/sdk/aws-models/dynamodb.json");
-        let client = DynamicClient::builder()
-            .model_file(dynamodb)
-            .build()
-            .unwrap();
+        let client = builder().model_file(dynamodb).build().unwrap();
         assert_eq!("aws.protocols#awsJson1_0", client.protocol_id());
     }
 
@@ -307,10 +319,13 @@ mod tests {
 
     #[test]
     fn uses_the_explicit_protocol() {
-        let client = protocols("example.protocols#RestJsonAndCbor")
-            .protocol(aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new())
-            .build()
-            .unwrap();
+        let client =
+            protocols("example.protocols#RestJsonAndCbor")
+                .config(Config::builder().protocol(
+                    aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new(),
+                ))
+                .build()
+                .unwrap();
         assert_eq!("aws.protocols#restJson1", client.protocol_id());
     }
 
@@ -343,6 +358,41 @@ mod tests {
             err.kind(),
             BuildErrorKind::ProtocolNotFound { service, traits }
                 if *service == id("example.protocols#NoProtocol") && traits.is_empty()
+        ));
+    }
+
+    #[test]
+    fn fails_without_a_behavior_version() {
+        let err = DynamicClient::builder()
+            .model_file(model("weather.json"))
+            .build()
+            .unwrap_err();
+        assert!(matches!(err.kind(), BuildErrorKind::MissingBehaviorVersion));
+    }
+
+    #[test]
+    fn a_later_config_wins_for_the_fields_it_sets() {
+        // The second config sets no behavior version, so the first one's stays.
+        let client =
+            builder()
+                .model_file(model("weather.json"))
+                .config(Config::builder().protocol(
+                    aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new(),
+                ))
+                .build()
+                .unwrap();
+        assert_eq!("aws.protocols#restJson1", client.protocol_id());
+    }
+
+    #[test]
+    fn fails_on_aws_query_without_a_service_version() {
+        let err = protocols("example.protocols#QueryWithoutVersion")
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            err.kind(),
+            BuildErrorKind::MissingServiceVersion { service }
+                if *service == id("example.protocols#QueryWithoutVersion")
         ));
     }
 }

@@ -39,6 +39,10 @@ pub(crate) enum BuildErrorKind {
         service: ShapeId,
         traits: Vec<ShapeId>,
     },
+    MissingBehaviorVersion,
+    MissingServiceVersion {
+        service: ShapeId,
+    },
 }
 
 impl BuildError {
@@ -81,6 +85,18 @@ impl BuildError {
     pub(crate) fn protocol_not_found(service: ShapeId, traits: Vec<ShapeId>) -> Self {
         Self {
             kind: BuildErrorKind::ProtocolNotFound { service, traits },
+        }
+    }
+
+    pub(crate) fn missing_behavior_version() -> Self {
+        Self {
+            kind: BuildErrorKind::MissingBehaviorVersion,
+        }
+    }
+
+    pub(crate) fn missing_service_version(service: ShapeId) -> Self {
+        Self {
+            kind: BuildErrorKind::MissingServiceVersion { service },
         }
     }
 
@@ -142,6 +158,16 @@ impl fmt::Display for BuildError {
                 write_ids(f, traits)?;
                 write!(f, "; set a protocol with `protocol(..)`")
             }
+            BuildErrorKind::MissingBehaviorVersion => write!(
+                f,
+                "a behavior version is required: set one with \
+                 `Config::builder().behavior_version(..)`"
+            ),
+            BuildErrorKind::MissingServiceVersion { service } => write!(
+                f,
+                "service `{service}` uses the awsQuery protocol, which needs a service \
+                 version, but the service has no `version`"
+            ),
         }
     }
 }
@@ -156,6 +182,8 @@ impl Error for BuildError {
             BuildErrorKind::UnknownService { .. } => None,
             BuildErrorKind::SchemaBuildFailed { source } => Some(source),
             BuildErrorKind::ProtocolNotFound { .. } => None,
+            BuildErrorKind::MissingBehaviorVersion => None,
+            BuildErrorKind::MissingServiceVersion { .. } => None,
         }
     }
 }

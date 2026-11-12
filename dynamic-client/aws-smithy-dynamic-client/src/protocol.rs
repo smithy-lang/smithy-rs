@@ -20,7 +20,7 @@ const AWS_JSON_1_0: ShapeId = ShapeId::from_static("aws.protocols#awsJson1_0");
 const AWS_JSON_1_1: ShapeId = ShapeId::from_static("aws.protocols#awsJson1_1");
 const REST_JSON_1: ShapeId = ShapeId::from_static("aws.protocols#restJson1");
 const REST_XML: ShapeId = ShapeId::from_static("aws.protocols#restXml");
-const AWS_QUERY: ShapeId = ShapeId::from_static("aws.protocols#awsQuery");
+pub(crate) const AWS_QUERY: ShapeId = ShapeId::from_static("aws.protocols#awsQuery");
 const EC2_QUERY: ShapeId = ShapeId::from_static("aws.protocols#ec2Query");
 const PROTOCOL_DEFINITION: ShapeId = ShapeId::from_static("smithy.api#protocolDefinition");
 

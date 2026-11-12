@@ -14,6 +14,7 @@ aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
 aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
 aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }
 aws-smithy-query = { path = "../../rust-runtime/aws-smithy-query" }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
 
