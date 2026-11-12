@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Additional CI checks for the CDK that provisions this repository's own CI infrastructure: the
+# GitHub Actions OIDC provider, and the IAM roles that workflows assume to reach AWS.
+#
+# None of this was checked anywhere before. `check-tools` builds and tests
+# `tools/ci-cdk/canary-runner`, which is the Rust part; the TypeScript was never compiled, linted or
+# tested by CI -- including the jest suite that pins the trust policy of every role a workflow can
+# assume. A trust policy is exactly the kind of thing that should not first be exercised by a
+# deployment.
+#
+# The build image provides node at /opt/nodejs and puts it on PATH, so this needs no setup. These
+# checks were verified against that same node version.
+set -eux
+
+npm ci
+
+# Lint, then typecheck and synthesize. `npm run build` is `tsc` followed by `cdk synth`, which is
+# the strongest check available offline: it produces the actual CloudFormation, so a construct that
+# compiles but cannot assemble into a template still fails here.
+npm run lint
+npm run build
+
+npx jest
