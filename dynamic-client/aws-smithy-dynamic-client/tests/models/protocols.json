@@ -42,6 +42,23 @@
             "traits": {
                 "aws.protocols#awsQuery": {}
             }
+        },
+        "example.protocols#Facts": {
+            "type": "service",
+            "version": "2024-01-01",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {},
+                "smithy.api#xmlNamespace": {
+                    "uri": "https://example.com/facts",
+                    "prefix": "f"
+                }
+            }
+        },
+        "example.protocols#FactsWithoutVersion": {
+            "type": "service",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {}
+            }
         }
     }
 }

@@ -18,7 +18,9 @@ use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponentsBuilder, SharedConfigValidator,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugins, StaticRuntimePlugin};
-use aws_smithy_schema::protocol::SharedClientProtocol;
+use aws_smithy_schema::protocol::{
+    ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
+};
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -45,7 +47,8 @@ pub struct DynamicClient {
     #[allow(dead_code)]
     schemas: Arc<RuntimeSchemaSet>,
     // The default plugins, then the plugin for the client's config, in the order generated
-    // clients apply them. The protocol is stored in the config plugin's layer.
+    // clients apply them. The protocol and the service facts are stored in the config plugin's
+    // layer.
     // TODO(dynamic-client): Remove this `allow` once calls read the runtime plugins.
     #[allow(dead_code)]
     runtime_plugins: RuntimePlugins,
@@ -77,7 +80,7 @@ impl DynamicClient {
     #[cfg(test)]
     fn protocol_id(&self) -> String {
         let (cfg, _) = self.client_config();
-        cfg.load::<SharedClientProtocol>()
+        cfg.load::<aws_smithy_schema::protocol::SharedClientProtocol>()
             .expect("build() stores the protocol")
             .protocol_id()
             .to_string()
@@ -165,8 +168,10 @@ impl Builder {
         components.push_config_validator(SharedConfigValidator::base_client_config_fn(
             validate_http_client,
         ));
-        let runtime_plugins =
-            runtime_plugins(components, behavior_version, service.name(), protocol);
+        let mut layer = Layer::new("DynamicClientConfig");
+        layer.store_put(protocol);
+        store_service_facts(&mut layer, &service_view);
+        let runtime_plugins = runtime_plugins(components, layer, behavior_version, service.name());
         // The same check generated clients run when they are created.
         let mut cfg = ConfigBag::base();
         let components = runtime_plugins
@@ -194,15 +199,35 @@ fn validate_http_client(
     }
 }
 
+// Stores the service facts that protocols read from the config, as generated clients store them.
+// A generated client stores an empty version when the model has none.
+fn store_service_facts(layer: &mut Layer, service: &ServiceView<'_>) {
+    let id = service.id();
+    layer.store_put(ServiceShapeName::new(id.name().to_owned()));
+    layer.store_put(ServiceShapeNamespace::new(id.namespace().to_owned()));
+    layer.store_put(ServiceVersion::new(
+        service.version().unwrap_or_default().to_owned(),
+    ));
+    let xml_namespace = service
+        .get_trait(&XML_NAMESPACE)
+        .and_then(|value| value.as_object());
+    if let Some(xml_namespace) = xml_namespace {
+        let uri = xml_namespace.get("uri").and_then(|value| value.as_str());
+        let prefix = xml_namespace.get("prefix").and_then(|value| value.as_str());
+        layer.store_put(ServiceXmlNamespace::new(
+            uri.unwrap_or_default().to_owned(),
+            prefix.map(|prefix| prefix.to_owned().into()),
+        ));
+    }
+}
+
 // The default plugins, then a plugin for the client's config, as generated clients build them.
 fn runtime_plugins(
     components: RuntimeComponentsBuilder,
+    layer: Layer,
     behavior_version: BehaviorVersion,
     service_name: &str,
-    protocol: SharedClientProtocol,
 ) -> RuntimePlugins {
-    let mut layer = Layer::new("DynamicClientConfig");
-    layer.store_put(protocol);
     RuntimePlugins::new()
         .with_client_plugins(default_plugins(
             DefaultPluginParams::new()
@@ -215,6 +240,8 @@ fn runtime_plugins(
                 .with_runtime_components(components),
         )
 }
+
+const XML_NAMESPACE: ShapeId = ShapeId::from_static("smithy.api#xmlNamespace");
 
 // Picks the service specified by the builder, or the model's only service. A specified service
 // is looked up by ID, so only the default case walks the model's shapes.
@@ -256,6 +283,9 @@ mod tests {
     use aws_smithy_http_client::test_util::NeverClient;
     use aws_smithy_lang::runtime_schema::Materialization;
     use aws_smithy_lang::ShapeId;
+    use aws_smithy_schema::protocol::{
+        ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
+    };
     use std::path::PathBuf;
     use std::time::UNIX_EPOCH;
 
@@ -512,5 +542,30 @@ mod tests {
         assert!(matches!(err.kind(), BuildErrorKind::InvalidConfig { .. }));
         let source = std::error::Error::source(&err).expect("the validator error is the source");
         assert!(source.downcast_ref::<MissingHttpClient>().is_some());
+    }
+
+    #[test]
+    fn stores_the_service_facts_in_the_config() {
+        let client = protocols("example.protocols#Facts").build().unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!("Facts", cfg.load::<ServiceShapeName>().unwrap().as_str());
+        assert_eq!(
+            "example.protocols",
+            cfg.load::<ServiceShapeNamespace>().unwrap().as_str()
+        );
+        assert_eq!("2024-01-01", cfg.load::<ServiceVersion>().unwrap().as_str());
+        let xml_namespace = cfg.load::<ServiceXmlNamespace>().unwrap();
+        assert_eq!("https://example.com/facts", xml_namespace.uri());
+        assert_eq!(Some("f"), xml_namespace.prefix());
+    }
+
+    #[test]
+    fn stores_an_empty_version_and_no_xml_namespace_when_the_model_has_none() {
+        let client = protocols("example.protocols#FactsWithoutVersion")
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!("", cfg.load::<ServiceVersion>().unwrap().as_str());
+        assert!(cfg.load::<ServiceXmlNamespace>().is_none());
     }
 }
