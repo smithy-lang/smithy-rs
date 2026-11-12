@@ -18,6 +18,7 @@
 
 pub mod baseline;
 pub mod classify;
+pub mod floor;
 pub mod leg;
 pub mod lockfile;
 pub mod manifest;
