@@ -294,19 +294,20 @@ fn syntactic_shape_ids_resolve_and_warn() {
 
 #[test]
 fn unsupported_constructs_are_reported_precisely() {
-    let err = idl_err(
-        "namespace ex\nstring S\napply S @sensitive\nstructure M with [S] {}\nset Old { member: String }\n",
-    );
+    let err =
+        idl_err("namespace ex\nstring S\nstructure M with [S] {}\nset Old { member: String }\n");
     assert_eq!(
         codes(&err),
         [
-            DiagnosticCode::UnsupportedFeature,
             DiagnosticCode::UnsupportedFeature,
             DiagnosticCode::UnsupportedFeature,
         ]
     );
     assert!(err.is_invalid_model());
     let err = idl_err("namespace ex\n@mixin\nstructure M {}\n");
+    assert_eq!(codes(&err), [DiagnosticCode::UnsupportedFeature]);
+    // `@mixin` applied with `apply` is caught too.
+    let err = idl_err("namespace ex\nstructure M {}\napply M @mixin\n");
     assert_eq!(codes(&err), [DiagnosticCode::UnsupportedFeature]);
 }
 
@@ -466,6 +467,31 @@ fn only_input_and_output_count_as_inline_shapes() {
     };
     assert!(limited(2).unwrap_err().is_resource_limit());
     limited(3).unwrap();
+}
+
+#[test]
+fn apply_counts_toward_max_shapes_in_both_formats() {
+    // A shape and an `apply` are two top-level entries in either format; traits do not count.
+    let idl = "namespace ex\n@sensitive\nstring S\napply S {\n    @documentation(\"x\")\n    @tags([\"a\"])\n}\n";
+    let json = r#"{"smithy":"2.0","shapes":{"ex#S":{"type":"structure","members":{"m":{"target":"smithy.api#String"}}},"ex#S$m":{"type":"apply","traits":{"smithy.api#required":{}}}}}"#;
+    let idl_with = |max| {
+        Model::assembler()
+            .max_shapes(max)
+            .add_idl_str("model.smithy", idl)
+            .assemble()
+            .into_result()
+    };
+    let json_with = |max| {
+        Model::assembler()
+            .max_shapes(max)
+            .add_json_str("model.json", json)
+            .assemble()
+            .into_result()
+    };
+    assert!(idl_with(1).unwrap_err().is_resource_limit());
+    assert!(json_with(1).unwrap_err().is_resource_limit());
+    idl_with(2).unwrap();
+    json_with(2).unwrap();
 }
 
 #[test]

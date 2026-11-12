@@ -100,9 +100,8 @@ fn any_error_means_no_model() {
 }
 
 #[test]
-fn every_mixin_and_apply_form_is_unsupported() {
+fn every_mixin_form_is_unsupported() {
     let cases = [
-        r#""a#X":{"type":"apply","traits":{"smithy.api#documentation":"x"}}"#,
         r#""a#X":{"type":"structure","mixins":[{"target":"a#M"}]},"a#M":{"type":"structure"}"#,
         r#""a#M":{"type":"structure","traits":{"smithy.api#mixin":{}}}"#,
         r#""a#M":{"type":"string","traits":{"smithy.api#mixin":{"localTraits":[]}}}"#,
