@@ -255,6 +255,39 @@ async fn user_polls_pending_followed_by_data_for_every_bin_in_throughput_logs() 
         .expect("response MUST NOT timeout");
 }
 
+/// Scenario: The server sends data continuously, but always below the configured
+///           minimum throughput floor (nonzero but too slow).
+/// Expected: MUST timeout once the below-floor state persists past the grace period.
+#[tokio::test]
+async fn download_below_floor_nonzero_throughput() {
+    let _logs = show_test_logs();
+
+    let (time, sleep) = tick_advance_time_and_sleep();
+    let (server, response_sender) = channel_server();
+    // 1024 B/s floor with a 5 s grace period.
+    let op = operation_with_floor(server, time.clone(), sleep, 1024);
+
+    let server = tokio::spawn(async move {
+        // Send one byte every 2 seconds, nonzero but below the 1024 B/s floor.
+        // After the grace period the body should be aborted.
+        for _ in 0..20 {
+            response_sender.send(Bytes::from_static(b"x")).await.ok();
+            tick!(time, Duration::from_secs(2));
+        }
+        drop(response_sender);
+    });
+
+    let response_body = op.invoke(()).await.expect("initial success");
+    let result = eagerly_consume(response_body).await;
+    server.await.unwrap();
+
+    let err = result.expect_err("should have timed out due to below-floor throughput");
+    assert_str_contains!(
+        DisplayErrorContext(err.as_ref()).to_string(),
+        "minimum throughput was specified at"
+    );
+}
+
 use download_test_tools::*;
 mod download_test_tools {
     use crate::stalled_stream_common::*;
@@ -270,6 +303,39 @@ mod download_test_tools {
         http_connector: impl HttpConnector + 'static,
         time: TickAdvanceTime,
         sleep: TickAdvanceSleep,
+    ) -> Operation<(), SdkBody, Infallible> {
+        build_operation(
+            http_connector,
+            time,
+            sleep,
+            StalledStreamProtectionConfig::enabled()
+                .grace_period(Duration::from_secs(5))
+                .build(),
+        )
+    }
+
+    pub fn operation_with_floor(
+        http_connector: impl HttpConnector + 'static,
+        time: TickAdvanceTime,
+        sleep: TickAdvanceSleep,
+        floor_bytes_per_second: u64,
+    ) -> Operation<(), SdkBody, Infallible> {
+        build_operation(
+            http_connector,
+            time,
+            sleep,
+            StalledStreamProtectionConfig::enabled()
+                .grace_period(Duration::from_secs(5))
+                .minimum_throughput_bytes_per_second(floor_bytes_per_second)
+                .build(),
+        )
+    }
+
+    fn build_operation(
+        http_connector: impl HttpConnector + 'static,
+        time: TickAdvanceTime,
+        sleep: TickAdvanceSleep,
+        ssp: StalledStreamProtectionConfig,
     ) -> Operation<(), SdkBody, Infallible> {
         #[derive(Debug)]
         struct Deserializer;
@@ -301,11 +367,7 @@ mod download_test_tools {
             .timeout_config(TimeoutConfig::disabled())
             .serializer(|_body: ()| Ok(HttpRequest::new(SdkBody::empty())))
             .deserializer_impl(Deserializer)
-            .stalled_stream_protection(
-                StalledStreamProtectionConfig::enabled()
-                    .grace_period(Duration::from_secs(5))
-                    .build(),
-            )
+            .stalled_stream_protection(ssp)
             .interceptor(StalledStreamProtectionInterceptor::default())
             .sleep_impl(sleep)
             .time_source(time)
