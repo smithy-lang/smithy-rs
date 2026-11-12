@@ -521,9 +521,52 @@ jobs:
         import json, sys
         d = json.load(open(sys.argv[1]))
         print("record=%s" % ("true" if d["record"] else "false"))
+        print("unchecked=%s" % ("true" if d["unchecked"] else "false"))
         print("key_prefix=%s" % d["key_prefix"])
         PY
         cat "${RUNNER_TEMP}/record/summary.json" >> "$GITHUB_STEP_SUMMARY" || true
+
+    # A release where not one leg reported is the only condition nothing else here can see. Every
+    # other signal starts from a verdict, so with no verdict the alarm sees nothing, the archive
+    # writes nothing, and the per-leg "no report" warning cannot fire -- no leg job ran to print it.
+    # This is the backstop for every cause of that: a dispatch accepted and dropped, a bad scenario
+    # input, the matrix job failing to expand, the runs being cancelled.
+    #
+    # The metrics role is assumed *before* the record role below, because the second assumption
+    # overwrites the first and this one has to happen while these credentials are the ones in
+    # effect. The two are never held at once.
+    - name: Is the metrics role configured
+      id: metrics
+      if: always() && steps.summarize.outputs.unchecked == 'true'
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::error title=Release unchecked::not one leg reported, and no metrics role is configured to say so"
+        fi
+
+    - name: Assume the metrics role
+      if: always() && steps.metrics.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Record that the release was never checked
+      if: always() && steps.metrics.outputs.configured == 'true'
+      working-directory: tools/ci-build/canary
+      run: |
+        set -euo pipefail
+        # Emits nothing unless the decision says every leg is unreported, so this is safe to reach
+        # on any release. The release name comes from the decision rather than from an input, so a
+        # datapoint cannot be recorded against a release the canary was not watching.
+        cargo run --quiet -- emit-unchecked \
+          --decision "${RUNNER_TEMP}/decision.json" \
+          --payload-dir "${RUNNER_TEMP}/metric"
 
     # Always kept, so the record exists even before the bucket does, and so a green release still
     # leaves the per-leg outcomes readable for a fortnight.
