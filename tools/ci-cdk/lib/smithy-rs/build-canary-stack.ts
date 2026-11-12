@@ -23,8 +23,12 @@ import { Construct } from "constructs";
 export const METRIC_NAMESPACE = "smithy-rs-build-canary";
 
 /**
- * Alarm name prefixes the alarm role may manage: the canary's own, and the paging self-test that
- * exercises alarm to ticket without the canary.
+ * Alarm name prefixes the alarm role may manage.
+ *
+ * `build-canary-*` is the canary's own, one alarm per release. `paging-selftest-*` belongs to a
+ * hand-dispatched workflow that exercises datapoint to ticket on its own, without a release and
+ * without building anything; it arrives with the canary. Both are granted here so that bringing
+ * this stack up is a single deploy rather than two.
  */
 export const ALARM_PREFIXES = ["build-canary", "paging-selftest"];
 
@@ -54,7 +58,7 @@ export interface Properties extends StackProps {
  * The three roles the build canary assumes, and the bucket holding its baselines.
  *
  * The split that matters is leg versus orchestrator. Every leg needs to write a metric, and legs
- * run on whatever ref the release was cut from, sixty at a time. The orchestrator is one job per
+ * run on whatever ref the release was cut from, forty at a time. The orchestrator is one job per
  * release: it arms the alarm, polls publish status, decides which legs to dispatch, and files the
  * record at the end. One role doing both would mean every leg — and anything else in the repository
  * able to assume that role — also held permission to delete the alarm watching it and to write into
