@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
+import software.amazon.smithy.rustsdk.invalidCredentialErrorsOverride
 import java.util.logging.Logger
 
 class STSDecorator : ClientCodegenDecorator {
@@ -82,7 +83,9 @@ class STSDecorator : ClientCodegenDecorator {
                                             let mut transient_errors: Vec<&'static str> = #{TRANSIENT_ERRORS}.into();
                                             transient_errors.push("IDPCommunicationError");
                                             #{Cow}::Owned(transient_errors)
-                                            }).build()""",
+                                            })#{invalid_credential_errors}.build()""",
+                                        "invalid_credential_errors" to
+                                            (invalidCredentialErrorsOverride(codegenContext, operation) ?: writable {}),
                                         "AwsErrorCodeClassifier" to
                                             AwsRuntimeType.awsRuntime(runtimeConfig)
                                                 .resolve("retries::classifiers::AwsErrorCodeClassifier"),

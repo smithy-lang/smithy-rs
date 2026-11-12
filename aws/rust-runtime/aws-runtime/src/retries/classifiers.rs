@@ -46,12 +46,12 @@ pub const THROTTLING_ERRORS: &[&str] = &[
 /// AWS error codes that represent transient errors.
 pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutException"];
 
-/// AWS error codes that mean the credentials signing the request are no longer valid.
-///
-/// When a service rejects a request with one of the codes in this list, the SDK retries it. The
-/// identity cache invalidates the rejected credentials at the end of that attempt, so the retry
-/// resolves identity again and carries refreshed credentials.
-pub const INVALID_CREDENTIAL_ERRORS: &[&str] = &["ExpiredToken", "ExpiredTokenException"];
+// AWS error codes that mean the credentials signing the request are no longer valid.
+//
+// When a service rejects a request with one of the codes in this list, the SDK retries it. The
+// identity cache invalidates the rejected credentials at the end of that attempt, so the retry
+// resolves identity again and carries refreshed credentials.
+pub(crate) const INVALID_CREDENTIAL_ERRORS: &[&str] = &["ExpiredToken", "ExpiredTokenException"];
 
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
 #[derive(Debug)]

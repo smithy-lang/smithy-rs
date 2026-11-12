@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoo
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.getBuiltIn
+import software.amazon.smithy.rustsdk.invalidCredentialErrorsOverride
 import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
 
@@ -179,7 +180,9 @@ class S3Decorator : ClientCodegenDecorator {
                                             let mut transient_errors: Vec<&'static str> = #{TRANSIENT_ERRORS}.into();
                                             transient_errors.push("InternalError");
                                             #{Cow}::Owned(transient_errors)
-                                            }).build()""",
+                                            })#{invalid_credential_errors}.build()""",
+                                        "invalid_credential_errors" to
+                                            (invalidCredentialErrorsOverride(codegenContext, operation) ?: writable {}),
                                         "AwsErrorCodeClassifier" to
                                             AwsRuntimeType.awsRuntime(runtimeConfig)
                                                 .resolve("retries::classifiers::AwsErrorCodeClassifier"),

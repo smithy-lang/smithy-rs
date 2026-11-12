@@ -292,7 +292,7 @@ async fn load_sso_credentials(
 ) -> provider::Result {
     let token = if let Some(token_provider) = token_provider {
         token_provider
-            .resolve_token(time_source)
+            .resolve_token(time_source.clone())
             .await
             .map_err(|err| {
                 if resolved_token_error_is_non_recoverable(&err) {
@@ -313,6 +313,13 @@ async fn load_sso_credentials(
                 }
             })?
     };
+    // The token is still expired when it cannot be refreshed: it lacks the refresh metadata, or the
+    // refresh attempt failed. Signing in again is the only fix, so fail before calling SSO with it.
+    if token.expires_at <= time_source.now() {
+        return Err(CredentialsError::non_recoverable(
+            SsoTokenProviderError::ExpiredToken,
+        ));
+    }
 
     let config = sdk_config
         .to_builder()
@@ -369,6 +376,84 @@ mod test {
     use super::*;
     use aws_sdk_sso::types::error::UnauthorizedException;
     use aws_smithy_types::error::ErrorMetadata;
+
+    // An expired SSO token whose refresh fails is non-recoverable, and the provider does not call
+    // `GetRoleCredentials` with it.
+    #[tokio::test]
+    async fn expired_token_with_failed_refresh_is_non_recoverable() {
+        use aws_smithy_async::time::StaticTimeSource;
+        use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
+        use aws_smithy_types::body::SdkBody;
+        use aws_smithy_types::retry::RetryConfig;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        // The cached token expired at 1640437200 (2021-12-25T13:00:00Z). The registration and
+        // refresh token are still usable, so the provider attempts a refresh.
+        let fs = Fs::from_slice(&[(
+            "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
+            r#"
+            { "startUrl": "https://d-123.awsapps.com/start",
+              "region": "us-west-2",
+              "accessToken": "cachedtoken",
+              "expiresAt": "2021-12-25T13:00:00Z",
+              "clientId": "clientid",
+              "clientSecret": "YSBzZWNyZXQ=",
+              "registrationExpiresAt": "2022-12-25T13:30:00Z",
+              "refreshToken": "cachedrefreshtoken" }
+            "#,
+        )]);
+        let env = Env::from_slice(&[("HOME", "/home/user")]);
+        let time_source = SharedTimeSource::new(StaticTimeSource::new(
+            UNIX_EPOCH + Duration::from_secs(1640439000),
+        ));
+        // The only response fails the refresh. A `GetRoleCredentials` call would be a second request.
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            http::Request::builder()
+                .uri("https://oidc.us-west-2.amazonaws.com/token")
+                .body(SdkBody::empty())
+                .unwrap(),
+            http::Response::builder()
+                .status(500)
+                .body(SdkBody::empty())
+                .unwrap(),
+        )]);
+        let sdk_config = SdkConfig::builder()
+            .http_client(http_client.clone())
+            .time_source(time_source.clone())
+            .retry_config(RetryConfig::disabled())
+            .behavior_version(crate::BehaviorVersion::latest())
+            .build();
+        let token_provider = SsoTokenProvider::builder()
+            .configure(&sdk_config)
+            .session_name("test")
+            .region(Region::new("us-west-2"))
+            .start_url("https://d-123.awsapps.com/start")
+            .build_with(env.clone(), fs.clone());
+        let sso_provider_config = SsoProviderConfig {
+            account_id: "123456789012".into(),
+            role_name: "role".into(),
+            start_url: "https://d-123.awsapps.com/start".into(),
+            region: Region::new("us-west-2"),
+            session_name: Some("test".into()),
+        };
+
+        let err = load_sso_credentials(
+            &sso_provider_config,
+            &sdk_config,
+            Some(&token_provider),
+            &env,
+            &fs,
+            time_source,
+        )
+        .await
+        .expect_err("an expired token must fail");
+        assert!(err.is_non_recoverable(), "{err:?}");
+        assert_eq!(
+            http_client.actual_requests().count(),
+            1,
+            "only the failed refresh is sent"
+        );
+    }
 
     #[test]
     fn sso_token_error_classification() {

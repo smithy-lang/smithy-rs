@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 internal class StaticStabilityDecoratorTest {
@@ -212,6 +213,173 @@ internal class StaticStabilityDecoratorTest {
                             2,
                             "invalidation must force credential re-resolution on the retry",
                         );
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+    }
+
+    // An operation that models `ExpiredTokenException` returns it for a reason new credentials
+    // cannot fix, so that operation neither retries nor invalidates on it. An operation that does
+    // not model the code still does both.
+    @Test
+    fun `modeled ExpiredTokenException neither retries nor invalidates`() {
+        val model =
+            """
+            namespace test
+
+            use aws.api#service
+            use aws.auth#sigv4
+            use aws.protocols#restJson1
+            use smithy.rules#endpointRuleSet
+
+            @service(sdkId: "dontcare")
+            @restJson1
+            @sigv4(name: "dontcare")
+            @auth([sigv4])
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {
+                    "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                }
+            })
+            service TestService {
+                version: "2023-01-01",
+                operations: [ModeledOperation, PlainOperation]
+            }
+
+            @error("client")
+            @httpError(400)
+            structure ExpiredTokenException {
+                message: String
+            }
+
+            @http(uri: "/ModeledOperation", method: "GET")
+            operation ModeledOperation {
+                errors: [ExpiredTokenException]
+            }
+
+            @http(uri: "/PlainOperation", method: "GET")
+            operation PlainOperation {}
+            """.asSmithyModel()
+
+        awsSdkIntegrationTest(model) { ctx, rustCrate ->
+            val rc = ctx.runtimeConfig
+            val moduleName = ctx.moduleUseName()
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc).resolve("Credentials"),
+                    "StaticStabilityEligible" to
+                        AwsRuntimeType.awsCredentialTypes(rc).resolve("StaticStabilityEligible"),
+                    "ProvideCredentials" to
+                        AwsRuntimeType.awsCredentialTypes(rc).resolve("provider::ProvideCredentials"),
+                    "ProvideCredentialsFuture" to
+                        AwsRuntimeType.awsCredentialTypes(rc).resolve("provider::future::ProvideCredentials"),
+                    "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                    "ReplayEvent" to
+                        RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::ReplayEvent"),
+                    "Request" to RuntimeType.HttpRequest1x,
+                    "Response" to RuntimeType.HttpResponse1x,
+                    "SdkBody" to RuntimeType.sdkBody(rc),
+                    "StaticReplayClient" to
+                        RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::StaticReplayClient"),
+                    "BehaviorVersion" to
+                        RuntimeType.smithyRuntimeApiClient(rc).resolve("client::behavior_version::BehaviorVersion"),
+                    "StaticTimeSource" to RuntimeType.smithyAsync(rc).resolve("time::StaticTimeSource"),
+                    "SharedAsyncSleep" to RuntimeType.smithyAsync(rc).resolve("rt::sleep::SharedAsyncSleep"),
+                    "TokioSleep" to
+                        CargoDependency.smithyAsync(rc).withFeature("rt-tokio").toType()
+                            .resolve("rt::sleep::TokioSleep"),
+                )
+            rustCrate.integrationTest("modeled_invalid_credential_error") {
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
+                rustTemplate(
+                    """
+                    use std::sync::{Arc, Mutex};
+                    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+                    // Vends a fresh, eligible credential on every call, counting calls.
+                    ##[derive(Debug, Clone)]
+                    struct CountingProvider {
+                        calls: Arc<Mutex<usize>>,
+                        now: SystemTime,
+                    }
+                    impl #{ProvideCredentials} for CountingProvider {
+                        fn provide_credentials<'a>(&'a self) -> #{ProvideCredentialsFuture}<'a>
+                        where
+                            Self: 'a,
+                        {
+                            let mut calls = self.calls.lock().unwrap();
+                            *calls += 1;
+                            let mut creds = #{Credentials}::new(
+                                format!("AKID{}", *calls),
+                                "secret",
+                                #{None},
+                                #{Some}(self.now + Duration::from_secs(3600)),
+                                "test",
+                            );
+                            creds.set_property(#{StaticStabilityEligible});
+                            #{ProvideCredentialsFuture}::ready(#{Ok}(creds))
+                        }
+                    }
+
+                    // The first attempt is rejected with `ExpiredTokenException`. A retry gets 200.
+                    fn client(calls: Arc<Mutex<usize>>) -> ($moduleName::Client, #{StaticReplayClient}) {
+                        let now = UNIX_EPOCH + Duration::from_secs(1000);
+                        let http_client = #{StaticReplayClient}::new(vec![
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder()
+                                    .status(400)
+                                    .header("x-amzn-errortype", "ExpiredTokenException")
+                                    .body(#{SdkBody}::from("{}"))
+                                    .unwrap(),
+                            ),
+                            #{ReplayEvent}::new(
+                                #{Request}::builder().body(#{SdkBody}::from("")).unwrap(),
+                                #{Response}::builder().status(200).body(#{SdkBody}::from("{}")).unwrap(),
+                            ),
+                        ]);
+                        let config = $moduleName::Config::builder()
+                            .behavior_version(#{BehaviorVersion}::v2026_08_01())
+                            .http_client(http_client.clone())
+                            .time_source(#{StaticTimeSource}::new(now))
+                            .sleep_impl(#{SharedAsyncSleep}::new(#{TokioSleep}::new()))
+                            .credentials_provider(CountingProvider { calls, now })
+                            .region(#{Region}::new("us-west-2"))
+                            .build();
+                        ($moduleName::Client::from_conf(config), http_client)
+                    }
+
+                    ##[::tokio::test]
+                    async fn modeled_code_is_returned_without_retry() {
+                        let calls = Arc::new(Mutex::new(0usize));
+                        let (client, http_client) = client(calls.clone());
+                        let err = client
+                            .modeled_operation()
+                            .send()
+                            .await
+                            .expect_err("a modeled ExpiredTokenException is returned to the caller");
+                        assert!(err.into_service_error().is_expired_token_error());
+                        assert_eq!(http_client.actual_requests().count(), 1, "no retry");
+                        assert_eq!(*calls.lock().unwrap(), 1, "no invalidation");
+                    }
+
+                    ##[::tokio::test]
+                    async fn unmodeled_code_invalidates_and_retries() {
+                        let calls = Arc::new(Mutex::new(0usize));
+                        let (client, http_client) = client(calls.clone());
+                        client
+                            .plain_operation()
+                            .send()
+                            .await
+                            .expect("an unmodeled ExpiredTokenException is retried and succeeds");
+                        assert_eq!(http_client.actual_requests().count(), 2, "one retry");
+                        assert_eq!(*calls.lock().unwrap(), 2, "invalidation re-resolves credentials");
                     }
                     """,
                     *codegenScope,
