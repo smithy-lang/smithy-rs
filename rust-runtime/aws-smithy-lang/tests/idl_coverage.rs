@@ -870,7 +870,6 @@ fn classify(path: &Path) -> Expected {
     let uses_unsupported = text.lines().any(|line| {
         let line = line.trim_start();
         line.starts_with("$version: \"1")
-            || line.starts_with("apply ")
             || line.starts_with("@mixin")
             || line.contains(" with [")
             || line.starts_with("set ")
@@ -898,14 +897,22 @@ fn repository_models_are_classified() {
             (Expected::Parses, Ok(_)) => parsed += 1,
             (Expected::Parses, Err(err)) => {
                 // Files are loaded alone, so references to shapes and traits in other files
-                // may not resolve. Nothing else may fail.
+                // may not resolve, and an `apply` may target a shape in another file. Nothing
+                // else may fail; warnings (such as syntactic shape IDs naming shapes in other
+                // files) are fine.
+                let uses_apply = std::fs::read_to_string(path)
+                    .unwrap()
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("apply "));
                 for d in err.diagnostics() {
-                    if !matches!(
-                        d.code(),
+                    let expected = match d.code() {
                         DiagnosticCode::UnresolvedReference
-                            | DiagnosticCode::InvalidTarget
-                            | DiagnosticCode::InvalidTrait
-                    ) {
+                        | DiagnosticCode::InvalidTarget
+                        | DiagnosticCode::InvalidTrait => true,
+                        DiagnosticCode::UnknownShape => uses_apply,
+                        _ => false,
+                    };
+                    if d.severity() == Severity::Error && !expected {
                         failures.push(format!("{shown}: unexpected {d}"));
                     }
                 }

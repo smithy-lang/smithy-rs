@@ -23,12 +23,12 @@ use super::syntax::{
     ShapeSyntax, Span, StatementSyntax, TraitValueSyntax,
 };
 use crate::assembler::{merge_trait_values, LoadedDocument};
-use crate::ast_converter::AstConverter;
+use crate::ast_converter::{AstConverter, Entry};
 use crate::diagnostic::{
     escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, Position,
     SourceLocation,
 };
-use crate::json_loader::Document;
+use crate::json_loader::{Document, DocumentApply};
 use crate::model::ModelData;
 use crate::node::{Node, NodeObject, NodeValue};
 use crate::prelude;
@@ -383,14 +383,50 @@ impl<'a> Lowerer<'a> {
     }
 
     fn apply(&mut self, scope: &Scope<'_>, apply: &ApplySyntax) {
-        self.converter.error(
-            DiagnosticCode::UnsupportedFeature,
-            format!(
-                "`apply` to `{}` is not supported",
-                scope.resolve(&apply.target)
-            ),
-            self.located(apply.span),
+        let target = scope.resolve(&apply.target);
+        let annotations = Annotations {
+            documentation: None,
+            traits: apply.traits.clone(),
+        };
+        let pointer = shape_pointer(&target);
+        let traits = self.traits(scope, &annotations, Vec::new(), &|| pointer.clone());
+        // The JSON AST form of the statement, so both forms of `apply` are converted alike.
+        let mut object = NodeObject::new();
+        object.insert(
+            "type",
+            Node::from("apply").with_position(self.position(apply.span)),
         );
+        if let Some(traits) = traits {
+            object.insert("traits", traits);
+        }
+        let node = Node::from(object).with_position(self.position(apply.target.span));
+        let Some(Entry::Apply(apply)) = self.converter.convert_entry(&target, node) else {
+            return;
+        };
+        // Like the reference implementation, a statement outside the prelude namespace cannot
+        // apply traits to any shape in it, even one a model adds, with or without the prelude.
+        let namespace = self.document.namespace.as_ref().map(|n| n.value.as_str());
+        if namespace != Some(prelude::NAMESPACE) && apply.target.namespace() == prelude::NAMESPACE {
+            for (id, value) in &apply.traits {
+                self.converter.push(
+                    Diagnostic::error(
+                        DiagnosticCode::PreludeConflict,
+                        format!(
+                            "cannot apply `{id}` to the immutable prelude shape `{}`",
+                            apply.target
+                        ),
+                    )
+                    .with_shape_id(apply.target.clone())
+                    .with_source_location(value.source_location().clone()),
+                );
+            }
+            return;
+        }
+        let shapes_before = self.output.shapes.len();
+        self.output.applies.push(DocumentApply {
+            shapes_before,
+            apply,
+        });
     }
 
     fn shape(&mut self, scope: &Scope<'_>, shape: &ShapeSyntax) {
@@ -478,7 +514,7 @@ impl<'a> Lowerer<'a> {
             );
             return;
         }
-        if let Some(shape) = self.converter.convert_shape(&id, node) {
+        if let Some(Entry::Shape(shape)) = self.converter.convert_entry(&id, node) {
             self.output.shapes.insert(shape.id().clone(), shape);
         }
     }
