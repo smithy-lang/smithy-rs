@@ -162,6 +162,27 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Record that a release was never checked, which nothing else can notice.
+    ///
+    /// Every other signal here starts from a leg reaching a verdict. When no leg reaches anything
+    /// there is no verdict to be red, green or even `INFRA_FAIL`, so the alarm sees nothing, the
+    /// archive writes nothing, and the per-leg "no report" warning cannot fire because no leg job
+    /// ran to print it. A release going entirely unverified is the condition this canary exists to
+    /// remove, and without this it is the one condition it would not report.
+    ///
+    /// Reads the decision `summarize` wrote. Emits nothing unless every leg is unreported, so it is
+    /// safe to run on every release, and the release name comes from the decision rather than an
+    /// argument so a datapoint cannot be recorded against a release the canary was not watching.
+    EmitUnchecked {
+        /// The decision `summarize` printed on stdout.
+        #[arg(long)]
+        decision: PathBuf,
+        #[arg(long)]
+        payload_dir: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
     ///
     /// One run per release. Resolves every manifest on a 15-minute tick and stops when
@@ -451,8 +472,46 @@ fn main() -> anyhow::Result<()> {
                 payload_dir,
                 dry_run,
             };
-            let written =
-                metric::record_watcher_failure(&report.tag, "dispatch-failed", &mut emitter)?;
+            let written = metric::record_component_failure(
+                &report.tag,
+                metric::WATCHER,
+                "dispatch-failed",
+                &mut emitter,
+            )?;
+            for d in &written {
+                eprintln!("  {d}");
+            }
+            println!("{}", serde_json::to_string(&written)?);
+        }
+        Command::EmitUnchecked {
+            decision,
+            payload_dir,
+            dry_run,
+        } => {
+            let text = std::fs::read_to_string(&decision)
+                .with_context(|| format!("reading {}", decision.display()))?;
+            let decision: summary::Decision =
+                serde_json::from_str(&text).context("parsing the decision")?;
+
+            if !decision.unchecked {
+                eprintln!(
+                    "{}: legs reported, so the release was checked; nothing to record",
+                    decision.release
+                );
+                println!("[]");
+                return Ok(());
+            }
+
+            let mut emitter = metric::AwsCli {
+                payload_dir,
+                dry_run,
+            };
+            let written = metric::record_component_failure(
+                &decision.release,
+                metric::RECORD,
+                "nothing-ran",
+                &mut emitter,
+            )?;
             for d in &written {
                 eprintln!("  {d}");
             }
@@ -580,16 +639,27 @@ fn main() -> anyhow::Result<()> {
             if !record.had_a_hard_verdict() {
                 eprintln!("nothing blamed the release, so there is nothing to archive");
             }
+            if record.nothing_ran() {
+                eprintln!(
+                    "  ALARM: not one of {} legs reported, so nothing checked {} at all. Either \
+                     the legs were never dispatched, or they were dispatched and never ran.",
+                    record.legs_total, record.run.release
+                );
+            }
 
-            // The decision, for the step that does the upload. Keeping it on stdout as JSON means
+            // The decision, for the steps that emit and upload. Keeping it on stdout as JSON means
             // the workflow never has to parse prose, and the record itself is the file in --out.
             println!(
                 "{}",
-                serde_json::json!({
-                    "key_prefix": key_prefix,
-                    "record": record.had_a_hard_verdict(),
-                    "summary": path,
-                })
+                serde_json::to_string(&summary::Decision {
+                    // From the folded record, which is also what gets archived, so the
+                    // decision and the record cannot disagree about which release this is.
+                    release: record.run.release.clone(),
+                    key_prefix,
+                    record: record.had_a_hard_verdict(),
+                    unchecked: record.nothing_ran(),
+                    summary: path.display().to_string(),
+                })?
             );
         }
         Command::GenLeg {

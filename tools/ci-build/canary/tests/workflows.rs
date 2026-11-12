@@ -398,6 +398,70 @@ fn a_rigged_break_is_armed_apart_from_a_real_one() {
     );
 }
 
+/// A release that nothing checked has to be reported, and from the right credentials.
+///
+/// This is the one condition no verdict exists for, so the record job is the only thing positioned
+/// to notice it. Noticing needs the metrics role; archiving needs the record role; and
+/// `configure-aws-credentials` overwrites whatever came before it. So the order is load-bearing in
+/// a way YAML cannot express: assume metrics, emit, then assume record. Reversed, the emit step
+/// runs with credentials that cannot write a datapoint, and the one thing standing between an
+/// unchecked release and silence fails with an access error.
+#[test]
+fn an_unchecked_release_is_reported_before_the_record_role_is_taken() {
+    let wf = load("post-publish-watch");
+    let job = jobs(&wf).get("record").copied().expect("a record job");
+    let names: Vec<String> = steps(job)
+        .iter()
+        .map(|s| step_name(s).to_string())
+        .collect();
+
+    let at = |needle: &str| -> usize {
+        names
+            .iter()
+            .position(|n| n.contains(needle))
+            .unwrap_or_else(|| panic!("no step containing {needle:?} in {names:?}"))
+    };
+
+    let emit = at("never checked");
+    let metrics = at("Assume the metrics role");
+    let record = at("Assume the record role");
+
+    assert!(
+        metrics < emit,
+        "the metrics role must be held when the datapoint is written"
+    );
+    assert!(
+        emit < record,
+        "the record role overwrites the metrics credentials, so it must come after the emit: \
+         {names:?}"
+    );
+
+    // And the emission has to be able to run when the rest of the job has already gone wrong,
+    // because "nothing ran" is itself a symptom of things having gone wrong.
+    let emit_step = &steps(job)[emit];
+    let condition = emit_step
+        .get("if")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    assert!(
+        condition.contains("always()"),
+        "the unchecked-release report must survive an earlier failure: {condition:?}"
+    );
+
+    // The release must come from the folded record, never from a workflow input: a datapoint
+    // recorded against a release the canary was not watching would land on an armed series and page
+    // about the wrong thing.
+    let run = emit_step.get("run").and_then(Value::as_str).unwrap_or("");
+    assert!(
+        run.contains("--decision"),
+        "the emission must read the decision rather than take a release argument: {run:?}"
+    );
+    assert!(
+        !run.contains("--release") && !run.contains("TAG"),
+        "the release must not be passed in: {run:?}"
+    );
+}
+
 /// An arming failure must not stop the release being checked. Checking without being able to page
 /// still beats not checking, and the arming failure is loud in its own job. What the dispatch tier
 /// does need is to know *which* release.

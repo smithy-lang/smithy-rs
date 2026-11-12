@@ -165,44 +165,51 @@ pub fn datapoints(tag: &str, leg: &Leg, verdict: Option<Verdict>) -> Vec<Datapoi
     vec![datapoint(tag_only), datapoint(full)]
 }
 
-/// Identifies the watcher as the emitter, rather than a leg.
+/// The watcher, which asks for the legs.
 pub const WATCHER: &str = "watcher";
 
-/// The datapoints the watcher writes when it fails in a way that leaves a release unchecked.
+/// The record job, which is the last thing to look at a release and so the only thing positioned to
+/// notice that nothing looked at it.
+pub const RECORD: &str = "record";
+
+/// The datapoints a part of the canary other than a leg writes when it fails in a way that leaves a
+/// release unchecked.
 ///
-/// The watcher is an emitter too, and the case that matters is a failed dispatch: the legs it would
-/// have asked for are the only thing that produces a verdict, so a dispatch that did not happen is
-/// a release proceeding with no post-publish verification at all. That is the condition this whole
-/// canary exists to remove, and it would otherwise be visible only as a red job nobody is watching.
+/// A leg reporting a verdict is the only thing that says anything about a release. So the failures
+/// worth a datapoint here are the ones where **no verdict exists and none is coming**: the watcher
+/// could not ask for the legs, or the legs were asked for and never ran. Either way the release
+/// proceeds with no post-publish verification at all, which is the condition this whole canary
+/// exists to remove, and which would otherwise be visible only as a red job nobody is watching.
 ///
-/// **The alarmed series is byte-identical to a leg's**, which is the point: one alarm covers both,
-/// so the watcher failing and a crate being broken reach the same oncall through the same path. A
-/// test asserts that equality, because an alarm watching `{Tag}` would silently ignore a series
-/// that differed by one dimension.
+/// **The alarmed series is byte-identical to a leg's**, which is the point: one alarm covers all of
+/// it, so a crate being broken and a release never being checked reach the same oncall by the same
+/// path. A test asserts that equality, because an alarm watching `{Tag}` would silently ignore a
+/// series that differed by one dimension.
 ///
-/// The diagnosis series is deliberately *not* the leg's shape. A watcher failure has no manifest,
-/// no toolchain and no target, and filling those with placeholders to force a common shape would
-/// put six dimensions of nothing on a ticket. A different kind of emitter gets a different
-/// diagnosis.
-pub fn watcher_datapoints(tag: &str, reason: &str) -> Vec<Datapoint> {
+/// The diagnosis series is deliberately *not* the leg's shape. These failures have no manifest, no
+/// toolchain and no target, and filling those with placeholders to force a common shape would put
+/// six dimensions of nothing on a ticket. A different kind of emitter gets a different diagnosis:
+/// which component noticed, and what it noticed.
+pub fn component_datapoints(tag: &str, component: &str, reason: &str) -> Vec<Datapoint> {
     vec![
         datapoint(vec![dimension("Tag", tag)]),
         datapoint(vec![
             dimension("Tag", tag),
-            dimension("Component", WATCHER),
+            dimension("Component", component),
             dimension("Reason", reason),
         ]),
     ]
 }
 
-/// Record a watcher failure. Same contract as [`record`]: validated, then emitted, and an emission
-/// failure is an error rather than a shrug.
-pub fn record_watcher_failure(
+/// Record a failure from somewhere other than a leg. Same contract as [`record`]: validated, then
+/// emitted, and an emission failure is an error rather than a shrug.
+pub fn record_component_failure(
     tag: &str,
+    component: &str,
     reason: &str,
     emitter: &mut dyn Emitter,
 ) -> anyhow::Result<Vec<Datapoint>> {
-    let datapoints = watcher_datapoints(tag, reason);
+    let datapoints = component_datapoints(tag, component, reason);
     validate(&datapoints)?;
     emitter.emit(NAMESPACE, &serde_json::to_string(&datapoints)?)?;
     Ok(datapoints)
@@ -630,7 +637,7 @@ mod tests {
             &leg("new-project--stable"),
             Some(Verdict::CompileFail),
         );
-        let watcher = watcher_datapoints("release-2026-11-09", "dispatch-failed");
+        let watcher = component_datapoints("release-2026-11-09", WATCHER, "dispatch-failed");
         assert_eq!(
             leg[0], watcher[0],
             "the alarmed series must be identical, or one alarm cannot cover both"
@@ -643,7 +650,8 @@ mod tests {
     fn a_watcher_failure_names_itself_and_its_reason() {
         let mut e = FakeEmitter::default();
         let written =
-            record_watcher_failure("release-2026-11-09", "dispatch-failed", &mut e).unwrap();
+            record_component_failure("release-2026-11-09", WATCHER, "dispatch-failed", &mut e)
+                .unwrap();
 
         assert_eq!(written.len(), 2);
         assert_eq!(
@@ -659,7 +667,7 @@ mod tests {
     #[test]
     fn a_watcher_failure_with_no_tag_is_refused_before_the_call() {
         let mut e = FakeEmitter::default();
-        assert!(record_watcher_failure("", "dispatch-failed", &mut e).is_err());
+        assert!(record_component_failure("", WATCHER, "dispatch-failed", &mut e).is_err());
         assert!(e.calls.is_empty());
     }
 

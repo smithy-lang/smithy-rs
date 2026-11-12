@@ -6,9 +6,9 @@
 //! The watcher: one run per release, resolving every 15 minutes while the crates arrive.
 //!
 //! A release publishes its crates one at a time over minutes, and the graph a consumer resolves
-//! changes under them as it goes. The watcher covers that window. It resolves the thirteen
-//! manifests on a tick, dispatches legs for the ones whose graph moved, and stops when the release
-//! has finished publishing.
+//! changes under them as it goes. The watcher covers that window. It resolves every manifest on a
+//! tick, dispatches legs for the ones whose graph moved, and stops when the release has finished
+//! publishing.
 //!
 //! # Why this is one run and not a cron
 //!
@@ -36,6 +36,10 @@
 //! work; this one degrades towards doing none, because legs that were never dispatched emit no
 //! datapoint and an absent datapoint cannot raise an alarm. It is the one error the watcher refuses
 //! to continue past.
+//!
+//! And "fails" includes being accepted and dropped. `gh workflow run` is a 204 with no body, so a
+//! zero exit says the request was accepted and nothing about whether a run exists. The dispatch is
+//! therefore confirmed by looking for the run it should have created — see [`GhDispatcher`].
 
 use std::fmt;
 use std::time::Duration;
@@ -86,12 +90,21 @@ pub struct Tick {
     pub number: u32,
     /// Elapsed time into the run, in seconds, so a tick's place in the window is readable.
     pub at_secs: u64,
-    /// Manifests whose graph moved, and which therefore had legs dispatched.
+    /// Manifests whose graph moved, and which therefore had legs dispatched — unless
+    /// [`Self::dispatch_failed`], in which case this is what *would* have been dispatched.
     pub dispatched: Vec<String>,
     /// Manifests whose graph was identical to the previous tick's.
     pub unchanged: Vec<String>,
     /// Manifests the watcher could not resolve. Dispatched anyway, so a leg reports it properly.
     pub unresolved: Vec<String>,
+    /// The dispatch for this tick did not land, so none of [`Self::dispatched`] got legs.
+    ///
+    /// The list is kept rather than cleared, because which manifests moved is the diagnosis and the
+    /// failure is a separate fact. What it must not do is make [`WatchReport::dispatches`] count
+    /// them: a report claiming nine dispatches on a tick where none happened would tell a reader
+    /// the legs were asked for. Found by running a dispatch that was accepted and dropped.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dispatch_failed: bool,
 }
 
 impl Tick {
@@ -125,8 +138,14 @@ pub struct WatchReport {
 
 impl WatchReport {
     /// How many dispatches were made, counting one per manifest per tick.
+    ///
+    /// A tick whose dispatch did not land contributes nothing, because nothing was dispatched.
     pub fn dispatches(&self) -> usize {
-        self.ticks.iter().map(|t| t.dispatched.len()).sum()
+        self.ticks
+            .iter()
+            .filter(|t| !t.dispatch_failed)
+            .map(|t| t.dispatched.len())
+            .sum()
     }
 
     /// Whether the window ended the way it should have.
@@ -220,6 +239,7 @@ pub fn watch(
             dispatched: vec![],
             unchanged: vec![],
             unresolved: vec![],
+            dispatch_failed: false,
         };
 
         for manifest in manifests {
@@ -250,6 +270,7 @@ pub fn watch(
         if tick.dispatched_anything() {
             if let Err(e) = dispatcher.dispatch(&tick.dispatched, tag) {
                 eprintln!("dispatch failed: {e}");
+                tick.dispatch_failed = true;
                 ticks.push(tick);
                 break Stopped::DispatchFailed;
             }
@@ -427,6 +448,79 @@ impl GhDispatcher {
     }
 }
 
+/// The leg workflow's `name:`, which GitHub prefixes onto every run's display title.
+///
+/// Duplicated from the YAML, and cross-checked against it by a test — the same arrangement as the
+/// metric namespace. If the two drift, a dispatch can no longer be confirmed and the watcher reports
+/// a failure that did not happen.
+pub const LEG_WORKFLOW_NAME: &str = "Build canary";
+
+/// How many times to look for the run a dispatch should have created, and how long to wait between
+/// looks.
+///
+/// Run creation is asynchronous: the API accepts the request and the run appears a moment later. Six
+/// looks five seconds apart is half a minute, which is generous against a measured appearance time
+/// of about a second and still negligible against a fifteen-minute tick.
+const CONFIRM_ATTEMPTS: u32 = 6;
+const CONFIRM_WAIT: Duration = Duration::from_secs(5);
+
+/// The display title GitHub gives a dispatched run, from `run-name:` in the leg workflow.
+///
+/// This is what makes a confirmation precise rather than racy. Counting *all* runs for the tag would
+/// also see the floor tier's hourly dispatches, so a dropped dispatch could be masked by somebody
+/// else's run appearing at the same moment. The floor tier always dispatches `scenario=all` and the
+/// watcher never does — it names the manifests that moved — so the titles cannot collide.
+pub fn dispatched_run_title(scenario: &str) -> String {
+    format!("{LEG_WORKFLOW_NAME} - {scenario}")
+}
+
+/// How many runs in a `gh run list --json displayTitle` listing bear this title.
+///
+/// A malformed listing is an error rather than a zero. Zero is the signal for "the dispatch did not
+/// land", and reading it out of output we failed to parse would turn a `gh` problem into a false
+/// report that a release went unchecked.
+pub fn runs_with_title(listing: &str, title: &str) -> anyhow::Result<usize> {
+    let runs: Vec<serde_json::Value> =
+        serde_json::from_str(listing).context("parsing the run listing")?;
+    Ok(runs
+        .iter()
+        .filter(|r| r.get("displayTitle").and_then(|t| t.as_str()) == Some(title))
+        .count())
+}
+
+impl GhDispatcher {
+    /// The argv that lists the runs a dispatch would add to.
+    fn list_argv(&self, tag: &str) -> Vec<String> {
+        vec![
+            "run".into(),
+            "list".into(),
+            "--repo".into(),
+            self.repo.clone(),
+            "--workflow".into(),
+            self.workflow.clone(),
+            "--branch".into(),
+            tag.to_string(),
+            "--limit".into(),
+            "100".into(),
+            "--json".into(),
+            "displayTitle".into(),
+        ]
+    }
+
+    fn count_runs(&self, tag: &str, title: &str) -> anyhow::Result<usize> {
+        let out = std::process::Command::new("gh")
+            .args(self.list_argv(tag))
+            .output()
+            .context("running gh run list")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh run list failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        runs_with_title(&String::from_utf8_lossy(&out.stdout), title)
+    }
+}
+
 impl Dispatcher for GhDispatcher {
     fn dispatch(&mut self, manifests: &[String], tag: &str) -> anyhow::Result<()> {
         let argv = self.argv(manifests, tag);
@@ -434,6 +528,14 @@ impl Dispatcher for GhDispatcher {
             eprintln!("  would dispatch: gh {}", argv.join(" "));
             return Ok(());
         }
+
+        // `gh workflow run` is a 204 with no body: it returns no run id, so a success here means
+        // "the request was accepted" and nothing more. A request that is accepted and then dropped
+        // leaves the release with no legs, no verdict, and therefore no datapoint — silence exactly
+        // where a page belongs. So the run is confirmed to exist rather than assumed.
+        let title = dispatched_run_title(&manifests.join(","));
+        let before = self.count_runs(tag, &title)?;
+
         let out = std::process::Command::new("gh")
             .args(&argv)
             .output()
@@ -443,8 +545,25 @@ impl Dispatcher for GhDispatcher {
             "gh workflow run failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
-        eprintln!("  dispatched {} manifest(s)", manifests.len());
-        Ok(())
+
+        for attempt in 1..=CONFIRM_ATTEMPTS {
+            if self.count_runs(tag, &title)? > before {
+                eprintln!(
+                    "  dispatched {} manifest(s), run confirmed on look {attempt}",
+                    manifests.len()
+                );
+                return Ok(());
+            }
+            if attempt < CONFIRM_ATTEMPTS {
+                std::thread::sleep(CONFIRM_WAIT);
+            }
+        }
+        anyhow::bail!(
+            "gh workflow run was accepted but no run titled {title:?} appeared for {tag} within \
+             {}s, so {} manifest(s) have no legs and this release is unchecked",
+            CONFIRM_ATTEMPTS as u64 * CONFIRM_WAIT.as_secs(),
+            manifests.len()
+        )
     }
 }
 
@@ -452,6 +571,81 @@ impl Dispatcher for GhDispatcher {
 mod tests {
     use super::*;
     use crate::test_support::tempdir;
+
+    /// Counting by title is what makes the confirmation precise. The floor tier dispatches
+    /// `scenario=all` every hour against the same tag, so counting every run would let its arrival
+    /// mask a dropped dispatch of ours.
+    #[test]
+    fn a_dispatch_is_confirmed_by_the_title_of_the_run_it_creates() {
+        let listing = r#"[
+            {"displayTitle":"Build canary - new-project,wasm"},
+            {"displayTitle":"Build canary - all"},
+            {"displayTitle":"Build canary - all"},
+            {"displayTitle":"Some other workflow - whatever"}
+        ]"#;
+
+        let ours = dispatched_run_title("new-project,wasm");
+        assert_eq!(ours, "Build canary - new-project,wasm");
+        assert_eq!(runs_with_title(listing, &ours).unwrap(), 1);
+
+        // The floor tier's runs are visible but do not count towards ours.
+        assert_eq!(
+            runs_with_title(listing, &dispatched_run_title("all")).unwrap(),
+            2
+        );
+        // A set we never dispatched has no runs, which is what an unconfirmed dispatch looks like.
+        assert_eq!(
+            runs_with_title(listing, &dispatched_run_title("serialization")).unwrap(),
+            0
+        );
+        assert_eq!(runs_with_title("[]", &ours).unwrap(), 0);
+    }
+
+    /// Zero is the signal for "the dispatch did not land", so it must not also be what an
+    /// unreadable listing produces — that would turn a `gh` problem into a false report that a
+    /// release went unchecked.
+    #[test]
+    fn an_unreadable_run_listing_is_an_error_rather_than_a_zero() {
+        for bad in ["", "not json", "{\"runs\":[]}", "null"] {
+            assert!(
+                runs_with_title(bad, "Build canary - all").is_err(),
+                "{bad:?} should not read as zero runs"
+            );
+        }
+    }
+
+    /// The workflow's `name:` and `run-name:` are duplicated into this module, and a drift would
+    /// mean no dispatch could ever be confirmed — so every watcher tick would report a failure that
+    /// did not happen, which is worse than the silence it was added to fix.
+    #[test]
+    fn the_run_title_matches_what_the_leg_workflow_declares() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .expect("repo root");
+        let yaml = std::fs::read_to_string(root.join(".github/workflows/build-canary.yml"))
+            .expect("the leg workflow should be readable");
+
+        let field = |key: &str| -> String {
+            yaml.lines()
+                .find_map(|l| l.strip_prefix(key))
+                .unwrap_or_else(|| panic!("no {key:?} in the leg workflow"))
+                .trim()
+                .to_string()
+        };
+        assert_eq!(
+            field("name:"),
+            LEG_WORKFLOW_NAME,
+            "the workflow name this module assumes has drifted from the YAML"
+        );
+        // GitHub renders `run-name` into the display title, so the shape has to be the one this
+        // module reconstructs: the workflow name, a dash, the scenario input.
+        assert_eq!(
+            field("run-name:"),
+            "${{ github.workflow }} - ${{ inputs.scenario }}",
+            "the run-name shape this module reconstructs has changed"
+        );
+    }
 
     /// Resolves each manifest to a scripted sequence of lockfiles, one per tick.
     struct FakeResolver {
@@ -747,6 +941,22 @@ mod tests {
         assert_eq!(report.ticks.len(), 1, "it stops immediately");
         assert_eq!(report.exit_code(), 1);
         assert!(!report.ended_cleanly());
+
+        // The report must not claim dispatches that did not happen. The tick keeps the list of
+        // manifests that moved, because that is the diagnosis, but the count has to read zero or a
+        // reader concludes the legs were asked for. Found by running a dispatch that was accepted
+        // and dropped: the report said "9 dispatch(es)" when there were none.
+        assert!(report.ticks[0].dispatch_failed);
+        assert_eq!(report.dispatches(), 0, "nothing was dispatched");
+        assert_eq!(
+            report.ticks[0].dispatched.len(),
+            2,
+            "but what would have been is still readable"
+        );
+        assert!(
+            report.to_string().contains("0 dispatch(es)"),
+            "and the summary line agrees: {report}"
+        );
     }
 
     /// A release that never reports complete is bounded, and the ending says so.

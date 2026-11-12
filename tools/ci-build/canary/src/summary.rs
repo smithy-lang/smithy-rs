@@ -40,7 +40,7 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::classify::{Diagnosis, Step, Verdict};
 use crate::leg::Report;
@@ -144,6 +144,45 @@ impl RunSummary {
     pub fn had_a_hard_verdict(&self) -> bool {
         self.red.iter().any(|l| l.verdict.is_hard())
     }
+
+    /// Whether this release was checked **at all**.
+    ///
+    /// Every other signal in this system starts from a leg reaching a verdict. This is the one
+    /// condition where no leg reached anything, so there is no verdict to be red, green or even
+    /// `INFRA_FAIL` — and every mechanism downstream is therefore silent. A release can arrive here
+    /// because the dispatch was accepted and dropped, because the `scenario` input named nothing,
+    /// because the matrix job failed to expand, or because the runs were cancelled. The causes
+    /// differ; the consequence is identical and is exactly what this canary exists to prevent.
+    ///
+    /// Deliberately *not* a threshold. A release where 39 of 40 legs are unreported is alarming,
+    /// but it still produced a verdict, so the existing machinery saw it and the per-leg warning
+    /// names it. The all-or-nothing case is different in kind rather than in degree: nothing
+    /// anywhere observed the release.
+    ///
+    /// A superseded release does **not** count, because its legs report `superseded` rather than
+    /// going silent — they deliberately say "I did not build", which is what that report exists for.
+    pub fn nothing_ran(&self) -> bool {
+        self.legs_total > 0 && self.unreported.len() == self.legs_total
+    }
+}
+
+/// What the record job needs to know once the reports are folded.
+///
+/// On stdout as JSON so the workflow never parses prose, and read back by the step that emits the
+/// datapoint — which is why the release name travels in here rather than as a workflow input. A
+/// datapoint must not be recordable against a release the canary was not watching.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Decision {
+    /// The release tag, taken from the folded record rather than from an argument.
+    pub release: String,
+    /// Where in the archive this record belongs.
+    pub key_prefix: String,
+    /// Whether to archive it at all: only a release that broke earns a permanent record.
+    pub record: bool,
+    /// [`RunSummary::nothing_ran`] — the release produced no verdict of any kind.
+    pub unchecked: bool,
+    /// Where the record was written.
+    pub summary: String,
 }
 
 /// Fold a run's leg matrix and whatever reports came back into one record.
@@ -459,6 +498,73 @@ mod tests {
         // `flatten` on the run has to put the identity at the top level, not under a `run` key.
         assert!(json.contains("\"release\":\"release-2026-11-09\""));
         assert!(json.contains("\"run_attempt\":1"));
+    }
+
+    /// The condition nothing else in this system can see.
+    ///
+    /// Every other signal starts from a leg reaching a verdict. When no leg reaches anything there
+    /// is no verdict to be red, green or `INFRA_FAIL`, so the alarm sees nothing, the archive
+    /// writes nothing, and the per-leg "no report" warning cannot fire because no leg job ran to
+    /// print it. A release going entirely unverified is the thing this canary exists to prevent,
+    /// and it was the one thing it would not have reported.
+    #[test]
+    fn a_release_where_no_leg_reported_is_recognised_as_unchecked() {
+        let legs = matrix();
+        let s = summarize(run(), &legs, &[]);
+
+        assert!(s.nothing_ran(), "not one leg of {} reported", legs.len());
+        assert_eq!(s.unreported.len(), legs.len());
+        assert!(
+            !s.had_a_hard_verdict(),
+            "and the existing trigger is blind to it, which is the point"
+        );
+    }
+
+    /// Deliberately all-or-nothing rather than a threshold. One leg short of total silence is
+    /// alarming, but it still produced verdicts — so the alarm already saw them and the per-leg
+    /// warning names the missing one. The all-unreported case differs in kind: nothing anywhere
+    /// observed the release.
+    #[test]
+    fn one_leg_reporting_is_not_nothing_running() {
+        let legs = matrix();
+        let s = summarize(run(), &legs, &[green_report(&legs[0].id)]);
+
+        assert!(!s.nothing_ran());
+        assert_eq!(
+            s.unreported.len(),
+            legs.len() - 1,
+            "and the rest is visible"
+        );
+    }
+
+    /// A superseded release did not run its legs either, and must not be reported as unchecked: its
+    /// legs say `superseded` rather than going silent, which is exactly what that report is for,
+    /// and the newer release provides the coverage.
+    #[test]
+    fn a_superseded_release_is_not_unchecked() {
+        let legs = matrix();
+        let reports: Vec<Report> = legs.iter().map(|l| Report::superseded(&l.id)).collect();
+        let s = summarize(run(), &legs, &reports);
+
+        assert!(!s.nothing_ran(), "superseded is a report, not silence");
+        assert!(s.unreported.is_empty());
+    }
+
+    /// The decision is written by one step and read by the step that emits the datapoint, so it has
+    /// to survive the round trip — and it carries the release, so that a datapoint cannot be
+    /// recorded against a release the canary was not watching.
+    #[test]
+    fn the_decision_round_trips_and_carries_the_release() {
+        let d = Decision {
+            release: "release-2026-11-11".into(),
+            key_prefix: "runs/release-2026-11-11/42-1".into(),
+            record: false,
+            unchecked: true,
+            summary: "/tmp/record/summary.json".into(),
+        };
+        let json = serde_json::to_string(&d).unwrap();
+        assert_eq!(serde_json::from_str::<Decision>(&json).unwrap(), d);
+        assert!(json.contains("release-2026-11-11"));
     }
 
     /// The one thing a reader of an old record cannot reconstruct for themselves.
