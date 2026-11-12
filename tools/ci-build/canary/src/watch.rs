@@ -413,8 +413,10 @@ impl PublishWatch for CratesIoWatch {
 /// Dispatches the leg workflow through the `gh` CLI.
 ///
 /// One call per tick carrying every manifest that moved, rather than one call per manifest. The leg
-/// workflow's concurrency key includes the scenario, so two ticks that dispatch different sets
-/// cannot cancel each other, while a repeated dispatch of the same set supersedes its predecessor.
+/// workflow's concurrency key includes the scenario, so two ticks that dispatch different sets run
+/// side by side. A repeated dispatch of the *same* set **queues** behind the run in flight rather
+/// than replacing it: a cancelled run's legs emit no datapoint and leave no report, which is
+/// indistinguishable from legs that died silently, whereas a queued run only starts late.
 pub struct GhDispatcher {
     pub workflow: String,
     pub repo: String,
