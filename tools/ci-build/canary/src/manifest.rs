@@ -338,12 +338,9 @@ mod tests {
     /// A scenario that constrains `aws-config` deliberately must win over the body's own
     /// requirement, or it stops testing the thing it exists for.
     ///
-    /// The subject is built here rather than taken from the table. It used to be
-    /// `prior-aws-config-1-12`, which is now withdrawn for being red — and the guard matters more
-    /// than any one row that happens to exercise it: the three withdrawn rows are *meant* to come
-    /// back, and the next narrowing scenario someone writes needs this to already hold. A
-    /// synthetic subject also means the live table no longer has to contain a narrowing row for
-    /// the property to be checked at all.
+    /// The subject is built here rather than taken from the table, so the property is checked even
+    /// when no live row happens to narrow `aws-config`. The three withdrawn rows are *meant* to
+    /// come back, and the next narrowing scenario someone writes needs this to already hold.
     #[test]
     fn the_scenarios_requirement_wins_over_the_bodys() {
         let narrowing = Scenario {

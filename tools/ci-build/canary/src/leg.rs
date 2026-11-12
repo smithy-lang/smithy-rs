@@ -116,11 +116,10 @@ pub fn commands(leg: &Leg) -> Vec<Command> {
     };
 
     // The toolchain comes first because every later command is invoked as `cargo +<version>`.
-    // Recent rustup auto-installs a missing `+toolchain` and only warns, which is why running
-    // `generate-lockfile` first appeared to work locally; it makes the leg depend on an opt-out-able
-    // rustup convenience (`RUSTUP_AUTO_INSTALL=0` disables it) for a step that is free to order
-    // correctly. Installing explicitly also keeps the download inside a step whose failures carry
-    // the `INFRA_FAIL` retry policy.
+    // Recent rustup auto-installs a missing `+toolchain` and only warns, so ordering this later
+    // would make the leg depend on an opt-out-able rustup convenience (`RUSTUP_AUTO_INSTALL=0`
+    // disables it) for a step that is free to order correctly. Installing explicitly also keeps the
+    // download inside a step whose failures carry the `INFRA_FAIL` retry policy.
     let mut out = vec![Command {
         step: Step::InstallToolchain,
         program: "rustup".into(),

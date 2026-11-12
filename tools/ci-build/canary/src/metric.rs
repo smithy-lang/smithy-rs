@@ -44,11 +44,10 @@
 //!
 //! # Every verdict, including `INFRA_FAIL`
 //!
-//! One severity for all five, which means a runner failure can wake someone. That is a deliberate
-//! trade rather than an oversight: the alternative is a second alarm and a second severity, and the
-//! retry policy already absorbs the transient cases — an `INFRA_FAIL` costs three attempts over six
-//! minutes before it is ever reported. The verdict is on the second series, so a responder sees
-//! which kind it was before doing anything.
+//! One severity for all five, which means a runner failure can wake someone. The retry policy
+//! absorbs the transient cases — an `INFRA_FAIL` costs three attempts over six minutes before it is
+//! ever reported — and the verdict is on the second series, so a responder sees which kind it was
+//! before doing anything.
 
 use std::fmt;
 

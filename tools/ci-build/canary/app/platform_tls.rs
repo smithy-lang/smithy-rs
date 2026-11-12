@@ -89,12 +89,10 @@ async fn platform_native_cert_store_completes_a_real_tls_handshake() {
     // answered, and `ResponseError` means it answered with something
     // unparseable. Either way the handshake finished.
     //
-    // Everything else is treated as a connector failure, including the two that
-    // an earlier version reported as "ok: TLS handshake completed":
-    // `ConstructionFailure` means the request was never even built, and
-    // `TimeoutError` means nothing came back. Neither is evidence of a
-    // handshake, and announcing one is how a diagnostic ends up asserting the
-    // opposite of what it prints.
+    // Everything else is treated as a connector failure. `ConstructionFailure`
+    // means the request was never even built, and `TimeoutError` means nothing
+    // came back. Neither is evidence of a handshake, and announcing one is how a
+    // diagnostic ends up asserting the opposite of what it prints.
     match &err {
         aws_sdk_s3::error::SdkError::ServiceError(e) => {
             println!(

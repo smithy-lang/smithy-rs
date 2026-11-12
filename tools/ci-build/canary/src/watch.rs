@@ -1010,8 +1010,7 @@ mod tests {
     }
 
     /// The suppression must never come from a store that is simply broken. If the failure cannot be
-    /// recorded, the manifest is dispatched on every tick — back to the old behaviour, which is
-    /// wasteful rather than blind.
+    /// recorded, the manifest is dispatched on every tick — wasteful, but never blind.
     #[test]
     fn a_failure_that_cannot_be_recorded_is_dispatched_every_tick() {
         let dir = tempdir("watch-unrecordable-failure");

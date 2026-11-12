@@ -127,17 +127,12 @@ jobs:
         set -o pipefail
         export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3
 
-        # Severity lives here, in reviewed code, rather than inside the secret, so that changing
-        # it is a reviewed edit and not a secret rotation nobody sees.
+        # Severity lives here, in reviewed code, rather than inside the secret, so changing it is a
+        # reviewed edit rather than a secret rotation nobody sees.
         #
-        # 2.5 while the chain is being proven. Not 5, because a Sev5 would show a ticket was cut
-        # and nothing about whether anyone is reached. Not 2 yet, because 2 pages immediately at
-        # any hour and the canary has not yet earned that: its false-positive rate has never
-        # been measured over a real release. 2.5 pages during business hours, which is enough to
-        # prove the notification path exists.
-        #
-        # Raising this to 2 is the last step of the rollout, and it should happen only once the
-        # false-positive rate has been measured across real releases.
+        # 2.5 pages during business hours, which is enough to prove the notification path exists.
+        # Raising it to 2 is the last step of the rollout, once the false-positive rate has been
+        # measured across real releases.
         SEVERITY=2.5
         ALARM="build-canary-${TAG}"
 
@@ -151,15 +146,14 @@ jobs:
         # collapse into the test's ticket and vanish -- the failure the canary exists to prevent,
         # reintroduced by the act of testing it.
         #
-        # Armed on every release rather than only while something is rigged. In normal operation it
+        # Armed on every release rather than only while something is rigged: in normal operation it
         # watches a series nothing writes to and `notBreaching` holds it at OK, so the standing cost
-        # is one alarm. The alternative is a second switch to remember, and forgetting it loses the
-        # one observation a test release exists for.
+        # is one alarm.
         INDUCED_ALARM="build-canary-induced-${TAG}"
 
-        # Both placeholders must be present *before* substituting. A template that hardcoded the
-        # severity would make the substitution a no-op and leave nothing behind to detect, so this
-        # line would claim Sev5 while cutting whatever the secret carried.
+        # Both placeholders must be present before substituting. A template with the severity
+        # hardcoded would make the substitution a no-op, so this job would report the severity above
+        # while cutting at whatever the secret carries.
         for PLACEHOLDER in '{severity}' '{dedupe}'; do
           if [[ "$TICKET_ARN_TEMPLATE" != *"$PLACEHOLDER"* ]]; then
             echo "::error title=Bad template::BUILD_CANARY_TICKET_ARN_TEMPLATE must contain ${PLACEHOLDER}"
@@ -414,12 +408,9 @@ jobs:
         # Checked after the sleep rather than before, so the answer is current. A leg run takes
         # minutes, so by the time an hour starts, the previous hour's verdict is long settled.
         #
-        # The rule: skip only when a leg went red that was NOT already red before this release.
-        # It used to be "has any run for this tag ever concluded failure", which asked about the
-        # tag's history rather than about this release against what was already true -- so one leg
-        # red for a reason nobody had fixed skipped hours 2-24 of every release forever, and an
-        # infrastructure failure before the classifier ran did the same. See the `floor` module for
-        # the four defects and which clause fixes each.
+        # The rule: skip only when a leg went red that was NOT already red before this release. A
+        # leg red for a reason nobody has fixed must not cost hours 2-24, and an infrastructure
+        # failure before the classifier runs must not either. See the `floor` module.
         LISTING="${RUNNER_TEMP}/floor-runs.json"
         gh run list --repo "$REPO" --workflow build-canary.yml --limit 100 \
           --json databaseId,status,conclusion,displayTitle,headBranch,createdAt > "$LISTING"

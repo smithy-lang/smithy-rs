@@ -373,11 +373,9 @@ async fn real_chain_reaches_links_two_three_and_four() {
 }
 
 // ---------------------------------------------------------------------------
-// Induced latency and loss. The obvious objection is that nothing here can make S3
-// slow or lossy on demand -- true of S3, and irrelevant: the loopback listener above
-// already drives the REAL default hyper client (no `http_client` override), and a
-// listener we own can be made arbitrarily slow and can drop connections at will.
-// These two checks do exactly that.
+// Induced latency and loss. The loopback listener above drives the REAL default
+// hyper client (no `http_client` override), and a listener we own can be made
+// arbitrarily slow and can drop connections at will. These two checks do that.
 // ---------------------------------------------------------------------------
 
 /// A listener that sleeps `delay` before responding, then serves `200`.
@@ -531,10 +529,8 @@ async fn induced_connection_loss_is_retried_and_recovers() {
 }
 
 // ---------------------------------------------------------------------------
-// API surface. Four checks: presigning and pagination (measured in an earlier
-// prototype but lost when `test-util` moved to [dev-dependencies], so re-added
-// here), plus status-code retry classification and multipart, which were never
-// built.
+// API surface. Four checks: presigning, pagination, status-code retry
+// classification, and multipart.
 // ---------------------------------------------------------------------------
 
 /// 2025-06-15T00:00:00Z. Pinned so the signature scope and X-Amz-Date are fixed.

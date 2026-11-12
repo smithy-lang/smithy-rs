@@ -10,15 +10,11 @@
 //! early and the legs test a half-published graph, reporting breaks that are really just crates
 //! that have not arrived yet; finish late or never and the floor tier never starts.
 //!
-//! # Why a checklist and not a quiet period
+//! # A checklist, not a quiet period
 //!
-//! The obvious approach is to watch for a gap: once no new crate has appeared for N minutes,
-//! declare it done. Measured across 307 inter-crate gaps the median is 0.55 minutes and the
-//! longest 11.10, so a threshold does exist — but it is a tuned number whose failure mode is
-//! silent. Pick it too small and the window opens on a partial graph, and nothing says so.
-//!
-//! A checklist has no tunable parameter. The release is finished when crates.io has every version
-//! this tag declares, and until then the outstanding set names exactly what is missing.
+//! The release is finished when crates.io has every version this tag declares, and until then the
+//! outstanding set names exactly what is missing. No tunable threshold, so no window that can open
+//! on a partial graph without saying so.
 //!
 //! # What counts as "arrived"
 //!

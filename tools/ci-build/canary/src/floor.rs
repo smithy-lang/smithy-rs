@@ -9,40 +9,23 @@
 //! propagation lags and a graph that resolved cleanly at minute 15 can resolve differently at
 //! minute 75. Each hour decides whether to bother. This module is that decision.
 //!
-//! # What the rule used to be, and why it had to change
-//!
-//! It asked: *has any `build-canary.yml` run for this release tag ever concluded `failure`?* That
-//! sentence has four problems, and they are all the same problem — it asks about the tag's history
-//! when the useful question is about this release against what was already true.
-//!
-//! **It could not tell a new break from a standing one.** Any red leg answered yes, which is only
-//! equivalent to "this release is broken" while red is exceptional. With one leg red for a reason
-//! nobody has fixed, hour one answers yes on every release forever and hours 2–24 never run — so
-//! the tier that exists to catch a break appearing late is the one tier guaranteed not to.
-//!
-//! **It read the run's conclusion, not the verdict.** A job fails for reasons that have nothing to
-//! do with the published graph: checkout, the toolchain install, the matrix expander. `INFRA_FAIL`
-//! was deliberately given exit 0 so infrastructure could not stop the window, and this bypassed
-//! that for any infrastructure failure happening before the classifier ran.
-//!
-//! **It counted the dispatch tier's runs.** Those run *during* publishing, when crates arrive one
-//! at a time and intermediate graphs genuinely do break. A transient at minute 15 disabled the whole
-//! day — on the exact reasoning the floor tier exists to refute.
-//!
-//! **It was a latch, not a state.** One hundred runs of history with no time window, so a break
-//! that later cleared still answered yes for the rest of the day.
-//!
-//! # What it is now
+//! # The rule
 //!
 //! > Skip this hour if the most recent completed full-matrix run found a hard verdict on a leg that
 //! > was not already red before this release.
 //!
-//! Each clause fixes one of the four:
+//! Every clause carries its own weight:
 //!
-//! * *a hard verdict* — read from the verdict-owning step, so infrastructure cannot stop the window
-//! * *full-matrix run* — the floor tier's own dispatches, never the publish window's
-//! * *most recent completed* — a state, so a cleared break stops latching
-//! * *not already red before this release* — the baseline, so a standing red leg is not news
+//! * *a hard verdict* — read from the verdict-owning step rather than the job's conclusion, so an
+//!   infrastructure failure before the classifier runs cannot stop the window that `INFRA_FAIL`'s
+//!   exit 0 exists to protect
+//! * *full-matrix run* — the floor tier's own dispatches, never the publish window's, where crates
+//!   arrive one at a time and intermediate graphs genuinely do break
+//! * *most recent completed* — a state rather than a latch, so a break that later cleared stops
+//!   counting
+//! * *not already red before this release* — a leg red for a reason nobody has fixed is not news,
+//!   and without this clause the tier that exists to catch a late break is the one guaranteed not
+//!   to run
 //!
 //! # Where "before this release" comes from
 //!
@@ -51,9 +34,9 @@
 //! previous release's runs are always there.
 //!
 //! When there is no previous release to compare against — the first release ever to run this, or a
-//! gap long enough to age the runs out — every red leg counts as news and the rule behaves exactly
-//! as it did before. That is the deliberate choice: an absent baseline degrades to the old
-//! behaviour rather than to something new and untested.
+//! gap long enough to age the runs out — every red leg counts as news, so an absent baseline
+//! dispatches rather than skipping. Fail-open is the safe direction: it costs runner minutes and
+//! checks everything, where the opposite would skip hours nobody asked it to skip.
 //!
 //! # What this does not decide
 //!
@@ -335,9 +318,8 @@ mod tests {
     }
 
     /// Every run that must be *excluded* is deliberately **newer** than the one that should win, so
-    /// that dropping any one filter changes the answer. An earlier version of this fixture put the
-    /// exclusions older than the winner, which meant three of the filters could be deleted with
-    /// every test still passing. Found by mutation, not by reading.
+    /// that dropping any one filter changes the answer. With the exclusions older than the winner
+    /// instead, three of the filters can be deleted with every test still passing.
     const LISTING: &str = r#"[
         {"databaseId":10,"status":"in_progress","conclusion":null,
          "displayTitle":"Build canary - all","headBranch":"release-2026-11-11",
@@ -452,11 +434,10 @@ mod tests {
         );
     }
 
-    /// With no previous release to compare against, every red leg counts as news — which is exactly
-    /// what the old rule did. An absent baseline degrades to the old behaviour rather than to
-    /// something new and untested.
+    /// With no previous release to compare against, every red leg counts as news, so an absent
+    /// baseline dispatches rather than skipping.
     #[test]
-    fn no_baseline_degrades_to_the_old_behaviour() {
+    fn no_baseline_dispatches_every_red_leg() {
         let g = decide(Some(&set(&["ssstar--stable"])), None);
         assert!(!g.dispatch);
         assert_eq!(g.news, ["ssstar--stable"]);

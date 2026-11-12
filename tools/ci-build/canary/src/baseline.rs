@@ -62,9 +62,7 @@
 //!
 //! Dispatching it on *every* tick, though, re-runs the same matrix to reach the same verdict. A
 //! three-hour window on a 15-minute tick is twelve ticks, so one manifest that cannot resolve for
-//! the length of a release asked for twelve identical matrices — measured, by running the watcher
-//! against a registry that could not serve six of the manifests: all six appeared in `dispatched`
-//! on all six ticks.
+//! the length of a release would cost twelve identical matrices.
 //!
 //! That is what [`gate_failure`] is for. The failure is recorded, and a failure identical to the
 //! *previous* tick's is not dispatched again. Three properties make it safe:

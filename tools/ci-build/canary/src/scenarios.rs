@@ -474,14 +474,13 @@ pub struct Leg {
     /// runs a release — one per floor hour plus the publish window — to re-prove a graph that only
     /// changes when somebody commits a change to it.
     ///
-    /// Omitted from the matrix JSON when false, so the ordinary matrix is byte-for-byte what it was
-    /// before this existed.
+    /// Omitted from the matrix JSON when false, so only a test-registry leg carries the marker.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub test_registry: bool,
     /// Inherited from the manifest this leg builds: see [`Scenario::induced`].
     ///
-    /// Omitted from the matrix JSON when absent, so the ordinary matrix is byte-for-byte what it
-    /// was before this existed, and a rigged release's matrix says so in the job log.
+    /// Omitted from the matrix JSON when absent, so only a rigged leg carries the marker and a
+    /// rigged release's matrix says so in the job log.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub induced: Option<String>,
 }
@@ -846,11 +845,10 @@ mod tests {
     /// The split decides how much of the matrix can report a run-phase verdict at all: a stub leg
     /// has no assertions, so it can only ever say `COMPILE_FAIL`, `RESOLVE_FAIL` or `INFRA_FAIL`.
     ///
-    /// It used to be four, and withdrawing the three `prior-aws-config-*` rows is what took it to
-    /// one. Nine legs of forty now carry assertions — `new-project` at five toolchains plus the
-    /// four build-axis legs that reuse its manifest — where before it was twenty-four of sixty.
-    /// That is the real cost of the withdrawal, and it is concentrated: `new-project` is now the
-    /// only dependency row that can produce a `RUNTIME_FAIL` or `HARNESS_FAIL` at all.
+    /// Nine legs of forty carry assertions — `new-project` at five toolchains plus the four
+    /// build-axis legs that reuse its manifest — and the coverage is concentrated there:
+    /// `new-project` is the only dependency row that can produce a `RUNTIME_FAIL` or
+    /// `HARNESS_FAIL` at all.
     #[test]
     fn one_scenario_is_client_shaped() {
         let app: Vec<_> = SCENARIOS

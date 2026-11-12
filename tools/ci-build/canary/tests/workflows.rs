@@ -12,14 +12,6 @@
 //! It is a test in this crate rather than a standalone script because `check-tools` already runs
 //! the crate's tests, so it needs no new CI wiring and cannot be forgotten.
 //!
-//! Two of these were written after the thing they check had already gone wrong:
-//!
-//! - The orchestrator's release-tag trigger initially had no arming gate, so merging it would have
-//!   started a 24-hour, full-matrix watch on the next release as a side effect.
-//! - The self-test's ticket-ARN template was validated for *leftover* placeholders rather than
-//!   *missing* ones, so a secret carrying a hardcoded severity would have cut a severity-2 ticket
-//!   from a self-test — which is what the pinned severity exists to prevent.
-//!
 //! The syntax is already checked elsewhere: the repository's pre-commit configuration runs
 //! `check-yaml` and `pretty-format-yaml`. Nothing here duplicates that.
 
@@ -631,10 +623,8 @@ fn the_all_scenario_excludes_the_test_registry_legs() {
 /// the signal reserved for a leg that died silently, and is how a deliberate cancellation would get
 /// filed as a defect in the canary.
 ///
-/// Asserted because the setting is one word and the comments describing it had already drifted from
-/// it: both this workflow and the watcher's dispatcher claimed a repeat "supersedes its
-/// predecessor", which is what `true` would do. The code was right and the prose was wrong, in the
-/// one place a reader would look to find out what happens when ticks overlap.
+/// Asserted because the setting is one word, and the difference between its two values is invisible
+/// until ticks actually overlap.
 #[test]
 fn a_repeated_dispatch_queues_rather_than_cancelling_its_predecessor() {
     let wf = load("build-canary");
@@ -679,8 +669,8 @@ fn a_repeated_dispatch_queues_rather_than_cancelling_its_predecessor() {
 ///
 /// And the gate is a command in this crate rather than a shell one-liner, because deciding from the
 /// verdicts in two runs is not something to trust to `jq`. That needs a checkout and a toolchain in
-/// a job that previously only slept and called an API, so their absence would fail every floor hour
-/// on the first real release and nowhere earlier.
+/// a job whose only other steps are a sleep and an API call, so their absence would fail every floor
+/// hour on the first real release and nowhere earlier.
 #[test]
 fn the_floor_gate_can_see_the_previous_release_and_can_run() {
     let wf = load("post-publish-watch");

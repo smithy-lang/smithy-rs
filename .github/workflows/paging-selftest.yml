@@ -20,24 +20,14 @@
 #           the previous release's alarm while a ticket may still be open against it -- so whether
 #           that releases the ticketing system's hold has to be known.
 #
-# SEVERITY 2.5, everywhere, and it is not a parameter.
+# SEVERITY 2.5, everywhere, and not a parameter. Production will be 2.
 #
-# Not 5, because a Sev5 would prove a ticket was cut and nothing about whether anyone is reached --
-# and the notification half is the most important thing here and the least verifiable anywhere else.
-# Sev2.5 pages during business hours, so a self-test run during the working day exercises that half.
-# Run it during the working day for that reason; run it at night and a silent pager is not evidence
-# of anything.
+# 2.5 pages during business hours, so run this during the working day: the notification half is the
+# point, and a silent pager at night is not evidence of anything.
 #
-# Not 2, because this workflow exists to cut tickets nobody asked for, and a full Sev2 pages
-# immediately whatever the hour. Production severity is 2; testing stops one band short of it.
-#
-# Both 2 and 2.5 need high-severity ticketing enabled for the application cutting them, which is
+# High-severity ticketing has to be enabled for the application cutting the ticket, which is
 # unverified -- so the first `fire` may be rejected rather than delivered. That is a finding, not a
 # fault in this workflow.
-#
-# It stays a pinned constant rather than a dispatch input: cutting high-severity tickets
-# unnecessarily gets an application's ticketing access revoked, so the severity should be a reviewed
-# edit, not a choice made in a dropdown at 2am.
 name: Paging self-test
 run-name: Paging self-test - ${{ inputs.action }} - ${{ inputs.session }}
 on:
@@ -133,13 +123,9 @@ jobs:
 
         SEVERITY=2.5
 
-        # Both placeholders must be *present*, checked before substituting. Checking only for
-        # leftovers afterwards looks equivalent and is not: a template that hardcoded the severity
-        # would leave nothing behind, so the substitution would be a no-op and this workflow would
-        # cut a ticket at whatever severity the secret happened to carry -- defeating the pin above,
-        # which exists because unnecessary high-severity tickets get an application's ticketing
-        # access revoked. A template that hardcoded the dedupe key would be just as quiet: every
-        # session would collapse into one ticket, and the dedupe test would prove nothing.
+        # Both placeholders must be present before substituting. A template with the severity
+        # hardcoded would make the substitution a no-op and cut at whatever severity the secret
+        # carries; one with the dedupe key hardcoded would collapse every session into one ticket.
         for PLACEHOLDER in '{severity}' '{dedupe}'; do
           if [[ "$TICKET_ARN_TEMPLATE" != *"$PLACEHOLDER"* ]]; then
             echo "::error title=Bad template::BUILD_CANARY_TICKET_ARN_TEMPLATE must contain ${PLACEHOLDER}"
