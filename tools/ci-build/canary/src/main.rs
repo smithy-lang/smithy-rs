@@ -12,6 +12,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 
 use canary::baseline;
+use canary::floor;
 use canary::leg;
 use canary::manifest;
 use canary::metric;
@@ -161,6 +162,35 @@ enum Command {
         payload_dir: PathBuf,
         #[arg(long)]
         dry_run: bool,
+    },
+
+    /// Pick the two full-matrix runs a floor hour's gate compares.
+    ///
+    /// Prints two lines, each a run id or `-`: this release's most recent completed full-matrix
+    /// run, then the previous release's. Two lines rather than JSON because the workflow reads them
+    /// straight into shell variables and then has to fetch each one.
+    FloorRuns {
+        /// `gh run list --json databaseId,status,conclusion,displayTitle,headBranch,createdAt`
+        #[arg(long)]
+        listing: PathBuf,
+        /// The release this watch is for.
+        #[arg(long)]
+        tag: String,
+    },
+
+    /// Decide whether a floor hour is still worth dispatching.
+    ///
+    /// Skips the hour only when a leg went red that was **not** already red before this release.
+    /// See `floor` for the four defects in the rule this replaces, each of which came from asking
+    /// about the tag's history rather than about this release against what was already true.
+    FloorGate {
+        /// `gh run view --json jobs` for this release's run. Omit when there is none yet.
+        #[arg(long)]
+        this: Option<PathBuf>,
+        /// The same for the previous release's run. Omit when there is no previous release, which
+        /// degrades the rule to its old behaviour rather than to something untested.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
     },
 
     /// Record that a release was never checked, which nothing else can notice.
@@ -482,6 +512,44 @@ fn main() -> anyhow::Result<()> {
                 eprintln!("  {d}");
             }
             println!("{}", serde_json::to_string(&written)?);
+        }
+        Command::FloorRuns { listing, tag } => {
+            let text = std::fs::read_to_string(&listing)
+                .with_context(|| format!("reading {}", listing.display()))?;
+            let (mine, previous) = floor::newest_floor_runs(&text, &tag)?;
+
+            let show = |r: &Option<floor::FloorRun>| match r {
+                Some(r) => r.id.to_string(),
+                None => "-".to_string(),
+            };
+            eprintln!(
+                "this release ({tag}): {}; previous release: {}",
+                show(&mine),
+                match &previous {
+                    Some(r) => format!("{} ({})", r.id, r.tag),
+                    None => "none found, so every red leg will count as news".to_string(),
+                }
+            );
+            println!("{}", show(&mine));
+            println!("{}", show(&previous));
+        }
+        Command::FloorGate { this, baseline } => {
+            let red = |p: &Option<PathBuf>| -> anyhow::Result<Option<_>> {
+                match p {
+                    None => Ok(None),
+                    Some(p) => {
+                        let text = std::fs::read_to_string(p)
+                            .with_context(|| format!("reading {}", p.display()))?;
+                        Ok(Some(floor::red_legs(&text)?))
+                    }
+                }
+            };
+            let mine = red(&this)?;
+            let known = red(&baseline)?;
+            let gate = floor::decide(mine.as_ref(), known.as_ref());
+
+            eprintln!("{}", gate.reason);
+            println!("{}", serde_json::to_string(&gate)?);
         }
         Command::EmitUnchecked {
             decision,

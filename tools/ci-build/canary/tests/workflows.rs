@@ -398,6 +398,71 @@ fn a_rigged_break_is_armed_apart_from_a_real_one() {
     );
 }
 
+/// The floor hour's gate has to be able to see the previous release, and to run at all.
+///
+/// Two ways this degrades silently rather than breaking loudly, both of which have to be ruled out
+/// in YAML because neither is visible from the Rust side.
+///
+/// Scoping the run listing to this release's tag — which the gate it replaced did, with
+/// `--branch "$TAG"` — makes the baseline permanently unfindable. The gate then treats every red
+/// leg as news and behaves exactly as the old rule did, on every release, with nothing to show that
+/// anything is wrong.
+///
+/// And the gate is a command in this crate rather than a shell one-liner, because deciding from the
+/// verdicts in two runs is not something to trust to `jq`. That needs a checkout and a toolchain in
+/// a job that previously only slept and called an API, so their absence would fail every floor hour
+/// on the first real release and nowhere earlier.
+#[test]
+fn the_floor_gate_can_see_the_previous_release_and_can_run() {
+    let wf = load("post-publish-watch");
+    let job = jobs(&wf).get("floor-tier").copied().expect("a floor tier");
+    let all_steps = steps(job);
+
+    assert!(
+        all_steps
+            .iter()
+            .any(|s| s.get("uses").and_then(Value::as_str) == Some("actions/checkout@v4")),
+        "the gate runs a command from this repository, so the job has to check it out"
+    );
+    assert!(
+        all_steps.iter().any(|s| s
+            .get("uses")
+            .and_then(Value::as_str)
+            .is_some_and(|u| u.contains("rust-toolchain"))),
+        "and it needs a toolchain to build it"
+    );
+
+    let gate = all_steps
+        .iter()
+        .filter_map(|s| s.get("run").and_then(Value::as_str))
+        .find(|r| r.contains("floor-gate"))
+        .expect("the floor hour must decide with `floor-gate`");
+
+    // The listing has to span releases, so it must not be narrowed to this one.
+    let listing_line = gate
+        .lines()
+        .find(|l| l.contains("gh run list"))
+        .expect("the gate lists runs");
+    let listing_block: String = gate
+        .lines()
+        .skip_while(|l| !l.contains("gh run list"))
+        .take(3)
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !listing_block.contains("--branch"),
+        "scoping the listing to this tag makes the previous release unfindable, which silently \
+         restores the rule this replaced: {listing_line:?}"
+    );
+
+    // And the decision must come from the verdicts, never from a run's conclusion — the whole
+    // reason an infrastructure failure can no longer stop the window.
+    assert!(
+        !gate.contains("conclusion'] == 'failure'") && !gate.contains("conclusion\"] == \"failure"),
+        "the gate must not read a run's conclusion: {gate}"
+    );
+}
+
 /// A release that nothing checked has to be reported, and from the right credentials.
 ///
 /// This is the one condition no verdict exists for, so the record job is the only thing positioned
