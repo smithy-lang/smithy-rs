@@ -20,11 +20,25 @@ pub struct BuildError {
 #[derive(Debug)]
 pub(crate) enum BuildErrorKind {
     MissingModel,
-    ModelLoadFailed { path: PathBuf, source: LoadError },
+    ModelLoadFailed {
+        path: PathBuf,
+        source: LoadError,
+    },
     NoService,
-    AmbiguousService { services: Vec<ShapeId> },
-    UnknownService { id: ShapeId, services: Vec<ShapeId> },
-    SchemaBuildFailed { source: SchemaBuildError },
+    AmbiguousService {
+        services: Vec<ShapeId>,
+    },
+    UnknownService {
+        id: ShapeId,
+        services: Vec<ShapeId>,
+    },
+    SchemaBuildFailed {
+        source: SchemaBuildError,
+    },
+    ProtocolNotFound {
+        service: ShapeId,
+        traits: Vec<ShapeId>,
+    },
 }
 
 impl BuildError {
@@ -61,6 +75,12 @@ impl BuildError {
     pub(crate) fn schema_build_failed(source: SchemaBuildError) -> Self {
         Self {
             kind: BuildErrorKind::SchemaBuildFailed { source },
+        }
+    }
+
+    pub(crate) fn protocol_not_found(service: ShapeId, traits: Vec<ShapeId>) -> Self {
+        Self {
+            kind: BuildErrorKind::ProtocolNotFound { service, traits },
         }
     }
 
@@ -107,6 +127,21 @@ impl fmt::Display for BuildError {
             BuildErrorKind::SchemaBuildFailed { .. } => {
                 write!(f, "failed to build schemas for the service")
             }
+            BuildErrorKind::ProtocolNotFound { service, traits } if traits.is_empty() => {
+                write!(
+                    f,
+                    "service `{service}` has no protocol trait; set a protocol with `protocol(..)`"
+                )
+            }
+            BuildErrorKind::ProtocolNotFound { service, traits } => {
+                write!(
+                    f,
+                    "no protocol implementation matches the protocol traits of service \
+                     `{service}`: "
+                )?;
+                write_ids(f, traits)?;
+                write!(f, "; set a protocol with `protocol(..)`")
+            }
         }
     }
 }
@@ -120,6 +155,7 @@ impl Error for BuildError {
             BuildErrorKind::AmbiguousService { .. } => None,
             BuildErrorKind::UnknownService { .. } => None,
             BuildErrorKind::SchemaBuildFailed { source } => Some(source),
+            BuildErrorKind::ProtocolNotFound { .. } => None,
         }
     }
 }

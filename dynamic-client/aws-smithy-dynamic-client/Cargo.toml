@@ -10,7 +10,12 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
 aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }
+aws-smithy-query = { path = "../../rust-runtime/aws-smithy-query" }
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
 
 [package.metadata.docs.rs]
 all-features = true

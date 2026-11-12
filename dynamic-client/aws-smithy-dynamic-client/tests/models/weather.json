@@ -3,7 +3,10 @@
     "shapes": {
         "example.weather#Weather": {
             "type": "service",
-            "version": "2006-03-01"
+            "version": "2006-03-01",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {}
+            }
         }
     }
 }

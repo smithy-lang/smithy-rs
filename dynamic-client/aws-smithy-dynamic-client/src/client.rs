@@ -6,9 +6,11 @@
 //! The dynamic client and its builder.
 
 use crate::error::BuildError;
+use crate::protocol::{detect, protocol_traits};
 use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::{Model, ShapeId};
+use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -31,6 +33,9 @@ pub struct DynamicClient {
     // TODO(dynamic-client): Remove this `allow` once calls read the schemas.
     #[allow(dead_code)]
     schemas: Arc<RuntimeSchemaSet>,
+    // TODO(dynamic-client): Remove this `allow` once calls read the protocol.
+    #[allow(dead_code)]
+    protocol: SharedClientProtocol,
 }
 
 impl DynamicClient {
@@ -45,6 +50,11 @@ impl DynamicClient {
             .service()
             .expect("the set is built for a service")
     }
+
+    #[cfg(test)]
+    fn protocol_id(&self) -> String {
+        self.protocol.protocol_id().to_string()
+    }
 }
 
 /// A builder for a [`DynamicClient`].
@@ -52,6 +62,7 @@ impl DynamicClient {
 pub struct Builder {
     model_file: Option<PathBuf>,
     service: Option<ShapeId>,
+    protocol: Option<SharedClientProtocol>,
 }
 
 impl Builder {
@@ -71,6 +82,13 @@ impl Builder {
         self
     }
 
+    /// Sets the protocol to use, in place of the one detected from the service's protocol
+    /// traits.
+    pub fn protocol(mut self, protocol: impl ClientProtocol + 'static) -> Self {
+        self.protocol = Some(SharedClientProtocol::new(protocol));
+        self
+    }
+
     /// Builds the client.
     ///
     /// # Errors
@@ -78,6 +96,8 @@ impl Builder {
     /// Fails when the builder has no model, or when the model file fails to load. Also fails
     /// when the model has no service, or has several and none is specified. Also fails when
     /// the model has no service with the given ID, or when the service's shapes are invalid.
+    /// Also fails when no protocol is set and no built-in protocol matches a protocol trait
+    /// of the service.
     pub fn build(self) -> Result<DynamicClient, BuildError> {
         let path = self.model_file.ok_or_else(BuildError::missing_model)?;
         let model = Model::from_json_file(&path)
@@ -90,8 +110,18 @@ impl Builder {
             .materialization(Materialization::Lazy)
             .build()
             .map_err(BuildError::schema_build_failed)?;
+        let protocol = match self.protocol {
+            Some(protocol) => protocol,
+            None => detect(&service_view).ok_or_else(|| {
+                BuildError::protocol_not_found(
+                    service.clone(),
+                    protocol_traits(&model, &service_view),
+                )
+            })?,
+        };
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
+            protocol,
         })
     }
 }
@@ -246,6 +276,73 @@ mod tests {
             err.kind(),
             BuildErrorKind::UnknownService { id: unknown, services }
                 if *unknown == id("example.weather#Forecast") && services.is_empty()
+        ));
+    }
+
+    fn protocols(service: &str) -> super::Builder {
+        DynamicClient::builder()
+            .model_file(model("protocols.json"))
+            .service(id(service))
+    }
+
+    #[test]
+    fn detects_the_protocol_from_the_service_trait() {
+        let dynamodb = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../aws/sdk/aws-models/dynamodb.json");
+        let client = DynamicClient::builder()
+            .model_file(dynamodb)
+            .build()
+            .unwrap();
+        assert_eq!("aws.protocols#awsJson1_0", client.protocol_id());
+    }
+
+    #[test]
+    fn picks_the_first_protocol_in_priority_order() {
+        // The model lists `restJson1` first, and `rpcv2Cbor` has the higher priority.
+        let client = protocols("example.protocols#RestJsonAndCbor")
+            .build()
+            .unwrap();
+        assert_eq!("smithy.protocols#rpcv2Cbor", client.protocol_id());
+    }
+
+    #[test]
+    fn uses_the_explicit_protocol() {
+        let client = protocols("example.protocols#RestJsonAndCbor")
+            .protocol(aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new())
+            .build()
+            .unwrap();
+        assert_eq!("aws.protocols#restJson1", client.protocol_id());
+    }
+
+    #[test]
+    fn fails_when_no_built_in_protocol_matches_a_known_protocol_trait() {
+        let err = protocols("example.protocols#Ec2Query").build().unwrap_err();
+        assert!(matches!(
+            err.kind(),
+            BuildErrorKind::ProtocolNotFound { traits, .. }
+                if *traits == vec![id("aws.protocols#ec2Query")]
+        ));
+    }
+
+    #[test]
+    fn fails_when_no_built_in_protocol_matches_a_defined_protocol_trait() {
+        let err = protocols("example.protocols#WireOnly").build().unwrap_err();
+        assert!(matches!(
+            err.kind(),
+            BuildErrorKind::ProtocolNotFound { traits, .. }
+                if *traits == vec![id("example.protocols#wire")]
+        ));
+    }
+
+    #[test]
+    fn fails_on_a_service_with_no_protocol_trait() {
+        let err = protocols("example.protocols#NoProtocol")
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            err.kind(),
+            BuildErrorKind::ProtocolNotFound { service, traits }
+                if *service == id("example.protocols#NoProtocol") && traits.is_empty()
         ));
     }
 }

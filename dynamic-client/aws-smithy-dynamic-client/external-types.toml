@@ -1,3 +1,4 @@
 allowed_external_types = [
     "aws_smithy_lang::shape_id::ShapeId",
+    "aws_smithy_schema::schema::protocol::ClientProtocol",
 ]

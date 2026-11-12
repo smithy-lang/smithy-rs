@@ -21,6 +21,7 @@
 
 pub mod client;
 pub mod error;
+mod protocol;
 
 pub use client::DynamicClient;
 pub use error::BuildError;
