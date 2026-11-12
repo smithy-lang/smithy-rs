@@ -17,8 +17,8 @@
 //!
 //! It was ten scenarios and sixty legs. Four rows are commented out in the table below, each with
 //! its reason and what restoring it is gated on: they are red against the crates published today,
-//! and a leg that is red on arrival costs the floor tier its remaining twenty-three hours on every
-//! release rather than costing one leg of coverage.
+//! and a leg that is red on arrival cuts a ticket on every release for something nobody can act on.
+//! See [`SCENARIOS`] for why that, and not the cost of the legs, is what disqualifies them.
 
 use serde::Serialize;
 
@@ -147,8 +147,8 @@ pub struct BuildAxisLeg {
 ///
 /// Each withdrawn row carries its own reason and the condition for putting it back. They are
 /// commented rather than deleted because every one of them is the right row to be checking; what
-/// disqualifies them is that they are red *now*, and a standing red leg makes the floor tier's
-/// stop rule fire on arrival.
+/// disqualifies them is that they are red *now*, and a leg that is red on arrival pages on every
+/// release about something no release caused and nobody can act on.
 pub const SCENARIOS: &[Scenario] = &[
     Scenario {
         id: "new-project",
@@ -179,11 +179,15 @@ pub const SCENARIOS: &[Scenario] = &[
     // cannot compile today. That is exactly the class of defect this canary exists to catch, so
     // deleting the rows would be deleting the finding.
     //
-    // Why they cannot stay switched on: a floor hour asks "did any dispatched run for this tag
-    // conclude failure?", and a standing red leg answers yes at hour one of every release. The
-    // remaining twenty-three hours are then skipped — so these fifteen legs, by reporting a break
-    // that is already known, cost the canary its ability to detect a new one. Red has to be
-    // exceptional for that stop rule to mean anything.
+    // Why they cannot stay switched on: a leg emits `Red {Tag}` for any hard verdict, and that is
+    // the series the release alarm watches. So these fifteen legs would cut a ticket on every
+    // release, forever, about a break no release caused — and an oncall who learns the canary's
+    // ticket is always the same ticket stops reading it, which costs far more than fifteen legs.
+    //
+    // Note what this is *not*. The floor tier's gate compares against the previous release, so a
+    // standing red leg no longer stops the window; see the `floor` module. Paging is the reason
+    // these are off, and it is unaffected by that gate, which decides what to dispatch and never
+    // what to report.
     //
     // Restoring them is gated on the incompatibility being fixed, not on a decision about the
     // canary. Uncomment, run `gen-matrix`, and the counts in the tests below move with them.
@@ -247,8 +251,8 @@ pub const SCENARIOS: &[Scenario] = &[
     //
     // This one differs from the three above in who can act on it. Those are a break in crates this
     // repository publishes; this is a break in a third party's code, so no release from here will
-    // ever turn it green. It would have gone red on every release forever, taking the floor tier's
-    // remaining twenty-three hours with it each time.
+    // ever turn it green — it would have cut a ticket on every release forever, with no action
+    // available to whoever received it.
     //
     // Kept commented rather than deleted because the row is still the right row — a dependent
     // whose requirements on us are frozen is a real shape worth checking. Restoring it is gated on
@@ -569,12 +573,12 @@ mod tests {
 
     /// The reason the four rows had to go, stated as a property rather than left in a comment.
     ///
-    /// A floor hour asks whether any dispatched run for this tag concluded `failure`, so one leg
-    /// that is red on arrival answers yes at hour one of every release and the remaining
-    /// twenty-three hours are skipped. A row known to be red against the crates published today
-    /// therefore does not cost one leg of coverage, it costs the rest of the day — which is why
-    /// `ssstar` and the three `prior-aws-config-*` rows are commented out above rather than left
-    /// on with their failures tolerated.
+    /// Any hard verdict emits `Red {Tag}`, which is the series the release alarm watches, so a row
+    /// that is red against the crates published today cuts a ticket on every release about
+    /// something no release caused. That is what disqualifies `ssstar` and the three
+    /// `prior-aws-config-*` rows, rather than the cost of running them — and it is not something
+    /// the floor tier's gate affects, since that decides what to dispatch and never what to
+    /// report.
     ///
     /// This cannot assert that the live table is green, which would need a network and twelve
     /// minutes. It asserts the weaker thing that is still worth having: that nobody has quietly
@@ -590,9 +594,9 @@ mod tests {
         for s in manifests() {
             assert!(
                 !KNOWN_RED.contains(&s.id),
-                "{} is red against today's published crates: switching it back on costs the floor \
-                 tier its remaining twenty-three hours on every release, so it has to come back \
-                 together with the fix, and this list has to lose the entry",
+                "{} is red against today's published crates: switching it back on cuts a ticket on \
+                 every release about a break no release caused, so it has to come back together \
+                 with the fix, and this list has to lose the entry",
                 s.id
             );
         }
