@@ -65,8 +65,9 @@ export interface Properties {
  * The IDs land inside the `repo` segment rather than at the end, so adding a trailing wildcard
  * achieves nothing and a single `repo:ORG/REPO:*` pattern silently stops matching — every role here
  * would become unassumable the moment this repository were renamed. Listing both patterns avoids
- * that without resorting to wildcards inside the org and repo segments, which would also match a
- * *neighbouring* org or repository name.
+ * that. The wildcards in the immutable pattern sit only where an ID goes, after an `@`, rather than
+ * standing in for the org and repository names, so neither pattern can match a *neighbouring* org
+ * or a repository whose name merely starts the same way.
  *
  * Every condition in the block must hold, so the coarse `sub` match cannot widen what the exact
  * `repository` match allows.
