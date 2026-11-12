@@ -398,6 +398,196 @@ fn a_rigged_break_is_armed_apart_from_a_real_one() {
     );
 }
 
+/// One `aws cloudwatch put-metric-alarm` invocation, as the flags that decide what it watches.
+struct AlarmCommand {
+    namespace: String,
+    metric_name: String,
+    /// The `Name=…,Value=…` arguments, in order, with shell quoting removed.
+    dimensions: Vec<String>,
+}
+
+/// Split a command into arguments, keeping double-quoted arguments whole.
+///
+/// Enough of a shell for the arming step and no more: the only quoting it uses is `"…"` around
+/// dimension arguments, which must survive as single arguments because that is what makes each one
+/// a dimension rather than two.
+fn arguments(command: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    let mut started = false;
+    for c in command.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if started {
+                    args.push(std::mem::take(&mut current));
+                    started = false;
+                }
+            }
+            c => {
+                current.push(c);
+                started = true;
+            }
+        }
+    }
+    if started {
+        args.push(current);
+    }
+    args
+}
+
+/// Every `put-metric-alarm` invocation in a workflow, read out of the shipped YAML.
+///
+/// Reads the file rather than a copy of it, because the whole point is that these flags are a third
+/// copy of something the crate also declares.
+fn alarm_commands(text: &str) -> Vec<AlarmCommand> {
+    let mut commands = Vec::new();
+    let mut lines = text.lines();
+    while let Some(first) = lines.next() {
+        // The invocation itself, not a comment mentioning it: the arming step's prose refers to
+        // `put-metric-alarm` too, and parsing that found no flags and failed confusingly.
+        if !first
+            .trim_start()
+            .starts_with("aws cloudwatch put-metric-alarm")
+        {
+            continue;
+        }
+        // Backslash-continued: take lines until one does not end in a backslash.
+        let mut whole = String::new();
+        let mut line = first.to_string();
+        loop {
+            let trimmed = line.trim_end();
+            let continues = trimmed.ends_with('\\');
+            whole.push(' ');
+            whole.push_str(trimmed.trim_end_matches('\\').trim());
+            if !continues {
+                break;
+            }
+            match lines.next() {
+                Some(next) => line = next.to_string(),
+                None => break,
+            }
+        }
+
+        let args = arguments(&whole);
+        let value_of = |flag: &str| -> String {
+            let at = args
+                .iter()
+                .position(|a| a == flag)
+                .unwrap_or_else(|| panic!("{flag} is missing from {whole:?}"));
+            args.get(at + 1)
+                .unwrap_or_else(|| panic!("{flag} has no value in {whole:?}"))
+                .clone()
+        };
+        let dimensions = {
+            let at = args
+                .iter()
+                .position(|a| a == "--dimensions")
+                .unwrap_or_else(|| panic!("--dimensions is missing from {whole:?}"));
+            args[at + 1..]
+                .iter()
+                .take_while(|a| !a.starts_with("--"))
+                .cloned()
+                .collect()
+        };
+        commands.push(AlarmCommand {
+            namespace: value_of("--namespace"),
+            metric_name: value_of("--metric-name"),
+            dimensions,
+        });
+    }
+    commands
+}
+
+/// Each alarm must watch the series a red leg actually writes.
+///
+/// That series' identity — namespace, metric name, dimension set — exists in three places: this
+/// crate, the CDK stack, and the arming step's `put-metric-alarm` flags. The namespace is checked
+/// against the CDK by a test in `metric.rs`, and the `Induced` dimension name is already taken from
+/// the crate's constant. The rest of the arming step's copy was unchecked, and a mismatch there is
+/// the quietest failure available to this canary: the legs emit, the alarm sits at `OK` for the
+/// whole release, every job is green, and nothing pages. CloudWatch matches dimensions exactly, so
+/// one dimension too many on the alarmed datapoint is enough to cause it.
+///
+/// The expectation is *generated* by the code the legs use, with the release tag passed in as the
+/// same `${TAG}` the workflow substitutes — so what is compared is the real datapoint shape against
+/// the real arming flags, not two literals written next to each other.
+#[test]
+fn the_alarms_watch_the_series_a_red_leg_writes() {
+    use canary::metric;
+
+    let kept = canary::toolchain::resolve(
+        canary::toolchain::Version::new(1, 94, 1),
+        canary::toolchain::Version::new(1, 86, 0),
+    )
+    .expect("the toolchain span should resolve")
+    .kept;
+    let legs = canary::scenarios::release_legs(&kept);
+    let leg = legs.first().expect("the release matrix has legs").clone();
+    let mut rigged = leg.clone();
+    rigged.induced = Some("a requirement moved on purpose".to_string());
+
+    // The alarmed datapoint is the one carrying the fewest dimensions; the other is the diagnosis
+    // copy, which deliberately has more and which no alarm watches.
+    let alarmed = |l: &canary::scenarios::Leg| -> metric::Datapoint {
+        let written = metric::datapoints("${TAG}", l, Some(canary::classify::Verdict::CompileFail));
+        assert_eq!(
+            written.len(),
+            2,
+            "a red leg writes an alarmed and a diagnosis datapoint"
+        );
+        let fewest = written
+            .iter()
+            .min_by_key(|d| d.dimensions.len())
+            .expect("datapoints")
+            .clone();
+        let most = written
+            .iter()
+            .max_by_key(|d| d.dimensions.len())
+            .expect("datapoints");
+        assert!(
+            most.dimensions.len() > fewest.dimensions.len(),
+            "the diagnosis datapoint must be distinguishable from the alarmed one"
+        );
+        fewest
+    };
+
+    let expected = [alarmed(&leg), alarmed(&rigged)];
+    let armed = alarm_commands(&raw("post-publish-watch"));
+    assert_eq!(
+        armed.len(),
+        2,
+        "one alarm for a real break and one for a rigged one"
+    );
+
+    for (command, want) in armed.iter().zip(expected.iter()) {
+        assert_eq!(
+            command.namespace,
+            metric::NAMESPACE,
+            "the alarm watches a namespace the legs do not write to, so it can never fire"
+        );
+        assert_eq!(
+            command.metric_name,
+            metric::METRIC_NAME,
+            "the alarm watches a metric the legs do not write, so it can never fire"
+        );
+        let want: Vec<String> = want
+            .dimensions
+            .iter()
+            .map(|d| format!("Name={},Value={}", d.name, d.value))
+            .collect();
+        assert_eq!(
+            command.dimensions, want,
+            "the alarm's dimensions differ from the ones a red leg writes; CloudWatch matches the \
+             set exactly, so this alarm would never see the datapoint"
+        );
+    }
+}
+
 /// `all` must mean the release matrix, not every leg the matrix can express.
 ///
 /// The test-registry legs resolve a graph committed to this repository, so they can say nothing
