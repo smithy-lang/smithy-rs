@@ -166,8 +166,15 @@ impl Resolved {
 
 /// Whether a resolved package is one this canary is watching, as opposed to a third-party
 /// dependency that happens to be in the graph.
+///
+/// The test family counts. Without it a rigged break would reach a ticket with the `duplicate`
+/// field empty — the one field that names *which* two versions collided, and the whole reason this
+/// module exists. So the exercise meant to prove the diagnosis is readable would have proved the
+/// opposite, silently. Found by inducing the break and reading the report rather than by a test.
 fn is_under_test(name: &str) -> bool {
-    ENTIRE_SMITHY_RUNTIME.contains(&name) || AWS_SDK_RUNTIME.contains(&name)
+    ENTIRE_SMITHY_RUNTIME.contains(&name)
+        || AWS_SDK_RUNTIME.contains(&name)
+        || name.starts_with(crate::test_registry::PREFIX)
 }
 
 /// Order versions by their numeric components rather than as text.

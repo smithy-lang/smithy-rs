@@ -104,7 +104,12 @@ jobs:
         want = sys.argv[1]
         all_legs = json.load(open('/tmp/all.json'))
         if want == 'all':
-            json.dump(all_legs, sys.stdout)
+            # `all` is what a *release* runs, which excludes the test-registry legs. Those resolve a
+            # graph committed to this repository rather than the published one, so they can say
+            # nothing about a release -- and including them would cost twenty-five runs a release,
+            # one per floor hour plus the publish window, re-proving a graph that only moves when
+            # somebody commits a change to it. They are dispatched by name instead.
+            json.dump([l for l in all_legs if not l.get('test_registry')], sys.stdout)
             raise SystemExit(0)
 
         # A comma-separated list, not a single value: the watcher dispatches the *set* of manifests

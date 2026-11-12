@@ -242,6 +242,24 @@ pub const SCENARIOS: &[Scenario] = &[
         reaches: "a dependent whose requirements on us are frozen",
         induced: None,
     },
+    // The canary pointed at itself. Resolves from a registry assembled on disk rather than from
+    // crates.io, so a break can be induced without publishing anything — see `test_registry`.
+    //
+    // Excluded from `all` and dispatched by name, because the graph it resolves changes only when
+    // somebody commits a change to it. In the ordinary matrix it would cost twenty-five runs a
+    // release to re-prove something that cannot have moved.
+    //
+    // `Body::Stub` is enough and is also what the real failure looked like: the September break
+    // was an E0308 *inside* `aws-config`, not in the consumer's own code, so the dependency fails
+    // to compile whether or not anything calls it.
+    Scenario {
+        id: "canary-test-registry",
+        deps: &[("ct-client", "0.1")],
+        body: Body::Stub,
+        reaches: "the canary itself — a graph we can break on purpose, to prove a verdict reaches \
+                  a person",
+        induced: None,
+    },
     // ----------------------------------------------------------------------------------------
     // WITHDRAWN: red at admission on every toolchain, for a reason nobody here can fix.
     //
@@ -449,6 +467,17 @@ pub struct Leg {
     pub body: Body,
     /// Which commands the leg runs, and so which verdicts it can produce.
     pub checks: Checks,
+    /// This leg resolves from the on-disk test registry, not from crates.io.
+    ///
+    /// Such a leg exists to exercise the canary itself, so it is **excluded from `all`** and runs
+    /// only when dispatched by name. Including it in the ordinary matrix would cost twenty-five
+    /// runs a release — one per floor hour plus the publish window — to re-prove a graph that only
+    /// changes when somebody commits a change to it.
+    ///
+    /// Omitted from the matrix JSON when false, so the ordinary matrix is byte-for-byte what it was
+    /// before this existed.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub test_registry: bool,
     /// Inherited from the manifest this leg builds: see [`Scenario::induced`].
     ///
     /// Omitted from the matrix JSON when absent, so the ordinary matrix is byte-for-byte what it
@@ -487,6 +516,7 @@ pub fn legs(toolchains: &[Toolchain]) -> Vec<Leg> {
             profile: Profile::Debug,
             body: s.body,
             checks: checks_for(s.body, None),
+            test_registry: uses_test_registry(s),
             induced: s.induced.map(str::to_string),
         })
     });
@@ -501,6 +531,9 @@ pub fn legs(toolchains: &[Toolchain]) -> Vec<Leg> {
         profile: b.profile,
         body: b.body,
         checks: checks_for(b.body, b.target),
+        // No build-axis leg uses the test registry: those vary target and profile against the real
+        // published graph, which is the only thing a target or a profile can say anything about.
+        test_registry: false,
         // From the manifest, not from the build-axis row, because that is where a rigged break
         // lives. Four build-axis legs share `new-project`, so rigging it rigs them too — which is
         // correct: they build the manifest that was rigged.
@@ -518,6 +551,35 @@ pub fn manifests() -> Vec<&'static Scenario> {
 /// Look up a manifest by id.
 pub fn manifest(id: &str) -> Option<&'static Scenario> {
     manifests().into_iter().find(|s| s.id == id)
+}
+
+/// The legs a *release* runs: everything except the test-registry family.
+///
+/// This is what `scenario=all` dispatches, and what a record is folded against. The distinction
+/// matters in both directions. A release must not run the test family, because the graph it
+/// resolves is committed to this repository and cannot say anything about a release — and twenty-five
+/// runs a release re-proving it would be the cost. And a record must not *count* it, because a leg
+/// the release never dispatched would be folded in as `unreported`, which is the signal reserved
+/// for a leg that died silently.
+pub fn release_legs(toolchains: &[Toolchain]) -> Vec<Leg> {
+    legs(toolchains)
+        .into_iter()
+        .filter(|l| !l.test_registry)
+        .collect()
+}
+
+/// Whether this manifest resolves from the on-disk test registry rather than from crates.io.
+///
+/// Derived from the requirements rather than declared as a field, so the two cannot disagree. A
+/// manifest that names only crates from the test family can only be satisfied by that family, and
+/// one that names a real crate can only be satisfied by crates.io — there is no third possibility
+/// to encode, and [`tests::no_manifest_mixes_real_and_test_requirements`] is what keeps it that way.
+pub fn uses_test_registry(scenario: &Scenario) -> bool {
+    !scenario.deps.is_empty()
+        && scenario
+            .deps
+            .iter()
+            .all(|(name, _)| name.starts_with(crate::test_registry::PREFIX))
 }
 
 /// Why a manifest is rigged, if it is. See [`Scenario::induced`].
@@ -550,24 +612,42 @@ mod tests {
     }
 
     #[test]
-    fn the_table_is_six_scenarios_and_ten_build_axis_legs() {
-        assert_eq!(SCENARIOS.len(), 6, "four rows are withdrawn; see the table");
+    fn the_table_is_seven_scenarios_and_ten_build_axis_legs() {
+        assert_eq!(
+            SCENARIOS.len(),
+            7,
+            "six that resolve crates.io, one that resolves the on-disk test registry, and four \
+             withdrawn rows commented out above"
+        );
         assert_eq!(BUILD_AXIS.len(), 10);
     }
 
-    /// The headline number, cross-checked the other way round: 6 × 5 + 10.
+    /// Two numbers, and the distinction between them matters more than either.
+    ///
+    /// `legs()` is everything the matrix can express: 7 × 5 + 10. What a *release* runs is the
+    /// subset excluding the test-registry legs, because those resolve a graph committed to this
+    /// repository and cannot say anything about a release — they are dispatched by name when
+    /// somebody is testing the canary itself.
     #[test]
-    fn five_toolchains_give_forty_legs() {
+    fn a_release_runs_forty_of_the_forty_five_legs() {
         let tcs = today();
         assert_eq!(tcs.len(), 5);
         let legs = legs(&tcs);
-        assert_eq!(legs.len(), 40);
+        assert_eq!(legs.len(), 45, "7 scenarios × 5 toolchains + 10 build-axis");
+
+        let release: Vec<_> = legs.iter().filter(|l| !l.test_registry).collect();
+        assert_eq!(release.len(), 40, "what `scenario=all` dispatches");
+        assert_eq!(
+            legs.len() - release.len(),
+            5,
+            "the test family, one per toolchain"
+        );
 
         let dependency = legs
             .iter()
             .filter(|l| !BUILD_AXIS.iter().any(|b| b.id == l.id))
             .count();
-        assert_eq!(dependency, 30, "6 scenarios × 5 toolchains");
+        assert_eq!(dependency, 35, "7 scenarios × 5 toolchains");
         assert_eq!(legs.len() - dependency, 10, "build-axis legs");
     }
 
@@ -602,9 +682,9 @@ mod tests {
         }
     }
 
-    /// The second cross-check: 9 + 5×5 + 2 + 1 + 3.
+    /// The second cross-check: 9 + 6×5 + 2 + 1 + 3.
     #[test]
-    fn the_manifest_to_leg_mapping_also_gives_forty() {
+    fn the_manifest_to_leg_mapping_also_gives_forty_five() {
         let legs = legs(&today());
         let count = |m: &str| legs.iter().filter(|l| l.manifest == m).count();
 
@@ -615,7 +695,7 @@ mod tests {
         assert_eq!(count("wasm"), 2);
         assert_eq!(count("large-generated-clients"), 1);
         assert_eq!(count("serialization"), 3, "i686, powerpc, powerpc64");
-        assert_eq!(9 + 5 * 5 + 2 + 1 + 3, legs.len());
+        assert_eq!(9 + 6 * 5 + 2 + 1 + 3, legs.len());
     }
 
     /// The canary must not claim coverage the project does not have. A platform CI never builds is a
@@ -722,11 +802,11 @@ mod tests {
     }
 
     #[test]
-    fn nine_manifests_back_the_matrix() {
-        assert_eq!(manifests().len(), 9);
+    fn ten_manifests_back_the_matrix() {
+        assert_eq!(manifests().len(), 10);
         let legs = legs(&today());
         let used: HashSet<_> = legs.iter().map(|l| l.manifest.as_str()).collect();
-        assert_eq!(used.len(), 9, "every manifest is reachable from some leg");
+        assert_eq!(used.len(), 10, "every manifest is reachable from some leg");
     }
 
     #[test]
@@ -744,7 +824,7 @@ mod tests {
             .unwrap()
             .kept;
         let legs = legs(&four);
-        assert_eq!(legs.len(), 6 * 4 + 10);
+        assert_eq!(legs.len(), 7 * 4 + 10);
         assert_eq!(
             legs.iter()
                 .filter(|l| BUILD_AXIS.iter().any(|b| b.id == l.id))
@@ -758,7 +838,7 @@ mod tests {
         let one = toolchain::resolve(Version::new(1, 99, 1), Version::new(1, 99, 0))
             .unwrap()
             .kept;
-        assert_eq!(legs(&one).len(), 6 + 10);
+        assert_eq!(legs(&one).len(), 7 + 10);
     }
 
     /// One scenario resolves a client and so carries the app body; the other five are stubs.
@@ -862,6 +942,53 @@ mod tests {
             !induced_manifests().is_empty(),
             "the field should appear in the matrix exactly when something is rigged"
         );
+    }
+
+    /// A manifest resolves from one source or the other, never both.
+    ///
+    /// The source is derived from the requirements rather than declared, so a manifest naming both
+    /// a real crate and a test-family one would be ambiguous — and would resolve from whichever
+    /// source the derivation happened to pick, which is how a test leg ends up looking for
+    /// `ct-client` on crates.io and reporting `RESOLVE_FAIL` about a healthy release.
+    #[test]
+    fn no_manifest_mixes_real_and_test_requirements() {
+        for s in manifests() {
+            let test: Vec<_> = s
+                .deps
+                .iter()
+                .filter(|(n, _)| n.starts_with(crate::test_registry::PREFIX))
+                .collect();
+            let real: Vec<_> = s
+                .deps
+                .iter()
+                .filter(|(n, _)| !n.starts_with(crate::test_registry::PREFIX))
+                .collect();
+            assert!(
+                test.is_empty() || real.is_empty(),
+                "{} requires both test-family crates {test:?} and real ones {real:?}, so which \
+                 registry it resolves from is undefined",
+                s.id
+            );
+        }
+    }
+
+    /// The test family runs at every toolchain, which is the point: five legs red from one manifest
+    /// is the only way to exercise dedupe at the scale the matrix actually produces, and a single
+    /// datapoint from the paging self-test cannot.
+    #[test]
+    fn the_test_family_runs_at_every_toolchain() {
+        let legs = legs(&today());
+        let test: Vec<_> = legs.iter().filter(|l| l.test_registry).collect();
+        assert_eq!(test.len(), 5, "one per toolchain");
+        assert!(
+            test.iter().all(|l| l.manifest == "canary-test-registry"),
+            "one manifest backs all of them"
+        );
+        // And none of them is a build-axis leg: a target or a profile can only say something about
+        // the real published graph.
+        assert!(!BUILD_AXIS
+            .iter()
+            .any(|b| { manifest(b.manifest).is_some_and(uses_test_registry) }));
     }
 
     #[test]

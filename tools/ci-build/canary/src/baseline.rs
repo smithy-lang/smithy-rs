@@ -304,7 +304,7 @@ version = "1.0.230"
     #[test]
     fn every_real_manifest_id_yields_a_path() {
         let manifests = crate::scenarios::manifests();
-        assert_eq!(manifests.len(), 9, "the table has nine live manifests");
+        assert_eq!(manifests.len(), 10, "the table has ten live manifests");
         for scenario in manifests {
             let id = scenario.id;
             let p = relative_path(id).unwrap_or_else(|e| panic!("{id}: {e}"));
