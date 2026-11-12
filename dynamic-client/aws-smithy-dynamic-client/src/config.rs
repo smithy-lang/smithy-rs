@@ -13,7 +13,7 @@ use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 
 /// Configuration for a [`DynamicClient`](crate::DynamicClient).
 ///
-/// Pass it to the client builder with [`config`](crate::client::Builder::config).
+/// Pass it to the client builder with [`config`](crate::client::DynamicClientBuilder::config).
 ///
 /// ```
 /// use aws_smithy_dynamic_client::config::{BehaviorVersion, Config};

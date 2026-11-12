@@ -56,8 +56,8 @@ pub struct DynamicClient {
 
 impl DynamicClient {
     /// Returns a builder for a dynamic client.
-    pub fn builder() -> Builder {
-        Builder::default()
+    pub fn builder() -> DynamicClientBuilder {
+        DynamicClientBuilder::default()
     }
 
     #[cfg(test)]
@@ -89,16 +89,16 @@ impl DynamicClient {
 
 /// A builder for a [`DynamicClient`].
 #[derive(Clone, Debug, Default)]
-pub struct Builder {
+pub struct DynamicClientBuilder {
     model_file: Option<PathBuf>,
     service: Option<ShapeId>,
     config: config::Builder,
 }
 
-impl Builder {
+impl DynamicClientBuilder {
     /// Sets the path of the Smithy JSON AST file to load the model from.
     ///
-    /// [`build`](Builder::build) reads the file.
+    /// [`build`](DynamicClientBuilder::build) reads the file.
     pub fn model_file(mut self, path: impl Into<PathBuf>) -> Self {
         self.model_file = Some(path.into());
         self
@@ -301,7 +301,7 @@ mod tests {
 
     // A builder with a behavior version, a test HTTP client, and a test sleep. Every client needs
     // a behavior version, and the other two keep the tests independent of the default features.
-    fn builder() -> super::Builder {
+    fn builder() -> super::DynamicClientBuilder {
         let (_, sleep) = instant_time_and_sleep(UNIX_EPOCH);
         DynamicClient::builder().config(
             Config::builder()
@@ -411,7 +411,7 @@ mod tests {
         ));
     }
 
-    fn protocols(service: &str) -> super::Builder {
+    fn protocols(service: &str) -> super::DynamicClientBuilder {
         builder()
             .model_file(model("protocols.json"))
             .service(id(service))

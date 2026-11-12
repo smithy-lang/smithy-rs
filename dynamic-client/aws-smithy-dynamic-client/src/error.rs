@@ -12,7 +12,7 @@ use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
 
-/// An error from [`Builder::build`](crate::client::Builder::build).
+/// An error from [`DynamicClientBuilder::build`](crate::client::DynamicClientBuilder::build).
 #[derive(Debug)]
 pub struct BuildError {
     kind: BuildErrorKind,
