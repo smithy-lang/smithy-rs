@@ -301,7 +301,7 @@ impl ImdsCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsImds);
-            creds.set_property(StaticStabilityEligible);
+            creds.set_property(StaticStabilityEligible::default());
             creds
         })
     }

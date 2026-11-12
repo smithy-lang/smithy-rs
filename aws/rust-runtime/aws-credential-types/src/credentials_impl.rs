@@ -28,9 +28,45 @@ use crate::credential_feature::AwsCredentialFeature;
 /// conversion lifts it to an `Identity`-level property, and the cache reads it back generically via
 /// `Identity::property::<StaticStabilityEligible>()`. Custom/process providers stamp nothing and
 /// therefore get caching-only behavior.
+///
+/// A provider whose credentials come straight from a cached token, such as Login, builds the
+/// marker with [`StaticStabilityEligible::with_invalidation_hook`]. When a service rejects those
+/// credentials, the cache calls the hook with the rejected identity. The provider then knows
+/// that its next call follows an invalidation and must obtain new credentials from its source.
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct StaticStabilityEligible;
+#[derive(Clone, Debug, Default)]
+pub struct StaticStabilityEligible {
+    on_invalidate: Option<InvalidationHook>,
+}
+
+impl StaticStabilityEligible {
+    /// Creates a marker that calls `on_invalidate` with the rejected identity when the cache
+    /// invalidates the identity that carries it.
+    pub fn with_invalidation_hook(
+        on_invalidate: impl Fn(&Identity) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            on_invalidate: Some(InvalidationHook(Arc::new(on_invalidate))),
+        }
+    }
+
+    /// Calls the invalidation hook, if any, with the rejected identity.
+    pub fn notify_invalidated(&self, rejected: &Identity) {
+        if let Some(hook) = &self.on_invalidate {
+            (hook.0)(rejected)
+        }
+    }
+}
+
+// A closure has no `Debug`, and `Credentials` properties must implement it.
+#[derive(Clone)]
+struct InvalidationHook(Arc<dyn Fn(&Identity) + Send + Sync>);
+
+impl Debug for InvalidationHook {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str("InvalidationHook")
+    }
+}
 
 /// AWS SDK Credentials
 ///
@@ -427,8 +463,8 @@ impl From<Credentials> for Identity {
 
         // Lift the static-stability eligibility marker (stamped by built-in providers) from the
         // Credentials onto the generic Identity, so the cache reads it without a downcast.
-        if val.get_property::<StaticStabilityEligible>().is_some() {
-            builder.set_property(StaticStabilityEligible);
+        if let Some(eligible) = val.get_property::<StaticStabilityEligible>() {
+            builder.set_property(eligible.clone());
         }
 
         builder.data(val).build().expect("set required fields")

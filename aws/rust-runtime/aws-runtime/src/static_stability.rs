@@ -398,6 +398,13 @@ impl ResolveCachedIdentity for StaticStabilityCache {
                 st.expiration = Some(SystemTime::UNIX_EPOCH);
                 st.advisory_at = Some(SystemTime::UNIX_EPOCH);
                 st.mandatory_at = Some(SystemTime::UNIX_EPOCH);
+                drop(st);
+                // A token-backed provider such as Login returns its cached token until that token
+                // nears expiry. The hook tells it which identity was rejected, so its next call
+                // obtains a new one.
+                if let Some(eligible) = rejected.property::<StaticStabilityEligible>() {
+                    eligible.notify_invalidated(rejected);
+                }
                 break; // an identity is cached in exactly one partition
             }
         }
@@ -874,7 +881,7 @@ mod tests {
             .data(TestCreds { id })
             .expiration(epoch(expiry_secs));
         if eligible {
-            b = b.property(StaticStabilityEligible);
+            b = b.property(StaticStabilityEligible::default());
         }
         b.build().unwrap()
     }
@@ -1181,7 +1188,7 @@ mod tests {
     async fn no_expiry_served_indefinitely() {
         let no_expiry = Identity::builder()
             .data(TestCreds { id: 1 })
-            .property(StaticStabilityEligible)
+            .property(StaticStabilityEligible::default())
             .build()
             .unwrap();
         assert_eq!(no_expiry.expiration(), None);
@@ -1206,7 +1213,7 @@ mod tests {
     async fn no_expiry_refreshes_on_invalidation() {
         let no_expiry = Identity::builder()
             .data(TestCreds { id: 1 })
-            .property(StaticStabilityEligible)
+            .property(StaticStabilityEligible::default())
             .build()
             .unwrap();
         let h = Harness::new(vec![Ok(no_expiry), Ok(identity(2, 3600, true))]);
@@ -1226,7 +1233,36 @@ mod tests {
         assert!(contacted);
     }
 
-    // Two partitions, rejected identity in a non-sole partition: `invalidate` must find the
+    // Invalidating the cached credentials calls their hook with the rejected access key ID. A
+    // stale rejection, for credentials the cache no longer holds, calls no hook.
+    #[tokio::test]
+    async fn invalidate_notifies_the_hook_of_the_cached_credentials() {
+        use aws_credential_types::Credentials;
+
+        let notified = Arc::new(Mutex::new(Vec::<String>::new()));
+        let creds = |akid: &str| {
+            let notified = notified.clone();
+            let mut creds = Credentials::new(akid, "secret", None, Some(epoch(3600)), "test");
+            creds.set_property(StaticStabilityEligible::with_invalidation_hook(
+                move |rejected| {
+                    let creds = rejected.data::<Credentials>().unwrap();
+                    notified
+                        .lock()
+                        .unwrap()
+                        .push(creds.access_key_id().to_string())
+                },
+            ));
+            Identity::from(creds)
+        };
+        let h = Harness::new(vec![Ok(creds("ABCD"))]);
+        let served = h.get().await.0.unwrap();
+
+        h.cache.invalidate(&creds("EFGH"));
+        assert!(notified.lock().unwrap().is_empty(), "stale rejection");
+
+        h.cache.invalidate(&served);
+        assert_eq!(*notified.lock().unwrap(), ["ABCD"]);
+    }
     // matching slot by identity (ptr_eq) and collapse only it, leaving the other untouched.
     // Partition iteration order is unspecified (HashMap), so this covers the walk-past-a-
     // non-match path regardless of order.

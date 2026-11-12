@@ -93,7 +93,7 @@ internal class StaticStabilityDecoratorTest {
                             #{Some}(now + Duration::from_secs(1)),
                             "test",
                         );
-                        seed.set_property(#{StaticStabilityEligible});
+                        seed.set_property(#{StaticStabilityEligible}::default());
 
                         let config = $moduleName::Config::builder()
                             .behavior_version(bv)
@@ -161,7 +161,7 @@ internal class StaticStabilityDecoratorTest {
                                 #{Some}(self.now + Duration::from_secs(3600)),
                                 "test",
                             );
-                            creds.set_property(#{StaticStabilityEligible});
+                            creds.set_property(#{StaticStabilityEligible}::default());
                             #{ProvideCredentialsFuture}::ready(#{Ok}(creds))
                         }
                     }
@@ -322,7 +322,7 @@ internal class StaticStabilityDecoratorTest {
                                 #{Some}(self.now + Duration::from_secs(3600)),
                                 "test",
                             );
-                            creds.set_property(#{StaticStabilityEligible});
+                            creds.set_property(#{StaticStabilityEligible}::default());
                             #{ProvideCredentialsFuture}::ready(#{Ok}(creds))
                         }
                     }

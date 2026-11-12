@@ -345,7 +345,7 @@ impl Inner {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsStsAssumeRole);
-            creds.set_property(StaticStabilityEligible);
+            creds.set_property(StaticStabilityEligible::default());
             creds
         })
     }
