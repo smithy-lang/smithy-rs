@@ -467,6 +467,48 @@ fn values_created_in_code_are_never_at_the_same_location() {
 }
 
 #[test]
+fn idl_apply_outside_the_prelude_namespace_cannot_target_it() {
+    // Like the reference implementation, an IDL `apply` outside `smithy.api` cannot target a
+    // shape in it, even one a document added, and even without the prelude.
+    let added = doc(r#""smithy.api#Added":{"type":"string"}"#);
+    for prelude in [true, false] {
+        let mut assembler = Model::assembler();
+        if !prelude {
+            assembler = assembler.disable_prelude();
+        }
+        let validated = assembler
+            .add_json_str("a.json", added.clone())
+            .add_idl_str(
+                "b.smithy",
+                "$version: \"2\"\nnamespace ex\napply smithy.api#Added @smithy.api#sensitive\n",
+            )
+            .assemble();
+        assert_eq!(
+            codes(&validated),
+            [(Severity::Error, DiagnosticCode::PreludeConflict)],
+            "prelude: {prelude}"
+        );
+    }
+    // From inside the namespace, it can.
+    let model = expect_model(
+        Model::assembler()
+            .disable_prelude()
+            .add_json_str("a.json", added)
+            .add_idl_str(
+                "b.smithy",
+                "$version: \"2\"\nnamespace smithy.api\napply Added @smithy.api#sensitive\n",
+            )
+            .assemble(),
+    );
+    let added = model
+        .expect_shape(&ShapeId::from_static("smithy.api#Added"))
+        .unwrap()
+        .expect_shape()
+        .unwrap();
+    assert!(added.has_trait(&ShapeId::from_static("smithy.api#sensitive")));
+}
+
+#[test]
 fn shapes_keep_the_order_of_their_inputs() {
     // Shapes and models added in code are merged before documents, but the model lists every
     // shape in the order of the input that first added it.
