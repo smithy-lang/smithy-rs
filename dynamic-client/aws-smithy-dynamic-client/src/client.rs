@@ -137,6 +137,9 @@ impl DynamicClientBuilder {
             .config
             .behavior_version
             .ok_or_else(BuildError::missing_behavior_version)?;
+        // TODO(dynamic-client): Also load Smithy IDL. Pick the loader by file extension, `.json` or
+        // `.smithy`, so `model_file(..)` stays the only setter. A fallback to IDL after a JSON
+        // failure would report an IDL syntax error for a broken JSON file.
         let model = Model::from_json_file(&path)
             .map_err(|source| BuildError::model_load_failed(path, source))?;
         let service_view = select_service(&model, self.service)?;
