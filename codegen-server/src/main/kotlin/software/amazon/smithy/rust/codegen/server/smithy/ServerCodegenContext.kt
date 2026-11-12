@@ -52,6 +52,13 @@ data class ServerCodegenContext(
         get() = settings.codegenConfig.schemaSerde && runtimeConfig.httpVersion == HttpVersion.Http1x
 
     /**
+     * Whether the generated service supports collection of standard server metrics (RFC 49). Only
+     * `aws-smithy-http-server` implements it; `aws-smithy-legacy-http-server` (http 0.x) does not.
+     */
+    val supportsStandardMetrics: Boolean
+        get() = runtimeConfig.httpVersion == HttpVersion.Http1x
+
+    /**
      * The protocols the generated service serves.
      *
      * The schema path lists declared protocols in shape-ID order. Runtime routing options determine

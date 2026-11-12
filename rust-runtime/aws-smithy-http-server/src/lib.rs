@@ -21,6 +21,7 @@ pub mod error;
 pub mod extension;
 pub mod instrumentation;
 pub mod layer;
+pub mod metrics;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]

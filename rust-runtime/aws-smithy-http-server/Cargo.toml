@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.69.1"
+version = "0.69.2"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -20,6 +20,7 @@ request-id = ["dep:uuid"]
 aws-lambda = ["dep:lambda_http"]
 
 [dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio", "event-stream"] }
