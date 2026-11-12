@@ -51,7 +51,7 @@ pub const TRANSIENT_ERRORS: &[&str] = &["RequestTimeout", "RequestTimeoutExcepti
 /// When a service rejects a request with one of the codes in this list, the SDK retries it. The
 /// identity cache invalidates the rejected credentials at the end of that attempt, so the retry
 /// resolves identity again and carries refreshed credentials.
-pub const INVALID_CREDENTIAL_ERRORS: &[&str] = &["ExpiredToken", "InvalidToken"];
+pub const INVALID_CREDENTIAL_ERRORS: &[&str] = &["ExpiredToken", "ExpiredTokenException"];
 
 /// A retry classifier for determining if the response sent by an AWS service requires a retry.
 #[derive(Debug)]
@@ -501,7 +501,7 @@ mod test {
     #[test]
     fn classify_invalid_credential_errors() {
         let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
-        for code in ["ExpiredToken", "InvalidToken"] {
+        for code in ["ExpiredToken", "ExpiredTokenException"] {
             assert_eq!(
                 policy.classify_retry(&ctx_with(None, Some(code))),
                 RetryAction::retryable_error(ErrorKind::ClientError),
@@ -521,11 +521,7 @@ mod test {
     #[test]
     fn codes_outside_the_list_are_not_retried() {
         let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
-        for code in [
-            "ExpiredTokenException",
-            "AccessDenied",
-            "InvalidTokenException",
-        ] {
+        for code in ["InvalidToken", "AccessDenied", "InvalidTokenException"] {
             assert_eq!(
                 policy.classify_retry(&ctx_with(None, Some(code))),
                 RetryAction::NoActionIndicated,

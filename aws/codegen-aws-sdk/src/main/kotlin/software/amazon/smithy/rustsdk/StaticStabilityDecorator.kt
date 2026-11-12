@@ -27,8 +27,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * `LazyCache`). Clients built through `aws-config` get the same cache from `ConfigLoader::load()`.
  *
  * On every operation, it registers `CredentialAuthFailureInterceptor`: when a target service
- * rejects a request with `ExpiredToken`/`InvalidToken`, the interceptor sets a data-free config-bag
- * marker, and the orchestrator invalidates the signing identity so the next resolution refreshes.
+ * rejects a request with `ExpiredToken`/`ExpiredTokenException`, the interceptor sets a data-free
+ * config-bag marker, and the orchestrator invalidates the signing identity so the next resolution
+ * refreshes.
  */
 class StaticStabilityDecorator : ClientCodegenDecorator {
     override val name: String = "StaticStability"

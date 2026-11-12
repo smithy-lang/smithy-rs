@@ -198,15 +198,7 @@ impl LoginCredentialsProvider {
             .await
             .map_err(|err| {
                 let service_err = err.into_service_error();
-                let (message, non_recoverable) = match &service_err {
-                    CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
-                        OAuth2ErrorCode::InsufficientPermissions => (Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()), true),
-                        OAuth2ErrorCode::TokenExpired => (Some("Your session has expired. Please reauthenticate.".to_string()), true),
-                        OAuth2ErrorCode::UserCredentialsChanged => (Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()), true),
-                        _ => (None, false),
-                    }
-                    _ => (None, false),
-                };
+                let (message, non_recoverable) = refresh_failure(&service_err);
 
                 LoginTokenError::RefreshFailed {
                     message,
@@ -248,6 +240,22 @@ impl ProvideCredentials for LoginCredentialsProvider {
         Self: 'a,
     {
         future::ProvideCredentials::new(self.credentials())
+    }
+}
+
+// Maps a failed `CreateOAuth2Token` refresh to an optional actionable message and whether the
+// failure is non-recoverable. A non-recoverable failure needs the user to sign in again, so the
+// identity cache raises it immediately.
+fn refresh_failure(err: &CreateOAuth2TokenError) -> (Option<String>, bool) {
+    match err {
+        CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
+            OAuth2ErrorCode::InsufficientPermissions => (Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()), true),
+            OAuth2ErrorCode::TokenExpired => (Some("Your session has expired. Please reauthenticate.".to_string()), true),
+            OAuth2ErrorCode::UserCredentialsChanged => (Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()), true),
+            _ => (None, false),
+        },
+        CreateOAuth2TokenError::ValidationException(_) => (Some("Unable to refresh credentials because the Sign-In service rejected the refresh request. Please reauthenticate.".to_string()), true),
+        _ => (None, false),
     }
 }
 
@@ -579,5 +587,54 @@ mod test {
             test.check().await;
         }
         Ok(())
+    }
+
+    #[test]
+    fn refresh_failure_classification() {
+        use aws_sdk_signin::types::error::{
+            AccessDeniedException, InternalServerException, ValidationException,
+        };
+
+        let access_denied = |code| {
+            CreateOAuth2TokenError::AccessDeniedException(
+                AccessDeniedException::builder()
+                    .error(code)
+                    .message("denied")
+                    .build()
+                    .unwrap(),
+            )
+        };
+        for err in [
+            access_denied(OAuth2ErrorCode::TokenExpired),
+            access_denied(OAuth2ErrorCode::UserCredentialsChanged),
+            access_denied(OAuth2ErrorCode::InsufficientPermissions),
+            CreateOAuth2TokenError::ValidationException(
+                ValidationException::builder()
+                    .error(OAuth2ErrorCode::InvalidRequest)
+                    .message("invalid")
+                    .build()
+                    .unwrap(),
+            ),
+        ] {
+            let (message, non_recoverable) = refresh_failure(&err);
+            assert!(non_recoverable, "expected non-recoverable: {err:?}");
+            assert!(message.is_some(), "expected an actionable message: {err:?}");
+        }
+        for err in [
+            access_denied(OAuth2ErrorCode::ServerError),
+            CreateOAuth2TokenError::InternalServerException(
+                InternalServerException::builder()
+                    .error(OAuth2ErrorCode::ServerError)
+                    .message("internal")
+                    .build()
+                    .unwrap(),
+            ),
+        ] {
+            assert_eq!(
+                refresh_failure(&err),
+                (None, false),
+                "expected recoverable: {err:?}"
+            );
+        }
     }
 }

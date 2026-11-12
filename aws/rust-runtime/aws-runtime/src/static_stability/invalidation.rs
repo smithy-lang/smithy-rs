@@ -17,8 +17,8 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// Detects a credential auth failure (`ExpiredToken` or `InvalidToken`) on the operation response
-/// and signals the orchestrator — via the data-free
+/// Detects a credential auth failure (`ExpiredToken` or `ExpiredTokenException`) on the operation
+/// response and signals the orchestrator — via the data-free
 /// [`InvalidateResolvedIdentity`] config marker — to invalidate the resolved identity.
 ///
 /// This is **detection only**: the interceptor has no identity (the signed request is already gone
@@ -132,20 +132,19 @@ mod tests {
     }
 
     #[test]
-    fn triggers_on_expired_and_invalid_token_only() {
+    fn triggers_on_expired_token_codes_only() {
         assert!(
             sets_invalidate_marker("ExpiredToken"),
             "ExpiredToken must trigger invalidation"
         );
         assert!(
-            sets_invalidate_marker("InvalidToken"),
-            "InvalidToken must trigger invalidation"
+            sets_invalidate_marker("ExpiredTokenException"),
+            "ExpiredTokenException must trigger invalidation"
         );
-        // On STS and SSO-OIDC `ExpiredTokenException` names an expired input token in the request
-        // body, so the signing credentials are still good and must not be invalidated.
+        // Services do not return InvalidToken for expired credentials.
         assert!(
-            !sets_invalidate_marker("ExpiredTokenException"),
-            "ExpiredTokenException is about the input token, not the signing credentials"
+            !sets_invalidate_marker("InvalidToken"),
+            "InvalidToken must not trigger invalidation"
         );
         // AccessDenied is authorization, not credential validity — must NOT invalidate.
         assert!(

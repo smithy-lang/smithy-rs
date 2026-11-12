@@ -44,10 +44,11 @@ use tracing::Instrument;
 const DEFAULT_MANDATORY_WINDOW: Duration = Duration::from_secs(60);
 // Refresh point before expiry for caching-only (ineligible) identities
 const CACHING_ONLY_BUFFER_TIME: Duration = Duration::from_secs(10);
-// Uniform backoff floor after a failed refresh.
-const BACKOFF_MIN_SECS: u64 = 300;
-// Uniform backoff jitter span (300..=600s total).
-const BACKOFF_JITTER_SECS: u64 = 300;
+// Shortest backoff after a failed refresh.
+const BACKOFF_MIN_SECS: u64 = 60;
+// The longest backoff is half the remaining credential lifetime, kept between these two bounds.
+const BACKOFF_UPPER_MIN_SECS: u64 = 90;
+const BACKOFF_UPPER_MAX_SECS: u64 = 600;
 // Non-recoverable error cache floor + jitter span (1..=5s total).
 const ERROR_CACHE_MIN_SECS: u64 = 1;
 const ERROR_CACHE_JITTER_SECS: u64 = 4;
@@ -107,7 +108,7 @@ pub struct StaticStabilityCache {
     partitions: RwLock<HashMap<IdentityCachePartition, Arc<Partition>>>,
     load_timeout: Option<Duration>,
     non_recoverable: Option<NonRecoverablePredicate>,
-    // Tests only, `None` in production (jittered 300..=600s backoff).
+    // Tests only, `None` in production (jittered backoff scaled by remaining lifetime).
     backoff_override: Option<Duration>,
     // Tests only, `None` in production (advisory window from the lifetime table).
     advisory_window_override: Option<Duration>,
@@ -225,9 +226,11 @@ impl StaticStabilityCache {
         let now = runtime_components.time_source().expect("validated").now();
 
         // An `Ok` response already expired by `now` is treated as a failed refresh (retain + back
-        // off), not cached as fresh.
+        // off), not cached as fresh. On the initial fetch of an eligible identity the cache holds
+        // nothing to fall back on, so the cache stores and returns the expired credentials. Their
+        // expiration is past, so the next resolution takes the mandatory refresh path.
         let refreshed = resolved.and_then(|id| {
-            if expired(id.expiration(), now) {
+            if expired(id.expiration(), now) && (prev.is_some() || !eligible(&id)) {
                 Err("credential source returned already-expired credentials".into())
             } else {
                 Ok(id)
@@ -287,7 +290,13 @@ impl StaticStabilityCache {
                 // Backoff AND serve-stale are BOTH static stability — gated on eligibility.
                 match prev {
                     Some(c) if eligible(&c) => {
-                        let backoff = self.backoff_override.unwrap_or_else(jittered_backoff);
+                        let remaining = st
+                            .expiration
+                            .map(|exp| lifetime(exp, now))
+                            .unwrap_or_default();
+                        let backoff = self
+                            .backoff_override
+                            .unwrap_or_else(|| jittered_backoff(remaining));
                         st.next_refresh_allowed_at = Some(now + backoff);
                         tracing::warn!(
                             error = ?err,
@@ -353,11 +362,21 @@ impl ResolveCachedIdentity for StaticStabilityCache {
                     }
                     Err(_) => Ok(cached),
                 },
-                // Mandatory (incl. expired) and initial fetch: block on the gate, then
-                // reuse an in-flight result if another task refreshed while we waited.
-                Decision::Mandatory | Decision::Initial => {
+                // Mandatory (incl. expired): block on the gate, then reuse an in-flight result
+                // if another task refreshed while we waited.
+                Decision::Mandatory => {
                     let _permit = part.refresh_gate.lock().await;
                     if let Some(id) = part.recheck(now) {
+                        return Ok(id);
+                    }
+                    self.refresh(&part, &resolver, runtime_components, config_bag)
+                        .await
+                }
+                // Initial fetch: block on the gate, then reuse whatever another task cached during
+                // the wait, even when it is already expired. The source then sees one call.
+                Decision::Initial => {
+                    let _permit = part.refresh_gate.lock().await;
+                    if let Some(id) = part.state.lock().unwrap().cached.clone() {
                         return Ok(id);
                     }
                     // No rate-limiting during initial-fetch.
@@ -480,8 +499,17 @@ fn advisory_window_for(lifetime: Duration) -> Duration {
     }
 }
 
-fn jittered_backoff() -> Duration {
-    Duration::from_secs(BACKOFF_MIN_SECS + fastrand::u64(0..=BACKOFF_JITTER_SECS))
+// Uniformly random backoff from `BACKOFF_MIN_SECS` up to `backoff_upper_secs(remaining)`.
+fn jittered_backoff(remaining: Duration) -> Duration {
+    Duration::from_secs(fastrand::u64(
+        BACKOFF_MIN_SECS..=backoff_upper_secs(remaining),
+    ))
+}
+
+// Half the remaining credential lifetime, kept between 90 and 600 seconds. Credentials close to
+// expiring, or already expired, get a short backoff so the cache retries them sooner.
+fn backoff_upper_secs(remaining: Duration) -> u64 {
+    (remaining.as_secs() / 2).clamp(BACKOFF_UPPER_MIN_SECS, BACKOFF_UPPER_MAX_SECS)
 }
 
 fn jittered_error_cache() -> Duration {
@@ -672,16 +700,18 @@ mod tests {
             other => panic!("{doc}: unknown cachedCredentials {other:?}"),
         };
 
-        // Pre-walk the steps to build the source queue in order and assign fresh ids, computing
-        // each fresh response's expiry against the clock at that step.
+        // Pre-walk the steps to build the source queue in order and assign ids, computing each
+        // response's expiry against the clock at that step. `step_ids` holds the id of the
+        // credentials each step's response returns.
         let mut queue: Vec<Result<Identity, BoxError>> = Vec::new();
         if seeded {
             queue.push(Ok(identity(1, SEED_LIFE, true)));
         }
         let mut next_id = 1u32;
-        let mut fresh_ids = std::collections::VecDeque::new();
+        let mut step_ids: Vec<Option<u32>> = Vec::new();
         let mut clk = start;
         for step in &s.steps {
+            let mut step_id = None;
             match step {
                 Step::AdvanceTime { seconds } => clk += seconds,
                 Step::GetCredentials {
@@ -691,12 +721,13 @@ mod tests {
                 } => match response.as_deref() {
                     Some("freshCredentials") => {
                         next_id += 1;
-                        fresh_ids.push_back(next_id);
+                        step_id = Some(next_id);
                         let life = lifetime_seconds.unwrap_or(SEED_LIFE);
                         queue.push(Ok(identity(next_id, clk + life, true)));
                     }
                     Some("staleCredentials") => {
                         next_id += 1;
+                        step_id = Some(next_id);
                         queue.push(Ok(identity(next_id, clk, true))); // expiry <= now
                     }
                     Some("error") => queue.push(Err("recoverable".into())),
@@ -708,6 +739,7 @@ mod tests {
                 },
                 Step::Invalidate { .. } => {}
             }
+            step_ids.push(step_id);
         }
 
         // Build an isolated harness: a concrete cache (for internal accessors) with a
@@ -741,7 +773,7 @@ mod tests {
         }
 
         // Execute the steps.
-        for step in &s.steps {
+        for (step, step_id) in s.steps.iter().zip(&step_ids) {
             match step {
                 Step::AdvanceTime { seconds } => {
                     time.tick(Duration::from_secs(*seconds)).await;
@@ -788,7 +820,9 @@ mod tests {
                         }
                         "newCredentials" => {
                             let got = r.expect("newCredentials");
-                            cached_id = fresh_ids.pop_front().expect("a queued fresh id");
+                            cached_id = step_id.unwrap_or_else(|| {
+                                panic!("{doc}: newCredentials needs a response")
+                            });
                             assert_eq!(id_of(&got), cached_id, "{doc}: new id");
                             served = Some(got);
                         }
@@ -818,7 +852,7 @@ mod tests {
     #[tokio::test]
     async fn test_suite() {
         let scenarios: Vec<Scenario> = serde_json::from_str(SUITE).expect("valid suite json");
-        assert_eq!(scenarios.len(), 24, "expected the full modeled suite");
+        assert_eq!(scenarios.len(), 25, "expected the full modeled suite");
         for s in &scenarios {
             run_scenario(s).await;
         }
@@ -1011,8 +1045,9 @@ mod tests {
     }
 
     // A failed refresh applies the real (jittered) backoff: within it the source is not contacted
-    // (rate-limited); once it elapses the refresh is retried and succeeds. This is the only test
-    // exercising `jittered_backoff()` — the JSON suite injects a fixed backoff.
+    // (rate-limited); once it elapses the refresh is retried and succeeds. The JSON suite injects a
+    // fixed backoff, so this test exercises `jittered_backoff()`. The credentials are expired at
+    // the failed refresh, so the backoff is 60 to 90 seconds.
     #[tokio::test]
     async fn backoff_rate_limits_then_recovers() {
         let h = Harness::new(vec![
@@ -1027,17 +1062,73 @@ mod tests {
         assert_eq!(id_of(&r.unwrap()), 1, "failed refresh serves cached");
         assert!(contacted, "a refresh was attempted");
 
-        h.advance_to(3800).await; // < 300s later: strictly inside the backoff -> rate-limited
+        h.advance_to(3700 + 59).await; // < 60s later: strictly inside the backoff -> rate-limited
         let (r, contacted) = h.get().await;
         assert_eq!(id_of(&r.unwrap()), 1);
         assert!(!contacted, "within backoff: source not contacted");
 
-        h.advance_to(3700 + 601).await; // past the max backoff (600s) -> refresh retried
+        h.advance_to(3700 + 91).await; // past the max backoff (90s) -> refresh retried
         let (r, contacted) = h.get().await;
         assert_eq!(
             id_of(&r.unwrap()),
             2,
             "refresh retried once backoff elapsed"
+        );
+        assert!(contacted);
+    }
+
+    // Each row of the backoff table: remaining lifetime -> longest backoff.
+    #[test]
+    fn backoff_upper_bound_scales_with_remaining_lifetime() {
+        for (remaining_secs, upper_secs) in [
+            (40 * 60, 600), // 20 minutes or more: 1 to 10 minutes
+            (20 * 60, 600),
+            (10 * 60, 300), // 10 minutes: 1 to 5 minutes
+            (5 * 60, 150),  // 5 minutes: 1 to 2.5 minutes
+            (3 * 60, 90),   // 3 minutes or less, including expired: 1 to 1.5 minutes
+            (0, 90),
+        ] {
+            assert_eq!(
+                backoff_upper_secs(Duration::from_secs(remaining_secs)),
+                upper_secs,
+                "remaining {remaining_secs}s"
+            );
+        }
+        for _ in 0..1000 {
+            let backoff = jittered_backoff(Duration::ZERO).as_secs();
+            assert!((60..=90).contains(&backoff), "backoff {backoff}s");
+        }
+    }
+
+    // An expired first response is cached and returned. The next call takes the mandatory path
+    // and replaces it with fresh credentials.
+    #[tokio::test]
+    async fn expired_initial_fetch_is_cached_then_refreshed() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 0, true)), // expiry == now
+            Ok(identity(2, 3600, true)),
+        ]);
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "expired initial credentials are returned"
+        );
+        assert!(contacted);
+
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 2, "next call refreshes");
+        assert!(contacted);
+    }
+
+    // Out-of-scope (ineligible) identities keep failing when the first response is expired.
+    #[tokio::test]
+    async fn expired_initial_fetch_of_ineligible_identity_fails() {
+        let h = Harness::new(vec![Ok(identity(1, 0, false))]);
+        let (r, contacted) = h.get().await;
+        assert!(
+            r.is_err(),
+            "ineligible expired initial credentials are rejected"
         );
         assert!(contacted);
     }
@@ -1327,6 +1418,45 @@ mod tests {
             contacts.load(Ordering::SeqCst),
             2,
             "one refresh shared by all waiters"
+        );
+    }
+
+    // Concurrent initial callers all wait for the one initial fetch and reuse its result, even
+    // when the source returned already-expired credentials.
+    #[tokio::test]
+    async fn initial_concurrent_callers_reuse_expired_fetch() {
+        let (time, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contacts = Arc::new(AtomicUsize::new(0));
+        let resolver = SharedIdentityResolver::new(GatedSource {
+            gate: gate.clone(),
+            contacts: contacts.clone(),
+            results: Mutex::new(vec![Ok(identity(1, 0, true))]), // expiry == now
+        });
+        let cache = StaticStabilityCache::builder().build();
+
+        let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get2 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get3 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let driver = async {
+            tokio::task::yield_now().await;
+            gate.notify_one();
+        };
+        let (r1, r2, r3, ()) = tokio::join!(get1, get2, get3, driver);
+
+        assert_eq!(id_of(&r1.unwrap()), 1);
+        assert_eq!(id_of(&r2.unwrap()), 1);
+        assert_eq!(id_of(&r3.unwrap()), 1);
+        assert_eq!(
+            contacts.load(Ordering::SeqCst),
+            1,
+            "one initial fetch shared by all waiters"
         );
     }
 

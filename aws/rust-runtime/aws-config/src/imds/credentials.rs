@@ -203,8 +203,8 @@ impl ImdsCredentialsProvider {
     // `BehaviorVersion::v2026_08_01`), report the true expiration and let the cache decide how to
     // handle expired credentials from IMDS: it treats an expired response as a failed refresh and
     // keeps serving the last successfully cached credential, so static stability applies at refresh
-    // time. Before the first successful fetch there is nothing cached to fall back on, so an expired
-    // response on the initial fetch surfaces as an error rather than being used.
+    // time. Before the first successful fetch there is nothing cached to fall back on, so the cache
+    // caches and returns an expired response on the initial fetch, and refreshes it on the next call.
     //
     // On older behavior versions this provider owns static stability itself: it extends a stale
     // expiration so the already-fetched credentials continue to be used until the next refresh.
