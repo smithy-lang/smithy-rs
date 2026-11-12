@@ -304,10 +304,14 @@ mod tests {
         }
     }
 
+    /// The matrix a record is ever built from: the release matrix, excluding the test-registry
+    /// legs. Those are dispatched by name when somebody is testing the canary, never by a release,
+    /// so counting them would put five permanently `unreported` legs in every record -- the signal
+    /// reserved for a leg that died silently.
     fn matrix() -> Vec<Leg> {
         let clamped = toolchain::resolve(Version::new(1, 99, 1), Version::new(1, 94, 1))
             .expect("a real span");
-        scenarios::legs(&clamped.kept)
+        scenarios::release_legs(&clamped.kept)
     }
 
     fn green_report(leg_id: &str) -> Report {
@@ -380,7 +384,7 @@ mod tests {
     #[test]
     fn it_counts_the_four_buckets_and_they_add_up() {
         let legs = matrix();
-        assert_eq!(legs.len(), 40);
+        let total = legs.len();
 
         let red_ids: Vec<String> = legs
             .iter()
@@ -398,14 +402,14 @@ mod tests {
             .collect();
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.legs_total, 40);
+        assert_eq!(s.legs_total, total);
         assert_eq!(s.red.len(), 10);
-        assert_eq!(s.green.len(), 30);
+        assert_eq!(s.green.len(), total - 10);
         assert!(s.superseded.is_empty());
         assert!(s.unreported.is_empty(), "{:?}", s.unreported);
         assert_eq!(
             s.outcomes,
-            BTreeMap::from([("COMPILE_FAIL".into(), 10), ("GREEN".into(), 30)])
+            BTreeMap::from([("COMPILE_FAIL".into(), 10), ("GREEN".into(), total - 10)])
         );
         assert_eq!(
             s.red.len() + s.green.len() + s.superseded.len() + s.unreported.len(),
@@ -423,7 +427,7 @@ mod tests {
 
         let s = summarize(run(), &legs, &reports);
         assert_eq!(s.unreported, [legs[0].id.clone()]);
-        assert_eq!(s.green.len(), 39);
+        assert_eq!(s.green.len(), legs.len() - 1);
         assert!(!s.green.contains(&legs[0].id));
         assert_eq!(s.outcomes.get("UNREPORTED"), Some(&1));
     }
@@ -436,7 +440,7 @@ mod tests {
         let reports: Vec<Report> = legs.iter().map(|l| Report::superseded(&l.id)).collect();
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.superseded.len(), 40);
+        assert_eq!(s.superseded.len(), legs.len());
         assert!(s.green.is_empty(), "nothing was proven green");
         assert!(s.red.is_empty());
         assert!(!s.had_a_hard_verdict(), "so there is nothing to record");
@@ -613,7 +617,7 @@ mod tests {
         reports.extend(legs.iter().map(|l| green_report(&l.id)));
 
         let s = summarize(run(), &legs, &reports);
-        assert_eq!(s.green.len(), 40);
+        assert_eq!(s.green.len(), legs.len());
         assert!(s.unreported.is_empty());
     }
 

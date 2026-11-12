@@ -19,6 +19,7 @@ use canary::metric;
 use canary::publish;
 use canary::scenarios;
 use canary::summary;
+use canary::test_registry;
 use canary::toolchain::{self, Version};
 use canary::watch;
 
@@ -298,6 +299,14 @@ enum Command {
     },
 }
 
+/// A path beside `dir` rather than inside it, so cargo never scans it looking for sources.
+fn sibling(dir: &std::path::Path, name: &str) -> PathBuf {
+    match dir.parent() {
+        Some(parent) => parent.join(name),
+        None => PathBuf::from(name),
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     match Args::parse().command {
         Command::GenMatrix {
@@ -359,7 +368,25 @@ fn main() -> anyhow::Result<()> {
             } else {
                 let scenario = scenarios::manifest(&found.manifest)
                     .ok_or_else(|| anyhow::anyhow!("unknown manifest {:?}", found.manifest))?;
-                manifest::materialize(&manifest::render(found, scenario), &dir)?;
+                // A test-registry leg needs the registry assembled before it can resolve anything.
+                // Built beside the leg rather than inside it, so nothing cargo scans for sources
+                // can see it.
+                let registry = match scenarios::uses_test_registry(scenario) {
+                    false => None,
+                    true => {
+                        let out = sibling(&dir, "canary-test-registry");
+                        let work = sibling(&dir, "canary-test-registry-work");
+                        eprintln!(
+                            "assembling the test registry at {} -- this leg resolves from disk, \
+                             not from crates.io",
+                            out.display()
+                        );
+                        Some(test_registry::build(&out, &work)?)
+                    }
+                };
+                let rendered =
+                    manifest::render_with_registry(found, scenario, registry.as_deref())?;
+                manifest::materialize(&rendered, &dir)?;
             }
 
             let budget = budget_secs.map(Duration::from_secs).unwrap_or(leg::BUDGET);
@@ -600,8 +627,14 @@ fn main() -> anyhow::Result<()> {
         } => {
             let clamped = resolve(&stable, &msrv)?;
             let legs = scenarios::legs(&clamped.kept);
+            // Test-registry manifests are excluded: the watcher exists to notice the *published*
+            // graph moving, and a registry committed to this repository cannot move between ticks.
+            // Resolving one every tick would also fail, since its crates are not on crates.io, and
+            // an unresolvable manifest is dispatched rather than skipped -- so every tick of every
+            // release would dispatch legs for it.
             let manifests: Vec<String> = scenarios::manifests()
-                .iter()
+                .into_iter()
+                .filter(|s| !scenarios::uses_test_registry(s))
                 .map(|s| s.id.to_string())
                 .collect();
 
@@ -671,7 +704,10 @@ fn main() -> anyhow::Result<()> {
             out,
         } => {
             let clamped = resolve(&stable, &msrv)?;
-            let legs = scenarios::legs(&clamped.kept);
+            // The release matrix, not the whole matrix. A release never dispatches the
+            // test-registry legs, so folding them in would mark five legs `unreported` on every
+            // record -- and `unreported` is the signal reserved for a leg that died silently.
+            let legs = scenarios::release_legs(&clamped.kept);
             let reports = summary::read_reports(&reports)?;
             let run = summary::Run {
                 release,

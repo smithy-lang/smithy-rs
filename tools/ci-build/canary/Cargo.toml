@@ -15,6 +15,10 @@ anyhow = "1.0.87"
 clap = { version = "4.4.11", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Index entries carry a sha256 of the `.crate` file, and cargo refuses one that does not match.
+# Already a direct dependency of `crate-hasher` and `publisher`, so this adds no new third-party
+# code to the repository.
+sha256 = "1"
 toml = "0.8"
 
 [dev-dependencies]

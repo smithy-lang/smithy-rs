@@ -68,9 +68,45 @@ pub struct Rendered {
     pub cargo_toml: String,
     /// Relative path to contents. `src/main.rs`, `tests/hermetic.rs`, …
     pub files: BTreeMap<PathBuf, &'static str>,
+    /// `.cargo/config.toml`, present only for a leg that resolves from the on-disk test registry.
+    ///
+    /// Not in `files` because that holds `&'static str` bodies and this one carries a path computed
+    /// at run time — and because it is configuration rather than a body, which is the distinction a
+    /// reader cares about.
+    pub cargo_config: Option<String>,
 }
 
 /// Render the crate for one leg.
+///
+/// `registry` must be `Some` for a manifest that resolves from the on-disk test registry, and is
+/// ignored otherwise. Getting that wrong is not a cosmetic mistake: a test-registry leg rendered
+/// without the `.cargo/config.toml` would look for `ct-client` on crates.io, where it does not
+/// exist, and report `RESOLVE_FAIL` about a release that is perfectly fine. So it is an error
+/// rather than a default, and [`render`] refuses rather than guessing.
+pub fn render_with_registry(
+    leg: &Leg,
+    scenario: &Scenario,
+    registry: Option<&Path>,
+) -> anyhow::Result<Rendered> {
+    let needs = crate::scenarios::uses_test_registry(scenario);
+    let mut rendered = render(leg, scenario);
+    match (needs, registry) {
+        (true, Some(path)) => {
+            rendered.cargo_config = Some(crate::test_registry::cargo_config(path));
+        }
+        (true, None) => anyhow::bail!(
+            "{} resolves from the test registry, so it needs one; without it the leg would look \
+             for its crates on crates.io and report RESOLVE_FAIL about a healthy release",
+            scenario.id
+        ),
+        (false, _) => {}
+    }
+    Ok(rendered)
+}
+
+/// Render the crate for one leg, without a test registry.
+///
+/// Prefer [`render_with_registry`] at any call site that could be handed a test-registry manifest.
 pub fn render(leg: &Leg, scenario: &Scenario) -> Rendered {
     let mut deps: Vec<(String, String, Vec<&str>)> = scenario
         .deps
@@ -112,6 +148,7 @@ pub fn render(leg: &Leg, scenario: &Scenario) -> Rendered {
     Rendered {
         cargo_toml: cargo_toml(leg, &deps, dev_deps),
         files,
+        cargo_config: None,
     }
 }
 
@@ -174,6 +211,13 @@ pub fn materialize(rendered: &Rendered, dir: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     std::fs::write(dir.join("Cargo.toml"), &rendered.cargo_toml)
         .with_context(|| format!("writing {}/Cargo.toml", dir.display()))?;
+    if let Some(config) = &rendered.cargo_config {
+        let cargo_dir = dir.join(".cargo");
+        std::fs::create_dir_all(&cargo_dir)
+            .with_context(|| format!("creating {}", cargo_dir.display()))?;
+        std::fs::write(cargo_dir.join("config.toml"), config)
+            .with_context(|| format!("writing {}/.cargo/config.toml", dir.display()))?;
+    }
     for (rel, contents) in &rendered.files {
         let path = dir.join(rel);
         if let Some(parent) = path.parent() {
@@ -251,6 +295,44 @@ mod tests {
             dev.contains("test-util"),
             "the replay client needs test-util"
         );
+    }
+
+    /// Rendering a test-registry leg without a registry must be an error, not a default.
+    ///
+    /// The leg would otherwise look for `ct-client` on crates.io, where it does not exist, and
+    /// report `RESOLVE_FAIL` — a page claiming consumers cannot resolve the release, caused by a
+    /// missing four-line config file.
+    #[test]
+    fn a_test_registry_leg_refuses_to_render_without_one() {
+        let scenario = scenarios::manifest("canary-test-registry").expect("the test scenario");
+        let leg = Leg {
+            manifest: scenario.id.to_string(),
+            ..leg_named("new-project--stable")
+        };
+
+        let err = render_with_registry(&leg, scenario, None)
+            .expect_err("rendering without a registry must fail");
+        assert!(err.to_string().contains("RESOLVE_FAIL"), "{err}");
+
+        let ok = render_with_registry(&leg, scenario, Some(Path::new("/tmp/reg")))
+            .expect("with a registry it renders");
+        let config = ok.cargo_config.expect("a cargo config");
+        assert!(config.contains("local-registry = \"/tmp/reg\""), "{config}");
+    }
+
+    /// And an ordinary leg gets no cargo config at all, so nothing redirects the one thing the
+    /// canary exists to measure: what a consumer resolves from the real registry.
+    #[test]
+    fn an_ordinary_leg_gets_no_cargo_config() {
+        let leg = leg_named("new-project--stable");
+        let scenario = scenarios::manifest("new-project").unwrap();
+        for registry in [None, Some(Path::new("/tmp/reg"))] {
+            let r = render_with_registry(&leg, scenario, registry).unwrap();
+            assert!(
+                r.cargo_config.is_none(),
+                "a crates.io leg must never be redirected, even when a registry is available"
+            );
+        }
     }
 
     /// A scenario that constrains `aws-config` deliberately must win over the body's own

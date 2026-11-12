@@ -26,6 +26,7 @@ pub mod metric;
 pub mod publish;
 pub mod scenarios;
 pub mod summary;
+pub mod test_registry;
 pub mod toolchain;
 pub mod watch;
 
