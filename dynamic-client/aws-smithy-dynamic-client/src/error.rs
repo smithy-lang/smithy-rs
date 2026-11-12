@@ -7,6 +7,7 @@
 
 use aws_smithy_lang::runtime_schema::SchemaBuildError;
 use aws_smithy_lang::{LoadError, ShapeId};
+use aws_smithy_runtime_api::box_error::BoxError;
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -42,6 +43,9 @@ pub(crate) enum BuildErrorKind {
     MissingBehaviorVersion,
     MissingServiceVersion {
         service: ShapeId,
+    },
+    InvalidConfig {
+        source: BoxError,
     },
 }
 
@@ -97,6 +101,12 @@ impl BuildError {
     pub(crate) fn missing_service_version(service: ShapeId) -> Self {
         Self {
             kind: BuildErrorKind::MissingServiceVersion { service },
+        }
+    }
+
+    pub(crate) fn invalid_config(source: BoxError) -> Self {
+        Self {
+            kind: BuildErrorKind::InvalidConfig { source },
         }
     }
 
@@ -168,6 +178,7 @@ impl fmt::Display for BuildError {
                 "service `{service}` uses the awsQuery protocol, which needs a service \
                  version, but the service has no `version`"
             ),
+            BuildErrorKind::InvalidConfig { .. } => write!(f, "invalid client configuration"),
         }
     }
 }
@@ -184,9 +195,26 @@ impl Error for BuildError {
             BuildErrorKind::ProtocolNotFound { .. } => None,
             BuildErrorKind::MissingBehaviorVersion => None,
             BuildErrorKind::MissingServiceVersion { .. } => None,
+            BuildErrorKind::InvalidConfig { source } => Some(source.as_ref()),
         }
     }
 }
+
+// A config validator error: the config has no HTTP client, and no default one is available.
+#[derive(Debug)]
+pub(crate) struct MissingHttpClient;
+
+impl fmt::Display for MissingHttpClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "an HTTP client is required: set one with `Config::builder().http_client(..)`, or \
+             enable the `default-https-client` feature"
+        )
+    }
+}
+
+impl Error for MissingHttpClient {}
 
 #[cfg(test)]
 mod tests {

@@ -6,12 +6,20 @@
 //! The dynamic client and its builder.
 
 use crate::config;
-use crate::error::BuildError;
+use crate::error::{BuildError, MissingHttpClient};
 use crate::protocol::{detect, protocol_traits, AWS_QUERY};
 use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::{Model, ShapeId};
+use aws_smithy_runtime::client::defaults::{default_plugins, DefaultPluginParams};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponentsBuilder, SharedConfigValidator,
+};
+use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugins, StaticRuntimePlugin};
 use aws_smithy_schema::protocol::SharedClientProtocol;
+use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -36,9 +44,11 @@ pub struct DynamicClient {
     // TODO(dynamic-client): Remove this `allow` once calls read the schemas.
     #[allow(dead_code)]
     schemas: Arc<RuntimeSchemaSet>,
-    // TODO(dynamic-client): Remove this `allow` once calls read the protocol.
+    // The default plugins, then the plugin for the client's config, in the order generated
+    // clients apply them. The protocol is stored in the config plugin's layer.
+    // TODO(dynamic-client): Remove this `allow` once calls read the runtime plugins.
     #[allow(dead_code)]
-    protocol: SharedClientProtocol,
+    runtime_plugins: RuntimePlugins,
 }
 
 impl DynamicClient {
@@ -55,8 +65,22 @@ impl DynamicClient {
     }
 
     #[cfg(test)]
+    fn client_config(&self) -> (ConfigBag, RuntimeComponentsBuilder) {
+        let mut cfg = ConfigBag::base();
+        let components = self
+            .runtime_plugins
+            .apply_client_configuration(&mut cfg)
+            .expect("build() applied the same plugins");
+        (cfg, components)
+    }
+
+    #[cfg(test)]
     fn protocol_id(&self) -> String {
-        self.protocol.protocol_id().to_string()
+        let (cfg, _) = self.client_config();
+        cfg.load::<SharedClientProtocol>()
+            .expect("build() stores the protocol")
+            .protocol_id()
+            .to_string()
     }
 }
 
@@ -102,12 +126,14 @@ impl Builder {
     /// the model has no service with the given ID, or when the service's shapes are invalid.
     /// Also fails when no protocol is set and no built-in protocol matches a protocol trait
     /// of the service. Also fails when the config has no behavior version, or when the
-    /// awsQuery protocol is used and the service has no version.
+    /// awsQuery protocol is used and the service has no version. Also fails on an invalid
+    /// config, for example with retries and no sleep implementation, or with no HTTP client.
     pub fn build(self) -> Result<DynamicClient, BuildError> {
         let path = self.model_file.ok_or_else(BuildError::missing_model)?;
-        if self.config.behavior_version.is_none() {
-            return Err(BuildError::missing_behavior_version());
-        }
+        let behavior_version = self
+            .config
+            .behavior_version
+            .ok_or_else(BuildError::missing_behavior_version)?;
         let model = Model::from_json_file(&path)
             .map_err(|source| BuildError::model_load_failed(path, source))?;
         let service_view = select_service(&model, self.service)?;
@@ -133,11 +159,61 @@ impl Builder {
         {
             return Err(BuildError::missing_service_version(service));
         }
+        let mut components = RuntimeComponentsBuilder::new("DynamicClientConfig");
+        components.set_http_client(self.config.http_client);
+        components.set_sleep_impl(self.config.sleep_impl);
+        components.push_config_validator(SharedConfigValidator::base_client_config_fn(
+            validate_http_client,
+        ));
+        let runtime_plugins =
+            runtime_plugins(components, behavior_version, service.name(), protocol);
+        // The same check generated clients run when they are created.
+        let mut cfg = ConfigBag::base();
+        let components = runtime_plugins
+            .apply_client_configuration(&mut cfg)
+            .map_err(BuildError::invalid_config)?;
+        components
+            .validate_base_client_config(&cfg)
+            .map_err(BuildError::invalid_config)?;
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
-            protocol,
+            runtime_plugins,
         })
     }
+}
+
+// Fails when no HTTP client is set after every plugin is applied. A generated client finds a
+// missing HTTP client only when it sends a request.
+fn validate_http_client(
+    components: &RuntimeComponentsBuilder,
+    _cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    match components.http_client() {
+        Some(_) => Ok(()),
+        None => Err(MissingHttpClient.into()),
+    }
+}
+
+// The default plugins, then a plugin for the client's config, as generated clients build them.
+fn runtime_plugins(
+    components: RuntimeComponentsBuilder,
+    behavior_version: BehaviorVersion,
+    service_name: &str,
+    protocol: SharedClientProtocol,
+) -> RuntimePlugins {
+    let mut layer = Layer::new("DynamicClientConfig");
+    layer.store_put(protocol);
+    RuntimePlugins::new()
+        .with_client_plugins(default_plugins(
+            DefaultPluginParams::new()
+                .with_retry_partition_name(service_name.to_owned())
+                .with_behavior_version(behavior_version),
+        ))
+        .with_client_plugin(
+            StaticRuntimePlugin::new()
+                .with_config(layer.freeze())
+                .with_runtime_components(components),
+        )
 }
 
 // Picks the service specified by the builder, or the model's only service. A specified service
@@ -173,10 +249,15 @@ mod tests {
     use super::DynamicClient;
     use crate::config::{BehaviorVersion, Config};
     use crate::error::BuildErrorKind;
+    #[cfg(not(feature = "default-https-client"))]
+    use crate::error::MissingHttpClient;
     use crate::BuildError;
+    use aws_smithy_async::test_util::instant_time_and_sleep;
+    use aws_smithy_http_client::test_util::NeverClient;
     use aws_smithy_lang::runtime_schema::Materialization;
     use aws_smithy_lang::ShapeId;
     use std::path::PathBuf;
+    use std::time::UNIX_EPOCH;
 
     fn model(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -188,10 +269,16 @@ mod tests {
         ShapeId::new(id).unwrap()
     }
 
-    // A builder with a behavior version. Every client needs one.
+    // A builder with a behavior version, a test HTTP client, and a test sleep. Every client needs
+    // a behavior version, and the other two keep the tests independent of the default features.
     fn builder() -> super::Builder {
-        DynamicClient::builder()
-            .config(Config::builder().behavior_version(BehaviorVersion::latest()))
+        let (_, sleep) = instant_time_and_sleep(UNIX_EPOCH);
+        DynamicClient::builder().config(
+            Config::builder()
+                .behavior_version(BehaviorVersion::latest())
+                .http_client(NeverClient::new())
+                .sleep_impl(sleep),
+        )
     }
 
     fn build_error(file: &str, service: Option<&str>) -> BuildError {
@@ -394,5 +481,36 @@ mod tests {
             BuildErrorKind::MissingServiceVersion { service }
                 if *service == id("example.protocols#QueryWithoutVersion")
         ));
+    }
+
+    #[cfg(all(feature = "default-https-client", feature = "rt-tokio"))]
+    #[test]
+    fn uses_the_default_http_client_and_sleep_when_none_is_set() {
+        let client = DynamicClient::builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().behavior_version(BehaviorVersion::latest()))
+            .build()
+            .unwrap();
+        let (_, components) = client.client_config();
+        assert!(components.http_client().is_some());
+        assert!(components.sleep_impl().is_some());
+    }
+
+    #[cfg(not(feature = "default-https-client"))]
+    #[test]
+    fn fails_without_an_http_client_and_without_the_default() {
+        let (_, sleep) = instant_time_and_sleep(UNIX_EPOCH);
+        let err = DynamicClient::builder()
+            .model_file(model("weather.json"))
+            .config(
+                Config::builder()
+                    .behavior_version(BehaviorVersion::latest())
+                    .sleep_impl(sleep),
+            )
+            .build()
+            .unwrap_err();
+        assert!(matches!(err.kind(), BuildErrorKind::InvalidConfig { .. }));
+        let source = std::error::Error::source(&err).expect("the validator error is the source");
+        assert!(source.downcast_ref::<MissingHttpClient>().is_some());
     }
 }
