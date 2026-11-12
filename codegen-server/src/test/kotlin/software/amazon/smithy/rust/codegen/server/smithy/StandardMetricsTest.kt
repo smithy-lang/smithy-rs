@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
@@ -63,12 +64,13 @@ internal class StandardMetricsTest {
                     )
                 }
 
-                // A layer, registered through the config, that records each request's `on_finish` callback
-                // invocation: whether it received metrics.
+                // A layer, registered through the config, that records the metrics received by each request's
+                // `on_finish` callback.
                 rustTemplate(
                     """
+                    type Log = ::std::sync::Arc<::std::sync::Mutex<Vec<Option<#{Server}::metrics::RequestMetrics>>>>;
                     ##[derive(Clone, Default)]
-                    struct RecordLayer(::std::sync::Arc<::std::sync::Mutex<Vec<bool>>>);
+                    struct RecordLayer(Log);
                     impl<S> #{Tower}::Layer<S> for RecordLayer {
                         type Service = Record<S>;
                         fn layer(&self, inner: S) -> Record<S> {
@@ -78,7 +80,7 @@ internal class StandardMetricsTest {
                     ##[derive(Clone)]
                     struct Record<S> {
                         inner: S,
-                        log: ::std::sync::Arc<::std::sync::Mutex<Vec<bool>>>,
+                        log: Log,
                     }
                     impl<S, B> #{Tower}::Service<#{Http}::Request<B>> for Record<S>
                     where
@@ -92,9 +94,7 @@ internal class StandardMetricsTest {
                         }
                         fn call(&mut self, mut req: #{Http}::Request<B>) -> Self::Future {
                             let log = self.log.clone();
-                            #{Server}::metrics::RequestExt::on_finish(&mut req, move |metrics| {
-                                log.lock().unwrap().push(metrics.is_some());
-                            });
+                            #{Server}::metrics::RequestExt::on_finish(&mut req, move |metrics| log.lock().unwrap().push(metrics));
                             self.inner.call(req)
                         }
                     }
@@ -128,10 +128,26 @@ internal class StandardMetricsTest {
                             assert!(record.0.lock().unwrap().is_empty(), "response body not sent yet");
                             #{ReadResponse}
                             let _ = bytes;
-                            assert_eq!(*record.0.lock().unwrap(), [$enabled]);
+                            let record = record.0.lock().unwrap();
+                            assert_eq!(record.len(), 1, "the callback runs once");
+                            #{CheckMetrics}
                             """,
                             *scope,
                             "ReadResponse" to ServerHttpTestHelpers.httpBodyToBytes(context.runtimeConfig, "bytes", "response"),
+                            "CheckMetrics" to
+                                writable {
+                                    if (enabled) {
+                                        rust(
+                                            """
+                                            let metrics = record[0].as_ref().expect("metrics are enabled");
+                                            assert_eq!(metrics.service().absolute(), "com.amazonaws.simple##SimpleService");
+                                            assert_eq!(metrics.service_version(), None);
+                                            """,
+                                        )
+                                    } else {
+                                        rust("""assert!(record[0].is_none(), "metrics are disabled");""")
+                                    }
+                                },
                         )
                     }
                 }
