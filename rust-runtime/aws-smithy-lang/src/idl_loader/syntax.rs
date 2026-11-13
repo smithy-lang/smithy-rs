@@ -351,9 +351,12 @@ pub(crate) struct ShapeSyntax {
     pub(crate) span: Span,
 }
 
+/// An `apply` statement: traits applied to a shape or member defined elsewhere. Documentation
+/// comments before or inside the statement document nothing, so they are not kept.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ApplySyntax {
-    pub(crate) annotations: Annotations,
+    /// The applied traits in source order; empty for an empty block (`apply S {}`).
+    pub(crate) traits: Vec<TraitSyntax>,
     pub(crate) target: ShapeIdSyntax,
     pub(crate) span: Span,
 }

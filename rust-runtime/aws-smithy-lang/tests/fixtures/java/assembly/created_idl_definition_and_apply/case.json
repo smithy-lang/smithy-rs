@@ -1,0 +1,4 @@
+{
+    "description": "A shape built in code, defined again in IDL with an inline trait and an apply: the code shape's traits, then the inline trait, then the applied one.",
+    "steps": [{"addShapes": "shapes.json"}, {"addFile": "a.smithy"}]
+}
