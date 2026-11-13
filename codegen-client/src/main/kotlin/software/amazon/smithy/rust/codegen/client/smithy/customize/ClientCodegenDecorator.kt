@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorC
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -58,6 +59,12 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, Cl
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> = baseCustomizations
+
+    /** Hook to add client-only variants and methods to generated unions. */
+    fun unionCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<UnionCustomization>,
+    ): List<UnionCustomization> = baseCustomizations
 
     fun protocols(
         serviceId: ShapeId,
@@ -131,6 +138,14 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     ): List<ErrorCustomization> =
         combineCustomizations(baseCustomizations) { decorator, customizations ->
             decorator.errorCustomizations(codegenContext, customizations)
+        }
+
+    override fun unionCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<UnionCustomization>,
+    ): List<UnionCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.unionCustomizations(codegenContext, customizations)
         }
 
     override fun protocols(

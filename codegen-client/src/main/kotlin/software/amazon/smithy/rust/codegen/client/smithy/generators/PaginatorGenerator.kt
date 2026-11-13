@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocumentUnionDecodeMode
 import software.amazon.smithy.rust.codegen.client.smithy.traits.IsTruncatedPaginatorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -89,6 +90,10 @@ class PaginatorGenerator private constructor(
             generate(),
         )
 
+    /** Whether the paginator carries the `DocumentUnionDecodeMode` that its fluent builder selected. */
+    private val documentUnionDecodeMode = DocumentUnionDecodeMode.applies(codegenContext, operation)
+    private val decodeModeField = DocumentUnionDecodeMode.FIELD
+
     private val codegenScope =
         arrayOf(
             *preludeScope,
@@ -124,7 +129,7 @@ class PaginatorGenerator private constructor(
                 pub struct $paginatorName {
                     handle: std::sync::Arc<crate::client::Handle>,
                     builder: #{Builder},
-                    stop_on_duplicate_token: bool,
+                    stop_on_duplicate_token: bool,#{decode_mode_field:W}
                 }
 
                 impl $paginatorName {
@@ -133,9 +138,11 @@ class PaginatorGenerator private constructor(
                         Self {
                             handle,
                             builder,
-                            stop_on_duplicate_token: true,
+                            stop_on_duplicate_token: true,#{decode_mode_init:W}
                         }
                     }
+
+                    #{decode_mode_setter:W}
 
                     #{page_size_setter:W}
 
@@ -219,6 +226,7 @@ class PaginatorGenerator private constructor(
                                 &handle.conf,
                                 #{None},
                             ).with_operation_plugin(#{PaginatorFeatureTrackerRuntimePlugin}::new());
+                            #{decode_mode_plugin:W}
                             """,
                             *codegenScope,
                             "PaginatorFeatureTrackerRuntimePlugin" to
@@ -226,7 +234,49 @@ class PaginatorGenerator private constructor(
                                     InlineDependency.sdkFeatureTracker(runtimeConfig),
                                 ).resolve("paginator::PaginatorFeatureTrackerRuntimePlugin"),
                             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                            "decode_mode_plugin" to
+                                writable {
+                                    if (documentUnionDecodeMode) {
+                                        DocumentUnionDecodeMode.addPlugin(
+                                            runtimeConfig,
+                                            "runtime_plugins",
+                                            "self.$decodeModeField",
+                                        )(this)
+                                    }
+                                },
                         )
+                    },
+                "decode_mode_field" to
+                    writable {
+                        if (documentUnionDecodeMode) {
+                            rustTemplate(
+                                "\n$decodeModeField: #{Option}<#{Mode}>,",
+                                *preludeScope,
+                                "Mode" to DocumentUnionDecodeMode.type(runtimeConfig),
+                            )
+                        }
+                    },
+                "decode_mode_init" to
+                    writable {
+                        if (documentUnionDecodeMode) {
+                            rustTemplate("\n$decodeModeField: #{None},", *preludeScope)
+                        }
+                    },
+                "decode_mode_setter" to
+                    writable {
+                        if (documentUnionDecodeMode) {
+                            rustTemplate(
+                                """
+                                /// Carries the mode selected on the fluent builder to every page.
+                                pub(crate) fn $decodeModeField(mut self, mode: #{Option}<#{Mode}>) -> Self {
+                                    self.$decodeModeField = mode;
+                                    self
+                                }
+                                """,
+                                *preludeScope,
+                                "Mode" to DocumentUnionDecodeMode.type(runtimeConfig),
+                            )
+                        }
                     },
                 "is_empty_setter" to isEmptySetter(),
             )
