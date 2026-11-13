@@ -661,6 +661,16 @@ impl DocumentSettings for JsonCodecSettings {
             }
         })
     }
+
+    /// Returns whether this codec honors `@jsonName`, as set by
+    /// [`JsonCodecSettingsBuilder::use_json_name`].
+    ///
+    /// A document that the [`JsonDeserializer`] reads keeps the object keys from
+    /// the wire, so reading a structure from it matches keys to members the way
+    /// the codec matches the fields of a structure it reads directly.
+    fn use_json_name(&self) -> bool {
+        matches!(self.field_mapper, JsonFieldMapper::UseJsonName)
+    }
 }
 
 /// JSON codec for schema-based serialization and deserialization.
@@ -769,6 +779,18 @@ mod tests {
             DocumentSettings::protocol_id(&settings),
             "aws.protocols#restJson1"
         );
+    }
+
+    #[test]
+    fn document_settings_use_json_name_follows_the_builder() {
+        assert!(DocumentSettings::use_json_name(
+            &JsonCodecSettings::default()
+        ));
+        let member_names = JsonCodecSettings::builder().use_json_name(false).build();
+        assert!(!DocumentSettings::use_json_name(&member_names));
+        assert!(!DocumentSettings::use_json_name(
+            &member_names.to_builder().build()
+        ));
     }
 
     #[test]

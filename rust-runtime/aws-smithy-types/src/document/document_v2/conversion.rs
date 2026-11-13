@@ -76,7 +76,11 @@ impl DocumentV2 {
     /// |---|---|
     /// | `Blob` | `String` of the bytes in standard base64, with padding |
     /// | `Timestamp` | `Number` of seconds since the Unix epoch: `PosInt` or `NegInt` for a whole second, and `Float` otherwise |
-    /// | `BigInteger`, `BigDecimal` | `String` of the number's text, unchanged |
+    /// | `BigInteger`, `BigDecimal` | `Number` read from the number's text: `PosInt` or `NegInt` for an integer that fits in 64 bits, and the nearest `f64` otherwise |
+    ///
+    /// Each result is the `Document` that `Document`'s JSON parsers read from the value's
+    /// default JSON form: base64 text for a blob, epoch seconds for a timestamp, and the number
+    /// itself for a big number.
     ///
     /// Without settings, [`DiscriminatedDocument::as_blob`](crate::DiscriminatedDocument::as_blob)
     /// and [`DiscriminatedDocument::as_timestamp`](crate::DiscriminatedDocument::as_timestamp)
@@ -87,6 +91,9 @@ impl DocumentV2 {
     /// - An encoded value can't be told apart from a string or number with the same text or
     ///   value.
     /// - A fractional timestamp becomes an `f64`, which can lose sub-microsecond precision.
+    /// - A big number becomes an `f64` when it doesn't fit in 64 bits or has a fraction or an
+    ///   exponent. That rounds digits that an `f64` can't hold, and a magnitude beyond the `f64`
+    ///   range becomes infinity.
     /// - Objects lose their entry order, because [`Document::Object`] is a `HashMap`.
     ///
     /// The encodings don't depend on a protocol, and a protocol may encode the same values
@@ -96,7 +103,8 @@ impl DocumentV2 {
     /// # Example
     ///
     /// ```
-    /// use aws_smithy_types::{DateTime, Document, DocumentV2, Number};
+    /// use aws_smithy_types::{BigDecimal, DateTime, Document, DocumentV2, Number};
+    /// use std::str::FromStr;
     ///
     /// let blob = DocumentV2::Blob(b"hello".to_vec());
     /// assert_eq!(blob.to_document_lossy(), Document::String("aGVsbG8=".to_owned()));
@@ -105,6 +113,12 @@ impl DocumentV2 {
     /// assert_eq!(
     ///     timestamp.to_document_lossy(),
     ///     Document::Number(Number::PosInt(1_700_000_000)),
+    /// );
+    ///
+    /// let decimal = DocumentV2::BigDecimal(BigDecimal::from_str("0.1234567890123456789").unwrap());
+    /// assert_eq!(
+    ///     decimal.to_document_lossy(),
+    ///     Document::Number(Number::Float(0.12345678901234568)),
     /// );
     /// ```
     pub fn to_document_lossy(&self) -> Document {
@@ -124,8 +138,8 @@ impl DocumentV2 {
             DocumentV2::Null => Document::Null,
             DocumentV2::Blob(bytes) => Document::String(crate::base64::encode(bytes)),
             DocumentV2::Timestamp(timestamp) => Document::Number(epoch_seconds(*timestamp)),
-            DocumentV2::BigInteger(value) => Document::String(value.as_ref().to_owned()),
-            DocumentV2::BigDecimal(value) => Document::String(value.as_ref().to_owned()),
+            DocumentV2::BigInteger(value) => number_from_text(value.as_ref()),
+            DocumentV2::BigDecimal(value) => number_from_text(value.as_ref()),
         }
     }
 
@@ -164,6 +178,28 @@ fn epoch_seconds(timestamp: DateTime) -> Number {
         Number::Float(timestamp.as_secs_f64())
     } else {
         signed_number(timestamp.secs())
+    }
+}
+
+/// Reads the text of a [`BigInteger`](crate::BigInteger) or [`BigDecimal`](crate::BigDecimal)
+/// as `Document`'s JSON parsers read a JSON number. Text without a fraction or an exponent
+/// becomes `PosInt` or `NegInt` when it fits, and everything else becomes the nearest `f64`.
+///
+/// Zero is `PosInt`, as in `DocumentV2`'s `From<i64>`, even when the text is `-0`. Both types
+/// only hold text that `f64` parses, so the `String` fallback keeps the conversion total without
+/// being reachable.
+fn number_from_text(text: &str) -> Document {
+    if !text.contains(['.', 'e', 'E']) {
+        if let Ok(value) = text.parse::<u64>() {
+            return Document::Number(Number::PosInt(value));
+        }
+        if let Ok(value) = text.parse::<i64>() {
+            return Document::Number(signed_number(value));
+        }
+    }
+    match text.parse::<f64>() {
+        Ok(value) => Document::Number(Number::Float(value)),
+        Err(_) => Document::String(text.to_owned()),
     }
 }
 
@@ -462,24 +498,56 @@ mod tests {
     }
 
     #[test]
-    fn lossy_downgrade_keeps_big_number_text() {
+    fn lossy_downgrade_reads_big_numbers_as_numbers() {
         let cases = [
-            // One more than `u64::MAX`, and one less than `i64::MIN`.
-            big_integer("18446744073709551616"),
-            big_integer("-9223372036854775809"),
-            big_integer("00123"),
-            big_decimal("1.5e300"),
-            big_decimal("-0.000E-10"),
-            big_decimal("+.5"),
+            // Integers that fit in 64 bits, with the zero and sign rules of `From<i64>`.
+            (
+                big_integer("18446744073709551615"),
+                Number::PosInt(u64::MAX),
+            ),
+            (
+                big_integer("-9223372036854775808"),
+                Number::NegInt(i64::MIN),
+            ),
+            (big_integer("00123"), Number::PosInt(123)),
+            (big_integer("-0"), Number::PosInt(0)),
+            (big_decimal("100"), Number::PosInt(100)),
+            (big_decimal("+5"), Number::PosInt(5)),
+            (big_decimal("-7"), Number::NegInt(-7)),
+            // Integers beyond 64 bits, one past `u64::MAX` and one past `i64::MIN`.
+            (
+                big_integer("18446744073709551616"),
+                Number::Float(18_446_744_073_709_551_616.0),
+            ),
+            (
+                big_integer("-9223372036854775809"),
+                Number::Float(-9_223_372_036_854_775_808.0),
+            ),
+            // Text with a fraction or an exponent, which `f64` rounds.
+            (
+                big_decimal("0.1234567890123456789"),
+                Number::Float(0.123_456_789_012_345_68),
+            ),
+            (big_decimal("1.5e300"), Number::Float(1.5e300)),
+            (big_decimal("1e2"), Number::Float(100.0)),
+            (big_decimal("+.5"), Number::Float(0.5)),
+            (big_decimal("5."), Number::Float(5.0)),
+            (big_decimal("1e400"), Number::Float(f64::INFINITY)),
+            (big_decimal("-1e400"), Number::Float(f64::NEG_INFINITY)),
+            (big_decimal("1e-400"), Number::Float(0.0)),
         ];
-        for document in cases {
-            let text = match &document {
-                DocumentV2::BigInteger(value) => value.as_ref().to_owned(),
-                DocumentV2::BigDecimal(value) => value.as_ref().to_owned(),
-                _ => unreachable!(),
-            };
-            assert_eq!(document.to_document_lossy(), Document::String(text));
+        for (document, expected) in cases {
+            assert_eq!(
+                document.to_document_lossy(),
+                Document::Number(expected),
+                "{document:?}"
+            );
         }
+        let negative_zero = big_decimal("-0.000E-10").to_document_lossy();
+        assert!(
+            matches!(negative_zero, Document::Number(Number::Float(value)) if value == 0.0 && value.is_sign_negative()),
+            "{negative_zero:?}"
+        );
     }
 
     #[test]
@@ -513,9 +581,9 @@ mod tests {
         let expected = Document::Array(vec![
             Document::Object(HashMap::from([
                 ("when".to_owned(), Document::Number(Number::PosInt(10))),
-                ("size".to_owned(), string("99999999999999999999")),
+                ("size".to_owned(), Document::Number(Number::Float(1e20))),
             ])),
-            Document::Array(vec![string("0.1")]),
+            Document::Array(vec![Document::Number(Number::Float(0.1))]),
         ]);
         assert_eq!(document.to_document_lossy(), expected);
 

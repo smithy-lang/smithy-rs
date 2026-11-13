@@ -19,14 +19,14 @@
 //! # Member-name resolution
 //!
 //! For struct reads, member dispatch uses the document's keys (not the
-//! schema's member list) so that documents created from a typed shape
-//! by [`DocumentShapeSerializer`] round-trip — those use Smithy member
-//! names. Wire-name resolution for `@jsonName` / `@xmlName`-style
-//! renames is the responsibility of the protocol's deserializer
-//! (`JsonDeserializer`, etc.) — not this generic Document walker. The
-//! `JsonFieldMapper` machinery in `aws-smithy-json` performs that
-//! mapping during the codec stage; this deserializer simply matches
-//! Smithy member names against document keys.
+//! schema's member list). A key matches a member's Smithy member name,
+//! which is how documents created from a typed shape by
+//! [`DocumentShapeSerializer`] are keyed. A document read from a JSON
+//! protocol that honors `@jsonName` keeps the wire names instead, and
+//! its settings say so through [`DocumentSettings::use_json_name`]. For
+//! such a document, a member with `@jsonName` matches only that name,
+//! and other members match their member names, as in the JSON codec.
+//! Keys that match no member are skipped.
 //!
 //! Members present in the schema but absent from the document are not
 //! reported: generated builders default unset optional members to
@@ -120,7 +120,9 @@ impl<'a> DocumentShapeDeserializer<'a> {
     /// base64 strings and may encode timestamps as strings or
     /// numbers, so a document parsed from JSON via
     /// [`crate::codec::Codec::create_deserializer`] needs settings
-    /// for those round-trips to succeed.
+    /// for those round-trips to succeed. [`Self::read_struct`] matches
+    /// members by `@jsonName` when
+    /// [`DocumentSettings::use_json_name`] returns `true`.
     pub fn new_with_settings(
         document: &'a Document,
         settings: Option<Arc<dyn DocumentSettings>>,
@@ -178,23 +180,35 @@ fn kind_name(d: &Document) -> &'static str {
     }
 }
 
-/// Resolves a wire-level map key to a member of `schema`, matching
-/// against [`Schema::member_name`] directly.
+/// Resolves a document key to a member of `schema`.
 ///
-/// Wire-name resolution for `@jsonName` / `@xmlName`-style renames is
-/// the responsibility of the protocol's deserializer (which has access
-/// to the codec settings); this generic Document walker matches Smithy
-/// member names only. Documents produced by [`DocumentShapeSerializer`](super::DocumentShapeSerializer)
-/// always use Smithy member names, so the round-trip is exact.
+/// With `use_json_name` false, the key matches a member whose
+/// [`Schema::member_name`] equals it. With `use_json_name` true, a member
+/// with `@jsonName` matches only its `@jsonName` value and any other member
+/// matches its member name, the rule of the JSON codec's field mapper. In
+/// both modes the first matching member in schema order wins, and each
+/// member has exactly one name that matches it, so two keys never resolve to
+/// the same member. That keeps a struct read deterministic for an unordered
+/// [`Document::Object`].
 pub(super) fn resolve_member<'s>(
     schema: &'s Schema<'s>,
-    wire_name: &str,
+    key: &str,
+    use_json_name: bool,
 ) -> Option<&'s Schema<'s>> {
-    let idx = schema
-        .members()
-        .iter()
-        .position(|m| m.member_name() == Some(wire_name))?;
+    let idx = schema.members().iter().position(|m| {
+        let name = match m.json_name() {
+            Some(json_name) if use_json_name => Some(json_name.value()),
+            _ => m.member_name(),
+        };
+        name == Some(key)
+    })?;
     schema.member_schema_by_index(idx)
+}
+
+/// Whether `settings` key structure members by `@jsonName`. A document
+/// without settings uses member names.
+pub(super) fn uses_json_name(settings: Option<&dyn DocumentSettings>) -> bool {
+    settings.is_some_and(|settings| settings.use_json_name())
 }
 
 // -- Numeric coercion ------------------------------------------------
@@ -558,8 +572,9 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
             .cursor
             .as_object()
             .ok_or_else(|| type_mismatch("struct (map)", self.cursor))?;
+        let use_json_name = uses_json_name(self.settings.as_deref());
         for (key, value) in map {
-            let Some(member_schema) = resolve_member(schema, key) else {
+            let Some(member_schema) = resolve_member(schema, key, use_json_name) else {
                 // Unknown member — silently ignore. Matches the
                 // tolerant "ignore unknown fields" behavior of the
                 // JSON deserializer.
@@ -1053,6 +1068,201 @@ mod tests {
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let err = deserialize_person(&mut deser).unwrap_err();
         assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+    }
+
+    // -- `@jsonName` keys --------------------------------------------------
+
+    static RENAMED_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Renames", "renamed"),
+        ShapeType::String,
+        "renamed",
+        0,
+    )
+    .with_json_name("Renamed");
+    static PLAIN_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Renames", "plain"),
+        ShapeType::String,
+        "plain",
+        1,
+    );
+    // `first` and `second` swap names on the wire, which Smithy allows.
+    static FIRST_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Renames", "first"),
+        ShapeType::String,
+        "first",
+        2,
+    )
+    .with_json_name("second");
+    static SECOND_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Renames", "second"),
+        ShapeType::String,
+        "second",
+        3,
+    )
+    .with_json_name("first");
+    static NESTED_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Renames", "nested"),
+        ShapeType::Structure,
+        "nested",
+        4,
+    );
+    static RENAMES_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("smithy.example", "Renames"),
+        ShapeType::Structure,
+        &[
+            &RENAMED_MEMBER,
+            &PLAIN_MEMBER,
+            &FIRST_MEMBER,
+            &SECOND_MEMBER,
+            &NESTED_MEMBER,
+        ],
+    );
+    static INNER_MEMBER: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Inner", "inner"),
+        ShapeType::String,
+        "inner",
+        0,
+    )
+    .with_json_name("Inner");
+    static INNER_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("smithy.example", "Inner"),
+        ShapeType::Structure,
+        &[&INNER_MEMBER],
+    );
+
+    /// Settings whose only purpose is to choose the member naming.
+    #[derive(Debug)]
+    struct Naming {
+        use_json_name: bool,
+    }
+
+    impl DocumentSettings for Naming {
+        fn protocol_id(&self) -> &str {
+            "smithy.example#Naming"
+        }
+
+        fn use_json_name(&self) -> bool {
+            self.use_json_name
+        }
+    }
+
+    fn naming(use_json_name: bool) -> Option<Arc<dyn DocumentSettings>> {
+        Some(Arc::new(Naming { use_json_name }))
+    }
+
+    /// Reads a `Renames` structure and returns each member it was given, as
+    /// `(member name, value)` pairs in sorted order.
+    fn read_renames(deser: &mut dyn ShapeDeserializer) -> Vec<(String, String)> {
+        let mut seen = Vec::new();
+        deser
+            .read_struct(&RENAMES_SCHEMA, &mut |member, sub| {
+                let name = member.member_name().unwrap().to_string();
+                if member.member_index() == Some(4) {
+                    sub.read_struct(&INNER_SCHEMA, &mut |inner, value| {
+                        let name = format!("{name}.{}", inner.member_name().unwrap());
+                        seen.push((name, value.read_string(inner)?));
+                        Ok(())
+                    })?;
+                } else {
+                    seen.push((name, sub.read_string(member)?));
+                }
+                Ok(())
+            })
+            .unwrap();
+        seen.sort();
+        seen
+    }
+
+    fn pairs(expected: &[(&str, &str)]) -> Vec<(String, String)> {
+        expected
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .collect()
+    }
+
+    /// A document with both the member name and the `@jsonName` of each
+    /// renamed member. The value says which key it came from.
+    fn renames_document() -> Document {
+        let string = |s: &str| Document::String(s.to_string());
+        Document::Object(HashMap::from([
+            ("renamed".to_string(), string("member name")),
+            ("Renamed".to_string(), string("json name")),
+            ("plain".to_string(), string("plain")),
+            ("first".to_string(), string("key first")),
+            ("second".to_string(), string("key second")),
+            (
+                "nested".to_string(),
+                Document::Object(HashMap::from([
+                    ("inner".to_string(), string("member name")),
+                    ("Inner".to_string(), string("json name")),
+                ])),
+            ),
+        ]))
+    }
+
+    #[test]
+    fn read_struct_matches_member_names_without_json_name_settings() {
+        let document = renames_document();
+        let expected = pairs(&[
+            ("first", "key first"),
+            ("nested.inner", "member name"),
+            ("plain", "plain"),
+            ("renamed", "member name"),
+            ("second", "key second"),
+        ]);
+        for settings in [None, naming(false)] {
+            let mut deser = DocumentShapeDeserializer::new_with_settings(&document, settings);
+            assert_eq!(read_renames(&mut deser), expected);
+        }
+    }
+
+    #[test]
+    fn read_struct_matches_json_names_when_settings_use_them() {
+        let document = renames_document();
+        let mut deser = DocumentShapeDeserializer::new_with_settings(&document, naming(true));
+        // The `renamed` and `inner` keys match nothing, `plain` has no
+        // `@jsonName`, and the `first` key belongs to the `second` member.
+        assert_eq!(
+            read_renames(&mut deser),
+            pairs(&[
+                ("first", "key second"),
+                ("nested.inner", "json name"),
+                ("plain", "plain"),
+                ("renamed", "json name"),
+                ("second", "key first"),
+            ])
+        );
+    }
+
+    #[test]
+    fn resolve_member_prefers_the_first_member_with_the_name() {
+        // Smithy rejects a model whose members share a JSON name, but a
+        // schema built at runtime can have them.
+        static CLAIMS_X: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Clash", "claims_x"),
+            ShapeType::String,
+            "claims_x",
+            0,
+        )
+        .with_json_name("x");
+        static X: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Clash", "x"),
+            ShapeType::String,
+            "x",
+            1,
+        );
+        static CLASH: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Clash"),
+            ShapeType::Structure,
+            &[&CLAIMS_X, &X],
+        );
+        let resolve = |key: &str, use_json_name: bool| {
+            resolve_member(&CLASH, key, use_json_name).and_then(|m| m.member_name())
+        };
+        assert_eq!(resolve("x", true), Some("claims_x"));
+        assert_eq!(resolve("claims_x", true), None);
+        assert_eq!(resolve("x", false), Some("x"));
+        assert_eq!(resolve("claims_x", false), Some("claims_x"));
     }
 
     // -- Round-trip with the serializer ---------------------------------

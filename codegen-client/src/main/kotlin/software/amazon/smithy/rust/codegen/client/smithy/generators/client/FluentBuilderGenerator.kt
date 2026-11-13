@@ -8,6 +8,8 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.documentV2Companions
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.renderDocumentV2FluentMethods
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
@@ -356,6 +358,7 @@ class FluentBuilderGenerator(
                 FluentClientSection.FluentBuilderImpl(operation, errorType),
             )
 
+            val documentV2Companions = documentV2Companions(codegenContext, inputShape).associateBy { it.member.id }
             inputShape.members().forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
@@ -373,6 +376,8 @@ class FluentBuilderGenerator(
 
                 val getterName = member.getterName()
                 renderGetterHelper(member, getterName, optionalInputType)
+
+                documentV2Companions[member.id]?.also { renderDocumentV2FluentMethods(it, runtimeConfig) }
             }
         }
     }

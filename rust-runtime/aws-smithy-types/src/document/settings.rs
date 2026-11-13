@@ -25,7 +25,8 @@ use crate::{DateTime, DocumentError, Number};
 
 /// Protocol-specific settings used by
 /// [`DiscriminatedDocument`](super::DiscriminatedDocument)'s
-/// format-aware accessors.
+/// format-aware accessors, and by the document deserializers in
+/// `aws-smithy-schema` when they read a typed shape from a document.
 ///
 /// Implementations live alongside the format-specific codec they apply
 /// to. For example, the JSON codec's `JsonDocumentSettings` will
@@ -96,5 +97,19 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
             "protocol {} does not support coercing a number to a timestamp",
             self.protocol_id()
         )))
+    }
+
+    /// Whether this protocol keys structure members by their `@jsonName`.
+    ///
+    /// Reading a structure from a document uses this to match the document's keys to
+    /// members. When it returns `true`, a member with the `@jsonName` trait matches only
+    /// its `@jsonName` value, and any other member matches its member name, as the JSON
+    /// codecs do on the wire. When it returns `false`, every member matches its member
+    /// name. A document built from a typed shape uses member names and has no settings.
+    ///
+    /// Defaults to `false`. A JSON protocol that honors `@jsonName`, such as
+    /// `aws.protocols#restJson1`, overrides it to return `true`.
+    fn use_json_name(&self) -> bool {
+        false
     }
 }

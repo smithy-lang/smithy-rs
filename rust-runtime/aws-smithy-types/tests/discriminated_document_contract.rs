@@ -77,6 +77,8 @@ fn builder_methods_and_accessors_keep_their_types() {
     let inner: &Document = document.document();
     assert_eq!(discriminator, Some("com.example#Shape"));
     assert_eq!(settings.unwrap().protocol_id(), "com.example#Protocol");
+    // `Settings` predates `use_json_name`, so it keeps matching members by member name.
+    assert!(!settings.unwrap().use_json_name());
     assert_eq!(inner, &Document::Number(Number::PosInt(1)));
 
     let owned: Document = document.clone().into_document();

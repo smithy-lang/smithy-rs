@@ -758,7 +758,7 @@ fn round_trip_via_explicit_serializer_and_deserializer() {
 // two document types.
 
 mod v2 {
-    use aws_smithy_types::{DiscriminatedDocument, DocumentV2};
+    use aws_smithy_types::{DiscriminatedDocument, Document, DocumentV2, Number};
 
     use super::super::DiscriminatedDocumentV2Ext;
     use super::*;
@@ -930,11 +930,14 @@ mod v2 {
     }
 
     /// A `DocumentV2` built from a shape, downgraded with `to_document_lossy`, reads back as the
-    /// same shape through the `Document` deserializer.
+    /// same shape through the `Document` deserializer when its arbitrary-precision values fit in
+    /// an `f64`.
     #[test]
     fn downgraded_document_reads_back() {
         let original = AllTypes {
             a_timestamp: Some(DateTime::from_secs_f64(1_700_000_000.5)),
+            a_big_integer: Some("12345".parse().unwrap()),
+            a_big_decimal: Some("0.5".parse().unwrap()),
             ..all_types()
         };
         let v2 = DiscriminatedDocument::from_struct_v2(&ALL_TYPES_SCHEMA, &original).unwrap();
@@ -943,9 +946,18 @@ mod v2 {
             downgraded.as_shape(deserialize_all_types).unwrap(),
             original
         );
-        // It is the same `Document` that the `Document` serializer builds.
+
+        // It is the `Document` that the `Document` serializer builds, except that the
+        // arbitrary-precision members are numbers rather than text.
         let v1 = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
-        assert_eq!(downgraded.document(), v1.document());
+        let mut expected = v1.document().as_object().unwrap().clone();
+        assert_eq!(expected["a_big_integer"], Document::String("12345".into()));
+        expected.insert(
+            "a_big_integer".into(),
+            Document::Number(Number::PosInt(12345)),
+        );
+        expected.insert("a_big_decimal".into(), Document::Number(Number::Float(0.5)));
+        assert_eq!(downgraded.document(), &Document::Object(expected));
     }
 
     /// A shape holding a document: each serializer accepts both document types, and each

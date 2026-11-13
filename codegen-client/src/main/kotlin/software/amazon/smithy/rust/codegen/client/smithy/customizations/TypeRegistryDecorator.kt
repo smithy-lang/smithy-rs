@@ -21,8 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
  * Generates a `Client::registry()` accessor returning a `&'static TypeRegistry` containing
  * all user-modeled structure shapes in the service's closure.
  *
- * Per the SEP "Document Type and Type Registries", the primary type registry includes
- * every user-modeled structure shape in the service closure:
+ * The primary type registry includes every user-modeled structure shape in the service closure:
  * - `@error` structures are included — the SEP requires the primary registry to hold
  *   every structure shape, and a shape may live in both the primary registry and the
  *   dedicated `Client::error_registry()`.
@@ -30,6 +29,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
  * - Synthetic operation input/output shapes are excluded — they're codegen artifacts,
  *   not user-modeled types, and would inflate the registry with synthetic shape IDs
  *   that third-party callers would never look up.
+ *
+ * Using the closure deviates from the SEP "Document Type and Type Registries", which asks for
+ * the structures in the service's `shapes` property, and for an empty registry until that
+ * property exists. The Smithy version in use has no such property, and an empty registry
+ * would leave `Client::registry()` with nothing to look up. The closure holds every
+ * structure that this crate generates a type and schema for.
  *
  * Only fires for services in [SchemaSerdeAllowlist]; non-allowlisted services pay no
  * artifact-size cost for this codegen.
