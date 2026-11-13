@@ -1,0 +1,634 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The post-publish build canary's orchestrator: one run per release.
+#
+# A release sends its crates to crates.io one at a time over minutes, and the graph a consumer
+# resolves changes under them as it goes. This watches that window, then keeps checking for a day
+# afterwards, dispatching the legs in `build-canary.yml` and filing a record if anything broke.
+#
+# Two tiers, deliberately, and nothing else -- no standing poll:
+#
+#   dispatch tier   resolves every manifest every 15 minutes and dispatches only the manifests
+#                   whose graph moved. Ends when every declared runtime crate has arrived, or at a
+#                   three-hour ceiling. This is the tier that meets the detection target: a
+#                   dispatched run is created the moment the API call lands, where a scheduled run
+#                   is created a median 11m42s after its cron time and once took 55m33s.
+#
+#   floor tier      24 hourly cycles of the full matrix, diff-gated by nothing. A clean resolve is
+#                   not durable: index propagation lags a release, so a graph that resolved cleanly
+#                   at minute 15 can resolve differently at minute 75.
+#
+# SCOPE. The dispatch and floor tiers need no AWS credential -- they only ask for legs, and a leg
+# writes its verdict to its own job log. Only the final record job touches AWS, and it degrades to
+# writing the record as an artifact when the bucket is not configured, so this workflow is useful
+# before the stack is deployed.
+name: Post-publish watch
+run-name: Post-publish watch - ${{ inputs.tag || github.ref_name }}
+on:
+  push:
+    tags:
+    - 'release-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >
+          The release tag to watch. Defaults to the ref this run was started from, which is what the
+          tag trigger gives. Set it to re-watch a release by hand.
+        type: string
+        default: ''
+permissions:
+  contents: read
+  # To dispatch `build-canary.yml`. No workflow in this repository asked for this before, and it is
+  # the only write permission here: the legs are dispatched, never run inline, because 24 hours of
+  # the full matrix is roughly a thousand jobs, and a matrix is capped at 256 per run.
+  actions: write
+concurrency:
+  # One watch per release. A newer release supersedes an older watch rather than running beside it:
+  # the older release's legs would exit without building anyway, since a leg checks for a newer
+  # release tag before it starts.
+  group: post-publish-watch-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  # Arms this release's alarm, and must finish before any leg runs: a verdict that lands before the
+  # alarm exists is a datapoint on a series nothing is evaluating, which is silence rather than a
+  # page.
+  #
+  # This is the one job whose own failure no alarm can report, because it *is* the alarm. So it
+  # reads the alarm back rather than trusting `put-metric-alarm` to have worked, and the dispatch
+  # tier below deliberately runs even when this fails -- checking without paging still beats not
+  # checking, and the failure is loud here.
+  alarms:
+    name: Arm the alarm
+    # Armed by a repository variable, not by merging. Without this, landing this file would start a
+    # 24-hour, full-matrix watch on the next release as a side effect of a merge -- before the
+    # report-only window that exists to measure its false-positive rate has ever run. Set
+    # `BUILD_CANARY_ENABLED` to `true` to arm it; a manual dispatch always runs, so it can be
+    # exercised before then.
+    if: vars.BUILD_CANARY_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    environment: canary-orchestrator
+    outputs:
+      armed: ${{ steps.arm.outputs.armed }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+    - name: Resolve the tag
+      id: resolve
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        REF_NAME: ${{ github.ref_name }}
+      run: |
+        set -euo pipefail
+        TAG="${INPUT_TAG:-$REF_NAME}"
+        case "$TAG" in
+          release-*) ;;
+          *) echo "::error title=Not a release tag::${TAG} does not look like release-*"; exit 1 ;;
+        esac
+        echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        echo "watching ${TAG}"
+
+    - name: Is the alarm configured
+      id: config
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" && -n "$TICKET_ARN_TEMPLATE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          # The report-only state: legs run and record verdicts, and no alarm watches them. That is
+          # a deliberate stage, not a misconfiguration, which is why this is a notice.
+          echo "::notice title=No alarm::report-only -- verdicts are recorded but nothing pages"
+        fi
+
+    - name: Assume the alarm role
+      if: steps.config.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Arm
+      id: arm
+      if: steps.config.outputs.configured == 'true'
+      env:
+        # This job's own step, not `needs` -- a job cannot reference itself.
+        TAG: ${{ steps.resolve.outputs.tag }}
+        TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
+      run: |
+        set -euo pipefail
+        # Not the default for a `run:` step, and the delete below reads through a pipe.
+        set -o pipefail
+        export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3
+
+        # Severity lives here, in reviewed code, rather than inside the secret, so changing it is a
+        # reviewed edit rather than a secret rotation nobody sees.
+        #
+        # 2.5 pages during business hours, which is enough to prove the notification path exists.
+        # Raising it to 2 is the last step of the rollout, once the false-positive rate has been
+        # measured across real releases.
+        SEVERITY=2.5
+        ALARM="build-canary-${TAG}"
+
+        # A second alarm, watching `Red {Tag, Induced=true}`.
+        #
+        # A leg whose manifest was deliberately rigged -- to prove the chain from a verdict to a
+        # pager actually works -- writes to that series instead of the plain one. Two consequences,
+        # and both are the reason this exists. The release alarm cannot see a rigged leg, so without
+        # this alarm a rigged break would page nobody and prove nothing. And a ticket's dedupe key
+        # *is* its alarm name, so a shared alarm would make a real break landing during the test
+        # collapse into the test's ticket and vanish -- the failure the canary exists to prevent,
+        # reintroduced by the act of testing it.
+        #
+        # Armed on every release rather than only while something is rigged: in normal operation it
+        # watches a series nothing writes to and `notBreaching` holds it at OK, so the standing cost
+        # is one alarm.
+        INDUCED_ALARM="build-canary-induced-${TAG}"
+
+        # Both placeholders must be present before substituting. A template with the severity
+        # hardcoded would make the substitution a no-op, so this job would report the severity above
+        # while cutting at whatever the secret carries.
+        for PLACEHOLDER in '{severity}' '{dedupe}'; do
+          if [[ "$TICKET_ARN_TEMPLATE" != *"$PLACEHOLDER"* ]]; then
+            echo "::error title=Bad template::BUILD_CANARY_TICKET_ARN_TEMPLATE must contain ${PLACEHOLDER}"
+            exit 1
+          fi
+        done
+
+        # Filled once per alarm, because the dedupe key is the alarm name -- which is exactly what
+        # gives the two alarms two separate tickets. Errors go to stderr: this is read through a
+        # command substitution, so anything on stdout would be captured as part of the ARN.
+        fill_action() {
+          local arn="${TICKET_ARN_TEMPLATE//\{severity\}/$SEVERITY}"
+          arn="${arn//\{dedupe\}/$1}"
+          if [[ "$arn" == *'{'* || "$arn" != arn:* ]]; then
+            echo "::error title=Bad ARN::the filled template is not a usable alarm action for $1" >&2
+            return 1
+          fi
+          printf '%s' "$arn"
+        }
+        ACTION_ARN="$(fill_action "$ALARM")"
+        INDUCED_ACTION_ARN="$(fill_action "$INDUCED_ALARM")"
+
+        # Delete every previous release's alarm. Not an optimisation: an alarm left behind keeps
+        # evaluating a series nothing writes to any more, and `notBreaching` holds it at OK forever
+        # while occupying a dedupe key a later release may want. Deleting one with an open ticket
+        # against it is routine here, which is why the self-test checks that the hold is released.
+        aws cloudwatch describe-alarms --alarm-name-prefix build-canary- \
+          --query 'MetricAlarms[].AlarmName' --output text \
+          | tr '\t' '\n' | grep -v '^$' \
+          | while read -r old; do
+              echo "deleting previous alarm ${old}"
+              aws cloudwatch delete-alarms --alarm-names "$old"
+            done
+
+        aws cloudwatch put-metric-alarm \
+          --alarm-name "$ALARM" \
+          --alarm-description "The post-publish canary went red for ${TAG}. RESOLVE_FAIL, COMPILE_FAIL, HARNESS_FAIL or RUNTIME_FAIL mean a published crate does not build for a consumer; INFRA_FAIL means the canary itself broke; Component=watcher means the legs were never dispatched, so the release is unchecked. The dimensioned copy of the Red metric carries the verdict, manifest, leg and toolchain." \
+          --namespace smithy-rs-build-canary \
+          --metric-name Red \
+          --dimensions "Name=Tag,Value=${TAG}" \
+          --statistic Maximum --period 60 \
+          --evaluation-periods 1 --datapoints-to-alarm 1 \
+          --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold \
+          --treat-missing-data notBreaching \
+          --alarm-actions "$ACTION_ARN"
+
+        # The description has to make the test unmistakable from the ticket alone. A deliberate
+        # ticket that reads like a real finding is worse than no test: it spends the responder's
+        # trust, and the next real one is read as another drill.
+        aws cloudwatch put-metric-alarm \
+          --alarm-name "$INDUCED_ALARM" \
+          --alarm-description "THIS IS A TEST. A canary leg for ${TAG} went red on a manifest that was deliberately rigged to break, to prove that a verdict reaches a human. No published crate is implicated by this ticket and no consumer is affected. A real break in this same release would arrive separately, under ${ALARM}. If you were not told to expect this, that itself is the finding: say so, because the alarm should have been withdrawn with the break." \
+          --namespace smithy-rs-build-canary \
+          --metric-name Red \
+          --dimensions "Name=Tag,Value=${TAG}" "Name=Induced,Value=true" \
+          --statistic Maximum --period 60 \
+          --evaluation-periods 1 --datapoints-to-alarm 1 \
+          --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold \
+          --treat-missing-data notBreaching \
+          --alarm-actions "$INDUCED_ACTION_ARN"
+
+        # Read both back. `put-metric-alarm` returning success is not evidence the alarm exists, and
+        # this is the one job no alarm can report the failure of. Half-armed counts as unarmed: the
+        # two alarms are one mechanism, and the tiers below run either way.
+        for NAME in "$ALARM" "$INDUCED_ALARM"; do
+          FOUND="$(aws cloudwatch describe-alarms --alarm-names "$NAME" \
+                     --query 'length(MetricAlarms)' --output text)"
+          if [[ "$FOUND" != "1" ]]; then
+            echo "::error title=Alarm missing::put-metric-alarm succeeded but ${NAME} is not there"
+            exit 1
+          fi
+        done
+        echo "armed=true" >> "$GITHUB_OUTPUT"
+
+        for NAME in "$ALARM" "$INDUCED_ALARM"; do
+          {
+            echo "### Armed \`${NAME}\` at severity ${SEVERITY}"
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # The action verbatim, because how spaces in it are encoded is a question only observation
+          # settles.
+          aws cloudwatch describe-alarms --alarm-names "$NAME" \
+            --query 'MetricAlarms[0].{State:StateValue,Actions:AlarmActions,MissingData:TreatMissingData,Dimensions:Dimensions}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+        done
+
+  dispatch-tier:
+    name: Watch the publish window
+    needs: alarms
+    # Runs whether or not the alarm was armed. Checking a release without being able to page still
+    # beats not checking it -- that is the whole report-only stage -- and an arming failure is
+    # already loud in the job above. What it does require is knowing *which* release: an empty tag
+    # means `alarms` was skipped for being unarmed, or failed before it could resolve one, and
+    # watching an unnamed release is not a thing that can be done.
+    if: always() && needs.alarms.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # To record a failed dispatch, which is the watcher's own verdict about itself.
+      id-token: write
+    # The watcher's own ceiling is 180 minutes. The margin covers checkout, the toolchain install,
+    # and the final tick's work, so GitHub never kills the job before the watcher can report.
+    timeout-minutes: 195
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Watch
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        # The baselines live in RUNNER_TEMP: a baseline never has to outlive the run that wrote it,
+        # because the first tick of a release has no baseline and dispatches everything anyway.
+        cargo run --quiet -- watch \
+          --tag "${TAG}" \
+          --repo "${GITHUB_WORKSPACE}" \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --work-dir "${RUNNER_TEMP}/manifests" \
+          --baselines "${RUNNER_TEMP}/baselines" \
+          > "${RUNNER_TEMP}/watch.json"
+
+    # A failed dispatch is the watcher's own verdict about itself, and it is the one failure here
+    # that leaves a release with no verification at all -- the legs it would have asked for are the
+    # only thing that produces a verdict. So it records a datapoint on the same series a red leg
+    # does, and reaches the same oncall by the same path.
+    #
+    # A ceiling reached with crates still outstanding records nothing: that is a finding to read,
+    # not a release left unchecked, and the floor tier still runs after it.
+    - name: Is the metrics role configured
+      id: metrics
+      if: always()
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Assume the metrics role
+      if: always() && steps.metrics.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Record a failed dispatch
+      if: always() && steps.metrics.outputs.configured == 'true'
+      working-directory: tools/ci-build/canary
+      run: |
+        set -euo pipefail
+        REPORT="${RUNNER_TEMP}/watch.json"
+        # No report means the watcher died before it could write one, which this cannot distinguish
+        # from a watcher that never started. The absent-report warning below is what covers that.
+        if [[ ! -s "$REPORT" ]]; then
+          echo "no watch report, so nothing to record"
+          exit 0
+        fi
+        # The tag comes from the report, not from an input, so a datapoint cannot be recorded
+        # against a release the watcher was not watching.
+        cargo run --quiet -- emit-watch-failure \
+          --report "$REPORT" \
+          --payload-dir "${RUNNER_TEMP}/metric"
+
+    - name: Summarise the window
+      if: always()
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+      run: |
+        set -uo pipefail
+        REPORT="${RUNNER_TEMP}/watch.json"
+        if [[ ! -s "$REPORT" ]]; then
+          echo "::warning title=No watch report::the dispatch tier produced no report"
+          exit 0
+        fi
+        python3 - "$REPORT" "$TAG" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        print(f"### Dispatch tier — {sys.argv[2]}")
+        print()
+        print(f"- stopped: `{r['stopped']}`")
+        print(f"- ticks: {len(r['ticks'])}")
+        print(f"- dispatches: {sum(len(t['dispatched']) for t in r['ticks'])}")
+        print()
+        print("| tick | at | dispatched | unchanged | unresolved |")
+        print("|---|---|---|---|---|")
+        for t in r['ticks']:
+            print("| %d | %ds | %d | %d | %d |" % (
+                t['number'], t['at_secs'], len(t['dispatched']),
+                len(t['unchanged']), len(t['unresolved'])))
+        PY
+
+  floor-tier:
+    name: Floor hour ${{ matrix.hour }}
+    # Runs even if the dispatch tier failed. A watcher bug must not cost a day of checking, which is
+    # the backstop for everything the dispatch tier cannot see -- a third-party publish, or an index
+    # that propagates late.
+    needs: [alarms, dispatch-tier]
+    # Ran-and-finished, either way. Not `always()`, which would also fire when the dispatch tier was
+    # skipped because the canary is unarmed, and start a day of dispatching that nobody asked for.
+    if: needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure'
+    runs-on: ubuntu-latest
+    # An hour of sleeping plus a few minutes of work: a checkout, a toolchain, the gate's own build,
+    # and three API calls. Tight on purpose: without it a stuck step would hold a runner for the
+    # platform's six-hour maximum.
+    timeout-minutes: 75
+    strategy:
+      # One at a time, which is what makes this 24 hourly cycles rather than 24 simultaneous ones.
+      # The hours are interchangeable -- each one sleeps and dispatches the same matrix -- so their
+      # order does not matter, only that one runs at a time.
+      max-parallel: 1
+      # An hour that fails for its own reasons must not cancel the rest: a runner that could not
+      # reach GitHub for one dispatch says nothing about the next. Stopping early when the release
+      # is *known broken* is handled below, deliberately, rather than by failing a job.
+      fail-fast: false
+      matrix:
+        hour: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+               13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    steps:
+    # The gate decides from the verdicts in two runs rather than from a run's conclusion, which is
+    # more than a shell one-liner should be trusted with -- so it is a tested command in this crate,
+    # and that needs a checkout and a toolchain. Done before the sleep so the hour's boundary is not
+    # pushed out by a cold build, and so a job cancelled while sleeping has fetched nothing further.
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Wait out the hour
+      run: sleep 3600
+
+    - name: Dispatch this hour's legs, unless this release has broken something new
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+        HOUR: ${{ matrix.hour }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        # Checked after the sleep rather than before, so the answer is current. A leg run takes
+        # minutes, so by the time an hour starts, the previous hour's verdict is long settled.
+        #
+        # The rule: skip only when a leg went red that was NOT already red before this release. A
+        # leg red for a reason nobody has fixed must not cost hours 2-24, and an infrastructure
+        # failure before the classifier runs must not either. See the `floor` module.
+        LISTING="${RUNNER_TEMP}/floor-runs.json"
+        gh run list --repo "$REPO" --workflow build-canary.yml --limit 100 \
+          --json databaseId,status,conclusion,displayTitle,headBranch,createdAt > "$LISTING"
+
+        # Two lines: this release's newest completed full-matrix run, then the previous release's.
+        # `-` for either when there is none. Read rather than eval'd, so nothing this prints can
+        # become a shell word.
+        cd "${GITHUB_WORKSPACE}/tools/ci-build/canary"
+        { read -r THIS_RUN; read -r BASE_RUN; } < <(
+          cargo run --quiet -- floor-runs --listing "$LISTING" --tag "$TAG"
+        )
+
+        ARGS=()
+        if [[ "$THIS_RUN" != "-" ]]; then
+          gh run view "$THIS_RUN" --repo "$REPO" --json jobs > "${RUNNER_TEMP}/this.json"
+          ARGS+=(--this "${RUNNER_TEMP}/this.json")
+        fi
+        if [[ "$BASE_RUN" != "-" ]]; then
+          gh run view "$BASE_RUN" --repo "$REPO" --json jobs > "${RUNNER_TEMP}/base.json"
+          ARGS+=(--baseline "${RUNNER_TEMP}/base.json")
+        fi
+
+        GATE="$(cargo run --quiet -- floor-gate "${ARGS[@]}")"
+        DISPATCH="$(printf '%s' "$GATE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["dispatch"])')"
+        REASON="$(printf '%s' "$GATE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["reason"])')"
+
+        if [[ "$DISPATCH" != "True" ]]; then
+          # Stopping is a deliberate skip, not a failure. The release has already been reported and
+          # a later hour would dedupe into the same ticket, so continuing buys nothing. Marking the
+          # hour failed would instead claim the canary broke.
+          echo "::notice title=Hour ${HOUR} skipped::${REASON}"
+          echo "hour ${HOUR}: skipped -- ${REASON}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        gh workflow run build-canary.yml \
+          --repo "$REPO" \
+          --ref "$TAG" \
+          -f tier=floor \
+          -f scenario=all \
+          -f tag="$TAG"
+        echo "hour ${HOUR}: dispatched the full matrix against ${TAG} -- ${REASON}" \
+          >> "$GITHUB_STEP_SUMMARY"
+
+  record:
+    name: File the record
+    needs: [alarms, dispatch-tier, floor-tier]
+    # `always()` so a red floor hour still gets its record written -- that is the case the record
+    # exists for -- but still only when the dispatch tier actually ran.
+    if: |
+      always()
+      && (needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      # To assume the record role. Harmless when the role is not configured: the step that uses it
+      # is skipped and the record is kept as an artifact instead.
+      id-token: write
+    # The record role is assumed only from this environment, which is also the only thing
+    # distinguishing this job from a leg -- both run in this repository from the same release tag.
+    environment: canary-orchestrator
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Collect every leg report for this release
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        OUT="${RUNNER_TEMP}/reports"
+        mkdir -p "$OUT"
+
+        # The legs ran in their own dispatched runs, so their artifacts cannot be reached with
+        # `download-artifact`; they have to be fetched per run.
+        gh run list --repo "$REPO" --workflow build-canary.yml --branch "$TAG" \
+          --limit 100 --json databaseId,status \
+          | python3 -c "
+        import json, sys
+        for r in json.load(sys.stdin):
+            if r['status'] == 'completed':
+                print(r['databaseId'])
+        " > "${RUNNER_TEMP}/run-ids.txt"
+
+        echo "fetching artifacts from $(wc -l < "${RUNNER_TEMP}/run-ids.txt") leg run(s)"
+        while read -r id; do
+          # A run whose legs were all superseded uploads nothing, so a failure here is expected and
+          # must not lose the records of the runs that did.
+          gh run download "$id" --repo "$REPO" --dir "${OUT}/${id}" 2>/dev/null \
+            || echo "  run ${id}: no artifacts"
+        done < "${RUNNER_TEMP}/run-ids.txt"
+        echo "collected $(find "$OUT" -name report.json | wc -l) report(s)"
+
+    - name: Fold them into one record
+      id: summarize
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        SERVER: ${{ github.server_url }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        cargo run --quiet -- summarize \
+          --release "${TAG}" \
+          --run-id "${RUN_ID}" \
+          --run-attempt "${RUN_ATTEMPT}" \
+          --run-url "${SERVER}/${REPO}/actions/runs/${RUN_ID}" \
+          --tier dispatch \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --reports "${RUNNER_TEMP}/reports" \
+          --out "${RUNNER_TEMP}/record" \
+          > "${RUNNER_TEMP}/decision.json"
+
+        python3 - "${RUNNER_TEMP}/decision.json" <<'PY' >> "$GITHUB_OUTPUT"
+        import json, sys
+        d = json.load(open(sys.argv[1]))
+        print("record=%s" % ("true" if d["record"] else "false"))
+        print("unchecked=%s" % ("true" if d["unchecked"] else "false"))
+        print("key_prefix=%s" % d["key_prefix"])
+        PY
+        cat "${RUNNER_TEMP}/record/summary.json" >> "$GITHUB_STEP_SUMMARY" || true
+
+    # A release where not one leg reported is the only condition nothing else here can see. Every
+    # other signal starts from a verdict, so with no verdict the alarm sees nothing, the archive
+    # writes nothing, and the per-leg "no report" warning cannot fire -- no leg job ran to print it.
+    # This is the backstop for every cause of that: a dispatch accepted and dropped, a bad scenario
+    # input, the matrix job failing to expand, the runs being cancelled.
+    #
+    # The metrics role is assumed *before* the record role below, because the second assumption
+    # overwrites the first and this one has to happen while these credentials are the ones in
+    # effect. The two are never held at once.
+    - name: Is the metrics role configured
+      id: metrics
+      if: always() && steps.summarize.outputs.unchecked == 'true'
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::error title=Release unchecked::not one leg reported, and no metrics role is configured to say so"
+        fi
+
+    - name: Assume the metrics role
+      if: always() && steps.metrics.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Record that the release was never checked
+      if: always() && steps.metrics.outputs.configured == 'true'
+      working-directory: tools/ci-build/canary
+      run: |
+        set -euo pipefail
+        # Emits nothing unless the decision says every leg is unreported, so this is safe to reach
+        # on any release. The release name comes from the decision rather than from an input, so a
+        # datapoint cannot be recorded against a release the canary was not watching.
+        cargo run --quiet -- emit-unchecked \
+          --decision "${RUNNER_TEMP}/decision.json" \
+          --payload-dir "${RUNNER_TEMP}/metric"
+
+    # Always kept, so the record exists even before the bucket does, and so a green release still
+    # leaves the per-leg outcomes readable for a fortnight.
+    - name: Keep the record as an artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: canary-record
+        path: ${{ runner.temp }}/record
+        retention-days: 14
+        if-no-files-found: warn
+
+    - name: Is the archive configured
+      id: archive
+      env:
+        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
+        ROLE: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$BUCKET" && -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Archive not configured::the record is only an artifact for now"
+        fi
+
+    # Only a release that broke gets a permanent record. How often releases are green is a question
+    # for the metric, which has a datapoint per leg per run and is built for counting.
+    - name: Assume the record role
+      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+        aws-region: us-west-2
+
+    - name: Add it to the archive
+      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
+      env:
+        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
+        KEY_PREFIX: ${{ steps.summarize.outputs.key_prefix }}
+      run: |
+        set -euo pipefail
+        # The role can put and nothing else, and the key carries the release, the run id and the
+        # attempt, so this cannot land on an existing record.
+        aws s3 cp --recursive "${RUNNER_TEMP}/record" "s3://${BUCKET}/${KEY_PREFIX}/" \
+          --only-show-errors
+        echo "archived to s3://${BUCKET}/${KEY_PREFIX}/" >> "$GITHUB_STEP_SUMMARY"

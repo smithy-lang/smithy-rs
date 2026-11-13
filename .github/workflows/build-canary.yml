@@ -1,0 +1,410 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# The post-publish build canary's legs.
+#
+# Each leg resolves a consumer-shaped manifest against crates.io, builds it, and runs the hermetic
+# assertions, then reports one of five verdicts. Scenario x toolchain = one leg; every leg has its
+# own lockfile and its own verdict.
+#
+# SCOPE. A red leg records its verdict as a CloudWatch datapoint, and that is as far as this goes:
+# nothing here creates an alarm, so nothing here can page anyone. Arming the alarm is a separate
+# step, which is what lets the whole matrix run -- and its false-positive rate be measured -- while
+# still unable to wake an oncall.
+#
+# The emission is off until the metrics role is configured as a secret, so before the stack is
+# deployed this workflow behaves exactly as it did when it had no AWS access at all: it writes
+# verdicts to the job log and nothing else. It needs `id-token: write` to assume that role, which is
+# why every workflow input reaches a `run:` block through `env` and never through `${{ }}`
+# interpolation -- an injection here would now reach AWS.
+
+name: Build canary
+run-name: ${{ github.workflow }} - ${{ inputs.scenario }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Which tier dispatched this. Recorded on the run; does not change the legs.
+        type: choice
+        options: [manual, dispatch, floor]
+        default: manual
+      scenario:
+        description: >
+          Leg ids or manifest names, comma-separated, or `all`. One scenario is one or two legs at a
+          couple of minutes where `all` is the whole matrix, which is why the filter exists rather than being
+          a convenience. The watcher passes the set of manifests whose graph moved on a tick, so
+          every name given must match something -- a typo fails rather than quietly running a
+          subset.
+        type: string
+        default: all
+      tag:
+        description: >
+          The release tag these legs were dispatched for. When set, a leg exits without building if a
+          newer release-* tag exists -- a dispatched run outlives the cancellation of its dispatcher.
+          Leave empty outside a release.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the scenario so a release's concurrent manifests never block each other: two ticks that
+  # dispatch different sets land in different groups and run side by side.
+  #
+  # `cancel-in-progress: false` means a repeated dispatch of the *same* set queues behind the run in
+  # flight rather than replacing it, and that direction is deliberate. A cancelled run's legs die
+  # mid-flight: they emit no datapoint and leave no report, so they arrive in the record as
+  # `unreported` and look exactly like legs that died silently -- the one signal reserved for a real
+  # defect. A queued run merely starts late and still reports everything. Overlap should be rare,
+  # since a leg is bounded inside the watcher's tick by an invariant test, but when it happens late
+  # beats lost.
+  group: build-canary-${{ inputs.scenario }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: Expand the matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      legs: ${{ steps.expand.outputs.legs }}
+      count: ${{ steps.expand.outputs.count }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Expand
+      id: expand
+      working-directory: tools/ci-build/canary
+      # Inputs come in through `env`, never interpolated into the script. `${{ }}` is substituted
+      # into the command *text* before any shell sees it, so a value carrying a quote and `$(...)`
+      # would execute on the runner. Dispatch inputs need write access today, but this workflow is
+      # due to gain `id-token: write` and a role to assume, and at that point an injection here
+      # reaches AWS.
+      env:
+        SCENARIO: ${{ inputs.scenario }}
+      run: |
+        set -euo pipefail
+
+        # The span is clamped at the MSRV the crates under test declare, because a compiler below it
+        # is not a supported configuration -- a failure there is a rust-version error, not a break.
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+        echo "stable=${STABLE}  msrv=${MSRV}"
+
+        cargo run --quiet -- gen-matrix --stable "${STABLE}" --msrv "${MSRV}" > /tmp/all.json
+
+        # Filter by leg id or manifest name. `all` keeps everything.
+        python3 - "${SCENARIO}" <<'PY' > /tmp/legs.json
+        import json, sys
+        want = sys.argv[1]
+        all_legs = json.load(open('/tmp/all.json'))
+        if want == 'all':
+            # `all` is what a *release* runs, which excludes the test-registry legs. Those resolve a
+            # graph committed to this repository rather than the published one, so they can say
+            # nothing about a release -- and including them would cost twenty-five runs a release,
+            # one per floor hour plus the publish window, re-proving a graph that only moves when
+            # somebody commits a change to it. They are dispatched by name instead.
+            json.dump([l for l in all_legs if not l.get('test_registry')], sys.stdout)
+            raise SystemExit(0)
+
+        # A comma-separated list, not a single value: the watcher dispatches the *set* of manifests
+        # whose graph moved on a tick, and one run carrying four manifests is cheaper than four runs
+        # and keeps their legs on one page.
+        wanted = [w.strip() for w in want.split(',') if w.strip()]
+
+        # Every name has to match something. Checking each one rather than only checking that the
+        # result is non-empty matters once this takes a list: a misspelled manifest among four
+        # correct ones would otherwise run three legs and look like a success, and the manifest
+        # nobody built is exactly the one that would have been red.
+        known = {l['id'] for l in all_legs} | {l['manifest'] for l in all_legs}
+        missing = [w for w in wanted if w not in known]
+        if missing:
+            sys.exit(f"no leg or manifest named {', '.join(missing)}. "
+                     f"available: {', '.join(sorted(known))}")
+
+        json.dump([l for l in all_legs if l['id'] in wanted or l['manifest'] in wanted],
+                  sys.stdout)
+        PY
+
+        echo "legs=$(cat /tmp/legs.json)" >> "$GITHUB_OUTPUT"
+        echo "count=$(python3 -c 'import json;print(len(json.load(open("/tmp/legs.json"))))')" >> "$GITHUB_OUTPUT"
+
+    - name: Summarise
+      env:
+        SCENARIO: ${{ inputs.scenario }}
+        TIER: ${{ inputs.tier }}
+        COUNT: ${{ steps.expand.outputs.count }}
+        LEGS: ${{ steps.expand.outputs.legs }}
+      run: |
+        {
+          echo "### Build canary matrix"
+          echo ""
+          echo "${COUNT} legs, tier \`${TIER}\`, scenario \`${SCENARIO}\`"
+          echo ""
+          echo "| leg | runner | target | toolchain | checks |"
+          echo "|---|---|---|---|---|"
+          printf '%s' "${LEGS}" | python3 -c "
+        import json,sys
+        for l in json.load(sys.stdin):
+            print('| %s | %s | %s | %s | %s |' % (
+                l['id'], l['runner'], l.get('target') or 'native',
+                l['toolchain_version'], l['checks']))
+        "
+        } >> "$GITHUB_STEP_SUMMARY"
+
+  leg:
+    name: ${{ matrix.leg.id }}
+    needs: matrix
+    # Strictly under the watcher's 15-minute dispatch tick, so a leg can never outlive the tick that
+    # dispatched it and be re-dispatched alongside itself. The leg tracks its own clock and emits
+    # before this is reached -- a job killed here would run no further steps and so report nothing.
+    timeout-minutes: 14
+    runs-on: ${{ matrix.leg.runner }}
+    permissions:
+      contents: read
+      # To assume the metrics role and record a verdict. Deliberately not environment-gated: a
+      # condition on the `environment` claim would *require* every single leg to declare
+      # one, and they also run by hand outside a release. The namespace condition on the role is
+      # what bounds this instead.
+      id-token: write
+    strategy:
+      # Every leg has its own verdict, so one red leg must not cancel the rest.
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        leg: ${{ fromJSON(needs.matrix.outputs.legs) }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install musl tools
+      if: contains(matrix.leg.target, 'musl')
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+    - name: Run the leg
+      working-directory: tools/ci-build/canary
+      shell: bash
+      env:
+        LEG_ID: ${{ matrix.leg.id }}
+        RELEASE_TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+
+        # Built as an array rather than interpolated, so an empty tag contributes no argument at all
+        # and a non-empty one is a single argv entry whatever it contains.
+        TAG_ARG=()
+        if [[ -n "${RELEASE_TAG}" ]]; then
+          TAG_ARG=(--tag "${RELEASE_TAG}")
+        fi
+
+        # Exits 0 for green or INFRA_FAIL, non-zero for any hard verdict. That is how a floor hour's
+        # exit code carries the stop decision, since `needs:` can see success or failure but never why.
+        cargo run --quiet -- run-leg \
+          --leg "${LEG_ID}" \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --dir "${RUNNER_TEMP}/leg" \
+          "${TAG_ARG[@]}" \
+          | tee "${RUNNER_TEMP}/report.json"
+
+    - name: Report the verdict
+      id: report
+      if: always()
+      shell: bash
+      env:
+        LEG_ID: ${{ matrix.leg.id }}
+      run: |
+        set -uo pipefail
+        REPORT="${RUNNER_TEMP}/report.json"
+        # An absent report is the signature of a leg that died without saying anything, which is a
+        # defect in the canary rather than a finding about the release. It stays a warning, and a
+        # leg that skipped on purpose reports `stopped: superseded` rather than nothing, so this
+        # does not fire on every leg of a superseded release and get tuned out.
+        if [[ ! -s "$REPORT" ]]; then
+          echo "::warning title=No report::the leg produced no report, which is itself a defect"
+          exit 0
+        fi
+        python3 - "$REPORT" "$LEG_ID" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        verdict = r.get('verdict')
+        if r.get('stopped') == 'superseded':
+            print(f"### {sys.argv[2]} — SUPERSEDED")
+            print()
+            print("A newer `release-*` tag exists, so this leg did not build and reached no")
+            print("verdict. It emits no datapoint.")
+            raise SystemExit(0)
+        print(f"### {sys.argv[2]} — {verdict or 'GREEN'}")
+        print()
+        if verdict:
+            d = r.get('diagnosis') or {}
+            print(f"- step: `{r.get('failed_step')}`")
+            print(f"- stopped: `{r.get('stopped')}`")
+            if d.get('codes'):
+                print(f"- codes: {', '.join('`%s`' % c for c in d['codes'])}")
+            if d.get('summary'):
+                print(f"- {d['summary']}")
+            if d.get('target'):
+                at = f" at `{d['target_version']}`" if d.get('target_version') else ''
+                print(f"- cargo target: `{d['target']}`{at}")
+            # The versions, which is what a responder actually needs: a code and a message say
+            # what the compiler objected to, not which published pair produced it.
+            for dup in d.get('duplicate_versions') or []:
+                versions = ' and '.join(f"`{v}`" for v in dup['versions'])
+                print(f"- **two versions of `{dup['name']}` in one graph**: {versions}")
+        print()
+        print("| step | attempt | ok | verdict |")
+        print("|---|---|---|---|")
+        for a in r['attempts']:
+            print("| `%s` | %d | %s | %s |" % (
+                a['step'], a['attempt'], 'yes' if a['succeeded'] else 'no',
+                a.get('verdict') or ''))
+        PY
+
+        # Two separate questions, because three outcomes have to be told apart and one flag cannot.
+        #
+        # `verdict` is non-empty only for a leg that blamed something, and decides whether the
+        # rendered crate is worth keeping. Read from the report rather than from the leg's exit
+        # code, which cannot tell green from INFRA_FAIL -- both exit 0 so the window continues.
+        #
+        # `superseded` marks a leg that never built because a newer release exists. It is not green
+        # and not red, and nothing downstream should collect anything for it.
+        eval "$(python3 -c "
+        import json, sys
+        r = json.load(open(sys.argv[1]))
+        superseded = r.get('stopped') == 'superseded'
+        print('VERDICT=%s' % ('' if superseded else (r.get('verdict') or '')))
+        print('SUPERSEDED=%s' % ('true' if superseded else 'false'))
+        " "$REPORT")"
+        echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
+        echo "superseded=${SUPERSEDED}" >> "$GITHUB_OUTPUT"
+
+    # Only for a leg that reached a verdict. Without this the one artifact that says *what* broke is
+    # discarded with RUNNER_TEMP when the job ends: a page would name `COMPILE_FAIL` and an error
+    # code, and the exact set of published versions that produced it would be gone. Re-resolving
+    # later gives a different graph, because crates.io has moved on -- which is the whole reason a
+    # leg is a snapshot.
+    # The join to the paging chain. A verdict becomes a datapoint here; everything before this point
+    # writes to a job log, which pages nobody.
+    #
+    # Off until the role is configured, so this is inert before the stack is deployed. Reads the
+    # secret through a step output rather than an `if:` on the secret itself, because an empty
+    # `role-to-assume` fails the credentials action rather than skipping it.
+    - name: Is the metrics role configured
+      id: metrics
+      if: always() && steps.report.outputs.verdict != ''
+      env:
+        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+      run: |
+        set -euo pipefail
+        if [[ -n "$ROLE" ]]; then
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Metrics not configured::the verdict stays in the log for now"
+        fi
+
+    - name: Assume the metrics role
+      if: always() && steps.metrics.outputs.configured == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        aws-region: us-west-2
+
+    # A green leg and a superseded one record nothing, which is why this is gated on a verdict at
+    # all: that silence is what the alarm's `notBreaching` treatment turns back into OK, and a zero
+    # would make "it passed" indistinguishable from "it died without reporting".
+    - name: Record the verdict
+      if: always() && steps.metrics.outputs.configured == 'true'
+      working-directory: tools/ci-build/canary
+      env:
+        TAG: ${{ inputs.tag }}
+        LEG_ID: ${{ matrix.leg.id }}
+      run: |
+        set -euo pipefail
+        # Outside a release there is no tag, and the tag is the dimension the alarm watches. Rather
+        # than invent one -- which would land a datapoint on a series somebody's alarm may be
+        # watching -- record nothing and say so.
+        if [[ -z "${TAG}" ]]; then
+          echo "::notice title=No tag::${LEG_ID} ran outside a release, so its verdict is not recorded"
+          exit 0
+        fi
+        STABLE="$(rustc +stable --version | cut -d' ' -f2)"
+        MSRV="$(grep '^rust.msrv=' "${GITHUB_WORKSPACE}/gradle.properties" | cut -d= -f2)"
+        cargo run --quiet -- emit-verdict \
+          --report "${RUNNER_TEMP}/report.json" \
+          --tag "${TAG}" \
+          --stable "${STABLE}" \
+          --msrv "${MSRV}" \
+          --payload-dir "${RUNNER_TEMP}/metric"
+
+    # Two different things, collected under two different conditions.
+    #
+    # The report goes up for *every* leg, green included, because the durable record folded together
+    # at the end of a run has to be able to tell a green leg from one that died without saying
+    # anything. Inferring success from silence would bury the only evidence of a canary defect in
+    # the one artifact meant to outlive the run. It is about a kilobyte.
+    #
+    # The rendered crate goes up only for a leg that reached a verdict: it is the reproduction
+    # recipe, and a green leg has nothing to reproduce.
+    - name: Collect the evidence
+      if: always() && steps.report.outputs.superseded != 'true'
+      shell: bash
+      env:
+        LEG_ID: ${{ matrix.leg.id }}
+        VERDICT: ${{ steps.report.outputs.verdict }}
+      run: |
+        set -euo pipefail
+        OUT="${RUNNER_TEMP}/evidence"
+        mkdir -p "$OUT"
+
+        # An absent report is already warned about by the previous step. Write a placeholder so the
+        # upload still happens: an artifact saying "this leg produced nothing" is itself the
+        # finding, and `if-no-files-found: error` would otherwise fail the step and lose it.
+        if [[ -s "${RUNNER_TEMP}/report.json" ]]; then
+          cp "${RUNNER_TEMP}/report.json" "$OUT/"
+        else
+          echo "the leg produced no report, which is a defect in the canary" > "$OUT/NO-REPORT.txt"
+        fi
+
+        if [[ -n "$VERDICT" ]]; then
+          # `target/` is not copied: hundreds of megabytes of build output that says nothing the
+          # log does not.
+          cd "${RUNNER_TEMP}/leg"
+          cp Cargo.toml "$OUT/"
+          # A resolve that never succeeded leaves no lockfile at all, so this is expected to be
+          # missing for a RESOLVE_FAIL leg -- the evidence there is the manifest plus the step's
+          # stderr in the job log.
+          if [[ -f Cargo.lock ]]; then
+            cp Cargo.lock "$OUT/"
+          else
+            echo "no Cargo.lock: the resolve never succeeded" > "$OUT/NO-LOCKFILE.txt"
+          fi
+          for dir in src tests; do
+            [[ -d "$dir" ]] && cp -r "$dir" "$OUT/"
+          done
+        fi
+
+        echo "collected $(du -sh "$OUT" | cut -f1) for ${LEG_ID}"
+        find "$OUT" -type f | sed "s|$OUT/|  |"
+
+    - name: Upload the evidence
+      if: always() && steps.report.outputs.superseded != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: evidence-${{ matrix.leg.id }}
+        path: ${{ runner.temp }}/evidence
+        # Long enough to investigate a release, short enough not to accumulate. The 24-hour window
+        # plus a working week. Shorter than the record written to the archive, which is the point of
+        # that record: the diagnosis has to outlive the thing holding the lockfile.
+        retention-days: 14
+        if-no-files-found: error

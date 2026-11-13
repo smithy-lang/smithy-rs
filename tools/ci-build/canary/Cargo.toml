@@ -1,0 +1,29 @@
+[package]
+name = "canary"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = """
+Post-publish build canary for smithy-rs. Expands the scenario table into the leg matrix, renders a
+leg's manifest, runs the leg, and classifies the outcome into a verdict.
+"""
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow = "1.0.87"
+clap = { version = "4.4.11", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Index entries carry a sha256 of the `.crate` file, and cargo refuses one that does not match.
+# Already a direct dependency of `crate-hasher` and `publisher`, so this adds no new third-party
+# code to the repository.
+sha256 = "1"
+toml = "0.8"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+# Only for `tests/workflows.rs`, which asserts invariants of this canary's GitHub workflows.
+# A dev-dependency rather than a dependency: nothing the canary *runs* reads YAML. Same version as
+# `changelogger` and `smithy-rs-tool-common` already use, so this adds no new crate to the build.
+serde_yaml = "0.9"
