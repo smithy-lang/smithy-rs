@@ -8,10 +8,8 @@
 //!
 //! S3 is fully exempt in the shared timeout-defaults artifact: a large `PutObject` cannot produce
 //! response headers until the whole body has been sent, so any read bound would fire on normal
-//! usage. The assertion below runs with the opt-in **set**, which is what makes it meaningful — it
-//! proves the exemption holds, rather than merely that the gate is closed.
-//!
-//! This lives in its own test binary because the opt-in is process state.
+//! usage. The assertion runs at `latest()`, which is what makes it meaningful — it proves the
+//! exemption holds rather than merely that the gate is closed.
 
 use std::time::Duration;
 
@@ -20,14 +18,10 @@ use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::NeverClient;
 use aws_smithy_types::retry::RetryConfig;
 
-const OPT_IN: &str = "AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026";
-
 #[tokio::test]
-async fn s3_stays_exempt_even_with_the_opt_in_set() {
+async fn s3_stays_exempt_at_latest() {
     use aws_smithy_runtime_api::client::http::{http_client_fn, HttpClient};
     use std::sync::{Arc, Mutex};
-
-    std::env::set_var(OPT_IN, "true");
 
     let captured: Arc<Mutex<Option<Option<Duration>>>> = Default::default();
     let sink = captured.clone();
@@ -58,8 +52,6 @@ async fn s3_stays_exempt_even_with_the_opt_in_set() {
         .unwrap()
         .take()
         .expect("the HTTP client must have been asked for a connector");
-
-    std::env::remove_var(OPT_IN);
 
     assert_eq!(
         seen, None,

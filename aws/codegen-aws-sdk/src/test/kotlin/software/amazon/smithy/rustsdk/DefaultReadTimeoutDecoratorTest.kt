@@ -142,19 +142,6 @@ class DefaultReadTimeoutDecoratorTest {
                 seen.expect("the HTTP client must have been asked for a connector")
             }
 
-            /// Turns the opt-in on for this process.
-            ///
-            /// The gate is read when the client is constructed, so this has to run first. Every
-            /// test in a given binary writes the same value, so the write cannot be observed
-            /// racing; the unset case therefore needs a binary of its own rather than a flag flip.
-            ///
-            /// The harness is shared by every binary below, and the one covering the opt-in states
-            /// sets the variable itself, so this is unused there.
-            ##[allow(dead_code)]
-            fn enable_opt_in() {
-                std::env::set_var("AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026", "true");
-            }
-
             /// Sends one request through `builder` and returns the resolved `TimeoutConfig`.
             async fn resolve(builder: $moduleName::config::Builder) -> TimeoutConfig {
                 let capture = CaptureTimeoutConfig::default();
@@ -185,7 +172,6 @@ class DefaultReadTimeoutDecoratorTest {
                     """
                     #{tokio_test}
                     async fn general_default_is_five_minutes() {
-                        enable_opt_in();
                         let resolved = resolve($moduleName::Config::builder()).await;
                         assert_eq!(
                             resolved.read_timeout(),
@@ -201,7 +187,6 @@ class DefaultReadTimeoutDecoratorTest {
 
                     #{tokio_test}
                     async fn the_default_reaches_the_http_connector() {
-                        enable_opt_in();
                         assert_eq!(
                             connector_read_timeout($moduleName::Config::builder()).await,
                             Some(Duration::from_secs(300)),
@@ -211,7 +196,6 @@ class DefaultReadTimeoutDecoratorTest {
 
                     #{tokio_test}
                     async fn a_caller_value_wins() {
-                        enable_opt_in();
                         let resolved = resolve(
                             $moduleName::Config::builder().timeout_config(
                                 TimeoutConfig::builder()
@@ -227,57 +211,52 @@ class DefaultReadTimeoutDecoratorTest {
                 )
             }
 
-            // Separate binary: this is the only case that needs the variable *unset*, and the
-            // process environment cannot hold both states at once.
-            crate.integrationTest("default_read_timeout_opt_in") {
+            crate.integrationTest("default_read_timeout_behavior_version") {
                 harness(moduleName, ctx.runtimeConfig)
                 rustTemplate(
                     """
-                    /// Every state of the opt-in, in one test.
-                    ///
-                    /// These cases are deliberately not separate `##[test]`s: the gate is process
-                    /// state, and separate tests in one binary would run on parallel threads and
-                    /// overwrite each other's value. One sequential test is the only way to observe
-                    /// more than one state without pulling in a serialization crate.
+                    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+
+                    /// Pinning below the gate keeps the previous behavior.
                     #{tokio_test}
-                    async fn the_opt_in_gates_the_default() {
-                        // Unset: off, and the connect default survives.
-                        std::env::remove_var("AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026");
-                        let resolved = resolve($moduleName::Config::builder()).await;
+                    ##[allow(deprecated)]
+                    async fn absent_below_the_gate() {
+                        let resolved = resolve(
+                            $moduleName::Config::builder()
+                                .behavior_version(BehaviorVersion::v2026_11_10()),
+                        )
+                        .await;
                         assert_eq!(
                             resolved.read_timeout(),
                             None,
-                            "the default must stay off until the caller opts in"
+                            "a caller pinned below the gate must keep the old behavior"
                         );
                         assert_eq!(
                             resolved.connect_timeout(),
                             Some(Duration::from_millis(3100)),
-                            "leaving the read default off must not disturb the connect default"
+                            "and must still get the connect default from its own version"
                         );
                         assert_eq!(
-                            connector_read_timeout($moduleName::Config::builder()).await,
+                            connector_read_timeout(
+                                $moduleName::Config::builder()
+                                    .behavior_version(BehaviorVersion::v2026_11_10()),
+                            )
+                            .await,
                             None,
                             "and nothing may reach the connector either"
                         );
+                    }
 
-                        // Anything that is not `true` is ignored rather than rejected, so a typo
-                        // cannot stop a client from being built.
-                        for value in ["", "false", "1", "yes", "0", "truthy"] {
-                            std::env::set_var("AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026", value);
+                    /// Naming the gate version explicitly turns it on, as does `latest()`.
+                    #{tokio_test}
+                    async fn present_at_and_above_the_gate() {
+                        for bv in [BehaviorVersion::v2026_11_17(), BehaviorVersion::latest()] {
+                            let resolved =
+                                resolve($moduleName::Config::builder().behavior_version(bv)).await;
                             assert_eq!(
-                                resolve($moduleName::Config::builder()).await.read_timeout(),
-                                None,
-                                "{value:?} must not enable the default"
-                            );
-                        }
-
-                        // Case-insensitive `true`.
-                        for value in ["true", "True", "TRUE", "tRuE"] {
-                            std::env::set_var("AWS_ENABLE_DEFAULT_SOCKET_TIMEOUT_2026", value);
-                            assert_eq!(
-                                resolve($moduleName::Config::builder()).await.read_timeout(),
+                                resolved.read_timeout(),
                                 Some(Duration::from_secs(300)),
-                                "{value:?} must enable the default"
+                                "the default applies from the gate version onward"
                             );
                         }
                     }
@@ -298,7 +277,6 @@ class DefaultReadTimeoutDecoratorTest {
                     """
                     #{tokio_test}
                     async fn partial_tier_is_fifteen_minutes() {
-                        enable_opt_in();
                         let resolved = resolve($moduleName::Config::builder()).await;
                         assert_eq!(
                             resolved.read_timeout(),
@@ -309,7 +287,6 @@ class DefaultReadTimeoutDecoratorTest {
 
                     #{tokio_test}
                     async fn the_tier_reaches_the_http_connector() {
-                        enable_opt_in();
                         assert_eq!(
                             connector_read_timeout($moduleName::Config::builder()).await,
                             Some(Duration::from_secs(900))
@@ -332,7 +309,6 @@ class DefaultReadTimeoutDecoratorTest {
                     """
                     #{tokio_test}
                     async fn no_read_timeout_reaches_the_http_connector() {
-                        enable_opt_in();
                         assert_eq!(
                             connector_read_timeout($moduleName::Config::builder()).await,
                             None,
@@ -342,8 +318,6 @@ class DefaultReadTimeoutDecoratorTest {
 
                     #{tokio_test}
                     async fn exempt_service_has_no_read_timeout() {
-                        // With the opt-in on, so this proves exemption rather than a closed gate.
-                        enable_opt_in();
                         let resolved = resolve($moduleName::Config::builder()).await;
                         assert_eq!(
                             resolved.read_timeout(),
@@ -376,7 +350,6 @@ class DefaultReadTimeoutDecoratorTest {
                     """
                     #{tokio_test}
                     async fn overridden_service_gets_the_general_default() {
-                        enable_opt_in();
                         let resolved = resolve($moduleName::Config::builder()).await;
                         assert_eq!(
                             resolved.read_timeout(),
@@ -387,7 +360,6 @@ class DefaultReadTimeoutDecoratorTest {
 
                     #{tokio_test}
                     async fn the_override_reaches_the_http_connector() {
-                        enable_opt_in();
                         assert_eq!(
                             connector_read_timeout($moduleName::Config::builder()).await,
                             Some(Duration::from_secs(300))

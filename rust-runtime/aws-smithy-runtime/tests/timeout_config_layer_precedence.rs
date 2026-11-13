@@ -81,28 +81,9 @@ fn resolve(
     caller_client_config: Option<TimeoutConfig>,
     caller_operation_override: Option<TimeoutConfig>,
 ) -> TimeoutConfig {
-    resolve_at(
-        BehaviorVersion::latest(),
-        service_default,
-        caller_client_config,
-        caller_operation_override,
-    )
-}
-
-/// [`resolve`] at a caller-chosen behavior version.
-///
-/// The service default is gated on an environment variable rather than a behavior version, so it can
-/// reach a client pinned below `v2026_01_12` — where the runtime installs `TimeoutConfig::disabled()`
-/// instead of a connect default. That combination is only reachable since the gate changed.
-fn resolve_at(
-    behavior_version: BehaviorVersion,
-    service_default: Option<Duration>,
-    caller_client_config: Option<TimeoutConfig>,
-    caller_operation_override: Option<TimeoutConfig>,
-) -> TimeoutConfig {
     let defaults: Vec<SharedRuntimePlugin> = default_timeout_config_plugin_v2(
         &DefaultPluginParams::new()
-            .with_behavior_version(behavior_version)
+            .with_behavior_version(BehaviorVersion::latest())
             .with_retry_partition_name("dontcare"),
     )
     .into_iter()
@@ -326,77 +307,5 @@ fn disabling_a_timeout_also_truncates_the_merge_chain() {
         without_service_default.connect_timeout(),
         None,
         "pre-existing independently of this design"
-    );
-}
-
-/// A service default reaching a client pinned below `v2026_01_12`.
-///
-/// Only reachable since the gate became an environment variable. Below `v2026_01_12` the runtime
-/// installs `TimeoutConfig::disabled()` rather than a connect default, so this is the one
-/// combination where the service default lands on top of an all-disabled lower layer.
-///
-/// The service default still applies. The connect timeout stays absent, which is correct for that
-/// behavior version — it predates the connect default — but note the consequence: the merged config
-/// now reports `has_timeouts() == true` where previously it reported `false`. That is what
-/// `validate_timeout_config` keys on, and
-/// [`opting_in_below_v2026_01_12_makes_has_timeouts_true`] covers it.
-#[test]
-#[allow(deprecated)]
-fn service_default_applies_below_v2026_01_12() {
-    let tc = resolve_at(
-        BehaviorVersion::v2025_01_17(),
-        Some(SERVICE_READ),
-        None,
-        None,
-    );
-    assert_eq!(
-        tc.read_timeout(),
-        Some(SERVICE_READ),
-        "the opt-in is not gated on behavior version, so the default must still apply"
-    );
-    assert_eq!(
-        tc.connect_timeout(),
-        None,
-        "v2025_01_17 predates the connect default, so there is none to preserve"
-    );
-}
-
-/// The validator-visible consequence of the case above.
-///
-/// `validate_timeout_config` rejects a client when `has_timeouts()` is true and no `sleep_impl` is
-/// configured. Below `v2026_01_12` an un-opted-in client resolves to an all-disabled config, where
-/// `has_timeouts()` is false and that check cannot fire. Opting in flips it to true.
-///
-/// So a caller who disabled the `rt-tokio` feature, set no `sleep_impl`, and pinned below
-/// `v2026_01_12` moves from "builds" to "fails to build" by setting the variable. That population
-/// is narrow — at `v2026_01_12` and later the connect default already makes `has_timeouts()` true,
-/// so such a caller already had to supply a `sleep_impl` — and it is opt-in either way, but it is
-/// the one new way this change can break client construction.
-#[test]
-#[allow(deprecated)]
-fn opting_in_below_v2026_01_12_makes_has_timeouts_true() {
-    let without = resolve_at(BehaviorVersion::v2025_01_17(), None, None, None);
-    assert!(
-        !without.has_timeouts(),
-        "an un-opted-in client below v2026_01_12 resolves to all-disabled"
-    );
-
-    let with = resolve_at(
-        BehaviorVersion::v2025_01_17(),
-        Some(SERVICE_READ),
-        None,
-        None,
-    );
-    assert!(
-        with.has_timeouts(),
-        "opting in makes has_timeouts() true, which is what validate_timeout_config keys on"
-    );
-
-    // Why that population is narrow: from v2026_01_12 the connect default already makes
-    // has_timeouts() true with no opt-in at all, so a caller without a sleep_impl was already
-    // required to supply one. Only callers pinned below that version see a change here.
-    assert!(
-        resolve_at(BehaviorVersion::v2026_01_12(), None, None, None).has_timeouts(),
-        "the connect default alone already requires a sleep_impl from v2026_01_12"
     );
 }
