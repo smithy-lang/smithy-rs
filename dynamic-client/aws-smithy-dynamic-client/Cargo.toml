@@ -18,6 +18,7 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio"]
 
 [dependencies]
 aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async" }
+aws-smithy-dynamic-client-api = { path = "../aws-smithy-dynamic-client-api" }
 aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
 aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
 aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }

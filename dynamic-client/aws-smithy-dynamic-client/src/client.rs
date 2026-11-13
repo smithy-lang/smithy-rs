@@ -190,8 +190,17 @@ impl DynamicClientBuilder {
         if let Some(retry_partition) = self.config.retry_partition {
             layer.store_put(retry_partition);
         }
-        let runtime_plugins = runtime_plugins(components, layer, behavior_version, service.name())
-            .with_client_plugins(self.config.runtime_plugins);
+        let mut runtime_plugins =
+            runtime_plugins(components, layer, behavior_version, service.name());
+        if !self.config.puts.is_empty() {
+            let mut puts = Layer::new("DynamicClientPuts");
+            for put in &self.config.puts {
+                (put.store)(&mut puts);
+            }
+            runtime_plugins = runtime_plugins
+                .with_client_plugin(StaticRuntimePlugin::new().with_config(puts.freeze()));
+        }
+        let runtime_plugins = runtime_plugins.with_client_plugins(self.config.runtime_plugins);
         // The same check generated clients run when they are created.
         let mut cfg = ConfigBag::base();
         let components = runtime_plugins
@@ -294,7 +303,10 @@ fn service_ids(model: &Model) -> Vec<ShapeId> {
 #[cfg(test)]
 mod tests {
     use super::DynamicClient;
-    use crate::config::{BehaviorVersion, Config, RetryConfig, RetryPartition, TimeoutConfig};
+    use crate::config::{
+        Applies, BehaviorVersion, Config, ConfigKey, EndpointBuiltIn, RetryConfig, RetryPartition,
+        TimeoutConfig,
+    };
     use crate::error::BuildErrorKind;
     #[cfg(not(feature = "default-https-client"))]
     use crate::error::MissingHttpClient;
@@ -310,7 +322,7 @@ mod tests {
     use aws_smithy_schema::protocol::{
         ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
     };
-    use aws_smithy_types::config_bag::{FrozenLayer, Layer};
+    use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreAppend, StoreReplace};
     use std::path::PathBuf;
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -725,5 +737,53 @@ mod tests {
             .unwrap();
         let (cfg, _) = client.client_config();
         assert_eq!(2, cfg.load::<RetryConfig>().unwrap().max_attempts());
+    }
+
+    // Test keys, defined here as a plugin crate would define its own.
+    #[derive(Clone, Debug, PartialEq)]
+    struct ReplaceKey(u32);
+
+    impl Storable for ReplaceKey {
+        type Storer = StoreReplace<Self>;
+    }
+
+    impl ConfigKey for ReplaceKey {
+        const APPLIES: &'static [Applies] = &[];
+    }
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct AppendKey(u32);
+
+    impl Storable for AppendKey {
+        type Storer = StoreAppend<Self>;
+    }
+
+    impl ConfigKey for AppendKey {
+        const APPLIES: &'static [Applies] = &[Applies::EndpointBuiltIn(EndpointBuiltIn::USE_FIPS)];
+    }
+
+    #[test]
+    fn a_later_put_of_a_replace_key_wins() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().put(ReplaceKey(1)).put(ReplaceKey(2)))
+            .config(Config::builder().put(ReplaceKey(3)))
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!(Some(&ReplaceKey(3)), cfg.load::<ReplaceKey>());
+    }
+
+    #[test]
+    fn every_put_of_an_append_key_is_kept() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().put(AppendKey(1)).put(AppendKey(2)))
+            .config(Config::builder().put(AppendKey(3)))
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        let values: Vec<&AppendKey> = cfg.load::<AppendKey>().collect();
+        assert_eq!(vec![&AppendKey(3), &AppendKey(2), &AppendKey(1)], values);
     }
 }

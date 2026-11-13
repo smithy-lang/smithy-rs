@@ -74,6 +74,7 @@ version = "0.1.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-cbor",
+ "aws-smithy-dynamic-client-api",
  "aws-smithy-http-client",
  "aws-smithy-json",
  "aws-smithy-lang",
@@ -88,6 +89,10 @@ dependencies = [
 [[package]]
 name = "aws-smithy-dynamic-client-api"
 version = "0.1.0"
+dependencies = [
+ "aws-smithy-lang",
+ "aws-smithy-types",
+]
 
 [[package]]
 name = "aws-smithy-http"

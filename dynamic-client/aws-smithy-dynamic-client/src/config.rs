@@ -5,6 +5,10 @@
 
 //! Configuration for a dynamic client.
 
+pub use aws_smithy_dynamic_client_api::config_key::{
+    Applies, ConfigKey, EndpointBuiltIn, InvalidEndpointBuiltIn,
+};
+
 pub use aws_smithy_runtime::client::retries::RetryPartition;
 pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_smithy_types::retry::RetryConfig;
@@ -17,6 +21,9 @@ use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor}
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
+use aws_smithy_types::config_bag::Layer;
+use std::fmt;
+use std::sync::Arc;
 
 /// Configuration for a [`DynamicClient`](crate::DynamicClient).
 ///
@@ -55,6 +62,8 @@ pub struct Builder {
     pub(crate) retry_classifiers: Vec<SharedRetryClassifier>,
     pub(crate) interceptors: Vec<SharedInterceptor>,
     pub(crate) runtime_plugins: Vec<SharedRuntimePlugin>,
+    // The values set by `put`, in the order they were set. A key set twice is listed twice.
+    pub(crate) puts: Vec<Put>,
 }
 
 impl Builder {
@@ -150,6 +159,22 @@ impl Builder {
         self
     }
 
+    /// Sets a typed value for a setting that only some models use.
+    ///
+    /// The Rust type is the key. A key stored with `StoreReplace` keeps one value, and a later
+    /// `put` wins. A key stored with `StoreAppend` keeps every `put`.
+    pub fn put<T: ConfigKey>(mut self, value: T) -> Self
+    where
+        T::Storer: sealed::Sealed<T>,
+    {
+        self.puts.push(Put {
+            store: Arc::new(move |layer| {
+                <T::Storer as sealed::Sealed<T>>::store(layer, value.clone(), sealed::Token)
+            }),
+        });
+        self
+    }
+
     /// Builds the config.
     pub fn build(self) -> Config {
         Config { builder: self }
@@ -160,6 +185,7 @@ impl Builder {
         self.retry_classifiers.append(&mut later.retry_classifiers);
         self.interceptors.append(&mut later.interceptors);
         self.runtime_plugins.append(&mut later.runtime_plugins);
+        self.puts.append(&mut later.puts);
         Self {
             behavior_version: later.behavior_version.or(self.behavior_version),
             protocol: later.protocol.or(self.protocol),
@@ -172,8 +198,48 @@ impl Builder {
             retry_classifiers: self.retry_classifiers,
             interceptors: self.interceptors,
             runtime_plugins: self.runtime_plugins,
+            puts: self.puts,
         }
     }
+}
+
+// A value set by `put`. At `build()`, the value is written into a layer by `store`.
+#[derive(Clone)]
+pub(crate) struct Put {
+    pub(crate) store: Arc<dyn Fn(&mut Layer) + Send + Sync>,
+}
+
+impl fmt::Debug for Put {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Put").finish_non_exhaustive()
+    }
+}
+
+// How `put` stores a key: `StoreReplace` keys with `store_put`, and `StoreAppend` keys with
+// `store_append`. The trait is sealed, so new store kinds can be added without a breaking change.
+mod sealed {
+    use aws_smithy_types::config_bag::{Layer, Storable, StoreAppend, StoreReplace};
+
+    pub trait Sealed<T> {
+        fn store(layer: &mut Layer, value: T, _token: Token);
+    }
+
+    impl<T: Storable<Storer = StoreReplace<T>>> Sealed<T> for StoreReplace<T> {
+        fn store(layer: &mut Layer, value: T, _token: Token) {
+            layer.store_put(value);
+        }
+    }
+
+    impl<T: Storable<Storer = StoreAppend<T>>> Sealed<T> for StoreAppend<T> {
+        fn store(layer: &mut Layer, value: T, _token: Token) {
+            layer.store_append(value);
+        }
+    }
+
+    // A public type in a private module: no other crate can name it, so no other crate can
+    // create one or call `store`.
+    #[derive(Debug)]
+    pub struct Token;
 }
 
 impl From<Config> for Builder {
