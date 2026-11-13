@@ -108,6 +108,7 @@ impl DynamicClientBuilder {
         components.set_http_client(self.config.http_client);
         components.set_sleep_impl(self.config.sleep_impl);
         components.set_time_source(self.config.time_source);
+        components.set_identity_cache(self.config.identity_cache);
         for retry_classifier in self.config.retry_classifiers {
             components.push_retry_classifier(retry_classifier);
         }
@@ -136,6 +137,9 @@ impl DynamicClientBuilder {
         if let Some(retry_partition) = self.config.retry_partition {
             layer.store_put(retry_partition);
         }
+        if let Some(stalled_stream_protection) = self.config.stalled_stream_protection {
+            layer.store_put(stalled_stream_protection);
+        }
         #[cfg(feature = "aws")]
         if let Some(region) = self.config.region {
             layer.store_put(region);
@@ -143,6 +147,14 @@ impl DynamicClientBuilder {
         #[cfg(feature = "aws")]
         if let Some(invocation_id_generator) = self.config.invocation_id_generator {
             layer.store_put(invocation_id_generator);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(disable_clock_skew_correction) = self.config.disable_clock_skew_correction {
+            layer.store_put(
+                aws_runtime::service_clock_skew::DisableClockSkewCorrection::from(
+                    disable_clock_skew_correction,
+                ),
+            );
         }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
@@ -258,7 +270,7 @@ fn service_ids(model: &Model) -> Vec<ShapeId> {
 mod tests {
     use crate::config::{
         Applies, BehaviorVersion, Config, ConfigKey, EndpointBuiltIn, RetryConfig, RetryPartition,
-        TimeoutConfig,
+        StalledStreamProtectionConfig, TimeoutConfig,
     };
     use crate::error::BuildErrorKind;
     #[cfg(not(feature = "default-https-client"))]
@@ -269,14 +281,24 @@ mod tests {
     use aws_smithy_http_client::test_util::NeverClient;
     use aws_smithy_lang::runtime_schema::Materialization;
     use aws_smithy_lang::ShapeId;
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::identity::{
+        IdentityFuture, ResolveCachedIdentity, SharedIdentityResolver,
+    };
     use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_runtime_api::client::interceptors::Intercept;
     use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_runtime_api::client::runtime_components::{
+        RuntimeComponents, RuntimeComponentsBuilder,
+    };
     use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
     use aws_smithy_schema::protocol::{
         ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
     };
-    use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreAppend, StoreReplace};
+    use aws_smithy_types::config_bag::{
+        ConfigBag, FrozenLayer, Layer, Storable, StoreAppend, StoreReplace,
+    };
+    use std::fmt;
     use std::path::PathBuf;
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -693,6 +715,67 @@ mod tests {
         assert_eq!(2, cfg.load::<RetryConfig>().unwrap().max_attempts());
     }
 
+    #[derive(Debug)]
+    struct CacheRejected;
+
+    impl fmt::Display for CacheRejected {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("the test cache rejected the config")
+        }
+    }
+
+    impl std::error::Error for CacheRejected {}
+
+    // An identity cache that fails config validation, so a failed build shows the cache is set.
+    #[derive(Debug)]
+    struct RejectingCache;
+
+    impl ResolveCachedIdentity for RejectingCache {
+        fn resolve_cached_identity<'a>(
+            &'a self,
+            _resolver: SharedIdentityResolver,
+            _runtime_components: &'a RuntimeComponents,
+            _config_bag: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
+            IdentityFuture::ready(Err("unused".into()))
+        }
+
+        fn validate_base_client_config(
+            &self,
+            _runtime_components: &RuntimeComponentsBuilder,
+            _cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            Err(CacheRejected.into())
+        }
+    }
+
+    #[test]
+    fn uses_the_identity_cache_from_the_config() {
+        let err = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().identity_cache(RejectingCache))
+            .build()
+            .unwrap_err();
+        assert!(matches!(err.kind(), BuildErrorKind::InvalidConfig { .. }));
+        let source = std::error::Error::source(&err).expect("the cache error is the source");
+        assert!(source.downcast_ref::<CacheRejected>().is_some());
+    }
+
+    #[test]
+    fn stores_the_stalled_stream_protection_config() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(
+                Config::builder()
+                    .stalled_stream_protection(StalledStreamProtectionConfig::disabled()),
+            )
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        let config = cfg.load::<StalledStreamProtectionConfig>().unwrap();
+        assert!(!config.is_enabled());
+    }
+
     // Test keys, defined here as a plugin crate would define its own.
     #[derive(Clone, Debug, PartialEq)]
     struct ReplaceKey(u32);
@@ -744,12 +827,14 @@ mod tests {
     #[cfg(feature = "aws")]
     mod aws {
         use super::{builder, model};
-        use crate::config::{Config, Region};
+        use crate::config::{Config, Region, RetryConfig, StalledStreamProtectionConfig};
         use aws_credential_types::Credentials;
         use aws_runtime::invocation_id::{
             InvocationId, InvocationIdGenerator, SharedInvocationIdGenerator,
         };
+        use aws_runtime::service_clock_skew::DisableClockSkewCorrection;
         use aws_smithy_runtime_api::box_error::BoxError;
+        use aws_types::SdkConfig;
 
         #[derive(Debug)]
         struct FixedInvocationId;
@@ -778,6 +863,56 @@ mod tests {
             assert!(components
                 .identity_resolver(&aws_runtime::auth::sigv4::SCHEME_ID)
                 .is_some());
+        }
+
+        #[test]
+        fn stores_the_clock_skew_correction_setting() {
+            let client = builder()
+                .model_file(model("weather.json"))
+                .config(Config::builder().disable_clock_skew_correction(true))
+                .build()
+                .unwrap();
+            let (cfg, _) = client.client_config();
+            assert!(cfg
+                .load::<DisableClockSkewCorrection>()
+                .unwrap()
+                .is_disabled());
+        }
+
+        #[test]
+        fn copies_the_settings_of_an_sdk_config() {
+            let sdk_config = SdkConfig::builder()
+                .region(Region::new("us-west-2"))
+                .retry_config(RetryConfig::standard().with_max_attempts(7))
+                .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
+                .disable_clock_skew_correction(true)
+                .build();
+            let client = builder()
+                .model_file(model("weather.json"))
+                .config(&sdk_config)
+                .build()
+                .unwrap();
+            let (cfg, _) = client.client_config();
+            assert_eq!(Some(&Region::new("us-west-2")), cfg.load::<Region>());
+            assert_eq!(7, cfg.load::<RetryConfig>().unwrap().max_attempts());
+            let stalled_stream_protection = cfg.load::<StalledStreamProtectionConfig>().unwrap();
+            assert!(!stalled_stream_protection.is_enabled());
+            assert!(cfg
+                .load::<DisableClockSkewCorrection>()
+                .unwrap()
+                .is_disabled());
+        }
+
+        #[test]
+        fn an_sdk_config_keeps_the_settings_it_leaves_unset() {
+            let client = builder()
+                .model_file(model("weather.json"))
+                .config(Config::builder().region(Region::new("us-west-2")))
+                .config(&SdkConfig::builder().build())
+                .build()
+                .unwrap();
+            let (cfg, _) = client.client_config();
+            assert_eq!(Some(&Region::new("us-west-2")), cfg.load::<Region>());
         }
 
         #[test]

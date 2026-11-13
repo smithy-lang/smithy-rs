@@ -9,8 +9,10 @@ pub use aws_smithy_dynamic_client_api::config_key::{
     Applies, ConfigKey, EndpointBuiltIn, InvalidEndpointBuiltIn,
 };
 
+pub use aws_smithy_runtime::client::identity::IdentityCache;
 pub use aws_smithy_runtime::client::retries::RetryPartition;
 pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 #[cfg(feature = "aws")]
@@ -19,6 +21,7 @@ pub use aws_types::region::Region;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::client::http::{HttpClient, SharedHttpClient};
+use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
 use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
@@ -30,6 +33,7 @@ use std::sync::Arc;
 use {
     aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider},
     aws_runtime::invocation_id::{InvocationIdGenerator, SharedInvocationIdGenerator},
+    aws_types::SdkConfig,
 };
 
 /// Configuration for a [`DynamicClient`](crate::DynamicClient).
@@ -66,6 +70,8 @@ pub struct Builder {
     pub(crate) retry_config: Option<RetryConfig>,
     pub(crate) timeout_config: Option<TimeoutConfig>,
     pub(crate) retry_partition: Option<RetryPartition>,
+    pub(crate) identity_cache: Option<SharedIdentityCache>,
+    pub(crate) stalled_stream_protection: Option<StalledStreamProtectionConfig>,
     pub(crate) retry_classifiers: Vec<SharedRetryClassifier>,
     pub(crate) interceptors: Vec<SharedInterceptor>,
     pub(crate) runtime_plugins: Vec<SharedRuntimePlugin>,
@@ -77,6 +83,8 @@ pub struct Builder {
     pub(crate) credentials_provider: Option<SharedCredentialsProvider>,
     #[cfg(feature = "aws")]
     pub(crate) invocation_id_generator: Option<SharedInvocationIdGenerator>,
+    #[cfg(feature = "aws")]
+    pub(crate) disable_clock_skew_correction: Option<bool>,
 }
 
 impl Builder {
@@ -148,6 +156,26 @@ impl Builder {
         self
     }
 
+    /// Sets the identity cache that holds resolved identities, such as credentials, until they
+    /// expire.
+    ///
+    /// Without one, the default lazy cache is used.
+    pub fn identity_cache(mut self, identity_cache: impl ResolveCachedIdentity + 'static) -> Self {
+        self.identity_cache = Some(SharedIdentityCache::new(identity_cache));
+        self
+    }
+
+    /// Sets the stalled stream protection config.
+    ///
+    /// Without one, the default for the behavior version is used.
+    pub fn stalled_stream_protection(
+        mut self,
+        stalled_stream_protection: StalledStreamProtectionConfig,
+    ) -> Self {
+        self.stalled_stream_protection = Some(stalled_stream_protection);
+        self
+    }
+
     /// Adds a retry classifier. Each call adds one more.
     pub fn retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
         self.retry_classifiers
@@ -216,6 +244,16 @@ impl Builder {
         self
     }
 
+    /// Sets whether clock skew correction is disabled.
+    ///
+    /// Clock skew correction is on by default. It adjusts the request time by the difference
+    /// between the client's clock and the server's clock.
+    #[cfg(feature = "aws")]
+    pub fn disable_clock_skew_correction(mut self, disable_clock_skew_correction: bool) -> Self {
+        self.disable_clock_skew_correction = Some(disable_clock_skew_correction);
+        self
+    }
+
     /// Builds the config.
     pub fn build(self) -> Config {
         Config { builder: self }
@@ -236,6 +274,10 @@ impl Builder {
             retry_config: later.retry_config.or(self.retry_config),
             timeout_config: later.timeout_config.or(self.timeout_config),
             retry_partition: later.retry_partition.or(self.retry_partition),
+            identity_cache: later.identity_cache.or(self.identity_cache),
+            stalled_stream_protection: later
+                .stalled_stream_protection
+                .or(self.stalled_stream_protection),
             retry_classifiers: self.retry_classifiers,
             interceptors: self.interceptors,
             runtime_plugins: self.runtime_plugins,
@@ -248,6 +290,10 @@ impl Builder {
             invocation_id_generator: later
                 .invocation_id_generator
                 .or(self.invocation_id_generator),
+            #[cfg(feature = "aws")]
+            disable_clock_skew_correction: later
+                .disable_clock_skew_correction
+                .or(self.disable_clock_skew_correction),
         }
     }
 }
@@ -294,5 +340,34 @@ mod sealed {
 impl From<Config> for Builder {
     fn from(config: Config) -> Self {
         config.builder
+    }
+}
+
+/// Copies the settings of an [`SdkConfig`] into a builder.
+///
+/// A setting the `SdkConfig` leaves unset stays unset in the builder. So a builder made from an
+/// `SdkConfig` can be layered over another config with
+/// [`config`](crate::client::DynamicClientBuilder::config), and only the settings the `SdkConfig`
+/// sets win.
+#[cfg(feature = "aws")]
+impl From<&SdkConfig> for Builder {
+    // TODO(dynamic-client): Copy the other `SdkConfig` settings, such as `endpoint_url`,
+    // `use_fips`, `use_dual_stack`, and `app_name`, when the config gets setters for them.
+    fn from(sdk_config: &SdkConfig) -> Self {
+        Builder {
+            behavior_version: sdk_config.behavior_version(),
+            protocol: sdk_config.protocol(),
+            http_client: sdk_config.http_client(),
+            sleep_impl: sdk_config.sleep_impl(),
+            time_source: sdk_config.time_source(),
+            retry_config: sdk_config.retry_config().cloned(),
+            timeout_config: sdk_config.timeout_config().cloned(),
+            identity_cache: sdk_config.identity_cache(),
+            stalled_stream_protection: sdk_config.stalled_stream_protection(),
+            region: sdk_config.region().cloned(),
+            credentials_provider: sdk_config.credentials_provider(),
+            disable_clock_skew_correction: sdk_config.disable_clock_skew_correction(),
+            ..Default::default()
+        }
     }
 }
