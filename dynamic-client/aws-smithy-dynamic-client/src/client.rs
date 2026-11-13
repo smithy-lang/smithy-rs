@@ -7,7 +7,7 @@
 
 use crate::config;
 use crate::error::{BuildError, MissingHttpClient};
-use crate::protocol::{detect, protocol_traits, AWS_QUERY};
+use crate::protocol::{detect_protocol, protocol_traits, AWS_QUERY};
 use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::{Model, ShapeId};
@@ -152,7 +152,7 @@ impl DynamicClientBuilder {
             .map_err(BuildError::schema_build_failed)?;
         let protocol = match self.config.protocol {
             Some(protocol) => protocol,
-            None => detect(&service_view).ok_or_else(|| {
+            None => detect_protocol(&service_view).ok_or_else(|| {
                 BuildError::protocol_not_found(
                     service.clone(),
                     protocol_traits(&model, &service_view),

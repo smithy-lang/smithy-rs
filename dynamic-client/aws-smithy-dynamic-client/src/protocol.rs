@@ -76,7 +76,7 @@ const BUILT_IN_PROTOCOLS: &[(ShapeId, CreateProtocol)] = &[
 ];
 
 // The first built-in protocol, in priority order, whose protocol trait the service has.
-pub(crate) fn detect(service: &ServiceView<'_>) -> Option<SharedClientProtocol> {
+pub(crate) fn detect_protocol(service: &ServiceView<'_>) -> Option<SharedClientProtocol> {
     BUILT_IN_PROTOCOLS
         .iter()
         .find(|(id, _)| service.has_trait(id))
