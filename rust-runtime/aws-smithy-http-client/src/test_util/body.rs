@@ -71,7 +71,9 @@ impl http_body_1x::Body for ChannelBody {
     }
 
     fn is_end_stream(&self) -> bool {
-        self.rx.is_closed()
+        // The channel closes when the sender is dropped, which can happen while
+        // frames are still buffered. The body only ends once those are read too.
+        self.rx.is_closed() && self.rx.is_empty()
     }
 
     fn size_hint(&self) -> SizeHint {

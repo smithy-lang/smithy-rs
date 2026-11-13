@@ -260,3 +260,90 @@ impl HttpClient for RecordingClient {
         Some(ConnectorMetadata::new("recording-client", None))
     }
 }
+
+#[cfg(all(test, feature = "default-client"))]
+mod tests {
+    use super::RecordingClient;
+    use crate::test_util::dvr::{Action, Direction};
+    use aws_smithy_runtime_api::client::http::HttpConnector;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::byte_stream::ByteStream;
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// Serves one HTTP/1.1 request: reads the headers and exactly `content-length` body bytes,
+    /// then responds with the body it received.
+    async fn echo_one_request(listener: TcpListener) {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 1024];
+        let header_end = loop {
+            let n = socket.read(&mut chunk).await.unwrap();
+            assert!(n > 0, "connection closed before the request headers ended");
+            buf.extend_from_slice(&chunk[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                break pos + 4;
+            }
+        };
+        let headers = String::from_utf8_lossy(&buf[..header_end]).to_lowercase();
+        let content_length: usize = headers
+            .lines()
+            .find_map(|line| line.strip_prefix("content-length:"))
+            .map(|v| v.trim().parse().unwrap())
+            .unwrap_or(0);
+        while buf.len() < header_end + content_length {
+            let n = socket.read(&mut chunk).await.unwrap();
+            assert!(n > 0, "connection closed before the request body ended");
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        let body = &buf[header_end..header_end + content_length];
+        let response = format!("HTTP/1.1 200 OK\r\ncontent-length: {}\r\n\r\n", body.len());
+        socket.write_all(response.as_bytes()).await.unwrap();
+        socket.write_all(body).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn records_request_with_body_through_default_client() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(echo_one_request(listener));
+
+        let client = RecordingClient::new(crate::Connector::builder().build_http());
+        let request_body = r#"{"TableName":"test"}"#;
+        let request = HttpRequest::try_from(
+            http_1x::Request::post(format!("http://{addr}/"))
+                .header("content-length", request_body.len())
+                .body(SdkBody::from(request_body))
+                .unwrap(),
+        )
+        .unwrap();
+
+        let response = tokio::time::timeout(Duration::from_secs(5), async {
+            let mut response = client.call(request).await.unwrap();
+            let body = std::mem::replace(response.body_mut(), SdkBody::taken());
+            ByteStream::new(body).collect().await.unwrap().into_bytes()
+        })
+        .await
+        .expect("request through RecordingClient timed out");
+        assert_eq!(request_body.as_bytes(), &response[..]);
+        server.await.unwrap();
+
+        let events = client.events();
+        let recorded = |direction: Direction| {
+            events
+                .iter()
+                .filter_map(|e| match &e.action {
+                    Action::Data { data, direction: d } if *d == direction => {
+                        Some(data.copy_to_vec())
+                    }
+                    _ => None,
+                })
+                .flatten()
+                .collect::<Vec<u8>>()
+        };
+        assert_eq!(request_body.as_bytes(), recorded(Direction::Request));
+        assert_eq!(request_body.as_bytes(), recorded(Direction::Response));
+    }
+}
