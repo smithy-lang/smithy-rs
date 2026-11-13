@@ -161,9 +161,10 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
 /// Double → BigDecimal`. `Byte`, `IntEnum`, `Short`, and `Float` are
 /// skipped per the SEP.
 ///
-/// Private helper for [`DiscriminatedDocumentExt::shape_type`] on
-/// numeric documents.
-fn number_shape_type(n: &Number) -> ShapeType {
+/// Shared by [`DiscriminatedDocumentExt::shape_type`] and
+/// [`DiscriminatedDocumentV2Ext::shape_type_v2`](super::DiscriminatedDocumentV2Ext::shape_type_v2)
+/// for numeric documents.
+pub(super) fn number_shape_type(n: &Number) -> ShapeType {
     match n {
         Number::PosInt(v) => {
             if *v <= i32::MAX as u64 {

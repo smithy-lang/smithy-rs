@@ -9,11 +9,16 @@ use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
 use aws_smithy_types::primitive::Encoder;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document};
+use aws_smithy_types::{
+    BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, DocumentV2,
+};
 
 use crate::codec::JsonCodecSettings;
 
+use std::borrow::Cow;
 use std::sync::Arc;
+
+mod document_v2;
 
 /// `true` iff `s` is non-empty and consists entirely of ASCII digits.
 fn is_ascii_digits(s: &str) -> bool {
@@ -225,10 +230,10 @@ impl JsonSerializer {
     /// path needs no grammar check: any text at all is representable
     /// once escaped, so it cannot produce malformed JSON.
     ///
-    /// This is driven by the schema: only `bigInteger` / `bigDecimal`
-    /// shapes reach it. A `Document` carries no schema and has no
-    /// arbitrary-precision variant, so `write_document` never takes this
-    /// path.
+    /// `bigInteger` / `bigDecimal` shapes reach it through their schemas.
+    /// A `Document` has no arbitrary-precision variant, so `write_document`
+    /// never takes this path. `write_document_v2` applies the same rules to
+    /// `DocumentV2::BigInteger` and `DocumentV2::BigDecimal`.
     ///
     /// Nothing is appended to the output when validation fails, so a
     /// rejected value leaves no truncated fragment behind.
@@ -242,28 +247,32 @@ impl JsonSerializer {
             crate::serialize::JsonValueWriter::new(&mut self.output).string(text);
             return Ok(());
         }
-        let normalized;
-        let text = if is_json_number(text) {
-            text
-        } else {
-            normalized = self
-                .settings
-                .normalize_arbitrary_precision()
-                .then(|| to_json_number(text))
-                .flatten()
-                .ok_or_else(|| {
-                    SerdeError::invalid_input(format!(
-                        "arbitrary-precision value {text:?} is not a JSON number, so it cannot be \
-                         emitted as a raw JSON number; enable \
-                         `JsonCodecSettings::use_string_for_arbitrary_precision` to send it as a \
-                         JSON string, or `normalize_arbitrary_precision` to rewrite it"
-                    ))
-                })?;
-            &normalized
-        };
+        let text = self.json_number_text(text)?;
         self.prefix(schema);
-        self.output.push_str(text);
+        self.output.push_str(&text);
         Ok(())
+    }
+
+    /// Returns arbitrary-precision `text` as it should appear on the raw-number path: unchanged
+    /// if it is a JSON number, rewritten if `normalize_arbitrary_precision` is set and it can be,
+    /// and otherwise an [`SerdeError::InvalidInput`] error.
+    fn json_number_text<'t>(&self, text: &'t str) -> Result<Cow<'t, str>, SerdeError> {
+        if is_json_number(text) {
+            return Ok(Cow::Borrowed(text));
+        }
+        self.settings
+            .normalize_arbitrary_precision()
+            .then(|| to_json_number(text))
+            .flatten()
+            .map(Cow::Owned)
+            .ok_or_else(|| {
+                SerdeError::invalid_input(format!(
+                    "arbitrary-precision value {text:?} is not a JSON number, so it cannot be \
+                     emitted as a raw JSON number; enable \
+                     `JsonCodecSettings::use_string_for_arbitrary_precision` to send it as a \
+                     JSON string, or `normalize_arbitrary_precision` to rewrite it"
+                ))
+            })
     }
 
     fn write_json_value(&mut self, doc: &Document) -> Result<(), SerdeError> {
@@ -615,6 +624,15 @@ impl ShapeSerializer for JsonSerializer {
         self.prefix(schema);
         self.write_json_value(value)?;
         Ok(())
+    }
+
+    fn write_document_v2(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &DocumentV2,
+    ) -> Result<(), SerdeError> {
+        self.prefix(schema);
+        self.write_json_value_v2(value)
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {

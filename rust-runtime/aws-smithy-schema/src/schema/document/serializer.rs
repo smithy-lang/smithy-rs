@@ -36,7 +36,9 @@
 
 use std::collections::HashMap;
 
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, Number};
+use aws_smithy_types::{
+    BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, DocumentV2, Number,
+};
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use crate::Schema;
@@ -415,6 +417,22 @@ impl ShapeSerializer for DocumentShapeSerializer {
         self.commit_value(schema, value.clone())
     }
 
+    /// Stores [`DocumentV2::to_document_lossy`], so this never fails for the value's contents.
+    ///
+    /// The lossy encodings are the ones this serializer already uses for typed values: a blob
+    /// becomes a base64 string, a timestamp becomes epoch seconds, and an arbitrary-precision
+    /// number becomes its text. A `DocumentV2` member therefore produces the same `Document`
+    /// as a typed member holding the same value, and
+    /// [`DiscriminatedDocument::from_struct`](crate::document::DiscriminatedDocumentExt::from_struct)
+    /// keeps working for shapes that hold `DocumentV2` values.
+    fn write_document_v2(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &DocumentV2,
+    ) -> Result<(), SerdeError> {
+        self.commit_value(schema, value.to_document_lossy())
+    }
+
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.commit_value(schema, Document::Null)
     }
@@ -672,6 +690,56 @@ mod tests {
         let doc = ser.finish().unwrap();
         let map = doc.document().as_object().unwrap();
         assert!(matches!(map.get("foo"), Some(Document::String(s)) if s == "bar"));
+    }
+
+    // -- Finish error paths ---------------------------------------------
+
+    #[test]
+    fn write_document_v2_stores_the_lossy_downgrade() {
+        use aws_smithy_types::document::DocumentObject;
+        use aws_smithy_types::{Blob, DocumentV2};
+        use std::str::FromStr;
+
+        let timestamp = DateTime::from_secs_f64(1_700_000_000.5);
+        let big_integer = BigInteger::from_str("123456789012345678901234567890").unwrap();
+        let value = DocumentV2::Object(DocumentObject::from([
+            ("blob".to_string(), DocumentV2::Blob(b"raw".to_vec())),
+            ("timestamp".to_string(), DocumentV2::Timestamp(timestamp)),
+            (
+                "items".to_string(),
+                DocumentV2::Array(vec![DocumentV2::BigInteger(big_integer.clone())]),
+            ),
+        ]));
+        let mut ser = DocumentShapeSerializer::new();
+        ser.write_document_v2(&prelude::DOCUMENT, &value).unwrap();
+        let doc = ser.finish().unwrap();
+        assert_eq!(doc.document(), &value.to_document_lossy());
+
+        // The same values written as typed members produce the same `Document`.
+        let mut ser = DocumentShapeSerializer::new();
+        ser.write_blob(&prelude::BLOB, Blob::new(b"raw".to_vec()))
+            .unwrap();
+        assert_eq!(
+            Some(ser.finish().unwrap().document()),
+            doc.document().as_object().unwrap().get("blob")
+        );
+        let mut ser = DocumentShapeSerializer::new();
+        ser.write_timestamp(&prelude::TIMESTAMP, &timestamp)
+            .unwrap();
+        assert_eq!(
+            Some(ser.finish().unwrap().document()),
+            doc.document().as_object().unwrap().get("timestamp")
+        );
+        let mut ser = DocumentShapeSerializer::new();
+        ser.write_big_integer(&prelude::BIG_INTEGER, &big_integer)
+            .unwrap();
+        assert_eq!(
+            Some(ser.finish().unwrap().document()),
+            doc.document().as_object().unwrap()["items"]
+                .as_array()
+                .unwrap()
+                .first()
+        );
     }
 
     // -- Finish error paths ---------------------------------------------

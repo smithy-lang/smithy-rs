@@ -17,7 +17,7 @@ use crate::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
 use aws_smithy_runtime_api::http::header_parse::{self, quote_header_value};
-use aws_smithy_types::Document;
+use aws_smithy_types::{Document, DocumentV2};
 use std::borrow::Cow;
 
 /// Serializer for converting Smithy types to strings (for HTTP headers, query params, labels).
@@ -215,6 +215,18 @@ impl ShapeSerializer for HttpStringSerializer {
         &mut self,
         _schema: &Schema<'_>,
         _value: &Document,
+    ) -> Result<(), SerdeError> {
+        Err(SerdeError::unsupported(
+            "documents cannot be serialized to strings",
+        ))
+    }
+
+    // Returns the `write_document` error for every value. The default would return it only
+    // for values `Document` can represent, and a conversion error for the rest.
+    fn write_document_v2(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &DocumentV2,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::unsupported(
             "documents cannot be serialized to strings",
@@ -479,6 +491,21 @@ impl crate::codec::Codec for HttpStringCodec {
 mod tests {
     use super::*;
     use crate::prelude::*;
+
+    #[test]
+    fn document_v2_gets_the_write_document_error_whatever_its_contents() {
+        for value in [
+            DocumentV2::String("text".to_owned()),
+            DocumentV2::Blob(b"bytes".to_vec()),
+        ] {
+            let mut ser = HttpStringSerializer::new();
+            let err = ser.write_document_v2(&DOCUMENT, &value).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "unsupported operation: documents cannot be serialized to strings"
+            );
+        }
+    }
 
     #[test]
     fn test_serialize_boolean() {

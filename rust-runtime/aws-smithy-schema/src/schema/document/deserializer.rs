@@ -139,7 +139,7 @@ impl<'a> DocumentShapeDeserializer<'a> {
 /// when no protocol settings are attached; the inverse of what
 /// [`DocumentShapeSerializer`](super::DocumentShapeSerializer) writes
 /// for a `timestamp` shape.
-fn number_to_timestamp(n: &Number) -> Result<DateTime, SerdeError> {
+pub(super) fn number_to_timestamp(n: &Number) -> Result<DateTime, SerdeError> {
     match n {
         Number::PosInt(v) => i64::try_from(*v)
             .map(DateTime::from_secs)
@@ -186,7 +186,10 @@ fn kind_name(d: &Document) -> &'static str {
 /// to the codec settings); this generic Document walker matches Smithy
 /// member names only. Documents produced by [`DocumentShapeSerializer`](super::DocumentShapeSerializer)
 /// always use Smithy member names, so the round-trip is exact.
-fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Schema<'s>> {
+pub(super) fn resolve_member<'s>(
+    schema: &'s Schema<'s>,
+    wire_name: &str,
+) -> Option<&'s Schema<'s>> {
     let idx = schema
         .members()
         .iter()

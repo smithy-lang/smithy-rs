@@ -47,13 +47,13 @@ use std::collections::HashMap;
 use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_json::codec::JsonCodecSettings;
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::document::DiscriminatedDocumentExt;
+use aws_smithy_schema::document::{DiscriminatedDocumentExt, DiscriminatedDocumentV2Ext};
 use aws_smithy_schema::prelude;
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
 use aws_smithy_schema::{shape_id, Schema, ShapeId, ShapeType};
-use aws_smithy_types::{Blob, DateTime, DiscriminatedDocument, Document};
+use aws_smithy_types::{Blob, DateTime, DiscriminatedDocument, Document, DocumentV2};
 
 // -- Test fixture: `OmniWidget` schema and typed shape ----------------
 
@@ -430,7 +430,8 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     // parsed into a Document and then re-serialized, the member order
     // can shift. Parse both as `serde_json::Value` and compare
     // structurally — the SEP's intent is "produces equivalent JSON",
-    // not "produces byte-identical JSON".
+    // not "produces byte-identical JSON". `DocumentV2` keeps the order,
+    // and `run_sep_assertions_v2` compares its bytes.
     let reser_doc_from_ser: Vec<u8> = {
         let mut ser = codec.create_serializer();
         // `write_document` takes a plain `&Document` (no
@@ -484,7 +485,58 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
          equivalent to canonical_serialization",
     );
 
+    run_sep_assertions_v2(label, &canonical_serialization, &canonical_data_object);
+
     canonical_serialization
+}
+
+/// Runs assertions 2, 3, 5, and 6 of the matrix with `DocumentV2` in place of `Document`.
+///
+/// `DocumentV2` keeps object members in order, so assertions 5 and 6 compare bytes rather than
+/// JSON values. A document from the data object holds the blob and timestamp natively, and the
+/// codec writes them as `write_blob` and `write_timestamp` do. A document from the serialization
+/// holds them as the string and number on the wire, and the settings attached by
+/// `read_discriminated_document_v2` convert them back for `as_shape_v2`.
+fn run_sep_assertions_v2(
+    label: &str,
+    canonical_serialization: &[u8],
+    canonical_data_object: &OmniWidget,
+) {
+    let codec = JsonCodec::default();
+
+    let document_from_serialization: DiscriminatedDocument<DocumentV2> = codec
+        .create_deserializer(canonical_serialization)
+        .read_discriminated_document_v2()
+        .unwrap_or_else(|e| panic!("[{label}] read_discriminated_document_v2 failed: {e:?}"));
+    let document_from_data_object: DiscriminatedDocument<DocumentV2> =
+        DiscriminatedDocument::from_struct_v2(&OMNI_WIDGET_SCHEMA, canonical_data_object)
+            .unwrap_or_else(|e| panic!("[{label}] from_struct_v2 failed: {e:?}"));
+
+    for (assertion, document) in [
+        ("V2 assertion 2", &document_from_data_object),
+        ("V2 assertion 3", &document_from_serialization),
+    ] {
+        let typed: OmniWidget = document
+            .as_shape_v2(OmniWidget::deserialize)
+            .unwrap_or_else(|e| panic!("[{label}] {assertion}: as_shape_v2 failed: {e:?}"));
+        assert_eq!(&typed, canonical_data_object, "[{label}] {assertion}");
+    }
+
+    for (assertion, document) in [
+        ("V2 assertion 5", &document_from_serialization),
+        ("V2 assertion 6", &document_from_data_object),
+    ] {
+        let mut ser = codec.create_serializer();
+        ser.write_document_v2(&prelude::DOCUMENT, document.document())
+            .unwrap_or_else(|e| panic!("[{label}] {assertion}: write_document_v2 failed: {e:?}"));
+        let bytes = ser.finish();
+        assert_eq!(
+            String::from_utf8_lossy(&bytes),
+            String::from_utf8_lossy(canonical_serialization),
+            "[{label}] {assertion}: write_document_v2 must reproduce canonical_serialization \
+             byte for byte",
+        );
+    }
 }
 
 /// Asserts that two JSON byte slices are structurally equivalent (same
@@ -754,6 +806,61 @@ fn sep_write_document_no_discriminator_omits_type() {
          (the trait method is the discriminator-free emission path; \
          use write_discriminated_document for typed-Document emission)",
     );
+}
+
+#[test]
+fn sep_v2_typed_document_round_trips_through_the_wire() {
+    // A typed `DocumentV2` written with its discriminator reads back with
+    // the same discriminator and converts back to the same value.
+    let value = OmniWidget {
+        value_string: Some("hi".to_owned()),
+        value_blob: Some(Blob::new(b"abcd".to_vec())),
+        value_timestamp_default: Some(DateTime::from_secs(0)),
+        ..OmniWidget::default()
+    };
+    let codec = JsonCodec::default();
+    let document = DiscriminatedDocument::from_struct_v2(&OMNI_WIDGET_SCHEMA, &value)
+        .expect("from_struct_v2 succeeds for OmniWidget");
+
+    let mut ser = codec.create_serializer();
+    ser.write_discriminated_document_v2(&prelude::DOCUMENT, &document)
+        .expect("write_discriminated_document_v2 succeeds");
+    let bytes = ser.finish();
+    assert_eq!(
+        String::from_utf8_lossy(&bytes),
+        r#"{"__type":"smithy.example#OmniWidget","value_string":"hi","value_blob":"YWJjZA==","value_timestamp_default":0}"#,
+    );
+
+    let read = codec
+        .create_deserializer(&bytes)
+        .read_discriminated_document_v2()
+        .expect("read_discriminated_document_v2 succeeds");
+    assert_eq!(read.discriminator(), document.discriminator());
+    assert_eq!(read.as_shape_v2(OmniWidget::deserialize).unwrap(), value);
+}
+
+#[test]
+fn sep_v2_document_from_serialization_keeps_source_order() {
+    // SEP "Suggested New Test Scenarios": iterating a map document created
+    // from serialized data yields the entries in source order.
+    let input = br#"{"value_struct":{"inner_string":"n"},"value_map_strings":{"zeta":"1","alpha":"2"},"value_string":"hi"}"#;
+    let codec = JsonCodec::default();
+    let document = codec
+        .create_deserializer(input)
+        .read_discriminated_document_v2()
+        .expect("read_discriminated_document_v2 succeeds");
+
+    let object = document.document().as_object().expect("an object");
+    let keys: Vec<&str> = object.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["value_struct", "value_map_strings", "value_string"]);
+    let map = object["value_map_strings"].as_object().expect("an object");
+    let keys: Vec<&str> = map.keys().map(String::as_str).collect();
+    assert_eq!(keys, ["zeta", "alpha"]);
+
+    let mut ser = codec.create_serializer();
+    ser.write_document_v2(&prelude::DOCUMENT, document.document())
+        .expect("write_document_v2 succeeds");
+    assert_eq!(ser.finish(), input.as_slice());
 }
 
 // -- @jsonName interaction --------------------------------------------

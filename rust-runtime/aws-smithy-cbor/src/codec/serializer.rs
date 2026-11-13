@@ -8,7 +8,7 @@
 use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentV2};
 
 /// Tracks the kind of CBOR container currently being written.
 ///
@@ -274,9 +274,18 @@ impl ShapeSerializer for CborSerializer {
         _schema: &Schema<'_>,
         _value: &Document,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::unsupported(
-            "document types are not supported by rpcv2Cbor protocol",
-        ))
+        Err(documents_unsupported())
+    }
+
+    /// Rejects every value with the [`write_document`](Self::write_document)
+    /// error. The default would convert the value first, and report a
+    /// conversion error for a blob, a timestamp, or a big number.
+    fn write_document_v2(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &DocumentV2,
+    ) -> Result<(), SerdeError> {
+        Err(documents_unsupported())
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
@@ -284,6 +293,11 @@ impl ShapeSerializer for CborSerializer {
         self.encoder.null();
         Ok(())
     }
+}
+
+/// The error for every document value. Nothing is written before it.
+fn documents_unsupported() -> SerdeError {
+    SerdeError::unsupported("document types are not supported by rpcv2Cbor protocol")
 }
 
 #[cfg(test)]
@@ -1033,6 +1047,52 @@ mod tests {
                 decoded, input,
                 "serialize -> deserialize must round-trip the tagged unions"
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod document_v2_tests {
+    use super::*;
+    use aws_smithy_schema::codec::{Codec, FinishSerializer};
+    use aws_smithy_schema::prelude::DOCUMENT;
+    use aws_smithy_types::document::DocumentObject;
+
+    use crate::codec::CborCodec;
+
+    /// A value `Document` can hold, then values the default method would fail
+    /// to convert, at the top level and nested.
+    fn values() -> Vec<DocumentV2> {
+        let mut object = DocumentObject::new();
+        object.insert("data".to_string(), DocumentV2::Blob(b"hi".to_vec()));
+        vec![
+            DocumentV2::Null,
+            DocumentV2::Blob(b"hi".to_vec()),
+            DocumentV2::Timestamp(DateTime::from_secs(0)),
+            DocumentV2::BigInteger("18446744073709551616".parse().unwrap()),
+            DocumentV2::from(object),
+        ]
+    }
+
+    #[test]
+    fn write_document_v2_returns_the_write_document_error() {
+        let codec = CborCodec::default();
+        let expected = codec
+            .create_serializer()
+            .write_document(&DOCUMENT, &Document::Null)
+            .unwrap_err()
+            .to_string();
+        for value in values() {
+            let mut ser = codec.create_serializer();
+            // Called the way generated code calls it.
+            let dyn_ser: &mut dyn ShapeSerializer = &mut ser;
+            let err = dyn_ser.write_document_v2(&DOCUMENT, &value).unwrap_err();
+            assert!(
+                matches!(err, SerdeError::UnsupportedOperation { .. }),
+                "{value:?}: {err:?}"
+            );
+            assert_eq!(err.to_string(), expected, "{value:?}");
+            assert!(ser.finish().is_empty(), "{value:?} wrote output");
         }
     }
 }

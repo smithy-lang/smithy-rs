@@ -12,9 +12,11 @@
 //! Registries are the runtime piece behind the SEP's "Type Registry" concept.
 //! They support two main use cases:
 //!
-//! 1. **Document → typed shape conversion.** Given a [`Document`](aws_smithy_types::Document) carrying
+//! 1. **Document → typed shape conversion.** Given a [`Document`](aws_smithy_types::Document)
+//!    or [`DocumentV2`](aws_smithy_types::DocumentV2) carrying
 //!    a discriminator ([`ShapeId`]), the registry resolves the discriminator
-//!    to a `RegistryEntry`, walks the document via [`DocumentShapeDeserializer`],
+//!    to a `RegistryEntry`, walks the document via [`DocumentShapeDeserializer`](crate::document::DocumentShapeDeserializer)
+//!    or [`DocumentV2ShapeDeserializer`](crate::document::DocumentV2ShapeDeserializer),
 //!    and returns the typed value as a [`TypeErasedBox`] for the caller to
 //!    downcast.
 //! 2. **Schema lookup by shape ID.** Given a [`ShapeId`] (e.g. one extracted
@@ -36,7 +38,7 @@ use std::fmt;
 use aws_smithy_types::type_erasure::TypeErasedBox;
 use aws_smithy_types::DiscriminatedDocument;
 
-use crate::document::DocumentShapeDeserializer;
+use crate::document::{with_deserializer, SchemaDocument};
 use crate::schema::error_envelope::sanitize_error_code;
 use crate::serde::{SerdeError, ShapeDeserializer};
 use crate::Schema;
@@ -248,6 +250,13 @@ impl TypeRegistry {
     /// Deserialize the given `document` into the shape pointed to by its
     /// discriminator.
     ///
+    /// `document` can wrap either a [`Document`](aws_smithy_types::Document) or a
+    /// [`DocumentV2`](aws_smithy_types::DocumentV2). Both resolve the same
+    /// [`RegistryEntry`] and call the same [`DeserializeFn`], with a
+    /// [`DocumentShapeDeserializer`](crate::document::DocumentShapeDeserializer) or a
+    /// [`DocumentV2ShapeDeserializer`](crate::document::DocumentV2ShapeDeserializer)
+    /// that carries the document's settings.
+    ///
     /// Returns `Err(SerdeError::InvalidInput { .. })` if the document has no
     /// discriminator, and `Err(SerdeError::UnknownMember { .. })` if the
     /// discriminator does not match a registered shape.
@@ -267,7 +276,7 @@ impl TypeRegistry {
     /// use aws_smithy_schema::prelude;
     /// use aws_smithy_schema::registry::TypeRegistry;
     /// use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
-    /// use aws_smithy_types::{DiscriminatedDocument, Document};
+    /// use aws_smithy_types::{DiscriminatedDocument, Document, DocumentV2};
     /// use aws_smithy_types::type_erasure::TypeErasedBox;
     ///
     /// fn deserialize_string(d: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
@@ -287,10 +296,17 @@ impl TypeRegistry {
     /// let typed = registry.deserialize_document(&doc).unwrap();
     /// let value = typed.downcast::<String>().unwrap();
     /// assert_eq!(*value, "hi");
+    ///
+    /// // A `DocumentV2` resolves the same entry.
+    /// let doc = DiscriminatedDocument::new_v2(DocumentV2::String("hi".to_string()))
+    ///     .try_with_discriminator("smithy.api#String")
+    ///     .unwrap();
+    /// let typed = registry.deserialize_document(&doc).unwrap();
+    /// assert_eq!(*typed.downcast::<String>().unwrap(), "hi");
     /// ```
     pub fn deserialize_document(
         &self,
-        document: &DiscriminatedDocument,
+        document: &DiscriminatedDocument<impl SchemaDocument>,
     ) -> Result<TypeErasedBox, SerdeError> {
         let id = document.discriminator().ok_or_else(|| {
             SerdeError::invalid_input(
@@ -301,11 +317,7 @@ impl TypeRegistry {
             .entries
             .get(id)
             .ok_or_else(|| SerdeError::unknown_member(id.to_string()))?;
-        let mut deser = DocumentShapeDeserializer::new_with_settings(
-            document.document(),
-            document.settings().cloned(),
-        );
-        (entry.deserialize)(&mut deser)
+        with_deserializer(document, entry.deserialize)
     }
 
     /// Combine `self` and `other` into a new registry containing the union
@@ -551,8 +563,10 @@ impl ExactSizeIterator for Iter<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::DocumentShapeDeserializer;
 
-    use aws_smithy_types::{Blob, Document, DocumentError, DocumentSettings, Number};
+    use aws_smithy_types::document::DocumentObject;
+    use aws_smithy_types::{Blob, Document, DocumentError, DocumentSettings, DocumentV2, Number};
 
     use std::sync::Arc;
 
@@ -1164,6 +1178,129 @@ mod tests {
         let err = registry.deserialize_document(&doc).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("base64"), "unexpected error message: {msg}");
+    }
+
+    // -- deserialize_document with DocumentV2 ---------------------------------------------------
+
+    fn v2_document(
+        members: impl IntoIterator<Item = (&'static str, DocumentV2)>,
+        discriminator: &str,
+    ) -> DiscriminatedDocument<DocumentV2> {
+        let members = members
+            .into_iter()
+            .map(|(name, value)| (name.to_string(), value))
+            .collect::<DocumentObject>();
+        DiscriminatedDocument::new_v2(DocumentV2::Object(members))
+            .try_with_discriminator(discriminator)
+            .unwrap()
+    }
+
+    #[test]
+    fn deserialize_document_v2_resolves_the_same_entries() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        let foo = registry
+            .deserialize_document(&v2_document(
+                [("name", DocumentV2::from("hello"))],
+                "smithy.example#Foo",
+            ))
+            .unwrap();
+        assert_eq!(
+            *foo.downcast::<Foo>().unwrap(),
+            Foo {
+                name: Some("hello".to_string())
+            }
+        );
+
+        // `DocumentV2` reads truncate fractions, like `DocumentV2::coerce_integer`. The `Document`
+        // path rejects them.
+        let bar = registry
+            .deserialize_document(&v2_document(
+                [("value", DocumentV2::Number(Number::Float(42.9)))],
+                "smithy.example#Bar",
+            ))
+            .unwrap();
+        assert_eq!(*bar.downcast::<Bar>().unwrap(), Bar { value: Some(42) });
+        let v1_bar = DiscriminatedDocument::new(Document::Object(
+            [("value".to_string(), Document::Number(Number::Float(42.9)))].into(),
+        ))
+        .with_discriminator("smithy.example#Bar");
+        assert!(matches!(
+            registry.deserialize_document(&v1_bar),
+            Err(SerdeError::NumericCoercionLossy { .. })
+        ));
+
+        // Composition applies to both document types.
+        let merged = registry.compose(
+            TypeRegistry::builder()
+                .insert_shape(&FOO_SCHEMA, deserialize_foo_replacement)
+                .build(),
+        );
+        let replaced = merged
+            .deserialize_document(&v2_document([], "smithy.example#Foo"))
+            .unwrap();
+        assert!(replaced.downcast::<FooReplacement>().is_ok());
+    }
+
+    #[test]
+    fn deserialize_document_v2_errors_match_the_document_path() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        let no_discriminator =
+            DiscriminatedDocument::new_v2(DocumentV2::Object(Default::default()));
+        assert!(matches!(
+            registry.deserialize_document(&no_discriminator),
+            Err(SerdeError::InvalidInput { message }) if message.contains("discriminator")
+        ));
+        assert!(matches!(
+            registry.deserialize_document(&v2_document([], "smithy.example#Unregistered")),
+            Err(SerdeError::UnknownMember { member_name }) if member_name == "smithy.example#Unregistered"
+        ));
+        assert!(matches!(
+            registry.deserialize_document(&v2_document(
+                [("name", DocumentV2::Blob(b"x".to_vec()))],
+                "smithy.example#Foo"
+            )),
+            Err(SerdeError::TypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn deserialize_document_v2_reads_native_blobs_and_threads_settings() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&WIDGET_SCHEMA, deserialize_widget)
+            .build();
+        let widget = |document: &DiscriminatedDocument<DocumentV2>| {
+            *registry
+                .deserialize_document(document)
+                .unwrap()
+                .downcast::<Widget>()
+                .unwrap()
+        };
+        let abcd = Widget {
+            data: Some(Blob::new(b"abcd".to_vec())),
+        };
+
+        let native = v2_document(
+            [("data", DocumentV2::Blob(b"abcd".to_vec()))],
+            "smithy.example#Widget",
+        );
+        assert_eq!(widget(&native), abcd);
+
+        let base64 = v2_document(
+            [("data", DocumentV2::from("YWJjZA=="))],
+            "smithy.example#Widget",
+        );
+        assert_eq!(widget(&base64), abcd);
+        assert_eq!(
+            widget(&base64.with_settings(Arc::new(JsonishSettings))),
+            abcd
+        );
     }
 
     // -- Builder + Debug tests ------------------------------------------------------------------
