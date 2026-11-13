@@ -1,0 +1,8 @@
+{
+    "description": "The same list trait from an IDL apply, a JSON AST apply, and add_trait: JSON AST traits, then add_trait, then IDL apply traits.",
+    "steps": [
+        {"addFile": "a.smithy"},
+        {"addFile": "b.json"},
+        {"addTrait": "ex#S", "trait": "smithy.api#tags", "value": ["add-trait"]}
+    ]
+}
