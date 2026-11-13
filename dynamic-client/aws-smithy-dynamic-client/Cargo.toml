@@ -9,7 +9,28 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
+[features]
+default = ["default-https-client", "rt-tokio"]
+# The default HTTP client, used when the config sets none.
+default-https-client = ["aws-smithy-runtime/default-https-client"]
+# The Tokio sleep, used when the config sets no sleep implementation.
+rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio"]
+
 [dependencies]
+aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async" }
+aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
+aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
+aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }
+aws-smithy-query = { path = "../../rust-runtime/aws-smithy-query" }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
+aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
+aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
+
+[dev-dependencies]
+aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

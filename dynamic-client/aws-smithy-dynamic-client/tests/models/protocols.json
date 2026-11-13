@@ -1,0 +1,64 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "example.protocols#wire": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {
+                    "selector": "service"
+                },
+                "smithy.api#protocolDefinition": {}
+            }
+        },
+        "example.protocols#RestJsonAndCbor": {
+            "type": "service",
+            "version": "2024-01-01",
+            "traits": {
+                "aws.protocols#restJson1": {},
+                "smithy.protocols#rpcv2Cbor": {}
+            }
+        },
+        "example.protocols#Ec2Query": {
+            "type": "service",
+            "version": "2024-01-01",
+            "traits": {
+                "aws.protocols#ec2Query": {}
+            }
+        },
+        "example.protocols#WireOnly": {
+            "type": "service",
+            "version": "2024-01-01",
+            "traits": {
+                "example.protocols#wire": {}
+            }
+        },
+        "example.protocols#NoProtocol": {
+            "type": "service",
+            "version": "2024-01-01"
+        },
+        "example.protocols#QueryWithoutVersion": {
+            "type": "service",
+            "traits": {
+                "aws.protocols#awsQuery": {}
+            }
+        },
+        "example.protocols#Facts": {
+            "type": "service",
+            "version": "2024-01-01",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {},
+                "smithy.api#xmlNamespace": {
+                    "uri": "https://example.com/facts",
+                    "prefix": "f"
+                }
+            }
+        },
+        "example.protocols#FactsWithoutVersion": {
+            "type": "service",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {}
+            }
+        }
+    }
+}

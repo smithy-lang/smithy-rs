@@ -1,1 +1,7 @@
-allowed_external_types = []
+allowed_external_types = [
+    "aws_smithy_async::rt::sleep::AsyncSleep",
+    "aws_smithy_lang::shape_id::ShapeId",
+    "aws_smithy_runtime_api::client::behavior_version::BehaviorVersion",
+    "aws_smithy_runtime_api::client::http::HttpClient",
+    "aws_smithy_schema::schema::protocol::ClientProtocol",
+]
