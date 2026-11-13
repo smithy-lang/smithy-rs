@@ -168,13 +168,30 @@ impl DynamicClientBuilder {
         let mut components = RuntimeComponentsBuilder::new("DynamicClientConfig");
         components.set_http_client(self.config.http_client);
         components.set_sleep_impl(self.config.sleep_impl);
+        components.set_time_source(self.config.time_source);
+        for retry_classifier in self.config.retry_classifiers {
+            components.push_retry_classifier(retry_classifier);
+        }
+        for interceptor in self.config.interceptors {
+            components.push_interceptor(interceptor);
+        }
         components.push_config_validator(SharedConfigValidator::base_client_config_fn(
             validate_http_client,
         ));
         let mut layer = Layer::new("DynamicClientConfig");
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
-        let runtime_plugins = runtime_plugins(components, layer, behavior_version, service.name());
+        if let Some(retry_config) = self.config.retry_config {
+            layer.store_put(retry_config);
+        }
+        if let Some(timeout_config) = self.config.timeout_config {
+            layer.store_put(timeout_config);
+        }
+        if let Some(retry_partition) = self.config.retry_partition {
+            layer.store_put(retry_partition);
+        }
+        let runtime_plugins = runtime_plugins(components, layer, behavior_version, service.name())
+            .with_client_plugins(self.config.runtime_plugins);
         // The same check generated clients run when they are created.
         let mut cfg = ConfigBag::base();
         let components = runtime_plugins
@@ -277,7 +294,7 @@ fn service_ids(model: &Model) -> Vec<ShapeId> {
 #[cfg(test)]
 mod tests {
     use super::DynamicClient;
-    use crate::config::{BehaviorVersion, Config};
+    use crate::config::{BehaviorVersion, Config, RetryConfig, RetryPartition, TimeoutConfig};
     use crate::error::BuildErrorKind;
     #[cfg(not(feature = "default-https-client"))]
     use crate::error::MissingHttpClient;
@@ -286,11 +303,16 @@ mod tests {
     use aws_smithy_http_client::test_util::NeverClient;
     use aws_smithy_lang::runtime_schema::Materialization;
     use aws_smithy_lang::ShapeId;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
     use aws_smithy_schema::protocol::{
         ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
     };
+    use aws_smithy_types::config_bag::{FrozenLayer, Layer};
     use std::path::PathBuf;
-    use std::time::UNIX_EPOCH;
+    use std::time::{Duration, UNIX_EPOCH};
 
     fn model(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -570,5 +592,138 @@ mod tests {
         let (cfg, _) = client.client_config();
         assert_eq!("", cfg.load::<ServiceVersion>().unwrap().as_str());
         assert!(cfg.load::<ServiceXmlNamespace>().is_none());
+    }
+
+    #[test]
+    fn uses_the_time_source_from_the_config() {
+        let (time_source, _) = instant_time_and_sleep(UNIX_EPOCH + Duration::from_secs(42));
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().time_source(time_source))
+            .build()
+            .unwrap();
+        let (_, components) = client.client_config();
+        let now = components.time_source().unwrap().now();
+        assert_eq!(UNIX_EPOCH + Duration::from_secs(42), now);
+    }
+
+    #[derive(Debug)]
+    struct NamedInterceptor(&'static str);
+
+    impl Intercept for NamedInterceptor {
+        fn name(&self) -> &'static str {
+            self.0
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestClassifier;
+
+    impl ClassifyRetry for TestClassifier {
+        fn classify_retry(&self, _ctx: &InterceptorContext) -> RetryAction {
+            RetryAction::NoActionIndicated
+        }
+
+        fn name(&self) -> &'static str {
+            "TestClassifier"
+        }
+    }
+
+    // A runtime plugin that sets a retry config with `max_attempts` attempts.
+    #[derive(Debug)]
+    struct RetryPlugin(u32);
+
+    impl RuntimePlugin for RetryPlugin {
+        fn config(&self) -> Option<FrozenLayer> {
+            let mut layer = Layer::new("RetryPlugin");
+            layer.store_put(RetryConfig::standard().with_max_attempts(self.0));
+            Some(layer.freeze())
+        }
+    }
+
+    #[test]
+    fn stores_the_retry_timeout_and_partition_settings() {
+        let timeout_config = TimeoutConfig::builder()
+            .operation_timeout(Duration::from_secs(5))
+            .build();
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(
+                Config::builder()
+                    .retry_config(RetryConfig::standard().with_max_attempts(7))
+                    .timeout_config(timeout_config.clone())
+                    .retry_partition(RetryPartition::new("weather-partition")),
+            )
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!(7, cfg.load::<RetryConfig>().unwrap().max_attempts());
+        assert_eq!(&timeout_config, cfg.load::<TimeoutConfig>().unwrap());
+        assert_eq!(
+            &RetryPartition::new("weather-partition"),
+            cfg.load::<RetryPartition>().unwrap()
+        );
+    }
+
+    #[test]
+    fn names_the_retry_partition_after_the_service_by_default() {
+        let client = builder().model_file(model("weather.json")).build().unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!(
+            &RetryPartition::new("Weather"),
+            cfg.load::<RetryPartition>().unwrap()
+        );
+    }
+
+    #[test]
+    fn adds_retry_classifiers_and_interceptors() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(
+                Config::builder()
+                    .retry_classifier(TestClassifier)
+                    .interceptor(NamedInterceptor("first")),
+            )
+            .build()
+            .unwrap();
+        let (_, components) = client.client_config();
+        assert!(components
+            .retry_classifiers()
+            .any(|classifier| classifier.name() == "TestClassifier"));
+        assert!(components
+            .interceptors()
+            .any(|interceptor| interceptor.name() == "first"));
+    }
+
+    #[test]
+    fn a_later_config_appends_interceptors() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().interceptor(NamedInterceptor("first")))
+            .config(Config::builder().interceptor(NamedInterceptor("second")))
+            .build()
+            .unwrap();
+        let (_, components) = client.client_config();
+        let names: Vec<&str> = components
+            .interceptors()
+            .map(|interceptor| interceptor.name())
+            .filter(|name| ["first", "second"].contains(name))
+            .collect();
+        assert_eq!(vec!["first", "second"], names);
+    }
+
+    #[test]
+    fn a_runtime_plugin_overrides_the_config() {
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(
+                Config::builder()
+                    .retry_config(RetryConfig::standard().with_max_attempts(7))
+                    .runtime_plugin(RetryPlugin(2)),
+            )
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        assert_eq!(2, cfg.load::<RetryConfig>().unwrap().max_attempts());
     }
 }
