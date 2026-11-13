@@ -11,6 +11,7 @@
 import "source-map-support/register";
 import { App } from "aws-cdk-lib";
 import { PullRequestCdnStack } from "../../lib/smithy-rs/pull-request-cdn-stack";
+import { BuildCanaryStack } from "../../lib/smithy-rs/build-canary-stack";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
@@ -39,5 +40,19 @@ new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
 new CanaryStack(app, "smithy-rs-canary-stack", {
     lambdaExecutionRole: "smithy-rs-canary-lambda-exec-role",
     oidcProps,
+    env,
+});
+
+// The post-publish build canary's three roles and its record bucket. A separate stack so it can be
+// deployed on its own, because it depends only on the OIDC provider.
+//
+// Deploy it as `deploy --exclusively smithy-rs-build-canary-stack`. Not `npm run deploy`, which
+// passes `--all` and would also roll the pull-request CDN and the SDK canary; and not a bare
+// `deploy <name>` either, because CDK includes a stack's dependencies and the `Fn::ImportValue` of
+// the provider makes `oidc-provider-stack` one of them. `--exclusively` is what limits the change
+// to this stack, and the provider is already deployed — the roles the existing workflows assume
+// could not work otherwise.
+new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
+    githubActionsOidcProvider: githubActionsOidcProvider,
     env,
 });
