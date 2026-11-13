@@ -85,6 +85,8 @@ fun generateSmithyBuild(services: AwsServices): String {
             services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val partitionsConfigPath =
             services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val timeoutDefaultsConfigPath =
+            services.timeoutDefaultsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val integrationTestPath = project.projectDir.resolve("integration-tests")
             .let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         """
@@ -118,6 +120,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": $defaultConfigPath,
                                 "partitionsConfigPath": $partitionsConfigPath,
+                                "timeoutDefaultsConfigPath": $timeoutDefaultsConfigPath,
                                 "integrationTestPath": $integrationTestPath
                             }
                         }
@@ -143,6 +146,7 @@ tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
     inputs.dir(projectDir.resolve("aws-models"))
+    inputs.file(projectDir.resolve("sdk-timeout-defaults.json"))
     outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
     doFirst {
@@ -368,6 +372,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 tasks.smithyBuild.configure {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
+    inputs.file(projectDir.resolve("sdk-timeout-defaults.json"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
