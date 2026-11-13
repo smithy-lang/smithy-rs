@@ -1,0 +1,14 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#S": {
+            "type": "string",
+            "traits": {
+                "smithy.api#tags": [
+                    "apply",
+                    "code"
+                ]
+            }
+        }
+    }
+}

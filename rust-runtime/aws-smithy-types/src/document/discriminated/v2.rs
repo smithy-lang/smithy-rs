@@ -30,6 +30,7 @@ impl From<DocumentV2> for DiscriminatedDocument<DocumentV2> {
 impl sealed::Sealed for DocumentV2 {
     fn coerce_to_blob<'a>(
         &'a self,
+        _: sealed::Token,
         settings: Option<&dyn DocumentSettings>,
     ) -> Result<Cow<'a, [u8]>, DocumentError> {
         match self {
@@ -44,6 +45,7 @@ impl sealed::Sealed for DocumentV2 {
 
     fn coerce_to_timestamp(
         &self,
+        _: sealed::Token,
         settings: Option<&dyn DocumentSettings>,
     ) -> Result<DateTime, DocumentError> {
         match self {

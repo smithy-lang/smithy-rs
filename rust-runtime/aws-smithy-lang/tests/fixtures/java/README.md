@@ -40,8 +40,12 @@ ERROR and DANGER event IDs separately and the location and message of its first 
 - `invalid/`: both reject, with corresponding diagnostic codes. Syntax errors are reported at
   the same line and column as Java's, except for the cases listed in `COLUMN_DIFFERENCES`, where
   Rust points at the offending character instead of the start of the enclosing token.
-- `unsupported/`: Java accepts but this crate deliberately rejects: `apply`, mixins, Smithy 1.0,
-  and leading zeroes in numbers (which the IDL grammar forbids but Java's tokenizer accepts).
+- `unsupported/`: the reference implementation accepts but this crate deliberately rejects:
+  mixins, Smithy 1.0, leading zeroes in numbers (which the IDL grammar forbids but the
+  reference tokenizer accepts), unknown properties in a JSON AST `apply` entry (the
+  reference implementation warns; this crate rejects unknown properties everywhere), and a
+  line break or comment between `apply` and its target (the grammar requires spaces,
+  `%s"apply" SP ShapeId`; the reference implementation accepts any whitespace).
 
 Other known differences:
 
@@ -55,8 +59,9 @@ Other known differences:
   comment here; Java attaches it to a following member, but not to a following shape. The
   grammar does not decide this case (`LineComment` excludes a third `/`). Covered by lexer
   unit tests.
-- Java warns about documentation comments that attach to nothing; this crate ignores them.
-  Before a closing `}`, both reject them in enums and accept them elsewhere.
+- The reference implementation warns about documentation comments that attach to nothing
+  (including inside an `apply` block); this crate ignores them. Before a closing `}`, both
+  reject them in enums and accept them elsewhere.
 - Documentation text from files with lone CR line endings uses `\n` between lines here;
   Java keeps the CRs.
 - `-0` loads as the float `0.0`, matching how serde_json reads it in JSON AST input; Java

@@ -1,0 +1,26 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "other#Absolute": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Absolute."
+            }
+        },
+        "other#Imported": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Through use."
+            }
+        },
+        "smithy.api#Added": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "From smithy.api.",
+                "smithy.api#tags": [
+                    "json"
+                ]
+            }
+        }
+    }
+}

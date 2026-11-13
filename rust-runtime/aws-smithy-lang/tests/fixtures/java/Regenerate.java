@@ -164,7 +164,13 @@ public final class Regenerate {
                 if (accepted) {
                     // `unwrap` also rejects DANGER events, which these fixtures may contain.
                     Model model = result.getResult().get();
-                    ObjectNode serialized = ModelSerializer.builder().build().serialize(model);
+                    // Shapes a fixture adds to the prelude namespace are kept; only the prelude's
+                    // own shapes are left out.
+                    ObjectNode serialized = ModelSerializer.builder()
+                            .includePrelude(true)
+                            .shapeFilter(shape -> !PRELUDE_IDS.contains(shape.getId().withoutMember()))
+                            .build()
+                            .serialize(model);
                     Files.writeString(idlExpected.resolve(stem + ".json"), Node.prettyPrintJson(serialized) + "\n");
                 }
             }

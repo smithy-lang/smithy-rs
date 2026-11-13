@@ -236,83 +236,93 @@ mod tests {
     #[test]
     fn integer_accessors_accept_every_numeric_variant() {
         assert_eq!(
-            DocumentV2::Number(Number::PosInt(42)).as_byte().unwrap(),
+            DocumentV2::Number(Number::PosInt(42))
+                .coerce_byte()
+                .unwrap(),
             42
         );
         assert_eq!(
-            DocumentV2::Number(Number::NegInt(-42)).as_byte().unwrap(),
+            DocumentV2::Number(Number::NegInt(-42))
+                .coerce_byte()
+                .unwrap(),
             -42
         );
-        assert_eq!(big_integer("-128").as_byte().unwrap(), i8::MIN);
-        assert_eq!(big_integer("00123").as_short().unwrap(), 123);
+        assert_eq!(big_integer("-128").coerce_byte().unwrap(), i8::MIN);
+        assert_eq!(big_integer("00123").coerce_short().unwrap(), 123);
         assert_eq!(
             DocumentV2::Number(Number::PosInt(i32::MAX as u64))
-                .as_integer()
+                .coerce_integer()
                 .unwrap(),
             i32::MAX
         );
         assert_eq!(
             DocumentV2::Number(Number::NegInt(i64::MIN))
-                .as_long()
+                .coerce_long()
                 .unwrap(),
             i64::MIN
         );
-        assert_eq!(big_decimal("1.23e2").as_integer().unwrap(), 123);
+        assert_eq!(big_decimal("1.23e2").coerce_integer().unwrap(), 123);
     }
 
     #[test]
     fn integer_accessors_truncate_fractions_toward_zero() {
         assert_eq!(
-            DocumentV2::Number(Number::Float(1.9)).as_integer().unwrap(),
+            DocumentV2::Number(Number::Float(1.9))
+                .coerce_integer()
+                .unwrap(),
             1
         );
         assert_eq!(
             DocumentV2::Number(Number::Float(-1.9))
-                .as_integer()
+                .coerce_integer()
                 .unwrap(),
             -1
         );
         assert_eq!(
-            DocumentV2::Number(Number::Float(-0.5)).as_long().unwrap(),
+            DocumentV2::Number(Number::Float(-0.5))
+                .coerce_long()
+                .unwrap(),
             0
         );
-        assert_eq!(big_decimal("100.5").as_byte().unwrap(), 100);
-        assert_eq!(big_decimal("-127.99").as_byte().unwrap(), -127);
-        assert_eq!(big_decimal("5e-3").as_long().unwrap(), 0);
-        assert_eq!(big_decimal(".5").as_long().unwrap(), 0);
+        assert_eq!(big_decimal("100.5").coerce_byte().unwrap(), 100);
+        assert_eq!(big_decimal("-127.99").coerce_byte().unwrap(), -127);
+        assert_eq!(big_decimal("5e-3").coerce_long().unwrap(), 0);
+        assert_eq!(big_decimal(".5").coerce_long().unwrap(), 0);
     }
 
     #[test]
     fn integer_accessors_report_overflow() {
         assert!(is_overflow(
-            DocumentV2::Number(Number::PosInt(128)).as_byte()
+            DocumentV2::Number(Number::PosInt(128)).coerce_byte()
         ));
         assert!(is_overflow(
-            DocumentV2::Number(Number::NegInt(i64::MIN)).as_integer()
+            DocumentV2::Number(Number::NegInt(i64::MIN)).coerce_integer()
         ));
         assert!(is_overflow(
-            DocumentV2::Number(Number::PosInt(u64::MAX)).as_long()
+            DocumentV2::Number(Number::PosInt(u64::MAX)).coerce_long()
         ));
         assert!(is_overflow(
-            DocumentV2::Number(Number::Float(1e20)).as_long()
+            DocumentV2::Number(Number::Float(1e20)).coerce_long()
         ));
         assert!(is_overflow(
-            DocumentV2::Number(Number::Float(-1e300)).as_long()
+            DocumentV2::Number(Number::Float(-1e300)).coerce_long()
         ));
-        assert!(is_overflow(big_integer("12345678901234567890").as_long()));
         assert!(is_overflow(
-            big_integer("99999999999999999999999999999999999999999999").as_long()
+            big_integer("12345678901234567890").coerce_long()
         ));
-        assert!(is_overflow(big_decimal("128.5").as_byte()));
-        assert!(is_overflow(big_decimal("1e400").as_long()));
-        assert!(is_overflow(big_decimal("1e1000000000").as_long()));
+        assert!(is_overflow(
+            big_integer("99999999999999999999999999999999999999999999").coerce_long()
+        ));
+        assert!(is_overflow(big_decimal("128.5").coerce_byte()));
+        assert!(is_overflow(big_decimal("1e400").coerce_long()));
+        assert!(is_overflow(big_decimal("1e1000000000").coerce_long()));
     }
 
     #[test]
     fn integer_accessors_reject_non_finite_floats() {
         for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
             assert!(is_invalid_input(
-                DocumentV2::Number(Number::Float(value)).as_integer()
+                DocumentV2::Number(Number::Float(value)).coerce_integer()
             ));
         }
     }
@@ -326,8 +336,8 @@ mod tests {
             DocumentV2::Blob(vec![1]),
             DocumentV2::Array(vec![]),
         ] {
-            assert!(is_type_mismatch(document.as_long()), "{document:?}");
-            assert!(is_type_mismatch(document.as_double()), "{document:?}");
+            assert!(is_type_mismatch(document.coerce_long()), "{document:?}");
+            assert!(is_type_mismatch(document.coerce_double()), "{document:?}");
             assert!(
                 is_type_mismatch(document.coerce_big_integer()),
                 "{document:?}"
@@ -342,50 +352,56 @@ mod tests {
     #[test]
     fn float_accessors_accept_every_numeric_variant() {
         assert_eq!(
-            DocumentV2::Number(Number::PosInt(42)).as_double().unwrap(),
+            DocumentV2::Number(Number::PosInt(42))
+                .coerce_double()
+                .unwrap(),
             42.0
         );
         assert_eq!(
-            DocumentV2::Number(Number::NegInt(-42)).as_double().unwrap(),
+            DocumentV2::Number(Number::NegInt(-42))
+                .coerce_double()
+                .unwrap(),
             -42.0
         );
         assert_eq!(
-            DocumentV2::Number(Number::Float(2.5)).as_double().unwrap(),
+            DocumentV2::Number(Number::Float(2.5))
+                .coerce_double()
+                .unwrap(),
             2.5
         );
-        assert_eq!(big_integer("-17").as_double().unwrap(), -17.0);
-        assert_eq!(big_decimal("1.5E+3").as_double().unwrap(), 1500.0);
-        assert_eq!(big_decimal("1.5").as_float().unwrap(), 1.5_f32);
+        assert_eq!(big_integer("-17").coerce_double().unwrap(), -17.0);
+        assert_eq!(big_decimal("1.5E+3").coerce_double().unwrap(), 1500.0);
+        assert_eq!(big_decimal("1.5").coerce_float().unwrap(), 1.5_f32);
         // Precision loss is ignored: this rounds to the nearest `f64`.
         assert_eq!(
-            big_integer("9007199254740993").as_double().unwrap(),
+            big_integer("9007199254740993").coerce_double().unwrap(),
             9_007_199_254_740_992.0
         );
         // So is underflow.
-        assert_eq!(big_decimal("1e-400").as_double().unwrap(), 0.0);
+        assert_eq!(big_decimal("1e-400").coerce_double().unwrap(), 0.0);
     }
 
     #[test]
     fn float_accessors_report_overflow() {
-        assert!(is_overflow(big_decimal("1e400").as_double()));
+        assert!(is_overflow(big_decimal("1e400").coerce_double()));
         assert!(is_overflow(
-            big_integer(&format!("1{}", "0".repeat(400))).as_double()
+            big_integer(&format!("1{}", "0".repeat(400))).coerce_double()
         ));
         assert!(is_overflow(
-            DocumentV2::Number(Number::Float(1e300)).as_float()
+            DocumentV2::Number(Number::Float(1e300)).coerce_float()
         ));
-        assert!(is_overflow(big_decimal("1e39").as_float()));
+        assert!(is_overflow(big_decimal("1e39").coerce_float()));
     }
 
     #[test]
     fn float_accessors_keep_non_finite_floats() {
         assert!(DocumentV2::Number(Number::Float(f64::NAN))
-            .as_double()
+            .coerce_double()
             .unwrap()
             .is_nan());
         assert_eq!(
             DocumentV2::Number(Number::Float(f64::INFINITY))
-                .as_float()
+                .coerce_float()
                 .unwrap(),
             f32::INFINITY
         );
