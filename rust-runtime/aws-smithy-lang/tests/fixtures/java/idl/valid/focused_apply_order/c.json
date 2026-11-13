@@ -1,0 +1,19 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#S": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#tags": ["c-json"]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#tags": ["c-json"]
+            }
+        }
+    }
+}

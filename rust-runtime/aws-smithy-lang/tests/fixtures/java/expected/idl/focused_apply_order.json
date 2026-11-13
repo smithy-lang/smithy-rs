@@ -1,0 +1,36 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#S": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#tags": [
+                            "a-json-apply",
+                            "c-json",
+                            "d-json-apply",
+                            "b-inline",
+                            "e-inline",
+                            "a-apply",
+                            "e-apply"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#tags": [
+                    "a-json-apply",
+                    "c-json",
+                    "d-json-apply",
+                    "b-inline",
+                    "e-inline",
+                    "a-apply",
+                    "b-apply",
+                    "e-apply"
+                ]
+            }
+        }
+    }
+}
