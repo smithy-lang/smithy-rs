@@ -1,4 +1,5 @@
 allowed_external_types = [
+    "aws_credential_types::provider::credentials::ProvideCredentials",
     "aws_smithy_async::rt::sleep::AsyncSleep",
     "aws_smithy_async::time::TimeSource",
     "aws_smithy_dynamic_client_api::config_key::*",
@@ -12,4 +13,6 @@ allowed_external_types = [
     "aws_smithy_schema::schema::protocol::ClientProtocol",
     "aws_smithy_types::retry::RetryConfig",
     "aws_smithy_types::timeout::TimeoutConfig",
+    "aws_runtime::invocation_id::InvocationIdGenerator",
+    "aws_types::region::Region",
 ]

@@ -13,6 +13,8 @@ pub use aws_smithy_runtime::client::retries::RetryPartition;
 pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
+#[cfg(feature = "aws")]
+pub use aws_types::region::Region;
 
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
@@ -24,6 +26,11 @@ use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use aws_smithy_types::config_bag::Layer;
 use std::fmt;
 use std::sync::Arc;
+#[cfg(feature = "aws")]
+use {
+    aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider},
+    aws_runtime::invocation_id::{InvocationIdGenerator, SharedInvocationIdGenerator},
+};
 
 /// Configuration for a [`DynamicClient`](crate::DynamicClient).
 ///
@@ -64,6 +71,12 @@ pub struct Builder {
     pub(crate) runtime_plugins: Vec<SharedRuntimePlugin>,
     // The values set by `put`, in the order they were set. A key set twice is listed twice.
     pub(crate) puts: Vec<Put>,
+    #[cfg(feature = "aws")]
+    pub(crate) region: Option<Region>,
+    #[cfg(feature = "aws")]
+    pub(crate) credentials_provider: Option<SharedCredentialsProvider>,
+    #[cfg(feature = "aws")]
+    pub(crate) invocation_id_generator: Option<SharedInvocationIdGenerator>,
 }
 
 impl Builder {
@@ -175,6 +188,34 @@ impl Builder {
         self
     }
 
+    /// Sets the AWS region.
+    #[cfg(feature = "aws")]
+    pub fn region(mut self, region: Region) -> Self {
+        self.region = Some(region);
+        self
+    }
+
+    /// Sets the provider of the AWS credentials that sign requests.
+    #[cfg(feature = "aws")]
+    pub fn credentials_provider(
+        mut self,
+        credentials_provider: impl ProvideCredentials + 'static,
+    ) -> Self {
+        self.credentials_provider = Some(SharedCredentialsProvider::new(credentials_provider));
+        self
+    }
+
+    /// Sets the generator of the invocation ID sent with each request.
+    #[cfg(feature = "aws")]
+    pub fn invocation_id_generator(
+        mut self,
+        invocation_id_generator: impl InvocationIdGenerator + 'static,
+    ) -> Self {
+        self.invocation_id_generator =
+            Some(SharedInvocationIdGenerator::new(invocation_id_generator));
+        self
+    }
+
     /// Builds the config.
     pub fn build(self) -> Config {
         Config { builder: self }
@@ -199,6 +240,14 @@ impl Builder {
             interceptors: self.interceptors,
             runtime_plugins: self.runtime_plugins,
             puts: self.puts,
+            #[cfg(feature = "aws")]
+            region: later.region.or(self.region),
+            #[cfg(feature = "aws")]
+            credentials_provider: later.credentials_provider.or(self.credentials_provider),
+            #[cfg(feature = "aws")]
+            invocation_id_generator: later
+                .invocation_id_generator
+                .or(self.invocation_id_generator),
         }
     }
 }

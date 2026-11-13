@@ -114,6 +114,13 @@ impl DynamicClientBuilder {
         for interceptor in self.config.interceptors {
             components.push_interceptor(interceptor);
         }
+        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
+        // uses SigV4a, as generated clients do.
+        #[cfg(feature = "aws")]
+        if let Some(credentials_provider) = self.config.credentials_provider {
+            components
+                .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
+        }
         components.push_config_validator(SharedConfigValidator::base_client_config_fn(
             validate_http_client,
         ));
@@ -128,6 +135,14 @@ impl DynamicClientBuilder {
         }
         if let Some(retry_partition) = self.config.retry_partition {
             layer.store_put(retry_partition);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(region) = self.config.region {
+            layer.store_put(region);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(invocation_id_generator) = self.config.invocation_id_generator {
+            layer.store_put(invocation_id_generator);
         }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
@@ -724,5 +739,57 @@ mod tests {
         let (cfg, _) = client.client_config();
         let values: Vec<&AppendKey> = cfg.load::<AppendKey>().collect();
         assert_eq!(vec![&AppendKey(3), &AppendKey(2), &AppendKey(1)], values);
+    }
+
+    #[cfg(feature = "aws")]
+    mod aws {
+        use super::{builder, model};
+        use crate::config::{Config, Region};
+        use aws_credential_types::Credentials;
+        use aws_runtime::invocation_id::{
+            InvocationId, InvocationIdGenerator, SharedInvocationIdGenerator,
+        };
+        use aws_smithy_runtime_api::box_error::BoxError;
+
+        #[derive(Debug)]
+        struct FixedInvocationId;
+
+        impl InvocationIdGenerator for FixedInvocationId {
+            fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
+                Ok(Some(InvocationId::new("fixed".into())))
+            }
+        }
+
+        #[test]
+        fn stores_the_aws_settings() {
+            let client = builder()
+                .model_file(model("weather.json"))
+                .config(
+                    Config::builder()
+                        .region(Region::new("us-west-2"))
+                        .credentials_provider(Credentials::for_tests())
+                        .invocation_id_generator(FixedInvocationId),
+                )
+                .build()
+                .unwrap();
+            let (cfg, components) = client.client_config();
+            assert_eq!(Some(&Region::new("us-west-2")), cfg.load::<Region>());
+            assert!(cfg.load::<SharedInvocationIdGenerator>().is_some());
+            assert!(components
+                .identity_resolver(&aws_runtime::auth::sigv4::SCHEME_ID)
+                .is_some());
+        }
+
+        #[test]
+        fn a_later_config_region_wins() {
+            let client = builder()
+                .model_file(model("weather.json"))
+                .config(Config::builder().region(Region::new("us-west-2")))
+                .config(Config::builder().region(Region::new("eu-west-1")))
+                .build()
+                .unwrap();
+            let (cfg, _) = client.client_config();
+            assert_eq!(Some(&Region::new("eu-west-1")), cfg.load::<Region>());
+        }
     }
 }

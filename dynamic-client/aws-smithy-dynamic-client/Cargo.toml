@@ -10,13 +10,18 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [features]
-default = ["default-https-client", "rt-tokio"]
+default = ["aws", "default-https-client", "rt-tokio"]
+# The AWS settings: region, credentials provider, and invocation ID generator.
+aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types"]
 # The default HTTP client, used when the config sets none.
 default-https-client = ["aws-smithy-runtime/default-https-client"]
 # The Tokio sleep, used when the config sets no sleep implementation.
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio"]
 
 [dependencies]
+aws-credential-types = { path = "../../aws/rust-runtime/aws-credential-types", optional = true }
+aws-runtime = { path = "../../aws/rust-runtime/aws-runtime", optional = true }
+aws-types = { path = "../../aws/rust-runtime/aws-types", optional = true }
 aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async" }
 aws-smithy-dynamic-client-api = { path = "../aws-smithy-dynamic-client-api" }
 aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
@@ -30,6 +35,7 @@ aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
 
 [dev-dependencies]
+aws-credential-types = { path = "../../aws/rust-runtime/aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["test-util"] }
 
