@@ -378,6 +378,31 @@ apply SimpleStructOperation @httpResponseTests([
             requiredTimestamp: 1546300800,
             requiredEnum: "DIAMOND"
         }
+    },
+    {
+        id: "SimpleStructWithExactMillisecondTimestamp",
+        documentation: "Serializes and deserializes a whole-millisecond timestamp as the closest double",
+        protocol: rpcv2Cbor,
+        code: 200,
+        body: "v2xyZXF1aXJlZEJsb2JLYmxvYmJ5IGJsb2JvcmVxdWlyZWRCb29sZWFu9G5yZXF1aXJlZFN0cmluZ3hwVGhlcmUgYXJlIHRocmVlIHRoaW5ncyBhbGwgd2lzZSBtZW4gZmVhcjogdGhlIHNlYSBpbiBzdG9ybSwgYSBuaWdodCB3aXRoIG5vIG1vb24sIGFuZCB0aGUgYW5nZXIgb2YgYSBnZW50bGUgbWFuLmxyZXF1aXJlZEJ5dGUYRW1yZXF1aXJlZFNob3J0GEZvcmVxdWlyZWRJbnRlZ2VyGEdscmVxdWlyZWRMb25nGEhtcmVxdWlyZWRGbG9hdPo/MKPXbnJlcXVpcmVkRG91Ymxl+z/mTQE6kqMFcXJlcXVpcmVkVGltZXN0YW1wwftB2VT8QAffO2xyZXF1aXJlZEVudW1nRElBTU9ORP8=",
+        bodyMediaType: "application/cbor",
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor"
+        },
+        params: {
+            requiredBlob: "blobby blob",
+            requiredBoolean: false,
+            requiredString: "There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man.",
+            requiredByte: 69,
+            requiredShort: 70,
+            requiredInteger: 71,
+            requiredLong: 72,
+            requiredFloat: 0.69,
+            requiredDouble: 0.6969,
+            requiredTimestamp: 1700000000.123,
+            requiredEnum: "DIAMOND"
+        }
     }
 ])
 
