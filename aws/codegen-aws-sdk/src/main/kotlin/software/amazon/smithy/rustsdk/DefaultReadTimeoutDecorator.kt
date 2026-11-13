@@ -28,20 +28,19 @@ private const val BEHAVIOR_VERSION = "v2026_11_17"
  * The read timeout bounds request dispatch until response headers arrive. Without one, a peer that
  * accepts a connection and then goes silent leaves the request hanging until the OS gives up.
  *
- * The value is resolved at codegen time by [TimeoutDefaults] and emitted into the generated
- * `ServiceRuntimePlugin`'s config layer. Three things make that the right place:
+ * [TimeoutDefaults] resolves the value at codegen time, and it is emitted into the generated
+ * `ServiceRuntimePlugin`'s config layer. Three properties of that layer make it the right place,
+ * all pinned by `aws-smithy-runtime/tests/timeout_config_layer_precedence.rs`:
  *
- * - the layer is `Order::Defaults`, below the caller's `Config` layer, so any `read_timeout` the
- *   caller sets — longer, shorter, or disabled, on the client or per operation — wins
+ * - it is `Order::Defaults`, below the caller's `Config` layer, so any `read_timeout` the caller
+ *   sets — longer, shorter, or disabled, on the client or per operation — wins
  * - `TimeoutConfig` merges per field across layers, so this does not disturb the connect timeout
  * - `ServiceRuntimePlugin::new` runs on both construction paths, so one hook covers both
  *   `Config::from(&sdk_config)` and `Config::builder()`
  *
- * `rust-runtime/aws-smithy-runtime/tests/timeout_config_layer_precedence.rs` pins all three.
- *
- * Gating in codegen rather than in the runtime's `default_plugins` is deliberate: a runtime-side gate
- * would hand new behavior to anyone who bumps `aws-smithy-runtime` alone, which `cargo update` can do
- * without touching an SDK crate. Emitting the check here pins the decision to the generated crate.
+ * Gating here rather than in the runtime's `default_plugins` is deliberate: a runtime-side gate
+ * would hand new behavior to anyone who bumps `aws-smithy-runtime` alone, which `cargo update` can
+ * do without touching an SDK crate.
  */
 class DefaultReadTimeoutDecorator : ClientCodegenDecorator {
     override val name: String = "DefaultReadTimeout"

@@ -28,13 +28,11 @@ class TimeoutDefaults(artifact: ObjectNode) {
          *
          * The artifact exempts these because Go's and Java's timeouts span the whole response
          * lifecycle, so they would fire partway through a healthy bidirectional stream. Rust's
-         * `read_timeout` closes when response headers arrive, and every operation in these three
-         * services sends headers promptly — Transcribe Streaming measured at 778ms — so the
-         * exemption would remove blackhole protection without preventing any false positive.
+         * closes when response headers arrive, and all three send headers in tens of milliseconds
+         * — median 69ms, 13ms and 76ms respectively — so exempting them would give up blackhole
+         * protection without preventing any false positive.
          *
-         * Every other service takes its artifact value unchanged.
-         *
-         * Changing this set is a behavior change; `TimeoutDefaultsTest` checks each name still
+         * Changing this set is a behavior change. `TimeoutDefaultsTest` checks each name still
          * resolves to an exempt artifact entry, because a drifted name fails silently.
          */
         val RUST_GENERAL_DEFAULT_OVERRIDES =
@@ -63,9 +61,8 @@ class TimeoutDefaults(artifact: ObjectNode) {
     /**
      * Normalized key to original key, for the drift check in [readTimeoutFor].
      *
-     * Built eagerly so that two keys normalizing alike fail when the artifact loads rather than at
-     * whichever service happens to resolve first. That shape means a rename where both the old and
-     * the new key were added, which leaves one of them permanently dead.
+     * Built eagerly so two keys normalizing alike fail when the artifact loads, rather than at
+     * whichever service happens to resolve first.
      */
     private val normalizedKeys: Map<String, String> =
         perService.keys.groupBy { normalize(it) }.mapValues { (_, keys) ->
@@ -92,11 +89,9 @@ class TimeoutDefaults(artifact: ObjectNode) {
         if (perService.containsKey(sdkId)) {
             return perService[sdkId]
         }
-        // No exact entry. Make sure that is genuine absence and not a key that drifted out of
-        // alignment with this service's sdkId, which would silently downgrade the service to the
-        // general default, or silently strip its exemption. This is the Rust counterpart of Java's
-        // build-time `validateArtifactKeys`; the test of that name explains why it runs in this
-        // direction rather than Java's.
+        // No exact entry. Check that is genuine absence rather than a key that drifted out of
+        // alignment with this sdkId, which would silently downgrade the service to the general
+        // default or strip its exemption.
         normalizedKeys[normalize(sdkId)]?.let { drifted ->
             PANIC(
                 "the timeout-defaults artifact has the key '$drifted', which differs from the " +

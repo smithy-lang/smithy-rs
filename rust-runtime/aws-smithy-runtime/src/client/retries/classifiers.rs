@@ -324,15 +324,10 @@ mod test {
 
     /// A connector-level timeout is retryable.
     ///
-    /// This is the path a `read_timeout` takes, and it is a different branch of
+    /// This is the path a `read_timeout` takes, and a different branch of
     /// `TransientErrorClassifier` from `test_timeout_error` above: that one covers
-    /// `OrchestratorError::timeout` (the operation and operation-attempt timeouts), whereas a read
+    /// `OrchestratorError::timeout`, the operation and operation-attempt timeouts, whereas a read
     /// timeout surfaces as a `ConnectorError` whose kind is `Timeout`.
-    ///
-    /// The full chain, for reference: `maybe_timeout_future` yields an `HttpTimeoutError`, whose
-    /// `source()` is a `TimedOutError` specifically so that `downcast_error` recognizes it and
-    /// produces `ConnectorError::timeout`. `read_timeout_covers_handshake_through_response_headers`
-    /// in `aws-smithy-http-client` asserts that end; this asserts the classification end.
     #[test]
     fn test_connector_timeout_error_is_retryable() {
         let policy = TransientErrorClassifier::<UnmodeledError>::new();

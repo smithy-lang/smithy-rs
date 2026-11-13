@@ -17,12 +17,9 @@
 //! 3. `CanDisable` distinguishes "unset" from "explicitly disabled", so a caller can turn the
 //!    default off rather than only replace it.
 //!
-//! None of that is this crate's own behavior, which is exactly why it is worth pinning: a change
-//! to any of the three would silently break per-service defaults, and the failure mode is a
-//! timeout that is absent or unoverridable rather than a compile error.
-//!
-//! [`disabling_a_timeout_also_truncates_the_merge_chain`] documents a *pre-existing* sharp edge
-//! rather than desired behavior. See its comment.
+//! None of that is this crate's own behavior, which is why it is worth pinning: a change to any of
+//! the three would break per-service defaults with an absent or unoverridable timeout rather than a
+//! compile error.
 
 #![cfg(feature = "client")]
 
@@ -253,25 +250,16 @@ fn disabling_read_alongside_another_timeout_preserves_other_defaults() {
 
 /// Documents a pre-existing sharp edge, not desired behavior.
 ///
-/// `MergeTimeoutConfig::merge_iter` stops absorbing lower-priority layers once the accumulated
-/// value reports `has_timeouts() == false`. That predicate tests each field for `Set`, and
-/// `Disabled` is not `Set` — so a `TimeoutConfig` whose only non-`Unset` field is *disabled* also
-/// truncates the chain. The trigger is therefore broader than "an empty config": it is "no field
-/// is `Set`".
+/// `merge_iter` stops absorbing lower-priority layers once the accumulated value reports
+/// `has_timeouts() == false`. That predicate tests each field for `Set`, and `Disabled` is not
+/// `Set`, so a config whose only non-`Unset` field is *disabled* truncates the chain too. Both
+/// variants below already drop the 3.1s connect default today, with no service layer in play, so
+/// this design does not introduce it.
 ///
-/// It is also narrower than it first appears. It fires only when the caller sets *nothing else*;
-/// see `disabling_read_alongside_another_timeout_preserves_other_defaults`.
-///
-/// Both variants below already drop the 3.1s connect default **today**, with no per-service read
-/// default in play, so this is not a behavior this design introduces. It is confirmed by running
-/// the same cases with no service layer at all.
-///
-/// Consequences:
-/// - a fully-exempt service must emit no layer entry rather than an empty `TimeoutConfig`
-/// - customer guidance should prefer a longer `read_timeout` over disabling — see
-///   `caller_can_opt_out_losslessly_with_a_longer_read_timeout`
-/// - worth fixing separately; asserting current behavior here means the fix trips this test
-///   deliberately rather than altering per-service defaults by accident
+/// It fires only when the caller sets nothing else — see
+/// `disabling_read_alongside_another_timeout_preserves_other_defaults`. The consequence for this
+/// design is that a fully-exempt service must emit no layer entry rather than an empty
+/// `TimeoutConfig`. Asserting today's behavior means a future fix trips this test deliberately.
 #[test]
 fn disabling_a_timeout_also_truncates_the_merge_chain() {
     // Variant 1: an empty TimeoutConfig.

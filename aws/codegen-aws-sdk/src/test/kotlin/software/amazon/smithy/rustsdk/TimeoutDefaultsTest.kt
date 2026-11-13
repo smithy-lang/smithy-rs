@@ -101,15 +101,11 @@ class TimeoutDefaultsTest {
     /**
      * A drifted key must fail the build rather than silently resolve to the general default.
      *
-     * This is the Rust equivalent of Java's build-time `validateArtifactKeys`, adapted to the fact
-     * that smithy-rs vendors a subset of service models. Java generates every service, so it can
-     * assert "every key matches a known sdkId". Here that would reject ~59 of 83 keys whose models
-     * simply are not in this repo, and it would also reject legitimately forward-looking keys.
-     *
-     * So the check runs the other way: for each service actually being generated, if its exact
+     * The check runs per generated service rather than per artifact key, because smithy-rs vendors
+     * a subset of models: asserting that every key matches a known `sdkId` would reject ~59 of 83
+     * keys whose models are not in this repo. So for each service being generated, if its exact
      * `sdkId` is not a key but a key differs only by case or punctuation, that key was meant to
-     * cover this service and no longer does. That is unambiguous drift, and it is detectable with
-     * any subset of models.
+     * cover this service and no longer does — unambiguous drift, detectable with any subset.
      */
     @Test
     fun `a key that differs from a real sdkId only by punctuation is rejected`() {

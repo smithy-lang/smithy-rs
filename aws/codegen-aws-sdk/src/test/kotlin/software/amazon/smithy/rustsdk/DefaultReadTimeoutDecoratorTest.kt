@@ -18,10 +18,9 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 /**
  * End-to-end behavior of the per-service default read timeout in generated clients.
  *
- * These assert the *resolved* `TimeoutConfig` an operation actually sees, read out of the config bag
- * by an interceptor, rather than the presence of a string in generated source. The value has to
- * survive codegen, the `ServiceRuntimePlugin` layer, and the config-bag merge, and only the resolved
- * value proves all three.
+ * These assert the *resolved* `TimeoutConfig` an operation sees, read out of the config bag by an
+ * interceptor rather than matched as a string in generated source — the value has to survive
+ * codegen, the `ServiceRuntimePlugin` layer and the merge, and only the resolved value proves it.
  *
  * The scenarios are the three value buckets the artifact can produce, plus a Rust override:
  *
