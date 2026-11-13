@@ -15,7 +15,6 @@ use aws_smithy_schema::protocol::SharedClientProtocol;
 use aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol;
 
 const RPC_V2_CBOR: ShapeId = ShapeId::from_static("smithy.protocols#rpcv2Cbor");
-const RPC_V2_JSON: ShapeId = ShapeId::from_static("smithy.protocols#rpcv2Json");
 const AWS_JSON_1_0: ShapeId = ShapeId::from_static("aws.protocols#awsJson1_0");
 const AWS_JSON_1_1: ShapeId = ShapeId::from_static("aws.protocols#awsJson1_1");
 const REST_JSON_1: ShapeId = ShapeId::from_static("aws.protocols#restJson1");
@@ -24,12 +23,11 @@ pub(crate) const AWS_QUERY: ShapeId = ShapeId::from_static("aws.protocols#awsQue
 const EC2_QUERY: ShapeId = ShapeId::from_static("aws.protocols#ec2Query");
 const PROTOCOL_DEFINITION: ShapeId = ShapeId::from_static("smithy.api#protocolDefinition");
 
-// Every protocol trait Smithy and AWS define, including protocol traits with no shared
-// implementation. Models often omit the definitions of protocol traits, so the known traits are
-// listed by ID.
+// The protocol traits generated clients support. The list includes ec2Query, although it has no
+// shared implementation. Models often omit the definitions of protocol traits, so the known traits
+// are listed by ID.
 const KNOWN_PROTOCOLS: &[ShapeId] = &[
     RPC_V2_CBOR,
-    RPC_V2_JSON,
     AWS_JSON_1_0,
     AWS_JSON_1_1,
     REST_JSON_1,
