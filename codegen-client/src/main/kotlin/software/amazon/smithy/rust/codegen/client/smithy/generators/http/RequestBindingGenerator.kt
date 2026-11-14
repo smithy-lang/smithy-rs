@@ -8,12 +8,14 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.http
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.pattern.SmithyPattern
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.autoDeref
@@ -277,10 +279,21 @@ class RequestBindingGenerator(
         writer: RustWriter,
         memberShape: MemberShape,
     ) {
+        val isSparse = outerTarget is CollectionShape && outerTarget.hasTrait<SparseTrait>()
         listForEach(outerTarget, field) { innerField, targetId ->
             val target = model.expectShape(targetId)
-            val value = paramFmtFun(writer, target, memberShape, innerField)
-            rust("""query.push_kv("${param.locationName}", $value);""")
+            if (isSparse) {
+                // Elements of a `@sparse` list are `Option<T>`. Serialize the inner value when present and
+                // skip null entries, which have no representation in a query string.
+                val derefName = safeName("inner")
+                rustBlockTemplate("if let #{Some}($derefName) = $innerField", *preludeScope) {
+                    val value = paramFmtFun(writer, target, memberShape, derefName)
+                    rust("""query.push_kv("${param.locationName}", $value);""")
+                }
+            } else {
+                val value = paramFmtFun(writer, target, memberShape, innerField)
+                rust("""query.push_kv("${param.locationName}", $value);""")
+            }
         }
     }
 
