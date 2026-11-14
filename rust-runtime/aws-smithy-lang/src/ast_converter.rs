@@ -31,8 +31,8 @@ use crate::node::{Node, NodeObject, NodeValue};
 use crate::shape::owned::Common;
 use crate::shape::{
     EnumShape, IntEnumShape, ListShape, MapShape, MemberShape, Members, OperationShape,
-    ResourceShape, ServiceShape, Shape, ShapeType, SimpleShape, StructureShape, TraitMap,
-    UnionShape,
+    ResourceShape, ServiceShape, Shape, ShapeMixins, ShapeType, SimpleShape, StructureShape,
+    TraitMap, UnionShape,
 };
 use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
@@ -359,6 +359,7 @@ impl AstConverter {
             id,
             target: target?,
             traits: traits?,
+            inherited: None,
             source: location,
         })
     }
@@ -565,32 +566,35 @@ impl AstConverter {
             &location,
         );
 
-        match object.get("mixins").map(|m| (m, m.as_array())) {
-            None => {}
-            Some((_, Some([]))) => {}
-            Some((_, Some(_))) => {
+        // Mixins are supported for the shapes with named members; resolving them is the
+        // assembler's job, so a mixin may be defined in any input.
+        let mixins = match object.get("mixins").map(|m| (m, m.as_array())) {
+            Some((_, Some([_, ..])))
+                if !matches!(
+                    shape_type,
+                    ShapeType::Structure | ShapeType::Union | ShapeType::Enum | ShapeType::IntEnum
+                ) =>
+            {
                 self.error(
                     DiagnosticCode::UnsupportedFeature,
-                    format!("`{id}` uses mixins, which are not supported"),
+                    format!("{shape_type} `{id}` uses mixins, which are not supported for {shape_type} shapes"),
                     property("mixins"),
                 );
                 ok = false;
+                Vec::new()
             }
-            Some((other, None)) => {
-                self.error(
-                    DiagnosticCode::InvalidProperty,
-                    format!("`mixins` must be an array, found {}", other.type_name()),
-                    property("mixins"),
-                );
+            _ => self.ref_list(&object, "mixins").unwrap_or_else(|| {
                 ok = false;
-            }
-        }
+                Vec::new()
+            }),
+        };
 
         let traits = self.traits(object.remove("traits"));
         let traits_ok = traits.is_some();
         let common = Common {
             id: id.clone(),
             traits: traits.unwrap_or_default(),
+            mixins: ShapeMixins::declared(mixins),
             source: location.clone(),
         };
         let shape = self.kind(shape_type, common, &mut object, &location);

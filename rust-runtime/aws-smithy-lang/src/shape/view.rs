@@ -130,6 +130,10 @@ pub struct AppliedTrait<'a> {
 }
 
 impl<'a> AppliedTrait<'a> {
+    pub(crate) fn new(id: &'a ShapeId, value: &'a Node) -> Self {
+        Self { id, value }
+    }
+
     /// The trait's shape ID.
     pub fn id(&self) -> &'a ShapeId {
         self.id
@@ -177,6 +181,23 @@ impl<'a> ShapeView<'a> {
     /// The applied traits.
     pub fn traits(&self) -> Traits<'a> {
         Traits::new(&self.shape.common().traits)
+    }
+
+    /// The shape's mixins, in declaration order. Each is a shape of the same type in the model.
+    pub fn mixins(&self) -> impl ExactSizeIterator<Item = ShapeView<'a>> + 'a {
+        let data = self.data;
+        self.shape.mixins().iter().map(move |id| {
+            ShapeView::new(
+                data,
+                data.root(id).expect("models only contain resolved mixins"),
+            )
+        })
+    }
+
+    /// The shape's own traits: the [`traits`](Self::traits) applied to it rather than inherited
+    /// from its [mixins](Self::mixins). For a shape without mixins, every trait.
+    pub fn introduced_traits(&self) -> impl Iterator<Item = AppliedTrait<'a>> + 'a {
+        self.shape.introduced_traits()
     }
 
     /// The value of a trait, by trait shape ID.
@@ -387,6 +408,33 @@ impl<'a> MemberView<'a> {
     /// The applied traits.
     pub fn traits(&self) -> Traits<'a> {
         Traits::new(&self.member.traits)
+    }
+
+    /// Returns `true` if the member is inherited from the mixins of its container, including a
+    /// member the container redefines.
+    pub fn is_inherited(&self) -> bool {
+        self.member.is_inherited()
+    }
+
+    /// The mixin members this member inherits from: the members with its name of its
+    /// container's mixins, in mixin order. Empty for a member that is not inherited.
+    pub fn mixins(&self) -> impl Iterator<Item = MemberView<'a>> + 'a {
+        let (data, name) = (self.data, self.member.name());
+        let mixins = if self.member.is_inherited() {
+            self.container.mixins()
+        } else {
+            &[]
+        };
+        mixins.iter().filter_map(move |mixin| {
+            let mixin = data.root(mixin)?;
+            Some(MemberView::new(data, mixin, mixin.member(name)?))
+        })
+    }
+
+    /// The member's own traits: the [`traits`](Self::traits) applied to it rather than inherited
+    /// from its [mixins](Self::mixins). For a member that is not inherited, every trait.
+    pub fn introduced_traits(&self) -> impl Iterator<Item = AppliedTrait<'a>> + 'a {
+        self.member.introduced_traits()
     }
 
     /// The value of a trait, by trait shape ID.

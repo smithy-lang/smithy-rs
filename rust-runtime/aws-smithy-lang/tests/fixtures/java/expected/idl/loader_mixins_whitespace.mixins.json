@@ -1,0 +1,11 @@
+{
+    "smithy.example#C": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#B"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": []
+    }
+}

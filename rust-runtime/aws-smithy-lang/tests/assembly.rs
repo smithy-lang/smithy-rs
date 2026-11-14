@@ -725,10 +725,6 @@ fn applied_traits_merge_like_java_smithy() {
         fails(base().add_trait("not an id", traits::DOCUMENTATION, "x")),
         DiagnosticCode::InvalidShapeId
     );
-    assert_eq!(
-        fails(base().add_trait("ex#A", traits::MIXIN, empty())),
-        DiagnosticCode::UnsupportedFeature
-    );
 }
 
 #[test]
@@ -1027,8 +1023,90 @@ fn shapes_built_in_code_merge_like_created_shapes() {
 }
 
 #[test]
-fn mixins_are_rejected_from_every_input() {
-    let json = doc(r#""ex#M":{"type":"structure","traits":{"smithy.api#mixin":{}}}"#);
+fn each_definition_checks_its_own_elided_members() {
+    // Like the reference implementation: `A$nope` once per definition that declares it, and
+    // `B$nope` once, although B has two definitions.
+    let dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/java/idl/invalid/focused_mixins_duplicate_elided_unknown"
+    );
+    let validated = Model::assembler()
+        .add_idl_file(format!("{dir}/a.smithy"))
+        .add_idl_file(format!("{dir}/b.smithy"))
+        .assemble();
+    let count = |id: &str| {
+        validated
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code() == DiagnosticCode::InvalidProperty)
+            .filter(|d| d.shape_id().is_some_and(|s| s.as_str() == id))
+            .count()
+    };
+    assert_eq!((count("ex#A$nope"), count("ex#B$nope")), (2, 1));
+}
+
+#[test]
+fn member_conflicts_are_located() {
+    let idl = r#"$version: "2"
+namespace ex
+@mixin
+structure M1 { x: String }
+@mixin
+structure M2 { x: Integer }
+structure A with [M1, M2] {
+    x: String
+}
+"#;
+    let validated = Model::assembler().add_idl_str("a.smithy", idl).assemble();
+    let conflicts: Vec<_> = validated
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code() == DiagnosticCode::InvalidShape)
+        .collect();
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    let location = conflicts[0].source_location().expect("located");
+    assert_eq!(location.line(), Some(8));
+}
+
+#[test]
+fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
+    let mixins = Model::from_json_str(
+        "m.json",
+        &doc(
+            r#""ex#M":{"type":"structure","traits":{"smithy.api#mixin":{}},
+                 "members":{"x":{"target":"smithy.api#String"}}},
+               "ex#C":{"type":"structure","mixins":[{"target":"ex#M"}]}"#,
+        ),
+    )
+    .unwrap();
+    let c = mixins.expect_shape(&ShapeId::from_static("ex#C")).unwrap();
+    let model = expect_model(
+        Model::assembler()
+            .add_shape(
+                SimpleShape::builder(ShapeType::String, "ex#C")
+                    .build()
+                    .unwrap(),
+            )
+            .add_shape(c.as_shape().unwrap().shape().clone())
+            .add_json_str(
+                "m.json",
+                doc(
+                    r#""ex#M":{"type":"structure","traits":{"smithy.api#mixin":{}},
+                 "members":{"x":{"target":"smithy.api#String"}}}"#,
+                ),
+            )
+            .add_trait("ex#M$x", traits::REQUIRED, empty())
+            .assemble(),
+    );
+    // Like any later shape built in code with the same ID, without a diagnostic, and the
+    // trait applied to its mixin still reaches it.
+    let c = model.expect_shape(&ShapeId::from_static("ex#C$x")).unwrap();
+    assert!(c.has_trait(&traits::REQUIRED));
+}
+
+#[test]
+fn mixins_of_unsupported_shape_types_are_rejected_from_every_input() {
+    let json = doc(r#""ex#M":{"type":"string","traits":{"smithy.api#mixin":{}}}"#);
     let validated = Model::assembler().add_json_str("m.json", json).assemble();
     let error = validated.diagnostics().iter().next().unwrap();
     assert_eq!(error.code(), DiagnosticCode::UnsupportedFeature);
@@ -1036,11 +1114,20 @@ fn mixins_are_rejected_from_every_input() {
         error.source_location().unwrap().pointer(),
         Some("/shapes/ex#M/traits/smithy.api#mixin")
     );
-    let built = StructureShape::builder("ex#M")
+    let built = SimpleShape::builder(ShapeType::String, "ex#M")
         .add_trait(traits::MIXIN, empty())
         .build()
         .unwrap();
     let validated = Model::assembler().add_shape(built).assemble();
+    assert_eq!(
+        validated.diagnostics().iter().next().unwrap().code(),
+        DiagnosticCode::UnsupportedFeature
+    );
+    let string = doc(r#""ex#M":{"type":"string"}"#);
+    let validated = Model::assembler()
+        .add_json_str("m.json", string)
+        .add_trait("ex#M", traits::MIXIN, empty())
+        .assemble();
     assert_eq!(
         validated.diagnostics().iter().next().unwrap().code(),
         DiagnosticCode::UnsupportedFeature

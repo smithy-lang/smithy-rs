@@ -17,7 +17,7 @@
 //! [`ModelAssembler::add_shape`]: crate::ModelAssembler::add_shape
 //! [`Model`]: crate::Model
 
-use super::view::Traits;
+use super::view::{AppliedTrait, Traits};
 use super::ShapeType;
 use crate::diagnostic::{fmt_located, SourceLocation};
 use crate::node::Node;
@@ -38,14 +38,70 @@ pub(crate) type Members = IndexMap<String, MemberShape>;
 #[derive(Debug, Clone)]
 pub(crate) struct Common {
     pub(crate) id: ShapeId,
+    /// The shape's traits: its own traits and the traits it inherits from its mixins.
     pub(crate) traits: TraitMap,
+    /// `None` for a shape without mixins, which keeps such shapes one pointer larger.
+    pub(crate) mixins: Option<Box<ShapeMixins>>,
     pub(crate) source: SourceLocation,
+}
+
+impl Common {
+    pub(crate) fn mixins(&self) -> &[ShapeId] {
+        self.mixins.as_ref().map_or(&[], |m| &m.ids)
+    }
 }
 
 impl PartialEq for Common {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.traits == other.traits
+        self.id == other.id
+            && self.traits == other.traits
+            && same_set(self.mixins(), other.mixins())
     }
+}
+
+/// The mixins of a shape that has them.
+///
+/// Members, and [`Common::traits`], hold the effective data: what the shape declares plus what it
+/// inherits. This records where it came from, which the reference implementation calls
+/// "introduced" data, so the shape can be written in its declared form.
+#[derive(Debug, Clone)]
+pub(crate) struct ShapeMixins {
+    /// The mixins, in declaration order.
+    pub(crate) ids: Vec<ShapeId>,
+    /// The IDs of the shape's own traits: the traits applied to it rather than inherited. Until
+    /// the assembler resolves the mixins, the shape's traits are all its own and this is empty.
+    pub(crate) introduced: HashSet<ShapeId>,
+}
+
+impl ShapeMixins {
+    /// Mixin data for a shape that declares `ids`, or `None` if it declares none.
+    pub(crate) fn declared(ids: Vec<ShapeId>) -> Option<Box<Self>> {
+        (!ids.is_empty()).then(|| {
+            Box::new(Self {
+                ids,
+                introduced: HashSet::new(),
+            })
+        })
+    }
+}
+
+/// The provenance of a member inherited from one or more mixins.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct InheritedMember {
+    /// The IDs of the member's own traits: the traits applied to it, or declared on a local
+    /// redefinition, rather than inherited.
+    pub(crate) introduced: HashSet<ShapeId>,
+}
+
+/// The traits of `traits` whose IDs are in `introduced`, or every trait without mixin data.
+pub(crate) fn introduced_traits<'a>(
+    traits: &'a TraitMap,
+    introduced: Option<&'a HashSet<ShapeId>>,
+) -> impl Iterator<Item = AppliedTrait<'a>> + 'a {
+    traits
+        .iter()
+        .filter(move |(id, _)| introduced.is_none_or(|introduced| introduced.contains(*id)))
+        .map(|(id, value)| AppliedTrait::new(id, value))
 }
 
 /// Compares unordered reference sets.
@@ -192,6 +248,21 @@ impl Shape {
         Traits::new(&self.common().traits)
     }
 
+    /// The shape's mixins, in declaration order. Empty for a shape without mixins.
+    pub fn mixins(&self) -> &[ShapeId] {
+        self.common().mixins()
+    }
+
+    /// The shape's own traits: the [`traits`](Self::traits) applied to it rather than inherited
+    /// from its mixins. For a shape without mixins, every trait.
+    pub fn introduced_traits(&self) -> impl Iterator<Item = AppliedTrait<'_>> + '_ {
+        let common = self.common();
+        introduced_traits(
+            &common.traits,
+            common.mixins.as_ref().map(|m| &m.introduced),
+        )
+    }
+
     /// Where the shape was declared, or [`SourceLocation::none`].
     pub fn source_location(&self) -> &SourceLocation {
         &self.common().source
@@ -232,12 +303,35 @@ impl Shape {
         }
     }
 
+    /// A member by name, for changing it.
+    pub(crate) fn member_mut(&mut self, name: &str) -> Option<&mut MemberShape> {
+        match self {
+            Shape::List(s) => (name == "member").then_some(&mut s.member),
+            Shape::Map(s) => match name {
+                "key" => Some(&mut s.key),
+                "value" => Some(&mut s.value),
+                _ => None,
+            },
+            _ => self.named_members_mut()?.get_mut(name),
+        }
+    }
+
     pub(crate) fn named_members(&self) -> Option<&Members> {
         match self {
             Shape::Structure(s) => Some(&s.members),
             Shape::Union(s) => Some(&s.members),
             Shape::Enum(s) => Some(&s.members),
             Shape::IntEnum(s) => Some(&s.members),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn named_members_mut(&mut self) -> Option<&mut Members> {
+        match self {
+            Shape::Structure(s) => Some(&mut s.members),
+            Shape::Union(s) => Some(&mut s.members),
+            Shape::Enum(s) => Some(&mut s.members),
+            Shape::IntEnum(s) => Some(&mut s.members),
             _ => None,
         }
     }
@@ -401,6 +495,7 @@ impl std::error::Error for ShapeBuildError {
 struct BuilderCommon {
     id: Option<ShapeId>,
     traits: TraitMap,
+    mixins: Option<Box<ShapeMixins>>,
     source: SourceLocation,
     error: Option<ShapeBuildError>,
 }
@@ -410,6 +505,7 @@ impl BuilderCommon {
         let mut this = Self {
             id: None,
             traits: TraitMap::new(),
+            mixins: None,
             source: SourceLocation::none(),
             error: None,
         };
@@ -427,6 +523,7 @@ impl BuilderCommon {
         Self {
             id: Some(common.id.clone()),
             traits: common.traits.clone(),
+            mixins: common.mixins.clone(),
             source: common.source.clone(),
             error: None,
         }
@@ -448,12 +545,25 @@ impl BuilderCommon {
 
     fn add_trait(&mut self, id: impl IntoShapeId, value: Node) {
         if let Some(id) = self.shape_id(id) {
+            if let Some(mixins) = &mut self.mixins {
+                mixins.introduced.insert(id.clone());
+            }
             self.traits.insert(id, value);
         }
     }
 
     fn remove_trait(&mut self, id: &ShapeId) {
+        if let Some(mixins) = &mut self.mixins {
+            mixins.introduced.remove(id);
+        }
         self.traits.shift_remove(id);
+    }
+
+    fn clear_traits(&mut self) {
+        if let Some(mixins) = &mut self.mixins {
+            mixins.introduced.clear();
+        }
+        self.traits.clear();
     }
 
     /// The ID of a member of this shape.
@@ -488,6 +598,7 @@ impl BuilderCommon {
         Ok(Common {
             id: self.id.expect("an ID is present when there is no error"),
             traits: self.traits,
+            mixins: self.mixins,
             source: self.source,
         })
     }
@@ -495,7 +606,8 @@ impl BuilderCommon {
 
 macro_rules! common_builder_methods {
     () => {
-        /// Applies a trait, replacing any existing value for the same trait.
+        /// Applies a trait, replacing any existing value for the same trait. On a shape with
+        /// mixins (from `to_builder`), the trait becomes one of the shape's own traits.
         pub fn add_trait(mut self, id: impl IntoShapeId, value: impl Into<Node>) -> Self {
             self.common.add_trait(id, value.into());
             self
@@ -509,7 +621,7 @@ macro_rules! common_builder_methods {
 
         /// Removes every trait.
         pub fn clear_traits(mut self) -> Self {
-            self.common.traits.clear();
+            self.common.clear_traits();
             self
         }
 
@@ -531,6 +643,20 @@ macro_rules! common_accessors {
         /// The applied traits.
         pub fn traits(&self) -> Traits<'_> {
             Traits::new(&self.common.traits)
+        }
+
+        /// The shape's mixins, in declaration order. Empty for a shape without mixins.
+        pub fn mixins(&self) -> &[ShapeId] {
+            self.common.mixins()
+        }
+
+        /// The shape's own traits: the [`traits`](Self::traits) applied to it rather than
+        /// inherited from its mixins. For a shape without mixins, every trait.
+        pub fn introduced_traits(&self) -> impl Iterator<Item = AppliedTrait<'_>> + '_ {
+            introduced_traits(
+                &self.common.traits,
+                self.common.mixins.as_ref().map(|m| &m.introduced),
+            )
         }
 
         /// Where the shape was declared, or [`SourceLocation::none`].
@@ -562,7 +688,10 @@ pub struct MemberShape {
     /// `Container$name`
     pub(crate) id: ShapeId,
     pub(crate) target: ShapeId,
+    /// The member's traits: its own traits and the traits it inherits from mixin members.
     pub(crate) traits: TraitMap,
+    /// `Some` for a member inherited from the mixins of its container.
+    pub(crate) inherited: Option<Box<InheritedMember>>,
     pub(crate) source: SourceLocation,
 }
 
@@ -573,6 +702,7 @@ impl MemberShape {
             id: None,
             target: None,
             traits: TraitMap::new(),
+            inherited: None,
             source: SourceLocation::none(),
             error: None,
         };
@@ -584,6 +714,23 @@ impl MemberShape {
             Err(err) => builder.fail(ShapeBuildError::invalid_id(err)),
         }
         builder.target(target)
+    }
+
+    /// Makes an inherited member an ordinary one, whose traits are all its own, for a container
+    /// without mixins.
+    fn clear_inherited(&mut self) {
+        self.inherited = None;
+    }
+
+    /// A member with no traits.
+    pub(crate) fn new(id: ShapeId, target: ShapeId, source: SourceLocation) -> Self {
+        Self {
+            id,
+            target,
+            traits: TraitMap::new(),
+            inherited: None,
+            source,
+        }
     }
 
     /// The member ID, such as `com.example#Shape$member`.
@@ -608,6 +755,19 @@ impl MemberShape {
         Traits::new(&self.traits)
     }
 
+    /// Returns `true` if the member is inherited from the mixins of its container, including a
+    /// member the container redefines. Use [`MemberView::mixins`](super::MemberView::mixins) for
+    /// the mixin members it inherits from.
+    pub fn is_inherited(&self) -> bool {
+        self.inherited.is_some()
+    }
+
+    /// The member's own traits: the [`traits`](Self::traits) applied to it rather than inherited
+    /// from mixin members. For a member that is not [inherited](Self::is_inherited), every trait.
+    pub fn introduced_traits(&self) -> impl Iterator<Item = AppliedTrait<'_>> + '_ {
+        introduced_traits(&self.traits, self.inherited.as_ref().map(|i| &i.introduced))
+    }
+
     /// Where the member was declared, or [`SourceLocation::none`].
     pub fn source_location(&self) -> &SourceLocation {
         &self.source
@@ -619,6 +779,7 @@ impl MemberShape {
             id: Some(self.id.clone()),
             target: Some(self.target.clone()),
             traits: self.traits.clone(),
+            inherited: self.inherited.clone(),
             source: self.source.clone(),
             error: None,
         }
@@ -627,7 +788,10 @@ impl MemberShape {
 
 impl PartialEq for MemberShape {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id && self.target == other.target && self.traits == other.traits
+        self.id == other.id
+            && self.target == other.target
+            && self.traits == other.traits
+            && self.is_inherited() == other.is_inherited()
     }
 }
 
@@ -639,6 +803,7 @@ pub struct MemberShapeBuilder {
     id: Option<ShapeId>,
     target: Option<ShapeId>,
     traits: TraitMap,
+    inherited: Option<Box<InheritedMember>>,
     source: SourceLocation,
     error: Option<ShapeBuildError>,
 }
@@ -657,10 +822,14 @@ impl MemberShapeBuilder {
         self
     }
 
-    /// Applies a trait, replacing any existing value for the same trait.
+    /// Applies a trait, replacing any existing value for the same trait. On an inherited member
+    /// (from `to_builder`), the trait becomes one of the member's own traits.
     pub fn add_trait(mut self, id: impl IntoShapeId, value: impl Into<Node>) -> Self {
         match id.into_shape_id() {
             Ok(id) => {
+                if let Some(inherited) = &mut self.inherited {
+                    inherited.introduced.insert(id.clone());
+                }
                 self.traits.insert(id, value.into());
             }
             Err(err) => self.fail(ShapeBuildError::invalid_id(err)),
@@ -670,6 +839,9 @@ impl MemberShapeBuilder {
 
     /// Removes a trait by its shape ID.
     pub fn remove_trait(mut self, id: &ShapeId) -> Self {
+        if let Some(inherited) = &mut self.inherited {
+            inherited.introduced.remove(id);
+        }
         self.traits.shift_remove(id);
         self
     }
@@ -691,6 +863,7 @@ impl MemberShapeBuilder {
                 .target
                 .expect("a target is present when there is no error"),
             traits: self.traits,
+            inherited: self.inherited,
             source: self.source,
         })
     }
@@ -825,12 +998,7 @@ impl ListShapeBuilder {
         let id = self.common.member_id("member");
         let target = self.common.shape_id(target);
         if let (Some(id), Some(target)) = (id, target) {
-            self.member = Some(MemberShape {
-                id,
-                target,
-                traits: TraitMap::new(),
-                source: SourceLocation::none(),
-            });
+            self.member = Some(MemberShape::new(id, target, SourceLocation::none()));
         }
         self
     }
@@ -857,10 +1025,10 @@ impl ListShapeBuilder {
                 .fail(ShapeBuildError::new("a list requires a `member`"));
         }
         let common = self.common.finish()?;
-        Ok(ListShape {
-            common,
-            member: self.member.expect("checked above"),
-        })
+        let mut member = self.member.expect("checked above");
+        // Lists cannot have mixins.
+        member.clear_inherited();
+        Ok(ListShape { common, member })
     }
 }
 
@@ -930,12 +1098,7 @@ impl MapShapeBuilder {
     fn simple_member(&mut self, name: &str, target: impl IntoShapeId) -> Option<MemberShape> {
         let id = self.common.member_id(name);
         let target = self.common.shape_id(target);
-        Some(MemberShape {
-            id: id?,
-            target: target?,
-            traits: TraitMap::new(),
-            source: SourceLocation::none(),
-        })
+        Some(MemberShape::new(id?, target?, SourceLocation::none()))
     }
 
     /// Sets the `key` member's target.
@@ -975,11 +1138,14 @@ impl MapShapeBuilder {
                 .fail(ShapeBuildError::new("a map requires `key` and `value`"));
         }
         let common = self.common.finish()?;
-        Ok(MapShape {
-            common,
-            key: self.key.expect("checked above"),
-            value: self.value.expect("checked above"),
-        })
+        let (mut key, mut value) = (
+            self.key.expect("checked above"),
+            self.value.expect("checked above"),
+        );
+        // Maps cannot have mixins.
+        key.clear_inherited();
+        value.clear_inherited();
+        Ok(MapShape { common, key, value })
     }
 }
 
@@ -1076,27 +1242,24 @@ macro_rules! named_member_shape {
                 let id = self.common.member_id(name);
                 let target = self.common.shape_id(target);
                 if let (Some(id), Some(target)) = (id, target) {
-                    let mut traits = TraitMap::new();
+                    let mut member = MemberShape::new(id, target, SourceLocation::none());
                     if let Some(value) = value {
-                        traits.insert(traits::ENUM_VALUE, value);
+                        member.traits.insert(traits::ENUM_VALUE, value);
                     }
-                    let member = MemberShape {
-                        id,
-                        target,
-                        traits,
-                        source: SourceLocation::none(),
-                    };
                     self.members.insert(name.to_owned(), member);
                 }
                 self
             }
 
-            /// Builds the shape.
+            /// Builds the shape. A member copied from a shape with mixins is inherited only if
+            /// this shape has mixins too.
             pub fn build(self) -> Result<$name, ShapeBuildError> {
-                Ok($name {
-                    common: self.common.finish()?,
-                    members: self.members,
-                })
+                let common = self.common.finish()?;
+                let mut members = self.members;
+                if common.mixins.is_none() {
+                    members.values_mut().for_each(MemberShape::clear_inherited);
+                }
+                Ok($name { common, members })
             }
         }
     };
@@ -1832,6 +1995,90 @@ mod tests {
         assert_ne!(e1, e3);
         assert_eq!(Shape::from(e1.clone()), Shape::from(e2));
         assert_ne!(Shape::from(e1), Shape::from(s1));
+    }
+
+    #[test]
+    fn builders_keep_mixins_and_own_traits() {
+        let model = crate::Model::from_json_str(
+            "m.json",
+            r#"{"smithy": "2", "shapes": {
+                "a#M": {"type": "structure", "traits": {"smithy.api#mixin": {}, "a#t": {}},
+                        "members": {"x": {"target": "a#Str"}}},
+                "a#S": {"type": "structure", "mixins": [{"target": "a#M"}]},
+                "a#Str": {"type": "string"},
+                "a#t": {"type": "structure", "traits": {"smithy.api#trait": {}}},
+                "a#u": {"type": "structure", "traits": {"smithy.api#trait": {}}}
+            }}"#,
+        )
+        .unwrap();
+        let own = |traits: Vec<AppliedTrait<'_>>| -> Vec<String> {
+            traits.iter().map(|t| t.id().to_string()).collect()
+        };
+        let shape = model.data().shapes[&ShapeId::from_static("a#S")]
+            .as_structure()
+            .unwrap();
+        assert_eq!(shape.mixins(), [ShapeId::from_static("a#M")]);
+        assert!(own(shape.introduced_traits().collect()).is_empty());
+        let u = ShapeId::from_static("a#u");
+        let rebuilt = shape
+            .to_builder()
+            .add_trait(u.clone(), NodeObject::new())
+            .build()
+            .unwrap();
+        assert_eq!(rebuilt.mixins(), shape.mixins());
+        assert_eq!(own(rebuilt.introduced_traits().collect()), ["a#u"]);
+        assert_eq!(rebuilt.traits().len(), 2);
+        let cleared = rebuilt.to_builder().remove_trait(&u).build().unwrap();
+        assert!(own(cleared.introduced_traits().collect()).is_empty());
+        assert!(rebuilt
+            .to_builder()
+            .clear_traits()
+            .build()
+            .unwrap()
+            .traits()
+            .is_empty());
+
+        let member = shape.member("x").unwrap();
+        assert!(member.is_inherited());
+        let member = member.to_builder().add_trait(u.clone(), NodeObject::new());
+        assert_eq!(
+            own(member
+                .clone()
+                .build()
+                .unwrap()
+                .introduced_traits()
+                .collect()),
+            ["a#u"]
+        );
+        let member = member.remove_trait(&u).build().unwrap();
+        assert!(member.is_inherited());
+        assert!(own(member.introduced_traits().collect()).is_empty());
+        // A member that is not inherited owns every trait.
+        let plain = MemberShape::builder("a#S$y", "a#Str")
+            .add_trait(u, NodeObject::new())
+            .build()
+            .unwrap();
+        assert_eq!(own(plain.introduced_traits().collect()), ["a#u"]);
+
+        // Copied into a shape without mixins, an inherited member is an ordinary one, so the
+        // writer keeps it.
+        let mut copy = StructureShape::builder("a#S");
+        for member in shape.members() {
+            copy = copy.add_member(member.clone());
+        }
+        let copy = copy.build().unwrap();
+        assert!(copy.members().all(|m| !m.is_inherited()));
+        let model = crate::Model::assembler()
+            .add_shape(copy)
+            .add_json_str(
+                "t.json",
+                r#"{"smithy": "2", "shapes": {"a#Str": {"type": "string"}}}"#,
+            )
+            .assemble()
+            .into_result()
+            .unwrap();
+        let json = crate::AstWriter::new().to_string(&model).unwrap();
+        assert!(json.contains(r#""members":{"x""#), "{json}");
     }
 
     #[test]

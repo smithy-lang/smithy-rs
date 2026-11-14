@@ -1,0 +1,144 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#A": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String"
+                },
+                "shared": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "A shared"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "A",
+                "smithy.api#mixin": {},
+                "smithy.api#tags": [
+                    "a"
+                ]
+            }
+        },
+        "ex#B": {
+            "type": "structure",
+            "members": {
+                "shared": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "B shared",
+                        "smithy.api#required": {}
+                    }
+                },
+                "b": {
+                    "target": "smithy.api#Integer"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "B",
+                "smithy.api#mixin": {}
+            }
+        },
+        "ex#Base": {
+            "type": "structure",
+            "members": {
+                "base": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "ex#D": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#A"
+                },
+                {
+                    "target": "ex#B"
+                }
+            ],
+            "members": {
+                "s": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "The shape's own documentation wins."
+            }
+        },
+        "ex#D$shared": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "B shared",
+                "smithy.api#required": {}
+            }
+        },
+        "ex#E": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#A"
+                },
+                {
+                    "target": "ex#B"
+                }
+            ],
+            "members": {}
+        },
+        "ex#E$shared": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "B shared",
+                "smithy.api#required": {}
+            }
+        },
+        "ex#Leaf": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#Mid"
+                },
+                {
+                    "target": "ex#Other"
+                }
+            ],
+            "members": {
+                "leaf": {
+                    "target": "smithy.api#String"
+                }
+            }
+        },
+        "ex#Mid": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#Base"
+                }
+            ],
+            "members": {
+                "mid": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "ex#Other": {
+            "type": "structure",
+            "members": {
+                "other": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        }
+    }
+}

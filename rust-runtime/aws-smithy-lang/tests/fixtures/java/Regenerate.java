@@ -25,6 +25,7 @@ import software.amazon.smithy.model.node.ArrayNode;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.EntityShape;
+import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.ModelSerializer;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
@@ -49,7 +50,8 @@ import software.amazon.smithy.model.validation.ValidationEvent;
  * <p>For every IDL fixture in {@code idl/GROUP/} (a {@code .smithy} file, or a directory of
  * {@code .smithy} and {@code .json} files assembled together), records the IDs of ERROR and
  * DANGER events separately, plus the location and message of the first ERROR event. Fixtures
- * without ERROR events are also written to {@code expected/idl/NAME.json}.
+ * without ERROR events are also written to {@code expected/idl/NAME.json}, and if they have
+ * shapes with mixins, how Java resolved them to {@code expected/idl/NAME.mixins.json}.
  *
  * <p>For every case in {@code assembly/} (a directory with a {@code case.json} listing assembler
  * steps), records the outcome and, for accepted cases, the serialized model and the source file
@@ -172,6 +174,13 @@ public final class Regenerate {
                             .build()
                             .serialize(model);
                     Files.writeString(idlExpected.resolve(stem + ".json"), Node.prettyPrintJson(serialized) + "\n");
+                    Path mixinsFile = idlExpected.resolve(stem + ".mixins.json");
+                    ObjectNode mixins = mixinResolution(model);
+                    if (mixins.isEmpty()) {
+                        Files.deleteIfExists(mixinsFile);
+                    } else {
+                        Files.writeString(mixinsFile, Node.prettyPrintJson(mixins) + "\n");
+                    }
                 }
             }
         }
@@ -182,6 +191,54 @@ public final class Regenerate {
                 .withMember("outcomes", cases.build())
                 .build();
         Files.writeString(idlExpected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
+    }
+
+    /**
+     * How Java resolved the mixins of every shape that has them: the mixins, and for the shape and
+     * each member, its effective traits and the IDs of its introduced (own) traits. Members, in
+     * order, also list their name, target, and mixin members. Synthetic traits are left out.
+     *
+     * <p>The serialized model alone cannot check this, because it is in the declared form that
+     * both implementations resolve when loading it.
+     */
+    private static ObjectNode mixinResolution(Model model) {
+        ObjectNode.Builder shapes = ObjectNode.builder();
+        model.shapes()
+                .filter(shape -> !shape.isMemberShape() && !shape.getMixins().isEmpty())
+                .sorted(Comparator.comparing(Shape::getId))
+                .forEach(shape -> {
+                    // An array, because member order is significant.
+                    ArrayNode.Builder members = ArrayNode.builder();
+                    for (MemberShape member : shape.members()) {
+                        members.withValue(resolved(member)
+                                .withMember("name", member.getMemberName())
+                                .withMember("target", member.getTarget().toString())
+                                .build());
+                    }
+                    shapes.withMember(shape.getId().toString(), resolved(shape)
+                            .withMember("members", members.build())
+                            .build());
+                });
+        return shapes.build();
+    }
+
+    private static ObjectNode.Builder resolved(Shape shape) {
+        ObjectNode.Builder traits = ObjectNode.builder();
+        shape.getAllTraits().values().stream()
+                .filter(t -> !t.isSynthetic())
+                .sorted(Comparator.comparing(Trait::toShapeId))
+                .forEach(t -> traits.withMember(t.toShapeId().toString(), withoutLocations(t.toNode())));
+        return ObjectNode.builder()
+                .withMember("mixins", shape.getMixins().stream()
+                        .map(id -> Node.from(id.toString()))
+                        .collect(ArrayNode.collect()))
+                .withMember("traits", traits.build())
+                .withMember("introduced", shape.getIntroducedTraits().values().stream()
+                        .filter(t -> !t.isSynthetic())
+                        .map(t -> t.toShapeId().toString())
+                        .sorted()
+                        .map(Node::from)
+                        .collect(ArrayNode.collect()));
     }
 
     private static void regenerateAssembly(Path root) throws Exception {

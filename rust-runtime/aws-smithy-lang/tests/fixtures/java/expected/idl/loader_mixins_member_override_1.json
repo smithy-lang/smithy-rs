@@ -1,0 +1,49 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "com.amazon.example#A1": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#private": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "com.amazon.example#A2": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "com.amazon.example#Valid": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "com.amazon.example#A2"
+                },
+                {
+                    "target": "com.amazon.example#A1"
+                }
+            ],
+            "members": {
+                "b": {
+                    "target": "smithy.api#String"
+                }
+            }
+        }
+    }
+}

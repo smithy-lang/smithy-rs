@@ -131,6 +131,14 @@ impl TraitDefinition {
             let id = applied.id();
             let location = applied.source_location();
             match model.get_shape(id) {
+                Some(definition) if definition.has_trait(&traits::MIXIN) => {
+                    diagnostics.push(error(
+                        DiagnosticCode::InvalidTrait,
+                        format!("`{id}` is a mixin and cannot be applied as a trait to `{owner}`"),
+                        owner,
+                        location,
+                    ))
+                }
                 Some(definition) if !definition.has_trait(&traits::TRAIT) => {
                     diagnostics.push(error(
                         DiagnosticCode::InvalidTrait,

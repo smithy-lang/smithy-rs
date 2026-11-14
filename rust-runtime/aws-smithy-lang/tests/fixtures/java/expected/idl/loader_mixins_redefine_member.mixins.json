@@ -1,0 +1,25 @@
+{
+    "smithy.example#MixedStructure": {
+        "mixins": [
+            "smithy.example#MixinStructure"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#MixinStructure$redefineable"
+                ],
+                "traits": {
+                    "smithy.api#internal": {},
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#required"
+                ],
+                "name": "redefineable",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

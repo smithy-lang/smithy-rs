@@ -29,19 +29,25 @@ IDL/JSON resolution). They include the examples from the
 [Smithy 2.0 IDL specification](https://smithy.io/2.0/spec/idl.html), completed with any
 shapes they reference, plus focused edge cases. `expected/idl/outcomes.json` records Java's
 ERROR and DANGER event IDs separately and the location and message of its first ERROR event;
-`expected/idl/NAME.json` is each accepted fixture as serialized by Java.
+`expected/idl/NAME.json` is each accepted fixture as serialized by Java. For accepted fixtures
+with shapes that use mixins, `expected/idl/NAME.mixins.json` records how Java resolved them:
+each such shape's mixins, its effective and own (introduced) traits, and its members in order
+with their targets, mixin members, and effective and own traits. The serialized model cannot
+show this, because it keeps mixins in their declared form, which both implementations resolve
+when loading it.
 
 `tests/java_idl_fixtures.rs` checks each group:
 
-- `valid/`: Java and Rust both accept, the models are equivalent, and the model survives a
-  write and read through the JSON AST.
+- `valid/`: Java and Rust both accept, the models are equivalent, mixins resolve to the same
+  members and traits, and the model survives a write and read through the JSON AST.
 - `danger/`: as `valid/`, but Java reports only DANGER `SyntacticShapeIdTarget` events, which
   Rust reports as warnings (`Severity` has no DANGER level).
 - `invalid/`: both reject, with corresponding diagnostic codes. Syntax errors are reported at
   the same line and column as Java's, except for the cases listed in `COLUMN_DIFFERENCES`, where
   Rust points at the offending character instead of the start of the enclosing token.
 - `unsupported/`: the reference implementation accepts but this crate deliberately rejects:
-  mixins, Smithy 1.0, leading zeroes in numbers (which the IDL grammar forbids but the
+  mixins of shape types other than structure, union, enum, and intEnum, a shape that is its own
+  mixin, Smithy 1.0, leading zeroes in numbers (which the IDL grammar forbids but the
   reference tokenizer accepts), unknown properties in a JSON AST `apply` entry (the
   reference implementation warns; this crate rejects unknown properties everywhere), and a
   line break or comment between `apply` and its target (the grammar requires spaces,
@@ -50,7 +56,19 @@ ERROR and DANGER event IDs separately and the location and message of its first 
 Other known differences:
 
 - An empty IDL enum is a syntax error here, because the grammar requires a member; Java
-  reports it while building the shape (`invalid/syntax_empty_enum`).
+  reports it while building the shape (`invalid/syntax_empty_enum`,
+  `invalid/validators_mixins_empty_enum_mixin`). Like Java, an enum with mixins may declare no
+  members and inherit them all (`valid/validators_mixins_non_empty_enum`), although the grammar
+  does not allow it.
+- When a member is inherited from more than one mixin, Java counts the traits of its second and
+  later mixin members as the member's own (introduced) traits, and so writes them in an `apply`
+  entry. Here a member's own traits are only those applied to it. The effective traits are the
+  same, so the models are equivalent; `mixins_resolve_like_reference_impl` compares own traits
+  only for members with one mixin.
+- Java lists the other shapes of a mixin cycle in the order of a hash map; this crate lists them
+  in the order the shapes were first seen.
+- Java drops a shape that is its own mixin, and the shapes that use it, without a diagnostic;
+  this crate reports it like any other mixin cycle (`unsupported/focused_mixins_self_reference`).
 - When `$version` is omitted, Java assumes IDL 1.0 and rejects 2.0-only syntax such as
   `= value` defaults. This crate assumes 2.0, as the specification recommends.
   `valid/focused_no_version` therefore uses only syntax valid in both versions.

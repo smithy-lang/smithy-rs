@@ -105,6 +105,16 @@
             "errors": [],
             "locations": {}
         },
+        "created_mixins": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_mixins_model": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
         "created_prelude_namespace": {
             "accepted": true,
             "errors": [],

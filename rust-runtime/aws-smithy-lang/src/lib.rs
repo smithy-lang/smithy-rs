@@ -78,7 +78,8 @@
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! Inputs using mixins are rejected with
+//! Mixins are supported for structure, union, enum, and intEnum shapes, as described on
+//! [`ModelAssembler`]. Mixins of other shape types are rejected with
 //! [`DiagnosticCode::UnsupportedFeature`](diagnostic::DiagnosticCode).
 //!
 //! [Smithy 2.0 IDL]: https://smithy.io/2.0/spec/idl.html
