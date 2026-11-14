@@ -15,3 +15,5 @@
 )]
 
 //! Types shared by the Smithy dynamic client and the plugins that customize it.
+
+pub mod config_key;
