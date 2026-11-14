@@ -361,7 +361,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                "format!(${lengthTrait.validationErrorMessage().dq()}, length, &path)",
+                                                "format!(${lengthTrait.validationErrorMessage().dq()})",
                                             ),
                                     )
                                 }
@@ -384,7 +384,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                 "path.clone()",
                                                 "format!(${
                                                     patternTrait.validationErrorMessage().dq()
-                                                }, &path, ${patternTrait.pattern.toString().dq()})",
+                                                }, ${patternTrait.pattern.toString().dq()})",
                                             ),
                                     )
                                 }
@@ -427,7 +427,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "path.clone()",
                                         "format!(${
                                             blobLength.lengthTrait.validationErrorMessage().dq()
-                                        }, length, &path)",
+                                        })",
                                     ),
                             )
                         }
@@ -465,7 +465,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             "FieldAssignments" to
                                 fieldAssignments(
                                     "path.clone()",
-                                    """format!(${it.validationErrorMessage().dq()}, length, &path)""",
+                                    """format!(${it.validationErrorMessage().dq()})""",
                                 ),
                         )
                     }
@@ -497,7 +497,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """,
                 *preludeScope,
                 *codegenScope,
-                "FieldAssignments" to fieldAssignments("path.clone()", """format!(r##"$message"##, &path)"""),
+                "FieldAssignments" to fieldAssignments("path.clone()", """format!(r##"$message"##)"""),
             )
         }
     }
@@ -523,7 +523,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "FieldAssignments" to
                     fieldAssignments(
                         "path.clone()",
-                        """format!(${rangeInfo.rangeTrait.validationErrorMessage().dq()}, &path)""",
+                        """format!(${rangeInfo.rangeTrait.validationErrorMessage().dq()})""",
                     ),
             )
         }
@@ -555,7 +555,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         """path.clone() + "/${it.forMember.memberName}"""",
-                                        """format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path)""",
+                                        """format!("Value at '{path}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null")""",
                                     ),
                             )
                         }
@@ -603,7 +603,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                 "format!(${
                                                     collectionTraitInfo.lengthTrait.validationErrorMessage()
                                                         .dq()
-                                                }, length, &path)",
+                                                })",
                                             ),
                                     )
                                 }
@@ -624,8 +624,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                                                     ${
                                                     collectionTraitInfo.uniqueItemsTrait.validationErrorMessage().dq()
                                                 },
-                                                    &duplicate_indices,
-                                                    &path
                                                 )
                                                 """,
                                             ),
