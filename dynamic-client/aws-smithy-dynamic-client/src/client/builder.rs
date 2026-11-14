@@ -6,11 +6,13 @@
 // The builder for a dynamic client, and the steps of `build()`.
 
 use super::DynamicClient;
-use crate::config;
+use crate::config::{self, Applies, Put};
 use crate::error::{BuildError, MissingHttpClient};
 use crate::protocol::{detect_protocol, protocol_traits, AWS_QUERY};
+use aws_smithy_lang::endpoint_rules::{EndpointBdd, EndpointRuleSet, Parameters};
 use aws_smithy_lang::runtime_schema::{Materialization, RuntimeSchemaSet};
 use aws_smithy_lang::shape::ServiceView;
+use aws_smithy_lang::traversal::Walker;
 use aws_smithy_lang::{Model, ShapeId};
 use aws_smithy_runtime::client::defaults::{default_plugins, DefaultPluginParams};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -23,6 +25,7 @@ use aws_smithy_schema::protocol::{
     ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -175,11 +178,98 @@ impl DynamicClientBuilder {
         components
             .validate_base_client_config(&cfg)
             .map_err(BuildError::invalid_config)?;
+        // Runs after the last step that can fail, so a failed build logs no warning.
+        for key in unused_keys(&service_view, &self.config.puts) {
+            tracing::warn!(
+                key,
+                service = %service,
+                "the service does not use this config key, so its value has no effect"
+            );
+        }
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
             runtime_plugins,
         })
     }
+}
+
+// Returns the type names of the keys set by `put` that the service never uses, each once. A key
+// is used when any of its `APPLIES` conditions holds, or when it has none.
+fn unused_keys(service: &ServiceView<'_>, keys: &[Put]) -> Vec<&'static str> {
+    if keys.is_empty() {
+        return Vec::new();
+    }
+    let conditions = || keys.iter().flat_map(|key| key.applies);
+    // The wanted traits not found yet on a shape the service reaches. The walk stops once every
+    // wanted trait is found.
+    let mut missing_traits: HashSet<&ShapeId> = conditions()
+        .filter_map(|applies| match applies {
+            Applies::Trait(id) => Some(id),
+            _ => None,
+        })
+        .collect();
+    if !missing_traits.is_empty() {
+        for shape in Walker::new().walk(*service) {
+            missing_traits.retain(|id| !shape.has_trait(id));
+            if missing_traits.is_empty() {
+                break;
+            }
+        }
+    }
+    let wanted_built_ins: HashSet<&str> = conditions()
+        .filter_map(|applies| match applies {
+            Applies::EndpointBuiltIn(built_in) => Some(built_in.as_str()),
+            _ => None,
+        })
+        .collect();
+    // TODO(dynamic-client): Reuse the endpoint rules decoded for endpoint resolution, once
+    // `build()` decodes them.
+    let missing_built_ins = if wanted_built_ins.is_empty() {
+        Some(wanted_built_ins)
+    } else {
+        missing_built_ins(service, wanted_built_ins)
+    };
+    let mut seen = HashSet::new();
+    keys.iter()
+        .filter(|key| seen.insert(key.type_id))
+        .filter(|key| {
+            !key.applies.is_empty()
+                && !key.applies.iter().any(|applies| match applies {
+                    Applies::Trait(id) => !missing_traits.contains(id),
+                    Applies::EndpointBuiltIn(built_in) => missing_built_ins
+                        .as_ref()
+                        .is_none_or(|missing| !missing.contains(built_in.as_str())),
+                    // A condition added later is treated as holding, so it never warns.
+                    _ => true,
+                })
+        })
+        .map(|key| key.name)
+        .collect()
+}
+
+// Returns the names in `wanted` that no parameter of the service's endpoint rules declares as its
+// `builtIn`. The BDD form is read first, then the rule-tree form. Returns `None` when the rules
+// fail to decode, so no built-in key is reported. Decode errors are reported by endpoint
+// resolution.
+fn missing_built_ins<'k>(
+    service: &ServiceView<'_>,
+    mut wanted: HashSet<&'k str>,
+) -> Option<HashSet<&'k str>> {
+    let mut remove_declared = |parameters: &Parameters| {
+        for built_in in parameters
+            .iter()
+            .filter_map(|parameter| parameter.built_in())
+        {
+            wanted.remove(built_in);
+        }
+    };
+    let traits = service.traits();
+    if let Some(bdd) = traits.get_as::<EndpointBdd>().ok()? {
+        remove_declared(bdd.parameters());
+    } else if let Some(rule_set) = traits.get_as::<EndpointRuleSet>().ok()? {
+        remove_declared(rule_set.parameters());
+    }
+    Some(wanted)
 }
 
 // Fails when no HTTP client is set after every plugin is applied. A generated client finds a
@@ -280,7 +370,7 @@ mod tests {
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::NeverClient;
     use aws_smithy_lang::runtime_schema::Materialization;
-    use aws_smithy_lang::ShapeId;
+    use aws_smithy_lang::{Model, ShapeId};
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::identity::{
         IdentityFuture, ResolveCachedIdentity, SharedIdentityResolver,
@@ -298,6 +388,7 @@ mod tests {
     use aws_smithy_types::config_bag::{
         ConfigBag, FrozenLayer, Layer, Storable, StoreAppend, StoreReplace,
     };
+    use std::collections::HashSet;
     use std::fmt;
     use std::path::PathBuf;
     use std::time::{Duration, UNIX_EPOCH};
@@ -822,6 +913,96 @@ mod tests {
         let (cfg, _) = client.client_config();
         let values: Vec<&AppendKey> = cfg.load::<AppendKey>().collect();
         assert_eq!(vec![&AppendKey(3), &AppendKey(2), &AppendKey(1)], values);
+    }
+
+    #[derive(Clone, Debug)]
+    struct CborKey;
+
+    impl Storable for CborKey {
+        type Storer = StoreReplace<Self>;
+    }
+
+    impl ConfigKey for CborKey {
+        const APPLIES: &'static [Applies] = &[Applies::Trait(ShapeId::from_static(
+            "smithy.protocols#rpcv2Cbor",
+        ))];
+    }
+
+    #[derive(Clone, Debug)]
+    struct WidgetKey;
+
+    impl Storable for WidgetKey {
+        type Storer = StoreReplace<Self>;
+    }
+
+    impl ConfigKey for WidgetKey {
+        const APPLIES: &'static [Applies] = &[Applies::Trait(ShapeId::from_static(
+            "example.widgets#widget",
+        ))];
+    }
+
+    // Returns the keys of `config` that the only service in the model `name` never uses.
+    fn unused(name: &str, config: Config) -> Vec<&'static str> {
+        let model = Model::from_json_file(model(name)).unwrap();
+        let service = model.services().next().unwrap();
+        let keys = crate::config::Builder::from(config).puts;
+        super::unused_keys(&service, &keys)
+    }
+
+    #[test]
+    fn a_key_for_a_trait_the_service_has_is_used() {
+        let config = Config::builder().put(CborKey).build();
+        assert!(unused("weather.json", config).is_empty());
+    }
+
+    #[test]
+    fn a_key_for_a_trait_the_service_lacks_is_unused() {
+        let config = Config::builder().put(WidgetKey).build();
+        assert_eq!(
+            vec![std::any::type_name::<WidgetKey>()],
+            unused("weather.json", config)
+        );
+    }
+
+    #[test]
+    fn a_key_set_twice_is_reported_once() {
+        let config = Config::builder().put(WidgetKey).put(WidgetKey).build();
+        assert_eq!(1, unused("weather.json", config).len());
+    }
+
+    #[test]
+    fn only_the_key_for_the_missing_trait_is_reported() {
+        let config = Config::builder().put(CborKey).put(WidgetKey).build();
+        assert_eq!(
+            vec![std::any::type_name::<WidgetKey>()],
+            unused("weather.json", config)
+        );
+    }
+
+    #[test]
+    fn a_key_for_a_built_in_the_rules_declare_is_used() {
+        let model = Model::from_json_file(model("endpoint-rules.json")).unwrap();
+        let service = model.services().next().unwrap();
+        let wanted = HashSet::from(["AWS::UseFIPS"]);
+        let missing = super::missing_built_ins(&service, wanted).expect("the rules decode");
+        assert!(missing.is_empty());
+        let config = Config::builder().put(AppendKey(1)).build();
+        assert!(unused("endpoint-rules.json", config).is_empty());
+    }
+
+    #[test]
+    fn a_key_for_a_built_in_is_unused_without_endpoint_rules() {
+        let config = Config::builder().put(AppendKey(1)).build();
+        assert_eq!(
+            vec![std::any::type_name::<AppendKey>()],
+            unused("weather.json", config)
+        );
+    }
+
+    #[test]
+    fn a_key_with_no_conditions_is_always_used() {
+        let config = Config::builder().put(ReplaceKey(1)).build();
+        assert!(unused("weather.json", config).is_empty());
     }
 
     #[cfg(feature = "aws")]

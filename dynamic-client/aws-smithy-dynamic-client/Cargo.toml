@@ -33,6 +33,7 @@ aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", f
 aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
+tracing = "0.1.44"
 
 [dev-dependencies]
 aws-credential-types = { path = "../../aws/rust-runtime/aws-credential-types", features = ["test-util"] }

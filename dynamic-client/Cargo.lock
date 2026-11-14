@@ -139,6 +139,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
+ "tracing",
 ]
 
 [[package]]

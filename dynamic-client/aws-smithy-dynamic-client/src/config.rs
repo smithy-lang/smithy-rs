@@ -27,6 +27,7 @@ use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, Shared
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use aws_smithy_types::config_bag::Layer;
+use std::any::{type_name, TypeId};
 use std::fmt;
 use std::sync::Arc;
 #[cfg(feature = "aws")]
@@ -209,6 +210,9 @@ impl Builder {
         T::Storer: sealed::Sealed<T>,
     {
         self.puts.push(Put {
+            type_id: TypeId::of::<T>(),
+            name: type_name::<T>(),
+            applies: T::APPLIES,
             store: Arc::new(move |layer| {
                 <T::Storer as sealed::Sealed<T>>::store(layer, value.clone(), sealed::Token)
             }),
@@ -298,15 +302,22 @@ impl Builder {
     }
 }
 
-// A value set by `put`. At `build()`, the value is written into a layer by `store`.
+// A value set by `put`. At `build()`, the value is written into a layer by `store`, and the key
+// is checked against the service.
 #[derive(Clone)]
 pub(crate) struct Put {
+    pub(crate) type_id: TypeId,
+    pub(crate) name: &'static str,
+    pub(crate) applies: &'static [Applies],
     pub(crate) store: Arc<dyn Fn(&mut Layer) + Send + Sync>,
 }
 
 impl fmt::Debug for Put {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Put").finish_non_exhaustive()
+        f.debug_struct("Put")
+            .field("name", &self.name)
+            .field("applies", &self.applies)
+            .finish_non_exhaustive()
     }
 }
 
