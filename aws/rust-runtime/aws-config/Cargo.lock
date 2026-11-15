@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.6.5"
+version = "1.6.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
