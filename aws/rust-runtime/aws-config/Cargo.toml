@@ -89,6 +89,7 @@ aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", feat
 aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "test-util"] }
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types", features = ["test-util"] }
 futures-util = { version = "0.3.29", default-features = false }
 tracing-test = "0.2.4"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }

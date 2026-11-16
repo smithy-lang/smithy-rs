@@ -141,6 +141,21 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
             "merge_conflicting_value_assignment" => ShapeConflict,
             // Two definitions that apply different values of a non-list trait.
             "merge_conflicting_trait" => TraitConflict,
+            // An `apply` with a value that conflicts with the shape's own trait.
+            "apply_conflict" => TraitConflict,
+            // An `apply` to a member only a later, conflicting definition has: only the conflict
+            // is reported, not the trait.
+            "apply_json_member_of_later_definition"
+            | "apply_json_held_member_of_later_definition" => ShapeConflict,
+            // Traits applied to a shape or member that nothing defines. Prelude shapes are not
+            // among the shapes an `apply` can target, even from the prelude namespace.
+            "apply_unknown_target"
+            | "apply_json_unknown_member"
+            | "apply_json_unknown_member_pending"
+            | "apply_in_prelude_namespace"
+            | "apply_json_prelude_shape" => UnknownShape,
+            // An IDL `apply` outside the prelude namespace to a shape in it.
+            "apply_prelude_shape" | "apply_prelude_namespace_shape" => PreludeConflict,
             "unsupported_version" => UnsupportedVersion,
             other if other.starts_with("syntax_") => IdlSyntax,
             other => panic!("{other}: map Java's generic `Model` event to a Rust code"),
@@ -153,11 +168,16 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
 fn intentional_rejection(fixture: &str) -> DiagnosticCode {
     use DiagnosticCode::*;
     match fixture {
-        "spec_apply" | "spec_apply_block" | "spec_inline_mixins" | "spec_mixin_elision"
-        | "spec_mixins" => UnsupportedFeature,
+        "spec_inline_mixins" | "spec_mixin_elision" | "spec_mixins" => UnsupportedFeature,
+        // Unknown properties are errors here; the reference implementation warns and applies
+        // the traits.
+        "apply_extra_property" => UnknownProperty,
         "version_1" => UnsupportedVersion,
         // The IDL grammar forbids leading zeroes; Java's tokenizer accepts them.
         "strict_leading_zero" => IdlSyntax,
+        // The grammar requires spaces after `apply`; the reference implementation also accepts a
+        // line break or a comment there.
+        "apply_newline_after_keyword" | "apply_comment_after_keyword" => IdlSyntax,
         other => panic!("{other}: document why this crate rejects a model Java accepts"),
     }
 }
@@ -349,7 +369,15 @@ fn idl_fixtures_round_trip_through_the_json_ast() {
             continue;
         }
         let model = assemble(&outcome.name).into_result().unwrap();
-        let json = aws_smithy_lang::AstWriter::new().to_string(&model).unwrap();
+        // Like the reference implementation's serializer, the writer leaves out every shape in
+        // the prelude namespace unless the prelude is included, even shapes a fixture adds.
+        let adds_prelude_shapes = model
+            .non_prelude_shapes()
+            .any(|shape| aws_smithy_lang::prelude::is_prelude_shape(shape.id()));
+        let json = aws_smithy_lang::AstWriter::new()
+            .include_prelude(adds_prelude_shapes)
+            .to_string(&model)
+            .unwrap();
         let reloaded = Model::from_json_str("written.json", &json)
             .unwrap_or_else(|e| panic!("{}: {:?}", outcome.name, e.diagnostics()));
         assert!(model.equivalent(&reloaded), "{}", outcome.name);
