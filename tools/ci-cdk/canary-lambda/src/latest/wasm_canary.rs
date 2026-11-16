@@ -38,13 +38,13 @@ impl wasmtime_wasi::WasiView for WasiHostCtx {
     }
 }
 
-impl wasmtime_wasi_http::types::WasiHttpView for WasiHostCtx {
-    fn ctx(&mut self) -> &mut wasmtime_wasi_http::WasiHttpCtx {
-        &mut self.wasi_http_ctx
-    }
-
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        &mut self.preview2_table
+impl wasmtime_wasi_http::p2::WasiHttpView for WasiHostCtx {
+    fn http(&mut self) -> wasmtime_wasi_http::p2::WasiHttpCtxView<'_> {
+        wasmtime_wasi_http::p2::WasiHttpCtxView {
+            ctx: &mut self.wasi_http_ctx,
+            table: &mut self.preview2_table,
+            hooks: Default::default(),
+        }
     }
 }
 
@@ -54,23 +54,15 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
         .join("aws_sdk_rust_lambda_canary_wasm.wasm");
 
     // Create a Wasmtime Engine configured to run Components
-    let engine = Engine::new(
-        wasmtime::Config::new()
-            .wasm_component_model(true)
-            .async_support(true),
-    )?;
+    let engine = Engine::new(wasmtime::Config::new().wasm_component_model(true))?;
 
     // Create our component from the wasm file
     let component = Component::from_file(&engine, wasm_bin_path)?;
 
     // Create the linker and link in the necessary WASI bindings
     let mut linker = Linker::new(&engine);
-    // Rust 1.100's std on wasm32-wasip2 imports `exit-with-code` from `wasi:cli/exit@0.2.12`.
-    // wasmtime-wasi 38 only links it behind its unstable `cli-exit-with-code` feature.
-    let mut link_options = wasmtime_wasi::p2::bindings::LinkOptions::default();
-    link_options.cli_exit_with_code(true);
-    wasmtime_wasi::p2::add_to_linker_with_options_async(&mut linker, &link_options)?;
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)?;
 
     // Configure and create a `WasiCtx`, which WASI functions need access to
     // through the host state of the store (which in this case is the host state
