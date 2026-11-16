@@ -65,7 +65,11 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
 
     // Create the linker and link in the necessary WASI bindings
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+    // Rust 1.100's std on wasm32-wasip2 imports `exit-with-code` from `wasi:cli/exit@0.2.12`.
+    // wasmtime-wasi 38 only links it behind its unstable `cli-exit-with-code` feature.
+    let mut link_options = wasmtime_wasi::p2::bindings::LinkOptions::default();
+    link_options.cli_exit_with_code(true);
+    wasmtime_wasi::p2::add_to_linker_with_options_async(&mut linker, &link_options)?;
     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 
     // Configure and create a `WasiCtx`, which WASI functions need access to
