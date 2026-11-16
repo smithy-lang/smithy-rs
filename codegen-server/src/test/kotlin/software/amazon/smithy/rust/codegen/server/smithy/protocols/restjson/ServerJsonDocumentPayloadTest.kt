@@ -121,7 +121,8 @@ internal class ServerJsonDocumentPayloadTest {
             }
             """.asSmithyModel()
 
-        for ((http1x, schemaSerde) in listOf(false to null, false to false, true to null, true to false, true to true)) {
+        // Explicitly disabling schemaSerde parses exactly like omitting it (see `ServerRustSettingsTest`).
+        for ((http1x, schemaSerde) in listOf(false to null, true to null, true to true)) {
             val settings = ServerAdditionalSettings.builder().withHttp1x(http1x)
             if (schemaSerde != null) {
                 settings.schemaSerde(schemaSerde)
