@@ -924,89 +924,9 @@ fn relationship_type_classification() {
 // ---------------------------------------------------------------------------------------------
 // Pagination.
 
-/// - `ex#Service` has defaults for both tokens and the page size.
-/// - `ex#ListAll` sets every property itself, with nested output paths.
-/// - `ex#ListInherited` and `ex#ListMixed` inherit different properties.
-/// - `ex#ListShared` paginates differently in `ex#Service` and `ex#Other`.
-/// - `ex#ListNested` is reached only through two resources.
-/// - `ex#Unmarked` has no `@paginated` trait, although the service's defaults would resolve.
-const PAGINATED: &str = r#"
-$version: "2"
-namespace ex
-
-@paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "maxResults")
-service Service {
-    operations: [ListAll, ListInherited, ListMixed, ListShared, Unmarked]
-    resources: [Outer]
-}
-
-@paginated(inputToken: "cursor", outputToken: "page.cursor")
-service Other {
-    operations: [ListShared]
-}
-
-service Bare {
-    operations: [ListAll]
-}
-
-@readonly
-@paginated(inputToken: "token", outputToken: "result.next", items: "result.items", pageSize: "size")
-operation ListAll {
-    input := { token: String, size: Integer, nextToken: String, maxResults: Integer }
-    output := { result: Result, nextToken: String }
-}
-
-@readonly
-@paginated(items: "things")
-operation ListInherited {
-    input := { nextToken: String, maxResults: Integer }
-    output := { nextToken: String, things: Things }
-}
-
-@readonly
-@paginated(inputToken: "start", pageSize: "limit")
-operation ListMixed {
-    input := { start: String, limit: Integer }
-    output := { nextToken: String }
-}
-
-@readonly
-@paginated(items: "things")
-operation ListShared {
-    input := { nextToken: String, maxResults: Integer, cursor: String }
-    output := { nextToken: String, things: Things, page: Page }
-}
-
-@readonly
-operation Unmarked {
-    input := { nextToken: String }
-    output := { nextToken: String }
-}
-
-resource Outer { resources: [Inner] }
-
-resource Inner { list: ListNested }
-
-@readonly
-@paginated(items: "things")
-operation ListNested {
-    input := { nextToken: String, maxResults: Integer }
-    output := { nextToken: String, things: Things }
-}
-
-structure Result {
-    next: String
-    items: Things
-}
-
-structure Page {
-    cursor: String
-}
-
-list Things {
-    member: String
-}
-"#;
+/// Valid pagination, shared with the reference-implementation parity test. The file's header
+/// comment lists the cases.
+const PAGINATED: &str = include_str!("../../tests/fixtures/java/paginated/paginated.smithy");
 
 /// Pagination that loads, because the loader does not validate `@paginated`, but cannot be
 /// resolved.

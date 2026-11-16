@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -17,6 +18,8 @@ import java.util.stream.Stream;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.BottomUpIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
+import software.amazon.smithy.model.knowledge.PaginatedIndex;
+import software.amazon.smithy.model.knowledge.PaginationInfo;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.SourceLocation;
 import software.amazon.smithy.model.loader.ModelAssembler;
@@ -30,6 +33,7 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.DynamicTrait;
+import software.amazon.smithy.model.traits.PaginatedTrait;
 import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.model.traits.TraitFactory;
 import software.amazon.smithy.model.validation.Severity;
@@ -55,6 +59,11 @@ import software.amazon.smithy.model.validation.ValidationEvent;
  * steps), records the outcome and, for accepted cases, the serialized model and the source file
  * of selected shapes, members, and traits. These cover inputs added in code ({@code addShape},
  * {@code addModel}, {@code putMetadata}, {@code addTrait}), which file fixtures cannot express.
+ *
+ * <p>For every fixture in {@code paginated/} (a {@code .smithy} or {@code .json} file), writes
+ * the answer of Java's {@code PaginatedIndex} for every service and operation to
+ * {@code expected/paginated/NAME.json}. These fixtures are assembled with full validation and
+ * must have no ERROR or DANGER events.
  *
  * <p>See README.md for how to run this.
  */
@@ -116,6 +125,59 @@ public final class Regenerate {
 
         regenerateIdl(root);
         regenerateAssembly(root);
+        regeneratePaginated(root);
+    }
+
+    private static void regeneratePaginated(Path root) throws Exception {
+        Path expected = root.resolve("expected").resolve("paginated");
+        Files.createDirectories(expected);
+        List<Path> fixtures = new ArrayList<>();
+        try (Stream<Path> files = Files.list(root.resolve("paginated"))) {
+            files.filter(p -> p.toString().endsWith(".smithy") || p.toString().endsWith(".json"))
+                    .sorted()
+                    .forEach(fixtures::add);
+        }
+        for (Path fixture : fixtures) {
+            // Full validation, including `PaginatedTraitValidator`: the Rust index matches Java
+            // only for valid models. `unwrap` throws on ERROR and DANGER events.
+            Model model = Model.assembler().addImport(fixture).assemble().unwrap();
+            PaginatedIndex index = PaginatedIndex.of(model);
+            // Every pair, so that the Rust test also checks where Java has no answer.
+            ObjectNode answers = byId(model.getServiceShapes().stream(), service -> byId(
+                    model.getOperationShapes().stream(),
+                    operation -> index.getPaginationInfo(service, operation)
+                            .map(Regenerate::pagination)
+                            .orElse(Node.nullNode())));
+            ObjectNode document = ObjectNode.builder()
+                    .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                    .withMember("pagination", answers)
+                    .build();
+            String stem = fixture.getFileName().toString().replaceFirst("\\.(smithy|json)$", "");
+            Files.writeString(expected.resolve(stem + ".json"), Node.prettyPrintJson(document) + "\n");
+        }
+    }
+
+    private static Node pagination(PaginationInfo info) {
+        PaginatedTrait effective = info.getPaginatedTrait();
+        return ObjectNode.builder()
+                .withMember("trait", ObjectNode.builder()
+                        .withMember("inputToken", optionalString(effective.getInputToken()))
+                        .withMember("outputToken", optionalString(effective.getOutputToken()))
+                        .withMember("items", optionalString(effective.getItems()))
+                        .withMember("pageSize", optionalString(effective.getPageSize()))
+                        .build())
+                .withMember("input", info.getInput().getId().toString())
+                .withMember("output", info.getOutput().getId().toString())
+                .withMember("inputTokenMember", info.getInputTokenMember().getId().toString())
+                .withMember("outputTokenMemberPath", ids(info.getOutputTokenMemberPath()))
+                .withMember("pageSizeMember", optionalString(
+                        info.getPageSizeMember().map(member -> member.getId().toString())))
+                .withMember("itemsMemberPath", ids(info.getItemsMemberPath()))
+                .build();
+    }
+
+    private static Node optionalString(Optional<String> value) {
+        return value.<Node>map(Node::from).orElse(Node.nullNode());
     }
 
     private static void regenerateIdl(Path root) throws Exception {

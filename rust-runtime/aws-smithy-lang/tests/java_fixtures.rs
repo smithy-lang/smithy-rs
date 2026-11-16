@@ -280,3 +280,96 @@ fn knowledge_matches_java() {
         dir.display()
     );
 }
+
+/// Agreement with Java's `PaginatedIndex` for every service and operation of every
+/// `paginated/` fixture.
+///
+/// Java validated these fixtures, so every query must succeed. Rust's errors for invalid
+/// pagination, which Java's index reports as missing information instead, are covered by the
+/// crate's unit tests.
+#[test]
+fn pagination_matches_java() {
+    use serde_json::{json, Value};
+
+    fn ids<'a>(
+        members: impl IntoIterator<Item = &'a aws_smithy_lang::shape::MemberView<'a>>,
+    ) -> Value {
+        Value::from(
+            members
+                .into_iter()
+                .map(|m| m.id().to_string())
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    let dir = fixtures().join("paginated");
+    let mut fixtures_checked = 0;
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.display();
+        let stem = path.file_stem().unwrap().to_string_lossy();
+        let expected: Value = serde_json::from_str(
+            &std::fs::read_to_string(fixtures().join(format!("expected/paginated/{stem}.json")))
+                .unwrap_or_else(|e| panic!("{name}: regenerate expected output: {e}")),
+        )
+        .unwrap();
+        let model = match path.extension().and_then(|e| e.to_str()) {
+            Some("smithy") => Model::from_idl_file(&path),
+            _ => load(&path),
+        }
+        .unwrap_or_else(|e| panic!("{name}: {:?}", e.diagnostics()));
+        let index = model.knowledge().paginated();
+
+        let answers = expected["pagination"].as_object().unwrap();
+        assert_eq!(answers.len(), model.services().count(), "{name}: services");
+        let (mut paginated, mut unpaginated) = (0, 0);
+        for (service, operations) in answers {
+            let operations = operations.as_object().unwrap();
+            assert_eq!(
+                operations.len(),
+                model.operations().count(),
+                "{name}: operations of {service}"
+            );
+            for (operation, answer) in operations {
+                let info = index
+                    .get(&service.parse().unwrap(), &operation.parse().unwrap())
+                    .unwrap_or_else(|err| panic!("{name}: {service} {operation}: {err}"));
+                let actual = match info {
+                    None => {
+                        unpaginated += 1;
+                        Value::Null
+                    }
+                    Some(info) => {
+                        paginated += 1;
+                        let effective = info.paginated_trait();
+                        json!({
+                            "trait": {
+                                "inputToken": effective.input_token(),
+                                "outputToken": effective.output_token(),
+                                "items": effective.items(),
+                                "pageSize": effective.page_size(),
+                            },
+                            "input": info.input_shape().id().to_string(),
+                            "output": info.output_shape().id().to_string(),
+                            "inputTokenMember": info.input_token_member().id().to_string(),
+                            "outputTokenMemberPath": ids(info.output_token_member_path()),
+                            "pageSizeMember": info.page_size_member().map(|m| m.id().to_string()),
+                            "itemsMemberPath": ids(info.items_member_path()),
+                        })
+                    }
+                };
+                assert_eq!(&actual, answer, "{name}: {service} {operation}");
+            }
+        }
+        assert!(
+            paginated > 0 && unpaginated > 0,
+            "{name}: expected both paginated and unpaginated pairs"
+        );
+        fixtures_checked += 1;
+    }
+    assert!(
+        fixtures_checked > 0,
+        "no pagination fixtures in {}",
+        dir.display()
+    );
+}

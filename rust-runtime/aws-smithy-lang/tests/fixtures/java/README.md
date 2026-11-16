@@ -98,6 +98,28 @@ regenerate after changing `FILE` or moving the pinned Smithy version.
 an equivalent model (including the order of merged arrays and metadata) with the same source
 files, and that rejected cases report corresponding diagnostic codes.
 
+## Pagination fixtures
+
+`paginated/` contains `.smithy` or `.json` models for `knowledge::PaginatedIndex`. Unlike
+`knowledge/` fixtures, they are assembled with full validation, including Java's
+`PaginatedTraitValidator`, and regenerating fails if Java reports an ERROR or DANGER event:
+the index is meant to agree with Java only on valid models. `expected/paginated/NAME.json`
+records Java's `PaginatedIndex` answer for every service and every operation of the model,
+`null` where Java has no pagination information. Otherwise it records the effective trait,
+the input and output structures, and every member of each resolved path.
+
+`tests/java_fixtures.rs` checks that every Rust query succeeds and gives the same answer.
+`paginated/paginated.smithy` is also the valid model of the crate's pagination unit tests.
+
+For invalid models, this crate intentionally differs from Java's index. The unit tests cover
+these cases:
+
+- An `inputToken` or `outputToken` that is missing or does not resolve is an error here; Java
+  returns no pagination information.
+- A `pageSize` or `items` value that does not resolve is an error here; Java omits it.
+- An output path with an empty member name is an error here. Java splits paths with
+  `Pattern.split`, which drops trailing empty names, so `token.` resolves to `token`.
+
 ## Regenerating
 
 After adding or changing a fixture, regenerate `expected/` with JDK 17+ and the pinned

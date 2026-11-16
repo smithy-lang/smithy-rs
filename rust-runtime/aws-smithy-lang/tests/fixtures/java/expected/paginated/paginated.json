@@ -1,0 +1,151 @@
+{
+    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "pagination": {
+        "ex#Bare": {
+            "ex#ListAll": {
+                "trait": {
+                    "inputToken": "token",
+                    "outputToken": "result.next",
+                    "items": "result.items",
+                    "pageSize": "size"
+                },
+                "input": "ex#ListAllInput",
+                "output": "ex#ListAllOutput",
+                "inputTokenMember": "ex#ListAllInput$token",
+                "outputTokenMemberPath": [
+                    "ex#ListAllOutput$result",
+                    "ex#Result$next"
+                ],
+                "pageSizeMember": "ex#ListAllInput$size",
+                "itemsMemberPath": [
+                    "ex#ListAllOutput$result",
+                    "ex#Result$items"
+                ]
+            },
+            "ex#ListInherited": null,
+            "ex#ListMixed": null,
+            "ex#ListNested": null,
+            "ex#ListShared": null,
+            "ex#Unmarked": null
+        },
+        "ex#Other": {
+            "ex#ListAll": null,
+            "ex#ListInherited": null,
+            "ex#ListMixed": null,
+            "ex#ListNested": null,
+            "ex#ListShared": {
+                "trait": {
+                    "inputToken": "cursor",
+                    "outputToken": "page.cursor",
+                    "items": "things",
+                    "pageSize": null
+                },
+                "input": "ex#ListSharedInput",
+                "output": "ex#ListSharedOutput",
+                "inputTokenMember": "ex#ListSharedInput$cursor",
+                "outputTokenMemberPath": [
+                    "ex#ListSharedOutput$page",
+                    "ex#Page$cursor"
+                ],
+                "pageSizeMember": null,
+                "itemsMemberPath": [
+                    "ex#ListSharedOutput$things"
+                ]
+            },
+            "ex#Unmarked": null
+        },
+        "ex#Service": {
+            "ex#ListAll": {
+                "trait": {
+                    "inputToken": "token",
+                    "outputToken": "result.next",
+                    "items": "result.items",
+                    "pageSize": "size"
+                },
+                "input": "ex#ListAllInput",
+                "output": "ex#ListAllOutput",
+                "inputTokenMember": "ex#ListAllInput$token",
+                "outputTokenMemberPath": [
+                    "ex#ListAllOutput$result",
+                    "ex#Result$next"
+                ],
+                "pageSizeMember": "ex#ListAllInput$size",
+                "itemsMemberPath": [
+                    "ex#ListAllOutput$result",
+                    "ex#Result$items"
+                ]
+            },
+            "ex#ListInherited": {
+                "trait": {
+                    "inputToken": "nextToken",
+                    "outputToken": "nextToken",
+                    "items": "things",
+                    "pageSize": "maxResults"
+                },
+                "input": "ex#ListInheritedInput",
+                "output": "ex#ListInheritedOutput",
+                "inputTokenMember": "ex#ListInheritedInput$nextToken",
+                "outputTokenMemberPath": [
+                    "ex#ListInheritedOutput$nextToken"
+                ],
+                "pageSizeMember": "ex#ListInheritedInput$maxResults",
+                "itemsMemberPath": [
+                    "ex#ListInheritedOutput$things"
+                ]
+            },
+            "ex#ListMixed": {
+                "trait": {
+                    "inputToken": "start",
+                    "outputToken": "nextToken",
+                    "items": null,
+                    "pageSize": "limit"
+                },
+                "input": "ex#ListMixedInput",
+                "output": "ex#ListMixedOutput",
+                "inputTokenMember": "ex#ListMixedInput$start",
+                "outputTokenMemberPath": [
+                    "ex#ListMixedOutput$nextToken"
+                ],
+                "pageSizeMember": "ex#ListMixedInput$limit",
+                "itemsMemberPath": []
+            },
+            "ex#ListNested": {
+                "trait": {
+                    "inputToken": "nextToken",
+                    "outputToken": "nextToken",
+                    "items": "things",
+                    "pageSize": "maxResults"
+                },
+                "input": "ex#ListNestedInput",
+                "output": "ex#ListNestedOutput",
+                "inputTokenMember": "ex#ListNestedInput$nextToken",
+                "outputTokenMemberPath": [
+                    "ex#ListNestedOutput$nextToken"
+                ],
+                "pageSizeMember": "ex#ListNestedInput$maxResults",
+                "itemsMemberPath": [
+                    "ex#ListNestedOutput$things"
+                ]
+            },
+            "ex#ListShared": {
+                "trait": {
+                    "inputToken": "nextToken",
+                    "outputToken": "nextToken",
+                    "items": "things",
+                    "pageSize": "maxResults"
+                },
+                "input": "ex#ListSharedInput",
+                "output": "ex#ListSharedOutput",
+                "inputTokenMember": "ex#ListSharedInput$nextToken",
+                "outputTokenMemberPath": [
+                    "ex#ListSharedOutput$nextToken"
+                ],
+                "pageSizeMember": "ex#ListSharedInput$maxResults",
+                "itemsMemberPath": [
+                    "ex#ListSharedOutput$things"
+                ]
+            },
+            "ex#Unmarked": null
+        }
+    }
+}
