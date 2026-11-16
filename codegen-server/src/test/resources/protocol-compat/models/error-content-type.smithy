@@ -1,8 +1,8 @@
 $version: "2"
 
 // Defines success and modeled-error outputs with empty, document, text, blob, media-typed,
-// and streaming bodies across all five protocols. Tests check how operation output metadata
-// controls modeled-error content type and invalid-response rejection.
+// and streaming bodies across all five protocols. Tests check that schema modeled-error
+// content types are independent of success outputs, while preserving legacy behavior.
 
 namespace compat.errorcontenttype
 use aws.protocols#restJson1

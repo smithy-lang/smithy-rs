@@ -9,6 +9,8 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -25,15 +27,15 @@ import java.nio.file.Path
 
 /**
  * Calls operations with empty, document, text, blob, media-typed, and streaming outputs, returning
- * both success values and modeled errors. Across all five protocols it checks how operation
- * output metadata determines error content type and how invalid values are rejected. Schema
- * error wrappers must retain the correct operation descriptor, and wire captures must match legacy.
+ * both success values and modeled errors. Schema errors use the protocol content type unless
+ * the error binds an explicit header, regardless of the success output. Legacy behavior stays
+ * covered, and wire captures match apart from the intentional REST error content-type difference.
  * The CBOR comparison is disabled pending a fix for legacy error header serialization.
  */
 @Tag("server-compatibility")
 internal class ModeledErrorContentTypeCompatibilityTest {
     @Test
-    fun `modeled error content type follows the operation output`() {
+    fun `schema modeled error content type is independent of the operation output`() {
         checkContentTypes(listOf("JsonErrorContentType", "XmlErrorContentType", "Json10ErrorContentType", "Json11ErrorContentType"))
     }
 
@@ -117,26 +119,11 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                     check(context.usesSchemaHttpSerde == schemaSerde)
                     crate.testModule {
                         tokioTest("modeled_error_content_type") {
-                            val schemaErrorChecks =
-                                if (schemaSerde) {
-                                    """
-                                    let shared = crate::error::Failure { message: #{Some}("failure".into()), content_type: #{None} };
-                                    assert!(#{Server}::schema::HttpModeledError::operation_schema(&shared).is_none());
-                                    let error = crate::error::MediaTextError::Failure(shared);
-                                    let operation = #{Server}::schema::HttpModeledError::operation_schema(&error).unwrap();
-                                    assert_eq!(operation.shape_id().shape_name(), "MediaText");
-                                    assert!(std::ptr::eq(operation.input(), crate::input::MediaTextInput::SCHEMA));
-                                    assert!(std::ptr::eq(operation.output(), crate::output::MediaTextOutput::SCHEMA));
-                                    """.trimIndent()
-                                } else {
-                                    ""
-                                }
                             rustTemplate(
                                 """
                                 use #{Tower}::ServiceExt;
                                 use #{BodyUtil}::BodyExt;
                                 use #{Json}::json;
-                                $schemaErrorChecks
                                 let mut observations = #{Vec}::new();
                                 for scenario in ["success", "absent", "explicit", "empty", "invalid", "document-type"] {
                                     let content_type = match scenario {
@@ -233,18 +220,18 @@ internal class ModeledErrorContentTypeCompatibilityTest {
                                         };
                                         let response = app.clone().oneshot(request).await.unwrap();
                                         let status = response.status().as_u16();
-                                        if ${!schemaSerde} {
-                                            // Fresh mainline at 9267f0e25 honors modeled HTTP bindings
-                                            // for AWS JSON too.
-                                            assert_eq!(status, if scenario == "success" { 200 } else if !$isCbor && scenario == "invalid" { 400 } else { 422 }, "{operation}/{scenario}");
-                                            if scenario != "invalid" {
-                                                // Generated serde treats an empty scalar header as absent.
-                                                let expected = if $isCbor { #{Some}(document_type) } else {
-                                                    content_type.filter(|value| !value.is_empty())
-                                                        .or(if $isRest { default_type } else { #{Some}(document_type) })
-                                                };
-                                                assert_eq!(response.headers().get("content-type").map(|h| h.to_str().unwrap()), expected, "{operation}/{scenario}");
-                                            }
+                                        assert_eq!(status, if scenario == "success" { 200 } else if !$isCbor && scenario == "invalid" { 400 } else { 422 }, "{operation}/{scenario}");
+                                        if scenario != "invalid" {
+                                            // Generated serde treats an empty scalar header as absent.
+                                            let default_type = if $isRest && (scenario == "success" || ${!schemaSerde}) {
+                                                default_type
+                                            } else {
+                                                #{Some}(document_type)
+                                            };
+                                            let expected = if scenario == "success" || $isCbor { default_type } else {
+                                                content_type.filter(|value| !value.is_empty()).or(default_type)
+                                            };
+                                            assert_eq!(response.headers().get("content-type").map(|h| h.to_str().unwrap()), expected, "{operation}/{scenario}");
                                         }
                                         let mut headers = response.headers().iter().map(|(name, value)|
                                             (name.as_str().to_owned(), value.as_bytes().to_vec())).collect::<#{Vec}<_>>();
@@ -271,7 +258,26 @@ internal class ModeledErrorContentTypeCompatibilityTest {
             }
         }
         for (service in protocols) {
-            Files.readString(run.resolve("$service-schema.json")) shouldBe Files.readString(run.resolve("$service-legacy.json"))
+            val schema = Node.parse(Files.readString(run.resolve("$service-schema.json"))).expectArrayNode().elements
+            val legacy = Node.parse(Files.readString(run.resolve("$service-legacy.json"))).expectArrayNode().elements
+            schema.size shouldBe legacy.size
+            for ((schemaNode, legacyNode) in schema.zip(legacy)) {
+                val schemaResponse = schemaNode.expectObjectNode()
+                val legacyResponse = legacyNode.expectObjectNode()
+                val scenario = schemaResponse.expectStringMember("scenario").value
+                if ((service == "JsonErrorContentType" || service == "XmlErrorContentType") && scenario in listOf("absent", "empty")) {
+                    // Only the default Content-Type changes; bodies, statuses, and other headers stay identical.
+                    schemaResponse.withoutMember("headers") shouldBe legacyResponse.withoutMember("headers")
+
+                    fun headersWithoutContentType(response: ObjectNode) =
+                        response.expectArrayMember("headers").elements.filter {
+                            it.expectArrayNode().elements.first().expectStringNode().value != "content-type"
+                        }
+                    headersWithoutContentType(schemaResponse) shouldBe headersWithoutContentType(legacyResponse)
+                } else {
+                    schemaResponse shouldBe legacyResponse
+                }
+            }
         }
     }
 }

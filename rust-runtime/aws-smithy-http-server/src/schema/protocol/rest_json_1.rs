@@ -156,14 +156,13 @@ impl ServerProtocol for RestJson1 {
     fn serialize_error(&self, error: &dyn HttpModeledError) -> Response {
         let schema = error.schema();
         let name = schema.shape_id().shape_name();
-        // Generated serde uses the operation output's default, even for a modeled error body.
-        let content_type = match error.operation_schema() {
-            Some(operation) => self.inner.response_content_type(operation.output()),
-            None => Some(CONTENT_TYPE),
-        };
-        let result =
-            self.inner
-                .serialize_modeled_error(self.inner.codec(), schema, error, error.status_code(), content_type);
+        let result = self.inner.serialize_modeled_error(
+            self.inner.codec(),
+            schema,
+            error,
+            error.status_code(),
+            Some(CONTENT_TYPE),
+        );
         match result {
             Ok(mut response) => {
                 // The discriminator travels in the header, as the shape name only.
