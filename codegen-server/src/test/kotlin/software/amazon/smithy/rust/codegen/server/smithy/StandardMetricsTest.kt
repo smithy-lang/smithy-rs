@@ -64,43 +64,7 @@ internal class StandardMetricsTest {
                     )
                 }
 
-                // A layer, registered through the config, that records the metrics received by each request's
-                // `on_finish` callback.
-                rustTemplate(
-                    """
-                    type Log = ::std::sync::Arc<::std::sync::Mutex<Vec<Option<#{Server}::metrics::RequestMetrics>>>>;
-                    ##[derive(Clone, Default)]
-                    struct RecordLayer(Log);
-                    impl<S> #{Tower}::Layer<S> for RecordLayer {
-                        type Service = Record<S>;
-                        fn layer(&self, inner: S) -> Record<S> {
-                            Record { inner, log: self.0.clone() }
-                        }
-                    }
-                    ##[derive(Clone)]
-                    struct Record<S> {
-                        inner: S,
-                        log: Log,
-                    }
-                    impl<S, B> #{Tower}::Service<#{Http}::Request<B>> for Record<S>
-                    where
-                        S: #{Tower}::Service<#{Http}::Request<B>>,
-                    {
-                        type Response = S::Response;
-                        type Error = S::Error;
-                        type Future = S::Future;
-                        fn poll_ready(&mut self, cx: &mut ::std::task::Context<'_>) -> ::std::task::Poll<Result<(), S::Error>> {
-                            self.inner.poll_ready(cx)
-                        }
-                        fn call(&mut self, mut req: #{Http}::Request<B>) -> Self::Future {
-                            let log = self.log.clone();
-                            #{Server}::metrics::RequestExt::on_finish(&mut req, move |metrics| log.lock().unwrap().push(metrics));
-                            self.inner.call(req)
-                        }
-                    }
-                    """,
-                    *scope,
-                )
+                recordLayer(scope)(this)
 
                 for (enabled in listOf(false, true)) {
                     tokioTest("config_layer_callback_runs_once_response_is_sent_with_metrics_${if (enabled) "enabled" else "disabled"}") {
@@ -183,6 +147,116 @@ internal class StandardMetricsTest {
         }
     }
 
+    private val outcomeModel =
+        """
+        ${'$'}version: "2.0"
+        namespace test.outcome
+        use aws.protocols#restJson1
+        @restJson1
+        service OutcomeService { operations: [Classify] }
+        @http(uri: "/classify", method: "POST")
+        operation Classify {
+            input := { kind: String }
+            output := {}
+            errors: [Rejected, Broken]
+        }
+        // Status codes that disagree with the classification, so that only the model can classify them.
+        @error("client")
+        @httpError(503)
+        @suppress(["HttpResponseCodeSemantics"])
+        structure Rejected { message: String }
+        @error("server")
+        @httpError(409)
+        @suppress(["HttpResponseCodeSemantics"])
+        structure Broken { message: String }
+        """.asSmithyModel()
+
+    @ParameterizedTest
+    @ValueSource(booleans = [false, true])
+    fun `outcome follows the model for operation results and the status otherwise`(schemaSerde: Boolean) {
+        serverIntegrationTest(
+            outcomeModel,
+            IntegrationTestParams(
+                additionalSettings = ServerAdditionalSettings.builder().schemaSerde(schemaSerde).toObjectNode(),
+            ),
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
+        ) { context, rustCrate ->
+            check(context.usesSchemaHttpSerde == schemaSerde)
+            val scope =
+                arrayOf(
+                    "Http" to RuntimeType.http(context.runtimeConfig),
+                    "Server" to ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType(),
+                    "Tower" to ServerCargoDependency.tower(context).toType(),
+                )
+            rustCrate.testModule {
+                recordLayer(scope)(this)
+                tokioTest("outcomes") {
+                    rustTemplate(
+                        """
+                        use #{Server}::metrics::{Fault, OutcomeSource};
+                        for (body, expected_status, expected_result, expected_source) in [
+                            (r##"{}"##, 200, "success", "operation"),
+                            (r##"{"kind":"rejected"}"##, 503, "client", "operation"),
+                            (r##"{"kind":"broken"}"##, 409, "server", "operation"),
+                            // A request the framework rejects before the handler runs: classified by status.
+                            (r##"{"##, 400, "client", "internal"),
+                        ] {
+                            let record = RecordLayer::default();
+                            let config = crate::OutcomeServiceConfig::builder()
+                                .layer(record.clone())
+                                .enable_standard_metrics()
+                                .build();
+                            let app = crate::OutcomeService::builder(config)
+                                .classify(|input: crate::input::ClassifyInput| async move {
+                                    match input.kind.as_deref() {
+                                        Some("rejected") => Err(crate::error::ClassifyError::Rejected(
+                                            crate::error::Rejected { message: None },
+                                        )),
+                                        Some("broken") => Err(crate::error::ClassifyError::Broken(
+                                            crate::error::Broken { message: None },
+                                        )),
+                                        _ => Ok(crate::output::ClassifyOutput {}),
+                                    }
+                                })
+                                .build()
+                                .expect("service should build");
+                            let request = #{Http}::Request::builder()
+                                .method("POST")
+                                .uri("/classify")
+                                .header("Content-Type", "application/json")
+                                .body(#{Server}::body::to_boxed_sync(body))
+                                .unwrap();
+                            let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
+                            let status = response.status();
+                            assert_eq!(status.as_u16(), expected_status, "{body}");
+                            drop(response);
+                            let record = record.0.lock().unwrap();
+                            let metrics = record[0].as_ref().expect("metrics are enabled");
+                            let outcome = metrics.outcome().expect("a response was produced");
+                            // Outcomes deliberately do not implement `PartialEq`, so compare a summary.
+                            let result = match &outcome.result {
+                                Ok(_) => "success",
+                                Err(error) => match error.fault {
+                                    Fault::Client => "client",
+                                    Fault::Server => "server",
+                                    _ => "unknown",
+                                },
+                            };
+                            let source = match outcome.source {
+                                OutcomeSource::Operation => "operation",
+                                OutcomeSource::Internal => "internal",
+                                _ => "unknown",
+                            };
+                            assert_eq!((result, source), (expected_result, expected_source), "{body} ({status})");
+                        }
+                        """,
+                        *scope,
+                    )
+                }
+            }
+        }
+    }
+
     @Test
     fun `http 0 services do not support standard metrics`() {
         serverIntegrationTest(model, testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_0_X)) { context, _ ->
@@ -196,4 +270,47 @@ internal class StandardMetricsTest {
             assert(!sources.contains("MetricsService")) { "http 0.x service mentions MetricsService" }
         }
     }
+
+    /**
+     * A layer, registered through the config, that records the metrics received by each request's
+     * `on_finish` callback. `scope` must bind `Http`, `Server` and `Tower`.
+     */
+    private fun recordLayer(scope: Array<out Pair<String, Any>>) =
+        writable {
+            rustTemplate(
+                """
+                type Log = ::std::sync::Arc<::std::sync::Mutex<Vec<Option<#{Server}::metrics::RequestMetrics>>>>;
+                ##[derive(Clone, Default)]
+                struct RecordLayer(Log);
+                impl<S> #{Tower}::Layer<S> for RecordLayer {
+                    type Service = Record<S>;
+                    fn layer(&self, inner: S) -> Record<S> {
+                        Record { inner, log: self.0.clone() }
+                    }
+                }
+                ##[derive(Clone)]
+                struct Record<S> {
+                    inner: S,
+                    log: Log,
+                }
+                impl<S, B> #{Tower}::Service<#{Http}::Request<B>> for Record<S>
+                where
+                    S: #{Tower}::Service<#{Http}::Request<B>>,
+                {
+                    type Response = S::Response;
+                    type Error = S::Error;
+                    type Future = S::Future;
+                    fn poll_ready(&mut self, cx: &mut ::std::task::Context<'_>) -> ::std::task::Poll<Result<(), S::Error>> {
+                        self.inner.poll_ready(cx)
+                    }
+                    fn call(&mut self, mut req: #{Http}::Request<B>) -> Self::Future {
+                        let log = self.log.clone();
+                        #{Server}::metrics::RequestExt::on_finish(&mut req, move |metrics| log.lock().unwrap().push(metrics));
+                        self.inner.call(req)
+                    }
+                }
+                """,
+                *scope,
+            )
+        }
 }

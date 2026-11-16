@@ -10,7 +10,7 @@ use std::{
 
 use http_body::{Body, Frame, SizeHint};
 
-use super::state::Finisher;
+use super::{state::Finisher, Outcome};
 
 pin_project_lite::pin_project! {
     /// A response body that finishes the request once the body has been fully sent, sending it
@@ -35,8 +35,13 @@ impl<B: Body> Body for MetricsFinalizingBody<B> {
     fn poll_frame(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
         let frame = ready!(this.inner.poll_frame(cx));
-        if matches!(frame, None | Some(Err(_))) {
-            this.finisher.finish();
+        match frame {
+            None => this.finisher.finish(),
+            Some(Err(_)) => {
+                this.finisher.record_outcome(Outcome::body_failure());
+                this.finisher.finish();
+            }
+            Some(Ok(_)) => {}
         }
         Poll::Ready(frame)
     }

@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -366,6 +367,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         match #{serialize_error}(&self) {
                             Ok(mut response) => {
                                 response.extensions_mut().insert(#{SmithyHttpServer}::extension::ModeledErrorExtension::new(self.name()));
+                                #{InsertModeledOutcome:W}
                                 response
                             },
                             Err(e) => {
@@ -380,6 +382,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol,
                 "Marker" to protocol.markerStruct(),
                 "serialize_error" to serverSerializeError(operationShape),
+                "InsertModeledOutcome" to insertModeledOutcome(operationShape, errorSymbol),
             )
         }
     }
@@ -469,6 +472,43 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             }
         }
     }
+
+    /**
+     * Marks the response with each error variant's `@error` classification, for standard server metrics.
+     */
+    private fun insertModeledOutcome(
+        operationShape: OperationShape,
+        errorSymbol: Symbol,
+    ): Writable =
+        writable {
+            if (!codegenContext.supportsStandardMetrics) {
+                return@writable
+            }
+            val metrics = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("metrics")
+            val arms =
+                operationShape.operationErrors(model).map {
+                    val variantShape = model.expectShape(it.id, StructureShape::class.java)
+                    val fault = if (variantShape.expectTrait<ErrorTrait>().isClientError) "Client" else "Server"
+                    writable {
+                        rustTemplate(
+                            "#{E}::${symbolProvider.toSymbol(variantShape).name}(_) => #{Metrics}::Fault::$fault,",
+                            "E" to errorSymbol,
+                            "Metrics" to metrics,
+                        )
+                    }
+                }
+            rustTemplate(
+                """
+                let fault = match &self {
+                    #{Arms:W}
+                };
+                response.extensions_mut().insert(#{Metrics}::ModeledOutcome::new(#{Err}(fault)));
+                """,
+                "Arms" to arms.join(""),
+                "Metrics" to metrics,
+                *RuntimeType.preludeScope,
+            )
+        }
 
     private fun serverSerializeError(operationShape: OperationShape): RuntimeType {
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
