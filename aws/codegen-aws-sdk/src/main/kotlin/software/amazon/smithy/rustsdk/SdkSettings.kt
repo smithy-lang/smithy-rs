@@ -72,6 +72,11 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() =
             awsSdk?.getStringMember("partitionsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
+    /** Path to the `sdk-timeout-defaults.json` configuration */
+    val timeoutDefaultsConfigPath: Path?
+        get() =
+            awsSdk?.getStringMember("timeoutDefaultsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
+
     val awsSdkBuild: Boolean
         get() = awsSdk?.getBooleanMember("awsSdkBuild")?.orNull()?.value ?: false
 

@@ -47,7 +47,9 @@ pub enum DiagnosticCode {
     InvalidProperty,
     /// The `type` of a shape is not known.
     UnknownShapeType,
-    /// A trait is applied to one of the prelude's own shapes.
+    /// A trait is applied to one of the prelude's own shapes with
+    /// [`ModelAssembler::add_trait`](crate::ModelAssembler::add_trait), or an IDL `apply`
+    /// statement outside the prelude namespace targets a shape in it.
     PreludeConflict,
     /// A shape reference does not resolve.
     UnresolvedReference,
