@@ -96,12 +96,14 @@ impl Iterator for Base64Iterator {
 pub(super) static FEATURE_ID_TO_METRIC_VALUE: LazyLock<HashMap<BusinessMetric, Cow<'static, str>>> =
     LazyLock::new(|| {
         let mut m = HashMap::new();
-        for (metric, value) in BusinessMetric::iter()
-            .cloned()
-            .zip(Base64Iterator::new())
-            .take(MAX_METRICS_ID_NUMBER)
-        {
-            m.insert(metric, Cow::Owned(value));
+        let mut ids = Base64Iterator::new().take(MAX_METRICS_ID_NUMBER);
+        for metric in BusinessMetric::iter().cloned() {
+            match ids.next() {
+                Some(value) => {
+                    m.insert(metric, Cow::Owned(value));
+                }
+                None => break,
+            }
         }
         m
     });
@@ -206,7 +208,16 @@ iterable_enum!(
     S3TransferCrtExplicit,
     S3TransferClassicAuto,
     S3TransferCrtAuto,
-    S3RegionRedirect
+    S3RegionRedirect,
+    S3TransferDirectIo,
+    S3CustomMemoryPool,
+    S3ZeroCopy,
+    S3ClientCreatedForOperation,
+    S3TransferCopy,
+    ChunkyChecksumCrc32,
+    ChunkyChecksumCrc32c,
+    ChunkyChecksumCrc64nvme,
+    CredentialDaemon
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -312,6 +323,7 @@ impl ProvideBusinessMetric for AwsCredentialFeature {
             S3ExpressBucket => Some(BusinessMetric::S3ExpressBucket),
             CredentialsProfileLogin => Some(BusinessMetric::CredentialsProfileLogin),
             CredentialsLogin => Some(BusinessMetric::CredentialsLogin),
+            CredentialDaemon => Some(BusinessMetric::CredentialDaemon),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
                 // while continuing to use an outdated version of an SDK crate or the `aws-credential-types`
@@ -430,6 +442,27 @@ mod tests {
             let metric = feature.provide_business_metric().unwrap();
             assert_eq!(id, FEATURE_ID_TO_METRIC_VALUE[&metric].as_ref());
         }
+    }
+
+    #[test]
+    fn credential_daemon_metric_encoding() {
+        let metric =
+            aws_credential_types::credential_feature::AwsCredentialFeature::CredentialDaemon
+                .provide_business_metric()
+                .unwrap();
+        assert_eq!("Aq", FEATURE_ID_TO_METRIC_VALUE[&metric].as_ref());
+        assert_eq!(
+            "Ah",
+            FEATURE_ID_TO_METRIC_VALUE[&BusinessMetric::S3RegionRedirect].as_ref()
+        );
+        assert_eq!(
+            "Ai",
+            FEATURE_ID_TO_METRIC_VALUE[&BusinessMetric::S3TransferDirectIo].as_ref()
+        );
+        assert_eq!(
+            "Ap",
+            FEATURE_ID_TO_METRIC_VALUE[&BusinessMetric::ChunkyChecksumCrc64nvme].as_ref()
+        );
     }
 
     #[test]

@@ -4,6 +4,7 @@
  */
 
 use super::repr::{self, BaseProvider};
+use crate::credential_daemon::FailClosedProvider;
 #[cfg(feature = "credentials-process")]
 use crate::credential_process::CredentialProcessProvider;
 #[cfg(feature = "credentials-login")]
@@ -196,6 +197,35 @@ impl ProviderChain {
                         message: None,
                     })?
                 }
+            }
+            BaseProvider::CredentialDaemon {
+                profile,
+                credential,
+                sso,
+            } => {
+                #[cfg(all(feature = "credential-daemon", unix))]
+                {
+                    use crate::credential_daemon::CredentialDaemonProvider;
+                    let _ = profile;
+                    let mut builder = CredentialDaemonProvider::builder()
+                        .configure(provider_config)
+                        .credential(*credential);
+                    if let Some((account_id, role_name)) = sso {
+                        builder = builder.sso_role(*account_id, *role_name);
+                    }
+                    Arc::new(builder.build())
+                }
+                #[cfg(not(all(feature = "credential-daemon", unix)))]
+                {
+                    use crate::credential_daemon::CredentialDaemonError;
+                    let _ = (credential, sso);
+                    Arc::new(FailClosedProvider(
+                        CredentialDaemonError::unsupported_platform(profile),
+                    ))
+                }
+            }
+            BaseProvider::CredentialDaemonFailClosed(err) => {
+                Arc::new(FailClosedProvider(err.clone()))
             }
         };
         tracing::debug!(base = ?repr.base(), "first credentials will be loaded from {:?}", repr.base());

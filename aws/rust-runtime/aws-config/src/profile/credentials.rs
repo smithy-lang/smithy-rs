@@ -141,6 +141,26 @@ pub(crate) mod repr;
 /// login_session = arn:aws:iam::0123456789012:user/Admin
 /// ```
 ///
+/// ### Credentials from a credential daemon
+///
+/// A profile in the shared config file can get its credentials from a local credential daemon,
+/// over a Unix domain socket. See [`credential_daemon`](crate::credential_daemon) for how the
+/// socket is found.
+///
+/// ```ini
+/// [profile dev]
+/// daemon_credential = dev
+/// ```
+///
+/// `daemon_credential` is only read from the config file, not from the credentials file. A
+/// profile that sets it gets its credentials only from the credential daemon, ahead of every
+/// other setting of the profile, and never falls back to another source. It can not also set
+/// `role_arn` or `web_identity_token_file`: to assume a role, use a separate profile with
+/// `source_profile` set to the credential daemon profile. When the profile also sets
+/// `sso_session` (or `sso_start_url`) with `sso_account_id` and `sso_role_name`, the account ID
+/// and role name are sent to the credential daemon. The provider needs the `credential-daemon`
+/// cargo feature (enabled by default) and a Unix platform.
+///
 #[doc = include_str!("location_of_profile_files.md")]
 #[derive(Debug)]
 pub struct ProfileFileCredentialsProvider {
@@ -1118,6 +1138,296 @@ region = us-east-1
         match &err {
             CredentialsError::ProviderError(_) => {}
             _ => panic!("wrong error type"),
+        }
+    }
+}
+
+#[cfg(all(test, unix, feature = "credential-daemon"))]
+mod credential_daemon_tests {
+    use crate::profile::credentials::Builder;
+    use crate::provider_config::ProviderConfig;
+    use crate::test_case::no_traffic_client;
+    use aws_credential_types::provider::ProvideCredentials;
+    #[allow(deprecated)]
+    use aws_runtime::env_config::file::{EnvConfigFileKind, EnvConfigFiles};
+    use aws_smithy_types::date_time::Format;
+    use aws_smithy_types::DateTime;
+    use aws_types::os_shim_internal::Env;
+    use std::time::{Duration, SystemTime};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixListener;
+
+    // The reproducer scenario: a config file profile with `daemon_credential`, and
+    // `AWS_CREDENTIAL_DAEMON_SOCKET` pointing at a fake credential daemon.
+    #[tokio::test]
+    async fn daemon_credential_profile_loads_from_credential_daemon() {
+        let dir = std::env::temp_dir().join(format!("cd-profile-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("daemon.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let expires = DateTime::from(SystemTime::now() + Duration::from_secs(900))
+            .fmt(Format::DateTime)
+            .unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read, mut write) = stream.into_split();
+            let mut line = String::new();
+            BufReader::new(read).read_line(&mut line).await.unwrap();
+            let reply = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"credential\":\"dev\",\"expires_at\":\"{expires}\",\"material\":{{\"type\":\"session_credentials\",\"access_key_id\":\"ASIADAEMON\",\"secret_access_key\":\"secret\",\"session_token\":\"token\"}}}}}}\n"
+            );
+            write.write_all(reply.as_bytes()).await.unwrap();
+            line
+        });
+
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[(
+                "AWS_CREDENTIAL_DAEMON_SOCKET",
+                socket.to_str().unwrap(),
+            )]))
+            .with_http_client(no_traffic_client());
+        #[allow(deprecated)]
+        let profile_files = EnvConfigFiles::builder()
+            .with_contents(
+                EnvConfigFileKind::Config,
+                "[profile dev]\ndaemon_credential = dev\n",
+            )
+            .build();
+        let provider = Builder::default()
+            .configure(&provider_config)
+            .profile_files(profile_files)
+            .profile_name("dev")
+            .build();
+        let creds = tokio::time::timeout(Duration::from_secs(10), provider.provide_credentials())
+            .await
+            .expect("no timeout")
+            .expect("credentials from the credential daemon");
+        assert_eq!("ASIADAEMON", creds.access_key_id());
+        assert_eq!(Some("token"), creds.session_token());
+        let request = server.await.unwrap();
+        assert_eq!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"credential/get\",\"params\":{\"credential\":\"dev\"}}\n",
+            request
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn daemon_provider(config: &str, socket: &str) -> super::ProfileFileCredentialsProvider {
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[("AWS_CREDENTIAL_DAEMON_SOCKET", socket)]))
+            .with_http_client(no_traffic_client());
+        #[allow(deprecated)]
+        let profile_files = EnvConfigFiles::builder()
+            .with_contents(EnvConfigFileKind::Config, config)
+            .build();
+        Builder::default()
+            .configure(&provider_config)
+            .profile_files(profile_files)
+            .profile_name("dev")
+            .build()
+    }
+
+    /// Every call gives a `ProviderError` with a credential daemon error of `code` in its source chain
+    async fn assert_fails_closed(
+        provider: &super::ProfileFileCredentialsProvider,
+        code: crate::credential_daemon::CredentialDaemonErrorCode,
+    ) {
+        use crate::credential_daemon::CredentialDaemonError;
+        use aws_credential_types::provider::error::CredentialsError;
+        use std::error::Error;
+        for _ in 0..2 {
+            let err = provider
+                .provide_credentials()
+                .await
+                .expect_err("should fail");
+            assert!(matches!(err, CredentialsError::ProviderError(_)), "{err:?}");
+            let mut source: Option<&(dyn Error + 'static)> = Some(&err);
+            let mut found = None;
+            while let Some(e) = source {
+                if let Some(daemon_error) = e.downcast_ref::<CredentialDaemonError>() {
+                    found = Some(daemon_error.code());
+                    break;
+                }
+                source = e.source();
+            }
+            assert_eq!(Some(code), found, "{err:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn invalid_daemon_profiles_fail_closed_on_every_call() {
+        use crate::credential_daemon::CredentialDaemonErrorCode::InvalidConfig;
+        // an invalid name, and static keys that must not be used instead
+        let provider = daemon_provider(
+            "[profile dev]\ndaemon_credential = a/b\naws_access_key_id = AKID\naws_secret_access_key = secret\n",
+            "/nonexistent/daemon.sock",
+        );
+        assert_fails_closed(&provider, InvalidConfig).await;
+
+        // `role_arn` in the credential daemon profile
+        let provider = daemon_provider(
+            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\nsource_profile = base\n\
+             [profile base]\naws_access_key_id = AKID\naws_secret_access_key = secret\n",
+            "/nonexistent/daemon.sock",
+        );
+        assert_fails_closed(&provider, InvalidConfig).await;
+
+        // a role profile whose source profile is an invalid credential daemon profile fails
+        // before any STS call (the HTTP client allows no traffic)
+        let provider = daemon_provider(
+            "[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/R\nsource_profile = base\n\
+             [profile base]\ndaemon_credential = .base\n",
+            "/nonexistent/daemon.sock",
+        );
+        assert_fails_closed(&provider, InvalidConfig).await;
+    }
+
+    // Case `conflict-web-identity`: `web_identity_token_file` in a daemon profile is a second
+    // credential source. Its error says to remove one, without the `source_profile` advice, and
+    // wins over `role_arn`. The daemon is not called.
+    #[tokio::test]
+    async fn daemon_profile_with_web_identity_names_two_sources() {
+        use crate::credential_daemon::CredentialDaemonErrorCode::InvalidConfig;
+        let dir = std::env::temp_dir().join(format!("cd-profile-wit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("daemon.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        listener.set_nonblocking(true).unwrap();
+
+        let message = |config: &str| {
+            let provider = daemon_provider(config, socket.to_str().unwrap());
+            async move {
+                assert_fails_closed(&provider, InvalidConfig).await;
+                let err = provider
+                    .provide_credentials()
+                    .await
+                    .expect_err("should fail");
+                format!(
+                    "{}",
+                    aws_smithy_types::error::display::DisplayErrorContext(&err)
+                )
+            }
+        };
+        for config in [
+            "[profile dev]\ndaemon_credential = dev\nweb_identity_token_file = /token.jwt\n",
+            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n\
+             web_identity_token_file = /token.jwt\n",
+        ] {
+            let message = message(config).await;
+            assert!(
+                message.contains(
+                    "profile `dev` has two credential sources, `daemon_credential` and \
+                     `web_identity_token_file`. Remove one of them."
+                ),
+                "{config}: {message}"
+            );
+            assert!(!message.contains("source_profile"), "{config}: {message}");
+        }
+
+        // `role_arn` without `web_identity_token_file` keeps the `source_profile` advice
+        let message = message(
+            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n",
+        )
+        .await;
+        assert!(
+            message.contains("Put `role_arn` in a separate profile with `source_profile = dev`."),
+            "{message}"
+        );
+
+        // the credential daemon saw no connection
+        assert_eq!(
+            std::io::ErrorKind::WouldBlock,
+            listener.accept().unwrap_err().kind()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn daemon_profile_with_one_sso_key_is_the_sso_error() {
+        let dir = std::env::temp_dir().join(format!("cd-profile-sso-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("daemon.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        listener.set_nonblocking(true).unwrap();
+
+        let provider = daemon_provider(
+            "[profile dev]\ndaemon_credential = dev\nsso_session = s\nsso_account_id = 0123\n\
+             [sso-session s]\nsso_region = us-east-1\nsso_start_url = https://example.com/start\n",
+            socket.to_str().unwrap(),
+        );
+        let err = provider
+            .provide_credentials()
+            .await
+            .expect_err("should fail");
+        let message = format!(
+            "{}",
+            aws_smithy_types::error::display::DisplayErrorContext(&err)
+        );
+        assert!(
+            message.contains("profile `dev` has invalid SSO config: if `sso_account_id` is set, then `sso_role_name` must also be set"),
+            "{message}"
+        );
+        // the credential daemon saw no connection
+        assert_eq!(
+            std::io::ErrorKind::WouldBlock,
+            listener.accept().unwrap_err().kind()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(all(test, not(all(unix, feature = "credential-daemon"))))]
+mod credential_daemon_unsupported_tests {
+    use crate::credential_daemon::{CredentialDaemonError, CredentialDaemonErrorCode};
+    use crate::profile::credentials::Builder;
+    use crate::provider_config::ProviderConfig;
+    use crate::test_case::no_traffic_client;
+    use aws_credential_types::provider::ProvideCredentials;
+    #[allow(deprecated)]
+    use aws_runtime::env_config::file::{EnvConfigFileKind, EnvConfigFiles};
+    use aws_types::os_shim_internal::Env;
+    use std::error::Error;
+
+    #[tokio::test]
+    async fn daemon_profile_fails_closed_without_the_feature() {
+        #[allow(deprecated)]
+        let profile_files = EnvConfigFiles::builder()
+            .with_contents(
+                EnvConfigFileKind::Config,
+                "[profile dev]\ndaemon_credential = dev\n",
+            )
+            .build();
+        let provider = Builder::default()
+            .configure(
+                &ProviderConfig::empty()
+                    .with_env(Env::from_slice(&[]))
+                    .with_http_client(no_traffic_client()),
+            )
+            .profile_files(profile_files)
+            .profile_name("dev")
+            .build();
+        for _ in 0..2 {
+            let err = provider
+                .provide_credentials()
+                .await
+                .expect_err("should fail");
+            let mut source: Option<&(dyn Error + 'static)> = Some(&err);
+            let mut found = None;
+            while let Some(e) = source {
+                if let Some(daemon_error) = e.downcast_ref::<CredentialDaemonError>() {
+                    found = Some(daemon_error.code());
+                    break;
+                }
+                source = e.source();
+            }
+            assert_eq!(
+                Some(CredentialDaemonErrorCode::UnsupportedPlatform),
+                found,
+                "{err:?}"
+            );
         }
     }
 }

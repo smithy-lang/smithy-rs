@@ -379,4 +379,74 @@ mod test {
             creds
         )
     }
+
+    // Case `env-web-identity-and-daemon-profile`: the profile is checked before the web identity
+    // environment variables, so the daemon profile wins and no STS call is made.
+    #[cfg(all(unix, feature = "credential-daemon"))]
+    #[tokio::test]
+    async fn daemon_profile_wins_over_web_identity_env() {
+        use crate::provider_config::ProviderConfig;
+        use crate::test_case::no_traffic_client;
+        use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_types::date_time::{DateTime, Format};
+        use aws_types::os_shim_internal::{Env, Fs};
+        use std::time::{Duration, SystemTime};
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::UnixListener;
+
+        let dir = std::env::temp_dir().join(format!("cd-default-chain-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let socket = dir.join("daemon.sock");
+        let listener = UnixListener::bind(&socket).unwrap();
+        let expires = DateTime::from(SystemTime::now() + Duration::from_secs(900))
+            .fmt(Format::DateTime)
+            .unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let (read, mut write) = stream.into_split();
+            let mut line = String::new();
+            BufReader::new(read).read_line(&mut line).await.unwrap();
+            let reply = format!(
+                "{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{\"credential\":\"dev\",\"expires_at\":\"{expires}\",\"material\":{{\"type\":\"session_credentials\",\"access_key_id\":\"ASIADAEMON\",\"secret_access_key\":\"secret\",\"session_token\":\"token\"}}}}}}\n"
+            );
+            write.write_all(reply.as_bytes()).await.unwrap();
+            line
+        });
+
+        let conf = ProviderConfig::no_configuration()
+            .with_env(Env::from_slice(&[
+                ("AWS_PROFILE", "dev"),
+                ("AWS_CONFIG_FILE", "/config"),
+                ("AWS_REGION", "us-east-1"),
+                ("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/WebIdentity"),
+                (
+                    "AWS_WEB_IDENTITY_TOKEN_FILE",
+                    "/nonexistent/aws-web-identity-token",
+                ),
+                ("AWS_CREDENTIAL_DAEMON_SOCKET", socket.to_str().unwrap()),
+            ]))
+            .with_fs(Fs::from_slice(&[(
+                "/config",
+                "[profile dev]\ndaemon_credential = dev\n",
+            )]))
+            .with_http_client(no_traffic_client())
+            .with_sleep_impl(TokioSleep::new());
+        let provider = DefaultCredentialsChain::builder()
+            .configure(conf)
+            .build()
+            .await;
+        let creds = tokio::time::timeout(Duration::from_secs(10), provider.provide_credentials())
+            .await
+            .expect("no timeout")
+            .expect("credentials from the credential daemon");
+        assert_eq!("ASIADAEMON", creds.access_key_id());
+        assert_eq!("secret", creds.secret_access_key());
+        assert_eq!(Some("token"), creds.session_token());
+        assert_eq!(
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"credential/get\",\"params\":{\"credential\":\"dev\"}}\n",
+            server.await.unwrap()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

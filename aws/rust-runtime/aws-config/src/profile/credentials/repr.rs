@@ -12,6 +12,7 @@
 //! 1-credential-per row (as opposed to a direct profile file representation which can combine
 //! multiple actions into the same profile).
 
+use crate::credential_daemon::{validate_credential_name, CredentialDaemonError};
 use crate::profile::credentials::ProfileFileError;
 use crate::profile::{Profile, ProfileSet};
 use crate::sensitive_command::CommandWithSensitiveArgs;
@@ -106,6 +107,24 @@ pub(crate) enum BaseProvider<'a> {
     /// login_session = arn:aws:iam::0123456789012:user/Admin
     /// ```
     LoginSession { login_session_arn: &'a str },
+
+    /// A profile that gets its credentials from a credential daemon
+    /// ```ini
+    /// [profile dev]
+    /// daemon_credential = dev
+    /// ```
+    CredentialDaemon {
+        profile: &'a str,
+        credential: &'a str,
+        /// The SSO account ID and role name to send to the credential daemon
+        sso: Option<(&'a str, &'a str)>,
+    },
+
+    /// A credential daemon profile that is not valid
+    ///
+    /// The error is returned each time credentials are loaded, so a misconfigured credential
+    /// daemon profile never falls back to another source.
+    CredentialDaemonFailClosed(CredentialDaemonError),
 }
 
 /// A profile that specifies a role to assume
@@ -171,6 +190,11 @@ pub(crate) fn resolve_chain(
         }
         // otherwise, store the name of the profile in case we see it again later
         visited_profiles.push(source_profile_name);
+        // A credential daemon profile comes first among the profile-based sources, and never
+        // falls back to the other settings of the profile.
+        if let Some(daemon) = credential_daemon_from_profile(profile_set, profile)? {
+            break daemon;
+        }
         // After the first item in the chain, we will prioritize static credentials if they exist
         if visited_profiles.len() > 1 {
             let try_static = static_creds_from_profile(profile);
@@ -252,6 +276,10 @@ mod credential_process {
 
 mod login_session {
     pub(super) const LOGIN_SESSION: &str = "login_session";
+}
+
+mod credential_daemon {
+    pub(super) const DAEMON_CREDENTIAL: &str = "daemon_credential";
 }
 
 const PROVIDER_NAME: &str = "ProfileFile";
@@ -385,14 +413,10 @@ fn sso_from_profile<'a>(
         }
     }
 
-    let invalid_sso_creds = |left: &str, right: &str| ProfileFileError::InvalidSsoConfig {
-        profile: profile.name().into(),
-        message: format!("if `{left}` is set, then `{right}` must also be set").into(),
-    };
     match (sso_account_id, sso_role_name) {
         (Some(_), Some(_)) | (None, None) => { /* good */ }
-        (Some(_), None) => return Err(invalid_sso_creds(sso::ACCOUNT_ID, sso::ROLE_NAME)),
-        (None, Some(_)) => return Err(invalid_sso_creds(sso::ROLE_NAME, sso::ACCOUNT_ID)),
+        (Some(_), None) => return Err(invalid_sso_creds(profile, sso::ACCOUNT_ID, sso::ROLE_NAME)),
+        (None, Some(_)) => return Err(invalid_sso_creds(profile, sso::ROLE_NAME, sso::ACCOUNT_ID)),
     }
 
     let missing_field = |s| move || ProfileFileError::missing_field(profile, s);
@@ -404,6 +428,89 @@ fn sso_from_profile<'a>(
         sso_role_name,
         sso_start_url,
         sso_session_name,
+    }))
+}
+
+fn invalid_sso_creds(profile: &Profile, left: &str, right: &str) -> ProfileFileError {
+    ProfileFileError::InvalidSsoConfig {
+        profile: profile.name().into(),
+        message: format!("if `{left}` is set, then `{right}` must also be set").into(),
+    }
+}
+
+/// Load credentials from a credential daemon
+///
+/// Example:
+/// ```ini
+/// [profile dev]
+/// daemon_credential = dev
+/// ```
+///
+/// Returns `Ok(None)` when the profile does not use a credential daemon. A profile that sets
+/// `daemon_credential` but is otherwise not valid gives a
+/// [`BaseProvider::CredentialDaemonFailClosed`], so that it never falls back to another source.
+fn credential_daemon_from_profile<'a>(
+    profile_set: &'a ProfileSet,
+    profile: &'a Profile,
+) -> Result<Option<BaseProvider<'a>>, ProfileFileError> {
+    let Some(credential) = profile.get(credential_daemon::DAEMON_CREDENTIAL) else {
+        return Ok(None);
+    };
+    let has_sso = profile.get(sso::SESSION_NAME).is_some() || profile.get(sso::START_URL).is_some();
+    let sso = match (
+        has_sso,
+        profile.get(sso::ACCOUNT_ID),
+        profile.get(sso::ROLE_NAME),
+    ) {
+        (false, _, _) => None,
+        // An SSO profile without a role resolves as if `daemon_credential` were absent
+        (true, None, None) => return Ok(None),
+        (true, Some(account_id), Some(role_name)) => Some((account_id, role_name)),
+        // Exactly one of the two keys is set: return the error of the SSO provider
+        (true, account_id, _) => {
+            sso_from_profile(profile_set, profile)?;
+            return Err(if account_id.is_some() {
+                invalid_sso_creds(profile, sso::ACCOUNT_ID, sso::ROLE_NAME)
+            } else {
+                invalid_sso_creds(profile, sso::ROLE_NAME, sso::ACCOUNT_ID)
+            });
+        }
+    };
+    let profile_name = profile.name();
+    // `web_identity_token_file` is checked first: it is a second credential source, so moving it
+    // to a `source_profile` chain is not the fix.
+    if profile.get(web_identity_token::TOKEN_FILE).is_some() {
+        return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
+            CredentialDaemonError::invalid_config(format!(
+                "profile `{profile_name}` has two credential sources, `daemon_credential` and \
+                 `{}`. Remove one of them.",
+                web_identity_token::TOKEN_FILE
+            )),
+        )));
+    }
+    if profile.get(role::ROLE_ARN).is_some() {
+        let key = role::ROLE_ARN;
+        return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
+            CredentialDaemonError::invalid_config(format!(
+                "profile `{profile_name}` sets `daemon_credential` together with `{key}`; \
+                 a credential daemon profile cannot also assume a role. Put `{key}` in a \
+                 separate profile with `source_profile = {profile_name}`."
+            )),
+        )));
+    }
+    if !validate_credential_name(credential) {
+        return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
+            CredentialDaemonError::invalid_config(format!(
+                "profile `{profile_name}` has an invalid `daemon_credential`. A credential \
+                 daemon credential name is 1 to 64 characters from `A-Z`, `a-z`, `0-9`, `.`, \
+                 `_` and `-`, and does not start with `.`."
+            )),
+        )));
+    }
+    Ok(Some(BaseProvider::CredentialDaemon {
+        profile: profile_name,
+        credential,
+        sso,
     }))
 }
 
@@ -539,15 +646,20 @@ mod tests {
             test_case.input.sso_sessions,
             Properties::new(),
         );
-        let actual = resolve_chain(&source);
+        // A fail-closed credential daemon base is an error that is returned when credentials
+        // are loaded
+        let actual =
+            resolve_chain(&source)
+                .map_err(|e| e.to_string())
+                .and_then(|chain| match chain.base {
+                    BaseProvider::CredentialDaemonFailClosed(e) => Err(e.to_string()),
+                    _ => Ok(chain),
+                });
         let expected = test_case.output;
         match (expected, actual) {
-            (TestOutput::Error(s), Err(e)) => assert!(
-                format!("{}", e).contains(&s),
-                "expected\n{}\nto contain\n{}\n",
-                e,
-                s
-            ),
+            (TestOutput::Error(s), Err(e)) => {
+                assert!(e.contains(&s), "expected\n{}\nto contain\n{}\n", e, s)
+            }
             (TestOutput::ProfileChain(expected), Ok(actual)) => {
                 assert_eq!(to_test_output(actual), expected)
             }
@@ -620,6 +732,16 @@ mod tests {
                     login_session_arn: login_session_arn.into(),
                 })
             }
+            BaseProvider::CredentialDaemon {
+                credential, sso, ..
+            } => output.push(Provider::CredentialDaemon {
+                credential: credential.into(),
+                sso_account_id: sso.map(|(account_id, _)| account_id.to_string()),
+                sso_role_name: sso.map(|(_, role_name)| role_name.to_string()),
+            }),
+            BaseProvider::CredentialDaemonFailClosed(e) => {
+                panic!("a fail-closed base is checked as an error: {e}")
+            }
         };
         for role in profile_chain.chain {
             output.push(Provider::AssumeRole {
@@ -672,6 +794,11 @@ mod tests {
         },
         LoginSession {
             login_session_arn: String,
+        },
+        CredentialDaemon {
+            credential: String,
+            sso_account_id: Option<String>,
+            sso_role_name: Option<String>,
         },
     }
 
