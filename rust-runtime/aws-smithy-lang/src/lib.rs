@@ -53,7 +53,7 @@
 //! Service and resource views distinguish *declaration-only* accessors such as
 //! `direct_operations` from complete queries such as `contained_operations`. The
 //! [`knowledge`] module provides the complete queries, as well as operation errors within a
-//! service, service-scoped parents, and incoming relationships.
+//! service, service-scoped parents and pagination, and incoming relationships.
 //!
 //! IDL documents are loaded with [`Model::from_idl_str`] and friends or
 //! [`ModelAssembler::add_idl_str`]. Relative shape IDs resolve against every input of an

@@ -75,12 +75,12 @@ pub trait TraitCodec: Sized {
 }
 
 pub(crate) fn decode<T: TraitCodec>(value: Option<&Node>) -> Result<Option<T>, TraitDecodeError> {
-    match value {
-        None => Ok(None),
-        Some(value) => T::from_node(value)
-            .map(Some)
-            .map_err(|err| err.for_trait(T::ID, value)),
-    }
+    value.map(decode_value).transpose()
+}
+
+/// Decodes an applied trait value, attributing any error to the trait.
+pub(crate) fn decode_value<T: TraitCodec>(value: &Node) -> Result<T, TraitDecodeError> {
+    T::from_node(value).map_err(|err| err.for_trait(T::ID, value))
 }
 
 /// A trait value could not be decoded by a [`TraitCodec`].
@@ -334,8 +334,10 @@ impl TraitCodec for EnumValue {
 /// [`with_defaults_from`](Self::with_defaults_from).
 ///
 /// Decoding checks only the form of the value: each property, when present, must be a
-/// non-empty string. Member names and paths are not resolved. Unknown properties are ignored,
-/// because the reference implementation reports them only as warnings.
+/// non-empty string. Member names and paths are not resolved; use
+/// [`PaginatedIndex`](crate::knowledge::PaginatedIndex) to resolve an operation's effective
+/// pagination within a service. Unknown properties are ignored, because the reference
+/// implementation reports them only as warnings.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Paginated {
     input_token: Option<String>,
@@ -345,10 +347,10 @@ pub struct Paginated {
 }
 
 impl Paginated {
-    const INPUT_TOKEN: &'static str = "inputToken";
-    const OUTPUT_TOKEN: &'static str = "outputToken";
-    const ITEMS: &'static str = "items";
-    const PAGE_SIZE: &'static str = "pageSize";
+    pub(crate) const INPUT_TOKEN: &'static str = "inputToken";
+    pub(crate) const OUTPUT_TOKEN: &'static str = "outputToken";
+    pub(crate) const ITEMS: &'static str = "items";
+    pub(crate) const PAGE_SIZE: &'static str = "pageSize";
 
     /// The name of the input member that holds the continuation token.
     pub fn input_token(&self) -> Option<&str> {
