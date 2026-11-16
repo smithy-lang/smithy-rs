@@ -144,6 +144,7 @@ edit-distance = "2"
 wasmtime = "47.0.4"
 wasmtime-wasi = "47.0.4"
 wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 "#;
 
@@ -676,6 +677,7 @@ edit-distance = "2"
 wasmtime = "47.0.4"
 wasmtime-wasi = "47.0.4"
 wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
@@ -746,6 +748,7 @@ edit-distance = "2"
 wasmtime = "47.0.4"
 wasmtime-wasi = "47.0.4"
 wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }

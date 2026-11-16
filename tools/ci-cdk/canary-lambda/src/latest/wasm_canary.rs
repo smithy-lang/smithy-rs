@@ -53,6 +53,10 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
         .expect("Current dir")
         .join("aws_sdk_rust_lambda_canary_wasm.wasm");
 
+    // wasmtime-wasi-http builds its TLS config from rustls's process-default crypto provider,
+    // and the canary enables both `ring` and `aws-lc-rs`, so rustls can't pick one on its own.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     // Create a Wasmtime Engine configured to run Components
     let engine = Engine::new(wasmtime::Config::new().wasm_component_model(true))?;
 
