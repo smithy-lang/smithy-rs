@@ -55,6 +55,10 @@
 //! [`knowledge`] module provides the complete queries, as well as operation errors within a
 //! service, service-scoped parents and pagination, and incoming relationships.
 //!
+//! Traits are stored as generic [`Node`]s and decoded on request with a
+//! [`TraitCodec`](traits::TraitCodec). Besides the codecs in [`traits`], the [`endpoint_rules`]
+//! module decodes endpoint rules and the [`waiters`] module decodes operation waiters.
+//!
 //! IDL documents are loaded with [`Model::from_idl_str`] and friends or
 //! [`ModelAssembler::add_idl_str`]. Relative shape IDs resolve against every input of an
 //! assembly, so IDL and JSON documents can refer to each other:
@@ -108,6 +112,7 @@ pub mod shape;
 pub mod traits;
 pub mod traversal;
 pub mod validation;
+pub mod waiters;
 
 mod assembler;
 mod ast_converter;
