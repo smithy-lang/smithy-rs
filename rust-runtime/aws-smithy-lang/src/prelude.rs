@@ -28,7 +28,7 @@ use std::sync::OnceLock;
 pub const NAMESPACE: &str = "smithy.api";
 
 /// The Smithy Java version whose prelude is embedded.
-pub const SOURCE_VERSION: &str = "1.74.0";
+pub const SOURCE_VERSION: &str = "1.74.1";
 
 /// `smithy.api#Unit`: the unit type, and the normalized target of an omitted operation input
 /// or output.
@@ -56,7 +56,7 @@ pub fn is_public_prelude_shape(id: &ShapeId) -> bool {
         .is_some_and(|shape| !shape.traits().contains(&traits::PRIVATE))
 }
 
-const PRELUDE_JSON: &str = include_str!("prelude/prelude-1.74.0.json");
+const PRELUDE_JSON: &str = include_str!("prelude/prelude-1.74.1.json");
 
 /// The parsed prelude shapes, shared read-only by every model in the process.
 pub(crate) fn shapes() -> &'static IndexMap<ShapeId, Shape> {

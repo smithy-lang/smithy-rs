@@ -1,0 +1,316 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#EmptyPath",
+            "message": "Waiter `W`, acceptor 0: Invalid JMESPath expression (): Syntax error at line 1 column 1: Expected ['@', 'A-Z|a-z|_', '`', '*', '{', '[', '[]', '&', '!', '[?', '('], but found EOF"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#InputOutputPathSyntax",
+            "message": "Waiter `W`, acceptor 0: Invalid JMESPath expression (input.): Syntax error at line 1 column 7: Expected ['[', '{', '*', 'A-Z|a-z|_'], but found EOF"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageIsANumber",
+            "message": "Waiter `W`, acceptor 1: The `message` JMESPath expression must resolve to a string or an array of strings, but this expression was statically determined to return a `number` type."
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageIsAnArrayOfObjects",
+            "message": "Waiter `W`, acceptor 1: The `message` JMESPath expression must resolve to a string or an array of strings, but this expression resolves to an array of `object`."
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageIsNull",
+            "message": "Waiter `W`, acceptor 1: The `message` JMESPath expression must resolve to a string or an array of strings, but this expression was statically determined to return a `null` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.1",
+            "severity": "DANGER",
+            "shape": "ex#MessageIsNull",
+            "message": "Waiter `W`, acceptor 1: Problem found in JMESPath expression (nmae): Object field 'nmae' does not exist in object with properties [name, count, ids, items] (1:1)"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageSyntax",
+            "message": "Waiter `W`, acceptor 1: Invalid JMESPath expression in `message` (length(name): Syntax error at line 1 column 12: Expected ['@', 'A-Z|a-z|_', '`', '*', '{', '[', '[]', '&', '!', '[?', '('], but found EOF"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#PathSyntax",
+            "message": "Waiter `W`, acceptor 0: Invalid JMESPath expression (items[): Syntax error at line 1 column 7: Expected ['-|0-9', ':', '*'], but found EOF"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#TooFewArguments",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (contains(ids)): contains function expected 2 arguments, but was given 1 (1:1)"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#TooManyArguments",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (length(items, name) > `0`): length function expected 1 arguments, but was given 2 (1:1)"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#UnknownFunction",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (lenght(items) > `0`): Unknown function: lenght (1:1)"
+        }
+    ],
+    "waiters": {
+        "ex#EmptyPath": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#InputOutputPathSyntax": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "inputOutput": {
+                                "path": "input.",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageIsANumber": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "count"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageIsAnArrayOfObjects": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "items"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageIsNull": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "nmae"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageSyntax": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "length(name"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#PathSyntax": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "items[",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#TooFewArguments": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "contains(ids)",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#TooManyArguments": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "length(items, name) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#UnknownFunction": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "lenght(items) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

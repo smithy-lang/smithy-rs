@@ -1,0 +1,124 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": true,
+    "events": [],
+    "waiters": {
+        "ex#GetThing": [
+            {
+                "name": "ThingReady",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "status",
+                                "expected": "ready",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "ready",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "items[].status",
+                                "expected": "ready",
+                                "comparator": "allStringEquals"
+                            }
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "output": {
+                                "path": "items[].status",
+                                "expected": "pending",
+                                "comparator": "anyStringEquals"
+                            }
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "inputOutput": {
+                                "path": "input.name == output.name",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "output": {
+                                "path": "status",
+                                "expected": "failed",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": "reason"
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "output": {
+                                "path": "items[].status",
+                                "expected": "failed",
+                                "comparator": "anyStringEquals"
+                            }
+                        },
+                        "message": "reasons"
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "errorType": "NotFound"
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "errorType": "ex#Throttled"
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

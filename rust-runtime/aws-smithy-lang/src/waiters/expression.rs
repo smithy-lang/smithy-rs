@@ -790,10 +790,14 @@ impl Checker {
                 (Some(_), n) => format!("at least {n} argument{}", plural(n)),
                 (None, n) => format!("{n} argument{}", plural(n)),
             };
+            let given = match args.len() {
+                1 => "1 was given".to_owned(),
+                n => format!("{n} were given"),
+            };
             self.report(
                 Severity::Error,
                 offset,
-                format!("`{name}` takes {expected}, but {} were given", args.len()),
+                format!("`{name}` takes {expected}, but {given}"),
             );
         } else {
             for (index, (arg, value)) in args.iter().zip(&types).enumerate() {

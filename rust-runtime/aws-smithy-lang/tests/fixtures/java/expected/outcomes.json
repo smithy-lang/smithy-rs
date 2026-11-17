@@ -1,5 +1,5 @@
 {
-    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "generator": "software.amazon.smithy:smithy-model:1.74.1",
     "outcomes": {
         "invalid/duplicate_enum_value": {
             "accepted": false,

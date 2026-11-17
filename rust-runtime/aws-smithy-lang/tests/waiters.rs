@@ -676,3 +676,78 @@ fn public_types_are_send_sync_and_clone() {
     fn assert_error<T: std::error::Error + Send + Sync + 'static>() {}
     assert_error::<TraitDecodeError>();
 }
+
+/// Every `@waitable` trait in `aws/sdk/aws-models` decodes, round-trips, and has expressions
+/// that parse, and the validator finds no errors. The corpus covers only part of the
+/// specification, so this is a regression check; `java_fixtures.rs` checks agreement with
+/// the reference implementation.
+#[test]
+fn corpus_waiters_decode_and_validate() {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../aws/sdk/aws-models");
+    let mut paths: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", dir.display()))
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    paths.sort();
+    let (mut models, mut operations, mut waiters, mut acceptors, mut warnings) = (0, 0, 0, 0, 0);
+    for path in paths {
+        let text = std::fs::read_to_string(&path).unwrap();
+        if !text.contains(WAITABLE.as_str()) {
+            continue;
+        }
+        let name = path.display();
+        models += 1;
+        let validated = Model::assembler()
+            .add_json_str(name.to_string(), text)
+            .add_validator(aws_smithy_lang::waiters::validator())
+            .assemble();
+        let errors: Vec<_> = validated
+            .diagnostics()
+            .errors()
+            .map(|d| d.to_string())
+            .collect();
+        assert!(errors.is_empty(), "{name}: {errors:#?}");
+        warnings += validated
+            .diagnostics()
+            .iter()
+            .filter(|d| d.validator() == Some("Waiters"))
+            .count();
+        let model = validated.into_result().unwrap();
+
+        for operation in model.shapes_with_trait(&WAITABLE) {
+            let id = operation.id();
+            let waitable = operation
+                .get_trait_as::<Waitable>()
+                .unwrap_or_else(|e| panic!("{name}: {id}: {e}"))
+                .unwrap();
+            assert_eq!(
+                Waitable::from_node(&waitable.to_node()).unwrap(),
+                waitable,
+                "{name}: {id}"
+            );
+            operations += 1;
+            for (waiter_name, waiter) in waitable.waiters() {
+                waiters += 1;
+                for acceptor in waiter.acceptors() {
+                    acceptors += 1;
+                    let path = match acceptor.matcher().kind() {
+                        MatcherKind::Output(matcher) | MatcherKind::InputOutput(matcher) => {
+                            Some(matcher.path())
+                        }
+                        _ => None,
+                    };
+                    for expression in path.into_iter().chain(acceptor.message()) {
+                        jmespath::parse(expression)
+                            .unwrap_or_else(|e| panic!("{name}: {id} waiter `{waiter_name}`: {e}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(acceptors > 0, "no waiters in {}", dir.display());
+    // Logged as a baseline; the corpus changes over time, so this is not asserted.
+    println!(
+        "corpus: {models} models, {operations} operations, {waiters} waiters, \
+         {acceptors} acceptors, {warnings} warnings"
+    );
+}

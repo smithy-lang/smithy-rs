@@ -4,7 +4,7 @@
  */
 
 //! Compiles an [`EndpointRuleSet`] into an endpoint BDD, following Smithy Java's
-//! `CompileBdd` (`smithy-rules-engine` 1.73.0) stage by stage, so it produces the BDDs Java
+//! `CompileBdd` (`smithy-rules-engine` 1.74.1) stage by stage, so it produces the BDDs Java
 //! does.
 //!
 //! Where Java's compiler fails on a valid rule set, or produces a BDD that selects a different
@@ -41,7 +41,7 @@ use std::fmt;
 
 impl EndpointRuleSet {
     /// Compiles the rule set into an [`EndpointBdd`] that selects the same result for all
-    /// parameter values. This follows Smithy Java's `CompileBdd` (`smithy-rules-engine` 1.73.0)
+    /// parameter values. This follows Smithy Java's `CompileBdd` (`smithy-rules-engine` 1.74.1)
     /// and produces the same BDD.
     ///
     /// The rule set must use only standard-library and AWS functions, and every reference

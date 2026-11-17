@@ -29,7 +29,7 @@
  import software.amazon.smithy.rulesengine.language.syntax.rule.Rule;
  import software.amazon.smithy.rulesengine.language.syntax.rule.TreeRule;
 
-@@ -72,6 +83,9 @@
+@@ -73,6 +84,9 @@
                  localVarUsage.merge(ref, 1, Integer::sum);
              }
          }
@@ -39,7 +39,7 @@
 
          Set<Condition> eliminatedConditions = new HashSet<>();
          List<Condition> transformedConditions = transformConditions(
-@@ -127,6 +141,38 @@
+@@ -128,6 +142,38 @@
          return result;
      }
 
@@ -78,7 +78,7 @@
      private boolean canCoalesce(String var, Condition bind, Condition use, Map<String, Integer> localVarUsage) {
          if (!use.getFunction().getReferences().contains(var)) {
              return false;
-@@ -155,9 +201,58 @@
+@@ -156,9 +202,58 @@
              return false;
          }
 
@@ -217,12 +217,15 @@
  import java.util.List;
  import java.util.Set;
  import java.util.function.Function;
-@@ -22,11 +23,18 @@
+@@ -22,6 +23,7 @@
  import software.amazon.smithy.model.traits.AbstractTrait;
  import software.amazon.smithy.model.traits.AbstractTraitBuilder;
  import software.amazon.smithy.model.traits.Trait;
 +import software.amazon.smithy.rulesengine.language.Endpoint;
- import software.amazon.smithy.rulesengine.language.RulesVersion;
+ import software.amazon.smithy.rulesengine.language.EndpointComponentFactory;
+ import software.amazon.smithy.rulesengine.language.EndpointRuleSet;
+ import software.amazon.smithy.rulesengine.language.EndpointRuleSetExtension;
+@@ -29,7 +31,13 @@
  import software.amazon.smithy.rulesengine.language.evaluation.Scope;
  import software.amazon.smithy.rulesengine.language.evaluation.type.Type;
  import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters;
@@ -236,7 +239,7 @@
  import software.amazon.smithy.rulesengine.language.syntax.rule.NoMatchRule;
  import software.amazon.smithy.rulesengine.language.syntax.rule.Rule;
  import software.amazon.smithy.rulesengine.logic.bdd.Bdd;
-@@ -108,6 +116,33 @@
+@@ -117,6 +125,33 @@
       *
       * @return a new trait with unreferenced conditions removed, or this trait if none were removed
       */
@@ -270,7 +273,7 @@
      public EndpointBddTrait removeUnreferencedConditions() {
          // Find which conditions are actually referenced
          int[] refCount = new int[conditions.size()];
-@@ -118,6 +153,26 @@
+@@ -127,6 +162,26 @@
              }
          }
 
