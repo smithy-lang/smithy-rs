@@ -37,7 +37,7 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             return self
                 .router
                 .match_route(request)
-                .is_ok_and(OperationTarget::has_streaming_input);
+                .is_ok_and(|matched| matched.route.has_streaming_input());
         }
         use crate::routing::Router;
         request.method() == http::Method::POST
@@ -48,12 +48,15 @@ impl MetadataProtocolRouter for RpcV2CborProtocolRouter {
             && self
                 .router
                 .match_route(request)
-                .is_ok_and(OperationTarget::has_streaming_input)
+                .is_ok_and(|matched| matched.route.has_streaming_input())
     }
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
-        self.router.match_route(request).map_err(Into::into)
+        self.router
+            .match_route(request)
+            .map(|matched| matched.route)
+            .map_err(Into::into)
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
@@ -98,12 +101,16 @@ pub(crate) fn rpc_v2_cbor_router(
                 }
             }
         }
-        names
-            .into_iter()
-            .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
+        names.into_iter().map(move |name| {
+            (
+                format!("{}.{}", ctx.service.shape_id().shape_name(), name),
+                crate::shape_id::ShapeId::from_schema(target.operation().shape_id()),
+                *target,
+            )
+        })
     });
     Ok(RpcV2CborProtocolRouter {
         service_schema: ctx.service,
-        router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_owned(entries),
+        router: crate::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_routes(entries),
     })
 }

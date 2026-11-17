@@ -116,6 +116,74 @@ internal class StandardMetricsTest {
                     }
                 }
 
+                tokioTest("operation_is_recorded_when_a_config_layer_does_not_call_the_route") {
+                    rustTemplate(
+                        """
+                        type Log = ::std::sync::Arc<::std::sync::Mutex<Vec<Option<#{Server}::metrics::RequestMetrics>>>>;
+                        ##[derive(Clone, Default)]
+                        struct RespondLayer(Log);
+                        impl<S> #{Tower}::Layer<S> for RespondLayer {
+                            type Service = Respond<S>;
+                            fn layer(&self, inner: S) -> Respond<S> {
+                                Respond { _inner: inner, log: self.0.clone() }
+                            }
+                        }
+                        /// Registers an `on_finish` callback, then responds without calling the route.
+                        ##[derive(Clone)]
+                        struct Respond<S> {
+                            _inner: S,
+                            log: Log,
+                        }
+                        impl<S, B> #{Tower}::Service<#{Http}::Request<B>> for Respond<S>
+                        where
+                            S: #{Tower}::Service<#{Http}::Request<B>>,
+                        {
+                            type Response = #{Http}::Response<#{Server}::body::BoxBody>;
+                            type Error = ::std::convert::Infallible;
+                            type Future = ::std::future::Ready<Result<Self::Response, Self::Error>>;
+                            fn poll_ready(&mut self, _cx: &mut ::std::task::Context<'_>) -> ::std::task::Poll<Result<(), Self::Error>> {
+                                ::std::task::Poll::Ready(Ok(()))
+                            }
+                            fn call(&mut self, mut req: #{Http}::Request<B>) -> Self::Future {
+                                let log = self.log.clone();
+                                #{Server}::metrics::RequestExt::on_finish(&mut req, move |metrics| log.lock().unwrap().push(metrics));
+                                ::std::future::ready(Ok(#{Http}::Response::new(#{Server}::body::empty())))
+                            }
+                        }
+                        let respond = RespondLayer::default();
+                        let config = crate::SimpleServiceConfig::builder()
+                            .layer(respond.clone())
+                            .enable_standard_metrics()
+                            .build();
+                        let called = ::std::sync::Arc::new(::std::sync::atomic::AtomicBool::new(false));
+                        let handler_called = called.clone();
+                        let app = crate::SimpleService::builder(config)
+                            .operation(move |input: crate::input::OperationInput| {
+                                handler_called.store(true, ::std::sync::atomic::Ordering::SeqCst);
+                                async { crate::output::OperationOutput { message: input.message } }
+                            })
+                            .build()
+                            .expect("service should build");
+                        let request = #{Http}::Request::builder()
+                            .method("POST")
+                            .uri("/operation")
+                            .header("Content-Type", "application/json")
+                            .body(#{Server}::body::Body::empty())
+                            .unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
+                        drop(response);
+                        assert!(!called.load(::std::sync::atomic::Ordering::SeqCst), "the layer does not call the route");
+                        let log = respond.0.lock().unwrap();
+                        let metrics = log[0].as_ref().expect("metrics are enabled");
+                        assert_eq!(
+                            metrics.operation().map(|id| id.absolute()),
+                            Some("com.amazonaws.simple##Operation"),
+                        );
+                        """,
+                        *scope,
+                    )
+                }
+
                 for (enabled in listOf(false, true)) {
                     tokioTest("routes_requests_with_standard_metrics_${if (enabled) "enabled" else "disabled"}") {
                         rustTemplate(
@@ -248,6 +316,9 @@ internal class StandardMetricsTest {
                                 _ => "unknown",
                             };
                             assert_eq!((result, source), (expected_result, expected_source), "{body} ({status})");
+                            // Routing chose the operation, even when the framework rejected the request before the handler ran.
+                            let operation = metrics.operation().map(|id| id.absolute());
+                            assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
                         }
                         """,
                         *scope,

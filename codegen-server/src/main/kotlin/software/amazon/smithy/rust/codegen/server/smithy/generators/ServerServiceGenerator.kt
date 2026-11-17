@@ -87,6 +87,12 @@ class ServerServiceGenerator(
             expr
         }
 
+    /**
+     * The associated function constructing a generated serde protocol router from the route entries emitted by
+     * [emitRouteEntries]. `aws-smithy-http-server` routers record each route's operation for standard metrics.
+     */
+    private val routerConstructor = if (supportsStandardMetrics) "from_routes" else "from_iter"
+
     /** The legacy (non-schema) routing service type, routing to `route`. */
     private fun legacyRoutingService(route: String) =
         "#{SmithyHttpServer}::routing::RoutingService<#{Router}<$route>, #{Protocol}>"
@@ -447,6 +453,7 @@ class ServerServiceGenerator(
      */
     private fun RustWriter.emitRouteEntries(
         specFunctions: List<Pair<String, Writable>>,
+        operationStructName: String,
         emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
     ) {
         // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
@@ -454,6 +461,12 @@ class ServerServiceGenerator(
         specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
             val isLast = index == specFunctions.size - 1
             rust("($requestSpecsModuleName::$specBuilderFunctionName(), ")
+            if (supportsStandardMetrics) {
+                rustTemplate(
+                    "<crate::operation_shape::$operationStructName as #{SmithyHttpServer}::operation::OperationShape>::ID, ",
+                    "SmithyHttpServer" to smithyHttpServer,
+                )
+            }
             emitHandlerExpr(!isLast)
             rust("),")
         }
@@ -486,7 +499,7 @@ class ServerServiceGenerator(
                         for (operationShape in operations) {
                             val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
-                            emitRouteEntries(specFunctions) { isClone ->
+                            emitRouteEntries(specFunctions, operationStructNames.getValue(operationShape)) { isClone ->
                                 val accessor =
                                     if (isClone) {
                                         "self.$fieldName.clone()"
@@ -527,7 +540,7 @@ class ServerServiceGenerator(
 
                             #{PatternInitializations:W}
 
-                            #{Router}::from_iter([#{RoutesArrayElements:W}])
+                            #{Router}::$routerConstructor([#{RoutesArrayElements:W}])
                         };
                         let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
                         let svc = svc.map(|s| s.layer(self.layer));
@@ -581,7 +594,8 @@ class ServerServiceGenerator(
                         for (operationShape in operations) {
                             val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
-                            emitRouteEntries(specFunctions) { isClone ->
+                            val operationStructName = operationStructNames.getValue(operationShape)
+                            emitRouteEntries(specFunctions, operationStructName) { isClone ->
                                 val accessor =
                                     if (isClone) {
                                         "self.$fieldName.clone()"
@@ -617,7 +631,7 @@ class ServerServiceGenerator(
                         >
                     {
 
-                        let router = #{Router}::from_iter([#{Pairs:W}]);
+                        let router = #{Router}::$routerConstructor([#{Pairs:W}]);
                         let svc = self
                             .layer
                             .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
@@ -956,8 +970,9 @@ class ServerServiceGenerator(
                 operations.map { operation ->
                     writable {
                         val field = builderFieldNames.getValue(operation)
-                        val handler = "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))"
                         val operationName = operationStructNames.getValue(operation)
+                        val handler =
+                            "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))"
                         rustTemplate("(<crate::operation_shape::$operationName as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")

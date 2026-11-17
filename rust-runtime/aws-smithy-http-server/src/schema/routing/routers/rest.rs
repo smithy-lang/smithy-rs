@@ -83,6 +83,7 @@ pub fn rest_router(
                         crate::routing::request_spec::QuerySpec::from_vector_unchecked(query),
                     )),
                 ),
+                crate::shape_id::ShapeId::from_schema(target.operation().shape_id()),
                 *target,
             ))
         })
@@ -98,7 +99,7 @@ pub fn rest_router(
     parse_mime(codec_content_type).map_err(|err| RouterBuildError::Configuration(err.to_string()))?;
     Ok(RestProtocolRouter {
         service_schema: ctx.service,
-        router: crate::protocol::rest::router::RestRouter::from_iter(entries),
+        router: crate::protocol::rest::router::RestRouter::from_routes(entries),
         codec_content_type,
         codec_aliases,
         operations,
@@ -141,7 +142,8 @@ impl MetadataProtocolRouter for RestProtocolRouter {
         if self.service_schema.protocols().len() == 1 {
             return self.route(request).is_ok_and(|target| target.has_streaming_input());
         }
-        self.router.match_route(request).is_ok_and(|target| {
+        self.router.match_route(request).is_ok_and(|matched| {
+            let target = matched.route;
             target.has_streaming_input()
                 && admits(
                     &self
@@ -155,7 +157,10 @@ impl MetadataProtocolRouter for RestProtocolRouter {
     }
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
-        self.router.match_route(request).map_err(RoutingError::from)
+        self.router
+            .match_route(request)
+            .map(|matched| matched.route)
+            .map_err(RoutingError::from)
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
@@ -165,7 +170,7 @@ impl MetadataProtocolRouter for RestProtocolRouter {
                 Err(error) => RouteClaim::DeferredRejection(error),
             };
         }
-        match self.router.match_route(request) {
+        match self.router.match_route(request).map(|matched| matched.route) {
             Ok(target)
                 if admits(
                     &self

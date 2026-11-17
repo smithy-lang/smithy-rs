@@ -21,8 +21,10 @@ use crate::protocol::aws_json_11::router::ROUTE_CUTOFF;
 use crate::response::IntoResponse;
 use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
+use crate::routing::RouteMatch;
 use crate::routing::Router;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
+use crate::shape_id::ShapeId;
 
 use super::route_identity::parse_route_identity;
 use super::{RpcV2Cbor, SMITHY_PROTOCOL_HEADER};
@@ -55,7 +57,7 @@ pub enum Error {
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
 pub struct RpcV2CborRouter<S> {
-    routes: TinyMap<std::borrow::Cow<'static, str>, S, ROUTE_CUTOFF>,
+    routes: TinyMap<std::borrow::Cow<'static, str>, (ShapeId, S), ROUTE_CUTOFF>,
 }
 
 /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
@@ -66,18 +68,23 @@ const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 impl<S> RpcV2CborRouter<S> {
     /// Looks up a modeled service and operation independently of transport validation.
     /// Schema claiming uses this to distinguish a known route from a deferred rejection.
-    pub(crate) fn match_target(&self, path: &str) -> Option<&S> {
+    pub(crate) fn match_target(&self, path: &str) -> Option<&(ShapeId, S)> {
         let identity = parse_route_identity(path)?;
         tracing::trace!(service = %identity.service, operation = %identity.operation, "parsed service and operation from URI");
         self.routes
             .get(format!("{}.{}", identity.service, identity.operation).as_str())
     }
-    /// Builds routing keys owned by a runtime service schema adapter.
-    pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
+    /// Creates a router from `(target, operation, route)` entries, where `target` is a
+    /// `Service.Operation` routing key.
+    #[doc(hidden)]
+    pub fn from_routes<K>(routes: impl IntoIterator<Item = (K, ShapeId, S)>) -> Self
+    where
+        K: Into<std::borrow::Cow<'static, str>>,
+    {
         Self {
-            routes: iter
+            routes: routes
                 .into_iter()
-                .map(|(key, value)| (std::borrow::Cow::Owned(key), value))
+                .map(|(key, operation, route)| (key.into(), (operation, route)))
                 .collect(),
         }
     }
@@ -96,7 +103,11 @@ impl<S> RpcV2CborRouter<S> {
         S::Future: Send + 'static,
     {
         RpcV2CborRouter {
-            routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(key, (operation, s))| (key, (operation, Route::new(s))))
+                .collect(),
         }
     }
 
@@ -109,7 +120,7 @@ impl<S> RpcV2CborRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(key, route)| (key, layer.layer(route)))
+                .map(|(key, (operation, route))| (key, (operation, layer.layer(route))))
                 .collect(),
         }
     }
@@ -196,7 +207,7 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
 
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
+    fn match_route(&self, request: &http::Request<B>) -> Result<RouteMatch<Self::Service>, Self::Error> {
         // Only `Method::POST` is allowed.
         if request.method() != http::Method::POST {
             return Err(Error::MethodNotAllowed);
@@ -216,20 +227,8 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
         let request_path = request.uri().path();
         tracing::trace!(%request_path, "parsing service and operation from URI");
         // Parse the URI, then look up the generated serde `Service.Operation` registration key.
-        let route = self.match_target(request_path).ok_or(Error::NotFound)?;
-        Ok(route.clone())
-    }
-}
-
-impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
-    #[inline]
-    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
-        Self {
-            routes: iter
-                .into_iter()
-                .map(|(key, value)| (std::borrow::Cow::Borrowed(key), value))
-                .collect(),
-        }
+        let (operation, route) = self.match_target(request_path).ok_or(Error::NotFound)?;
+        Ok(RouteMatch::new(operation.clone(), route.clone()))
     }
 }
 
@@ -455,13 +454,14 @@ mod tests {
     #[test]
     fn owned_routes_match_uri_tails_in_both_map_modes() {
         for count in [1, super::ROUTE_CUTOFF + 1] {
-            let router = RpcV2CborRouter::from_owned((0..count).map(|i| (format!("Service.Operation{i}"), i)));
+            let router =
+                RpcV2CborRouter::from_routes((0..count).map(|i| (format!("Service.Operation{i}"), OPERATION, i)));
             for i in 0..count {
                 for path in [
                     format!("/service/Service/operation/Operation{i}"),
                     format!("/prefix/service/com.example.Service/operation/Operation{i}?ignored=/service/Other/operation/Other"),
                 ] {
-                    assert_eq!(router.match_route(&req(&Method::POST, &path, Some(headers()))).unwrap(), i);
+                    assert_eq!(router.match_route(&req(&Method::POST, &path, Some(headers()))).unwrap().route, i);
                 }
             }
             for path in [
@@ -495,6 +495,8 @@ mod tests {
         assert!(invalid.is_none());
     }
 
+    const OPERATION: crate::shape_id::ShapeId = crate::shape_id::ShapeId::new("test#Operation", "test", "Operation");
+
     /// Helper function returning the only strictly required header.
     fn headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
@@ -504,12 +506,12 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = [("Service.Operation", ())].into_iter().collect();
+        let router = RpcV2CborRouter::from_routes([("Service.Operation", OPERATION, ())]);
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.
         let routing_result = router.match_route(&req(&Method::POST, good_uri, Some(headers())));
-        assert!(routing_result.is_ok());
+        assert_eq!(routing_result.unwrap().operation, OPERATION);
 
         // The request would be valid if it used `Method::POST`.
         let invalid_request = req(&Method::GET, good_uri, Some(headers()));

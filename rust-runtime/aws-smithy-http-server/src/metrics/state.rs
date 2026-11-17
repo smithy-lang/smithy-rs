@@ -71,6 +71,13 @@ impl MetricsState {
         }
     }
 
+    /// Records the operation the request was routed to, if metrics are enabled.
+    pub(crate) fn record_operation(&self, operation: &ShapeId) {
+        if let Some(metrics) = &self.inner.metrics {
+            metrics.lock().unwrap_or_else(PoisonError::into_inner).operation = Some(operation.clone());
+        }
+    }
+
     fn is_enabled(&self) -> bool {
         self.inner.metrics.is_some()
     }
@@ -107,6 +114,13 @@ impl MetricsState {
     }
 }
 
+/// Records the operation `request` was routed to, if standard metrics are being collected.
+pub(crate) fn record_operation<B>(request: &http::Request<B>, operation: &ShapeId) {
+    if let Some(state) = request.extensions().get::<MetricsState>() {
+        state.record_operation(operation);
+    }
+}
+
 /// Whether standard metrics are being collected for `request`.
 pub(crate) fn collecting<B>(request: &http::Request<B>) -> bool {
     request
@@ -126,6 +140,7 @@ struct InProgressMetrics {
     start_system_time: SystemTime,
     service: ServiceIdentity,
     outcome: Option<Outcome>,
+    operation: Option<ShapeId>,
 }
 
 impl InProgressMetrics {
@@ -135,6 +150,7 @@ impl InProgressMetrics {
             start_system_time: time_source.now(),
             service: service.clone(),
             outcome: None,
+            operation: None,
         }
     }
 
@@ -146,6 +162,7 @@ impl InProgressMetrics {
             service: self.service.id.clone(),
             service_version: self.service.version,
             outcome: self.outcome.clone(),
+            operation: self.operation.clone(),
         }
     }
 }

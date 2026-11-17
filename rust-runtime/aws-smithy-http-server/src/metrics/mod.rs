@@ -11,7 +11,7 @@ use crate::shape_id::ShapeId;
 
 #[doc(hidden)]
 pub use self::outcome::ModeledOutcome;
-pub(crate) use self::state::collecting;
+pub(crate) use self::state::{collecting, record_operation};
 pub use self::{
     outcome::{ErrorOutcome, Fault, Outcome, OutcomeSource, SuccessOutcome},
     request_ext::RequestExt,
@@ -36,6 +36,7 @@ pub struct RequestMetrics {
     service: ShapeId,
     service_version: Option<&'static str>,
     outcome: Option<Outcome>,
+    operation: Option<ShapeId>,
 }
 
 impl RequestMetrics {
@@ -70,6 +71,12 @@ impl RequestMetrics {
     /// The version of the service that handled the request, if its model specifies one.
     pub fn service_version(&self) -> Option<&str> {
         self.service_version
+    }
+
+    /// The [`ShapeId`] of the operation the request was routed to, or `None` if it was not routed to
+    /// an operation.
+    pub fn operation(&self) -> Option<&ShapeId> {
+        self.operation.as_ref()
     }
 
     /// How the request turned out.

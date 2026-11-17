@@ -42,6 +42,7 @@ use crate::{
     body::{boxed, BoxBody},
     error::BoxError,
     response::IntoResponse,
+    shape_id::ShapeId,
 };
 
 #[cfg(feature = "aws-lambda")]
@@ -70,7 +71,24 @@ pub trait Router<B> {
     type Error;
 
     /// Matches a [`http::Request`] to a target [`Service`].
-    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
+    fn match_route(&self, request: &http::Request<B>) -> Result<RouteMatch<Self::Service>, Self::Error>;
+}
+
+/// The route a [`Router`] selected for a request.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct RouteMatch<S> {
+    /// The operation the request was routed to.
+    pub operation: ShapeId,
+    /// The route serving the operation.
+    pub route: S,
+}
+
+impl<S> RouteMatch<S> {
+    /// Creates a [`RouteMatch`] for `route`, which serves `operation`.
+    pub fn new(operation: ShapeId, route: S) -> Self {
+        Self { operation, route }
+    }
 }
 
 /// A [`Service`] using the [`Router`] `R` to redirect messages to specific routes.
@@ -192,7 +210,10 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.
-            Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
+            Ok(RouteMatch { operation, route, .. }) => {
+                crate::metrics::record_operation(&req, &operation);
+                RoutingFuture::from_oneshot(route.oneshot(req))
+            }
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(error) => {
                 tracing::debug!(%error, "failed to route");

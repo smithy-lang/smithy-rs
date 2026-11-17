@@ -367,11 +367,11 @@ pub trait Router<B> {
     type Error;
 
     /// Matches a [`http::Request`] to a target [`Service`].
-    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
+    fn match_route(&self, request: &http::Request<B>) -> Result<RouteMatch<Self::Service>, Self::Error>;
 }
 ```
 
-which provides the ability to determine an inner HTTP service from a collection using a `&http::Request`.
+which provides the ability to determine an inner HTTP service from a collection using a `&http::Request`. A `RouteMatch` holds the selected route together with the `ShapeId` of the operation it serves.
 
 Types which implement the `Router` trait are converted to a HTTP service via the `RoutingService` struct:
 
@@ -395,8 +395,11 @@ where
 
     async fn call(&mut self, req: http::Request<B>) -> Result<Self::Response, Self::Error> {
         match self.router.match_route(&req) {
-            // Successfully routed, use the routes `Service::call`.
-            Ok(ok) => ok.oneshot(req).await,
+            // Successfully routed: record the operation for standard metrics, then use the route's `Service::call`.
+            Ok(RouteMatch { operation, route, .. }) => {
+                /* record `operation` */
+                route.oneshot(req).await
+            }
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(error) => {
                 debug!(%error, "failed to route");

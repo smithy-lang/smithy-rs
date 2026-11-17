@@ -118,7 +118,11 @@ async fn sole_aws_json_claims_preserve_native_uri_method_and_target_rejections()
     use crate::response::IntoResponse;
     use crate::routing::Router;
 
-    let legacy = AwsJsonRouter::from_owned([("Service.first".to_owned(), ())]);
+    let legacy = AwsJsonRouter::from_routes([(
+        "Service.first",
+        crate::shape_id::ShapeId::new("test#first", "test", "first"),
+        (),
+    )]);
     for schema in [&AWS_JSON_10, &AWS_JSON_11] {
         let app = app(schema, []);
         for (method, uri, target) in [
@@ -176,7 +180,11 @@ async fn sole_cbor_claims_serialize_native_header_rejections() {
     use crate::response::IntoResponse;
     use crate::routing::Router;
 
-    let legacy = RpcV2CborRouter::from_owned([("Service.first".to_owned(), ())]);
+    let legacy = RpcV2CborRouter::from_routes([(
+        "Service.first",
+        crate::shape_id::ShapeId::new("test#first", "test", "first"),
+        (),
+    )]);
     let app = app(&RPC, []);
     for (header, forbidden) in [
         (None, None),

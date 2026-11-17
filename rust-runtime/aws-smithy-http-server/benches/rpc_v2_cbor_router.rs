@@ -18,9 +18,12 @@ use aws_smithy_http_server::body::empty;
 use aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter;
 use aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor;
 use aws_smithy_http_server::routing::{Router, RoutingService};
+use aws_smithy_http_server::shape_id::ShapeId;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use http::{HeaderValue, Method, Request, Response};
 use std::hint::black_box;
+
+const OPERATION: ShapeId = ShapeId::new("test#Operation", "test", "Operation");
 use tokio::runtime::Runtime;
 use tower::{service_fn, ServiceExt};
 
@@ -85,7 +88,7 @@ fn scenarios() -> [(&'static str, Request<()>); 4] {
 }
 
 fn rpc_v2_cbor_router(c: &mut Criterion) {
-    let router: RpcV2CborRouter<()> = [("Service.Operation", ())].into_iter().collect();
+    let router: RpcV2CborRouter<()> = RpcV2CborRouter::from_routes([("Service.Operation", OPERATION, ())]);
     let scenarios = scenarios();
 
     let mut group = c.benchmark_group("rpc_v2_cbor_router/handwritten");
@@ -155,7 +158,7 @@ fn route_identity_parser(c: &mut Criterion) {
 
 fn rpc_v2_cbor_routing_service(c: &mut Criterion) {
     let operation = service_fn(|_request: Request<()>| async { Ok::<_, Infallible>(Response::new(empty())) });
-    let router: RpcV2CborRouter<_> = [("Service.Operation", operation)].into_iter().collect();
+    let router: RpcV2CborRouter<_> = RpcV2CborRouter::from_routes([("Service.Operation", OPERATION, operation)]);
     let service = RoutingService::<_, RpcV2Cbor>::new(router);
     let runtime = Runtime::new().expect("Tokio runtime");
 

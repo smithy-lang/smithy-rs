@@ -11,7 +11,9 @@ use tower::Service;
 use crate::body::BoxBody;
 use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
+use crate::routing::RouteMatch;
 use crate::routing::Router;
+use crate::shape_id::ShapeId;
 
 use http::header::ToStrError;
 use thiserror::Error;
@@ -47,16 +49,21 @@ pub(crate) const ROUTE_CUTOFF: usize = 15;
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<std::borrow::Cow<'static, str>, S, ROUTE_CUTOFF>,
+    routes: TinyMap<std::borrow::Cow<'static, str>, (ShapeId, S), ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
-    /// Builds routing keys owned by a runtime service schema adapter.
-    pub fn from_owned(iter: impl IntoIterator<Item = (String, S)>) -> Self {
+    /// Creates a router from `(target, operation, route)` entries, where `target` is a
+    /// `Service.Operation` routing key.
+    #[doc(hidden)]
+    pub fn from_routes<K>(routes: impl IntoIterator<Item = (K, ShapeId, S)>) -> Self
+    where
+        K: Into<std::borrow::Cow<'static, str>>,
+    {
         Self {
-            routes: iter
+            routes: routes
                 .into_iter()
-                .map(|(key, value)| (std::borrow::Cow::Owned(key), value))
+                .map(|(key, operation, route)| (key.into(), (operation, route)))
                 .collect(),
         }
     }
@@ -70,7 +77,7 @@ impl<S> AwsJsonRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(key, route)| (key, layer.layer(route)))
+                .map(|(key, (operation, route))| (key, (operation, layer.layer(route))))
                 .collect(),
         }
     }
@@ -83,7 +90,11 @@ impl<S> AwsJsonRouter<S> {
         S::Future: Send + 'static,
     {
         AwsJsonRouter {
-            routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(key, (operation, s))| (key, (operation, Route::new(s))))
+                .collect(),
         }
     }
 }
@@ -92,7 +103,7 @@ impl<S: Clone> AwsJsonRouter<S> {
     /// Looks up the route the `x-amz-target` header names, without checking the method or URI.
     pub(crate) fn match_target<B>(&self, request: &http::Request<B>) -> Option<S> {
         let target = request.headers().get("x-amz-target")?.to_str().ok()?;
-        self.routes.get(target).cloned()
+        self.routes.get(target).map(|(_operation, route)| route.clone())
     }
 }
 
@@ -103,7 +114,7 @@ where
     type Service = S;
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+    fn match_route(&self, request: &http::Request<B>) -> Result<RouteMatch<S>, Self::Error> {
         // The URI must be root,
         if request.uri() != "/" {
             return Err(Error::NotRootUrl);
@@ -119,20 +130,8 @@ where
         let target = target.to_str().map_err(Error::InvalidHeader)?;
 
         // Lookup in the `TinyMap` for a route for the target.
-        let route = self.routes.get(target).ok_or(Error::NotFound)?;
-        Ok(route.clone())
-    }
-}
-
-impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
-    #[inline]
-    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
-        Self {
-            routes: iter
-                .into_iter()
-                .map(|(key, value)| (std::borrow::Cow::Borrowed(key), value))
-                .collect(),
-        }
+        let (operation, route) = self.routes.get(target).ok_or(Error::NotFound)?;
+        Ok(RouteMatch::new(operation.clone(), route.clone()))
     }
 }
 
@@ -146,16 +145,17 @@ mod tests {
 
     #[tokio::test]
     async fn simple_routing() {
-        let routes = vec![("Service.Operation")];
-        let router: AwsJsonRouter<_> = routes.clone().into_iter().map(|operation| (operation, ())).collect();
+        const OPERATION: ShapeId = ShapeId::new("test#Operation", "test", "Operation");
+        let router = AwsJsonRouter::from_routes([("Service.Operation", OPERATION, ())]);
 
         let mut headers = HeaderMap::new();
         headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));
 
         // Valid request, should match.
-        router
+        let matched = router
             .match_route(&req(&Method::POST, "/", Some(headers.clone())))
             .unwrap();
+        assert_eq!(matched.operation, OPERATION);
 
         // No headers, should return `MissingHeader`.
         let res = router.match_route(&req(&Method::POST, "/", None));

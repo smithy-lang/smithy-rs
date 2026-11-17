@@ -45,7 +45,10 @@ impl MetadataProtocolRouter for AwsJsonProtocolRouter {
 
     fn route(&self, request: &Request<()>) -> Result<OperationTarget, RoutingError> {
         use crate::routing::Router;
-        self.router.match_route(request).map_err(RoutingError::from)
+        self.router
+            .match_route(request)
+            .map(|matched| matched.route)
+            .map_err(RoutingError::from)
     }
 
     fn claim(&self, request: &Request<()>) -> RouteClaim {
@@ -96,13 +99,17 @@ pub fn aws_json_router(
                 }
             }
         }
-        names
-            .into_iter()
-            .map(move |name| (format!("{}.{}", ctx.service.shape_id().shape_name(), name), *target))
+        names.into_iter().map(move |name| {
+            (
+                format!("{}.{}", ctx.service.shape_id().shape_name(), name),
+                crate::shape_id::ShapeId::from_schema(target.operation().shape_id()),
+                *target,
+            )
+        })
     });
     Ok(AwsJsonProtocolRouter {
         service_schema: ctx.service,
-        router: crate::protocol::aws_json::router::AwsJsonRouter::from_owned(entries),
+        router: crate::protocol::aws_json::router::AwsJsonRouter::from_routes(entries),
         content_type,
     })
 }

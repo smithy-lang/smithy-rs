@@ -10,7 +10,9 @@ use crate::body::BoxBody;
 use crate::routing::request_spec::Match;
 use crate::routing::request_spec::RequestSpec;
 use crate::routing::Route;
+use crate::routing::RouteMatch;
 use crate::routing::Router;
+use crate::shape_id::ShapeId;
 use tower::Layer;
 use tower::Service;
 
@@ -36,10 +38,26 @@ pub struct RestRouter<S> {
     // `Arc` so cloning the router, which `serve` does per request, shares each
     // `RequestSpec` and its regex's match cache. A cloned `Regex` gets a fresh,
     // empty cache pool, so without the `Arc` every clone would rebuild it.
-    routes: Vec<(Arc<RequestSpec>, S)>,
+    routes: Vec<(Arc<RequestSpec>, ShapeId, S)>,
 }
 
 impl<S> RestRouter<S> {
+    /// Creates a router from `(request_spec, operation, route)` entries.
+    #[doc(hidden)]
+    pub fn from_routes(routes: impl IntoIterator<Item = (RequestSpec, ShapeId, S)>) -> Self {
+        let mut routes: Vec<(Arc<RequestSpec>, ShapeId, S)> = routes
+            .into_iter()
+            .map(|(request_spec, operation, route)| (Arc::new(request_spec), operation, route))
+            .collect();
+
+        // Sort them once by specificity, with the more specific routes sorted before the less
+        // specific ones, so that when routing a request we can simply iterate through the routes
+        // and pick the first one that matches.
+        routes.sort_by_key(|(request_spec, _operation, _route)| std::cmp::Reverse(request_spec.rank()));
+
+        Self { routes }
+    }
+
     /// Applies a [`Layer`] uniformly to all routes.
     pub fn layer<L>(self, layer: L) -> RestRouter<L::Service>
     where
@@ -49,7 +67,7 @@ impl<S> RestRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(request_spec, route)| (request_spec, layer.layer(route)))
+                .map(|(request_spec, operation, route)| (request_spec, operation, layer.layer(route)))
                 .collect(),
         }
     }
@@ -62,7 +80,11 @@ impl<S> RestRouter<S> {
         S::Future: Send + 'static,
     {
         RestRouter {
-            routes: self.routes.into_iter().map(|(spec, s)| (spec, Route::new(s))).collect(),
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(spec, operation, s)| (spec, operation, Route::new(s)))
+                .collect(),
         }
     }
 }
@@ -74,13 +96,13 @@ where
     type Service = S;
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+    fn match_route(&self, request: &http::Request<B>) -> Result<RouteMatch<S>, Self::Error> {
         let mut method_allowed = true;
 
-        for (request_spec, route) in &self.routes {
+        for (request_spec, operation, route) in &self.routes {
             match request_spec.matches(request) {
                 // Match found.
-                Match::Yes => return Ok(route.clone()),
+                Match::Yes => return Ok(RouteMatch::new(operation.clone(), route.clone())),
                 // Match found, but method disallowed.
                 Match::MethodNotAllowed => method_allowed = false,
                 // Continue looping to see if another route matches.
@@ -96,29 +118,34 @@ where
     }
 }
 
-impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
-    #[inline]
-    fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
-        let mut routes: Vec<(Arc<RequestSpec>, S)> = iter
-            .into_iter()
-            .map(|(request_spec, route)| (Arc::new(request_spec), route))
-            .collect();
-
-        // Sort them once by specificity, with the more specific routes sorted before the less
-        // specific ones, so that when routing a request we can simply iterate through the routes
-        // and pick the first one that matches.
-        routes.sort_by_key(|(request_spec, _route)| std::cmp::Reverse(request_spec.rank()));
-
-        Self { routes }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
     use http::Method;
+
+    /// Builds a router whose routes all serve an operation named after the route.
+    fn router(request_specs: Vec<(RequestSpec, &'static str)>) -> RestRouter<&'static str> {
+        RestRouter::from_routes(
+            request_specs
+                .into_iter()
+                .map(|(spec, name)| (spec, ShapeId::new(name, "test", name), name)),
+        )
+    }
+
+    #[test]
+    fn matches_report_the_operation() {
+        let router = router(vec![(
+            RequestSpec::from_parts(Method::GET, vec![PathSegment::Literal(String::from("a"))], Vec::new()),
+            "A",
+        )]);
+        let matched = router.match_route(&req(&Method::GET, "/a", None)).unwrap();
+        assert_eq!(matched.operation, ShapeId::new("A", "test", "A"));
+        let layered = router.layer(tower::layer::layer_fn(|name: &'static str| name.len()));
+        let matched = layered.match_route(&req(&Method::GET, "/a", None)).unwrap();
+        assert_eq!((matched.operation, matched.route), (ShapeId::new("A", "test", "A"), 1));
+    }
 
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
@@ -171,7 +198,7 @@ mod tests {
         ];
 
         // Test both RestJson1 and RestXml routers.
-        let router: RestRouter<_> = request_specs.into_iter().collect();
+        let router = router(request_specs);
 
         let hits = vec![
             ("A", Method::GET, "/a/b/c"),
@@ -187,7 +214,7 @@ mod tests {
             ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
         ];
         for (svc_name, method, uri) in &hits {
-            assert_eq!(router.match_route(&req(method, uri, None)).unwrap(), *svc_name);
+            assert_eq!(router.match_route(&req(method, uri, None)).unwrap().route, *svc_name);
         }
 
         for (_, _, uri) in hits {
@@ -256,7 +283,7 @@ mod tests {
             ),
         ];
 
-        let router: RestRouter<_> = request_specs.into_iter().collect();
+        let router = router(request_specs);
 
         let hits = vec![
             ("A1", Method::GET, "/a/foo"),
@@ -265,7 +292,7 @@ mod tests {
             ("B2", Method::GET, "/b/foo?q=baz"),
         ];
         for (svc_name, method, uri) in hits {
-            assert_eq!(router.match_route(&req(&method, uri, None)).unwrap(), svc_name);
+            assert_eq!(router.match_route(&req(&method, uri, None)).unwrap().route, svc_name);
         }
     }
 
@@ -285,14 +312,17 @@ mod tests {
                 "B",
             ),
         ];
-        let router: RestRouter<_> = request_specs.into_iter().collect();
+        let router = router(request_specs);
         let cloned = router.clone();
 
         assert_eq!(cloned.routes.len(), 2);
-        for ((spec, _), (cloned_spec, _)) in router.routes.iter().zip(cloned.routes.iter()) {
+        for ((spec, _, _), (cloned_spec, _, _)) in router.routes.iter().zip(cloned.routes.iter()) {
             assert!(Arc::ptr_eq(spec, cloned_spec));
         }
-        assert_eq!(cloned.match_route(&req(&Method::GET, "/a/label", None)).unwrap(), "A");
-        assert_eq!(cloned.match_route(&req(&Method::POST, "/b", None)).unwrap(), "B");
+        assert_eq!(
+            cloned.match_route(&req(&Method::GET, "/a/label", None)).unwrap().route,
+            "A"
+        );
+        assert_eq!(cloned.match_route(&req(&Method::POST, "/b", None)).unwrap().route, "B");
     }
 }

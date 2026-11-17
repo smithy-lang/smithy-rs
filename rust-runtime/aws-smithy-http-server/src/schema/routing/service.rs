@@ -128,6 +128,10 @@ impl MultiProtocolRoutingService {
             std::ptr::eq(binding.operation, selected.operation()),
             "router index belongs to a different operation"
         );
+        crate::metrics::record_operation(
+            &request,
+            &crate::shape_id::ShapeId::from_schema(binding.operation.shape_id()),
+        );
         SelectedOperation::new(
             self.state.protocols[protocol].protocol.clone(),
             binding.operation,

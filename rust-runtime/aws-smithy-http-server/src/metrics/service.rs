@@ -127,7 +127,13 @@ mod tests {
     use http_body_util::{BodyExt, Full};
     use tower::{service_fn, Service, ServiceExt};
 
-    use crate::metrics::{test_util::TestService, Fault, ModeledOutcome, RequestExt, RequestMetrics, SuccessOutcome};
+    use crate::{
+        metrics::{
+            test_util::{TestOperation, TestService},
+            Fault, ModeledOutcome, RequestExt, RequestMetrics, SuccessOutcome,
+        },
+        operation::OperationShape,
+    };
 
     use super::*;
 
@@ -431,6 +437,59 @@ mod tests {
         assert!(result.is_err());
         let metrics = seen.lock().unwrap().take().expect("callback received metrics");
         assert!(metrics.outcome().is_none());
+    }
+
+    /// Serves a request for `uri` through a `MetricsService` around a REST `RoutingService` with
+    /// one route, `GET /a`, for `TestOperation`. The route is wrapped in a layer that responds
+    /// without calling it. Returns the metrics received by an `on_finish` callback registered
+    /// before routing.
+    async fn operation_metrics(uri: &str) -> RequestMetrics {
+        use crate::protocol::{rest::router::RestRouter, rest_json_1::RestJson1};
+        use crate::routing::{request_spec::*, RoutingService};
+
+        let route = service_fn(|_: http::Request<()>| async { ok() });
+        let router = RestRouter::from_routes([(
+            RequestSpec::from_parts(
+                http::Method::GET,
+                vec![PathSegment::Literal(String::from("a"))],
+                Vec::new(),
+            ),
+            <TestOperation as OperationShape>::ID,
+            route,
+        )])
+        .layer(tower::layer::layer_fn(|_route| {
+            service_fn(|_: http::Request<()>| async { ok() })
+        }));
+        let routing = RoutingService::<_, RestJson1>::new(router);
+
+        let seen = Arc::new(Mutex::new(None));
+        let inner = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                routing.clone().oneshot(req)
+            })
+        };
+        let response = MetricsService::new::<TestService>(inner, true)
+            .oneshot(http::Request::get(uri).body(()).unwrap())
+            .await
+            .unwrap();
+        drop(response);
+        let metrics = seen.lock().unwrap().take();
+        metrics.expect("callback received metrics")
+    }
+
+    #[tokio::test]
+    async fn routed_requests_record_the_operation_even_if_a_layer_does_not_call_the_route() {
+        let metrics = operation_metrics("/a").await;
+        assert_eq!(metrics.operation(), Some(&<TestOperation as OperationShape>::ID));
+    }
+
+    #[tokio::test]
+    async fn unrouted_requests_have_no_operation() {
+        let metrics = operation_metrics("/unknown").await;
+        assert_eq!(metrics.operation(), None);
     }
 
     #[test]
