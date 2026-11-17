@@ -1,4 +1,23 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 16th, 2026
+===================
+**New this release:**
+- :tada: (client, [aws-sdk-rust#1296](https://github.com/awslabs/aws-sdk-rust/issues/1296), @sfod) The connection pool now enables TCP keepalive by default with a 30-second idle interval. This keeps connections alive through NAT gateways and load balancers that silently drop idle TCP flows, reducing connection errors on reuse. Pass `None` to `tcp_keepalive` on the pool builder to opt out.
+- :tada: (client, [smithy-rs#5004](https://github.com/smithy-lang/smithy-rs/issues/5004), @yychen23) Added `BehaviorVersion::v2026_11_17`, which is now what `BehaviorVersion::latest()` returns. `BehaviorVersion::v2026_11_10` is deprecated in favor of it.
+
+    For generic Smithy clients this changes no behavior: the new version exists to gate a default read timeout that applies only to AWS SDK clients. If you call `v2026_11_10()` explicitly you will see a deprecation warning, which you can resolve by moving to `latest()` or by naming the new version directly.
+- :bug: (client, [smithy-rs#4905](https://github.com/smithy-lang/smithy-rs/issues/4905)) Upgrade `HickoryDnsResolver` to `hickory-resolver` 0.26.3, which resolves the RUSTSEC advisories reported against `hickory-proto` 0.25 and `hickory-resolver` 0.25. The resolver keeps querying IPv4 first with IPv6 as a fallback, keeps its default cache size of 32, and sends EDNS(0) only when `/etc/resolv.conf` enables it. With `hickory-resolver` 0.26, UDP queries are retransmitted while a response is outstanding, the lookup timeout bounds all nameservers queried in one attempt, and on Apple platforms the system configuration is read from the System Configuration framework instead of `/etc/resolv.conf`.
+- :bug: (all, @franco2002lu) Fix RPC v2 CBOR timestamp decoding losing a millisecond. A float timestamp that is the closest double to a whole number of milliseconds, such as `1700000000.123`, was truncated to the millisecond below about half the time. Timestamps are now rounded to the nearest millisecond, the protocol's resolution.
+- :bug: (all, [smithy-rs#3765](https://github.com/smithy-lang/smithy-rs/issues/3765), @osrs-agent) Generated `Debug` impls for structures and unions now redact `@sensitive` values nested in lists, sets and maps, for example appflow's `CustomAuthCredentials.credentials_map`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @franco2002lu
+- @osrs-agent ([smithy-rs#3765](https://github.com/smithy-lang/smithy-rs/issues/3765))
+- @sfod ([aws-sdk-rust#1296](https://github.com/awslabs/aws-sdk-rust/issues/1296))
+- @yychen23 ([smithy-rs#5004](https://github.com/smithy-lang/smithy-rs/issues/5004))
+
+
 November 9th, 2026
 ==================
 **New this release:**
