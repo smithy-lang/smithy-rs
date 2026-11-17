@@ -72,16 +72,21 @@
 //! - every acceptor state, matcher, and path comparator is one this crate knows.
 //!
 //! Decoding does not check rules that depend on sibling values, the operation, or the
-//! service: that `minDelay` is at most `maxDelay`, that a waiter has a success acceptor, that
-//! only failure acceptors have a message, that a `booleanEquals` matcher expects `"true"` or
-//! `"false"`, that an `errorType` names an error of the operation, that waiter names are
-//! unique within a service, or that the operation does not use event streams.
-//!
-//! JMESPath expressions ([`PathMatcher::path`] and [`Acceptor::message`]) are kept exactly as
-//! written, with the location of their string value. Decoding does not parse them.
+//! service, and does not parse JMESPath expressions ([`PathMatcher::path`] and
+//! [`Acceptor::message`]): they are kept exactly as written, with the location of their
+//! string value. The [`validator`] checks those rules.
 //!
 //! As in the reference implementation, unknown properties of waiters, acceptors, and path
 //! matchers are ignored, and are not re-encoded. An unknown matcher member is an error.
+//!
+//! # Validation
+//!
+//! [`validator`] checks the rest of the specification: that the trait is applied to an
+//! operation without event streams, that `minDelay` is at most `maxDelay`, that each waiter
+//! has a success acceptor, that only failure acceptors have a message, that waiter names are
+//! case-insensitively unique within a service, and that expressions parse and agree with
+//! the operation's input and output shapes. See its documentation for the full list and the
+//! differences from the reference implementation.
 //!
 //! # Order and equality
 //!
@@ -98,6 +103,10 @@
 //! [`TraitCodec`]: crate::traits::TraitCodec
 
 mod codec;
+mod expression;
+mod validate;
+
+pub use validate::validator;
 
 use crate::diagnostic::{Location, SourceLocation};
 use crate::node::Node;

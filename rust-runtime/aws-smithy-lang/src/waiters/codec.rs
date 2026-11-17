@@ -18,21 +18,33 @@ use std::fmt;
 type Result<T> = std::result::Result<T, TraitDecodeError>;
 
 const DOCUMENTATION: &str = "documentation";
-const ACCEPTORS: &str = "acceptors";
+pub(super) const ACCEPTORS: &str = "acceptors";
 const MIN_DELAY: &str = "minDelay";
 const MAX_DELAY: &str = "maxDelay";
 const DEPRECATED: &str = "deprecated";
 const TAGS: &str = "tags";
 const STATE: &str = "state";
-const MATCHER: &str = "matcher";
+pub(super) const MATCHER: &str = "matcher";
 const MESSAGE: &str = "message";
-const OUTPUT: &str = "output";
-const INPUT_OUTPUT: &str = "inputOutput";
+pub(super) const OUTPUT: &str = "output";
+pub(super) const INPUT_OUTPUT: &str = "inputOutput";
 const SUCCESS: &str = "success";
 const ERROR_TYPE: &str = "errorType";
 const PATH: &str = "path";
 const EXPECTED: &str = "expected";
 const COMPARATOR: &str = "comparator";
+
+/// The properties of each structure in the trait value. Decoding ignores others.
+pub(super) const WAITER_PROPERTIES: [&str; 6] = [
+    DOCUMENTATION,
+    ACCEPTORS,
+    MIN_DELAY,
+    MAX_DELAY,
+    DEPRECATED,
+    TAGS,
+];
+pub(super) const ACCEPTOR_PROPERTIES: [&str; 3] = [STATE, MATCHER, MESSAGE];
+pub(super) const PATH_MATCHER_PROPERTIES: [&str; 3] = [PATH, EXPECTED, COMPARATOR];
 
 const DEFAULT_MIN_DELAY: u32 = 2;
 const DEFAULT_MAX_DELAY: u32 = 120;
@@ -41,13 +53,13 @@ const DELAY_RANGE: std::ops::RangeInclusive<u32> = 1..=i32::MAX as u32;
 
 const WAITER_NAME_PATTERN: &str = "^[A-Z]+[A-Za-z0-9]*$";
 
-/// Where a problem is, as the prefix of an error message: a waiter and, within it, an
-/// acceptor. The error's location identifies the exact value; this names it for values
-/// created in code, which have no location.
+/// Where a problem is, as the prefix of a message: a waiter and, within it, an acceptor.
+/// The location of a decoding error identifies the exact value and names it for values
+/// created in code that have no location.
 #[derive(Clone, Copy)]
-struct Context<'a> {
-    waiter: &'a str,
-    acceptor: Option<usize>,
+pub(super) struct Context<'a> {
+    pub(super) waiter: &'a str,
+    pub(super) acceptor: Option<usize>,
 }
 
 impl Context<'_> {
