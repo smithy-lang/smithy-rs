@@ -1,6 +1,11 @@
 {
     "generator": "software.amazon.smithy:smithy-model:1.74.0",
     "outcomes": {
+        "add_trait_and_applies": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
         "add_trait_document_prelude_namespace": {
             "accepted": true,
             "errors": [],
@@ -50,6 +55,21 @@
                 "ex#S": "code.json",
                 "ex#S$m": "code.json"
             }
+        },
+        "created_idl_apply": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_idl_definition_and_apply": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_json_apply": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
         },
         "created_json_map_value_first": {
             "accepted": true,

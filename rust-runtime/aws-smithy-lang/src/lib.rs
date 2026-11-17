@@ -78,7 +78,7 @@
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! Inputs using `apply` or mixins are rejected with
+//! Inputs using mixins are rejected with
 //! [`DiagnosticCode::UnsupportedFeature`](diagnostic::DiagnosticCode).
 //!
 //! [Smithy 2.0 IDL]: https://smithy.io/2.0/spec/idl.html

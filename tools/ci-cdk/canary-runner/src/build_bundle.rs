@@ -141,9 +141,10 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
+wasmtime = "47.0.4"
+wasmtime-wasi = "47.0.4"
+wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 "#;
 
@@ -673,9 +674,10 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
+wasmtime = "47.0.4"
+wasmtime-wasi = "47.0.4"
+wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
@@ -743,9 +745,10 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
+wasmtime = "47.0.4"
+wasmtime-wasi = "47.0.4"
+wasmtime-wasi-http = "47.0.4"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }
