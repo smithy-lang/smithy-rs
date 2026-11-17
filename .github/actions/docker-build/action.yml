@@ -55,6 +55,9 @@ runs:
       shared-key: ${{ runner.os }}-${{ github.job }}-${{ inputs.label != '' && inputs.label || inputs.action }}
       workspaces: |
         . smithy-rs-target
+      # Each merge group has its own ref, and no later run can restore a cache saved under it.
+      # Saving would only evict caches that `main` and pull requests can use.
+      save-if: ${{ github.event_name != 'merge_group' }}
   - name: Download all artifacts
     uses: ./smithy-rs/.github/actions/download-all-artifacts
   - name: Prepare build image

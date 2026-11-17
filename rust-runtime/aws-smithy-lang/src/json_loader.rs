@@ -27,14 +27,14 @@
 //! - **Bounded peak memory.** Using `serde_json::Value` would materialize the whole document
 //!   (about 6 MiB of JSON for EC2) before conversion. Here only one shape's [`Node`] is alive
 //!   at a time, and its trait values move into the declaration without being cloned.
-//! - **Explicit unsupported features.** `apply`, `set`, mixins, and `@mixin` declarations
-//!   produce `UnsupportedFeature`. They are neither silently accepted nor mixed in with
-//!   ordinary unknown-field errors.
+//! - **Explicit unsupported features.** `set`, mixins, and `@mixin` declarations produce
+//!   `UnsupportedFeature`. They are neither silently accepted nor mixed in with ordinary
+//!   unknown-field errors.
 //! - **No serde surface.** JSON is converted directly into the crate's owned semantic
 //!   [`Shape`] types, the same types callers build in code. Nothing about
 //!   the JSON AST encoding leaks into the model or the public API.
 
-use crate::ast_converter::AstConverter;
+use crate::ast_converter::{Apply, AstConverter, Entry};
 use crate::diagnostic::{
     escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, SourceLocation,
 };
@@ -68,52 +68,102 @@ pub(crate) const DEFAULT_MAX_DIAGNOSTICS: usize = 1_000;
 pub(crate) struct Document {
     pub(crate) metadata: NodeObject,
     pub(crate) shapes: IndexMap<ShapeId, Shape>,
-    /// The first applied trait of a shape in document order, as `(target, trait)`, for shapes
-    /// where that is not the [canonical first trait](canonical_first_trait).
-    ///
-    /// The Smithy reference implementation applies JSON AST traits in document order as they are
-    /// read, which decides how the traits of a shape built in code merge with a document that
-    /// redefines it (see the assembler's `Merge`). Converted shapes no longer record whether
-    /// `traits` came before `members`, so the uncommon order is recorded here.
-    pub(crate) first_traits: HashMap<ShapeId, (ShapeId, ShapeId)>,
+    /// The first trait in document order of each shape definition whose first trait is not
+    /// the [usual one](is_usual_first_trait). See [`FirstTrait`].
+    pub(crate) first_traits: HashMap<ShapeId, FirstTrait>,
+    /// `apply` entries in document order, so that traits can be applied in document order.
+    pub(crate) applies: Vec<DocumentApply>,
 }
 
-/// The first applied trait of a shape in the usual JSON AST key order (members before
-/// `traits`, as Smithy's serializers write them): the first trait of the first member that has
-/// one, otherwise the shape's first trait.
-pub(crate) fn canonical_first_trait(shape: &Shape) -> Option<(&ShapeId, &ShapeId)> {
-    shape
+/// The trait a JSON AST shape definition applies first, in document order.
+///
+/// The reference implementation applies the traits of a JSON AST definition one at a time, in
+/// document order. When the definition redefines a shape built in code, its first trait is what
+/// touches that shape, and the shape's own traits are merged right after it, before the rest of
+/// the definition's traits (see the assembler's `Merge`). So the order of concatenated values
+/// depends on which trait comes first, which depends on the order of keys in the JSON object:
+/// `traits` before or after `members`, and the order of the members.
+///
+/// A converted [`Shape`] no longer records that key order, so the loader records the first
+/// trait here, and only when it differs from the order Smithy's serializers write.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FirstTrait {
+    /// The shape or member the trait is applied to.
+    pub(crate) target: ShapeId,
+    /// The trait's shape ID.
+    pub(crate) id: ShapeId,
+}
+
+/// Whether `first` is the first trait of `shape` in the order Smithy's serializers write: the
+/// first trait of the first member that has one, otherwise the shape's first trait (members
+/// come before `traits`).
+fn is_usual_first_trait(shape: &Shape, first: &FirstTrait) -> bool {
+    let usual = shape
         .members()
         .find_map(|member| Some((member.id(), member.traits.keys().next()?)))
-        .or_else(|| Some((shape.id(), shape.common().traits.keys().next()?)))
+        .or_else(|| Some((shape.id(), shape.common().traits.keys().next()?)));
+    usual.is_some_and(|(target, id)| *target == first.target && *id == first.id)
 }
 
-/// The first applied trait of a shape object in document order, as `(member, trait)` where
-/// `member` is `None` for the shape itself.
-fn first_trait_in_document(node: &Node) -> Option<(Option<&str>, &str)> {
-    fn first_key(traits: Option<&Node>) -> Option<&str> {
-        traits?.as_object()?.iter().next().map(|(key, _)| key)
-    }
-    fn member_trait(member: &Node) -> Option<&str> {
-        first_key(member.as_object()?.get("traits"))
-    }
-    for (key, value) in value_entries(node)? {
-        let found = match key {
-            "traits" => first_key(Some(value)).map(|id| (None, id)),
-            "members" => value_entries(value)?
-                .find_map(|(name, member)| member_trait(member).map(|id| (Some(name), id))),
-            "member" | "key" | "value" => member_trait(value).map(|id| (Some(key), id)),
-            _ => None,
+/// The first trait of a shape object in document order, before the object is converted.
+struct DocumentFirstTrait {
+    /// The member the trait is applied to, or `None` for the shape itself.
+    member: Option<String>,
+    /// The trait's shape ID, as written.
+    id: String,
+}
+
+impl DocumentFirstTrait {
+    /// Finds the first trait in a shape object, looking at `traits` and every member in key
+    /// order.
+    fn find(node: &Node) -> Option<Self> {
+        let first_key = |traits: Option<&Node>| -> Option<String> {
+            Some(traits?.as_object()?.iter().next()?.0.to_owned())
         };
-        if found.is_some() {
-            return found;
+        let member_trait = |member: &Node| first_key(member.as_object()?.get("traits"));
+        for (key, value) in node.as_object()?.iter() {
+            let found = match key {
+                "traits" => first_key(Some(value)).map(|id| Self { member: None, id }),
+                "members" => value.as_object()?.iter().find_map(|(name, member)| {
+                    member_trait(member).map(|id| Self {
+                        member: Some(name.to_owned()),
+                        id,
+                    })
+                }),
+                "member" | "key" | "value" => member_trait(value).map(|id| Self {
+                    member: Some(key.to_owned()),
+                    id,
+                }),
+                _ => None,
+            };
+            if found.is_some() {
+                return found;
+            }
         }
+        None
     }
-    None
+
+    /// Resolves the trait against the converted `shape`, or `None` if it is the usual first
+    /// trait (which the assembler derives) or does not resolve.
+    fn unusual(self, shape: &Shape) -> Option<FirstTrait> {
+        let target = match self.member {
+            None => shape.id().clone(),
+            Some(name) => shape.member(&name)?.id().clone(),
+        };
+        let first = FirstTrait {
+            target,
+            id: ShapeId::new(&self.id).ok()?,
+        };
+        (!is_usual_first_trait(shape, &first)).then_some(first)
+    }
 }
 
-fn value_entries(node: &Node) -> Option<impl Iterator<Item = (&str, &Node)>> {
-    node.as_object().map(NodeObject::iter)
+/// An `apply` entry of a [`Document`], with where it falls among the document's definitions.
+#[derive(Debug, Clone)]
+pub(crate) struct DocumentApply {
+    /// The number of [`Document::shapes`] defined before this entry.
+    pub(crate) shapes_before: usize,
+    pub(crate) apply: Apply,
 }
 
 /// Parser limits, configured through [`ModelAssembler`](crate::ModelAssembler).
@@ -412,38 +462,28 @@ impl<'de> Visitor<'de> for ShapesSeed<'_, '_> {
             let node = map
                 .next_value_seed(NodeSeed { ctx, depth: 2 })?
                 .with_position(position);
-            let first = first_trait_in_document(&node)
-                .map(|(member, id)| (member.map(str::to_owned), id.to_owned()));
-            if let Some(shape) = state.converter.convert_shape(&key, node) {
-                let mut document = state.document.borrow_mut();
-                if let Some(first) = first.and_then(|first| uncommon_first_trait(&shape, first)) {
-                    document.first_traits.insert(shape.id().clone(), first);
+            let first = DocumentFirstTrait::find(&node);
+            match state.converter.convert_entry(&key, node) {
+                Some(Entry::Shape(shape)) => {
+                    let mut document = state.document.borrow_mut();
+                    if let Some(first) = first.and_then(|first| first.unusual(&shape)) {
+                        document.first_traits.insert(shape.id().clone(), first);
+                    }
+                    document.shapes.insert(shape.id().clone(), shape);
                 }
-                document.shapes.insert(shape.id().clone(), shape);
+                Some(Entry::Apply(apply)) => {
+                    let mut document = state.document.borrow_mut();
+                    let shapes_before = document.shapes.len();
+                    document.applies.push(DocumentApply {
+                        shapes_before,
+                        apply,
+                    });
+                }
+                None => {}
             }
             seen.insert(key);
         }
         Ok(())
-    }
-}
-
-/// `(target, trait)` for the first trait in document order, if it is not the canonical one.
-fn uncommon_first_trait(
-    shape: &Shape,
-    (member, id): (Option<String>, String),
-) -> Option<(ShapeId, ShapeId)> {
-    let target = match member {
-        None => shape.id().clone(),
-        Some(name) => shape.member(&name)?.id().clone(),
-    };
-    let id = ShapeId::new(&id).ok()?;
-    match canonical_first_trait(shape) {
-        Some((canonical_target, canonical_id))
-            if *canonical_target == target && *canonical_id == id =>
-        {
-            None
-        }
-        _ => Some((target, id)),
     }
 }
 
@@ -587,10 +627,6 @@ mod tests {
     fn unsupported_features() {
         for (shapes, pointer) in [
             (
-                r#""a#A":{"type":"apply","traits":{"a#t":{}}}"#,
-                "/shapes/a#A/type",
-            ),
-            (
                 r#""a#A":{"type":"structure","mixins":[{"target":"a#M"}]}"#,
                 "/shapes/a#A/mixins",
             ),
@@ -609,6 +645,14 @@ mod tests {
         }
         let ok = parse(&doc(r#""a#A":{"type":"structure","mixins":[]}"#)).unwrap();
         assert_eq!(ok.shapes.len(), 1);
+    }
+
+    #[test]
+    fn only_apply_keys_may_be_member_ids() {
+        let document = parse(&doc(r#""a#A$m":{"type":"apply","traits":{"a#t":{}}}"#)).unwrap();
+        assert_eq!(document.applies[0].apply.target.as_str(), "a#A$m");
+        let err = parse(&doc(r#""a#A$m":{"type":"string"}"#)).unwrap_err();
+        assert_eq!(codes(&err), [DiagnosticCode::InvalidShapeId]);
     }
 
     #[test]

@@ -11,7 +11,7 @@ prelude, and validates the result with the built-in `StructuralV1` validators
 plus any custom `Validator`s. `AstWriter` writes JSON AST in insertion order or
 canonical order. Every loaded shape, member, trait, and node value records its
 source location (file, line, column, and semantic JSON Pointer), and errors and
-diagnostics report it. Inputs that use `apply` or mixins are rejected with an
+diagnostics report it. Inputs that use mixins are rejected with an
 `UnsupportedFeature` diagnostic.
 
 With the optional `runtime-schema` feature, `runtime_schema::RuntimeSchemaSet`
