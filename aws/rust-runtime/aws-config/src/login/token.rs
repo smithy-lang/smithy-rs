@@ -26,7 +26,7 @@ pub(super) struct LoginToken {
     pub(super) client_id: String,
     pub(super) dpop_key: Zeroizing<String>,
     /// Region the session was created in (`signInRegion`). When present, it is
-    /// always non-empty and trimmed.
+    /// trimmed and a valid host label.
     pub(super) sign_in_region: Option<Region>,
 }
 

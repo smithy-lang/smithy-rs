@@ -586,6 +586,79 @@ mod test {
         Ok(())
     }
 
+    /// With a Sign-In endpoint override, the region does not pick the host, so a
+    /// `signInRegion` that is not a valid host label must not stop the refresh.
+    #[tokio::test]
+    async fn endpoint_override_with_malformed_sign_in_region_refreshes() {
+        let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
+        let cache_path = "/home/user/.aws/login/cache/4b0ba8f99f075c0633e122fd73346ce203a3faf18ea0310eb2d29df1bab2e255.json";
+        let cached_token = serde_json::json!({
+            "accessToken": {
+                "accessKeyId": "OLDEXPIREDKEY",
+                "secretAccessKey": "oldExpiredSecretKey",
+                "sessionToken": "oldExpiredSessionToken",
+                "accountId": "012345678901",
+                "expiresAt": "2020-01-01T00:00:00Z"
+            },
+            "tokenType": "aws_sigv4",
+            "clientId": "arn:aws:signin:::devtools/same-device",
+            "refreshToken": "valid_refresh_token",
+            "dpopKey": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIPt/u8InPLpQeQLJTvVX+sNDzni8vMDMt3Liu+nMBigfoAoGCCqGSM49\nAwEHoUQDQgAEILkGG7rNOnxiIJlMgimY1UPP8eDMFP0DAY6WGjngP4bvTAiUCQ/I\nffut2379uP+OBCm2ovGpBOJRgrl1RspUOQ==\n-----END EC PRIVATE KEY-----\n",
+            "signInRegion": "bad region!"
+        });
+        let fs = Fs::from_map(HashMap::from([(
+            cache_path.to_string(),
+            serde_json::to_vec(&cached_token).unwrap(),
+        )]));
+        let env = Env::from_slice(&[
+            ("HOME", "/home/user"),
+            (
+                "AWS_ENDPOINT_URL_SIGNIN",
+                "https://signin-proxy.example.com",
+            ),
+        ]);
+        let mock: MockApiCall = serde_json::from_value(serde_json::json!({
+            "response": {
+                "tokenOutput": {
+                    "accessToken": {
+                        "accessKeyId": "NEWREFRESHEDKEY",
+                        "secretAccessKey": "newRefreshedSecretKey",
+                        "sessionToken": "newRefreshedSessionToken"
+                    },
+                    "refreshToken": "new_refresh_token",
+                    "expiresIn": 900
+                }
+            }
+        }))
+        .unwrap();
+        let requests = CapturedRequests::default();
+        // 2025-11-19T00:00:00Z, the same fixed time as the SEP test cases
+        let now = UNIX_EPOCH + Duration::from_secs(1763510400);
+        let provider_config = ProviderConfig::empty()
+            .with_env(env)
+            .with_fs(fs)
+            .with_http_client(TestHttpClient::new(&[mock], requests.clone()))
+            .with_region(Some(Region::from_static("us-east-2")))
+            .with_sleep_impl(TokioSleep::new())
+            .with_time_source(SharedTimeSource::new(StaticTimeSource::new(now)));
+        let provider = LoginCredentialsProvider::builder(session_arn)
+            .configure(&provider_config)
+            .build();
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("the endpoint override picks the host, so the refresh succeeds");
+        assert_eq!("NEWREFRESHEDKEY", creds.access_key_id());
+        let uris: Vec<_> = requests
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(uri, _)| uri.clone())
+            .collect();
+        assert_eq!(vec!["https://signin-proxy.example.com/v1/token"], uris);
+    }
+
     /// How the first `CreateOAuth2Token` attempt fails before the retry succeeds
     #[derive(Clone, Copy, Debug)]
     enum FirstAttempt {

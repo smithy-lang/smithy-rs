@@ -268,10 +268,16 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
                         {
                             let value = value.to_unescaped()?;
                             let trimmed = value.trim();
-                            sign_in_region = if trimmed.is_empty() {
-                                None
-                            } else {
+                            sign_in_region = if is_valid_region(trimmed) {
                                 Some(Region::new(trimmed.to_owned()))
+                            } else {
+                                if !trimmed.is_empty() {
+                                    tracing::warn!(
+                                        sign_in_region = ?trimmed,
+                                        "ignoring `signInRegion` in the cached Login token because it is not a valid region"
+                                    );
+                                }
+                                None
                             };
                         }
                         _ => {}
@@ -314,6 +320,19 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
         client_id,
         dpop_key,
         sign_in_region,
+    })
+}
+
+/// Whether `region` can be sent as the Sign-In `Region` endpoint parameter. The generated
+/// endpoint parameter validation rejects a region that is not a valid host label (dots
+/// allowed), even when an endpoint override picks the host.
+fn is_valid_region(region: &str) -> bool {
+    region.split('.').all(|label| {
+        (1..=63).contains(&label.len())
+            && !label.starts_with('-')
+            && label
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
     })
 }
 
@@ -424,6 +443,10 @@ mod tests {
         assert_eq!(None, region(r#""signInRegion": "   ","#));
         assert_eq!(None, region(r#""signInRegion": null,"#));
         assert_eq!(None, region(r#""signInRegion": 5,"#));
+        // Not a valid host label, so it can't be sent as the `Region` endpoint parameter
+        assert_eq!(None, region(r#""signInRegion": "bad region!","#));
+        assert_eq!(None, region(r#""signInRegion": "-eu-west-1","#));
+        assert_eq!(None, region(r#""signInRegion": "eu-west-1.","#));
     }
 
     #[tokio::test]
