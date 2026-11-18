@@ -345,7 +345,7 @@ internal class StaticStabilityDecoratorTest {
                             ),
                         ]);
                         let config = $moduleName::Config::builder()
-                            .behavior_version(#{BehaviorVersion}::v2026_08_01())
+                            .behavior_version(#{BehaviorVersion}::v2026_12_08())
                             .http_client(http_client.clone())
                             .time_source(#{StaticTimeSource}::new(now))
                             .sleep_impl(#{SharedAsyncSleep}::new(#{TokioSleep}::new()))
