@@ -33,6 +33,8 @@ pub const MIXIN: ShapeId = ShapeId::from_static("smithy.api#mixin");
 pub const ENUM_VALUE: ShapeId = ShapeId::from_static("smithy.api#enumValue");
 /// `smithy.api#private`
 pub const PRIVATE: ShapeId = ShapeId::from_static("smithy.api#private");
+/// `smithy.api#length`
+pub const LENGTH: ShapeId = ShapeId::from_static("smithy.api#length");
 
 /// Converts between a trait's generic [`Node`] value and a typed Rust value.
 ///

@@ -6,6 +6,7 @@
 //! `StructuralV1` rules: the assembler's critical checks and the built-in validators.
 
 use crate::diagnostic::DiagnosticCode::{self, *};
+use crate::diagnostic::Severity;
 use crate::model::Model;
 use crate::prelude;
 use crate::ModelAssembler;
@@ -506,5 +507,58 @@ fn resource_cycles() {
                "a#D":{"type":"resource"}"#
         ),
         []
+    );
+}
+
+fn errors_file(json: &str) -> Vec<String> {
+    let validated = ModelAssembler::new()
+        .add_json_str("t.json", json)
+        .assemble();
+    let mut lines: Vec<String> = validated
+        .diagnostics()
+        .iter()
+        .map(|d| {
+            let severity = match d.severity() {
+                Severity::Note => "NOTE",
+                Severity::Warning => "WARNING",
+                Severity::Error => "ERROR",
+            };
+            let shape = d.shape_id().map(|id| id.to_string()).unwrap_or_default();
+            let validator = d.validator().unwrap_or_default();
+            format!("[{severity}] {shape}: {} | {validator}", d.message())
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
+#[test]
+fn length_trait_matches_smithy_java() {
+    let model = r#"{
+        "smithy": "2.0",
+        "shapes": {
+            "ns.foo#Valid1": {"type": "list", "member": {"target": "smithy.api#String"},
+                              "traits": {"smithy.api#length": {"min": 0}}},
+            "ns.foo#Valid2": {"type": "list", "member": {"target": "smithy.api#String"},
+                              "traits": {"smithy.api#length": {"max": 1}}},
+            "ns.foo#Valid3": {"type": "list", "member": {"target": "smithy.api#String"},
+                              "traits": {"smithy.api#length": {"min": 0, "max": 1}}},
+            "ns.foo#Valid4": {"type": "list", "member": {"target": "smithy.api#String"},
+                              "traits": {"smithy.api#length": {"min": 4, "max": 4}}},
+            "ns.foo#Invalid1": {"type": "list", "member": {"target": "smithy.api#String"},
+                                "traits": {"smithy.api#length": {"max": -1}}},
+            "ns.foo#Invalid2": {"type": "list", "member": {"target": "smithy.api#String"},
+                                "traits": {"smithy.api#length": {"min": -1}}},
+            "ns.foo#Invalid3": {"type": "list", "member": {"target": "smithy.api#String"},
+                                "traits": {"smithy.api#length": {"min": 5, "max": 4}}}
+        }
+    }"#;
+    assert_eq!(
+        errors_file(model),
+        [
+            "[ERROR] ns.foo#Invalid1: A length trait is applied with a negative `max` value. | LengthTrait",
+            "[ERROR] ns.foo#Invalid2: A length trait is applied with a negative `min` value. | LengthTrait",
+            "[ERROR] ns.foo#Invalid3: A length trait is applied with a `min` value greater than its `max` value. | LengthTrait",
+        ]
     );
 }

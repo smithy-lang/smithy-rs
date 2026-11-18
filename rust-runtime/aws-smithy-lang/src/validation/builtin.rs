@@ -32,6 +32,7 @@ pub(crate) fn builtin_validators(require_trait_definitions: bool) -> Vec<Arc<dyn
         Arc::new(UnitTarget),
         Arc::new(ErrorTarget),
         Arc::new(ServiceRename),
+        Arc::new(LengthTrait),
     ]
 }
 
@@ -472,6 +473,56 @@ impl Validator for ServiceRename {
                     None => {
                         names.insert(name.to_ascii_lowercase(), (id, location));
                     }
+                }
+            }
+        }
+    }
+}
+
+/// `@length` has non-negative `min` and `max` values, and `min` is not greater than `max`.
+struct LengthTrait;
+
+impl Validator for LengthTrait {
+    fn name(&self) -> &str {
+        "LengthTrait"
+    }
+
+    fn validate(&self, model: &Model, diagnostics: &mut DiagnosticSink<'_>) {
+        for shape in model
+            .shapes_with_trait(&traits::LENGTH)
+            .filter(|shape| !prelude::is_prelude_shape(shape.id()))
+        {
+            let Some(value) = shape.get_trait(&traits::LENGTH) else {
+                continue;
+            };
+            let bound = |name: &str| {
+                value
+                    .as_object()
+                    .and_then(|object| object.get(name))
+                    .and_then(|bound| bound.as_number())
+                    .and_then(|bound| bound.as_i64())
+            };
+            let (min, max) = (bound("min"), bound("max"));
+            let mut report = |message: &str| {
+                diagnostics.push(error(
+                    DiagnosticCode::InvalidTrait,
+                    message.to_owned(),
+                    shape.id(),
+                    value.source_location(),
+                ));
+            };
+
+            if min.is_some_and(|min| min < 0) {
+                report("A length trait is applied with a negative `min` value.");
+            }
+            if max.is_some_and(|max| max < 0) {
+                report("A length trait is applied with a negative `max` value.");
+            }
+            if let (Some(min), Some(max)) = (min, max) {
+                if min > max {
+                    report(
+                        "A length trait is applied with a `min` value greater than its `max` value.",
+                    );
                 }
             }
         }
