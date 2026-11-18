@@ -276,7 +276,15 @@ impl Builder {
             sleep_impl: later.sleep_impl.or(self.sleep_impl),
             time_source: later.time_source.or(self.time_source),
             retry_config: later.retry_config.or(self.retry_config),
-            timeout_config: later.timeout_config.or(self.timeout_config),
+            // A later timeout config keeps each timeout it leaves unset from the earlier one, as
+            // generated clients merge timeout configs.
+            timeout_config: match (later.timeout_config, self.timeout_config) {
+                (Some(mut later), Some(earlier)) => {
+                    later.take_defaults_from(&earlier);
+                    Some(later)
+                }
+                (later, earlier) => later.or(earlier),
+            },
             retry_partition: later.retry_partition.or(self.retry_partition),
             identity_cache: later.identity_cache.or(self.identity_cache),
             stalled_stream_protection: later

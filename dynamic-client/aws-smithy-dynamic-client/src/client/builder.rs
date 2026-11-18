@@ -745,6 +745,32 @@ mod tests {
     }
 
     #[test]
+    fn a_later_timeout_config_keeps_the_earlier_timeouts_it_leaves_unset() {
+        let earlier = TimeoutConfig::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .build();
+        let later = TimeoutConfig::builder()
+            .operation_timeout(Duration::from_secs(30))
+            .build();
+        let client = builder()
+            .model_file(model("weather.json"))
+            .config(Config::builder().timeout_config(earlier))
+            .config(Config::builder().timeout_config(later))
+            .build()
+            .unwrap();
+        let (cfg, _) = client.client_config();
+        let timeout_config = cfg.load::<TimeoutConfig>().unwrap();
+        assert_eq!(
+            Some(Duration::from_secs(10)),
+            timeout_config.connect_timeout()
+        );
+        assert_eq!(
+            Some(Duration::from_secs(30)),
+            timeout_config.operation_timeout()
+        );
+    }
+
+    #[test]
     fn names_the_retry_partition_after_the_service_by_default() {
         let client = builder().model_file(model("weather.json")).build().unwrap();
         let (cfg, _) = client.client_config();
