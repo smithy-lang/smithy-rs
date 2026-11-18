@@ -6,19 +6,24 @@
 //! The dynamic client and its builder.
 
 use crate::call::CallBuilder;
-use crate::error::OperationNotFound;
+use crate::error::{InputError, InputErrorKind, OperationNotFound};
+use crate::serde::check_input;
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
 use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::ShapeId;
 #[cfg(test)]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_schema::OperationSchema;
 #[cfg(test)]
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::Document;
 use std::sync::Arc;
+use struct_value::StructValue;
 
 mod builder;
+mod struct_value;
 
 pub(crate) use builder::warn_unused_keys;
 pub use builder::DynamicClientBuilder;
@@ -100,6 +105,51 @@ impl DynamicClient {
             .schemas
             .operation(id)
             .expect("the schema set has every operation of the service"))
+    }
+
+    /// Returns a value of the structure or union with the shape ID `shape`, built from `value`.
+    ///
+    /// The value is a document object keyed by the Smithy member names of the shape. The value
+    /// implements [`SerializableStruct`], so a protocol or a document type can serialize the value
+    /// by the shape's schema.
+    ///
+    /// ```no_run
+    /// # fn example(
+    /// #     client: &aws_smithy_dynamic_client::DynamicClient,
+    /// # ) -> Result<(), Box<dyn std::error::Error>> {
+    /// use aws_smithy_lang::ShapeId;
+    /// use aws_smithy_schema::serde::SerializableStruct;
+    /// use aws_smithy_types::Document;
+    ///
+    /// let value = Document::Object(
+    ///     [("key".to_owned(), Document::String("color".to_owned()))].into(),
+    /// );
+    /// let tag = client.struct_value(&ShapeId::new("smithy.example#Tag")?, value)?;
+    /// assert_eq!("smithy.example#Tag", tag.schema().shape_id().as_str());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`InputError`] when the service reaches no shape with the ID `shape`, when the
+    /// shape is not a structure or a union, or when `value` does not match the shape's schema.
+    pub fn struct_value(
+        &self,
+        shape: &ShapeId,
+        value: Document,
+    ) -> Result<impl SerializableStruct + Send + Sync + 'static, InputError> {
+        let not_found =
+            || InputError::for_shape(shape.as_str().to_owned(), InputErrorKind::UnknownShape);
+        let schema = self.schemas.schema(shape).ok_or_else(not_found)?;
+        if !schema.is_structure() && !schema.is_union() {
+            return Err(InputError::for_shape(
+                shape.as_str().to_owned(),
+                InputErrorKind::NotAStructure,
+            ));
+        }
+        check_input(&self.schemas, schema, &value)?;
+        Ok(StructValue::new(value, self.schemas.clone(), shape.clone()))
     }
 
     // Finds an operation of the service by its shape name.

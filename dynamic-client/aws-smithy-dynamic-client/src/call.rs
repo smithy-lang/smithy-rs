@@ -805,4 +805,79 @@ mod tests {
             seen_schema
         );
     }
+
+    fn shape(id: &str) -> aws_smithy_lang::ShapeId {
+        aws_smithy_lang::ShapeId::new(id).unwrap()
+    }
+
+    #[test]
+    fn a_struct_value_has_the_schema_of_its_shape() {
+        let (client, _request) = client(200, "{}");
+        let tag = object([("key", Document::String("color".to_owned()))]);
+        let value = client
+            .struct_value(&shape("smithy.example#Tag"), tag)
+            .unwrap();
+        assert_eq!("smithy.example#Tag", value.schema().shape_id().as_str());
+    }
+
+    #[test]
+    fn a_nested_struct_value_serializes_by_its_schema() {
+        use aws_smithy_schema::document::DiscriminatedDocumentExt;
+        use aws_smithy_types::DiscriminatedDocument;
+        let (client, _request) = client(200, "{}");
+        let members = object([
+            ("id", Document::String("1".to_owned())),
+            (
+                "tags",
+                Document::Array(vec![object([(
+                    "key",
+                    Document::String("color".to_owned()),
+                )])]),
+            ),
+        ]);
+        let value = client
+            .struct_value(
+                &shape("smithy.example#UpdateSprocketInput"),
+                members.clone(),
+            )
+            .unwrap();
+        let document = DiscriminatedDocument::from_struct(value.schema(), &value).unwrap();
+        assert_eq!(
+            Some("smithy.example#UpdateSprocketInput"),
+            document.discriminator()
+        );
+        assert_eq!(&members, document.document());
+    }
+
+    #[test]
+    fn a_struct_value_that_does_not_match_its_schema_fails() {
+        let (client, _request) = client(200, "{}");
+        let tag = object([("key", Document::Number(Number::PosInt(5)))]);
+        let err = client
+            .struct_value(&shape("smithy.example#Tag"), tag)
+            .err()
+            .expect("the value has the wrong type");
+        assert_eq!("/key", err.path());
+        assert_eq!(&InputErrorKind::WrongType, err.kind());
+    }
+
+    #[test]
+    fn a_struct_value_of_an_unknown_shape_fails() {
+        let (client, _request) = client(200, "{}");
+        let err = client
+            .struct_value(&shape("smithy.example#Nope"), object([]))
+            .err()
+            .expect("the service reaches no such shape");
+        assert_eq!(&InputErrorKind::UnknownShape, err.kind());
+    }
+
+    #[test]
+    fn a_struct_value_of_a_list_shape_fails() {
+        let (client, _request) = client(200, "{}");
+        let err = client
+            .struct_value(&shape("smithy.example#TagList"), object([]))
+            .err()
+            .expect("a list is not a structure");
+        assert_eq!(&InputErrorKind::NotAStructure, err.kind());
+    }
 }
