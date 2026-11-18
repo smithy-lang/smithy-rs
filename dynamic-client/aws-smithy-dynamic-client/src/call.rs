@@ -477,4 +477,92 @@ mod tests {
             recorded(&seen)
         );
     }
+
+    fn object<const N: usize>(members: [(&str, Document); N]) -> Document {
+        Document::Object(
+            members
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value))
+                .collect(),
+        )
+    }
+
+    #[tokio::test]
+    async fn missing_required_members_get_zero_values() {
+        let (client, _request) = client(200, "{}");
+        let output = client.call("DescribeSprocket").send().await.unwrap();
+        let unset = || Document::String("no value was set".to_owned());
+        let expected = object([
+            ("name", Document::String(String::new())),
+            ("color", unset()),
+            ("legacyColor", unset()),
+            ("count", Document::Number(Number::PosInt(0))),
+            ("weight", Document::Number(Number::Float(0.0))),
+            ("active", Document::Bool(false)),
+            ("tags", Document::Array(Vec::new())),
+            ("labels", object([])),
+            ("extra", Document::Null),
+            ("owner", object([("id", Document::String(String::new()))])),
+            ("size", Document::Number(Number::PosInt(7))),
+        ]);
+        assert_eq!(&expected, output.members());
+    }
+
+    #[tokio::test]
+    async fn a_present_nested_structure_gets_its_required_members() {
+        let (client, _request) = client(200, r#"{"owner":{"email":"a@b.c"}}"#);
+        let output = client.call("DescribeSprocket").send().await.unwrap();
+        let owner = object([
+            ("id", Document::String(String::new())),
+            ("email", Document::String("a@b.c".to_owned())),
+        ]);
+        let members = output.members().as_object().unwrap();
+        assert_eq!(Some(&owner), members.get("owner"));
+        assert_eq!(None, members.get("note"));
+    }
+
+    #[tokio::test]
+    async fn the_output_has_its_http_bound_members() {
+        let (_, sleep) = instant_time_and_sleep(UNIX_EPOCH);
+        let http_client = infallible_client_fn(|_| {
+            http_1x::Response::builder()
+                .status(200)
+                .header("x-color", "red")
+                .header("x-meta-size", "large")
+                .body(SdkBody::from(r#"{"name":"bolt"}"#))
+                .unwrap()
+        });
+        let endpoint = StaticRuntimePlugin::new().with_runtime_components(
+            RuntimeComponentsBuilder::new("TestEndpoint").with_endpoint_resolver(Some(
+                StaticUriEndpointResolver::uri("https://example.com"),
+            )),
+        );
+        let client = DynamicClient::builder()
+            .model_file(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/models/widgets.json"))
+            .config(
+                Config::builder()
+                    .behavior_version(BehaviorVersion::latest())
+                    .http_client(http_client)
+                    .sleep_impl(sleep)
+                    .runtime_plugin(endpoint),
+            )
+            .build()
+            .unwrap();
+        let output = client
+            .call("GetWidget")
+            .input(object([("id", Document::String("w1".to_owned()))]))
+            .send()
+            .await
+            .unwrap();
+        let expected = object([
+            ("color", Document::String("red".to_owned())),
+            (
+                "meta",
+                object([("size", Document::String("large".to_owned()))]),
+            ),
+            ("status", Document::Number(Number::PosInt(200))),
+            ("name", Document::String("bolt".to_owned())),
+        ]);
+        assert_eq!(&expected, output.members());
+    }
 }

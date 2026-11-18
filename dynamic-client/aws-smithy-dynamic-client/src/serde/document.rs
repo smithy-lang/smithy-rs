@@ -13,10 +13,13 @@
 // timestamps, and big numbers.
 
 mod coerce;
+mod correct;
 
 pub(crate) use coerce::check_input;
+use correct::fill_missing;
 
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+use aws_smithy_lang::shape::MemberView;
 use aws_smithy_lang::ShapeId;
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
@@ -26,7 +29,8 @@ use aws_smithy_types::{Document, Number};
 use std::collections::HashMap;
 
 // `SerializableDocument` holds a structure or union document. A protocol's serializer writes
-// the document through the document's schema.
+// the document through the document's schema. The document was checked against the schema by
+// `check_input`, so only a value the check let through reaches the fallback errors below.
 pub(crate) struct SerializableDocument<'a> {
     document: &'a Document,
     schema: &'a Schema<'a>,
@@ -40,15 +44,11 @@ impl<'a> SerializableDocument<'a> {
         schema: &'a Schema<'a>,
         schemas: &'a RuntimeSchemaSet,
     ) -> Result<Self, SerdeError> {
-        let schema = target_schema(schemas, schema)?;
-        match document {
-            Document::Object(_) => Ok(Self {
-                document,
-                schema,
-                schemas,
-            }),
-            _ => Err(type_mismatch(schema, document)),
-        }
+        Ok(Self {
+            document,
+            schema: target_schema(schemas, schema)?,
+            schemas,
+        })
     }
 }
 
@@ -61,17 +61,6 @@ impl SerializableStruct for SerializableDocument<'_> {
         let Document::Object(members) = self.document else {
             return Err(type_mismatch(self.schema, self.document));
         };
-        if self.schema.shape_type() == ShapeType::Union && members.len() != 1 {
-            return Err(SerdeError::invalid_input(format!(
-                "a value of union `{}` has exactly one member",
-                self.schema.shape_id().as_str()
-            )));
-        }
-        for name in members.keys() {
-            if self.schema.member_schema(name).is_none() {
-                return Err(SerdeError::unknown_member(name));
-            }
-        }
         for member in self.schema.members() {
             let name = member.member_name().expect("structure members have names");
             match members.get(name) {
@@ -141,10 +130,6 @@ fn write_value(
         (ShapeType::Structure | ShapeType::Union, value) => {
             serializer.write_struct(schema, &SerializableDocument::new(value, schema, schemas)?)
         }
-        (
-            ShapeType::Blob | ShapeType::Timestamp | ShapeType::BigInteger | ShapeType::BigDecimal,
-            _,
-        ) => Err(unsupported(schema)),
         (_, value) => Err(type_mismatch(schema, value)),
     }
 }
@@ -168,6 +153,7 @@ pub(crate) fn read_struct(
         members.insert(name.to_owned(), read_value(schemas, member, deserializer)?);
         Ok(())
     })?;
+    fill_missing(schemas, schema, &mut members);
     Ok(Document::Object(members))
 }
 
@@ -237,20 +223,22 @@ fn target_schema<'s>(
     if schema.member_name().is_none() {
         return Ok(schema);
     }
-    let not_found = || {
-        SerdeError::custom(format!(
-            "no schema for the target of member `{}`",
-            schema.shape_id().as_str()
-        ))
-    };
-    let member = ShapeId::new(schema.shape_id().as_str()).map_err(|_| not_found())?;
-    let target = schemas
-        .model()
-        .get_shape(&member)
-        .and_then(|shape| shape.as_member())
-        .ok_or_else(not_found)?
-        .target();
-    schemas.schema(target).ok_or_else(not_found)
+    model_member(schemas, schema)
+        .and_then(|member| schemas.schema(member.target()))
+        .ok_or_else(|| {
+            SerdeError::custom(format!(
+                "no schema for the target of member `{}`",
+                schema.shape_id().as_str()
+            ))
+        })
+}
+
+// Returns the model member of a member schema.
+// TODO(aws-smithy-lang): Drop this lookup once runtime schemas carry every model trait, such as
+// `@required` and `@default`.
+fn model_member<'s>(schemas: &'s RuntimeSchemaSet, schema: &Schema<'_>) -> Option<MemberView<'s>> {
+    let id = ShapeId::new(schema.shape_id().as_str()).ok()?;
+    schemas.model().get_shape(&id)?.as_member()
 }
 
 fn integer<T: TryFrom<Number>>(schema: &Schema<'_>, number: Number) -> Result<T, SerdeError> {

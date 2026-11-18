@@ -185,6 +185,8 @@ fn unused_keys(service: &ServiceView<'_>, keys: &[Put]) -> Vec<&'static str> {
         })
         .collect();
     if !missing_traits.is_empty() {
+        // TODO(aws-smithy-lang): Use the shape set that `RuntimeSchemaSet` already walked for the
+        // service, once it exposes one. Then this second walk goes away.
         for shape in Walker::new().walk(*service) {
             missing_traits.retain(|id| !shape.has_trait(id));
             if missing_traits.is_empty() {

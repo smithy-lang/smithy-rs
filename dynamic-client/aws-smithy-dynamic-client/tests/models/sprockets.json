@@ -13,6 +13,9 @@
                 },
                 {
                     "target": "smithy.example#UpdateSprocket"
+                },
+                {
+                    "target": "smithy.example#DescribeSprocket"
                 }
             ],
             "traits": {
@@ -156,6 +159,140 @@
                 },
                 "sides": {
                     "target": "smithy.api#Integer"
+                }
+            }
+        },
+        "smithy.example#DescribeSprocket": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#DescribeSprocketInput"
+            },
+            "output": {
+                "target": "smithy.example#DescribeSprocketOutput"
+            }
+        },
+        "smithy.example#DescribeSprocketInput": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#DescribeSprocketOutput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "color": {
+                    "target": "smithy.example#Color",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "legacyColor": {
+                    "target": "smithy.example#LegacyColor",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "count": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "weight": {
+                    "target": "smithy.api#Double",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "active": {
+                    "target": "smithy.api#Boolean",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "tags": {
+                    "target": "smithy.example#TagList",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "labels": {
+                    "target": "smithy.example#Labels",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "extra": {
+                    "target": "smithy.api#Document",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "owner": {
+                    "target": "smithy.example#Owner",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "shape": {
+                    "target": "smithy.example#Shape",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "size": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#default": 7
+                    }
+                },
+                "note": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "smithy.example#Color": {
+            "type": "enum",
+            "members": {
+                "RED": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "red"
+                    }
+                }
+            }
+        },
+        "smithy.example#LegacyColor": {
+            "type": "string",
+            "traits": {
+                "smithy.api#enum": [
+                    {
+                        "value": "blue"
+                    }
+                ]
+            }
+        },
+        "smithy.example#Owner": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "email": {
+                    "target": "smithy.api#String"
                 }
             }
         }

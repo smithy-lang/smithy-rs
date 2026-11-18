@@ -1,0 +1,87 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "example.widgets#Widgets": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "example.widgets#GetWidget"
+                }
+            ],
+            "traits": {
+                "aws.protocols#restJson1": {}
+            }
+        },
+        "example.widgets#GetWidget": {
+            "type": "operation",
+            "input": {
+                "target": "example.widgets#GetWidgetInput"
+            },
+            "output": {
+                "target": "example.widgets#GetWidgetOutput"
+            },
+            "traits": {
+                "smithy.api#http": {
+                    "method": "GET",
+                    "uri": "/widgets/{id}",
+                    "code": 200
+                },
+                "smithy.api#readonly": {}
+            }
+        },
+        "example.widgets#GetWidgetInput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "example.widgets#GetWidgetOutput": {
+            "type": "structure",
+            "members": {
+                "color": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#httpHeader": "x-color"
+                    }
+                },
+                "meta": {
+                    "target": "example.widgets#Meta",
+                    "traits": {
+                        "smithy.api#httpPrefixHeaders": "x-meta-"
+                    }
+                },
+                "status": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#httpResponseCode": {}
+                    }
+                },
+                "name": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "example.widgets#Meta": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String"
+            },
+            "value": {
+                "target": "smithy.api#String"
+            }
+        }
+    }
+}
