@@ -218,6 +218,15 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
     ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
         self.poll_inner(cx)
     }
+
+    fn is_end_stream(&self) -> bool {
+        // stays false until the checksum was checked, so the mismatch error is never skipped
+        self.checksum.is_none()
+    }
+
+    fn size_hint(&self) -> http_body_1x::SizeHint {
+        self.inner.size_hint()
+    }
 }
 
 #[cfg(test)]
@@ -228,7 +237,7 @@ mod tests {
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::{Buf, Bytes};
     use bytes_utils::SegmentedBuf;
-    use http_body_1x::Frame;
+    use http_body_1x::{Body, Frame};
     use http_body_util::BodyExt;
     use std::collections::VecDeque;
     use std::io::Read;
@@ -470,5 +479,22 @@ mod tests {
             expected: wrong_checksum,
             actual: calculate_crc32_checksum(TEXT),
         }]);
+    }
+
+    #[tokio::test]
+    async fn test_checksum_validated_body_keeps_size_hint() {
+        let input_text = "hello world";
+        let mut body = ChecksumBody::new(
+            SdkBody::from(input_text),
+            "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl(),
+            calculate_crc32_checksum(input_text),
+        );
+        assert_eq!(body.size_hint().exact(), Some(11));
+        assert!(!body.is_end_stream());
+
+        while let Some(frame) = body.frame().await {
+            frame.unwrap();
+        }
+        assert!(body.is_end_stream());
     }
 }
