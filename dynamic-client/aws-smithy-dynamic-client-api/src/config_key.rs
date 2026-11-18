@@ -7,9 +7,7 @@
 
 use aws_smithy_lang::ShapeId;
 use aws_smithy_types::config_bag::Storable;
-use std::borrow::Cow;
-use std::error::Error;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 
 /// A config value that only some models use, such as a value for a Smithy trait.
 ///
@@ -52,8 +50,11 @@ pub enum Applies {
 
 /// The name of an endpoint rule-set built-in, such as `AWS::UseFIPS`. A rule-set parameter
 /// declares one with its `builtIn` property.
+///
+/// A built-in name is used in [`ConfigKey::APPLIES`], a constant, so the name is always known at
+/// compile time and is never allocated.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EndpointBuiltIn(Cow<'static, str>);
+pub struct EndpointBuiltIn(&'static str);
 
 impl EndpointBuiltIn {
     /// The `AWS::UseFIPS` endpoint rule-set built-in.
@@ -80,48 +81,14 @@ impl EndpointBuiltIn {
         if !is_built_in_name(name.as_bytes()) {
             panic!("an endpoint built-in name must be of the form `Prefix::Name`");
         }
-        Self(Cow::Borrowed(name))
-    }
-
-    /// Creates the name of an endpoint rule-set built-in, from a name known only at runtime.
-    ///
-    /// Use it for endpoint rules built or edited in memory.
-    ///
-    /// # Errors
-    ///
-    /// Fails if `name` is not of the form `Prefix::Name`, with no empty part.
-    pub fn new(name: impl Into<Cow<'static, str>>) -> Result<Self, InvalidEndpointBuiltIn> {
-        let name = name.into();
-        if is_built_in_name(name.as_bytes()) {
-            Ok(Self(name))
-        } else {
-            Err(InvalidEndpointBuiltIn { name })
-        }
+        Self(name)
     }
 
     /// The name of the endpoint rule-set built-in, such as `AWS::UseFIPS`.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0
     }
 }
-
-/// An error from [`EndpointBuiltIn::new`]: the name is not of the form `Prefix::Name`.
-#[derive(Debug)]
-pub struct InvalidEndpointBuiltIn {
-    name: Cow<'static, str>,
-}
-
-impl fmt::Display for InvalidEndpointBuiltIn {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "`{}` is not an endpoint built-in name of the form `Prefix::Name`",
-            self.name
-        )
-    }
-}
-
-impl Error for InvalidEndpointBuiltIn {}
 
 // Returns `true` for `A::B` and `A::B::C`: at least two parts, separated by `::`, none empty.
 // The rules engine spec requires built-ins to be namespaced with `::`, as in `AWS::UseFIPS`.
@@ -171,19 +138,6 @@ mod tests {
         ] {
             assert!(!is_built_in_name(name.as_bytes()), "{name}");
         }
-    }
-
-    #[test]
-    fn new_takes_an_owned_name_and_checks_it() {
-        let built_in = EndpointBuiltIn::new(String::from("Custom::Region")).unwrap();
-        assert_eq!("Custom::Region", built_in.as_str());
-        assert!(EndpointBuiltIn::new(String::from("Region")).is_err());
-    }
-
-    #[test]
-    fn an_owned_name_equals_the_same_static_name() {
-        let owned = EndpointBuiltIn::new(String::from("AWS::UseFIPS")).unwrap();
-        assert_eq!(EndpointBuiltIn::USE_FIPS, owned);
     }
 
     #[test]

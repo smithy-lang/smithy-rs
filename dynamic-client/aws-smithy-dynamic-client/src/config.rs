@@ -5,9 +5,7 @@
 
 //! Configuration for a dynamic client.
 
-pub use aws_smithy_dynamic_client_api::config_key::{
-    Applies, ConfigKey, EndpointBuiltIn, InvalidEndpointBuiltIn,
-};
+pub use aws_smithy_dynamic_client_api::config_key::{Applies, ConfigKey, EndpointBuiltIn};
 
 pub use aws_smithy_runtime::client::identity::IdentityCache;
 pub use aws_smithy_runtime::client::retries::RetryPartition;
