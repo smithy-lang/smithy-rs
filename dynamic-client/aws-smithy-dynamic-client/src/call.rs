@@ -7,12 +7,14 @@
 
 use crate::config;
 use crate::error::{DynamicOperationError, OperationNotFound};
+use crate::serde::check_input;
 use crate::DynamicClient;
 use aws_smithy_lang::ShapeId;
 use aws_smithy_runtime::client::orchestrator::invoke;
 use aws_smithy_runtime_api::client::interceptors::context::Input;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_types::Document;
 use plugin::{operation_plugin, per_call_plugins};
 use std::fmt;
@@ -39,7 +41,7 @@ pub type CallResult = Result<DynamicOutput, SdkError<DynamicOperationError, Http
 pub struct CallBuilder {
     client: DynamicClient,
     operation: Result<ShapeId, OperationNotFound>,
-    input: DynamicInput,
+    input: Document,
     config_override: Option<config::Builder>,
 }
 
@@ -51,16 +53,16 @@ impl CallBuilder {
         Self {
             client,
             operation,
-            input: DynamicInput::new(Document::Object(Default::default())),
+            input: Document::Object(Default::default()),
             config_override: None,
         }
     }
 
-    /// Sets the input. A [`Document`] object keyed by the Smithy member names of the input
-    /// converts into a [`DynamicInput`].
+    /// Sets the input, as a [`Document`] object keyed by the Smithy member names of the input.
     ///
-    /// Without an input, the call sends an empty input.
-    pub fn input(mut self, input: impl Into<DynamicInput>) -> Self {
+    /// Without an input, the call sends an empty input. Interceptors see the input as a
+    /// [`DynamicInput`].
+    pub fn input(mut self, input: impl Into<Document>) -> Self {
         self.input = input.into();
         self
     }
@@ -85,6 +87,11 @@ impl CallBuilder {
     pub async fn send(self) -> CallResult {
         let operation = self.operation.map_err(SdkError::construction_failure)?;
         let client = self.client;
+        let input = DynamicInput::new(self.input, client.schemas.clone(), operation.clone());
+        // The input is checked before any interceptor runs, so every interceptor sees an input
+        // that matches the input schema.
+        check_input(&client.schemas, input.schema(), input.members())
+            .map_err(SdkError::construction_failure)?;
         let mut runtime_plugins = client
             .runtime_plugins
             .clone()
@@ -96,7 +103,7 @@ impl CallBuilder {
         }
         let service = client.sdk_id.as_ref();
         let name = operation.name();
-        let output = invoke(service, name, Input::erase(self.input), &runtime_plugins)
+        let output = invoke(service, name, Input::erase(input), &runtime_plugins)
             // Generated clients put the same span around each operation.
             .instrument(tracing::debug_span!(
                 "operation",
@@ -131,7 +138,7 @@ impl fmt::Debug for CallBuilder {
 mod tests {
     use crate::config::{Applies, BehaviorVersion, Config, ConfigKey, RetryConfig};
     use crate::error::{DynamicOperationError, InputError, InputErrorKind, OperationNotFound};
-    use crate::DynamicClient;
+    use crate::{DynamicClient, DynamicInput};
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::{
         capture_request, infallible_client_fn, CaptureRequestReceiver,
@@ -146,6 +153,7 @@ mod tests {
         RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
+    use aws_smithy_schema::serde::SerializableStruct;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
     use aws_smithy_types::error::metadata::ProvideErrorMetadata;
@@ -661,5 +669,77 @@ mod tests {
             .unwrap();
         assert_eq!(&sprocket("1"), output.members());
         assert_eq!(2, *attempts.lock().unwrap());
+    }
+
+    // `SeeInput` is an interceptor that records the input it sees before execution: the `id`
+    // member and the shape ID of the input schema.
+    #[derive(Debug, Default)]
+    struct SeeInput {
+        seen: Arc<Mutex<Vec<SeenInput>>>,
+    }
+
+    // `SeenInput` holds the `id` member and the input schema's shape ID, as an interceptor saw
+    // them.
+    type SeenInput = (Option<String>, Option<String>);
+
+    impl Intercept for SeeInput {
+        fn name(&self) -> &'static str {
+            "SeeInput"
+        }
+
+        fn read_before_execution(
+            &self,
+            context: &BeforeSerializationInterceptorContextRef<'_>,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            let input = context
+                .input()
+                .downcast_ref::<DynamicInput>()
+                .expect("the input of a call is a `DynamicInput`");
+            let id = input
+                .members()
+                .as_object()
+                .and_then(|members| members.get("id"))
+                .and_then(|id| id.as_string())
+                .map(str::to_owned);
+            let schema = Some(input.schema().shape_id().as_str().to_owned());
+            self.seen.lock().unwrap().push((id, schema));
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn an_interceptor_sees_the_input_and_its_schema() {
+        let see = SeeInput::default();
+        let seen = see.seen.clone();
+        let client = client_with(Config::builder().interceptor(see));
+        client
+            .call("GetSprocket")
+            .input(sprocket("1"))
+            .send()
+            .await
+            .unwrap();
+        let expected = (
+            Some("1".to_owned()),
+            Some("smithy.example#GetSprocketInput".to_owned()),
+        );
+        assert_eq!(vec![expected], *seen.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn a_bad_input_fails_before_any_interceptor_runs() {
+        let see = SeeInput::default();
+        let seen = see.seen.clone();
+        let client = client_with(Config::builder().interceptor(see));
+        let input = object([("id", Document::Number(Number::PosInt(1)))]);
+        let err = client
+            .call("GetSprocket")
+            .input(input)
+            .send()
+            .await
+            .unwrap_err();
+        let source = err.source().expect("the error has a source");
+        assert!(source.downcast_ref::<InputError>().is_some(), "{err:?}");
+        assert!(seen.lock().unwrap().is_empty());
     }
 }

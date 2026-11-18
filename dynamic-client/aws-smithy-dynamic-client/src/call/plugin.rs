@@ -31,15 +31,10 @@ use aws_smithy_types::config_bag::Layer;
 // operation plugin.
 pub(super) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> StaticRuntimePlugin {
     let mut layer = Layer::new("DynamicOperation");
-    let schemas = client.schemas.clone();
-    let operation_id = operation.clone();
-    layer.store_put(SharedRequestSerializer::new(DocumentSerializer::new(
-        schemas.clone(),
-        operation_id.clone(),
-    )));
+    layer.store_put(SharedRequestSerializer::new(DocumentSerializer));
     layer.store_put(SharedResponseDeserializer::new(DocumentDeserializer::new(
-        schemas,
-        operation_id,
+        client.schemas.clone(),
+        operation.clone(),
     )));
     layer.store_put(Metadata::new(
         operation.name().to_owned(),

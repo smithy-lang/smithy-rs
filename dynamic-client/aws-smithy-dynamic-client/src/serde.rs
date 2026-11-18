@@ -16,43 +16,27 @@ use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::ser_de::{DeserializeResponse, SerializeRequest};
 use aws_smithy_schema::protocol::SharedClientProtocol;
+use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_types::config_bag::ConfigBag;
-use document::{check_input, read_struct, SerializableDocument};
+use document::read_struct;
+pub(crate) use document::{check_input, SerializableDocument};
 use error::read_error;
 use std::sync::Arc;
 
-// The serializer writes the input document through the protocol, by the operation's input
-// schema.
+// The serializer writes the input through the protocol, by the input's schema.
 #[derive(Debug)]
-pub(crate) struct DocumentSerializer {
-    schemas: Arc<RuntimeSchemaSet>,
-    operation: ShapeId,
-}
-
-impl DocumentSerializer {
-    pub(crate) fn new(schemas: Arc<RuntimeSchemaSet>, operation: ShapeId) -> Self {
-        Self { schemas, operation }
-    }
-}
+pub(crate) struct DocumentSerializer;
 
 impl SerializeRequest for DocumentSerializer {
     fn serialize_input(&self, input: Input, cfg: &mut ConfigBag) -> Result<HttpRequest, BoxError> {
         let input = input
             .downcast::<DynamicInput>()
             .expect("the input of a call is a `DynamicInput`");
-        let schema = self
-            .schemas
-            .operation(&self.operation)
-            .expect("the client found the operation")
-            .input();
         let protocol = cfg
             .load::<SharedClientProtocol>()
             .expect("build() stores the protocol");
-        // The input is checked first, so a value of the wrong type fails before serialization.
-        check_input(&self.schemas, schema, input.members())?;
-        let value = SerializableDocument::new(input.members(), schema, &self.schemas)?;
         // A protocol takes the request path from the model or the config, so the path is empty.
-        Ok(protocol.serialize_request(&value, schema, "", cfg)?)
+        Ok(protocol.serialize_request(&input, input.schema(), "", cfg)?)
     }
 }
 
