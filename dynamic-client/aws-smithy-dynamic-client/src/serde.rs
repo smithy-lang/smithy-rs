@@ -6,9 +6,9 @@
 // This module holds the request serializer and the response deserializer of a call.
 
 mod document;
+mod error;
 
 use crate::call::{DynamicInput, DynamicOutput};
-use crate::error::DynamicOperationError;
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
 use aws_smithy_lang::ShapeId;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -18,6 +18,7 @@ use aws_smithy_runtime_api::client::ser_de::{DeserializeResponse, SerializeReque
 use aws_smithy_schema::protocol::SharedClientProtocol;
 use aws_smithy_types::config_bag::ConfigBag;
 use document::{check_input, read_struct, SerializableDocument};
+use error::read_error;
 use std::sync::Arc;
 
 // The serializer writes the input document through the protocol, by the operation's input
@@ -80,13 +81,8 @@ impl DeserializeResponse for DocumentDeserializer {
         // TODO(dynamic-client): Also read a response with the status code of the operation's
         // `@http` trait as a success, as generated clients do.
         if !response.status().is_success() {
-            let meta = protocol
-                .parse_error_metadata(response, cfg)
-                .map_err(OrchestratorError::other)?
-                .build();
-            return Err(OrchestratorError::operation(Error::erase(
-                DynamicOperationError::unhandled(meta),
-            )));
+            let error = read_error(&self.schemas, &self.operation, protocol, response, cfg)?;
+            return Err(OrchestratorError::operation(Error::erase(error)));
         }
         let schema = self
             .schemas

@@ -20,7 +20,12 @@
             ],
             "traits": {
                 "aws.protocols#awsJson1_0": {}
-            }
+            },
+            "errors": [
+                {
+                    "target": "smithy.example#ServiceFooError"
+                }
+            ]
         },
         "smithy.example#CreateSprocket": {
             "type": "operation",
@@ -29,7 +34,12 @@
             },
             "output": {
                 "target": "smithy.example#CreateSprocketOutput"
-            }
+            },
+            "errors": [
+                {
+                    "target": "smithy.example#InvalidSprocketId"
+                }
+            ]
         },
         "smithy.example#CreateSprocketInput": {
             "type": "structure",
@@ -56,7 +66,15 @@
             },
             "output": {
                 "target": "smithy.example#GetSprocketOutput"
-            }
+            },
+            "errors": [
+                {
+                    "target": "smithy.example#InvalidSprocketId"
+                },
+                {
+                    "target": "smithy.example#SprocketBusy"
+                }
+            ]
         },
         "smithy.example#GetSprocketInput": {
             "type": "structure",
@@ -294,6 +312,40 @@
                 "email": {
                     "target": "smithy.api#String"
                 }
+            }
+        },
+        "smithy.example#InvalidSprocketId": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#error": "client"
+            }
+        },
+        "smithy.example#ServiceFooError": {
+            "type": "structure",
+            "members": {
+                "why": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#error": "server"
+            }
+        },
+        "smithy.example#SprocketBusy": {
+            "type": "structure",
+            "members": {
+                "message": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#error": "server",
+                "smithy.api#retryable": {}
             }
         }
     }

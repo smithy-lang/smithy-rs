@@ -5,12 +5,16 @@
 
 use crate::client::warn_unused_keys;
 use crate::config::{self, puts_plugin, ConfigParts};
+use crate::error::DynamicOperationError;
 use crate::serde::{DocumentDeserializer, DocumentSerializer};
 use crate::DynamicClient;
 use aws_smithy_lang::ShapeId;
 use aws_smithy_runtime::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
 use aws_smithy_runtime::client::identity::no_auth::NoAuthIdentityResolver;
 use aws_smithy_runtime::client::identity::IdentityCache;
+use aws_smithy_runtime::client::retries::classifiers::{
+    ModeledAsRetryableClassifier, TransientErrorClassifier,
+};
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
@@ -46,6 +50,8 @@ pub(super) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> S
     // TODO(dynamic-client): Resolve the endpoint from the model's endpoint rules.
     layer.store_put(EndpointResolverParams::new(()));
     let components = RuntimeComponentsBuilder::new("DynamicOperation")
+        .with_retry_classifier(TransientErrorClassifier::<DynamicOperationError>::new())
+        .with_retry_classifier(ModeledAsRetryableClassifier::<DynamicOperationError>::new())
         .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
             StaticAuthSchemeOptionResolver::new(vec![NO_AUTH_SCHEME_ID]),
         )))
@@ -54,6 +60,14 @@ pub(super) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> S
             NO_AUTH_SCHEME_ID,
             SharedIdentityResolver::new(NoAuthIdentityResolver::new()),
         );
+    // An AWS service marks throttling and transient errors by error code, such as
+    // `ThrottlingException`. An AWS SDK client retries those codes, and so does this client.
+    #[cfg(feature = "aws")]
+    let components =
+        components
+            .with_retry_classifier(aws_runtime::retries::classifiers::AwsErrorCodeClassifier::<
+                DynamicOperationError,
+            >::new());
     StaticRuntimePlugin::new()
         .with_config(layer.freeze())
         .with_runtime_components(components)

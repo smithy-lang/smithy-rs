@@ -130,7 +130,7 @@ impl fmt::Debug for CallBuilder {
 #[cfg(test)]
 mod tests {
     use crate::config::{Applies, BehaviorVersion, Config, ConfigKey, RetryConfig};
-    use crate::error::{InputError, InputErrorKind, OperationNotFound};
+    use crate::error::{DynamicOperationError, InputError, InputErrorKind, OperationNotFound};
     use crate::DynamicClient;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::{
@@ -564,5 +564,102 @@ mod tests {
             ("name", Document::String("bolt".to_owned())),
         ]);
         assert_eq!(&expected, output.members());
+    }
+
+    // Sends `GetSprocket` to a client whose response has status `status` and body `body`, and
+    // returns the service error.
+    async fn service_error(status: u16, body: &'static str) -> DynamicOperationError {
+        let (client, _request) = client(status, body);
+        client
+            .call("GetSprocket")
+            .input(sprocket("1"))
+            .send()
+            .await
+            .unwrap_err()
+            .into_service_error()
+    }
+
+    #[tokio::test]
+    async fn an_absolute_error_code_gives_a_modeled_error() {
+        let err = service_error(
+            400,
+            r#"{"__type":"smithy.example#InvalidSprocketId","id":"1"}"#,
+        )
+        .await;
+        assert_eq!(
+            Some("smithy.example#InvalidSprocketId"),
+            err.shape_id().map(|id| id.as_str())
+        );
+        assert_eq!(Some(&sprocket("1")), err.members());
+    }
+
+    #[tokio::test]
+    async fn a_relative_error_code_gives_a_modeled_error() {
+        let err = service_error(400, r#"{"__type":"InvalidSprocketId","id":"1"}"#).await;
+        assert_eq!(
+            Some("smithy.example#InvalidSprocketId"),
+            err.shape_id().map(|id| id.as_str())
+        );
+        assert_eq!(Some(&sprocket("1")), err.members());
+    }
+
+    #[tokio::test]
+    async fn a_service_error_gives_a_modeled_error() {
+        let err = service_error(400, r#"{"__type":"ServiceFooError","why":"IDK"}"#).await;
+        assert_eq!(
+            Some("smithy.example#ServiceFooError"),
+            err.shape_id().map(|id| id.as_str())
+        );
+        let why = object([("why", Document::String("IDK".to_owned()))]);
+        assert_eq!(Some(&why), err.members());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_error_code_gives_an_unhandled_error() {
+        let err = service_error(400, r#"{"__type":"Mystery","message":"what"}"#).await;
+        assert_eq!(None, err.shape_id());
+        assert_eq!(None, err.members());
+        assert_eq!(Some("Mystery"), err.code());
+        assert_eq!(Some("what"), err.message());
+    }
+
+    #[tokio::test]
+    async fn a_missing_message_member_comes_from_the_error_metadata() {
+        let err = service_error(500, r#"{"__type":"SprocketBusy","Message":"slow down"}"#).await;
+        let message = object([("message", Document::String("slow down".to_owned()))]);
+        assert_eq!(Some(&message), err.members());
+    }
+
+    #[tokio::test]
+    async fn a_retryable_error_is_retried() {
+        let attempts = Arc::new(Mutex::new(0));
+        let counter = attempts.clone();
+        let http_client = infallible_client_fn(move |_| {
+            let mut attempts = counter.lock().unwrap();
+            *attempts += 1;
+            let (status, body) = match *attempts {
+                // The status classifier does not retry a 400 status. So only the modeled retry
+                // kind can retry this response.
+                1 => (400, r#"{"__type":"SprocketBusy"}"#),
+                _ => (200, r#"{"id":"1"}"#),
+            };
+            http_1x::Response::builder()
+                .status(status)
+                .body(SdkBody::from(body))
+                .unwrap()
+        });
+        let client = client_with(
+            Config::builder()
+                .http_client(http_client)
+                .retry_config(RetryConfig::standard().with_max_attempts(2)),
+        );
+        let output = client
+            .call("GetSprocket")
+            .input(sprocket("1"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(&sprocket("1"), output.members());
+        assert_eq!(2, *attempts.lock().unwrap());
     }
 }
