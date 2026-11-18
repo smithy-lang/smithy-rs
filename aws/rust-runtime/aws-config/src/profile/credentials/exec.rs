@@ -82,7 +82,7 @@ impl AssumeRoleProvider {
             // static-stability caching, mirroring the standalone `sts::AssumeRoleProvider`.
             // Without this, the `StaticStabilityCache` treats them as caching-only and will not
             // serve them past expiration on a failed refresh.
-            creds.set_property(StaticStabilityEligible);
+            creds.set_property(StaticStabilityEligible::default());
             creds
         })
     }

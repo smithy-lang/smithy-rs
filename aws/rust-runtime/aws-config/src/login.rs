@@ -18,7 +18,7 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
-use aws_credential_types::StaticStabilityEligible;
+use aws_credential_types::{Credentials, StaticStabilityEligible};
 use aws_sdk_signin::config::Builder as SignInClientConfigBuilder;
 use aws_sdk_signin::operation::create_o_auth2_token::CreateOAuth2TokenError;
 use aws_sdk_signin::types::{CreateOAuth2TokenRequestBody, OAuth2ErrorCode};
@@ -26,6 +26,7 @@ use aws_sdk_signin::Client as SignInClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime::expiring_cache::ExpiringCache;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+use aws_smithy_runtime_api::client::identity::Identity;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::SdkConfig;
 use std::sync::Arc;
@@ -63,6 +64,9 @@ struct Inner {
     // older behavior versions the flag is false, and this provider keeps its own token cache
     // with a 30-second refresh cooldown.
     static_stability_via_cache: bool,
+    // Access key ID of credentials that the identity cache invalidated after a service rejected
+    // them. While the cached token still holds that key, the next call refreshes through Sign-In.
+    invalidated_access_key_id: Mutex<Option<String>>,
 }
 
 impl LoginCredentialsProvider {
@@ -94,10 +98,28 @@ impl LoginCredentialsProvider {
 
         let now = inner.time_source.now();
         let expires_soon = token.expires_at() - REFRESH_BUFFER_TIME <= now;
+        // A service rejected these credentials, so the cached token cannot be reused even when it
+        // is not expiring. If the token holds a different key, another process already refreshed
+        // it, and the token is good to use.
+        let rejected = {
+            let mut invalidated = inner.invalidated_access_key_id.lock().unwrap();
+            let rejected = invalidated.as_deref() == Some(token.access_token.access_key_id());
+            if !rejected {
+                *invalidated = None;
+            }
+            rejected
+        };
 
-        if expires_soon {
-            tracing::debug!("Login token expired or expiring soon, refreshing");
+        if expires_soon || rejected {
+            tracing::debug!(
+                expires_soon,
+                rejected,
+                "refreshing Login token because it is expiring or was rejected"
+            );
+            // On failure the error goes to the identity cache, and the rejected key stays recorded
+            // so the next attempt refreshes again.
             token = Self::refresh_cached_token(inner, &token, now).await?;
+            *inner.invalidated_access_key_id.lock().unwrap() = None;
         }
 
         Ok(token)
@@ -203,15 +225,7 @@ impl LoginCredentialsProvider {
             .await
             .map_err(|err| {
                 let service_err = err.into_service_error();
-                let (message, non_recoverable) = match &service_err {
-                    CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
-                        OAuth2ErrorCode::InsufficientPermissions => (Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()), true),
-                        OAuth2ErrorCode::TokenExpired => (Some("Your session has expired. Please reauthenticate.".to_string()), true),
-                        OAuth2ErrorCode::UserCredentialsChanged => (Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()), true),
-                        _ => (None, false),
-                    }
-                    _ => (None, false),
-                };
+                let (message, non_recoverable) = refresh_failure(&service_err);
 
                 LoginTokenError::RefreshFailed {
                     message,
@@ -242,7 +256,18 @@ impl LoginCredentialsProvider {
         creds
             .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
             .push(feat);
-        creds.set_property(StaticStabilityEligible);
+        // The identity cache calls this hook when a service rejects these credentials.
+        let inner = Arc::downgrade(&self.inner);
+        creds.set_property(StaticStabilityEligible::with_invalidation_hook(
+            move |rejected: &Identity| {
+                if let (Some(inner), Some(creds)) =
+                    (inner.upgrade(), rejected.data::<Credentials>())
+                {
+                    *inner.invalidated_access_key_id.lock().unwrap() =
+                        Some(creds.access_key_id().into());
+                }
+            },
+        ));
         Ok(creds)
     }
 }
@@ -253,6 +278,22 @@ impl ProvideCredentials for LoginCredentialsProvider {
         Self: 'a,
     {
         future::ProvideCredentials::new(self.credentials())
+    }
+}
+
+// Maps a failed `CreateOAuth2Token` refresh to an optional actionable message and whether the
+// failure is non-recoverable. A non-recoverable failure needs the user to sign in again, so the
+// identity cache raises it immediately.
+fn refresh_failure(err: &CreateOAuth2TokenError) -> (Option<String>, bool) {
+    match err {
+        CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
+            OAuth2ErrorCode::InsufficientPermissions => (Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()), true),
+            OAuth2ErrorCode::TokenExpired => (Some("Your session has expired. Please reauthenticate.".to_string()), true),
+            OAuth2ErrorCode::UserCredentialsChanged => (Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()), true),
+            _ => (None, false),
+        },
+        CreateOAuth2TokenError::ValidationException(_) => (Some("Unable to refresh credentials because the Sign-In service rejected the refresh request. Please reauthenticate.".to_string()), true),
+        _ => (None, false),
     }
 }
 
@@ -299,6 +340,7 @@ impl Builder {
             time_source: provider_config.time_source(),
             last_refresh_attempt: Mutex::new(None),
             static_stability_via_cache,
+            invalidated_access_key_id: Mutex::new(None),
         });
 
         LoginCredentialsProvider {
@@ -350,6 +392,9 @@ mod test {
         cache_contents: HashMap<String, serde_json::Value>,
         #[serde(default)]
         mock_api_calls: Vec<MockApiCall>,
+        // The case is the refresh that follows the identity cache invalidating this key.
+        #[serde(default)]
+        invalidated_access_key_id: Option<String>,
         outcomes: Vec<Outcome>,
     }
 
@@ -462,6 +507,10 @@ mod test {
             let provider = LoginCredentialsProvider::builder(session_arn)
                 .configure(&provider_config)
                 .build();
+            if let Some(access_key_id) = &self.invalidated_access_key_id {
+                *provider.inner.invalidated_access_key_id.lock().unwrap() =
+                    Some(access_key_id.clone());
+            }
 
             // Call provider once and validate result against all outcomes
             let result = dbg!(provider.provide_credentials().await);
@@ -634,6 +683,55 @@ mod test {
             test.check().await;
         }
         Ok(())
+    }
+
+    #[test]
+    fn refresh_failure_classification() {
+        use aws_sdk_signin::types::error::{
+            AccessDeniedException, InternalServerException, ValidationException,
+        };
+
+        let access_denied = |code| {
+            CreateOAuth2TokenError::AccessDeniedException(
+                AccessDeniedException::builder()
+                    .error(code)
+                    .message("denied")
+                    .build()
+                    .unwrap(),
+            )
+        };
+        for err in [
+            access_denied(OAuth2ErrorCode::TokenExpired),
+            access_denied(OAuth2ErrorCode::UserCredentialsChanged),
+            access_denied(OAuth2ErrorCode::InsufficientPermissions),
+            CreateOAuth2TokenError::ValidationException(
+                ValidationException::builder()
+                    .error(OAuth2ErrorCode::InvalidRequest)
+                    .message("invalid")
+                    .build()
+                    .unwrap(),
+            ),
+        ] {
+            let (message, non_recoverable) = refresh_failure(&err);
+            assert!(non_recoverable, "expected non-recoverable: {err:?}");
+            assert!(message.is_some(), "expected an actionable message: {err:?}");
+        }
+        for err in [
+            access_denied(OAuth2ErrorCode::ServerError),
+            CreateOAuth2TokenError::InternalServerException(
+                InternalServerException::builder()
+                    .error(OAuth2ErrorCode::ServerError)
+                    .message("internal")
+                    .build()
+                    .unwrap(),
+            ),
+        ] {
+            assert_eq!(
+                refresh_failure(&err),
+                (None, false),
+                "expected recoverable: {err:?}"
+            );
+        }
     }
 
     /// With a Sign-In endpoint override, the region does not pick the host, so a

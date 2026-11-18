@@ -203,8 +203,8 @@ impl ImdsCredentialsProvider {
     // `BehaviorVersion::v2026_12_08`), report the true expiration and let the cache decide how to
     // handle expired credentials from IMDS: it treats an expired response as a failed refresh and
     // keeps serving the last successfully cached credential, so static stability applies at refresh
-    // time. Before the first successful fetch there is nothing cached to fall back on, so an expired
-    // response on the initial fetch surfaces as an error rather than being used.
+    // time. Before the first successful fetch there is nothing cached to fall back on, so the cache
+    // caches and returns an expired response on the initial fetch, and refreshes it on the next call.
     //
     // On older behavior versions this provider owns static stability itself: it extends a stale
     // expiration so the already-fetched credentials continue to be used until the next refresh.
@@ -301,7 +301,7 @@ impl ImdsCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsImds);
-            creds.set_property(StaticStabilityEligible);
+            creds.set_property(StaticStabilityEligible::default());
             creds
         })
     }
@@ -423,6 +423,7 @@ mod test {
     // Legacy path (behavior version < v2026_12_08): the provider extends the stale expiry itself.
     #[tokio::test]
     #[traced_test]
+    #[allow(deprecated)]
     async fn expired_credentials_should_be_extended() {
         let http_client = StaticReplayClient::new(vec![
                 ReplayEvent::new(
@@ -513,6 +514,7 @@ mod test {
     // Legacy path (behavior version < v2026_12_08): the provider serves last-retrieved on failure.
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
+    #[allow(deprecated)]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
@@ -583,6 +585,7 @@ mod test {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
+    #[allow(deprecated)]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         use aws_smithy_async::rt::sleep::AsyncSleep;
         let client = crate::imds::Client::builder()
@@ -618,6 +621,7 @@ mod test {
     }
 
     #[tokio::test]
+    #[allow(deprecated)]
     async fn fallback_credentials_should_be_used_when_imds_returns_500_during_credentials_refresh()
     {
         let http_client = StaticReplayClient::new(vec![

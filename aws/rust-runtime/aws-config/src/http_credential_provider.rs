@@ -64,7 +64,7 @@ impl HttpCredentialProvider {
                     creds
                         .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                         .push(AwsCredentialFeature::CredentialsHttp);
-                    creds.set_property(StaticStabilityEligible);
+                    creds.set_property(StaticStabilityEligible::default());
                     creds
                 });
         match credentials {

@@ -13,27 +13,43 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
+use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// Detects a credential auth failure (`ExpiredToken` or `InvalidToken`) on the operation response
-/// and signals the orchestrator — via the data-free
+/// Detects a credential auth failure (`ExpiredToken` or `ExpiredTokenException`) on the operation
+/// response and signals the orchestrator — via the data-free
 /// [`InvalidateResolvedIdentity`] config marker — to invalidate the resolved identity.
 ///
 /// This is **detection only**: the interceptor has no identity (the signed request is already gone
 /// post-transmit), so the orchestrator makes the actual `invalidate` call with the in-scope signing
 /// identity. Registered per-operation by AWS codegen (like `AwsErrorCodeClassifier<E>`).
 pub struct CredentialAuthFailureInterceptor<E> {
+    invalid_credential_errors: Cow<'static, [&'static str]>,
     _marker: PhantomData<fn() -> E>,
 }
 
 impl<E> CredentialAuthFailureInterceptor<E> {
-    /// Creates a new [`CredentialAuthFailureInterceptor`].
+    /// Creates a new [`CredentialAuthFailureInterceptor`] that matches `ExpiredToken` and
+    /// `ExpiredTokenException`.
     pub fn new() -> Self {
         Self {
+            invalid_credential_errors: INVALID_CREDENTIAL_ERRORS.into(),
             _marker: PhantomData,
         }
+    }
+
+    /// Replaces the error codes that trigger invalidation.
+    ///
+    /// Codegen passes a shorter list for an operation that models one of the codes, because a
+    /// modeled code describes a failure that new credentials cannot fix.
+    pub fn invalid_credential_errors(
+        mut self,
+        invalid_credential_errors: impl Into<Cow<'static, [&'static str]>>,
+    ) -> Self {
+        self.invalid_credential_errors = invalid_credential_errors.into();
+        self
     }
 }
 
@@ -69,7 +85,7 @@ where
             .and_then(|err| err.as_operation_error())
             .and_then(|err| err.downcast_ref::<E>())
             .and_then(|err| err.code())
-            .is_some_and(|code| INVALID_CREDENTIAL_ERRORS.contains(&code));
+            .is_some_and(|code| self.invalid_credential_errors.contains(&code));
         if is_auth_failure {
             cfg.interceptor_state()
                 .store_put(InvalidateResolvedIdentity);
@@ -117,7 +133,13 @@ mod tests {
     // Runs the interceptor against a deserialized operation error with the given code and reports
     // whether it set the `InvalidateResolvedIdentity` marker.
     fn sets_invalidate_marker(code: &'static str) -> bool {
-        let interceptor = CredentialAuthFailureInterceptor::<CodedError>::new();
+        sets_marker_with(CredentialAuthFailureInterceptor::<CodedError>::new(), code)
+    }
+
+    fn sets_marker_with(
+        interceptor: CredentialAuthFailureInterceptor<CodedError>,
+        code: &'static str,
+    ) -> bool {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut cfg = ConfigBag::base();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
@@ -132,20 +154,19 @@ mod tests {
     }
 
     #[test]
-    fn triggers_on_expired_and_invalid_token_only() {
+    fn triggers_on_expired_token_codes_only() {
         assert!(
             sets_invalidate_marker("ExpiredToken"),
             "ExpiredToken must trigger invalidation"
         );
         assert!(
-            sets_invalidate_marker("InvalidToken"),
-            "InvalidToken must trigger invalidation"
+            sets_invalidate_marker("ExpiredTokenException"),
+            "ExpiredTokenException must trigger invalidation"
         );
-        // On STS and SSO-OIDC `ExpiredTokenException` names an expired input token in the request
-        // body, so the signing credentials are still good and must not be invalidated.
+        // Services do not return InvalidToken for expired credentials.
         assert!(
-            !sets_invalidate_marker("ExpiredTokenException"),
-            "ExpiredTokenException is about the input token, not the signing credentials"
+            !sets_invalidate_marker("InvalidToken"),
+            "InvalidToken must not trigger invalidation"
         );
         // AccessDenied is authorization, not credential validity — must NOT invalidate.
         assert!(
@@ -156,5 +177,16 @@ mod tests {
             !sets_invalidate_marker("ThrottlingException"),
             "unrelated errors must not trigger invalidation"
         );
+    }
+
+    // Codegen drops a code that the operation models, so that code no longer invalidates.
+    #[test]
+    fn custom_list_replaces_the_default() {
+        let interceptor = || {
+            CredentialAuthFailureInterceptor::<CodedError>::new()
+                .invalid_credential_errors(&["ExpiredToken"][..])
+        };
+        assert!(sets_marker_with(interceptor(), "ExpiredToken"));
+        assert!(!sets_marker_with(interceptor(), "ExpiredTokenException"));
     }
 }

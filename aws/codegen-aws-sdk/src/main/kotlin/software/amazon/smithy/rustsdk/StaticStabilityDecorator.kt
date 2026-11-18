@@ -27,8 +27,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * `LazyCache`). Clients built through `aws-config` get the same cache from `ConfigLoader::load()`.
  *
  * On every operation, it registers `CredentialAuthFailureInterceptor`: when a target service
- * rejects a request with `ExpiredToken`/`InvalidToken`, the interceptor sets a data-free config-bag
- * marker, and the orchestrator invalidates the signing identity so the next resolution refreshes.
+ * rejects a request with `ExpiredToken`/`ExpiredTokenException`, the interceptor sets a data-free
+ * config-bag marker, and the orchestrator invalidates the signing identity so the next resolution
+ * refreshes. An operation that models one of these codes does not invalidate on that code.
  */
 class StaticStabilityDecorator : ClientCodegenDecorator {
     override val name: String = "StaticStability"
@@ -92,7 +93,7 @@ private class StaticStabilityCacheCustomization(
 }
 
 private class CredentialAuthFailureInterceptorCustomization(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val operation: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -104,11 +105,13 @@ private class CredentialAuthFailureInterceptorCustomization(
                 writable {
                     section.registerInterceptor(runtimeConfig, this) {
                         rustTemplate(
-                            "#{CredentialAuthFailureInterceptor}::<#{OperationError}>::new()",
+                            "#{CredentialAuthFailureInterceptor}::<#{OperationError}>::new()#{invalid_credential_errors}",
                             "CredentialAuthFailureInterceptor" to
                                 AwsRuntimeType.awsRuntime(runtimeConfig)
                                     .resolve("static_stability::invalidation::CredentialAuthFailureInterceptor"),
                             "OperationError" to symbolProvider.symbolForOperationError(operation),
+                            "invalid_credential_errors" to
+                                (invalidCredentialErrorsOverride(codegenContext, operation) ?: writable {}),
                         )
                     }
                 }

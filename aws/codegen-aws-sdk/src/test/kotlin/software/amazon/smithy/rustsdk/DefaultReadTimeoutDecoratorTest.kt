@@ -248,6 +248,7 @@ class DefaultReadTimeoutDecoratorTest {
 
                     /// Naming the gate version explicitly turns it on, as does `latest()`.
                     #{tokio_test}
+                    ##[allow(deprecated)]
                     async fn present_at_and_above_the_gate() {
                         for bv in [BehaviorVersion::v2026_11_17(), BehaviorVersion::latest()] {
                             let resolved =
