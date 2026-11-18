@@ -8,6 +8,7 @@
 use crate::call::CallBuilder;
 use crate::error::OperationNotFound;
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::ShapeId;
 #[cfg(test)]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 
 mod builder;
 
+pub(crate) use builder::warn_unused_keys;
 pub use builder::DynamicClientBuilder;
 
 /// A client for a Smithy service, built from a model loaded at runtime.
@@ -90,6 +92,15 @@ impl DynamicClient {
         self.schemas
             .service()
             .expect("the set is built for a service")
+    }
+
+    pub(crate) fn service_view(&self) -> ServiceView<'_> {
+        self.schemas
+            .model()
+            .get_shape(self.service())
+            .and_then(|shape| shape.as_shape())
+            .and_then(|shape| shape.as_service())
+            .expect("build() selected a service shape")
     }
 
     #[cfg(test)]

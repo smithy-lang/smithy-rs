@@ -6,7 +6,7 @@
 // The builder for a dynamic client, and the steps of `build()`.
 
 use super::DynamicClient;
-use crate::config::{self, Applies, Put};
+use crate::config::{self, puts_plugin, Applies, ConfigParts, Put};
 use crate::error::{BuildError, MissingHttpClient};
 use crate::protocol::{detect_protocol, protocol_traits, AWS_QUERY};
 use aws_smithy_lang::endpoint_rules::{EndpointBdd, EndpointRuleSet, Parameters};
@@ -92,7 +92,8 @@ impl DynamicClientBuilder {
             .materialization(Materialization::Lazy)
             .build()
             .map_err(BuildError::schema_build_failed)?;
-        let protocol = match self.config.protocol {
+        let mut config = self.config;
+        let protocol = match config.protocol.take() {
             Some(protocol) => protocol,
             None => detect_protocol(&service_view).ok_or_else(|| {
                 BuildError::protocol_not_found(
@@ -107,69 +108,23 @@ impl DynamicClientBuilder {
         {
             return Err(BuildError::missing_service_version(service));
         }
-        let mut components = RuntimeComponentsBuilder::new("DynamicClientConfig");
-        components.set_http_client(self.config.http_client);
-        components.set_sleep_impl(self.config.sleep_impl);
-        components.set_time_source(self.config.time_source);
-        components.set_identity_cache(self.config.identity_cache);
-        for retry_classifier in self.config.retry_classifiers {
-            components.push_retry_classifier(retry_classifier);
-        }
-        for interceptor in self.config.interceptors {
-            components.push_interceptor(interceptor);
-        }
-        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
-        // uses SigV4a, as generated clients do.
-        #[cfg(feature = "aws")]
-        if let Some(credentials_provider) = self.config.credentials_provider {
-            components
-                .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
-        }
+        let puts = std::mem::take(&mut config.puts);
+        let ConfigParts {
+            mut layer,
+            mut components,
+            runtime_plugins: user_runtime_plugins,
+        } = config.into_parts("DynamicClientConfig");
         components.push_config_validator(SharedConfigValidator::base_client_config_fn(
             validate_http_client,
         ));
-        let mut layer = Layer::new("DynamicClientConfig");
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
-        if let Some(retry_config) = self.config.retry_config {
-            layer.store_put(retry_config);
-        }
-        if let Some(timeout_config) = self.config.timeout_config {
-            layer.store_put(timeout_config);
-        }
-        if let Some(retry_partition) = self.config.retry_partition {
-            layer.store_put(retry_partition);
-        }
-        if let Some(stalled_stream_protection) = self.config.stalled_stream_protection {
-            layer.store_put(stalled_stream_protection);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(region) = self.config.region {
-            layer.store_put(region);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(invocation_id_generator) = self.config.invocation_id_generator {
-            layer.store_put(invocation_id_generator);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(disable_clock_skew_correction) = self.config.disable_clock_skew_correction {
-            layer.store_put(
-                aws_runtime::service_clock_skew::DisableClockSkewCorrection::from(
-                    disable_clock_skew_correction,
-                ),
-            );
-        }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
-        if !self.config.puts.is_empty() {
-            let mut puts = Layer::new("DynamicClientPuts");
-            for put in &self.config.puts {
-                (put.store)(&mut puts);
-            }
-            runtime_plugins = runtime_plugins
-                .with_client_plugin(StaticRuntimePlugin::new().with_config(puts.freeze()));
+        if let Some(puts) = puts_plugin(&puts) {
+            runtime_plugins = runtime_plugins.with_client_plugin(puts);
         }
-        let runtime_plugins = runtime_plugins.with_client_plugins(self.config.runtime_plugins);
+        let runtime_plugins = runtime_plugins.with_client_plugins(user_runtime_plugins);
         // The same check generated clients run when they are created.
         let mut cfg = ConfigBag::base();
         let components = runtime_plugins
@@ -179,13 +134,7 @@ impl DynamicClientBuilder {
             .validate_base_client_config(&cfg)
             .map_err(BuildError::invalid_config)?;
         // Runs after the last step that can fail, so a failed build logs no warning.
-        for key in unused_keys(&service_view, &self.config.puts) {
-            tracing::warn!(
-                key,
-                service = %service,
-                "the service does not use this config key, so its value has no effect"
-            );
-        }
+        warn_unused_keys(&service_view, &puts);
         let mut operations: Vec<ShapeId> = schemas.operation_ids().cloned().collect();
         operations.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(DynamicClient {
@@ -207,6 +156,17 @@ fn sdk_id(service: &ServiceView<'_>) -> String {
         .and_then(|value| value.as_str())
         .unwrap_or(service.id().name())
         .to_owned()
+}
+
+// Logs one warning for each key set by `put` that the service never uses.
+pub(crate) fn warn_unused_keys(service: &ServiceView<'_>, keys: &[Put]) {
+    for key in unused_keys(service, keys) {
+        tracing::warn!(
+            key,
+            service = %service.id(),
+            "the service does not use this config key, so its value has no effect"
+        );
+    }
 }
 
 // Returns the type names of the keys set by `put` that the service never uses, each once. A key
