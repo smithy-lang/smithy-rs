@@ -12,13 +12,12 @@ import { Construct } from "constructs";
 /**
  * The namespace the build canary's verdicts are written to.
  *
- * Its own, deliberately not shared with the `aws-sdk-rust-canary` namespace. Two canaries writing
- * to one namespace could not be alarmed on independently, and the metrics role below is constrained
- * to this namespace — which is only meaningful if nothing else writes here.
+ * Its own, deliberately not shared with the `aws-sdk-rust-canary` namespace: two canaries on one
+ * namespace could not be alarmed on independently. The metrics role is constrained to this
+ * namespace, and the SDK canary's role is explicitly denied it, so nothing else writes here.
  *
- * **The leg must emit to exactly this namespace.** Nothing checks the two agree, because the
- * emitting code is Rust and this is TypeScript. A mismatch fails quietly in the worst way: the
- * `PutMetricData` call is denied by the namespace condition, so a verdict is simply never recorded.
+ * **The leg must emit to exactly this namespace**, or `PutMetricData` is denied by that condition
+ * and the verdict is never recorded. The canary crate has a test that reads this file and compares.
  */
 export const METRIC_NAMESPACE = "smithy-rs-build-canary";
 
