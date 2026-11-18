@@ -1,0 +1,20 @@
+async fn record_events(mut input: crate::input::StreamInput) {
+    let mut events = Vec::new();
+    loop {
+        match input.events.recv().await {
+            Ok(Some(event)) => events.push(json!({"event":format!("{event:?}")})),
+            Ok(None) => break,
+            Err(err) => {
+                events.push(json!({"error":format!("{err}"),"detail":format!("{err:?}")}));
+                break;
+            }
+        }
+    }
+    *OBSERVED.lock().unwrap() = Some(json!({"events":events}));
+}
+async fn record_streaming_blob(input: crate::input::StreamingBlobInput) {
+    let api_type = std::any::type_name_of_val(&input.value);
+    let value = __BLOB_BYTES__;
+    let hex: String = value.iter().map(|b|format!("{b:02x}")).collect();
+    *OBSERVED.lock().unwrap() = Some(json!({"streaming_blob_hex":hex,"api_type":api_type}));
+}

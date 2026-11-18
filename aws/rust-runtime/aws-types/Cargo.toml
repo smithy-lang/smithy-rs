@@ -26,10 +26,10 @@ tracing = "0.1.44"
 hyper-rustls = { version = "0.24.2", optional = true, default-features = false, features = ["http2", "webpki-roots"] }
 
 [dev-dependencies]
-http = "0.2.4"
+http = "0.2.12"
 tempfile = "3.16.0"
 tracing-test = "0.2.5"
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1.49.0", features = ["rt", "macros"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["http-02x"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 

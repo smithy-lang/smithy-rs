@@ -16,6 +16,7 @@ members = [
     "aws-smithy-http-server-metrics-macro",
     "aws-smithy-http-server-python",
     "aws-smithy-json",
+    "aws-smithy-lang",
     "aws-smithy-legacy-http",
     "aws-smithy-legacy-http-server",
     "aws-smithy-mocks",

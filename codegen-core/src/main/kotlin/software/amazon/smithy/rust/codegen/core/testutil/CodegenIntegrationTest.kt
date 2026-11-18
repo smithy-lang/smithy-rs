@@ -139,6 +139,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun schemaSerde(enabled: Boolean = true): Builder {
+                settings.add(SchemaSerde(enabled))
+                return this
+            }
+
             fun withHttp1x(enabled: Boolean = true): Builder {
                 settings.add(Http1x(enabled))
                 return this
@@ -180,6 +185,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("alwaysSendEventStreamInitialResponse", enabled)
+                    .build()
+        }
+
+        private data class SchemaSerde(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("schemaSerde", enabled)
                     .build()
         }
 

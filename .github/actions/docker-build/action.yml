@@ -23,10 +23,21 @@ inputs:
     type: boolean
     required: false
     default: true
+  # When set, the action is stopped with `timeout` shortly before the job would be, and the
+  # processes still running are printed first. GitHub's own timeout cancels the job without any of
+  # that, and frequently without keeping the log at all, which leaves a hang undiagnosable.
+  job-timeout-minutes:
+    description: The calling job's `timeout-minutes`; enables the action timeout and diagnostics
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
+  # Measured as early as possible so the action timeout accounts for the setup steps below.
+  - name: Record start time
+    shell: bash
+    run: echo "CI_ACTION_STARTED_AT=$(date +%s)" >> "${GITHUB_ENV}"
   - name: Gradle Cache
     if: ${{ github.event.inputs.use_cache == 'true' }}
     uses: actions/cache@v4
@@ -44,6 +55,9 @@ runs:
       shared-key: ${{ runner.os }}-${{ github.job }}-${{ inputs.label != '' && inputs.label || inputs.action }}
       workspaces: |
         . smithy-rs-target
+      # Each merge group has its own ref, and no later run can restore a cache saved under it.
+      # Saving would only evict caches that `main` and pull requests can use.
+      save-if: ${{ github.event_name != 'merge_group' }}
   - name: Download all artifacts
     uses: ./smithy-rs/.github/actions/download-all-artifacts
   - name: Prepare build image
@@ -103,7 +117,18 @@ runs:
     shell: bash
     env:
       ARTIFACT_LABEL: ${{ inputs.label != '' && inputs.label || inputs.action }}
+      JOB_TIMEOUT_MINUTES: ${{ inputs.job-timeout-minutes }}
     run: |
+      if [[ -n "${JOB_TIMEOUT_MINUTES}" ]]; then
+        # Leave 5 minutes of the job's budget for the diagnostics, cleanup, and artifact upload.
+        # The start time was recorded before setup, so time spent there counts against the budget.
+        deadline=$((CI_ACTION_STARTED_AT + JOB_TIMEOUT_MINUTES * 60 - 5 * 60))
+        export CI_ACTION_TIMEOUT_SECONDS=$((deadline - $(date +%s)))
+        if (( CI_ACTION_TIMEOUT_SECONDS < 60 )); then
+          CI_ACTION_TIMEOUT_SECONDS=60
+        fi
+        echo "Stopping ${{ inputs.action }} after ${CI_ACTION_TIMEOUT_SECONDS}s"
+      fi
       ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
       tar cfz "artifacts-${ARTIFACT_LABEL}.tar.gz" -C artifacts .
   - name: Upload artifacts

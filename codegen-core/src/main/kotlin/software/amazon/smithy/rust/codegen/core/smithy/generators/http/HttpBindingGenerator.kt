@@ -98,6 +98,16 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         val unionShape: UnionShape,
         val unmarshallerVariableName: String,
     ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
+
+    /**
+     * Event stream bodies are read inside the handler. Wrapping the body here is the only way to
+     * put a bound on those reads.
+     */
+    data class WrapEventStreamRequestBody(
+        val operationShape: OperationShape,
+        val unionShape: UnionShape,
+        val bodyVariableName: String,
+    ) : HttpBindingSection("WrapEventStreamRequestBody")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -297,12 +307,27 @@ class HttpBindingGenerator(
         }
 
         rustTemplate(
+            "let body = std::mem::replace(body, #{SdkBody}::taken());",
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
+
+        // Allow customizations to wrap the body before the receiver reads from it (e.g. to
+        // apply message timeouts)
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.WrapEventStreamRequestBody(
+                    operationShape,
+                    targetShape,
+                    "body",
+                ),
+            )(this)
+        }
+
+        rustTemplate(
             """
-            let body = std::mem::replace(body, #{SdkBody}::taken());
             let receiver = #{receiver:W};
             Ok(receiver)
             """,
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "receiver" to
                 writable {
                     if (codegenTarget == CodegenTarget.SERVER) {

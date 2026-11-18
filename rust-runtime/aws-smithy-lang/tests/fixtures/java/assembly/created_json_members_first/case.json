@@ -1,0 +1,5 @@
+{
+    "description": "As created_json_traits_first, with `members` before `traits` in the document.",
+    "steps": [{"addShapes": "code.json"}, {"addFile": "f.json"}],
+    "locations": ["ex#S", "ex#S$m"]
+}

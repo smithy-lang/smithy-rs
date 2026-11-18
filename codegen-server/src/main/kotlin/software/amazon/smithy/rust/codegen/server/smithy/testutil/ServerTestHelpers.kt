@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
+import software.amazon.smithy.rust.codegen.server.smithy.RequestBodyReadTimeouts
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -100,6 +101,15 @@ fun serverTestRustSettings(
     examplesUri: String? = null,
     minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
+    requestBodyReadTimeouts: RequestBodyReadTimeouts =
+        RequestBodyReadTimeouts(
+            null,
+            null,
+            emptyMap(),
+            emptySet(),
+            emptySet(),
+            emptySet(),
+        ),
 ) = ServerRustSettings(
     service,
     moduleName,
@@ -112,7 +122,8 @@ fun serverTestRustSettings(
     license,
     examplesUri,
     minimumSupportedRustVersion,
-    customizationConfig,
+    customizationConfig = customizationConfig,
+    requestBodyReadTimeouts = requestBodyReadTimeouts,
 )
 
 fun serverTestCodegenContext(

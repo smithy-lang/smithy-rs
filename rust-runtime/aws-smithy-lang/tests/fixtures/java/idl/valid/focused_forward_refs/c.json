@@ -1,0 +1,6 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#FromJson": {"type": "blob"}
+    }
+}

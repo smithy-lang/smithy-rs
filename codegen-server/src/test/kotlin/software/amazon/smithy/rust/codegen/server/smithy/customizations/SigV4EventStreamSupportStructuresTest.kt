@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -62,6 +63,27 @@ class SigV4EventStreamSupportStructuresTest {
                     assert_eq!(event.message, "test");
                     assert!(event.signature.is_none());
                     """,
+                    *codegenScope,
+                )
+            }
+
+            unitTest("test_signed_event_error_preserves_sources") {
+                rustTemplate(
+                    """
+                    let event_error = #{SignedEventError}::Event(#{IoError}::other("event failed"));
+                    assert_eq!(event_error.to_string(), "event failed");
+                    let source = #{Error}::source(&event_error).unwrap();
+                    assert_eq!(source.downcast_ref::<#{IoError}>().unwrap().to_string(), "event failed");
+
+                    let extraction_error = #{SignedEventError}::<#{IoError}>::InvalidSignedEvent(
+                        #{ExtractionError}::InvalidTimestamp,
+                    );
+                    assert_eq!(extraction_error.to_string(), "invalid or missing timestamp header");
+                    let source = #{Error}::source(&extraction_error).unwrap();
+                    assert!(source.downcast_ref::<#{ExtractionError}>().is_some());
+                    """,
+                    "IoError" to RuntimeType.std.resolve("io::Error"),
+                    "Error" to RuntimeType.StdError,
                     *codegenScope,
                 )
             }

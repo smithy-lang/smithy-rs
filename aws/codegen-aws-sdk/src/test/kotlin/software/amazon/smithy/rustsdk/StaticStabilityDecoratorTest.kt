@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 internal class StaticStabilityDecoratorTest {
     @Test
-    fun `bare AWS client defaults to the static-stability cache at v2026_08_01`() {
+    fun `bare AWS client defaults to the static-stability cache at v2026_12_08`() {
         awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { ctx, rustCrate ->
             val rc = ctx.runtimeConfig
             val moduleName = ctx.moduleUseName()
@@ -116,8 +116,8 @@ internal class StaticStabilityDecoratorTest {
                     ##[::tokio::test]
                     async fn static_stability_cache_serves_cached_on_refresh_failure() {
                         assert!(
-                            second_call_succeeds(#{BehaviorVersion}::v2026_08_01()).await,
-                            "at v2026_08_01 the static-stability cache should serve the cached credential",
+                            second_call_succeeds(#{BehaviorVersion}::v2026_12_08()).await,
+                            "at v2026_12_08 the static-stability cache should serve the cached credential",
                         );
                     }
 
@@ -191,7 +191,7 @@ internal class StaticStabilityDecoratorTest {
                         ]);
 
                         let config = $moduleName::Config::builder()
-                            .behavior_version(#{BehaviorVersion}::v2026_08_01())
+                            .behavior_version(#{BehaviorVersion}::v2026_12_08())
                             .http_client(http_client)
                             .time_source(#{StaticTimeSource}::new(now))
                             .sleep_impl(#{SharedAsyncSleep}::new(#{TokioSleep}::new()))

@@ -1,0 +1,22 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "foo": "bar"
+    },
+    "shapes": {
+        "smithy.example#MyStructure": {
+            "type": "structure",
+            "members": {
+                "foo": {
+                    "target": "smithy.other.namespace#MyString",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            }
+        },
+        "smithy.other.namespace#MyString": {
+            "type": "string"
+        }
+    }
+}

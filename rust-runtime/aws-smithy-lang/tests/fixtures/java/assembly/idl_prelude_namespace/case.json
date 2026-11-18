@@ -1,0 +1,5 @@
+{
+    "description": "An IDL document in the smithy.api namespace that redefines String as an integer with a trait, and adds a string: the prelude replaces the redefinition without a diagnostic, and the new shape is kept.",
+    "steps": [{"addFile": "a.smithy"}, {"addFile": "b.smithy"}],
+    "locations": ["smithy.api#Foo"]
+}

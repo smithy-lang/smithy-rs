@@ -11,11 +11,11 @@ import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
+import java.math.BigDecimal
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeFormatterBuilder
-import java.time.format.SignStyle
 import java.time.temporal.ChronoField
 import java.util.Locale
 import kotlin.math.absoluteValue
@@ -104,18 +104,12 @@ private fun generateTestTimes(allowed: AllowedSubseconds): List<ZonedDateTime> {
     return result
 }
 
-private fun generateEpochSecondsTests(): List<TestCase> {
-    val formatter =
-        DateTimeFormatterBuilder()
-            .appendValue(ChronoField.INSTANT_SECONDS, 1, 19, SignStyle.NORMAL)
-            .optionalStart()
-            .appendFraction(ChronoField.MICRO_OF_SECOND, 0, 6, true)
-            .optionalEnd()
-            .toFormatter()
-    return generateTestTimes(AllowedSubseconds.MICROS).map { time ->
-        TestCase(time, formatter.format(time))
+private fun generateEpochSecondsTests(): List<TestCase> =
+    generateTestTimes(AllowedSubseconds.MICROS).map { time ->
+        val instant = time.toInstant()
+        val seconds = BigDecimal.valueOf(instant.epochSecond).add(BigDecimal.valueOf(instant.nano.toLong(), 9))
+        TestCase(time, seconds.stripTrailingZeros().toPlainString())
     }
-}
 
 private fun generateHttpDateTests(parsing: Boolean): List<TestCase> {
     val formatter =
@@ -185,10 +179,10 @@ fun main() {
                         // The canonical number of seconds since the Unix epoch in UTC.
                         canonical_seconds: string,
 
-                        // The canonical nanosecond adjustment to the canonical number of seconds.
-                        // If conversion from (canonical_seconds, canonical_nanos) into a 128-bit integer is required,
-                        // DO NOT just add the two together as this will yield an incorrect value when
-                        // canonical_seconds is negative.
+                        // The canonical nanosecond adjustment to the canonical number of seconds. It is never
+                        // negative and always moves the time forward, also when canonical_seconds is negative
+                        // (as in java.time.Instant): -0.75 seconds is canonical_seconds -1 and canonical_nanos
+                        // 250000000. DO NOT join the two with a decimal point when canonical_seconds is negative.
                         canonical_nanos: number,
 
                         // Will be true if this test case is expected to result in an error or exception

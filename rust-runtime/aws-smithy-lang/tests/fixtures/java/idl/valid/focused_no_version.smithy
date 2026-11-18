@@ -1,0 +1,3 @@
+namespace ex
+
+string NoVersion

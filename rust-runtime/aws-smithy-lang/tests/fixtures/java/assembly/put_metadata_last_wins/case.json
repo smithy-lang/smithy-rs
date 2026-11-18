@@ -1,0 +1,4 @@
+{
+    "description": "Metadata added in code behaves like a map: the last value of a key wins.",
+    "steps": [{"putMetadata": "k", "value": ["a"]}, {"putMetadata": "k", "value": ["b"]}]
+}

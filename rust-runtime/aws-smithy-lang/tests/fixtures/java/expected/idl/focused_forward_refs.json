@@ -1,0 +1,41 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Annotated": {
+            "type": "string",
+            "traits": {
+                "ex#laterTrait": {}
+            }
+        },
+        "ex#FromJson": {
+            "type": "blob"
+        },
+        "ex#Later": {
+            "type": "integer"
+        },
+        "ex#String": {
+            "type": "string"
+        },
+        "ex#UsesLater": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "ex#String"
+                },
+                "b": {
+                    "target": "ex#Later"
+                },
+                "c": {
+                    "target": "ex#FromJson"
+                }
+            }
+        },
+        "ex#laterTrait": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        }
+    }
+}

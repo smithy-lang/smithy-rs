@@ -1,0 +1,141 @@
+{
+    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "outcomes": {
+        "invalid/duplicate_enum_value": {
+            "accepted": false,
+            "errors": [
+                "EnumShape"
+            ]
+        },
+        "invalid/empty_union": {
+            "accepted": false,
+            "errors": [
+                "Union"
+            ]
+        },
+        "invalid/enum_member_not_unit": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "invalid/error_without_trait": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/int_enum_missing_value": {
+            "accepted": false,
+            "errors": [
+                "EnumShape"
+            ]
+        },
+        "invalid/invalid_shape_id": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "invalid/map_key_integer": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/member_case_conflict": {
+            "accepted": false,
+            "errors": [
+                "ShapeIdConflict"
+            ]
+        },
+        "invalid/member_targets_operation": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/operation_input_not_structure": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/resource_cycle": {
+            "accepted": false,
+            "errors": [
+                "ResourceCycle"
+            ]
+        },
+        "invalid/resource_identifier_integer": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/service_operation_not_operation": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ]
+        },
+        "invalid/shape_case_conflict": {
+            "accepted": false,
+            "errors": [
+                "ShapeIdConflict"
+            ]
+        },
+        "invalid/trait_not_definition": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "invalid/unit_structure_member": {
+            "accepted": false,
+            "errors": [
+                "UnitType"
+            ]
+        },
+        "invalid/unknown_shape_type": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "invalid/unresolved_target": {
+            "accepted": false,
+            "errors": [
+                "Target.UnresolvedShape"
+            ]
+        },
+        "valid/all_shape_kinds": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/custom_trait": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/implicit_enum_values": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/metadata": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/nested_resources": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/omitted_unit_io": {
+            "accepted": true,
+            "errors": []
+        },
+        "valid/service_rename": {
+            "accepted": true,
+            "errors": []
+        }
+    }
+}

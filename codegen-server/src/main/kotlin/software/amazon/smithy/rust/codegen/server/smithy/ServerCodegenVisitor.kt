@@ -9,6 +9,8 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -21,6 +23,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShapeVisitor
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
@@ -33,9 +36,12 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
@@ -48,11 +54,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.util.CommandError
+import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerServiceSchemaGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -73,7 +84,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperat
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaConstantGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerSchemaDeserializeGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStreamingOperationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
@@ -84,6 +98,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFal
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.renderServerTests
+import software.amazon.smithy.rust.codegen.server.smithy.generators.validateSchemaCollections
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
@@ -99,7 +115,7 @@ import java.util.logging.Logger
  * generate all the needed types by calling the accept() function on the available shapes.
  */
 open class ServerCodegenVisitor(
-    context: PluginContext,
+    private val context: PluginContext,
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ShapeVisitor.Default<Unit>() {
     protected val logger = Logger.getLogger(javaClass.name)
@@ -110,6 +126,10 @@ open class ServerCodegenVisitor(
     protected var model: Model
     protected var codegenContext: ServerCodegenContext
     protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
+
+    /** Every protocol code generation supports for this service, keyed by protocol trait ID. */
+    protected var protocolGeneratorFactories:
+        Map<ShapeId, ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>>
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
@@ -122,6 +142,9 @@ open class ServerCodegenVisitor(
                 moduleProvider = ServerModuleProvider,
             )
 
+        if (settings.codegenConfig.schemaSerde) {
+            validateSchemaCollections(context.model, settings.getService(context.model))
+        }
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
         model = codegenDecorator.transformModel(service, baseModel, settings)
@@ -135,19 +158,13 @@ open class ServerCodegenVisitor(
                 codegenDecorator,
                 RustServerCodegenPlugin::baseSymbolProvider,
             )
+        val builtInFactories =
+            ServerProtocolLoader.defaultProtocols {
+                codegenDecorator.httpCustomizations(serverSymbolProviders.symbolProvider, it)
+            }
+        protocolGeneratorFactories = codegenDecorator.protocols(service.id, builtInFactories)
         val (protocolShape, protocolGeneratorFactory) =
-            ServerProtocolLoader(
-                codegenDecorator.protocols(
-                    service.id,
-                    ServerProtocolLoader.defaultProtocols { it ->
-                        codegenDecorator.httpCustomizations(
-                            serverSymbolProviders.symbolProvider,
-                            it,
-                        )
-                    },
-                ),
-            )
-                .protocolFor(context.model, service)
+            ServerProtocolLoader(protocolGeneratorFactories).protocolFor(context.model, service)
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -238,6 +255,10 @@ open class ServerCodegenVisitor(
             "[rust-server-codegen] Generating Rust server for service $service, protocol ${codegenContext.protocol}",
         )
 
+        if (codegenContext.usesSchemaHttpSerde) {
+            validateServedProtocols(service, codegenContext.servedProtocols, protocolGeneratorFactories.keys)
+        }
+
         val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
             validateModelHasAtMostOneValidationException(model, service),
@@ -275,12 +296,31 @@ open class ServerCodegenVisitor(
         serviceShapes.forEach { it.accept(this) }
         codegenDecorator.extras(codegenContext, rustCrate)
 
+        // The `crate::schema` descriptors read by the schema router. The service's trait map also
+        // records decorator-contributed protocol traits, supplied as insertions on the service shape.
+        if (codegenContext.usesSchemaHttpSerde) {
+            ServerServiceSchemaGenerator(
+                codegenContext,
+                codegenDecorator.schemaTraitInsertions(codegenContext, service),
+            ).render(rustCrate)
+        }
+
         rustCrate.getInlineModuleWriter().render()
+
+        val schemaMetadata =
+            if (settings.codegenConfig.schemaSerde) {
+                settings.manifestSettingsMetadata(
+                    codegenContext.servedProtocols,
+                    context.settings.getObjectMember(CODEGEN_SETTINGS).orElse(ObjectNode.objectNode()),
+                ).deepMergeWith(serverCodegenVersionMetadata())
+            } else {
+                emptyMap()
+            }
 
         rustCrate.finalize(
             settings,
             model,
-            codegenDecorator.crateManifestCustomizations(codegenContext),
+            codegenDecorator.crateManifestCustomizations(codegenContext).deepMergeWith(schemaMetadata),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,
@@ -302,6 +342,26 @@ open class ServerCodegenVisitor(
     override fun getDefault(shape: Shape?) {}
 
     /**
+     * Emits a structure's or union's schema statics and a `Type::SCHEMA` constant next to the generated type.
+     *
+     * Only renders when the `schemaSerde` codegen setting is on; [writer] must be the writer the type itself
+     * was rendered into so the constant lands in the same module.
+     */
+    protected fun renderSchemaConstant(
+        shape: Shape,
+        writer: RustWriter,
+    ) {
+        if (codegenContext.settings.codegenConfig.schemaSerde) {
+            ServerSchemaConstantGenerator(
+                codegenContext,
+                writer,
+                shape,
+                codegenDecorator.schemaTraitInsertions(codegenContext, shape),
+            ).render()
+        }
+    }
+
+    /**
      * Structure Shape Visitor
      *
      * For each structure shape, generate:
@@ -321,6 +381,13 @@ open class ServerCodegenVisitor(
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                 structSettings = codegenContext.structSettings(),
             ).render()
+            renderSchemaConstant(shape, this)
+            if (codegenContext.usesSchemaHttpSerde) {
+                ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).also {
+                    it.render()
+                    it.renderDeserializableShapeImpl()
+                }
+            }
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
                 ErrorImplGenerator(
@@ -331,6 +398,50 @@ open class ServerCodegenVisitor(
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                 ).render(CodegenTarget.SERVER)
+                if (codegenContext.usesSchemaHttpSerde) {
+                    val status =
+                        shape.getTrait<software.amazon.smithy.model.traits.HttpErrorTrait>()?.code
+                            ?: if (errorTrait.isClientError) {
+                                400
+                            } else {
+                                500
+                            }
+                    rustTemplate(
+                        """
+                        impl #{HttpModeledError} for ${codegenContext.symbolProvider.toSymbol(shape).name} {
+                            fn status_code(&self) -> u16 { $status }
+                        }
+                        """,
+                        "HttpModeledError" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("schema::HttpModeledError"),
+                    )
+                    val server = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                    rustTemplate(
+                        """
+                        impl<P> #{IntoResponse}<P> for ${codegenContext.symbolProvider.toSymbol(shape).name} {
+                            fn into_response(self) -> #{Response} {
+                                let mut response = #{Response}::new(#{Empty}());
+                                *response.status_mut() = #{Http}::StatusCode::from_u16(#{HttpModeledError}::status_code(&self))
+                                    .expect("modeled error status is valid");
+                                response.extensions_mut().insert(#{ModeledErrorExtension}::new(
+                                    #{InternHeaderName}(#{SerializableStruct}::schema(&self).shape_id().shape_name())));
+                                response
+                            }
+                            fn into_response_with_protocol(self, protocol: &dyn #{ServerProtocol}) -> #{Response} {
+                                protocol.serialize_error(&self)
+                            }
+                        }
+                        """,
+                        "IntoResponse" to server.resolve("response::IntoResponse"),
+                        "Response" to server.resolve("response::Response"),
+                        "Empty" to server.resolve("body::empty"),
+                        "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+                        "HttpModeledError" to server.resolve("schema::HttpModeledError"),
+                        "ModeledErrorExtension" to server.resolve("extension::ModeledErrorExtension"),
+                        "SerializableStruct" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("serde::SerializableStruct"),
+                        "ServerProtocol" to server.resolve("schema::ServerProtocol"),
+                        "InternHeaderName" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("intern_header_name"),
+                    )
+                }
             }
 
             renderStructureShapeBuilder(shape, this)
@@ -600,6 +711,10 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating an union shape $shape")
         rustCrate.useShapeWriter(shape) {
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
+            renderSchemaConstant(shape, this)
+            if (codegenContext.usesSchemaHttpSerde) {
+                ServerSchemaDeserializeGenerator(codegenContext, this, shape, validationExceptionConversionGenerator).render()
+            }
         }
 
         if (shape.isReachableFromOperationInput() &&
@@ -622,7 +737,7 @@ open class ServerCodegenVisitor(
 
         if (shape.isEventStream()) {
             rustCrate.withModule(ServerRustModule.Error) {
-                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+                ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape, runtimeConfig = codegenContext.runtimeConfig).render(this)
             }
         }
     }
@@ -634,14 +749,32 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
         shape: OperationShape,
     ) {
-        codegenDecorator.protocolTestGenerator(
-            codegenContext,
-            ServerProtocolTestGenerator(
-                codegenContext,
-                protocolGeneratorFactory.support(),
-                shape,
-            ),
-        ).render(writer)
+        // The schema path serves every declared protocol, so it runs every declared protocol's tests.
+        for (protocol in codegenContext.servedProtocols) {
+            val protocolContext = codegenContext.copy(protocol = protocol)
+            codegenDecorator.protocolTestGenerator(
+                protocolContext,
+                ServerProtocolTestGenerator(
+                    protocolContext,
+                    protocolGeneratorFactories.getValue(protocol).support(),
+                    shape,
+                    multiProtocol = codegenContext.servedProtocols.size > 1,
+                ),
+            ).renderServerTests(writer)
+        }
+    }
+
+    private fun resolveServerProtocol(
+        factory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>,
+        context: ServerCodegenContext,
+    ): ServerProtocol {
+        val protocol = factory.protocol(context)
+        return protocol as? ServerProtocol
+            ?: throw CodegenException(
+                "Protocol factory ${factory.javaClass.name} for ${context.protocol} returned ${protocol.javaClass.name}, " +
+                    "which does not implement ${ServerProtocol::class.java.name}. " +
+                    "Server protocol factories must return a ServerProtocol implementation.",
+            )
     }
 
     /**
@@ -655,7 +788,7 @@ open class ServerCodegenVisitor(
      */
     override fun serviceShape(shape: ServiceShape) {
         logger.info("[rust-server-codegen] Generating a service $shape")
-        val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
+        val serverProtocol = resolveServerProtocol(protocolGeneratorFactory, codegenContext)
 
         val configMethods = codegenDecorator.configMethods(codegenContext)
         val isConfigBuilderFallible = configMethods.isBuilderFallible()
@@ -680,6 +813,25 @@ open class ServerCodegenVisitor(
                 codegenContext,
                 serverProtocol,
                 isConfigBuilderFallible,
+                if (codegenContext.usesSchemaHttpSerde) {
+                    codegenDecorator.protocolRegistries(codegenContext)
+                } else {
+                    emptyList()
+                },
+                TopDownIndex.of(model).getContainedOperations(shape)
+                    .filter { codegenDecorator.schemaStreamingOperation(codegenContext, it) != null }
+                    .map { it.id }.toSet(),
+                if (codegenContext.usesSchemaHttpSerde) {
+                    // Resolve each served protocol's marker through its factory so that
+                    // decorator-supplied protocols provide their own marker type.
+                    codegenContext.servedProtocols.associateWith { protocol ->
+                        val protocolContext = codegenContext.copy(protocol = protocol)
+                        resolveServerProtocol(protocolGeneratorFactories.getValue(protocol), protocolContext)
+                            .markerStruct()
+                    }
+                } else {
+                    emptyMap()
+                },
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)
@@ -701,17 +853,43 @@ open class ServerCodegenVisitor(
     override fun operationShape(shape: OperationShape) {
         // Generate errors.
         rustCrate.withModule(ServerRustModule.Error) {
-            ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
+            ServerOperationErrorGenerator(
+                model,
+                codegenContext.symbolProvider,
+                shape,
+                codegenContext.usesSchemaHttpSerde,
+                codegenContext.runtimeConfig,
+            ).render(this)
         }
+
+        // Under `schemaSerde`, a streaming operation runs on the schema path end to end: its
+        // `StreamingOperationShape` glue replaces the generated serde `FromRequest`/`IntoResponse` pair.
+        val streamingCustomization = codegenDecorator.schemaStreamingOperation(codegenContext, shape)
+        val schemaStreaming =
+            codegenContext.usesSchemaHttpSerde &&
+                (
+                    streamingCustomization != null ||
+                        shape.inputShape(model).hasStreamingMember(model) || shape.outputShape(model).hasStreamingMember(model)
+                )
 
         // Generate operation shapes.
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
+            if (schemaStreaming) {
+                ServerStreamingOperationGenerator(
+                    codegenContext,
+                    shape,
+                    validationExceptionConversionGenerator,
+                    streamingCustomization,
+                ).render(this)
+            }
         }
 
-        // Generate operations ser/de.
-        rustCrate.withModule(ServerRustModule.Operation) {
-            protocolGenerator.renderOperation(this, shape)
+        // Schema operations use runtime HTTP serde, so they need no generated serde FromRequest/IntoResponse glue.
+        if (!codegenContext.usesSchemaHttpSerde) {
+            rustCrate.withModule(ServerRustModule.Operation) {
+                protocolGenerator.renderOperation(this, shape)
+            }
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
