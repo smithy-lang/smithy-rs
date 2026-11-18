@@ -170,6 +170,7 @@ where
         match &self.header_key {
             Some(header_key) => {
                 req.extensions_mut().insert(request_id.clone());
+                crate::metrics::record_request_id(&req);
                 ServerRequestIdResponseFuture {
                     response_package: Some(ResponsePackage {
                         request_id,
@@ -180,6 +181,7 @@ where
             }
             None => {
                 req.extensions_mut().insert(request_id);
+                crate::metrics::record_request_id(&req);
                 ServerRequestIdResponseFuture {
                     response_package: None,
                     fut: self.inner.call(req),

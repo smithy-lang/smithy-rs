@@ -11,7 +11,7 @@ use crate::shape_id::ShapeId;
 
 #[doc(hidden)]
 pub use self::outcome::ModeledOutcome;
-pub(crate) use self::state::{collecting, record_operation, MetricsState, OperationGuard};
+pub(crate) use self::state::{collecting, record_operation, record_request_id, MetricsState, OperationGuard};
 pub use self::{
     outcome::{ErrorOutcome, Fault, Outcome, OutcomeSource, SuccessOutcome},
     request_ext::RequestExt,
@@ -65,6 +65,8 @@ pub struct RequestMetrics {
     operation: Option<ShapeId>,
     operation_duration: Option<Duration>,
     concurrent_requests_count: usize,
+    #[cfg(feature = "request-id")]
+    request_id: Option<crate::request::request_id::ServerRequestId>,
 }
 
 impl RequestMetrics {
@@ -120,6 +122,28 @@ impl RequestMetrics {
         // If a metrics publisher needs to include the current request, all they have to do is add
         // one to this count.
         self.concurrent_requests_count
+    }
+
+    /// The request's ID, if the service assigned one with [`ServerRequestIdProviderLayer`], which
+    /// requires the `request-id` feature.
+    ///
+    #[cfg_attr(
+        feature = "request-id",
+        doc = "[`ServerRequestIdProviderLayer`]: crate::request::request_id::ServerRequestIdProviderLayer"
+    )]
+    #[cfg_attr(
+        not(feature = "request-id"),
+        doc = concat!(
+            "[`ServerRequestIdProviderLayer`]: https://docs.rs/aws-smithy-http-server/",
+            env!("CARGO_PKG_VERSION"),
+            "/aws_smithy_http_server/request/request_id/struct.ServerRequestIdProviderLayer.html",
+        ),
+    )]
+    pub fn request_id(&self) -> Option<String> {
+        #[cfg(feature = "request-id")]
+        return self.request_id.as_ref().map(ToString::to_string);
+        #[cfg(not(feature = "request-id"))]
+        None
     }
 
     /// The [`ShapeId`] of the service that handled the request.

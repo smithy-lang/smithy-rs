@@ -95,6 +95,15 @@ impl MetricsState {
         OperationGuard { state: self.clone() }
     }
 
+    /// Records the request's [`ServerRequestId`](crate::request::request_id::ServerRequestId), if
+    /// metrics are enabled.
+    #[cfg(feature = "request-id")]
+    pub(crate) fn record_request_id(&self, request_id: &crate::request::request_id::ServerRequestId) {
+        if let Some(metrics) = &self.inner.metrics {
+            metrics.lock().unwrap_or_else(PoisonError::into_inner).request_id = Some(request_id.clone());
+        }
+    }
+
     /// Records the operation the request was routed to, if metrics are enabled.
     pub(crate) fn record_operation(&self, operation: &ShapeId) {
         if let Some(metrics) = &self.inner.metrics {
@@ -145,6 +154,22 @@ pub(crate) fn record_operation<B>(request: &http::Request<B>, operation: &ShapeI
     }
 }
 
+/// Records the [`ServerRequestId`](crate::request::request_id::ServerRequestId) `request` carries,
+/// if it has one and standard metrics are being collected.
+pub(crate) fn record_request_id<B>(request: &http::Request<B>) {
+    #[cfg(feature = "request-id")]
+    if let (Some(state), Some(request_id)) = (
+        request.extensions().get::<MetricsState>(),
+        request
+            .extensions()
+            .get::<crate::request::request_id::ServerRequestId>(),
+    ) {
+        state.record_request_id(request_id);
+    }
+    #[cfg(not(feature = "request-id"))]
+    let _ = request;
+}
+
 /// The metrics state of `request`, if standard metrics are being collected for it.
 pub(crate) fn collecting<B>(request: &http::Request<B>) -> Option<MetricsState> {
     request
@@ -167,12 +192,16 @@ struct InProgressMetrics {
     operation: Option<ShapeId>,
     operation_duration: OperationDuration,
     concurrent_requests_count: usize,
+    #[cfg(feature = "request-id")]
+    request_id: Option<crate::request::request_id::ServerRequestId>,
 }
 
 impl InProgressMetrics {
     fn new(time_source: &SharedTimeSource, service: &ServiceIdentity, concurrent_requests_count: usize) -> Self {
         Self {
             concurrent_requests_count,
+            #[cfg(feature = "request-id")]
+            request_id: None,
             start_time: TimeAnchor {
                 instant: now(),
                 system_time: time_source.now(),
@@ -187,6 +216,8 @@ impl InProgressMetrics {
     fn finish(&self, end_time: Instant) -> RequestMetrics {
         RequestMetrics {
             concurrent_requests_count: self.concurrent_requests_count,
+            #[cfg(feature = "request-id")]
+            request_id: self.request_id.clone(),
             start_time: self.start_time,
             end_time,
             service: self.service.id.clone(),

@@ -91,6 +91,7 @@ where
             concurrent_requests_count,
         );
         req.extensions_mut().insert(state.clone());
+        super::record_request_id(&req);
         MetricsServiceFuture {
             inner: self.inner.call(req),
             finisher: Some(Finisher::new(state, concurrent_request)),
@@ -139,7 +140,7 @@ mod tests {
     use bytes::Bytes;
     use http_body::Frame;
     use http_body_util::{BodyExt, Full};
-    use tower::{service_fn, Service, ServiceExt};
+    use tower::{service_fn, util::BoxCloneService, Service, ServiceExt};
 
     use crate::{
         metrics::{
@@ -545,6 +546,70 @@ mod tests {
             logged,
             [("a".into(), 0), ("b".into(), 1), ("c".into(), 2), ("d".into(), 0)]
         );
+    }
+
+    /// Serves `request` through a `MetricsService` around `wrap(route)`, and returns the request ID
+    /// its metrics report. The route registers an `on_finish` callback.
+    async fn reported_request_id<W, S>(request: http::Request<()>, wrap: W) -> Option<String>
+    where
+        W: FnOnce(BoxCloneService<http::Request<()>, http::Response<BoxBody>, Infallible>) -> S,
+        S: Service<http::Request<()>, Response = http::Response<BoxBody>, Error = Infallible>,
+    {
+        let seen = Arc::new(Mutex::new(None));
+        let route = {
+            let seen = seen.clone();
+            BoxCloneService::new(service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { ok().map(|response| response.map(crate::body::boxed)) }
+            }))
+        };
+        let response = MetricsService::new::<TestService>(wrap(route), true)
+            .oneshot(request)
+            .await
+            .unwrap();
+        drop(response);
+        let metrics = seen.lock().unwrap().take();
+        metrics.expect("callback received metrics").request_id()
+    }
+
+    #[tokio::test]
+    async fn requests_without_an_id_report_none() {
+        assert_eq!(reported_request_id(http::Request::new(()), |route| route).await, None);
+    }
+
+    #[cfg(feature = "request-id")]
+    #[tokio::test]
+    async fn an_id_assigned_around_the_service_is_reported() {
+        use crate::request::request_id::ServerRequestIdProviderLayer;
+        use tower::Layer;
+
+        let seen = Arc::new(Mutex::new(None));
+        let route = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { ok().map(|response| response.map(crate::body::boxed)) }
+            })
+        };
+        let service = ServerRequestIdProviderLayer::new().layer(MetricsService::new::<TestService>(route, true));
+        drop(service.oneshot(http::Request::new(())).await.unwrap());
+        let metrics = seen.lock().unwrap().take().expect("callback received metrics");
+        assert!(metrics.request_id().is_some());
+    }
+
+    #[cfg(feature = "request-id")]
+    #[tokio::test]
+    async fn an_id_assigned_inside_the_service_is_reported() {
+        use crate::request::request_id::ServerRequestIdProviderLayer;
+        use tower::Layer;
+
+        let reported = reported_request_id(http::Request::new(()), |route| {
+            ServerRequestIdProviderLayer::new().layer(route)
+        })
+        .await;
+        assert!(reported.is_some());
     }
 
     #[test]
