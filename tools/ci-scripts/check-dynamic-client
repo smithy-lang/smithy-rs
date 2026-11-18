@@ -6,8 +6,8 @@
 
 # Checks the `dynamic-client/` workspace.
 #
-# `--fast` runs clippy and the tests, with no features, the default features, and all features.
-# The pre-commit hook `dynamic-client` uses it at push time.
+# `--fast` checks the formatting, and runs clippy and the tests with no features, the default
+# features, and all features. The pre-commit hook `dynamic-client` uses it at push time.
 #
 # With no argument, the script also builds the docs, checks external types, and checks minimal
 # versions. These three steps need nightly Rust, `cargo-check-external-types`, and
@@ -17,6 +17,8 @@
 set -eux
 
 cd "$(git rev-parse --show-toplevel)/dynamic-client"
+
+cargo fmt --all -- --check
 
 for features in --no-default-features "" --all-features; do
     # shellcheck disable=SC2086 # An empty `features` must expand to no argument.

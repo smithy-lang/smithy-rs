@@ -1,0 +1,30 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "example.rules#Rules": {
+            "type": "service",
+            "version": "2006-03-01",
+            "traits": {
+                "smithy.protocols#rpcv2Cbor": {},
+                "smithy.rules#endpointRuleSet": {
+                    "version": "1.0",
+                    "parameters": {
+                        "UseFIPS": {
+                            "type": "boolean",
+                            "builtIn": "AWS::UseFIPS",
+                            "required": true,
+                            "default": false
+                        }
+                    },
+                    "rules": [
+                        {
+                            "type": "error",
+                            "conditions": [],
+                            "error": "no endpoint"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}
