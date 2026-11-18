@@ -67,6 +67,28 @@ pub struct RequestMetrics {
     concurrent_requests_count: usize,
     #[cfg(feature = "request-id")]
     request_id: Option<crate::request::request_id::ServerRequestId>,
+    http: HttpRequestMetrics,
+}
+
+/// The HTTP-specific parts of [`RequestMetrics`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct HttpRequestMetrics {
+    status_code: Option<http::StatusCode>,
+}
+
+impl HttpRequestMetrics {
+    /// The HTTP status code of the response the service produced.
+    ///
+    /// This method may return `None` in rare circumstances where no response was produced. See the
+    /// docs for [`RequestMetrics::outcome`] for details about these circumstances.
+    ///
+    /// Metrics publishers should *not* use the status code to infer whether a request was a
+    /// success, a client error, or a server error. Instead, use [`RequestMetrics::outcome`] and
+    /// match against the [`Outcome::result`] field.
+    pub fn status_code(&self) -> Option<http::StatusCode> {
+        self.status_code
+    }
 }
 
 impl RequestMetrics {
@@ -144,6 +166,11 @@ impl RequestMetrics {
         return self.request_id.as_ref().map(ToString::to_string);
         #[cfg(not(feature = "request-id"))]
         None
+    }
+
+    /// The HTTP-specific metrics of the request.
+    pub fn http(&self) -> &HttpRequestMetrics {
+        &self.http
     }
 
     /// The [`ShapeId`] of the service that handled the request.

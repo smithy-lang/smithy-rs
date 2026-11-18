@@ -323,6 +323,7 @@ internal class StandardMetricsTest {
                             let operation = metrics.operation().map(|id| id.absolute());
                             assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
                             assert!(metrics.request_id().is_some(), "{body}: the request ID layer assigned an ID");
+                            assert_eq!(metrics.http().status_code(), Some(status), "{body}");
                             let operation_duration = metrics.operation_duration();
                             if handler_ran {
                                 let operation_duration = operation_duration.expect("the handler ran");
