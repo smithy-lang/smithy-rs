@@ -365,8 +365,8 @@ impl ByteStream {
     /// async fn bytestream_from_file() -> ByteStream {
     ///     let bytestream = ByteStream::read_from()
     ///         .path("docs/some-large-file.csv")
-    ///         // Specify the size of the buffer used to read the file (in bytes, default is 4096)
-    ///         .buffer_size(32_784)
+    ///         // Specify the size of the buffer used to read the file (in bytes, default is 65536)
+    ///         .buffer_size(262_144)
     ///         // Specify the length of the file used (skips an additional call to retrieve the size)
     ///         .length(Length::Exact(123_456))
     ///         .build()
@@ -573,8 +573,7 @@ impl Inner {
 
     async fn collect(self) -> Result<AggregatedBytes, crate::body::Error> {
         let mut output = SegmentedBuf::new();
-        let body = self.body;
-        pin_utils::pin_mut!(body);
+        let mut body = std::pin::pin!(self.body);
         while let Some(buf) = body.next().await {
             output.push(buf?);
         }

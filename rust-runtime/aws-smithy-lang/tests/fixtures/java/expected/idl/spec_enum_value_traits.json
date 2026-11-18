@@ -1,0 +1,35 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Suit": {
+            "type": "enum",
+            "members": {
+                "DIAMOND": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#deprecated": {},
+                        "smithy.api#enumValue": "diamond"
+                    }
+                },
+                "CLUB": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "club"
+                    }
+                },
+                "HEART": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "heart"
+                    }
+                },
+                "SPADE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "spade"
+                    }
+                }
+            }
+        }
+    }
+}

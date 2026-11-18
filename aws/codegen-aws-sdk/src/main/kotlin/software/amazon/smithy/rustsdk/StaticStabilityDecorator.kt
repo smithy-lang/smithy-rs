@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  *
  * On the generated `ServiceRuntimePlugin`, it installs `StaticStabilityCache` as the default
  * identity cache for clients built directly from a `Config` (without `aws-config`) — only when the
- * customer hasn't configured one, and only at `BehaviorVersion >= v2026_08_01` (older versions keep
+ * customer hasn't configured one, and only at `BehaviorVersion >= v2026_12_08` (older versions keep
  * `LazyCache`). Clients built through `aws-config` get the same cache from `ConfigLoader::load()`.
  *
  * On every operation, it registers `CredentialAuthFailureInterceptor`: when a target service
@@ -76,7 +76,7 @@ private class StaticStabilityCacheCustomization(
                             && ${section.serviceConfigName}
                                 .behavior_version
                                 .expect("behavior version is set before the service runtime plugin runs")
-                                .is_at_least(#{BehaviorVersion}::v2026_08_01())
+                                .is_at_least(#{BehaviorVersion}::v2026_12_08())
                         {
                             runtime_components
                                 .set_identity_cache(Some(#{StaticStabilityCache}::builder().build()));

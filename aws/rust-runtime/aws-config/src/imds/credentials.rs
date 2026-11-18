@@ -58,7 +58,7 @@ pub struct ImdsCredentialsProvider {
     time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
     // Whether static stability is provided by the identity cache instead of by this provider.
-    // True at v2026_08_01+ (default cache is the StaticStabilityCache): this provider reports the
+    // True at v2026_12_08+ (default cache is the StaticStabilityCache): this provider reports the
     // true expiration and surfaces a failed refresh as an error. False for older behavior versions
     // (LazyCache): this provider offers static stability itself — extending stale expirations and
     // serving the last-retrieved credentials on a failed refresh.
@@ -81,7 +81,7 @@ impl Builder {
         self
     }
 
-    /// Override the [instance profile](instance-profile) used for this provider.
+    /// Override the [instance profile][instance-profile] used for this provider.
     ///
     /// When retrieving IMDS credentials, a call must first be made to
     /// `<IMDS_BASE_URL>/latest/meta-data/iam/security-credentials/`. This returns the instance
@@ -126,7 +126,7 @@ impl Builder {
         let static_stability_via_cache = provider_config
             .behavior_version()
             .unwrap_or_else(BehaviorVersion::latest)
-            .is_at_least(BehaviorVersion::v2026_08_01());
+            .is_at_least(BehaviorVersion::v2026_12_08());
         ImdsCredentialsProvider {
             client,
             env,
@@ -200,7 +200,7 @@ impl ImdsCredentialsProvider {
     // Determines the expiration to report for freshly fetched IMDS credentials.
     //
     // When the identity cache owns static stability (the default from
-    // `BehaviorVersion::v2026_08_01`), report the true expiration and let the cache decide how to
+    // `BehaviorVersion::v2026_12_08`), report the true expiration and let the cache decide how to
     // handle expired credentials from IMDS: it treats an expired response as a failed refresh and
     // keeps serving the last successfully cached credential, so static stability applies at refresh
     // time. Before the first successful fetch there is nothing cached to fall back on, so an expired
@@ -420,7 +420,7 @@ mod test {
         // There should not be logs indicating credentials are extended for stability.
         assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
-    // Legacy path (behavior version < v2026_08_01): the provider extends the stale expiry itself.
+    // Legacy path (behavior version < v2026_12_08): the provider extends the stale expiry itself.
     #[tokio::test]
     #[traced_test]
     async fn expired_credentials_should_be_extended() {
@@ -463,11 +463,11 @@ mod test {
         assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
-    // Counterpart to `expired_credentials_should_be_extended`: at v2026_08_01 the cache owns static
+    // Counterpart to `expired_credentials_should_be_extended`: at v2026_12_08 the cache owns static
     // stability, so the provider reports the true (past) expiration and does not extend it.
     #[tokio::test]
     #[traced_test]
-    async fn expired_credentials_are_not_extended_at_v2026_08_01() {
+    async fn expired_credentials_are_not_extended_at_v2026_12_08() {
         let http_client = StaticReplayClient::new(vec![
                 ReplayEvent::new(
                     token_request("http://169.254.169.254", 21600),
@@ -483,7 +483,7 @@ mod test {
                 ),
             ]);
 
-        // Same already-expired credentials as the legacy test, but at v2026_08_01.
+        // Same already-expired credentials as the legacy test, but at v2026_12_08.
         let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
         let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
@@ -491,7 +491,7 @@ mod test {
             .with_http_client(http_client.clone())
             .with_sleep_impl(sleep)
             .with_time_source(time_source)
-            .with_behavior_version(Some(BehaviorVersion::v2026_08_01()));
+            .with_behavior_version(Some(BehaviorVersion::v2026_12_08()));
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
             .build();
@@ -510,7 +510,7 @@ mod test {
         assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
-    // Legacy path (behavior version < v2026_08_01): the provider serves last-retrieved on failure.
+    // Legacy path (behavior version < v2026_12_08): the provider serves last-retrieved on failure.
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
@@ -553,11 +553,11 @@ mod test {
         );
     }
 
-    // Counterpart to the fallback tests: at v2026_08_01 the cache owns serve-cached, so a failed
+    // Counterpart to the fallback tests: at v2026_12_08 the cache owns serve-cached, so a failed
     // refresh surfaces as an error rather than serving the seeded last-retrieved credentials.
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
-    async fn refresh_failure_errors_at_v2026_08_01_instead_of_serving_last_retrieved() {
+    async fn refresh_failure_errors_at_v2026_12_08_instead_of_serving_last_retrieved() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
@@ -567,15 +567,15 @@ mod test {
             .imds_client(client)
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_behavior_version(Some(BehaviorVersion::v2026_08_01())),
+                    .with_behavior_version(Some(BehaviorVersion::v2026_12_08())),
             )
-            // Seed a fallback; at v2026_08_01 it must NOT be served.
+            // Seed a fallback; at v2026_12_08 it must NOT be served.
             .last_retrieved_credentials(aws_credential_types::Credentials::for_tests())
             .build();
         let actual = provider.provide_credentials().await;
         assert!(
             actual.is_err(),
-            "at v2026_08_01 a failed refresh must error, not serve last-retrieved: {actual:?}"
+            "at v2026_12_08 a failed refresh must error, not serve last-retrieved: {actual:?}"
         );
     }
 

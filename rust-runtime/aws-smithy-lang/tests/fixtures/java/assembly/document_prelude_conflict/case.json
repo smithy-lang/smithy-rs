@@ -1,0 +1,4 @@
+{
+    "description": "Two JSON AST documents that define smithy.api#String differently: the definitions conflict like any other, even though the prelude would replace them.",
+    "steps": [{"addFile": "a.json"}, {"addFile": "b.json"}]
+}

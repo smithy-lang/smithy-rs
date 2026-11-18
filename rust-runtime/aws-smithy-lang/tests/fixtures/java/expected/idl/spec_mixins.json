@@ -1,0 +1,47 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#BaseUser": {
+            "type": "structure",
+            "members": {
+                "userId": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "smithy.example#SensitiveString": {
+            "type": "string",
+            "traits": {
+                "smithy.api#mixin": {},
+                "smithy.api#sensitive": {}
+            }
+        },
+        "smithy.example#SensitiveText": {
+            "type": "string",
+            "mixins": [
+                {
+                    "target": "smithy.example#SensitiveString"
+                }
+            ],
+            "traits": {
+                "smithy.api#pattern": "^[a-zA-Z\\.]*$"
+            }
+        },
+        "smithy.example#UserDetails": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#BaseUser"
+                }
+            ],
+            "members": {
+                "username": {
+                    "target": "smithy.api#String"
+                }
+            }
+        }
+    }
+}

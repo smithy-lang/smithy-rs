@@ -161,6 +161,11 @@ internal class RustReservedWordSymbolProviderTest {
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$self").target("namespace#Integer").build(),
         ) shouldBe "self_"
+
+        // `gen` is reserved since the 2024 edition
+        provider.toMemberName(
+            MemberShape.builder().id("namespace#container\$gen").target("namespace#Integer").build(),
+        ) shouldBe "r##gen"
     }
 
     @Test

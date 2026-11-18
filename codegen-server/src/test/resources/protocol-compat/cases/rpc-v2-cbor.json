@@ -1,0 +1,94 @@
+[
+  {
+    "id": "body-object",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a0",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1666e6573746564a0",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a1666e6573746564a1687265717569726564626f6b",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/service/Audit/operation/Body",
+    "body_hex": "a164626c6f62646533303d",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f65656d707479",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f647a65726f",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/service/Audit/operation/Response",
+    "body_hex": "a1687363656e6172696f6671756f746573",
+    "headers": [
+      [
+        "smithy-protocol",
+        "rpc-v2-cbor"
+      ]
+    ],
+    "content_type": "application/cbor",
+    "source": "CborParserGenerator; RpcV2Cbor; CborDeserializer"
+  }
+]

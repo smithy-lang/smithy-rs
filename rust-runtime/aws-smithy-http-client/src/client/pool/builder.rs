@@ -23,7 +23,7 @@ use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     all(feature = "test-util", aws_sdk_unstable)
 ))]
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::dns::{ResolveDns, SharedDnsResolver};
+use aws_smithy_runtime_api::client::dns::{ResolveDns, ResolveDnsError, SharedDnsResolver};
 use aws_smithy_runtime_api::shared::IntoShared;
 #[cfg(any(
     all(test, feature = "rt-tokio"),
@@ -35,18 +35,23 @@ use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::error::Error;
 use std::fmt;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
 use std::sync::atomic::AtomicU64;
+use std::task::{Context, Poll};
 use std::time::Duration;
-#[cfg(any(
-    all(test, feature = "rt-tokio"),
-    all(feature = "test-util", aws_sdk_unstable)
-))]
 use tower::Service;
 
 /// Default duration for retaining an idle reusable connection.
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// Default TCP keepalive probe interval for newly created sockets.
+///
+/// 30 seconds keeps connections alive well within the idle timeout of
+/// NAT gateways and firewalls without adding meaningful overhead.
+const DEFAULT_TCP_KEEPALIVE: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 enum TriStateOption<T> {
@@ -108,6 +113,12 @@ pub struct Builder<Tls = TlsUnset> {
     tls: Tls,
 }
 
+/// Connection-pool builder with a TLS provider selected.
+///
+/// Created by [`Builder::tls_provider`]. HTTPS construction requires an enabled
+/// TLS provider feature.
+pub type HttpsBuilder = Builder<TlsProviderSelected>;
+
 impl Default for Builder<TlsUnset> {
     fn default() -> Self {
         Self {
@@ -115,7 +126,7 @@ impl Default for Builder<TlsUnset> {
             time_source: None,
             sleep_impl: None,
             tcp_nodelay: true,
-            tcp_keepalive: TriStateOption::NotSet,
+            tcp_keepalive: TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
             max_connections_per_host: None,
             reuse_scope: ConnectionReuseScope::default(),
             partitions: None,
@@ -273,6 +284,15 @@ impl<Tls> Builder<Tls> {
         self
     }
 
+    /// Returns whether an explicit partition set is configured.
+    ///
+    /// An explicitly supplied empty set also returns `true`. Clearing the set
+    /// with [`Self::set_partitions`] and `None` restores anonymous partition
+    /// construction.
+    pub fn has_explicit_partitions(&self) -> bool {
+        self.partitions.is_some()
+    }
+
     /// Declares the complete explicit partition set.
     pub fn partitions(mut self, partitions: impl IntoIterator<Item = Partition>) -> Self {
         self.partitions = Some(partitions.into_iter().collect());
@@ -368,6 +388,21 @@ impl Builder<TlsUnset> {
     }
 }
 
+impl Builder<TlsProviderSelected> {
+    /// Builds a pool whose connector performs TLS and ALPN negotiation.
+    pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+        {
+            self.build_https_enabled()
+        }
+        #[cfg(not(any(feature = "__rustls", feature = "s2n-tls")))]
+        {
+            // Provider has no variants here; exhaustiveness is compiler-checked.
+            match self.tls.provider {}
+        }
+    }
+}
+
 crate::cfg::cfg_tls! {
     impl Builder<TlsProviderSelected> {
         /// Sets provider-specific TLS configuration for HTTPS connections.
@@ -382,14 +417,14 @@ crate::cfg::cfg_tls! {
             self
         }
 
-        /// Builds a pool whose connector performs TLS and ALPN negotiation.
-        pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        /// Selects the resolver for the HTTPS transport.
+        fn build_https_enabled(self) -> Result<ConnectionPool, BuildError> {
             let resolver = self.dns_resolver.clone();
             match resolver {
                 Some(resolver) => {
                     self.build_https_with_resolver(HyperUtilResolver { resolver })
                 }
-                None => self.build_https_with_resolver(GaiResolver::new()),
+                None => self.build_https_with_resolver(DefaultResolver(GaiResolver::new())),
             }
         }
 
@@ -409,7 +444,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "__rustls")]
                 tls::Provider::Rustls(crypto_mode) => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, alpn_protocols| {
                             let mut connector =
@@ -432,7 +467,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, _alpn_protocols| {
                             let mut connector =
@@ -455,6 +490,34 @@ crate::cfg::cfg_tls! {
     }
 }
 
+/// Reports a hyper-util resolver's failures as `ResolveDnsError`, so they are classified like
+/// a custom resolver's, as I/O.
+///
+/// The pool wraps its default resolver, `GaiResolver`, in this. getaddrinfo's error does not say
+/// which failures are permanent, so every DNS failure is retried.
+#[derive(Clone)]
+struct DefaultResolver<R>(R);
+
+impl<R> Service<Name> for DefaultResolver<R>
+where
+    R: Service<Name>,
+    R::Error: Into<Box<dyn Error + Send + Sync>>,
+    R::Future: Send + 'static,
+{
+    type Response = R::Response;
+    type Error = ResolveDnsError;
+    type Future = Pin<Box<dyn Future<Output = Result<R::Response, ResolveDnsError>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx).map_err(ResolveDnsError::new)
+    }
+
+    fn call(&mut self, name: Name) -> Self::Future {
+        let resolving = self.0.call(name);
+        Box::pin(async move { resolving.await.map_err(ResolveDnsError::new) })
+    }
+}
+
 impl Builder<TlsUnset> {
     /// Builds a pool for cleartext HTTP connections.
     ///
@@ -466,7 +529,7 @@ impl Builder<TlsUnset> {
         let resolver = self.dns_resolver.clone();
         match resolver {
             Some(resolver) => self.build_http_with_resolver(HyperUtilResolver { resolver }),
-            None => self.build_http_with_resolver(GaiResolver::new()),
+            None => self.build_http_with_resolver(DefaultResolver(GaiResolver::new())),
         }
     }
 
@@ -480,7 +543,10 @@ impl Builder<TlsUnset> {
     {
         validate_default_connector_interfaces(self.partitions.as_deref())?;
         let tcp_nodelay = self.tcp_nodelay;
-        let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+        let tcp_keepalive = self
+            .tcp_keepalive
+            .clone()
+            .resolve(Some(DEFAULT_TCP_KEEPALIVE));
         let proxy_config = self.proxy_config.clone();
         let transport = if proxy_config.is_disabled() {
             establish::from_interface_connector(move |interface| {
@@ -771,7 +837,10 @@ mod tests {
     fn builder_preserves_unset_disabled_and_configured_settings() {
         let mut builder = Builder::default();
         assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
-        assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
+        assert_eq!(
+            TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
+            builder.tcp_keepalive
+        );
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());
@@ -973,5 +1042,38 @@ mod tests {
             "the anonymous partition identifier is reserved",
             error.to_string()
         );
+    }
+
+    /// A resolver that fails every lookup with an `io::Error`.
+    #[derive(Clone)]
+    struct FailingResolver;
+
+    impl Service<Name> for FailingResolver {
+        type Response = std::vec::IntoIter<SocketAddr>;
+        type Error = std::io::Error;
+        type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, name: Name) -> Self::Future {
+            std::future::ready(Err(std::io::Error::other(format!(
+                "no addresses for {name}"
+            ))))
+        }
+    }
+
+    #[tokio::test]
+    async fn default_resolver_failure_through_http_connector_is_io() {
+        let mut connector = HttpConnector::new_with_resolver(DefaultResolver(FailingResolver));
+
+        let error = connector
+            .call(http_1x::Uri::from_static("http://example.com/"))
+            .await
+            .expect_err("DNS resolution fails");
+
+        let error = crate::client::downcast_error(error.into());
+        assert!(error.is_io(), "expected an I/O error, got {error:?}");
     }
 }

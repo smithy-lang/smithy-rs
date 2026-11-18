@@ -4,6 +4,8 @@
  */
 
 pub mod router;
-
-/// [AWS JSON 1.1](https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html) protocol.
-pub struct AwsJson1_1;
+/// The `awsJson1_1` protocol.
+///
+/// The same type is used as the protocol type parameter of generated serde servers and, with
+/// `codegen.schemaSerde`, as the schema-driven protocol implementation.
+pub use crate::schema::protocol::AwsJson1_1;

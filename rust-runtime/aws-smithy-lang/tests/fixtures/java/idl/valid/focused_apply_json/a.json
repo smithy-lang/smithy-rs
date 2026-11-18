@@ -1,0 +1,25 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Later$m": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": ["a-apply"]
+            }
+        },
+        "ex#Later": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": ["a-apply"],
+                "smithy.api#documentation": "Applied in an earlier file."
+            }
+        },
+        "ex#NothingApplied": {
+            "type": "apply"
+        },
+        "ex#EmptyTraits": {
+            "type": "apply",
+            "traits": {}
+        }
+    }
+}

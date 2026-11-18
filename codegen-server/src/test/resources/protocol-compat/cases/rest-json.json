@@ -1,0 +1,67 @@
+[
+  {
+    "id": "query-empty",
+    "uri": "/bindings",
+    "body": "",
+    "headers": [],
+    "source": "ServerHttpBoundProtocolGenerator.serverRenderQueryStringParser",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-object",
+    "uri": "/body",
+    "body": "{}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator",
+    "expected_legacy_status": 200
+  },
+  {
+    "id": "body-known-null",
+    "uri": "/body",
+    "body": "{\"text\":\"a\",\"text\":null}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-nested-missing",
+    "uri": "/body",
+    "body": "{\"nested\":{}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-nested-valid",
+    "uri": "/body",
+    "body": "{\"nested\":{\"required\":\"ok\"}}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "body-blob-good",
+    "uri": "/body",
+    "body": "{\"blob\":\"e30=\"}",
+    "headers": [],
+    "source": "JsonParserGenerator; ServerSchemaDeserializeGenerator"
+  },
+  {
+    "id": "response-empty",
+    "uri": "/response",
+    "body": "{\"scenario\": \"empty\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-zero",
+    "uri": "/response",
+    "body": "{\"scenario\": \"zero\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  },
+  {
+    "id": "response-quotes",
+    "uri": "/response",
+    "body": "{\"scenario\": \"quotes\"}",
+    "headers": [],
+    "source": "HttpBindingGenerator.renderHeaders/renderPrefixHeader; serverRenderHttpResponseCode"
+  }
+]

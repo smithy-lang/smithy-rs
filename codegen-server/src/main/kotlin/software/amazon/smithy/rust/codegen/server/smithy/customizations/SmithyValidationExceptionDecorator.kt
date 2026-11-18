@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
@@ -68,6 +69,28 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
     }
 
     override val shapeId: ShapeId = SHAPE_ID
+
+    override fun validationExceptionSymbol(): Symbol =
+        codegenContext.symbolProvider.toSymbol(codegenContext.model.expectShape(shapeId))
+
+    override fun renderImplFromConstraintViolationForValidationException(): Writable =
+        writable {
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{ValidationException} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
+                        Self {
+                            message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                            field_list: Some(vec![first_validation_exception_field]),
+                        }
+                    }
+                }
+                """,
+                "ValidationException" to validationExceptionSymbol(),
+                "From" to RuntimeType.From,
+            )
+        }
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {

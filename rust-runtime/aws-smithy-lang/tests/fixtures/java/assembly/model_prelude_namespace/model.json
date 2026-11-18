@@ -1,0 +1,1 @@
+{"smithy": "2.0", "shapes": {"smithy.api#Foo": {"type": "string"}, "ex#Kept": {"type": "string"}}}

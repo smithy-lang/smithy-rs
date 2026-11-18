@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -79,6 +80,10 @@ class UnconstrainedUnionGenerator(
         val constraintViolationName = constraintViolationSymbol.name
 
         inlineModuleCreator(symbol) {
+            // Schema receivers validate each event directly, leaving these variants unused.
+            if (codegenContext.settings.codegenConfig.schemaSerde && shape.isEventStream()) {
+                rust("##[allow(dead_code)]")
+            }
             rustBlock(
                 """
                 ##[allow(clippy::enum_variant_names)]

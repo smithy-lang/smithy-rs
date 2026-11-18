@@ -23,8 +23,8 @@ import java.nio.file.Path
  */
 sealed class HttpTestType {
     /**
-     * Run the test for all HTTP versions: HTTP 0.x and HTTP 1.x.
-     * This is the default to ensure comprehensive coverage across both HTTP versions.
+     * Run the test for all supported HTTP versions: HTTP 0.x and HTTP 1.x for generated serde,
+     * or HTTP 1.x for schema serde.
      */
     object ALL : HttpTestType()
 
@@ -79,6 +79,11 @@ fun serverIntegrationTest(
         RustServerCodegenPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     }
 
+    val schemaSerdeEnabled =
+        params.additionalSettings.expectObjectNode()
+            .getObjectMember("codegen").orElse(Node.objectNode())
+            .getBooleanMemberOrDefault(ServerCodegenConfig.SCHEMA_SERDE_CONFIG_KEY, false)
+
     // Handle AS_CONFIGURED case separately - run once without modifying params
     if (testCoverage is HttpTestType.Default) {
         val path = codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)
@@ -90,7 +95,7 @@ fun serverIntegrationTest(
                 .orElse(Node.objectNode())
                 .expectObjectNode()
                 .getBooleanMember(ServerCodegenConfig.HTTP_1X_CONFIG_KEY)
-        val http1xEnabled = http1xNode.map { it.value }.orElse(false)
+        val http1xEnabled = http1xNode.map { it.value }.orElse(schemaSerdeEnabled)
         val version = if (http1xEnabled) HttpTestVersion.HTTP_1_X else HttpTestVersion.HTTP_0_X
         return listOf(GeneratedServer(path, version))
     }
@@ -98,7 +103,7 @@ fun serverIntegrationTest(
     // Determine which HTTP versions to test
     val shouldTestHttp0 =
         when (testCoverage) {
-            is HttpTestType.ALL -> true
+            is HttpTestType.ALL -> !schemaSerdeEnabled
             is HttpTestType.Only -> testCoverage.version == HttpTestVersion.HTTP_0_X
             is HttpTestType.Default -> false // Already handled above
         }

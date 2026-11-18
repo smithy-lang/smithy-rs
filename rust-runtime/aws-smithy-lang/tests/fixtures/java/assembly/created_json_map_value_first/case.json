@@ -1,0 +1,4 @@
+{
+    "description": "A map built in code, then a JSON AST definition that lists `value` before `key`: the document's first trait (on `value`) touches the shape built in code.",
+    "steps": [{"addShapes": "code.json"}, {"addFile": "f.json"}]
+}

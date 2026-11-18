@@ -4,6 +4,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Usage: check-server-codegen-unit-tests [i/n]
+#
+# With `i/n`, runs only shard `i` of `n` of the test classes (see `testShard` in
+# codegen-server/build.gradle.kts). Without it, runs every shard.
+
 set -eux
 cd smithy-rs
-./gradlew codegen-server:test
+
+SHARD_ARGS=()
+if [[ $# -gt 0 ]]; then
+    SHARD_ARGS=("-PtestShard=$1")
+fi
+
+./gradlew codegen-server:test -PexcludeServerCompatibilityTests=true "${SHARD_ARGS[@]}"

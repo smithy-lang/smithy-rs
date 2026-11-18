@@ -1,0 +1,5 @@
+{
+    "description": "A shape built in code, then a JSON AST definition without traits: the shape built in code is the later, kept definition.",
+    "steps": [{"addShapes": "code.json"}, {"addFile": "f.json"}],
+    "locations": ["ex#S", "ex#S$m"]
+}

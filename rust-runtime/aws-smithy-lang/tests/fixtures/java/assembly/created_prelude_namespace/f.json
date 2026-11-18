@@ -1,0 +1,1 @@
+{"smithy":"2.0","shapes":{"ex#Uses":{"type":"structure","members":{"name":{"target":"smithy.api#String","traits":{"smithy.api#length":{"min":1}}}}}}}

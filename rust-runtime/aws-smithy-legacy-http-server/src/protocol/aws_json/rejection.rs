@@ -33,6 +33,10 @@ pub enum RequestRejection {
     /// Typically happens when the request has headers that are not valid UTF-8.
     #[error("failed to convert request: {0}")]
     HttpConversion(#[from] HttpError),
+
+    /// The request was not received in full before a configured read deadline expired.
+    #[error("the request was not received before the configured read deadline")]
+    RequestTimeout,
 }
 
 impl From<std::convert::Infallible> for RequestRejection {

@@ -1,0 +1,12 @@
+[package]
+name = "rust-tokens"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Prints the token stream of Rust source files for whitespace-insensitive comparison"
+
+[dependencies]
+proc-macro2 = { version = "1", features = ["span-locations"] }
+
+# Not a member of any repository workspace.
+[workspace]

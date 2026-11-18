@@ -1,0 +1,29 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Merged": {
+            "type": "string",
+            "traits": {
+                "smithy.api#tags": ["b"],
+                "smithy.api#documentation": "Only in this definition."
+            }
+        },
+        "ex#Record": {
+            "type": "structure",
+            "members": {
+                "member": {
+                    "target": "smithy.api#String",
+                    "traits": {"smithy.api#tags": ["b"]}
+                },
+                "same": {
+                    "target": "smithy.api#String",
+                    "traits": {"smithy.api#default": "x"}
+                },
+                "overridden": {
+                    "target": "smithy.api#String",
+                    "traits": {"smithy.api#default": "b"}
+                }
+            }
+        }
+    }
+}

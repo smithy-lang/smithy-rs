@@ -1,0 +1,158 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "greeting": "hello",
+        "quoted key": {
+            "nested": [1, -2.5, true, null, "text", "smithy.api#required"],
+            "big": 18446744073709551615
+        }
+    },
+    "shapes": {
+        "smithy.example#Thing": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Documentation for `Thing`.\n\nSecond paragraph.",
+                "smithy.api#tags": [],
+                "smithy.api#length": { "min": 1, "max": 10 }
+            }
+        },
+        "smithy.example#marker": {
+            "type": "structure",
+            "members": {
+                "level": { "target": "smithy.api#Integer" }
+            },
+            "traits": { "smithy.api#trait": {} }
+        },
+        "smithy.example#Example": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.example#Thing",
+                    "traits": {
+                        "smithy.api#documentation": "Member docs.",
+                        "smithy.api#required": {},
+                        "smithy.api#default": "a"
+                    }
+                },
+                "count": {
+                    "target": "smithy.api#Integer",
+                    "traits": { "smithy.api#default": 0 }
+                },
+                "imported": { "target": "other#Imported" },
+                "text": {
+                    "target": "smithy.api#String",
+                    "traits": { "smithy.api#default": "Hello,\n  text block.\n" }
+                }
+            },
+            "traits": { "smithy.example#marker": {} }
+        },
+        "smithy.example#Things": {
+            "type": "list",
+            "member": { "target": "smithy.example#Thing" },
+            "traits": { "smithy.example#marker": { "level": 2 } }
+        },
+        "smithy.example#Index": {
+            "type": "map",
+            "key": { "target": "smithy.api#String" },
+            "value": { "target": "smithy.example#Things" }
+        },
+        "smithy.example#Suit": {
+            "type": "enum",
+            "members": {
+                "DIAMOND": {
+                    "target": "smithy.api#Unit",
+                    "traits": { "smithy.api#enumValue": "diamond" }
+                },
+                "CLUB": {
+                    "target": "smithy.api#Unit",
+                    "traits": { "smithy.api#deprecated": {} }
+                }
+            }
+        },
+        "smithy.example#Level": {
+            "type": "intEnum",
+            "members": {
+                "LOW": {
+                    "target": "smithy.api#Unit",
+                    "traits": { "smithy.api#enumValue": 1 }
+                },
+                "HIGH": {
+                    "target": "smithy.api#Unit",
+                    "traits": { "smithy.api#enumValue": 2 }
+                }
+            }
+        },
+        "smithy.example#Choice": {
+            "type": "union",
+            "members": {
+                "a": { "target": "smithy.api#String" },
+                "b": { "target": "smithy.example#Example" }
+            }
+        },
+        "smithy.example#When": { "type": "timestamp" },
+        "smithy.example#Anything": { "type": "document" },
+        "smithy.example#Service": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [{ "target": "smithy.example#GetThing" }],
+            "resources": [{ "target": "smithy.example#Widget" }],
+            "errors": [{ "target": "smithy.example#Failure" }],
+            "rename": { "other#Imported": "ImportedBlob" }
+        },
+        "smithy.example#Widget": {
+            "type": "resource",
+            "identifiers": { "widgetId": { "target": "smithy.api#String" } },
+            "properties": { "label": { "target": "smithy.api#String" } },
+            "read": { "target": "smithy.example#GetWidget" },
+            "operations": [{ "target": "smithy.example#Touch" }]
+        },
+        "smithy.example#GetWidget": {
+            "type": "operation",
+            "input": { "target": "smithy.example#GetWidgetRequest" },
+            "output": { "target": "smithy.example#GetWidgetResponse" },
+            "errors": [{ "target": "smithy.example#Failure" }],
+            "traits": { "smithy.api#readonly": {} }
+        },
+        "smithy.example#GetWidgetRequest": {
+            "type": "structure",
+            "members": {
+                "widgetId": {
+                    "target": "smithy.api#String",
+                    "traits": { "smithy.api#required": {} }
+                }
+            }
+        },
+        "smithy.example#GetWidgetResponse": {
+            "type": "structure",
+            "members": {
+                "label": { "target": "smithy.api#String" }
+            }
+        },
+        "smithy.example#Touch": { "type": "operation" },
+        "smithy.example#GetThingInput": {
+            "type": "structure",
+            "members": {
+                "id": { "target": "smithy.api#String" }
+            },
+            "traits": { "smithy.api#input": {} }
+        },
+        "smithy.example#GetThingOutput": {
+            "type": "structure",
+            "members": {
+                "thing": { "target": "smithy.example#Thing" }
+            },
+            "traits": { "smithy.api#sensitive": {}, "smithy.api#output": {} }
+        },
+        "smithy.example#GetThing": {
+            "type": "operation",
+            "input": { "target": "smithy.example#GetThingInput" },
+            "output": { "target": "smithy.example#GetThingOutput" },
+            "traits": { "smithy.api#readonly": {} }
+        },
+        "smithy.example#Failure": {
+            "type": "structure",
+            "members": {},
+            "traits": { "smithy.api#error": "client" }
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#NotATrait": {
+      "type": "structure"
+    },
+    "ex#S": {
+      "type": "string",
+      "traits": {
+        "ex#NotATrait": {}
+      }
+    }
+  }
+}

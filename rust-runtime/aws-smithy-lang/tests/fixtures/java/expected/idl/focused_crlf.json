@@ -1,0 +1,25 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#S": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#default": "multi\nline\n"
+                    }
+                },
+                "b": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#default": "quoted\n    newline"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Line one\nLine two"
+            }
+        }
+    }
+}

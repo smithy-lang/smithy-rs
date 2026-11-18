@@ -245,6 +245,109 @@ class StructureGeneratorTest {
     }
 
     @Test
+    fun `generate a custom debug implementation when sensitive shapes are nested in collections`() {
+        val model =
+            """
+            namespace com.test
+
+            @sensitive
+            string Secret
+
+            list SecretList { member: Secret }
+
+            @uniqueItems
+            list SecretSet { member: Secret }
+
+            map SecretKeyMap { key: Secret, value: String }
+
+            map SecretValueMap { key: String, value: Secret }
+
+            list NestedSecretList { member: SecretList }
+
+            map MapOfSecretLists { key: String, value: SecretList }
+
+            structure NestedSecrets {
+                public: String,
+                secretList: SecretList,
+                secretSet: SecretSet,
+                keyMap: SecretKeyMap,
+                valueMap: SecretValueMap,
+                nestedList: NestedSecretList,
+                mapOfLists: MapOfSecretLists,
+            }
+            """.asSmithyModel(smithyVersion = "2")
+        val shape = model.lookup<StructureShape>("com.test#NestedSecrets")
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
+        TestWorkspace.testProject().unitTest {
+            structureGenerator(model, provider, this, shape).render()
+
+            rust(
+                """
+                use std::collections::HashMap;
+
+                let nested = NestedSecrets {
+                    public: Some("public-value".to_owned()),
+                    secret_list: Some(vec!["leak-1".to_owned()]),
+                    secret_set: Some(vec!["leak-2".to_owned()]),
+                    key_map: Some(HashMap::from([("leak-3".to_owned(), "leak-4".to_owned())])),
+                    value_map: Some(HashMap::from([("leak-5".to_owned(), "leak-6".to_owned())])),
+                    nested_list: Some(vec![vec!["leak-7".to_owned()]]),
+                    map_of_lists: Some(HashMap::from([("leak-8".to_owned(), vec!["leak-9".to_owned()])])),
+                };
+
+                assert_eq!(format!("{:?}", nested),
+                "NestedSecrets { public: Some(\"public-value\"), secret_list: \"*** Sensitive Data Redacted ***\", secret_set: \"*** Sensitive Data Redacted ***\", key_map: \"*** Sensitive Data Redacted ***\", value_map: \"*** Sensitive Data Redacted ***\", nested_list: \"*** Sensitive Data Redacted ***\", map_of_lists: \"*** Sensitive Data Redacted ***\" }");
+                """,
+            )
+        }.compileAndTest()
+    }
+
+    @Test
+    fun `redact a list of sensitive shapes inside a nested structure`() {
+        val model =
+            """
+            namespace com.test
+
+            @sensitive
+            string Secret
+
+            list SecretList { member: Secret }
+
+            structure Holder {
+                label: String,
+                secrets: SecretList,
+            }
+
+            structure Outer {
+                public: String,
+                inner: Holder,
+            }
+            """.asSmithyModel(smithyVersion = "2")
+        val holder = model.lookup<StructureShape>("com.test#Holder")
+        val outer = model.lookup<StructureShape>("com.test#Outer")
+        val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
+        val project = TestWorkspace.testProject(provider)
+        project.useShapeWriter(holder) {
+            structureGenerator(model, provider, this, holder).render()
+            structureGenerator(model, provider, this, outer).render()
+            unitTest(
+                "nested_holder_secret_list_redacted",
+                """
+                let outer = Outer {
+                    public: Some("public-value".to_owned()),
+                    inner: Some(Holder {
+                        label: Some("label-value".to_owned()),
+                        secrets: Some(vec!["leak-1".to_owned()]),
+                    }),
+                };
+                assert_eq!(format!("{:?}", outer), "Outer { public: Some(\"public-value\"), inner: Some(Holder { label: Some(\"label-value\"), secrets: \"*** Sensitive Data Redacted ***\" }) }");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
     fun `attach docs to everything`() {
         val model =
             """

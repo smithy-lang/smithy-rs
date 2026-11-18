@@ -1,0 +1,20 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "escapes": [
+            "\"",
+            "\\",
+            "/",
+            "\u0008",
+            "\u000c",
+            "\n",
+            "\r",
+            "\t",
+            "éA",
+            "ab"
+        ],
+        "literalNewline": "line one\nline two",
+        "unicode": "héllo ✓"
+    },
+    "shapes": {}
+}

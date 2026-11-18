@@ -1,0 +1,208 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#BlobShape": {
+      "type": "blob"
+    },
+    "ex#BooleanShape": {
+      "type": "boolean"
+    },
+    "ex#DocumentShape": {
+      "type": "document"
+    },
+    "ex#StringShape": {
+      "type": "string"
+    },
+    "ex#ByteShape": {
+      "type": "byte"
+    },
+    "ex#ShortShape": {
+      "type": "short"
+    },
+    "ex#IntegerShape": {
+      "type": "integer"
+    },
+    "ex#LongShape": {
+      "type": "long"
+    },
+    "ex#FloatShape": {
+      "type": "float"
+    },
+    "ex#DoubleShape": {
+      "type": "double"
+    },
+    "ex#BigIntegerShape": {
+      "type": "bigInteger"
+    },
+    "ex#BigDecimalShape": {
+      "type": "bigDecimal"
+    },
+    "ex#TimestampShape": {
+      "type": "timestamp"
+    },
+    "ex#List": {
+      "type": "list",
+      "member": {
+        "target": "smithy.api#String"
+      }
+    },
+    "ex#Map": {
+      "type": "map",
+      "key": {
+        "target": "smithy.api#String"
+      },
+      "value": {
+        "target": "ex#List"
+      }
+    },
+    "ex#Struct": {
+      "type": "structure",
+      "members": {
+        "b": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "a": {
+          "target": "ex#Map"
+        }
+      }
+    },
+    "ex#Union": {
+      "type": "union",
+      "members": {
+        "unit": {
+          "target": "smithy.api#Unit"
+        },
+        "s": {
+          "target": "ex#Struct"
+        }
+      }
+    },
+    "ex#Enum": {
+      "type": "enum",
+      "members": {
+        "A": {
+          "target": "smithy.api#Unit"
+        },
+        "B": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "b"
+          }
+        }
+      }
+    },
+    "ex#IntEnum": {
+      "type": "intEnum",
+      "members": {
+        "ONE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": 1
+          }
+        }
+      }
+    },
+    "ex#Service": {
+      "type": "service",
+      "version": "2024-01-01",
+      "operations": [
+        {
+          "target": "ex#Op"
+        }
+      ],
+      "resources": [
+        {
+          "target": "ex#Thing"
+        }
+      ],
+      "errors": [
+        {
+          "target": "ex#Oops"
+        }
+      ]
+    },
+    "ex#Op": {
+      "type": "operation",
+      "input": {
+        "target": "ex#OpInput"
+      },
+      "output": {
+        "target": "ex#OpOutput"
+      },
+      "errors": [
+        {
+          "target": "ex#Oops"
+        }
+      ]
+    },
+    "ex#OpInput": {
+      "type": "structure",
+      "members": {
+        "id": {
+          "target": "smithy.api#String"
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "ex#OpOutput": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#output": {}
+      }
+    },
+    "ex#Oops": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#error": "client"
+      }
+    },
+    "ex#Thing": {
+      "type": "resource",
+      "identifiers": {
+        "id": {
+          "target": "smithy.api#String"
+        }
+      },
+      "read": {
+        "target": "ex#GetThing"
+      }
+    },
+    "ex#GetThing": {
+      "type": "operation",
+      "input": {
+        "target": "ex#GetThingInput"
+      },
+      "output": {
+        "target": "ex#GetThingOutput"
+      },
+      "traits": {
+        "smithy.api#readonly": {}
+      }
+    },
+    "ex#GetThingInput": {
+      "type": "structure",
+      "members": {
+        "id": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#input": {}
+      }
+    },
+    "ex#GetThingOutput": {
+      "type": "structure",
+      "traits": {
+        "smithy.api#output": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.api#Added": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": ["json"]
+            }
+        }
+    }
+}

@@ -10,8 +10,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 
 /**
- * A [StructureCustomization] that generates a `Schema` implementation
- * alongside the structure definition.
+ * A [StructureCustomization] that generates a `Schema` implementation for the
+ * structure, in a module of its own (see [SchemaGenerator.renderInOwnModule]).
  */
 class SchemaStructureCustomization(
     private val codegenContext: CodegenContext,
@@ -20,7 +20,7 @@ class SchemaStructureCustomization(
         when (section) {
             is StructureSection.AdditionalTraitImpls ->
                 writable {
-                    SchemaGenerator(codegenContext, this, section.shape).render()
+                    SchemaGenerator(codegenContext, this, section.shape).renderInOwnModule()
                 }
             else -> emptySection
         }

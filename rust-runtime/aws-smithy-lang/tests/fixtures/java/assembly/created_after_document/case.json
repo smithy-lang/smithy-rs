@@ -1,0 +1,5 @@
+{
+    "description": "As created_json_traits_first, but the shape is added after the document: shapes built in code are registered before any document regardless.",
+    "steps": [{"addFile": "f.json"}, {"addShapes": "code.json"}],
+    "locations": ["ex#S", "ex#S$m"]
+}

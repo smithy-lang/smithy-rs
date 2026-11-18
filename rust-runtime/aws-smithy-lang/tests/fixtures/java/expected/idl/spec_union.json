@@ -1,0 +1,25 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#MyUnion": {
+            "type": "union",
+            "members": {
+                "i32": {
+                    "target": "smithy.api#Integer"
+                },
+                "string": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#length": {
+                            "min": 1,
+                            "max": 100
+                        }
+                    }
+                },
+                "time": {
+                    "target": "smithy.api#Timestamp"
+                }
+            }
+        }
+    }
+}

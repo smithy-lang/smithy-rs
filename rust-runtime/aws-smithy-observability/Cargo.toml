@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-observability"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
 ]
@@ -11,9 +11,13 @@ repository = "https://github.com/awslabs/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
+tracing = "0.1.44"
 
 [dev-dependencies]
+aws-smithy-checksums = { path = "../aws-smithy-checksums" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "test-util"] }
 serial_test = "3.1.1"
 
 

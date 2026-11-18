@@ -1,0 +1,42 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "refs": {
+            "String": "keys are literal",
+            "absolute": "smithy.api#String",
+            "member": "smithy.api#Unit",
+            "relative": "smithy.api#Integer"
+        }
+    },
+    "shapes": {
+        "ex#StringList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.api#String"
+            }
+        },
+        "ex#Target": {
+            "type": "string",
+            "traits": {
+                "ex#refs": {
+                    "values": [
+                        "ex#Target",
+                        "smithy.api#String",
+                        "Quoted"
+                    ]
+                }
+            }
+        },
+        "ex#refs": {
+            "type": "structure",
+            "members": {
+                "values": {
+                    "target": "ex#StringList"
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        }
+    }
+}
