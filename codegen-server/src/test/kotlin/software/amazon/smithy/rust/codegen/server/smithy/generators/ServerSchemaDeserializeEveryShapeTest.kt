@@ -148,6 +148,20 @@ class ServerSchemaDeserializeEveryShapeTest {
                         assert_eq!(message.next.as_ref().unwrap().text, "inner");
                         #{constrainedAsserts:W}
 
+                        // The type registry exposes the same walkers by shape ID, building input shapes.
+                        let registry = crate::type_registry::registry();
+                        let entry = registry.entry_for_fqn("test##Message").expect("output-only shapes are registered");
+                        let mut deser = codec.create_deserializer(body);
+                        let boxed = (entry.deserialize_fn())(&mut deser).unwrap();
+                        assert_eq!(boxed.downcast::<Message>().unwrap().count, Some(3));
+                        let shared = registry.entry_for_fqn("test##Shared").expect("input shapes are registered");
+                        let mut deser = codec.create_deserializer(br##"{"id":"x","kinds":["A"]}"##);
+                        let boxed = (shared.deserialize_fn())(&mut deser).unwrap();
+                        assert_eq!(boxed.downcast::<Shared>().unwrap().kinds, Some(vec![Kind::A]));
+                        let mut deser = codec.create_deserializer(br##"{"id":"far too long"}"##);
+                        assert!((shared.deserialize_fn())(&mut deser).is_err(), "registry entries validate input shapes");
+                        assert!(registry.entry_for_fqn("test##OpInput").is_none(), "operation wrappers are not registered");
+
                         assert!(rejected(br##"{"text":"hi","kind":"Z"}"##), "unknown closed enum value");
                         assert!(rejected(br##"{"text":"hi","kinds":["Z"]}"##), "unknown enum in a list");
                         assert!(rejected(br##"{"text":"hi","byKind":{"Z":1}}"##), "unknown enum key");
