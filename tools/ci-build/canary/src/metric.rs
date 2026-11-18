@@ -58,14 +58,12 @@ use crate::scenarios::Leg;
 
 /// The namespace every datapoint is written to.
 ///
-/// Must equal `METRIC_NAMESPACE` in the CDK stack, which is the sole bound on the metrics role:
-/// `PutMetricData` takes no resource-level permissions, so a condition on `cloudwatch:namespace` is
-/// the only lever there is. [`tests::the_namespace_matches_the_cdk_stack`] checks the two agree.
+/// Must equal `METRIC_NAMESPACE` in the CDK stack, which conditions the metrics role on it:
+/// `PutMetricData` takes no resource-level permissions, so the namespace is the only lever inside
+/// the call. [`tests::the_namespace_matches_the_cdk_stack`] checks the two agree.
 ///
-/// That check matters more than it looks. A disagreement is denied by the namespace condition, so
-/// the call fails and the verdict is never recorded — and a verdict that was never recorded cannot
-/// raise an alarm, which is silence where a page should have been. The CDK's own comment says
-/// nothing checks this; now something does.
+/// A disagreement is denied by that condition, so the verdict is never recorded — and a verdict
+/// that was never recorded cannot raise an alarm, which is silence where a page should have been.
 pub const NAMESPACE: &str = "smithy-rs-build-canary";
 
 /// The metric name. One name, two dimension sets.
