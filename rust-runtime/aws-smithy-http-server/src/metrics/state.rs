@@ -6,7 +6,10 @@
 use std::{
     mem,
     panic::{catch_unwind, AssertUnwindSafe},
-    sync::{Arc, Mutex, PoisonError},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex, PoisonError,
+    },
     time::{Duration, Instant},
 };
 
@@ -55,10 +58,18 @@ struct Inner {
 
 impl MetricsState {
     /// The wall clock is read from `time_source`, only if `enabled`.
-    pub(crate) fn new(enabled: bool, time_source: &SharedTimeSource, service: &ServiceIdentity) -> Self {
+    ///
+    /// `concurrent_requests_count` is the number of other requests in progress when this one started.
+    pub(crate) fn new(
+        enabled: bool,
+        time_source: &SharedTimeSource,
+        service: &ServiceIdentity,
+        concurrent_requests_count: usize,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
-                metrics: enabled.then(|| Mutex::new(InProgressMetrics::new(time_source, service))),
+                metrics: enabled
+                    .then(|| Mutex::new(InProgressMetrics::new(time_source, service, concurrent_requests_count))),
                 callbacks: Mutex::new(Vec::new()),
             }),
         }
@@ -155,11 +166,13 @@ struct InProgressMetrics {
     outcome: Option<Outcome>,
     operation: Option<ShapeId>,
     operation_duration: OperationDuration,
+    concurrent_requests_count: usize,
 }
 
 impl InProgressMetrics {
-    fn new(time_source: &SharedTimeSource, service: &ServiceIdentity) -> Self {
+    fn new(time_source: &SharedTimeSource, service: &ServiceIdentity, concurrent_requests_count: usize) -> Self {
         Self {
+            concurrent_requests_count,
             start_time: TimeAnchor {
                 instant: now(),
                 system_time: time_source.now(),
@@ -173,6 +186,7 @@ impl InProgressMetrics {
 
     fn finish(&self, end_time: Instant) -> RequestMetrics {
         RequestMetrics {
+            concurrent_requests_count: self.concurrent_requests_count,
             start_time: self.start_time,
             end_time,
             service: self.service.id.clone(),
@@ -246,17 +260,45 @@ impl OperationDuration {
     }
 }
 
+/// Counts the requests a service has started but not finished. Clones share the count.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ConcurrentRequests(Arc<AtomicUsize>);
+
+impl ConcurrentRequests {
+    /// Counts a request as started. Returns the number of other requests in progress, and a guard
+    /// that counts the request as finished when dropped.
+    pub(crate) fn start(&self) -> (usize, ConcurrentRequestGuard) {
+        let others = self.0.fetch_add(1, Ordering::Relaxed);
+        (others, ConcurrentRequestGuard(self.0.clone()))
+    }
+}
+
+/// Counts a request started by [`ConcurrentRequests::start`] as finished when dropped.
+pub(crate) struct ConcurrentRequestGuard(Arc<AtomicUsize>);
+
+impl Drop for ConcurrentRequestGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 /// Finishes the request when [`finish`](Self::finish) is first called, or when dropped.
 pub(crate) struct Finisher {
     state: Option<MetricsState>,
+    concurrent_request: Option<ConcurrentRequestGuard>,
 }
 
 impl Finisher {
-    pub(crate) fn new(state: MetricsState) -> Self {
-        Self { state: Some(state) }
+    /// `concurrent_request` stops counting the request as in progress when it finishes.
+    pub(crate) fn new(state: MetricsState, concurrent_request: Option<ConcurrentRequestGuard>) -> Self {
+        Self {
+            state: Some(state),
+            concurrent_request,
+        }
     }
 
     pub(crate) fn finish(&mut self) {
+        self.concurrent_request = None;
         if let Some(state) = self.state.take() {
             state.finish();
         }
@@ -336,7 +378,7 @@ mod tests {
     }
 
     fn enabled_state() -> MetricsState {
-        MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>())
+        MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>(), 0)
     }
 
     #[tokio::test(start_paused = true)]

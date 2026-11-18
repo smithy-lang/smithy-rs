@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     body::MetricsFinalizingBody,
-    state::{Finisher, MetricsState, ServiceIdentity},
+    state::{ConcurrentRequests, Finisher, MetricsState, ServiceIdentity},
     Outcome,
 };
 
@@ -35,6 +35,7 @@ pub struct MetricsService<S> {
     enabled: bool,
     time_source: SharedTimeSource,
     service: ServiceIdentity,
+    concurrent_requests: ConcurrentRequests,
 }
 
 impl<S> MetricsService<S> {
@@ -46,6 +47,7 @@ impl<S> MetricsService<S> {
             enabled,
             time_source: SharedTimeSource::default(),
             service: ServiceIdentity::of::<Ser>(),
+            concurrent_requests: ConcurrentRequests::default(),
         }
     }
 
@@ -56,6 +58,7 @@ impl<S> MetricsService<S> {
             enabled: self.enabled,
             time_source: self.time_source,
             service: self.service,
+            concurrent_requests: self.concurrent_requests,
         }
     }
 }
@@ -75,11 +78,22 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
-        let state = MetricsState::new(self.enabled, &self.time_source, &self.service);
+        let (concurrent_requests_count, concurrent_request) = if self.enabled {
+            let (count, guard) = self.concurrent_requests.start();
+            (count, Some(guard))
+        } else {
+            (0, None)
+        };
+        let state = MetricsState::new(
+            self.enabled,
+            &self.time_source,
+            &self.service,
+            concurrent_requests_count,
+        );
         req.extensions_mut().insert(state.clone());
         MetricsServiceFuture {
             inner: self.inner.call(req),
-            finisher: Some(Finisher::new(state)),
+            finisher: Some(Finisher::new(state, concurrent_request)),
         }
     }
 }
@@ -490,6 +504,47 @@ mod tests {
     async fn unrouted_requests_have_no_operation() {
         let metrics = operation_metrics("/unknown").await;
         assert_eq!(metrics.operation(), None);
+    }
+
+    /// A `MetricsService` whose requests record the concurrent requests count they observed, in
+    /// the order they finish, under the request's `x-name` header.
+    fn counting_service(
+        enabled: bool,
+        log: &Arc<Mutex<Vec<(String, usize)>>>,
+    ) -> impl Service<http::Request<()>, Response = http::Response<BoxBody>, Error = Infallible> + Clone {
+        let log = log.clone();
+        let inner = service_fn(move |mut req: http::Request<()>| {
+            let log = log.clone();
+            let name = req.headers()["x-name"].to_str().unwrap().to_owned();
+            req.on_finish(move |metrics| {
+                let count = metrics.map_or(usize::MAX, |metrics| metrics.concurrent_requests_count());
+                log.lock().unwrap().push((name, count));
+            });
+            async { ok() }
+        });
+        MetricsService::new::<TestService>(inner, enabled)
+    }
+
+    fn named(name: &str) -> http::Request<()> {
+        http::Request::builder().header("x-name", name).body(()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn concurrent_requests_count_excludes_the_request_itself() {
+        let log = Arc::default();
+        let svc = counting_service(true, &log);
+        // Responses whose bodies have not been sent keep their requests in progress.
+        let a = svc.clone().oneshot(named("a")).await.unwrap();
+        let b = svc.clone().oneshot(named("b")).await.unwrap();
+        let c = svc.clone().oneshot(named("c")).await.unwrap();
+        drop((a, b));
+        drop(c);
+        drop(svc.clone().oneshot(named("d")).await.unwrap());
+        let logged = log.lock().unwrap().clone();
+        assert_eq!(
+            logged,
+            [("a".into(), 0), ("b".into(), 1), ("c".into(), 2), ("d".into(), 0)]
+        );
     }
 
     #[test]
