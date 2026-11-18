@@ -5,13 +5,13 @@
 
 //! Collection of standard server metrics.
 
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::shape_id::ShapeId;
 
 #[doc(hidden)]
 pub use self::outcome::ModeledOutcome;
-pub(crate) use self::state::{collecting, record_operation};
+pub(crate) use self::state::{collecting, record_operation, MetricsState, OperationGuard};
 pub use self::{
     outcome::{ErrorOutcome, Fault, Outcome, OutcomeSource, SuccessOutcome},
     request_ext::RequestExt,
@@ -26,41 +26,86 @@ mod state;
 #[cfg(test)]
 mod test_util;
 
+/// A point in time, as both a monotonic [`Instant`] and a wall-clock [`SystemTime`].
+///
+/// Use it to convert other [`Instant`]s to wall-clock time, by calling [`Self::system_time_of`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TimeAnchor {
+    /// The point in time on the monotonic clock.
+    pub instant: Instant,
+    /// The same point in time on the wall clock.
+    pub system_time: SystemTime,
+}
+
+impl TimeAnchor {
+    /// Converts `instant` to wall-clock time, relative to this anchor. `instant` may be earlier or
+    /// later than [`self.instant`](Self::instant).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the result cannot be represented as a [`SystemTime`].
+    pub fn system_time_of(&self, instant: Instant) -> SystemTime {
+        if instant >= self.instant {
+            self.system_time + (instant - self.instant)
+        } else {
+            self.system_time - (self.instant - instant)
+        }
+    }
+}
+
 /// Standard server metrics collected for a single request.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct RequestMetrics {
-    start_time: Instant,
+    start_time: TimeAnchor,
     end_time: Instant,
-    start_system_time: SystemTime,
     service: ShapeId,
     service_version: Option<&'static str>,
     outcome: Option<Outcome>,
     operation: Option<ShapeId>,
+    operation_duration: Option<Duration>,
 }
 
 impl RequestMetrics {
     /// When the service began handling the request, as both a monotonic and a wall-clock time.
     ///
-    /// Other timestamps are only monotonic. To convert one to wall-clock time, add its offset
-    /// from the monotonic start time to the wall-clock start time:
+    /// Other timestamps are only monotonic. To convert one to wall-clock time, use
+    /// [`TimeAnchor::system_time_of`]:
     ///
     /// ```
     /// # use aws_smithy_http_server::metrics::RequestMetrics;
     /// # use std::time::SystemTime;
     /// fn end_system_time(metrics: &RequestMetrics) -> SystemTime {
-    ///     let (start, start_system_time) = metrics.start_time();
-    ///     start_system_time + (metrics.end_time() - start)
+    ///     metrics.start_time().system_time_of(metrics.end_time())
     /// }
     /// ```
-    pub fn start_time(&self) -> (Instant, SystemTime) {
-        (self.start_time, self.start_system_time)
+    pub fn start_time(&self) -> TimeAnchor {
+        self.start_time
     }
 
     /// When the request finished: its response was fully sent, sending the response failed, or
     /// handling the request was abandoned.
     pub fn end_time(&self) -> Instant {
         self.end_time
+    }
+
+    /// The total wall-clock time spent executing the operation's [handler] and any [model plugins].
+    ///
+    /// Returns `None` if the operation was not executed at all (due to a request deserialization
+    /// error, for example).
+    ///
+    /// The service may configure a [layer] or [HTTP plugin] that causes the operation to be
+    /// executed multiple times. For example, a plugin might automatically retry failed operation
+    /// invocations, or it might run multiple invocations in parallel (also known as hedging). In
+    /// these cases, this method returns the total duration during which *at least* one invocation
+    /// was running.
+    ///
+    /// [handler]: crate::operation::Handler
+    /// [model plugins]: crate::plugin::ModelMarker
+    /// [HTTP plugin]: crate::plugin::HttpMarker
+    /// [layer]: tower::Layer
+    pub fn operation_duration(&self) -> Option<Duration> {
+        self.operation_duration
     }
 
     /// The [`ShapeId`] of the service that handled the request.
@@ -101,5 +146,31 @@ impl RequestMetrics {
     /// [Infallible]: std::convert::Infallible
     pub fn outcome(&self) -> Option<&Outcome> {
         self.outcome.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn time_anchor_converts_earlier_and_later_instants() {
+        let anchor = TimeAnchor {
+            instant: tokio::time::Instant::now().into_std(),
+            system_time: SystemTime::UNIX_EPOCH + Duration::from_secs(1_000),
+        };
+        let later = anchor.instant + Duration::from_secs(5);
+        let earlier = anchor.instant - Duration::from_secs(5);
+        assert_eq!(
+            anchor.system_time_of(later),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(1_005)
+        );
+        assert_eq!(
+            anchor.system_time_of(earlier),
+            SystemTime::UNIX_EPOCH + Duration::from_secs(995)
+        );
+        assert_eq!(anchor.system_time_of(anchor.instant), anchor.system_time);
     }
 }

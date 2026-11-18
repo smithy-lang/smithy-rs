@@ -32,7 +32,7 @@ use crate::{
 };
 
 use super::{OperationShape, SchemaOperationShape, StreamingOperationShape};
-use crate::metrics::{Fault, ModeledOutcome, SuccessOutcome};
+use crate::metrics::{Fault, MetricsState, ModeledOutcome, OperationGuard, SuccessOutcome};
 use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_types::body::SdkBody;
 
@@ -173,7 +173,7 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
-        let collecting_metrics = crate::metrics::collecting(&req);
+        let metrics = crate::metrics::collecting(&req);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let selected = match selected_operation::<Op>(&parts.extensions) {
@@ -248,17 +248,21 @@ where
                     }
                 }
             };
-            match service.oneshot((input, extractors)).await {
+            let result = {
+                let _exec_guard = metrics.as_ref().map(MetricsState::start_operation);
+                service.oneshot((input, extractors)).await
+            };
+            match result {
                 Ok(output) => {
                     let mut response = protocol.serialize_response(operation.output(), &output);
-                    if collecting_metrics {
+                    if metrics.is_some() {
                         ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
                     }
                     Ok(response)
                 }
                 Err(err) => {
                     let mut response = protocol.serialize_error(&err);
-                    if collecting_metrics {
+                    if metrics.is_some() {
                         mark_modeled_error(&mut response, &err);
                     }
                     Ok(response)
@@ -370,7 +374,7 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
-        let collecting_metrics = crate::metrics::collecting(&req);
+        let metrics = crate::metrics::collecting(&req);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let selected = match selected_operation::<Op>(&parts.extensions) {
@@ -418,17 +422,21 @@ where
                     return Ok(protocol.serialize_rejection(err));
                 }
             };
-            match service.oneshot((input, extractors)).await {
+            let result = {
+                let _exec_guard = metrics.as_ref().map(MetricsState::start_operation);
+                service.oneshot((input, extractors)).await
+            };
+            match result {
                 Ok(output) => {
                     let mut response = Op::serialize_streaming_output(output, protocol);
-                    if collecting_metrics {
+                    if metrics.is_some() {
                         ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
                     }
                     Ok(response)
                 }
                 Err(err) => {
                     let mut response = protocol.serialize_error(&err);
-                    if collecting_metrics {
+                    if metrics.is_some() {
                         mark_modeled_error(&mut response, &err);
                     }
                     Ok(response)
@@ -670,8 +678,10 @@ pin_project! {
         S: Service<Input>,
     {
         service: Option<S>,
-        // Whether to mark a successful output with its outcome, for standard metrics.
-        collecting_metrics: bool,
+        // The request's metrics state, if standard metrics are being collected.
+        metrics: Option<MetricsState>,
+        // Ends the inner service's execution, for standard metrics, when dropped.
+        exec_guard: Option<OperationGuard>,
         #[pin]
         inner: InnerAlias<Input, Protocol, B, S>,
         request_body_read_timeout: Option<RequestBodyReadTimeoutState>,
@@ -717,11 +727,13 @@ where
                     };
                     *this.request_body_read_timeout = None;
                     match result {
-                        Ok(ok) => this
-                            .service
-                            .take()
-                            .expect("futures cannot be polled after completion")
-                            .oneshot(ok),
+                        Ok(ok) => {
+                            *this.exec_guard = this.metrics.as_ref().map(MetricsState::start_operation);
+                            this.service
+                                .take()
+                                .expect("futures cannot be polled after completion")
+                                .oneshot(ok)
+                        }
                         Err(err) => {
                             // The error may arise either from a `FromRequest` failure for any user-defined
                             // handler's additional input parameters, or from a de-serialization failure
@@ -733,10 +745,11 @@ where
                 }
                 InnerProj::Inner { call } => {
                     let result = ready!(call.poll(cx));
+                    *this.exec_guard = None;
                     let output = match result {
                         Ok(ok) => {
                             let mut response = ok.into_response();
-                            if *this.collecting_metrics {
+                            if this.metrics.is_some() {
                                 ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
                             }
                             response
@@ -790,7 +803,8 @@ where
         });
         UpgradeFuture {
             service: Some(service),
-            collecting_metrics: crate::metrics::collecting(&req),
+            metrics: crate::metrics::collecting(&req),
+            exec_guard: None,
             inner: Inner::FromRequest {
                 inner: <Input as FromRequest<P, B>>::from_request(req),
             },

@@ -7,14 +7,14 @@ use std::{
     mem,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{Arc, Mutex, PoisonError},
-    time::{Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 use aws_smithy_async::time::SharedTimeSource;
 
 use crate::{service::ServiceShape, shape_id::ShapeId};
 
-use super::{Outcome, RequestMetrics};
+use super::{Outcome, RequestMetrics, TimeAnchor};
 
 /// A callback invoked once the request is finished.
 pub(crate) type FinishCallback = Box<dyn FnOnce(Option<RequestMetrics>) + Send>;
@@ -71,6 +71,19 @@ impl MetricsState {
         }
     }
 
+    /// Records that an execution of the operation's handler (and its model plugins) began. The
+    /// execution ends when the returned guard is dropped.
+    pub(crate) fn start_operation(&self) -> OperationGuard {
+        if let Some(metrics) = &self.inner.metrics {
+            metrics
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .operation_duration
+                .start(now());
+        }
+        OperationGuard { state: self.clone() }
+    }
+
     /// Records the operation the request was routed to, if metrics are enabled.
     pub(crate) fn record_operation(&self, operation: &ShapeId) {
         if let Some(metrics) = &self.inner.metrics {
@@ -121,12 +134,13 @@ pub(crate) fn record_operation<B>(request: &http::Request<B>, operation: &ShapeI
     }
 }
 
-/// Whether standard metrics are being collected for `request`.
-pub(crate) fn collecting<B>(request: &http::Request<B>) -> bool {
+/// The metrics state of `request`, if standard metrics are being collected for it.
+pub(crate) fn collecting<B>(request: &http::Request<B>) -> Option<MetricsState> {
     request
         .extensions()
         .get::<MetricsState>()
-        .is_some_and(MetricsState::is_enabled)
+        .filter(|state| state.is_enabled())
+        .cloned()
 }
 
 /// The current time, from tokio's clock so that tests can control it.
@@ -136,21 +150,24 @@ fn now() -> Instant {
 
 /// Standard metrics measured so far for a request that has not yet finished.
 struct InProgressMetrics {
-    start_time: Instant,
-    start_system_time: SystemTime,
+    start_time: TimeAnchor,
     service: ServiceIdentity,
     outcome: Option<Outcome>,
     operation: Option<ShapeId>,
+    operation_duration: OperationDuration,
 }
 
 impl InProgressMetrics {
     fn new(time_source: &SharedTimeSource, service: &ServiceIdentity) -> Self {
         Self {
-            start_time: now(),
-            start_system_time: time_source.now(),
+            start_time: TimeAnchor {
+                instant: now(),
+                system_time: time_source.now(),
+            },
             service: service.clone(),
             outcome: None,
             operation: None,
+            operation_duration: OperationDuration::default(),
         }
     }
 
@@ -158,12 +175,74 @@ impl InProgressMetrics {
         RequestMetrics {
             start_time: self.start_time,
             end_time,
-            start_system_time: self.start_system_time,
             service: self.service.id.clone(),
             service_version: self.service.version,
             outcome: self.outcome.clone(),
             operation: self.operation.clone(),
+            operation_duration: self.operation_duration.total(end_time),
         }
+    }
+}
+
+/// Ends an execution started by [`MetricsState::start_operation`] when dropped: when the execution
+/// returns, its future is dropped, or a panic unwinds through it.
+pub(crate) struct OperationGuard {
+    state: MetricsState,
+}
+
+impl Drop for OperationGuard {
+    fn drop(&mut self) {
+        if let Some(metrics) = &self.state.inner.metrics {
+            metrics
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .operation_duration
+                .finish(now());
+        }
+    }
+}
+
+/// Measures the total time during which at least one execution of the operation was in progress.
+///
+/// Overlapping executions count once. An execution still in progress when the request finishes
+/// counts until then.
+#[derive(Debug, Default)]
+struct OperationDuration {
+    /// Whether any execution has ever started.
+    executed: bool,
+    /// Executions that have started but not finished.
+    in_progress: usize,
+    /// When `in_progress` last rose from zero, if it is above zero.
+    since: Option<Instant>,
+    /// Time accumulated by intervals that have already ended.
+    total: Duration,
+}
+
+impl OperationDuration {
+    fn start(&mut self, now: Instant) {
+        self.executed = true;
+        if self.in_progress == 0 {
+            self.since = Some(now);
+        }
+        self.in_progress += 1;
+    }
+
+    fn finish(&mut self, now: Instant) {
+        self.in_progress = self.in_progress.saturating_sub(1);
+        if self.in_progress == 0 {
+            if let Some(since) = self.since.take() {
+                self.total += now.saturating_duration_since(since);
+            }
+        }
+    }
+
+    /// The total, counting any interval still in progress up to `end`, or `None` if no execution
+    /// ever started.
+    fn total(&self, end: Instant) -> Option<Duration> {
+        self.executed.then(|| match self.since {
+            Some(since) => self.total + end.saturating_duration_since(since),
+            None => self.total,
+        })
     }
 }
 
@@ -202,6 +281,100 @@ mod tests {
     use super::*;
 
     use crate::metrics::test_util::{TestService, UnversionedTestService};
+
+    fn at(base: Instant, secs: u64) -> Instant {
+        base + Duration::from_secs(secs)
+    }
+
+    #[test]
+    fn operation_duration_is_none_if_the_operation_never_executes() {
+        let base = now();
+        assert_eq!(OperationDuration::default().total(at(base, 10)), None);
+    }
+
+    #[test]
+    fn an_instantaneous_execution_has_a_zero_duration() {
+        let base = now();
+        let mut time = OperationDuration::default();
+        time.start(at(base, 3));
+        time.finish(at(base, 3));
+        assert_eq!(time.total(at(base, 10)), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn sequential_executions_are_summed() {
+        let base = now();
+        let mut time = OperationDuration::default();
+        time.start(at(base, 0));
+        time.finish(at(base, 3));
+        time.start(at(base, 5));
+        time.finish(at(base, 7));
+        assert_eq!(time.total(at(base, 10)), Some(Duration::from_secs(5)));
+    }
+
+    #[test]
+    fn overlapping_executions_count_once() {
+        let base = now();
+        let mut time = OperationDuration::default();
+        time.start(at(base, 0));
+        time.start(at(base, 2));
+        time.finish(at(base, 4));
+        time.finish(at(base, 6));
+        assert_eq!(time.total(at(base, 10)), Some(Duration::from_secs(6)));
+    }
+
+    /// Finishes `state` and returns the operation duration its callbacks receive.
+    fn finished_operation_duration(state: MetricsState) -> Option<Duration> {
+        let seen = Arc::new(Mutex::new(None));
+        state.push_callback(Box::new({
+            let seen = seen.clone();
+            move |metrics| *seen.lock().unwrap() = metrics
+        }));
+        state.finish();
+        let metrics = seen.lock().unwrap().take();
+        metrics.expect("metrics are enabled").operation_duration()
+    }
+
+    fn enabled_state() -> MetricsState {
+        MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn dropping_the_guard_ends_the_execution() {
+        let state = enabled_state();
+        let execution = state.start_operation();
+        tokio::time::advance(Duration::from_secs(2)).await;
+        drop(execution);
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert_eq!(finished_operation_duration(state), Some(Duration::from_secs(2)));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_panicking_execution_ends_when_it_unwinds() {
+        let state = enabled_state();
+        let execution = state.start_operation();
+        tokio::time::advance(Duration::from_secs(3)).await;
+        let panicked = catch_unwind(AssertUnwindSafe(move || {
+            let _execution = execution;
+            panic!("the handler panicked");
+        }));
+        assert!(panicked.is_err());
+        tokio::time::advance(Duration::from_secs(5)).await;
+        assert_eq!(finished_operation_duration(state), Some(Duration::from_secs(3)));
+    }
+
+    #[test]
+    fn execution_in_progress_counts_until_the_request_finishes() {
+        let base = now();
+        let mut time = OperationDuration::default();
+        time.start(at(base, 0));
+        time.finish(at(base, 2));
+        time.start(at(base, 4));
+        // A concurrent execution that finishes while the earlier one is still in progress.
+        time.start(at(base, 5));
+        time.finish(at(base, 6));
+        assert_eq!(time.total(at(base, 10)), Some(Duration::from_secs(8)));
+    }
 
     #[test]
     fn empty_service_version_is_none() {
