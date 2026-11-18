@@ -76,6 +76,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             HttpRequestCompressionDecorator(),
             DisablePayloadSigningDecorator(),
             AwsDisableStalledStreamProtection(),
+            DefaultReadTimeoutDecorator(),
             Sigv4aAuthTraitBackfillDecorator(),
             EndpointBasedAuthSchemeDecorator(),
             SpanDecorator(),

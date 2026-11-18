@@ -164,7 +164,7 @@ version = "1.2.0"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.6.5"
+version = "1.6.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.16.3"
+version = "1.16.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
