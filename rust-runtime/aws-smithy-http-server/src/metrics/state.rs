@@ -82,6 +82,15 @@ impl MetricsState {
         }
     }
 
+    /// Records the response's status code and outcome, if metrics are enabled.
+    pub(crate) fn record_response(&self, status_code: http::StatusCode, outcome: Outcome) {
+        if let Some(metrics) = &self.inner.metrics {
+            let mut metrics = metrics.lock().unwrap_or_else(PoisonError::into_inner);
+            metrics.status_code = Some(status_code);
+            metrics.outcome = Some(outcome);
+        }
+    }
+
     /// Records that an execution of the operation's handler (and its model plugins) began. The
     /// execution ends when the returned guard is dropped.
     pub(crate) fn start_operation(&self) -> OperationGuard {
@@ -170,6 +179,7 @@ struct InProgressMetrics {
     operation_duration: OperationDuration,
     concurrent_requests_count: usize,
     request_id: Option<String>,
+    status_code: Option<http::StatusCode>,
 }
 
 impl InProgressMetrics {
@@ -177,6 +187,7 @@ impl InProgressMetrics {
         Self {
             concurrent_requests_count,
             request_id: None,
+            status_code: None,
             start_time: TimeAnchor {
                 instant: now(),
                 system_time: time_source.now(),
@@ -192,6 +203,7 @@ impl InProgressMetrics {
         RequestMetrics {
             concurrent_requests_count: self.concurrent_requests_count,
             request_id: self.request_id.clone(),
+            status_code: self.status_code,
             start_time: self.start_time,
             end_time,
             service: self.service.id.clone(),
@@ -309,6 +321,13 @@ impl Finisher {
     pub(crate) fn record_outcome(&self, outcome: Outcome) {
         if let Some(state) = &self.state {
             state.record_outcome(outcome);
+        }
+    }
+
+    /// Records the response's status code and outcome, unless the request has already finished.
+    pub(crate) fn record_response(&self, status_code: http::StatusCode, outcome: Outcome) {
+        if let Some(state) = &self.state {
+            state.record_response(status_code, outcome);
         }
     }
 }

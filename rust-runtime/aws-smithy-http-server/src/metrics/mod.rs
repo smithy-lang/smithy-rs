@@ -67,6 +67,7 @@ pub struct RequestMetrics {
     operation_duration: Duration,
     concurrent_requests_count: usize,
     request_id: Option<String>,
+    status_code: Option<http::StatusCode>,
 }
 
 impl RequestMetrics {
@@ -144,6 +145,18 @@ impl RequestMetrics {
     )]
     pub fn request_id(&self) -> Option<&str> {
         self.request_id.as_deref()
+    }
+
+    /// The HTTP status code of the response the service produced.
+    ///
+    /// This method may return `None` in rare circumstances where no response was produced. See the
+    /// docs for [`Self::outcome`] for details about these circumstances.
+    ///
+    /// Metrics publishers should *not* use the status code to infer whether a request was a
+    /// success, a client error, or a server error. Instead, use [`Self::outcome`] and match against
+    /// the [`Outcome::result`] field.
+    pub fn status_code(&self) -> Option<http::StatusCode> {
+        self.status_code
     }
 
     /// The [`ShapeId`] of the service that handled the request.

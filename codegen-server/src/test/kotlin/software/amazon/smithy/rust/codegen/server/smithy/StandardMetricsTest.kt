@@ -255,6 +255,7 @@ internal class StandardMetricsTest {
                             let operation = metrics.operation().map(|id| id.absolute());
                             assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
                             assert!(metrics.request_id().is_some(), "{body}: the request ID layer assigned an ID");
+                            assert_eq!(metrics.status_code(), Some(status), "{body}");
                             let operation_duration = metrics.operation_duration();
                             if handler_ran {
                                 assert!(operation_duration >= std::time::Duration::from_millis(1), "{body}: {operation_duration:?}");
