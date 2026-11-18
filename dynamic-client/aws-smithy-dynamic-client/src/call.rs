@@ -742,4 +742,67 @@ mod tests {
         assert!(source.downcast_ref::<InputError>().is_some(), "{err:?}");
         assert!(seen.lock().unwrap().is_empty());
     }
+
+    #[test]
+    fn the_operation_view_reaches_a_member_type() {
+        let (client, _request) = client(200, "{}");
+        let operation = client.operation("GetSprocket").unwrap();
+        assert_eq!("smithy.example#GetSprocket", operation.id().as_str());
+        let input = operation.input();
+        assert_eq!("smithy.example#GetSprocketInput", input.shape_id().as_str());
+        let id = input
+            .member_schema("id")
+            .expect("the input has an `id` member");
+        assert_eq!(aws_smithy_schema::ShapeType::String, id.shape_type());
+        assert_eq!(
+            "smithy.example#GetSprocketOutput",
+            operation.output().shape_id().as_str()
+        );
+    }
+
+    #[test]
+    fn the_operation_view_lists_the_service_errors_first() {
+        let (client, _request) = client(200, "{}");
+        let operation = client.operation("GetSprocket").unwrap();
+        let errors: Vec<&str> = operation
+            .errors()
+            .iter()
+            .map(|error| error.shape_id().as_str())
+            .collect();
+        assert_eq!(
+            vec![
+                "smithy.example#ServiceFooError",
+                "smithy.example#InvalidSprocketId",
+                "smithy.example#SprocketBusy",
+            ],
+            errors
+        );
+    }
+
+    #[test]
+    fn the_operation_view_of_an_unknown_operation_fails() {
+        let (client, _request) = client(200, "{}");
+        let err = client.operation("DeleteSprocket").unwrap_err();
+        assert_eq!("DeleteSprocket", err.operation());
+        assert_eq!("smithy.example#Sprockets", err.service().as_str());
+    }
+
+    #[tokio::test]
+    async fn an_interceptor_sees_the_same_input_schema_as_the_operation_view() {
+        let see = SeeInput::default();
+        let seen = see.seen.clone();
+        let client = client_with(Config::builder().interceptor(see));
+        client
+            .call("GetSprocket")
+            .input(sprocket("1"))
+            .send()
+            .await
+            .unwrap();
+        let view = client.operation("GetSprocket").unwrap();
+        let seen_schema = seen.lock().unwrap()[0].1.clone();
+        assert_eq!(
+            Some(view.input().shape_id().as_str().to_owned()),
+            seen_schema
+        );
+    }
 }

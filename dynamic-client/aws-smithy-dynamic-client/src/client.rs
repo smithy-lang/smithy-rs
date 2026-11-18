@@ -13,6 +13,7 @@ use aws_smithy_lang::ShapeId;
 #[cfg(test)]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+use aws_smithy_schema::OperationSchema;
 #[cfg(test)]
 use aws_smithy_types::config_bag::ConfigBag;
 use std::sync::Arc;
@@ -80,12 +81,33 @@ impl DynamicClient {
     /// # }
     /// ```
     pub fn call(&self, operation: &str) -> CallBuilder {
-        let found = self
-            .operations
-            .binary_search_by(|id| id.name().cmp(operation))
-            .map(|index| self.operations[index].clone())
-            .map_err(|_| OperationNotFound::new(operation.to_owned(), self.service().clone()));
+        let found = self.operation_id(operation).cloned();
         CallBuilder::new(self.clone(), found)
+    }
+
+    /// Returns the schemas of the operation with the shape name `operation`, such as
+    /// `"GetForecast"`.
+    ///
+    /// The schemas are the input, the output, and the errors. The errors are the service's
+    /// errors, then the operation's own.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`OperationNotFound`] when the service has no operation with that name.
+    pub fn operation(&self, operation: &str) -> Result<OperationSchema<'_>, OperationNotFound> {
+        let id = self.operation_id(operation)?;
+        Ok(self
+            .schemas
+            .operation(id)
+            .expect("the schema set has every operation of the service"))
+    }
+
+    // Finds an operation of the service by its shape name.
+    fn operation_id(&self, operation: &str) -> Result<&ShapeId, OperationNotFound> {
+        self.operations
+            .binary_search_by(|id| id.name().cmp(operation))
+            .map(|index| &self.operations[index])
+            .map_err(|_| OperationNotFound::new(operation.to_owned(), self.service().clone()))
     }
 
     fn service(&self) -> &ShapeId {
