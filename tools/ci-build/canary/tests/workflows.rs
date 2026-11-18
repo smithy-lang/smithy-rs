@@ -47,6 +47,28 @@ fn pinned_severity(text: &str) -> String {
     found[0].to_string()
 }
 
+/// The tag patterns of `RELEASE_REFS` in the CDK stack, with `refs/tags/` stripped.
+fn release_tag_patterns_from_the_cdk() -> Vec<String> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("repo root")
+        .to_path_buf();
+    let ts = std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
+        .expect("the CDK stack should be readable from the repo");
+    let body = ts
+        .split_once("export const RELEASE_REFS = [")
+        .expect("RELEASE_REFS not found in the CDK stack")
+        .1
+        .split_once(']')
+        .expect("unterminated RELEASE_REFS")
+        .0;
+    body.split('"')
+        .filter_map(|s| s.strip_prefix("refs/tags/"))
+        .map(str::to_string)
+        .collect()
+}
+
 fn workflow_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -786,6 +808,38 @@ fn an_unchecked_release_is_reported_before_the_record_role_is_taken() {
     );
 }
 
+/// The orchestrator's own tag check must accept exactly what the roles accept.
+///
+/// The roles are conditioned on `RELEASE_REFS`, so a tag outside it can reach this workflow but
+/// cannot assume anything. Checking the same shape here turns that into one clear error instead of
+/// a credentials failure three steps later, and keeps the two definitions from drifting apart.
+#[test]
+fn the_tag_check_accepts_exactly_what_the_roles_accept() {
+    let text = raw("post-publish-watch");
+
+    // The accepting arm of the `case`: patterns joined by `|`, ending in `) ;;`.
+    let arms: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("release-") && l.ends_with(") ;;"))
+        .collect();
+    assert_eq!(arms.len(), 1, "expected one accepting arm, found {arms:?}");
+    let mut accepted: Vec<String> = arms[0]
+        .trim_end_matches(") ;;")
+        .split('|')
+        .map(|p| p.trim().to_string())
+        .collect();
+    accepted.sort();
+
+    let mut expected = release_tag_patterns_from_the_cdk();
+    expected.sort();
+
+    assert_eq!(
+        accepted, expected,
+        "the shell check and the roles disagree on what a release tag looks like"
+    );
+}
+
 /// An arming failure must not stop the release being checked. Checking without being able to page
 /// still beats not checking, and the arming failure is loud in its own job. What the dispatch tier
 /// does need is to know *which* release.
@@ -819,8 +873,10 @@ fn an_arming_failure_does_not_stop_the_release_being_checked() {
 #[test]
 fn the_release_tag_has_a_single_source() {
     let text = raw("post-publish-watch");
+    // The error's title rather than its wording, which `the_tag_check_accepts_exactly_what_the_
+    // roles_accept` is free to change.
     assert_eq!(
-        text.matches("does not look like release-*").count(),
+        text.matches("title=Not a release tag").count(),
         1,
         "the tag should be validated in exactly one place"
     );

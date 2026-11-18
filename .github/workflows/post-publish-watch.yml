@@ -84,9 +84,12 @@ jobs:
       run: |
         set -euo pipefail
         TAG="${INPUT_TAG:-$REF_NAME}"
+        # The same shape the roles are conditioned on, character for character: `?` is one
+        # character in a shell glob and in an IAM `StringLike` alike. A tag the roles would refuse
+        # fails here, saying so, rather than later as a credentials error.
         case "$TAG" in
-          release-*) ;;
-          *) echo "::error title=Not a release tag::${TAG} does not look like release-*"; exit 1 ;;
+          release-????-??-??|release-????-??-??.*) ;;
+          *) echo "::error title=Not a release tag::${TAG} is not release-YYYY-MM-DD"; exit 1 ;;
         esac
         echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
         echo "watching ${TAG}"
