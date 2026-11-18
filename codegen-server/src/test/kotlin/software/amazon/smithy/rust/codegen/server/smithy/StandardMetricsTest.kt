@@ -204,6 +204,7 @@ internal class StandardMetricsTest {
                             let record = RecordLayer::default();
                             let config = crate::OutcomeServiceConfig::builder()
                                 .layer(record.clone())
+                                .layer(#{Server}::request::request_id::ServerRequestIdProviderLayer::new())
                                 .enable_standard_metrics()
                                 .build();
                             let app = crate::OutcomeService::builder(config)
@@ -253,6 +254,7 @@ internal class StandardMetricsTest {
                             // Routing chose the operation, even when the framework rejected the request before the handler ran.
                             let operation = metrics.operation().map(|id| id.absolute());
                             assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
+                            assert!(metrics.request_id().is_some(), "{body}: the request ID layer assigned an ID");
                             let operation_duration = metrics.operation_duration();
                             if handler_ran {
                                 assert!(operation_duration >= std::time::Duration::from_millis(1), "{body}: {operation_duration:?}");

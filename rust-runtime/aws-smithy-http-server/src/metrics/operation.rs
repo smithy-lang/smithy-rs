@@ -47,6 +47,10 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         if let Some(state) = req.extensions().get::<MetricsState>() {
             state.record_operation(&self.operation);
+            #[cfg(feature = "request-id")]
+            if let Some(request_id) = req.extensions().get::<crate::request::request_id::ServerRequestId>() {
+                state.record_request_id(request_id);
+            }
         }
         self.inner.call(req)
     }

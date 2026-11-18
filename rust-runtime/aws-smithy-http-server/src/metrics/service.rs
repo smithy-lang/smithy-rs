@@ -532,6 +532,44 @@ mod tests {
         );
     }
 
+    /// Serves `request` through a `MetricsService`, with its route wrapped in `RecordOperation`,
+    /// and returns the request ID its metrics report.
+    async fn reported_request_id(request: http::Request<()>) -> Option<String> {
+        let seen = Arc::new(Mutex::new(None));
+        let inner = {
+            let seen = seen.clone();
+            RecordOperation::new::<TestOperation>(service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { ok() }
+            }))
+        };
+        let response = MetricsService::new::<TestService>(inner, true)
+            .oneshot(request)
+            .await
+            .unwrap();
+        drop(response);
+        let metrics = seen.lock().unwrap().take();
+        metrics
+            .expect("callback received metrics")
+            .request_id()
+            .map(str::to_owned)
+    }
+
+    #[tokio::test]
+    async fn requests_without_an_id_report_none() {
+        assert_eq!(reported_request_id(http::Request::new(())).await, None);
+    }
+
+    #[cfg(feature = "request-id")]
+    #[tokio::test]
+    async fn routed_requests_report_their_id() {
+        let id = crate::request::request_id::ServerRequestId::new();
+        let mut request = http::Request::new(());
+        request.extensions_mut().insert(id.clone());
+        assert_eq!(reported_request_id(request).await, Some(id.to_string()));
+    }
+
     #[test]
     fn map_preserves_enablement() {
         assert!(MetricsService::new::<TestService>((), true).map(|()| 0).enabled);
