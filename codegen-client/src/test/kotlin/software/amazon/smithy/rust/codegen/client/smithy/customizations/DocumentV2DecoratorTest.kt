@@ -251,10 +251,25 @@ class DocumentV2DecoratorTest {
                             let FooOutput { payload, .. } = &output;
                             assert_eq!(payload, &Some(v1("AQID")));
 
-                            // Changing the public field doesn't change the companion.
+                            // Once the public field changes, the companion no longer describes it.
                             output.payload = Some(v1("changed"));
                             assert_eq!(output.payload(), Some(&v1("changed")));
+                            assert_eq!(output.payload_v2(), None);
+                            output.payload = None;
+                            assert_eq!(output.payload_v2(), None);
+
+                            // Restoring the field's value makes the companion current again.
+                            output.payload = Some(v1("AQID"));
                             assert_eq!(output.payload_v2(), Some(&blob()));
+
+                            // The same holds for a required field, which isn't an `Option`, and for collections.
+                            let mut data = FooData::builder().body_v2(blob()).build().unwrap();
+                            data.body = v1("changed");
+                            assert_eq!(data.body_v2(), None);
+
+                            let mut input = FooInput::builder().payload_list_v2(blob()).build().unwrap();
+                            input.payload_list.as_mut().unwrap().push(v1("added"));
+                            assert_eq!(input.payload_list_v2(), None);
                         }
 
                         ##[test]
@@ -306,8 +321,8 @@ class DocumentV2DecoratorTest {
             }.joinToString("\n")
 
         // The output of an event stream operation with an initial response gets `into_builder`, which must carry the
-        // companion. Compiling it checks the types; this checks that the setter is there.
-        sources shouldContain ".set_payload_v2(self.payload_v2.0)"
+        // companion while it is current. Compiling it checks the types; this checks that the setter is there.
+        sources shouldContain "into_current_companion(self.payload_v2.0, self.payload.as_ref()))"
 
         // A deprecated member's `DocumentV2` methods are deprecated too.
         val legacyMethods = Regex("""(#\[deprecated]\s*)?pub fn (set_|get_)?legacy_v2\(""").findAll(sources).toList()
@@ -404,14 +419,59 @@ class DocumentV2DecoratorTest {
                         }
 
                         ##[test]
-                        fn changing_the_public_field_changes_the_output_only_without_a_companion() {
+                        fn changing_the_public_field_takes_priority_over_the_companion() {
                             let mut input = FooInput::builder().payload(v1("before")).build().unwrap();
                             input.payload = Some(v1("after"));
                             assert_eq!(json(&input), r##"{"payload":"after"}"##);
 
                             let mut input = FooInput::builder().payload_v2(big()).build().unwrap();
                             input.payload = Some(v1("after"));
-                            assert_eq!(json(&input), format!(r##"{{"payload":{BIG}}}"##));
+                            assert_eq!(json(&input), r##"{"payload":"after"}"##);
+
+                            // A companion that was read, rather than set with a builder method, works the same way.
+                            let text = format!(r##"{{"payload":{BIG}}}"##);
+                            let mut input = FooInput::deserialize(&mut deser(&text)).unwrap();
+                            input.payload = Some(v1("after"));
+                            assert_eq!(json(&input), r##"{"payload":"after"}"##);
+
+                            // Clearing the field writes nothing for the member.
+                            input.payload = None;
+                            assert_eq!(json(&input), "{}");
+
+                            // Restoring the field's value writes the exact form again.
+                            input.payload = Some(big_v1());
+                            assert_eq!(json(&input), text);
+                        }
+
+                        ##[test]
+                        fn editing_a_response_struct_changes_what_is_resent() {
+                            let output = FooOutput::deserialize(&mut deser(
+                                &format!(r##"{{"data":{{"body":{BIG},"type":"before"}}}}"##),
+                            ))
+                            .unwrap();
+                            let mut data = output.data.unwrap();
+
+                            // Unchanged, the nested structure is resent exactly.
+                            let input = FooInput::builder().data(data.clone()).build().unwrap();
+                            assert_eq!(json(&input), format!(r##"{{"data":{{"body":{BIG},"type":"before"}}}}"##));
+
+                            data.r##type = Some(v1("after"));
+                            let input = FooInput::builder().data(data).build().unwrap();
+                            assert_eq!(json(&input), format!(r##"{{"data":{{"body":{BIG},"type":"after"}}}}"##));
+                        }
+
+                        ##[test]
+                        fn editing_a_collection_read_from_a_response_changes_what_is_resent() {
+                            let text = format!(r##"{{"payloadList":[{BIG}],"payloadMap":{{"key":{BIG}}}}}"##);
+                            let mut input = FooInput::deserialize(&mut deser(&text)).unwrap();
+                            assert_eq!(json(&input), text);
+
+                            input.payload_list.as_mut().unwrap()[0] = v1("edited");
+                            input.payload_map.as_mut().unwrap().insert("key".to_string(), v1("edited"));
+                            assert_eq!(
+                                json(&input),
+                                r##"{"payloadList":["edited"],"payloadMap":{"key":"edited"}}"##,
+                            );
                         }
 
                         ##[test]
