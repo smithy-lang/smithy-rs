@@ -189,18 +189,23 @@ fn epoch_seconds(timestamp: DateTime) -> Number {
 /// only hold text that `f64` parses, so the `String` fallback keeps the conversion total without
 /// being reachable.
 fn number_from_text(text: &str) -> Document {
+    match nearest_number(text) {
+        Some(number) => Document::Number(number),
+        None => Document::String(text.to_owned()),
+    }
+}
+
+/// The [`Number`] that [`number_from_text`] reads from `text`, or `None` if `text` isn't a number.
+pub(crate) fn nearest_number(text: &str) -> Option<Number> {
     if !text.contains(['.', 'e', 'E']) {
         if let Ok(value) = text.parse::<u64>() {
-            return Document::Number(Number::PosInt(value));
+            return Some(Number::PosInt(value));
         }
         if let Ok(value) = text.parse::<i64>() {
-            return Document::Number(signed_number(value));
+            return Some(signed_number(value));
         }
     }
-    match text.parse::<f64>() {
-        Ok(value) => Document::Number(Number::Float(value)),
-        Err(_) => Document::String(text.to_owned()),
-    }
+    text.parse::<f64>().ok().map(Number::Float)
 }
 
 /// The work of [`DocumentV2::try_to_document`], keeping the path to a failure unformatted

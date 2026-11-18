@@ -52,8 +52,9 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use crate::date_time::Format;
+use crate::document::document_v2::nearest_number;
 use crate::document::document_variant_name;
-use crate::{DateTime, Document, DocumentError, DocumentSettings, DocumentV2, Number};
+use crate::{BigDecimal, DateTime, Document, DocumentError, DocumentSettings, DocumentV2, Number};
 
 mod v2;
 
@@ -284,6 +285,12 @@ impl<D: DocumentTrait> DiscriminatedDocument<D> {
     ///   [`DocumentSettings::coerce_number_to_timestamp`] when settings are
     ///   attached, and read as epoch seconds, the deterministic default,
     ///   otherwise.
+    /// - A [`DocumentV2::BigDecimal`], which a JSON reader produces for
+    ///   epoch seconds with nanoseconds, is converted with
+    ///   [`DocumentSettings::coerce_big_decimal_to_timestamp`] when settings
+    ///   are attached. Otherwise it is read as epoch seconds: exactly when
+    ///   its text has no exponent and at most nine fraction digits, and as
+    ///   the nearest number otherwise.
     /// - A string is converted with
     ///   [`DocumentSettings::coerce_string_to_timestamp`] when settings are
     ///   attached, and parsed as RFC-3339 (`date-time`), which is Smithy's
@@ -428,6 +435,33 @@ fn number_as_timestamp(
     match settings {
         Some(settings) => settings.coerce_number_to_timestamp(n),
         None => number_as_epoch_seconds(n),
+    }
+}
+
+/// Converts an arbitrary-precision decimal to a timestamp: with `settings` when attached, and
+/// as epoch seconds otherwise.
+///
+/// Without settings, text that [`Format::EpochSeconds`] parses, which has no exponent and at
+/// most nine fraction digits, is read exactly. Other text is read as the [`Number`] that a
+/// [`Document`] read from the same JSON holds, so it gives the same timestamp as that
+/// `Document` does.
+fn big_decimal_as_timestamp(
+    d: &BigDecimal,
+    settings: Option<&dyn DocumentSettings>,
+) -> Result<DateTime, DocumentError> {
+    if let Some(settings) = settings {
+        return settings.coerce_big_decimal_to_timestamp(d);
+    }
+    if let Ok(timestamp) = DateTime::from_str(d.as_ref(), Format::EpochSeconds) {
+        return Ok(timestamp);
+    }
+    match nearest_number(d.as_ref()) {
+        Some(n) => number_as_epoch_seconds(&n),
+        // Unreachable: a `BigDecimal` only holds text that `f64` parses.
+        None => Err(DocumentError::invalid_input(format!(
+            "{} is not a number",
+            d.as_ref()
+        ))),
     }
 }
 

@@ -7,7 +7,9 @@
 
 use std::borrow::Cow;
 
-use super::{number_as_timestamp, sealed, string_as_blob, string_as_timestamp};
+use super::{
+    big_decimal_as_timestamp, number_as_timestamp, sealed, string_as_blob, string_as_timestamp,
+};
 use crate::document::document_v2::variant_name;
 use crate::{DateTime, DiscriminatedDocument, DocumentError, DocumentSettings, DocumentV2};
 
@@ -51,6 +53,7 @@ impl sealed::Sealed for DocumentV2 {
         match self {
             DocumentV2::Timestamp(timestamp) => Ok(*timestamp),
             DocumentV2::Number(n) => number_as_timestamp(n, settings),
+            DocumentV2::BigDecimal(d) => big_decimal_as_timestamp(d, settings),
             DocumentV2::String(s) => string_as_timestamp(s, settings),
             other => Err(DocumentError::type_mismatch(format!(
                 "expected timestamp, found {}",
@@ -209,6 +212,8 @@ mod tests {
             DocumentV2::Number(Number::PosInt(u64::MAX)),
             DocumentV2::Number(Number::Float(f64::NAN)),
             DocumentV2::String("yesterday".to_owned()),
+            DocumentV2::BigDecimal(big_decimal("18446744073709551615")),
+            DocumentV2::BigDecimal(big_decimal("1e400")),
         ] {
             assert!(matches!(
                 error(document),
@@ -219,5 +224,50 @@ mod tests {
             error(DocumentV2::Bool(true)),
             DocumentError::TypeMismatch { .. }
         ));
+    }
+
+    fn big_decimal(text: &str) -> crate::BigDecimal {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn as_timestamp_reads_big_decimals_as_exact_epoch_seconds() {
+        for (text, timestamp) in [
+            (
+                "1700000000.123456789",
+                DateTime::from_secs_and_nanos(1_700_000_000, 123_456_789),
+            ),
+            ("-1.5", DateTime::from_secs_and_nanos(-2, 500_000_000)),
+            ("12", DateTime::from_secs(12)),
+        ] {
+            let document = wrap(DocumentV2::BigDecimal(big_decimal(text)));
+            assert_eq!(document.as_timestamp().unwrap(), timestamp, "{text}");
+        }
+    }
+
+    #[test]
+    fn as_timestamp_reads_other_big_decimals_as_the_nearest_number() {
+        // An exponent, and more than nine fraction digits, give what the `Document` read from
+        // the same JSON gives.
+        for text in ["17000000001234567891e-10", "1700000000.1234567891"] {
+            let document = wrap(DocumentV2::BigDecimal(big_decimal(text)));
+            let v1 = DiscriminatedDocument::new(
+                DocumentV2::BigDecimal(big_decimal(text)).to_document_lossy(),
+            );
+            assert_eq!(
+                document.as_timestamp().unwrap(),
+                v1.as_timestamp().unwrap(),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_timestamp_passes_big_decimals_to_the_settings() {
+        // `TestSettings` keeps the default `coerce_big_decimal_to_timestamp`, which calls its
+        // `coerce_number_to_timestamp`.
+        let document = wrap(DocumentV2::BigDecimal(big_decimal("1700000000.123456789")))
+            .with_settings(settings());
+        assert_eq!(document.as_timestamp().unwrap(), DateTime::from_secs(1));
     }
 }
