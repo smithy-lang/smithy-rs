@@ -17,7 +17,7 @@ use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse, Or
 use aws_smithy_runtime_api::client::ser_de::{DeserializeResponse, SerializeRequest};
 use aws_smithy_schema::protocol::SharedClientProtocol;
 use aws_smithy_types::config_bag::ConfigBag;
-use document::{read_struct, SerializableDocument};
+use document::{check_input, read_struct, SerializableDocument};
 use std::sync::Arc;
 
 // The serializer writes the input document through the protocol, by the operation's input
@@ -47,6 +47,8 @@ impl SerializeRequest for DocumentSerializer {
         let protocol = cfg
             .load::<SharedClientProtocol>()
             .expect("build() stores the protocol");
+        // The input is checked first, so a value of the wrong type fails before serialization.
+        check_input(&self.schemas, schema, input.members())?;
         let value = SerializableDocument::new(input.members(), schema, &self.schemas)?;
         // A protocol takes the request path from the model or the config, so the path is empty.
         Ok(protocol.serialize_request(&value, schema, "", cfg)?)

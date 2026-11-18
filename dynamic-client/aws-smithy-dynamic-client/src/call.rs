@@ -130,7 +130,7 @@ impl fmt::Debug for CallBuilder {
 #[cfg(test)]
 mod tests {
     use crate::config::{Applies, BehaviorVersion, Config, ConfigKey, RetryConfig};
-    use crate::error::OperationNotFound;
+    use crate::error::{InputError, InputErrorKind, OperationNotFound};
     use crate::DynamicClient;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::{
@@ -149,7 +149,7 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
     use aws_smithy_types::error::metadata::ProvideErrorMetadata;
-    use aws_smithy_types::Document;
+    use aws_smithy_types::{Document, Number};
     use std::error::Error;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
@@ -288,6 +288,27 @@ mod tests {
             .expect("the source is `OperationNotFound`");
         assert_eq!("DeleteSprocket", not_found.operation());
         assert_eq!("smithy.example#Sprockets", not_found.service().as_str());
+        request.expect_no_request();
+    }
+
+    #[tokio::test]
+    async fn an_input_of_the_wrong_type_fails_and_sends_nothing() {
+        let (client, request) = client(200, "{}");
+        let input =
+            Document::Object([("id".to_owned(), Document::Number(Number::PosInt(1)))].into());
+        let err = client
+            .call("GetSprocket")
+            .input(input)
+            .send()
+            .await
+            .unwrap_err();
+        assert!(matches!(err, SdkError::ConstructionFailure(_)), "{err:?}");
+        let source = err.source().expect("the error has a source");
+        let input_error = source
+            .downcast_ref::<InputError>()
+            .expect("the source is `InputError`");
+        assert_eq!("/id", input_error.path());
+        assert_eq!(&InputErrorKind::WrongType, input_error.kind());
         request.expect_no_request();
     }
 

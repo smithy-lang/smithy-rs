@@ -9,8 +9,12 @@
 // an `unsupported` error in both directions.
 // TODO(dynamic-client): Use DocumentV2 from the `feature/documentv2` branch throughout the crate,
 // for inputs, outputs, and this conversion. DocumentV2 holds blob and timestamp values.
-// TODO(dynamic-client): Coerce input documents to the input schema, and shape output documents
-// by the output schema, including blobs, timestamps, and big numbers.
+// TODO(dynamic-client): Shape output documents by the output schema, including blobs,
+// timestamps, and big numbers.
+
+mod coerce;
+
+pub(crate) use coerce::check_input;
 
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
 use aws_smithy_lang::ShapeId;

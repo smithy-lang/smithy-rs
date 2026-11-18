@@ -10,6 +10,9 @@
                 },
                 {
                     "target": "smithy.example#GetSprocket"
+                },
+                {
+                    "target": "smithy.example#UpdateSprocket"
                 }
             ],
             "traits": {
@@ -72,6 +75,88 @@
             },
             "traits": {
                 "smithy.api#output": {}
+            }
+        },
+        "smithy.example#UpdateSprocket": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#UpdateSprocketInput"
+            },
+            "output": {
+                "target": "smithy.example#UpdateSprocketOutput"
+            }
+        },
+        "smithy.example#UpdateSprocketInput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                },
+                "size": {
+                    "target": "smithy.api#Byte"
+                },
+                "tags": {
+                    "target": "smithy.example#TagList"
+                },
+                "labels": {
+                    "target": "smithy.example#Labels"
+                },
+                "shape": {
+                    "target": "smithy.example#Shape"
+                },
+                "note": {
+                    "target": "smithy.api#String"
+                },
+                "data": {
+                    "target": "smithy.api#Blob"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#UpdateSprocketOutput": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "smithy.example#TagList": {
+            "type": "list",
+            "member": {
+                "target": "smithy.example#Tag"
+            },
+            "traits": {
+                "smithy.api#sparse": {}
+            }
+        },
+        "smithy.example#Tag": {
+            "type": "structure",
+            "members": {
+                "key": {
+                    "target": "smithy.api#String"
+                }
+            }
+        },
+        "smithy.example#Labels": {
+            "type": "map",
+            "key": {
+                "target": "smithy.api#String"
+            },
+            "value": {
+                "target": "smithy.api#String"
+            }
+        },
+        "smithy.example#Shape": {
+            "type": "union",
+            "members": {
+                "round": {
+                    "target": "smithy.api#Boolean"
+                },
+                "sides": {
+                    "target": "smithy.api#Integer"
+                }
             }
         }
     }
