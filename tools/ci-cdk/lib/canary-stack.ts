@@ -20,6 +20,7 @@ import { CfnDirectoryBucket } from "aws-cdk-lib/aws-s3express";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { GitHubOidcRole } from "./constructs/github-oidc-role";
+import { METRIC_NAMESPACE as BUILD_CANARY_NAMESPACE } from "./smithy-rs/build-canary-stack";
 
 export interface OidcProps {
     roleId: string;
@@ -84,6 +85,20 @@ export class CanaryStack extends Stack {
                     actions: ["cloudwatch:PutMetricData"],
                     effect: Effect.ALLOW,
                     resources: ["*"],
+                }),
+            );
+
+            // ...but never into the build canary's namespace. The allow above has no namespace
+            // condition and every pull request's canary job assumes this role, so without the deny
+            // any CI job here could trip the build canary's alarm and page its oncall.
+            this.githubOidcRole.oidcRole.addToPolicy(
+                new PolicyStatement({
+                    actions: ["cloudwatch:PutMetricData"],
+                    effect: Effect.DENY,
+                    resources: ["*"],
+                    conditions: {
+                        StringEquals: { "cloudwatch:namespace": BUILD_CANARY_NAMESPACE },
+                    },
                 }),
             );
         }

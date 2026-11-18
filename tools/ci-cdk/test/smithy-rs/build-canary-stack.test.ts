@@ -10,6 +10,7 @@ import {
     METRIC_NAMESPACE,
     ORCHESTRATOR_ENVIRONMENT,
     RECORD_PREFIX,
+    RELEASE_REFS,
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 
@@ -189,6 +190,22 @@ test("the orchestrator's roles should be gated on the environment, and the legs'
     // The legs must not need an environment -- conditioning on the claim would *require* every leg
     // to declare one, and they run by hand during the report-only window too.
     expect(trustFor(template, "metrics").StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
+});
+
+/**
+ * The ref is what bounds who can write the canary's series. A namespace has no owner, so the
+ * metrics role's namespace condition does not.
+ */
+test("every role should only be assumable from a release tag or main", () => {
+    const template = synth();
+
+    for (const role of ["metrics", "alarms", "records"]) {
+        expect(trustFor(template, role).StringLike[`${CLAIM}:ref`]).toEqual(RELEASE_REFS);
+    }
+
+    // A date-shaped tag matches; a stray `release-test` must not.
+    expect(RELEASE_REFS).toContain("refs/tags/release-????-??-??");
+    expect(RELEASE_REFS.some((r) => r.includes("release-*"))).toBe(false);
 });
 
 test("it should output everything that has to be copied into a secret by hand", () => {

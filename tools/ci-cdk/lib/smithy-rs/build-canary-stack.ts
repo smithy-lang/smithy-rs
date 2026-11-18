@@ -42,6 +42,20 @@ export const ALARM_PREFIXES = ["build-canary", "paging-selftest"];
 export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
 
 /**
+ * The refs a build canary job may run from: a real release tag, or `main` for a by-hand dispatch.
+ *
+ * `?` matches exactly one character in an IAM `StringLike`, so a date-shaped tag matches and a stray
+ * `release-test` gets no role. This is what bounds who can write the canary's series — a namespace
+ * has no owner, so the metrics role's namespace condition does not. Who may create a release tag is
+ * a repository ruleset's job, not this one's.
+ */
+export const RELEASE_REFS = [
+    "refs/tags/release-????-??-??",
+    "refs/tags/release-????-??-??.*",
+    "refs/heads/main",
+];
+
+/**
  * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
  *
  * **The Rust side must use the same prefix.** Unlike {@link METRIC_NAMESPACE}, this one is checked:
@@ -105,10 +119,9 @@ export class BuildCanaryStack extends Stack {
         this.metricsRole = new GitHubOidcRole(this, "metrics", {
             name: "smithy-rs-build-canary-metrics",
             ...github,
-            // Deliberately not narrowed by ref or environment. A leg runs for whatever tag the
-            // release was cut from, and also by hand during the report-only window, so pinning the
-            // ref here would break the second case for no gain: the namespace condition below is
-            // what bounds the damage, not the ref.
+            // Not environment-gated: that claim would require all forty legs to declare one. The
+            // ref bounds it instead.
+            refs: RELEASE_REFS,
         });
         this.metricsRole.oidcRole.addToPolicy(
             new PolicyStatement({
@@ -129,6 +142,8 @@ export class BuildCanaryStack extends Stack {
             name: "smithy-rs-build-canary-alarms",
             ...github,
             environment: ORCHESTRATOR_ENVIRONMENT,
+            // The environment already restricts the refs; this narrows `release-*` to real tags.
+            refs: RELEASE_REFS,
         });
         this.alarmRole.oidcRole.addToPolicy(
             new PolicyStatement({
@@ -186,6 +201,7 @@ export class BuildCanaryStack extends Stack {
             name: "smithy-rs-build-canary-records",
             ...github,
             environment: ORCHESTRATOR_ENVIRONMENT,
+            refs: RELEASE_REFS,
         });
         // Write only: no read, no delete, no list. An archive should only ever grow, and the
         // workflow needs nothing else — a `PutObject` that succeeds is its own confirmation, and
