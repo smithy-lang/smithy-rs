@@ -222,8 +222,9 @@ fn unused_keys(service: &ServiceView<'_>, keys: &[Put]) -> Vec<&'static str> {
             _ => None,
         })
         .collect();
-    // TODO(dynamic-client): Reuse the endpoint rules decoded for endpoint resolution, once
-    // `build()` decodes them.
+    // TODO(dynamic-client): Read the parameters from the one `EndpointBdd` that endpoint
+    // resolution uses, once `build()` builds it. A service with only `@endpointRuleSet` gets its
+    // BDD from `EndpointRuleSet::compile`, so the rule-tree form goes away here too.
     let missing_built_ins = if wanted_built_ins.is_empty() {
         Some(wanted_built_ins)
     } else {
