@@ -151,6 +151,13 @@ test("the record bucket should be private, encrypted and TLS-only", () => {
     expect(policyJson).not.toContain("AuthenticatedUsers");
 });
 
+/** The record role has no delete, so a version it overwrites is one it cannot then remove. */
+test("the record bucket should keep an overwritten record", () => {
+    synth().hasResourceProperties("AWS::S3::Bucket", {
+        VersioningConfiguration: { Status: "Enabled" },
+    });
+});
+
 test("the records should not expire, unlike every other bucket in this app", () => {
     // Outliving GitHub's 90-day retention is the entire purpose. A lifecycle rule here would
     // reintroduce the gap the bucket exists to close.
