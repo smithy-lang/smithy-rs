@@ -186,11 +186,27 @@ impl DynamicClientBuilder {
                 "the service does not use this config key, so its value has no effect"
             );
         }
+        let mut operations: Vec<ShapeId> = schemas.operation_ids().cloned().collect();
+        operations.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
+            operations: operations.into(),
+            sdk_id: sdk_id(&service_view).into(),
             runtime_plugins,
         })
     }
+}
+
+// Returns the `sdkId` of the service's `aws.api#service` trait, or the service's shape name when
+// the trait is absent. Generated clients use the same service name.
+fn sdk_id(service: &ServiceView<'_>) -> String {
+    service
+        .get_trait(&AWS_API_SERVICE)
+        .and_then(|value| value.as_object())
+        .and_then(|value| value.get("sdkId"))
+        .and_then(|value| value.as_str())
+        .unwrap_or(service.id().name())
+        .to_owned()
 }
 
 // Returns the type names of the keys set by `put` that the service never uses, each once. A key
@@ -328,6 +344,7 @@ fn runtime_plugins(
 }
 
 const XML_NAMESPACE: ShapeId = ShapeId::from_static("smithy.api#xmlNamespace");
+const AWS_API_SERVICE: ShapeId = ShapeId::from_static("aws.api#service");
 
 // Picks the service specified by the builder, or the model's only service. A specified service
 // is looked up by ID, so only the default case walks the model's shapes.

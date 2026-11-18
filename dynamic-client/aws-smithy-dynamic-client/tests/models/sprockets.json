@@ -1,0 +1,78 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Sprockets": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#CreateSprocket"
+                },
+                {
+                    "target": "smithy.example#GetSprocket"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {}
+            }
+        },
+        "smithy.example#CreateSprocket": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#CreateSprocketInput"
+            },
+            "output": {
+                "target": "smithy.example#CreateSprocketOutput"
+            }
+        },
+        "smithy.example#CreateSprocketInput": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#CreateSprocketOutput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "smithy.example#GetSprocket": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.example#GetSprocketInput"
+            },
+            "output": {
+                "target": "smithy.example#GetSprocketOutput"
+            }
+        },
+        "smithy.example#GetSprocketInput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "smithy.example#GetSprocketOutput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        }
+    }
+}

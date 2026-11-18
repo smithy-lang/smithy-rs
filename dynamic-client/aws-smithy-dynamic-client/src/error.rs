@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Errors from building a dynamic client.
+//! Errors from building a dynamic client and from its calls.
 
 use aws_smithy_lang::runtime_schema::SchemaBuildError;
 use aws_smithy_lang::{LoadError, ShapeId};
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_types::error::metadata::{ErrorMetadata, ProvideErrorMetadata};
 use std::error::Error;
 use std::fmt;
 use std::path::PathBuf;
@@ -215,6 +216,78 @@ impl fmt::Display for MissingHttpClient {
 }
 
 impl Error for MissingHttpClient {}
+
+/// The error of a call to an operation the service does not have.
+///
+/// A call fails with this error as the source of an `SdkError::ConstructionFailure`, and sends
+/// no request.
+#[derive(Debug)]
+pub struct OperationNotFound {
+    operation: String,
+    service: ShapeId,
+}
+
+impl OperationNotFound {
+    pub(crate) fn new(operation: String, service: ShapeId) -> Self {
+        Self { operation, service }
+    }
+
+    /// Returns the operation name of the call.
+    pub fn operation(&self) -> &str {
+        &self.operation
+    }
+
+    /// Returns the shape ID of the service.
+    pub fn service(&self) -> &ShapeId {
+        &self.service
+    }
+}
+
+impl fmt::Display for OperationNotFound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "service `{}` has no operation `{}`",
+            self.service, self.operation
+        )
+    }
+}
+
+impl Error for OperationNotFound {}
+
+/// An error response from the service.
+///
+/// The code, message, and request ID of the response are read with [`ProvideErrorMetadata`].
+// TODO(dynamic-client): Add the modeled error shape, its members as a document, and its retry
+// kind. Implement `CreateUnhandledError`, so `SdkError::into_service_error` works.
+#[derive(Debug)]
+pub struct DynamicOperationError {
+    meta: ErrorMetadata,
+}
+
+impl DynamicOperationError {
+    pub(crate) fn unhandled(meta: ErrorMetadata) -> Self {
+        Self { meta }
+    }
+}
+
+impl ProvideErrorMetadata for DynamicOperationError {
+    fn meta(&self) -> &ErrorMetadata {
+        &self.meta
+    }
+}
+
+impl fmt::Display for DynamicOperationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self.meta.code(), self.meta.message()) {
+            (Some(code), Some(message)) => write!(f, "the service returned `{code}`: {message}"),
+            (Some(code), None) => write!(f, "the service returned `{code}`"),
+            (None, _) => write!(f, "the service returned an error"),
+        }
+    }
+}
+
+impl Error for DynamicOperationError {}
 
 #[cfg(test)]
 mod tests {

@@ -5,8 +5,9 @@
 
 //! The dynamic client and its builder.
 
+use crate::call::CallBuilder;
+use crate::error::OperationNotFound;
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
-#[cfg(test)]
 use aws_smithy_lang::ShapeId;
 #[cfg(test)]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
@@ -37,15 +38,17 @@ pub use builder::DynamicClientBuilder;
 pub struct DynamicClient {
     // The schemas of the selected service, built on first use. The set also holds the model
     // and the service ID.
-    // TODO(dynamic-client): Remove this `allow` once calls read the schemas.
-    #[allow(dead_code)]
-    schemas: Arc<RuntimeSchemaSet>,
+    pub(crate) schemas: Arc<RuntimeSchemaSet>,
+    // The service's operations are sorted by name, so a call finds its operation by binary
+    // search.
+    operations: Arc<[ShapeId]>,
+    // The service name is the service's SDK ID, or the service's shape name when the model has
+    // no SDK ID. Generated clients use the same service name.
+    pub(crate) sdk_id: Arc<str>,
     // The default plugins, then the plugin for the client's config, in the order generated
     // clients apply them. The protocol and the service facts are stored in the config plugin's
     // layer.
-    // TODO(dynamic-client): Remove this `allow` once calls read the runtime plugins.
-    #[allow(dead_code)]
-    runtime_plugins: RuntimePlugins,
+    pub(crate) runtime_plugins: RuntimePlugins,
 }
 
 impl DynamicClient {
@@ -54,7 +57,35 @@ impl DynamicClient {
         DynamicClientBuilder::default()
     }
 
-    #[cfg(test)]
+    /// Returns a call to the operation with the shape name `operation`, such as `"GetForecast"`.
+    ///
+    /// Send the call with [`CallBuilder::send`]. A call to an operation the service does not
+    /// have fails when it is sent, and sends no request.
+    ///
+    /// ```no_run
+    /// # async fn example(
+    /// #     client: &aws_smithy_dynamic_client::DynamicClient,
+    /// # ) -> Result<(), Box<dyn std::error::Error>> {
+    /// use aws_smithy_dynamic_client::DynamicOutput;
+    /// use aws_smithy_types::Document;
+    ///
+    /// let input = Document::Object(
+    ///     [("city".to_owned(), Document::String("Seattle".to_owned()))].into(),
+    /// );
+    /// let output: DynamicOutput = client.call("GetForecast").input(input).send().await?;
+    /// println!("{:?}", output.members());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn call(&self, operation: &str) -> CallBuilder {
+        let found = self
+            .operations
+            .binary_search_by(|id| id.name().cmp(operation))
+            .map(|index| self.operations[index].clone())
+            .map_err(|_| OperationNotFound::new(operation.to_owned(), self.service().clone()));
+        CallBuilder::new(self.clone(), found)
+    }
+
     fn service(&self) -> &ShapeId {
         self.schemas
             .service()

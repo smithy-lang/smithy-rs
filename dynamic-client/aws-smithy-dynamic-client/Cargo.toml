@@ -33,12 +33,15 @@ aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", f
 aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }
+fastrand = "2.3.0"
 tracing = "0.1.44"
 
 [dev-dependencies]
 aws-credential-types = { path = "../../aws/rust-runtime/aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["test-util"] }
+http-1x = { package = "http", version = "1.1.0" }
+tokio = { version = "1.49.0", features = ["macros", "rt"] }
 
 [package.metadata.docs.rs]
 all-features = true
