@@ -194,12 +194,12 @@ internal class StandardMetricsTest {
                     rustTemplate(
                         """
                         use #{Server}::metrics::{Fault, OutcomeSource};
-                        for (body, expected_status, expected_result, expected_source) in [
-                            (r##"{}"##, 200, "success", "operation"),
-                            (r##"{"kind":"rejected"}"##, 503, "client", "operation"),
-                            (r##"{"kind":"broken"}"##, 409, "server", "operation"),
+                        for (body, expected_status, expected_result, expected_source, handler_ran) in [
+                            (r##"{}"##, 200, "success", "operation", true),
+                            (r##"{"kind":"rejected"}"##, 503, "client", "operation", true),
+                            (r##"{"kind":"broken"}"##, 409, "server", "operation", true),
                             // A request the framework rejects before the handler runs: classified by status.
-                            (r##"{"##, 400, "client", "internal"),
+                            (r##"{"##, 400, "client", "internal", false),
                         ] {
                             let record = RecordLayer::default();
                             let config = crate::OutcomeServiceConfig::builder()
@@ -208,6 +208,8 @@ internal class StandardMetricsTest {
                                 .build();
                             let app = crate::OutcomeService::builder(config)
                                 .classify(|input: crate::input::ClassifyInput| async move {
+                                    // Make the handler's execution time measurable.
+                                    std::thread::sleep(std::time::Duration::from_millis(1));
                                     match input.kind.as_deref() {
                                         Some("rejected") => Err(crate::error::ClassifyError::Rejected(
                                             crate::error::Rejected { message: None },
@@ -251,6 +253,12 @@ internal class StandardMetricsTest {
                             // Routing chose the operation, even when the framework rejected the request before the handler ran.
                             let operation = metrics.operation().map(|id| id.absolute());
                             assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
+                            let operation_duration = metrics.operation_duration();
+                            if handler_ran {
+                                assert!(operation_duration >= std::time::Duration::from_millis(1), "{body}: {operation_duration:?}");
+                            } else {
+                                assert_eq!(operation_duration, std::time::Duration::ZERO, "{body}");
+                            }
                         }
                         """,
                         *scope,
