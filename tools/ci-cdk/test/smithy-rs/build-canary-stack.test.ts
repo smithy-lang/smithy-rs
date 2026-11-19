@@ -58,7 +58,11 @@ const actionsOf = (statements: Statement[]): string[] =>
 
 test("it should create exactly three roles", () => {
     const roles = synth().findResources("AWS::IAM::Role");
-    expect(Object.values(roles).map((r) => r.Properties.RoleName).sort()).toEqual([
+    expect(
+        Object.values(roles)
+            .map((r) => r.Properties.RoleName)
+            .sort(),
+    ).toEqual([
         "smithy-rs-build-canary-alarms-github-oidc-role",
         "smithy-rs-build-canary-metrics-github-oidc-role",
         "smithy-rs-build-canary-records-github-oidc-role",
@@ -135,9 +139,7 @@ test("the record bucket should be private, encrypted and TLS-only", () => {
         IgnorePublicAcls: true,
         RestrictPublicBuckets: true,
     });
-    expect(
-        JSON.stringify(buckets[0].Properties.BucketEncryption),
-    ).toContain("AES256");
+    expect(JSON.stringify(buckets[0].Properties.BucketEncryption)).toContain("AES256");
 
     // `enforceSSL` renders as a bucket policy denying anything not over TLS.
     const policies = Object.values(template.findResources("AWS::S3::BucketPolicy"));
@@ -212,9 +214,7 @@ test("it should output everything that has to be copied into a secret by hand", 
     const outputs = synth().findOutputs("*");
     const descriptions = Object.values(outputs).map((o) => o.Description);
 
-    expect(descriptions).toContain(
-        "Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret",
-    );
+    expect(descriptions).toContain("Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret");
     expect(descriptions).toContain("Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret");
     expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_ROLE_ARN repository secret");
     expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_BUCKET repository secret");

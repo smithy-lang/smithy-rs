@@ -14,6 +14,15 @@ export interface Properties {
     name: string;
     githubOrg: string;
     githubRepo: string;
+    /**
+     * The organisation's numeric id, from `gh api orgs/ORG --jq .id`.
+     *
+     * Required rather than optional because this and {@link githubRepoId} are what actually
+     * authorise the role; see the class docs. A wrong value produces a role nobody can assume.
+     */
+    githubOrgId: string;
+    /** The repository's numeric id, from `gh api repos/ORG/REPO --jq .id`. */
+    githubRepoId: string;
     oidcProvider: OpenIdConnectProvider;
 
     /**
@@ -52,28 +61,35 @@ export interface Properties {
  * evaluate `sub`, and a role without such a condition is exactly the shape AWS's identity-provider
  * controls exist to catch.
  *
- * So both are present, with the precise work done by the exact keys and `sub` left coarse. The
- * `sub` condition carries one pattern per format, because repositories created after 15 July 2026
- * use an *immutable* `sub` embedding the owner and repository IDs, and a rename or transfer moves
- * an existing repository to it:
+ * So both are present, with the precise work done by the exact keys and `sub` left coarse.
+ *
+ * ## Identifiers, not names
+ *
+ * The exact keys are `repository_id` and `repository_owner_id`, not `repository`. Organisation and
+ * repository names are mutable, and a name freed by a rename can be claimed by another account, so
+ * a condition on `repository` would refuse this repository after a rename *and* admit whoever took
+ * the old name. The ids are immutable across a rename.
+ *
+ * The same reasoning shapes the `sub` patterns, one per format:
  *
  * ```text
  * previous:   repo:octo-org/octo-repo:ref:refs/heads/main
  * immutable:  repo:octo-org@123456/octo-repo@456789:ref:refs/heads/main
  * ```
  *
- * The IDs land inside the `repo` segment rather than at the end, so adding a trailing wildcard
- * achieves nothing and a single `repo:ORG/REPO:*` pattern silently stops matching — every role here
- * would become unassumable the moment this repository were renamed. Listing both patterns avoids
- * that. The wildcards in the immutable pattern sit only where an ID goes, after an `@`, rather than
- * standing in for the org and repository names, so neither pattern can match a *neighbouring* org
- * or a repository whose name merely starts the same way.
+ * Repositories created after 15 July 2026 use the immutable format, and a rename or transfer moves
+ * an existing one to it — carrying the *new* names. So the immutable pattern wildcards the name
+ * positions and pins the ids. Wildcarding the ids instead would reinstate the recycled-namespace
+ * risk the format exists to remove, leaving trust name-based again.
  *
  * Every condition in the block must hold, so the coarse `sub` match cannot widen what the exact
- * `repository` match allows.
+ * keys allow.
+ *
+ * A **transfer** is not covered: neither GitHub nor AWS documents whether a repository id survives
+ * one, so a transfer may require this file to be updated.
  *
  * References: GitHub's OpenID Connect reference, "Immutable subject claims"; the IAM User Guide,
- * "Available keys for AWS OIDC federation", GitHub tab.
+ * "Available keys for AWS OIDC federation", GitHub tab, "Use immutable identifiers, not names".
  */
 export class GitHubOidcRole extends Construct {
     public readonly oidcRole: Role;
@@ -101,28 +117,36 @@ export class GitHubOidcRole extends Construct {
             );
         }
 
-        const { githubOrg: org, githubRepo: repo } = properties;
+        const {
+            githubOrg: org,
+            githubRepo: repo,
+            githubOrgId: orgId,
+            githubRepoId: repoId,
+        } = properties;
 
         const stringEquals: Record<string, string> = {
             // Enforced by the provider's client ID list too, but IAM's own examples all carry it
             // and it costs one line.
             [`${CLAIM}:aud`]: "sts.amazonaws.com",
-            [`${CLAIM}:repository`]: `${org}/${repo}`,
+            // The ids, not `repository`: see the class docs on identifiers versus names.
+            [`${CLAIM}:repository_owner_id`]: orgId,
+            [`${CLAIM}:repository_id`]: repoId,
         };
         if (properties.environment !== undefined) {
             stringEquals[`${CLAIM}:environment`] = properties.environment;
         }
 
-        // A `sub` condition as well, for two reasons. IAM recommends that every role trusting
-        // GitHub's provider evaluate `sub`, and a role without one is the shape AWS's own
-        // identity-provider controls are designed to catch. It is deliberately the coarse
-        // condition here: one pattern per `sub` format, so neither a rename nor an opt-in to
-        // immutable subjects can make the role unassumable, while the exact `repository` match
-        // above does the real authorising. Both have to match, so the coarse one cannot widen
-        // anything.
+        // A `sub` condition as well, because IAM recommends that every role trusting GitHub's
+        // provider evaluate it and a role without one is the shape AWS's identity-provider
+        // controls are designed to catch. Deliberately the coarse condition: the exact ids above
+        // do the real authorising, and both have to match, so this cannot widen anything.
         const subPatterns = [
-            `repo:${org}/${repo}:*`, // previous format
-            `repo:${org}@*/${repo}@*:*`, // immutable format, any owner and repository IDs
+            // Previous format, which carries no ids. Only reachable while this repository has
+            // neither been renamed nor opted in to immutable subjects.
+            `repo:${org}/${repo}:*`,
+            // Immutable format. Wildcards sit where the *names* go, so a rename still matches; the
+            // ids are pinned, because wildcarding those is what would make this name-based trust.
+            `repo:*@${orgId}/*@${repoId}:*`,
         ];
         const stringLike: Record<string, string | string[]> = {
             [`${CLAIM}:sub`]: subPatterns,

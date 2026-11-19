@@ -11,6 +11,7 @@ import "source-map-support/register";
 import { App } from "aws-cdk-lib";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
+import { AWS_SDK_RUST } from "../../lib/github-repositories";
 
 const app = new App();
 const env = { region: "us-west-2" };
@@ -22,8 +23,10 @@ const oidcProviderStack = new OidcProviderStack(app, "oidc-provider-stack", {
 const oidcProps: OidcProps = {
     roleId: "aws-sdk-rust",
     roleName: "aws-sdk-rust-canary",
-    roleGithubOrg: "awslabs",
-    roleGithubRepo: "aws-sdk-rust",
+    roleGithubOrg: AWS_SDK_RUST.githubOrg,
+    roleGithubRepo: AWS_SDK_RUST.githubRepo,
+    roleGithubOrgId: AWS_SDK_RUST.githubOrgId,
+    roleGithubRepoId: AWS_SDK_RUST.githubRepoId,
     provider: oidcProviderStack.githubActionsOidcProvider,
 };
 
