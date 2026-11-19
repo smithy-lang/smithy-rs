@@ -304,6 +304,61 @@ fn the_filled_alarm_action_is_never_printed() {
     }
 }
 
+/// Enabling the canary has to mean the whole paging chain is present.
+///
+/// `BUILD_CANARY_ENABLED` decides whether the orchestrator runs, not whether a verdict can reach a
+/// person, and the three places that notice a missing secret all treat it as a notice. So without
+/// this the canary can be switched on, run every leg, stay green, and page nobody — the failure it
+/// exists to remove, wearing its own clothes.
+///
+/// The archive is deliberately not in the list. It answers historical questions and no page depends
+/// on it.
+#[test]
+fn enabling_the_canary_requires_the_whole_paging_chain() {
+    let wf = load("post-publish-watch");
+    let alarms = jobs(&wf).get("alarms").copied().expect("an alarms job");
+    let step = steps(alarms)
+        .into_iter()
+        .find(|s| step_name(s).to_lowercase().contains("configured"))
+        .expect("a step deciding whether the alarm is configured");
+
+    let script = step.get("run").and_then(Value::as_str).expect("a script");
+    let env = serde_yaml::to_string(step.get("env").expect("an env block")).unwrap_or_default();
+
+    assert!(
+        env.contains("BUILD_CANARY_ENABLED"),
+        "the report-only fallback has to be conditional on the variable, or enabling means nothing"
+    );
+    for secret in [
+        "BUILD_CANARY_ALARM_ROLE_ARN",
+        "BUILD_CANARY_TICKET_ARN_TEMPLATE",
+        "BUILD_CANARY_METRICS_ROLE_ARN",
+    ] {
+        assert!(env.contains(secret), "the check has to read {secret}");
+        assert!(
+            script.contains(secret),
+            "and has to name {secret} when it is the one missing"
+        );
+    }
+    assert!(
+        !script.contains("BUILD_CANARY_RECORD"),
+        "the archive is optional and must not be able to stop a release being watched"
+    );
+
+    // The enabled branch has to end the step. A notice here is what the whole test is against.
+    let enabled_branch = script
+        .split_once("$ENABLED\" == \"true\"")
+        .expect("the script must branch on the variable")
+        .1;
+    let (branch, _) = enabled_branch
+        .split_once("\nfi")
+        .expect("an unterminated enabled branch");
+    assert!(
+        branch.contains("::error") && branch.contains("exit 1"),
+        "an incomplete chain while enabled has to fail, not warn: {branch:?}"
+    );
+}
+
 /// Every orchestrator job that assumes the metrics role has to declare the orchestrator's
 /// environment.
 ///

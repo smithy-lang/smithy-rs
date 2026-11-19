@@ -95,21 +95,45 @@ jobs:
         echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
         echo "watching ${TAG}"
 
+    # After `resolve`, deliberately. This step can fail, and the dispatch tier keys on the tag that
+    # step produced rather than on this job's result -- so failing here still leaves the release
+    # checked, where failing before the tag was resolved would leave it unwatched entirely.
     - name: Is the alarm configured
       id: config
       env:
-        ROLE: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        ENABLED: ${{ vars.BUILD_CANARY_ENABLED }}
+        ALARM_ROLE: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
         TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
+        # The legs' role, which this job never assumes. Checked here because a leg treats it as a
+        # notice and carries on, so without this the whole matrix can run, go green, and record
+        # nothing anywhere.
+        METRICS_ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
       run: |
         set -euo pipefail
-        if [[ -n "$ROLE" && -n "$TICKET_ARN_TEMPLATE" ]]; then
+        MISSING=()
+        [[ -n "$ALARM_ROLE" ]] || MISSING+=(BUILD_CANARY_ALARM_ROLE_ARN)
+        [[ -n "$TICKET_ARN_TEMPLATE" ]] || MISSING+=(BUILD_CANARY_TICKET_ARN_TEMPLATE)
+        [[ -n "$METRICS_ROLE" ]] || MISSING+=(BUILD_CANARY_METRICS_ROLE_ARN)
+
+        if [[ "${#MISSING[@]}" -eq 0 ]]; then
           echo "configured=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "configured=false" >> "$GITHUB_OUTPUT"
-          # The report-only state: legs run and record verdicts, and no alarm watches them. That is
-          # a deliberate stage, not a misconfiguration, which is why this is a notice.
-          echo "::notice title=No alarm::report-only -- verdicts are recorded but nothing pages"
+          exit 0
         fi
+
+        # `BUILD_CANARY_ENABLED` decides whether this job runs, not whether a verdict can reach a
+        # person. Those are separate, and a release watched with a hole between them is the failure
+        # this canary exists to remove -- so once the variable says production, an incomplete chain
+        # is an error rather than a notice nobody reads. The archive stays optional either way: it
+        # answers historical questions and no page depends on it.
+        if [[ "$ENABLED" == "true" ]]; then
+          echo "::error title=Paging chain incomplete::BUILD_CANARY_ENABLED is true, so a verdict must be able to reach a person, but ${MISSING[*]} is unset"
+          exit 1
+        fi
+
+        echo "configured=false" >> "$GITHUB_OUTPUT"
+        # Report-only, which is a deliberate stage while the variable is not yet true: legs run and
+        # record verdicts, and no alarm watches them.
+        echo "::notice title=No alarm::report-only -- verdicts are recorded but nothing pages (${MISSING[*]} unset)"
 
     - name: Assume the alarm role
       if: steps.config.outputs.configured == 'true'
