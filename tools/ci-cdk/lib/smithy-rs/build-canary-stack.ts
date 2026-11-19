@@ -218,13 +218,16 @@ export class BuildCanaryStack extends Stack {
             // Not in the other buckets in this app, which predate it. Adds a bucket policy denying
             // any request not over TLS; the AWS CLI always uses TLS, so there is nothing to break.
             enforceSSL: true,
-            // Deliberately no lifecycle expiration, unlike every other bucket here, because
-            // outliving GitHub's retention is the entire purpose. A record is a few hundred
-            // kilobytes and only a release that actually broke gets one.
-            versioned: false,
-            // The records are the only copy of this history once the runs are deleted, so the
-            // bucket outlives the stack. The other buckets here hold reproducible build inputs and
-            // are `DESTROY`; this one is not reproducible.
+            // An overwrite keeps the old record as a version, and the record role has no delete of
+            // any kind. The key carries the run id and attempt, so an overwrite should not happen
+            // at all; this is for when one does anyway.
+            versioned: true,
+            // No lifecycle expiration, unlike every other bucket here: outliving GitHub's retention
+            // is the entire purpose, a record is a few hundred kilobytes, and only a release that
+            // actually broke gets one.
+            //
+            // The bucket outlives the stack too, because once the runs are deleted these records
+            // are the only copy. The others here hold reproducible build inputs and are `DESTROY`.
             removalPolicy: RemovalPolicy.RETAIN,
         });
 
