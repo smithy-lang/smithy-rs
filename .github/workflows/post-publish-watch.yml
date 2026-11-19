@@ -670,19 +670,16 @@ jobs:
         d = json.load(open(sys.argv[1]))
         print("record=%s" % ("true" if d["record"] else "false"))
         print("unchecked=%s" % ("true" if d["unchecked"] else "false"))
-        print("key_prefix=%s" % d["key_prefix"])
         PY
         cat "${RUNNER_TEMP}/record/summary.json" >> "$GITHUB_STEP_SUMMARY" || true
 
     # A release where not one leg reported is the only condition nothing else here can see. Every
-    # other signal starts from a verdict, so with no verdict the alarm sees nothing, the archive
-    # writes nothing, and the per-leg "no report" warning cannot fire -- no leg job ran to print it.
+    # other signal starts from a verdict, so with no verdict the alarm sees nothing, the record is
+    # empty, and the per-leg "no report" warning cannot fire -- no leg job ran to print it.
     # This is the backstop for every cause of that: a dispatch accepted and dropped, a bad scenario
     # input, the matrix job failing to expand, the runs being cancelled.
     #
-    # Assumed again further down, before the archive write. Harmless now that both are the
-    # orchestrator's role -- the second assumption replaces identical credentials -- and kept as two
-    # steps because the archive's own configuration is not known until after this one runs.
+    # The orchestrator's role, which this job needs only to say that a release went unchecked.
     - name: Is the orchestrator role configured
       id: metrics
       if: always() && steps.summarize.outputs.unchecked == 'true'
@@ -716,8 +713,8 @@ jobs:
           --decision "${RUNNER_TEMP}/decision.json" \
           --payload-dir "${RUNNER_TEMP}/metric"
 
-    # Always kept, so the record exists even before the bucket does, and so a green release still
-    # leaves the per-leg outcomes readable for a fortnight.
+    # The record's only home while the permanent archive is deferred: a fortnight, which covers the
+    # incident it belongs to but not the question of how often this happens.
     - name: Keep the record as an artifact
       if: always()
       uses: actions/upload-artifact@v4
@@ -726,39 +723,3 @@ jobs:
         path: ${{ runner.temp }}/record
         retention-days: 14
         if-no-files-found: warn
-
-    - name: Is the archive configured
-      id: archive
-      env:
-        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
-        ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
-      run: |
-        set -euo pipefail
-        if [[ -n "$BUCKET" && -n "$ROLE" ]]; then
-          echo "configured=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "configured=false" >> "$GITHUB_OUTPUT"
-          echo "::notice title=Archive not configured::the record is only an artifact for now"
-        fi
-
-    # Only a release that broke gets a permanent record. How often releases are green is a question
-    # for the metric, which has a datapoint per leg per run and is built for counting.
-    - name: Assume the orchestrator role for the archive
-      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
-        aws-region: us-west-2
-
-    - name: Add it to the archive
-      if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
-      env:
-        BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
-        KEY_PREFIX: ${{ steps.summarize.outputs.key_prefix }}
-      run: |
-        set -euo pipefail
-        # The role can put and nothing else, and the key carries the release, the run id and the
-        # attempt, so this cannot land on an existing record.
-        aws s3 cp --recursive "${RUNNER_TEMP}/record" "s3://${BUCKET}/${KEY_PREFIX}/" \
-          --only-show-errors
-        echo "archived to s3://${BUCKET}/${KEY_PREFIX}/" >> "$GITHUB_STEP_SUMMARY"

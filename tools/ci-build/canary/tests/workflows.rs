@@ -1026,15 +1026,15 @@ fn the_floor_gate_can_see_the_previous_release_and_can_run() {
     );
 }
 
-/// A release that nothing checked has to be reported, and before the archive write.
+/// A release that nothing checked has to be reported, and before anything that can fail.
 ///
-/// This is the one condition no verdict exists for, so the record job is the only thing positioned
-/// to notice it. Both halves now use the orchestrator role, so the credential hazard that made the
-/// order load-bearing is gone — but the order still is, for a simpler reason: a failure archiving
-/// the record must not stop the datapoint that says the release went unchecked, which is the only
-/// signal a human ever sees for it.
+/// This is the one condition no verdict exists for -- no leg reported, so the alarm sees nothing
+/// and the per-leg "no report" warning cannot fire either -- which leaves the record job as the
+/// only thing positioned to notice it. Its datapoint is therefore the single signal a human ever
+/// gets, so it is written while the role is held and before the artifact upload, rather than after
+/// a step that could fail first.
 #[test]
-fn an_unchecked_release_is_reported_before_the_archive_write() {
+fn an_unchecked_release_is_reported_before_anything_that_can_fail() {
     let wf = load("post-publish-watch");
     let job = jobs(&wf).get("record").copied().expect("a record job");
     let names: Vec<String> = steps(job)
@@ -1047,16 +1047,16 @@ fn an_unchecked_release_is_reported_before_the_archive_write() {
             .position(|n| n.contains(needle))
             .unwrap_or_else(|| panic!("no step containing {needle:?} in {names:?}"))
     };
-    let emit = at("never checked");
     let assume = at("Assume the orchestrator role");
-    let archive = at("Add it to the archive");
+    let emit = at("never checked");
+    let artifact = at("Keep the record as an artifact");
     assert!(
         assume < emit,
         "the role must be held when the datapoint is written: {names:?}"
     );
     assert!(
-        emit < archive,
-        "an unchecked release must be reported before anything that can fail archiving: {names:?}"
+        emit < artifact,
+        "an unchecked release must be reported before any step that could fail first: {names:?}"
     );
 }
 

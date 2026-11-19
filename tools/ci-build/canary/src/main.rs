@@ -751,7 +751,6 @@ fn main() -> anyhow::Result<()> {
                 run_url,
                 tier,
             };
-            let key_prefix = summary::key_prefix(&run)?;
             let record = summary::summarize(run, &legs, &reports);
 
             std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
@@ -776,7 +775,7 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             if !record.had_a_hard_verdict() {
-                eprintln!("nothing blamed the release, so there is nothing to archive");
+                eprintln!("nothing blamed the release, so the record is a listing only");
             }
             if record.nothing_ran() {
                 eprintln!(
@@ -791,10 +790,9 @@ fn main() -> anyhow::Result<()> {
             println!(
                 "{}",
                 serde_json::to_string(&summary::Decision {
-                    // From the folded record, which is also what gets archived, so the
-                    // decision and the record cannot disagree about which release this is.
+                    // From the folded record rather than an argument, so the decision and the
+                    // record cannot disagree about which release this is.
                     release: record.run.release.clone(),
-                    key_prefix,
                     record: record.had_a_hard_verdict(),
                     unchecked: record.nothing_ran(),
                     summary: path.display().to_string(),

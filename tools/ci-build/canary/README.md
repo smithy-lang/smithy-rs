@@ -128,10 +128,13 @@ Three places, with different lifetimes, because the useful life of each differs.
 - **An artifact per leg**, kept 14 days. Every leg uploads its `report.json`; a leg that reached a
   verdict also uploads the rendered crate and its `Cargo.lock`, which is the reproduction recipe.
   A green leg has nothing to reproduce, and a superseded leg uploads nothing because it never built.
-- **One record per release that broke**, kept indefinitely. Artifacts and logs are kept 90 days by
-  default, and that retention now covers the workflow runs themselves, so three months after a
-  release broke there is no log, no artifact and no run. "How often does this happen, and to what"
-  is asked long after that.
+- **One record per release**, folded from every leg's report and kept 14 days as an artifact.
+
+A permanent archive of those records is deliberately deferred. It would answer "how often does this
+happen, and to what" -- artifacts, logs and now the runs themselves are kept 90 days, so three
+months on there is nothing left to count -- but that is a historical question, not the one this
+canary exists for, and it cost a durable bucket and a third secret to answer. The hooks for it are
+gone rather than dormant, so adding it later is a deliberate change rather than flipping a switch.
 
 The record never infers success from silence. A leg that died without reporting is a defect in the
 canary, so legs land in four buckets — red, green, superseded, unreported — and a leg reaches

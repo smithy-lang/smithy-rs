@@ -62,35 +62,6 @@ pub struct Run {
     pub tier: String,
 }
 
-/// The key prefix the records live under.
-///
-/// Must equal `RECORD_PREFIX` in the CDK stack, which is what grants the orchestrator permission to
-/// write exactly these keys. [`tests::the_prefix_matches_the_cdk_stack`] checks it, because a
-/// disagreement would deny every write and leave the archive silently empty.
-pub const PREFIX: &str = "runs";
-
-/// The key a run's record is written under, relative to the bucket.
-///
-/// Per release *and* per attempt, so nothing ever overwrites anything: the archive only grows,
-/// which is also why the role holding it has no delete permission.
-pub fn key_prefix(run: &Run) -> anyhow::Result<String> {
-    let safe = |label: &str, value: &str| -> anyhow::Result<()> {
-        let ok = !value.is_empty()
-            && value
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
-            && !value.contains("..");
-        anyhow::ensure!(ok, "{label} {value:?} is not usable in an object key");
-        Ok(())
-    };
-    safe("release", &run.release)?;
-    safe("run id", &run.run_id)?;
-    Ok(format!(
-        "{PREFIX}/{}/{}-{}",
-        run.release, run.run_id, run.run_attempt
-    ))
-}
-
 /// A leg that reached a hard verdict, with everything needed to understand it later.
 #[derive(Debug, Clone, Serialize)]
 pub struct RedLeg {
@@ -175,9 +146,8 @@ impl RunSummary {
 pub struct Decision {
     /// The release tag, taken from the folded record rather than from an argument.
     pub release: String,
-    /// Where in the archive this record belongs.
-    pub key_prefix: String,
-    /// Whether to archive it at all: only a release that broke earns a permanent record.
+    /// Whether the record is worth keeping as more than a per-leg listing: only a release that
+    /// broke earns one.
     pub record: bool,
     /// [`RunSummary::nothing_ran`] — the release produced no verdict of any kind.
     pub unchecked: bool,
@@ -347,37 +317,6 @@ mod tests {
             induced: false,
             attempts: vec![],
             elapsed: Duration::from_secs(65),
-        }
-    }
-
-    #[test]
-    fn the_key_is_per_release_and_per_attempt() {
-        let mut r = run();
-        assert_eq!(
-            key_prefix(&r).unwrap(),
-            "runs/release-2026-11-09/42920335827-1"
-        );
-        // A re-run must not overwrite the first attempt's record.
-        r.run_attempt = 2;
-        assert_eq!(
-            key_prefix(&r).unwrap(),
-            "runs/release-2026-11-09/42920335827-2"
-        );
-    }
-
-    #[test]
-    fn a_key_cannot_escape_the_prefix() {
-        for bad in ["../evil", "a/b", "..", ""] {
-            let mut r = run();
-            r.release = bad.into();
-            assert!(
-                key_prefix(&r).is_err(),
-                "release {bad:?} should be rejected"
-            );
-
-            let mut r = run();
-            r.run_id = bad.into();
-            assert!(key_prefix(&r).is_err(), "run id {bad:?} should be rejected");
         }
     }
 
@@ -562,7 +501,6 @@ mod tests {
     fn the_decision_round_trips_and_carries_the_release() {
         let d = Decision {
             release: "release-2026-11-11".into(),
-            key_prefix: "runs/release-2026-11-11/42-1".into(),
             record: false,
             unchecked: true,
             summary: "/tmp/record/summary.json".into(),
@@ -685,31 +623,5 @@ mod tests {
     fn an_empty_tree_reads_as_no_reports() {
         let dir = tempdir("summary-empty");
         assert!(read_reports(dir.path()).unwrap().is_empty());
-    }
-
-    /// The prefix is duplicated into TypeScript, where it scopes the IAM grant. A disagreement
-    /// would deny every write and leave the archive silently empty.
-    #[test]
-    fn the_prefix_matches_the_cdk_stack() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(3)
-            .expect("repo root");
-        let ts =
-            std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
-                .expect("the CDK stack should be readable from the repo");
-
-        let declared = ts
-            .lines()
-            .find_map(|l| {
-                let rest = l.trim().strip_prefix("export const RECORD_PREFIX = ")?;
-                Some(rest.trim_end_matches(';').trim_matches('"').to_string())
-            })
-            .expect("RECORD_PREFIX not found in the CDK stack");
-
-        assert_eq!(
-            declared, PREFIX,
-            "the Rust key prefix and the IAM grant's prefix have diverged"
-        );
     }
 }
