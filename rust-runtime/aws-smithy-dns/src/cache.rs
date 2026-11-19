@@ -3,14 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::dns::{
-    DnsFuture, ResolveDns, ResolveDnsError, SharedDnsResolver,
-};
+use aws_smithy_runtime_api::client::dns::*;
 use std::fmt::{Debug, Formatter};
-use std::net::IpAddr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 
 /// All configuration options for a caching DNS resolver
@@ -54,46 +49,6 @@ impl ResolverConfigBuilder {
     /// Creates a new configuration instance for caching resolvers
     pub fn build(&self) -> ResolverConfig {
         self.config.clone()
-    }
-}
-
-/// Fundamental name lookup result type based on what's in smithy-dns
-pub type ResolveDnsResult = Result<Vec<IpAddr>, ResolveDnsError>;
-
-/// Models a name resolution request.
-/// Future possibilities could include TTL override, IPv4 vs IPv6 restrictions, etc...
-/// This is the request type used in the public resolution API.
-#[derive(Debug, Clone)]
-pub struct ResolveRequest {
-    name: String,
-}
-
-impl ResolveRequest {
-    /// Create a new request builder instance
-    pub fn builder(name: &str) -> ResolveRequestBuilder {
-        ResolveRequestBuilder {
-            request: ResolveRequest {
-                name: name.to_string(),
-            },
-        }
-    }
-
-    /// the host name to perform a name resolution for
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-/// Builder type for ResolveRequest instances
-#[derive(Debug)]
-pub struct ResolveRequestBuilder {
-    request: ResolveRequest,
-}
-
-impl ResolveRequestBuilder {
-    /// Create a new ResolveRequest instance
-    pub fn build(&self) -> ResolveRequest {
-        self.request.clone()
     }
 }
 
@@ -171,140 +126,6 @@ impl ResolveResultBuilder {
 impl Default for ResolveResultBuilder {
     fn default() -> Self {
         todo!()
-    }
-}
-
-/// Classifies a connection-related error.  Determines how the address is "penalized" with respect
-/// to future resolution requests.
-#[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
-pub enum ConnectionErrorCategory {
-    /// Never use this address again for as long as it's tracked
-    Fatal,
-
-    /// Avoid this address unless there's no other alternative
-    Major,
-
-    /// Avoid using this address for at least a configurable amount of time
-    Standard(Duration),
-}
-
-/// Event emitted when something goes wrong with a connection.  This can either be during
-/// connection establishment or while something is using an established connection.  This event
-/// is used to discourage or route away from the associated IP address.
-#[derive(Debug)]
-pub struct HostEventConnectionError {
-    category: ConnectionErrorCategory,
-
-    source: Option<BoxError>,
-}
-
-impl HostEventConnectionError {
-    /// Creates a new builder for a connection error host event variant
-    pub fn builder(category: ConnectionErrorCategory) -> HostEventConnectionErrorBuilder {
-        HostEventConnectionErrorBuilder {
-            error: HostEventConnectionError {
-                category,
-                source: None,
-            },
-        }
-    }
-
-    /// How the resolver should penalize the associated address in future resolutions
-    pub fn category(&self) -> &ConnectionErrorCategory {
-        &self.category
-    }
-
-    /// Actual source error triggering this event
-    pub fn source(&self) -> Option<&BoxError> {
-        self.source.as_ref()
-    }
-}
-
-/// Builder type for HostEventConnectionError instances
-#[derive(Debug)]
-pub struct HostEventConnectionErrorBuilder {
-    error: HostEventConnectionError,
-}
-
-impl HostEventConnectionErrorBuilder {
-    /// Sets the source error that caused the connection error
-    pub fn with_source(&mut self, error: BoxError) -> &mut HostEventConnectionErrorBuilder {
-        self.error.source = Some(error);
-        self
-    }
-
-    /// (Consuming) builds a new HostEventConnectionError instance
-    pub fn build(self) -> HostEventConnectionError {
-        self.error
-    }
-}
-
-/// Per-host-event-type variants
-#[non_exhaustive]
-#[derive(Debug)]
-pub enum HostEventInformation {
-    /// Notifies the resolver that a consumer encountered an error condition while using a
-    /// connection to the address sourced from the resolver
-    ConnectionError(HostEventConnectionError),
-}
-
-/// A connection-related event that could cause us to update our internal bookkeeping that
-/// helps distribute IPs across connections.
-#[derive(Debug)]
-pub struct HostEvent {
-    /// Name of the host that the address was resolver for
-    name: String,
-
-    /// IP address of the connection that encountered an error
-    address: IpAddr,
-
-    /// Per-event-type data
-    event_data: HostEventInformation,
-}
-
-impl HostEvent {
-    /// Creates a new builder for HostEvents
-    pub fn builder(
-        name: &str,
-        address: IpAddr,
-        event_data: HostEventInformation,
-    ) -> HostEventBuilder {
-        HostEventBuilder {
-            event: HostEvent {
-                name: name.to_string(),
-                address,
-                event_data,
-            },
-        }
-    }
-
-    /// Host name this event corresponds to
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// IP address this event corresponds to
-    pub fn address(&self) -> IpAddr {
-        self.address
-    }
-
-    /// Host event variant data
-    pub fn event_data(&self) -> &HostEventInformation {
-        &self.event_data
-    }
-}
-
-/// Builder type for HostEvent instances
-#[derive(Debug)]
-pub struct HostEventBuilder {
-    event: HostEvent,
-}
-
-impl HostEventBuilder {
-    /// Creates a new HostEvent instance
-    pub fn build(self) -> HostEvent {
-        self.event
     }
 }
 
@@ -440,20 +261,6 @@ impl<T> ResolverProcess<T> {
     }
 }
 
-/// Unit result type for our public API(s)
-pub type ResolverResult = Result<(), BoxError>;
-
-/// Public API for the caching resolver.  Intentionally distinct from ResolveDns.
-pub trait Resolver: Debug + Send + Sync {
-    /// Perform a resolution request.  Equivalent to ResolveDns::resolve_dns but with a different
-    /// API to allow for extensibility (additional flags, options, etc...)
-    fn resolve(&self, request: ResolveRequest) -> DnsFuture<'static>;
-
-    /// Notify the resolver of an external host-related event that may affect how it
-    /// chooses to distribute IP addresses to resolution requests
-    fn notify(&self, event: HostEvent) -> ResolverResult;
-}
-
 /// Internal caching resolver implementation type that serves as the entry point for
 /// resolution requests
 #[derive(Debug)]
@@ -532,8 +339,12 @@ impl ResolverImpl {
     }
 }
 
-impl Resolver for ResolverImpl {
-    fn resolve(&self, request: ResolveRequest) -> DnsFuture<'static> {
+impl ResolveDns for ResolverImpl {
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+        self.resolve(ResolveRequest::builder(name).build())
+    }
+
+    fn resolve<'a>(&'a self, request: ResolveRequest) -> DnsFuture<'a> {
         let (tx, rx) = oneshot::channel::<ResolveDnsResult>();
         let internal_request = ResolveRequestInternal {
             request,
@@ -566,54 +377,11 @@ impl Resolver for ResolverImpl {
     }
 }
 
-/// Clonable, sharable handle to a caching resolver.  This is the public-facing instance type for
-/// all caching resolver variants.  It implements both its internal trait (CachingResolver) and the
-/// public external smithy DNS trait (ResolveDns).
-#[derive(Clone)]
-pub struct ResolverHandle {
-    resolver: Arc<dyn Resolver>,
-}
-
-impl ResolverHandle {
-    /// Factory function for creating caching resolver instances
-    pub fn new(resolver_impl: ResolverImpl) -> Self {
-        ResolverHandle {
-            resolver: Arc::new(resolver_impl),
-        }
-    }
-}
-
-impl Resolver for ResolverHandle {
-    fn resolve(&self, request: ResolveRequest) -> DnsFuture<'static> {
-        self.resolver.resolve(request)
-    }
-
-    fn notify(&self, event: HostEvent) -> ResolverResult {
-        self.resolver.notify(event)
-    }
-}
-
-impl std::fmt::Debug for ResolverHandle {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.resolver.fmt(f)
-    }
-}
-
-impl ResolveDns for ResolverHandle {
-    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
-        let request = ResolveRequest {
-            name: name.to_string(),
-        };
-
-        self.resolve(request)
-    }
-}
-
 #[cfg(test)]
 pub(crate) mod testing {
     use super::*;
     use std::future::Future;
-    use std::net::Ipv4Addr;
+    use std::net::{IpAddr, Ipv4Addr};
 
     #[derive(Default, Debug)]
     pub(crate) struct EmptyResolverState {}
@@ -637,13 +405,11 @@ pub(crate) mod testing {
         }
     }
 
-    fn new_caching_resolver_mock_lookup_success(config: ResolverConfig) -> ResolverHandle {
-        ResolverHandle {
-            resolver: Arc::new(ResolverImpl::new_default(
-                config,
-                handle_operation_mock_lookup_success,
-            )),
-        }
+    fn new_caching_resolver_mock_lookup_success(config: ResolverConfig) -> SharedDnsResolver {
+        SharedDnsResolver::new(ResolverImpl::new_default(
+            config,
+            handle_operation_mock_lookup_success,
+        ))
     }
 
     #[test]
@@ -686,13 +452,11 @@ pub(crate) mod testing {
         }
     }
 
-    fn new_caching_resolver_mock_lookup_failure(config: ResolverConfig) -> ResolverHandle {
-        ResolverHandle {
-            resolver: Arc::new(ResolverImpl::new_default(
-                config,
-                handle_operation_mock_lookup_failure,
-            )),
-        }
+    fn new_caching_resolver_mock_lookup_failure(config: ResolverConfig) -> SharedDnsResolver {
+        SharedDnsResolver::new(ResolverImpl::new_default(
+            config,
+            handle_operation_mock_lookup_failure,
+        ))
     }
 
     #[test]
@@ -738,7 +502,7 @@ pub(crate) mod testing {
     fn new_caching_resolver_mock_host_event(
         config: ResolverConfig,
     ) -> (
-        ResolverHandle,
+        SharedDnsResolver,
         std::pin::Pin<Box<dyn Future<Output = HostEvent>>>,
     ) {
         let (tx, rx) = oneshot::channel::<HostEvent>();
@@ -749,13 +513,11 @@ pub(crate) mod testing {
             })),
         };
 
-        let resolver = ResolverHandle {
-            resolver: Arc::new(ResolverImpl::new(
-                config,
-                resolver_state,
-                handle_operation_mock_host_event,
-            )),
-        };
+        let resolver = SharedDnsResolver::new(ResolverImpl::new(
+            config,
+            resolver_state,
+            handle_operation_mock_host_event,
+        ));
 
         let event_future = async move || rx.await.unwrap();
         (resolver, Box::pin(event_future()))
@@ -771,12 +533,12 @@ pub(crate) mod testing {
                 .build(),
         );
 
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Fatal).build();
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Fatal).build();
         let host_event = HostEvent::builder(
             "localhost",
             IpAddr::V4(Ipv4Addr::LOCALHOST),
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
 
@@ -785,13 +547,16 @@ pub(crate) mod testing {
 
         let received_event = runtime.block_on(event_future);
 
-        assert_eq!(IpAddr::V4(Ipv4Addr::LOCALHOST), received_event.address);
-        assert_eq!("localhost", received_event.name);
+        assert_eq!(IpAddr::V4(Ipv4Addr::LOCALHOST), received_event.address());
+        assert_eq!("localhost", received_event.name());
 
-        match received_event.event_data {
-            HostEventInformation::ConnectionError(error_event) => {
-                assert_eq!(ConnectionErrorCategory::Fatal, error_event.category);
-                assert!(error_event.source().is_none());
+        match received_event.event_data() {
+            HostEventInformation::AddressPenalty(penalty_event) => {
+                assert_eq!(AddressPenaltyCategory::Fatal, *penalty_event.category());
+                assert!(penalty_event.source().is_none());
+            }
+            _ => {
+                panic!("Unexpected event data");
             }
         }
     }

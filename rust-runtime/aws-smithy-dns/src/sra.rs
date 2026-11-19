@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::cache::*;
-use aws_smithy_runtime_api::client::dns::ResolveDnsError;
+use aws_smithy_runtime_api::client::dns::*;
 use priority_queue::PriorityQueue;
 use std::cmp::Reverse;
 use std::collections::{HashMap, VecDeque};
@@ -442,9 +442,9 @@ impl HostEntry {
     }
 
     /// Penalize an address based on the connection error category
-    fn handle_connection_error(&mut self, address: IpAddr, error: &HostEventConnectionError) {
-        match error.category() {
-            ConnectionErrorCategory::Fatal => {
+    fn handle_address_penalty(&mut self, address: IpAddr, penalty: &HostEventAddressPenalty) {
+        match penalty.category() {
+            AddressPenaltyCategory::Fatal => {
                 // remove from the sets, keep in TTL, effectively banishes the address until
                 // forgotten
                 match address {
@@ -456,12 +456,13 @@ impl HostEntry {
                     }
                 }
             }
-            ConnectionErrorCategory::Major => {
+            AddressPenaltyCategory::Major => {
                 self.demote_address(address, self.config.resolution_ttl);
             }
-            ConnectionErrorCategory::Standard(duration) => {
+            AddressPenaltyCategory::Custom(duration) => {
                 self.demote_address(address, *duration);
             }
+            _ => {}
         }
     }
 
@@ -564,10 +565,8 @@ impl HostEntry {
     fn handle_host_event(&mut self, event: HostEvent) {
         self.purge_expired();
 
-        match event.event_data() {
-            HostEventInformation::ConnectionError(error) => {
-                self.handle_connection_error(event.address(), error)
-            }
+        if let HostEventInformation::AddressPenalty(penalty) = event.event_data() {
+            self.handle_address_penalty(event.address(), penalty)
         }
     }
 }
@@ -636,9 +635,9 @@ fn handle_operation_sra(
 pub fn new_sra_caching_resolver(
     sra_config: SraResolverConfig,
     caching_config: ResolverConfig,
-) -> ResolverHandle {
+) -> SharedDnsResolver {
     let state = SraCachingResolverState::new(sra_config);
-    ResolverHandle::new(ResolverImpl::new(
+    SharedDnsResolver::new(ResolverImpl::new(
         caching_config,
         state,
         handle_operation_sra,
@@ -648,6 +647,9 @@ pub fn new_sra_caching_resolver(
 #[cfg(test)]
 mod testing {
     use super::*;
+    use aws_smithy_runtime_api::client::dns::{
+        AddressPenaltyCategory, HostEventAddressPenalty, HostEventInformation,
+    };
     use std::sync::Mutex;
 
     #[test]
@@ -1385,15 +1387,15 @@ mod testing {
         assert!(is_result_localhost(result_targets[0].clone()));
 
         // mark supplied address as a fatal error, should never be seen again as long as ttl active
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Fatal).build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Fatal).build();
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             address_to_ban,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
         // still know about it
         assert!(context.entry.addresses_by_ttl.contains(&address_to_ban));
         // but it's not in the specific list
@@ -1459,15 +1461,15 @@ mod testing {
         assert!(is_result_localhost(result_targets[0].clone()));
 
         // mark LOCALHOST_IPV4 as a fatal error, should never be seen again as long as ttl active
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Fatal).build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Fatal).build();
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             LOCALHOST_IPV4,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
         // still know about it
         assert!(context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
         // but it's not in the specific list
@@ -1508,15 +1510,15 @@ mod testing {
         assert!(is_result_localhost(result_targets[0].clone()));
 
         // mark LOCALHOST_IPV4 as a fatal error, should never be seen again as long as ttl active
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Fatal).build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Fatal).build();
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             LOCALHOST_IPV4,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
         // still know about it
         assert!(context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
         // but it's not in the specific list
@@ -1565,16 +1567,16 @@ mod testing {
 
         // mark LOCALHOST_IPV6 as unhealthy for a while
         let penalty_duration = Duration::from_secs(5);
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Standard(penalty_duration))
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(penalty_duration))
                 .build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             LOCALHOST_IPV6,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
         // still know about it
         assert!(context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV6));
 
@@ -1636,15 +1638,15 @@ mod testing {
         apply_mock_result_to_context(&mut context);
 
         // mark LOCALHOST_IPV6 as unhealthy for a while
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Major).build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Major).build();
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             LOCALHOST_IPV6,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
 
         let v6addr: Ipv6Addr = LOCALHOST_IPV6.to_string().parse().unwrap();
         assert!(!context
@@ -1705,16 +1707,16 @@ mod testing {
 
         // mark LOCALHOST_IPV6 as unhealthy for a while
         let penalty_duration = Duration::from_secs(5);
-        let connection_error =
-            HostEventConnectionError::builder(ConnectionErrorCategory::Standard(penalty_duration))
+        let address_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(penalty_duration))
                 .build();
-        let connection_failure_event: HostEvent = HostEvent::builder(
+        let address_penalty_event: HostEvent = HostEvent::builder(
             MOCK_HOST,
             LOCALHOST_IPV6,
-            HostEventInformation::ConnectionError(connection_error),
+            HostEventInformation::AddressPenalty(address_penalty),
         )
         .build();
-        context.entry.handle_host_event(connection_failure_event);
+        context.entry.handle_host_event(address_penalty_event);
         // still know about it
         assert!(context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV6));
 
