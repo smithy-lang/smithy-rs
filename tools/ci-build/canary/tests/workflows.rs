@@ -221,6 +221,56 @@ fn no_workflow_contains_internal_ticket_routing() {
     }
 }
 
+/// The filled alarm action must never be printed, only compared.
+///
+/// GitHub masks a secret's exact value, but filling `{severity}` and `{dedupe}` produces a string
+/// it does not mask. Printing that publishes internal ticket routing, because both the job log and
+/// the job summary are public.
+///
+/// The runtime companion of [`no_workflow_contains_internal_ticket_routing`], which keeps the same
+/// routing out of the files themselves.
+#[test]
+fn the_filled_alarm_action_is_never_printed() {
+    // Variables holding the action once the placeholders are filled. The two helpers' locals are
+    // lower case and absent here: `printf` into a command substitution captures, not prints.
+    // `TICKET_ARN_TEMPLATE` is absent too, being the exact secret, which GitHub does mask.
+    const HOLDS_THE_ACTION: &[&str] = &[
+        "ACTION_ARN",
+        "INDUCED_ACTION_ARN",
+        "ACTUAL_ACTION",
+        "EXPECTED_ACTION",
+    ];
+
+    for name in WORKFLOWS {
+        // Backslash continuations joined, so a command split across lines is judged whole.
+        let script = raw(name).replace("\\\n", " ");
+        for line in script.lines() {
+            if line.contains("AlarmActions") {
+                assert!(
+                    line.contains("$("),
+                    "{name}.yml reads AlarmActions without capturing the output, so the filled \
+                     action reaches the public job log: {line:?}"
+                );
+                assert!(
+                    !line.contains("tee") && !line.contains("GITHUB_STEP_SUMMARY"),
+                    "{name}.yml writes AlarmActions to the public job summary: {line:?}"
+                );
+            }
+
+            // Capturing is not enough: what is captured can still be echoed.
+            let trimmed = line.trim();
+            if trimmed.starts_with("echo ") || trimmed.starts_with("printf ") {
+                for held in HOLDS_THE_ACTION {
+                    assert!(
+                        !line.contains(held),
+                        "{name}.yml prints {held}, which holds the filled alarm action: {line:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Merging must not arm the canary. The orchestrator triggers on a release tag, so without a gate
 /// landing the file would start a 24-hour, full-matrix watch on the next release — before the
 /// report-only window that exists to measure its false-positive rate has ever run.
