@@ -47,8 +47,16 @@ export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
  *
  * `?` matches exactly one character in an IAM `StringLike`, so a date-shaped tag matches and a stray
  * `release-test` gets no role. This is what bounds who can write the canary's series — a namespace
- * has no owner, so the metrics role's namespace condition does not. Who may create a release tag is
- * a repository ruleset's job, not this one's.
+ * has no owner, so the metrics role's namespace condition does not.
+ *
+ * **It bounds the shape of the tag, not who created it**, and the two halves are a pair. Checking
+ * the author is a repository ruleset's job, and the ruleset has to be *enforcing* for this
+ * condition to mean anything: while it only evaluates, anyone with write access can tag an
+ * arbitrary commit `release-YYYY-MM-DD`, and code at that tag can assume the metrics role — or, if
+ * its workflow declares the orchestrator's environment, the alarm and record roles too, since the
+ * environment restricts which refs may use it and not who may push them. Enough to forge a page,
+ * delete the alarms, and write to the archive. So the ruleset being active is a prerequisite for
+ * deploying these roles, not a later hardening step.
  */
 export const RELEASE_REFS = [
     "refs/tags/release-????-??-??",
