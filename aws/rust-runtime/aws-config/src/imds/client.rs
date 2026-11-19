@@ -1245,6 +1245,7 @@ pub(crate) mod test {
             (4, vec![Duration::from_secs(1); 3]),
         );
         // Retry Behavior 2.1 lowers the base backoff for non-throttling errors to 50ms
+        #[allow(deprecated)]
         let retry_2_1 = BehaviorVersion::v2026_11_10();
         assert_eq!(
             connection_attempts_and_backoffs(retry_connect_timeouts(), retry_2_1).await,
