@@ -411,6 +411,104 @@ fn the_two_roles_are_used_by_the_jobs_they_were_made_for() {
     );
 }
 
+/// Everything the crate calls a release, the IAM conditions must accept.
+///
+/// This shape is written in four places: the orchestrator's `case` statement, the CDK's
+/// `RELEASE_REFS` globs, `watch::is_release_tag`, and the tag ruleset. The first two are tied
+/// together by [`the_tag_check_accepts_exactly_what_the_roles_accept`]; this ties the third to them.
+///
+/// The relationship is containment, not equality, and the direction matters. If the crate accepted
+/// something IAM refused, a leg would build the release and then have its datapoint denied —
+/// silence where a verdict belongs. The converse is harmless and unavoidable: `StringLike` has only
+/// `?` and `*`, so `release-????-??-??.*` cannot say "at least one digit" and necessarily admits a
+/// bare trailing dot. The crate being the stricter of the two is what covers that slack.
+#[test]
+fn the_release_shape_is_no_looser_than_the_cdks() {
+    let patterns = release_tag_patterns_from_the_cdk();
+
+    // IAM `StringLike`: `?` is exactly one character, `*` any sequence including none.
+    let matches_iam = |tag: &str| {
+        patterns.iter().any(|pattern| {
+            let expression: String = pattern
+                .chars()
+                .map(|c| match c {
+                    '?' => ".".to_string(),
+                    '*' => ".*".to_string(),
+                    other => regex_escape(other),
+                })
+                .collect();
+            regex_lite_match(&expression, tag)
+        })
+    };
+
+    let mut accepted = 0;
+    for tag in [
+        "release-2026-11-16",
+        "release-2026-01-01",
+        "release-2026-09-30.2",
+        "release-2026-09-30.10",
+        "release-test",
+        "release-",
+        "release-2026-11-16.",
+        "release-2026-11-1",
+        "release-202X-11-16",
+        "untagged-abc",
+    ] {
+        if canary::watch::is_release_tag(tag) {
+            accepted += 1;
+            assert!(
+                matches_iam(tag),
+                "the crate calls {tag:?} a release but no IAM ref pattern admits it, so its \
+                 leg would build and then be denied its datapoint"
+            );
+        }
+    }
+    assert!(
+        accepted >= 4,
+        "only {accepted} of the samples were accepted, so this proved almost nothing"
+    );
+
+    // The known slack, asserted so that closing it elsewhere does not go unnoticed: a bare
+    // trailing dot is inexpressible in the glob and is caught by the crate instead.
+    assert!(matches_iam("release-2026-11-16."));
+    assert!(!canary::watch::is_release_tag("release-2026-11-16."));
+}
+
+/// Escape one character for use in the tiny matcher below.
+fn regex_escape(c: char) -> String {
+    match c {
+        '.' | '+' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|' | '\\' => format!("\\{c}"),
+        other => other.to_string(),
+    }
+}
+
+/// Anchored match for a pattern built only of literals, `.` and `.*`.
+///
+/// Hand-rolled because this crate has no regex dependency and adding one to compare two glob
+/// dialects would be the larger change.
+fn regex_lite_match(expression: &str, value: &str) -> bool {
+    fn go(pattern: &[char], value: &[char]) -> bool {
+        match pattern.first() {
+            None => value.is_empty(),
+            Some('.') if pattern.get(1) == Some(&'*') => {
+                (0..=value.len()).any(|skip| go(&pattern[2..], &value[skip..]))
+            }
+            Some('.') => !value.is_empty() && go(&pattern[1..], &value[1..]),
+            Some('\\') => match (pattern.get(1), value.first()) {
+                (Some(literal), Some(head)) if literal == head => go(&pattern[2..], &value[1..]),
+                _ => false,
+            },
+            Some(literal) => match value.first() {
+                Some(head) if head == literal => go(&pattern[1..], &value[1..]),
+                _ => false,
+            },
+        }
+    }
+    let pattern: Vec<char> = expression.chars().collect();
+    let value: Vec<char> = value.chars().collect();
+    go(&pattern, &value)
+}
+
 /// A workflow that must not lose a queued dispatch has to say so, not rely on the default.
 ///
 /// `cancel-in-progress: false` keeps the run in flight, which is only half of it: GitHub's default

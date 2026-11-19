@@ -877,6 +877,10 @@ fn newest_release_tag() -> anyhow::Result<Option<String>> {
     let mut tags: Vec<String> = String::from_utf8_lossy(&out.stdout)
         .lines()
         .filter_map(|l| l.rsplit('/').next().map(str::to_string))
+        // Only real release names. The newest is the last in sort order, and anything else --
+        // `release-test`, say -- sorts after every `release-2…` tag, so one of them would answer
+        // this question for every real release and supersede all of their legs.
+        .filter(|t| watch::is_release_tag(t))
         .collect();
     tags.sort();
     Ok(tags.pop())

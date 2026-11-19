@@ -58,6 +58,30 @@ use crate::leg::Clock;
 /// 30-minute budget. Changing it is a conscious trade against that target.
 pub const INTERVAL: Duration = Duration::from_secs(15 * 60);
 
+/// Whether a tag names a real release: `release-YYYY-MM-DD`, or `release-YYYY-MM-DD.N` for a second
+/// release on the same day.
+///
+/// The same shape the orchestrator's tag check and the IAM `ref` conditions use, and it has to agree
+/// with both; `the_release_shape_agrees_with_the_cdk` in `tests/workflows.rs` is what checks that.
+///
+/// Load-bearing rather than tidiness. The newest release is found by sorting tags lexically, and
+/// anything not date-shaped sorts *after* every `release-2…` tag — so a single `release-test` left
+/// on the remote would answer "newest release" for every real one, make every leg exit as
+/// superseded, and page nobody until somebody noticed and deleted it.
+pub fn is_release_tag(tag: &str) -> bool {
+    let Some(rest) = tag.strip_prefix("release-") else {
+        return false;
+    };
+    // Defaulting the suffix to "0" lets the plain form take the same path as the suffixed one.
+    let (date, suffix) = rest.split_once('.').unwrap_or((rest, "0"));
+    let date_shaped = date.len() == 10
+        && date.bytes().enumerate().all(|(i, c)| match i {
+            4 | 7 => c == b'-',
+            _ => c.is_ascii_digit(),
+        });
+    date_shaped && !suffix.is_empty() && suffix.bytes().all(|c| c.is_ascii_digit())
+}
+
 /// The ceiling on one watcher run.
 ///
 /// The window should end when the release finishes publishing. This bounds the case where that
@@ -601,6 +625,55 @@ impl Dispatcher for GhDispatcher {
 
 #[cfg(test)]
 mod tests {
+    /// The shape has to accept every real release name and refuse everything that would sort after
+    /// one. The refusals are the point: each of them, left on the remote, would make every leg of
+    /// every release exit as superseded.
+    #[test]
+    fn the_release_shape_accepts_releases_and_refuses_what_outsorts_them() {
+        use super::is_release_tag;
+
+        for tag in [
+            "release-2026-11-16",
+            "release-2026-01-01",
+            "release-2026-09-30.2",
+            "release-2026-09-30.10",
+        ] {
+            assert!(is_release_tag(tag), "{tag} is a real release name");
+        }
+
+        for tag in [
+            // The one that prompted this: sorts after every `release-2…` tag.
+            "release-test",
+            "release-",
+            "release-2026-11-16-",
+            "release-2026-11-16.",
+            "release-2026-11-16.x",
+            "release-2026-11-1",
+            "release-2026-11-166",
+            "release-202X-11-16",
+            "release-2026_11_16",
+            "untagged-abc",
+            "v1.2.3",
+            "",
+        ] {
+            assert!(!is_release_tag(tag), "{tag:?} is not a release name");
+        }
+    }
+
+    /// And every refusal above has to be one that would actually have done damage, or the test is
+    /// asserting about strings nobody could be fooled by.
+    #[test]
+    fn a_stray_tag_outsorts_every_real_release() {
+        let newest_real = "release-2026-11-16";
+        for stray in ["release-test", "release-zzz", "release-x"] {
+            assert!(
+                stray > newest_real,
+                "{stray} must sort after {newest_real} for this to be worth guarding"
+            );
+            assert!(!super::is_release_tag(stray));
+        }
+    }
+
     use super::*;
     use crate::test_support::tempdir;
 
