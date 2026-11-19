@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocumentUnionDecodeMode
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -43,6 +44,49 @@ class ResponseDeserializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val parserGenerator = ProtocolParserGenerator(codegenContext, protocol)
     private val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+
+    /** Whether [operationShape]'s response reads through its `DocumentUnionDecodeMode`. */
+    private fun decodeMode(operationShape: OperationShape): Boolean =
+        schemaExclusive && DocumentUnionDecodeMode.applies(codegenContext, operationShape)
+
+    /**
+     * Returns `read(deser)`, a read from [deser], an expression of type `&mut dyn ShapeDeserializer`. For an operation
+     * whose response depends on the mode, it reads through the mode bound by [bindDecodeMode].
+     */
+    private fun readThroughMode(
+        operationShape: OperationShape,
+        deser: String,
+        read: (String) -> String,
+    ): String =
+        if (decodeMode(operationShape)) {
+            "${DocumentUnionDecodeMode.BINDING}.read_with($deser, |deser| ${read("deser")})"
+        } else {
+            read(deser)
+        }
+
+    /** Binds the operation's mode from `_cfg`, for [readThroughMode]. */
+    private fun bindDecodeMode(operationShape: OperationShape) =
+        writable {
+            if (decodeMode(operationShape)) {
+                DocumentUnionDecodeMode.bind(runtimeConfig, "_cfg")(this)
+            }
+        }
+
+    /**
+     * Renders a `reify_error` call that looks `error_code` up in [registry], a Rust expression, and reads the error
+     * body from `deser` through the operation's mode. [registryScope] holds the template parameters [registry] uses.
+     */
+    private fun reifyError(
+        operationShape: OperationShape,
+        registry: String,
+        vararg registryScope: Pair<String, Any>,
+    ) = writable {
+        rustTemplate(
+            readThroughMode(operationShape, "&mut *deser") { "#{reify_error}($registry, error_code, $it)" },
+            "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
+            *registryScope,
+        )
+    }
 
     private val codegenScope by lazy {
         val interceptorContext =
@@ -84,6 +128,7 @@ class ResponseDeserializerGenerator(
                 #{deserialize_streaming}
 
                 fn deserialize_nonstreaming_with_config(&self, response: &#{HttpResponse}, _cfg: &#{ConfigBag}) -> #{OutputOrError} {
+                    #{bind_decode_mode}
                     #{deserialize_nonstreaming}
                 }
             }
@@ -91,6 +136,7 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
+            "bind_decode_mode" to bindDecodeMode(operationShape),
             "deserialize_streaming" to
                 writable {
                     if (streaming) {
@@ -167,6 +213,7 @@ class ResponseDeserializerGenerator(
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
+                #{bind_decode_mode}
 
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     ##[allow(unused_mut)]
@@ -177,7 +224,7 @@ class ResponseDeserializerGenerator(
                             .expect("a SharedClientProtocol is required");
                         let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                             .map_err(#{E}::unhandled)?;
-                        output.deserialize_members(&mut *deser).map_err(#{E}::unhandled)?;
+                        ${readThroughMode(operationShape, "&mut *deser") { "output.deserialize_members($it)" }}.map_err(#{E}::unhandled)?;
                         #{MutateOutput}
                     }
                     // Every immutable borrow of the response has been dropped, so the live body can
@@ -197,6 +244,7 @@ class ResponseDeserializerGenerator(
             "E" to errorSymbol,
             "BuilderSymbol" to symbolProvider.symbolForBuilder(outputShape),
             "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+            "bind_decode_mode" to bindDecodeMode(operationShape),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
@@ -254,7 +302,14 @@ class ResponseDeserializerGenerator(
                 operationShape,
                 unionTarget,
                 useSchemaSerde = true,
+                documentUnionDecodeMode = decodeMode(operationShape),
             ).render()
+        val withDecodeMode =
+            if (decodeMode(operationShape)) {
+                ".with_document_union_decode_mode(${DocumentUnionDecodeMode.BINDING})"
+            } else {
+                ""
+            }
 
         rustTemplate(
             """
@@ -267,6 +322,7 @@ class ResponseDeserializerGenerator(
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
+                #{bind_decode_mode}
 
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     // Swap body out — becomes the event stream receiver.
@@ -278,14 +334,14 @@ class ResponseDeserializerGenerator(
                     let _response_headers = response.headers();
                     let protocol = _cfg.load::<#{SharedClientProtocol}>()
                         .expect("a SharedClientProtocol is required");
-                    let unmarshaller = #{unmarshaller}(protocol.clone());
+                    let unmarshaller = #{unmarshaller}(protocol.clone())$withDecodeMode;
                     let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
                     let mut output = #{BuilderSymbol}::default().${streamingMember.setterName()}(#{Some}(receiver));
                     // The body is gone, so the protocol reads only headers and status.
                     let mut deser = protocol
                         .deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                         .map_err(#{E}::unhandled)?;
-                    output.deserialize_members(&mut *deser).map_err(#{E}::unhandled)?;
+                    ${readThroughMode(operationShape, "&mut *deser") { "output.deserialize_members($it)" }}.map_err(#{E}::unhandled)?;
                     #{MutateOutput}
                     // Build via finalizeBuilder — applies error correction so @required
                     // non-event-stream members are populated with defaults. For RPC
@@ -305,6 +361,7 @@ class ResponseDeserializerGenerator(
             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
             "unmarshaller" to unmarshallerCtor,
+            "bind_decode_mode" to bindDecodeMode(operationShape),
             "MutateOutput" to
                 writable {
                     writeCustomizations(
@@ -475,7 +532,7 @@ class ResponseDeserializerGenerator(
                 // empty output has no members and no customizations to run.
                 ##[allow(unused_mut)]
                 let mut output = <#{BuilderSymbol}>::default();
-                output.deserialize_members(&mut *deser)
+                ${readThroughMode(operationShape, "&mut *deser") { "output.deserialize_members($it)" }}
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 #{MutateOutput}
                 let output = #{finalizeBuilder};
@@ -591,7 +648,7 @@ class ResponseDeserializerGenerator(
                     let mut deser = protocol.deserialize_error_response(response, _cfg)
                         .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                     let mut tmp = <#{ErrorBuilder}>::default();
-                    tmp.deserialize_members(&mut *deser)
+                    ${readThroughMode(operationShape, "&mut *deser") { "tmp.deserialize_members($it)" }}
                         .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                     """,
                     *codegenScope,
@@ -647,12 +704,7 @@ class ResponseDeserializerGenerator(
                         .deserialize_error_response(response, _cfg)
                         .ok()
                         .and_then(|mut deser| {
-                            #{reify_error}(
-                                ${errorSymbol.namespace}::error_registry::REGISTRY
-                                    .or(&crate::error_type_registry::REGISTRY),
-                                error_code,
-                                &mut *deser,
-                            )
+                            #{reify_error}
                         }) {
                         #{Some}(source) => <#{error_symbol} as #{CreateUnhandledError}>::create_unhandled_error(source, #{Some}(generic)),
                         #{None} => #{error_symbol}::generic(generic),
@@ -661,7 +713,11 @@ class ResponseDeserializerGenerator(
                 """,
                 *codegenScope,
                 "error_symbol" to errorSymbol,
-                "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
+                "reify_error" to
+                    reifyError(
+                        operationShape,
+                        "${errorSymbol.namespace}::error_registry::REGISTRY.or(&crate::error_type_registry::REGISTRY)",
+                    ),
                 "CreateUnhandledError" to
                     RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError"),
             )
@@ -683,11 +739,7 @@ class ResponseDeserializerGenerator(
                         .deserialize_error_response(response, _cfg)
                         .ok()
                         .and_then(|mut deser| {
-                            #{reify_error}(
-                                crate::error_type_registry::REGISTRY.or(&#{TypeRegistry}::new()),
-                                error_code,
-                                &mut *deser,
-                            )
+                            #{reify_error}
                         })
                 });
                 let err = match source {
@@ -698,8 +750,12 @@ class ResponseDeserializerGenerator(
                 """,
                 *codegenScope,
                 "error_symbol" to errorSymbol,
-                "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
-                "TypeRegistry" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::TypeRegistry"),
+                "reify_error" to
+                    reifyError(
+                        operationShape,
+                        "crate::error_type_registry::REGISTRY.or(&#{TypeRegistry}::new())",
+                        "TypeRegistry" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::TypeRegistry"),
+                    ),
                 "CreateUnhandledError" to
                     RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError"),
             )

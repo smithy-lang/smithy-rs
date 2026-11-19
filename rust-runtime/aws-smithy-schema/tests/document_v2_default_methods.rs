@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The provided `write_document_v2`, `write_typed_document`, and
-//! `read_document_v2` methods, seen from a third-party crate.
+//! The provided `write_document_v2`, `write_typed_document`, `read_document_v2`,
+//! and `document_union_decode_mode` methods, seen from a third-party crate.
 //!
 //! The serializer and deserializer below implement exactly the methods that
 //! `ShapeSerializer` and `ShapeDeserializer` required before `DocumentV2`
@@ -16,7 +16,7 @@
 use aws_smithy_schema::prelude::DOCUMENT;
 use aws_smithy_schema::registry::{RegistryEntry, TypeRegistry};
 use aws_smithy_schema::serde::{
-    SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
+    DocumentUnionDecodeMode, SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
 use aws_smithy_schema::{shape_id, Schema, ShapeType};
 use aws_smithy_types::document::DocumentObject;
@@ -283,6 +283,19 @@ fn default_read_returns_the_read_document_error() {
     let dynamic: &mut dyn ShapeDeserializer = &mut deserializer;
     let err = dynamic.read_document_v2(&DOCUMENT).unwrap_err();
     assert_eq!(err.to_string(), "invalid input: no document left");
+}
+
+#[test]
+fn an_existing_deserializer_reports_the_v1_union_decode_mode() {
+    let mut deserializer = V1Deserializer { document: None };
+    let dynamic: &mut dyn ShapeDeserializer = &mut deserializer;
+    assert_eq!(
+        dynamic.document_union_decode_mode(),
+        DocumentUnionDecodeMode::V1
+    );
+    // Selecting a mode doesn't need the deserializer's cooperation.
+    let mode = DocumentUnionDecodeMode::V2.read_with(dynamic, |d| d.document_union_decode_mode());
+    assert_eq!(mode, DocumentUnionDecodeMode::V2);
 }
 
 /// A serializer that writes `DocumentV2` natively, by wrapping the V1 one and

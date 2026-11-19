@@ -6,6 +6,7 @@
 //! Shape deserialization interfaces for the Smithy data model.
 
 use super::error::SerdeError;
+use super::DocumentUnionDecodeMode;
 use crate::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 use aws_smithy_types::{Document, DocumentV2};
@@ -156,6 +157,20 @@ pub trait ShapeDeserializer {
     /// `read_document` and lose those variants.
     fn read_document_v2(&mut self, schema: &Schema<'_>) -> Result<DocumentV2, SerdeError> {
         self.read_document(schema).map(DocumentV2::from)
+    }
+
+    /// Returns how a generated client union reads a member that holds documents from this
+    /// deserializer.
+    ///
+    /// When this returns [`DocumentUnionDecodeMode::V2`], a generated client union reads such a
+    /// member into its `DocumentV2` variant, such as `JsonV2(DocumentV2)`. Otherwise it reads the
+    /// original variant, such as `Json(Document)`.
+    ///
+    /// The default returns [`DocumentUnionDecodeMode::V1`]. Implementations don't need to
+    /// override it: [`DocumentUnionDecodeMode::read_with`] selects a mode for every value that a
+    /// read reaches, by wrapping the deserializers that aggregate reads pass to their consumers.
+    fn document_union_decode_mode(&self) -> DocumentUnionDecodeMode {
+        DocumentUnionDecodeMode::V1
     }
 
     /// Checks if the current value is null.

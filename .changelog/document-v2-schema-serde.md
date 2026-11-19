@@ -26,6 +26,13 @@ Schema serde can now write and read `DocumentV2` values.
   wrapper, through the new sealed `SchemaDocument` trait.
   `DocumentShapeSerializer` stores a `DocumentV2` value as its
   `to_document_lossy` conversion.
+- **Union decode mode:** `DocumentUnionDecodeMode` selects whether a generated
+  client union reads a member that holds documents into its original variant
+  (`V1`, the default) or its `DocumentV2` variant (`V2`). The new
+  `ShapeDeserializer::document_union_decode_mode` method reports the mode and
+  returns `V1` by default, so existing implementations keep compiling.
+  `DocumentUnionDecodeMode::read_with` makes every value a read reaches report
+  the mode, without changes to the deserializers it reads through.
 - **JSON:** in `aws-smithy-json`, `JsonSerializer` and `JsonDeserializer`
   implement the new methods. Objects keep their member order. Blobs are written
   as base64 strings, timestamps in the codec's default format, and
