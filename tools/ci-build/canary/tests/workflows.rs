@@ -365,8 +365,8 @@ fn the_alarm_is_armed_before_any_leg_runs() {
 
     // Severity in reviewed code, not inside the secret, so that raising it is a reviewed edit
     // rather than a secret rotation nobody sees. The value legitimately changes as the rollout
-    // proceeds — 2.5 while the chain is being proven, 2 once a false-positive rate has been
-    // measured — so what is asserted is that it is pinned and sane, not what it equals.
+    // proceeds — 3 while the canary finds its feet, then 2.5, then 2 once a false-positive rate
+    // has been measured — so what is asserted is that it is pinned and sane, not what it equals.
     let severity = pinned_severity(&text);
     assert!(
         SANCTIONED_SEVERITIES.contains(&severity.as_str()),
@@ -457,9 +457,9 @@ fn a_rigged_break_is_armed_apart_from_a_real_one() {
         "exactly one alarm should carry {marker}"
     );
 
-    // And its description has to say it is a test, because on a Sev2.5 that description is all the
-    // responder sees. A deliberate ticket that reads like a real finding spends the responder's
-    // trust, and the next real one gets read as another drill.
+    // And its description has to say it is a test, because the description is all the responder
+    // sees. A deliberate ticket that reads like a real finding spends the responder's trust, and
+    // the next real one gets read as another drill.
     let descriptions: Vec<&str> = text
         .lines()
         .filter(|l| l.trim().starts_with("--alarm-description "))

@@ -20,10 +20,15 @@
 #           the previous release's alarm while a ticket may still be open against it -- so whether
 #           that releases the ticketing system's hold has to be known.
 #
-# SEVERITY 2.5, everywhere, and not a parameter. Production will be 2.
+# SEVERITY 2.5, and not a parameter. Production will be 2.
 #
-# 2.5 pages during business hours, so run this during the working day: the notification half is the
-# point, and a silent pager at night is not evidence of anything.
+# Deliberately above the release alarm, which starts at a non-paging 3 so a canary finding its feet
+# cannot page anyone. This workflow is the opposite case: it only runs when someone dispatches it,
+# and proving that a page actually arrives is the whole point. A non-paging severity here would
+# demonstrate that a ticket is cut and leave the notification half unproven.
+#
+# 2.5 pages during business hours, so run this during the working day: a silent pager at night is
+# not evidence of anything.
 #
 # High-severity ticketing has to be enabled for the application cutting the ticket, which is
 # unverified -- so the first `fire` may be rejected rather than delivered. That is a finding, not a

@@ -133,10 +133,12 @@ jobs:
         # Severity lives here, in reviewed code, rather than inside the secret, so changing it is a
         # reviewed edit rather than a secret rotation nobody sees.
         #
-        # 2.5 pages during business hours, which is enough to prove the notification path exists.
-        # Raising it to 2 is the last step of the rollout, once the false-positive rate has been
-        # measured across real releases.
-        SEVERITY=2.5
+        # 3 cuts a ticket and pages nobody, which is the right first stage: a canary that pages on
+        # its own teething problems spends the oncall's trust before it has earned any. 2.5 pages
+        # during business hours and 2 is production; each step waits on the false-positive rate
+        # measured by the one before it. `paging-selftest.yml` stays at 2.5, because proving a page
+        # arrives is the one thing a non-paging severity cannot do.
+        SEVERITY=3
         ALARM="build-canary-${TAG}"
 
         # A second alarm, watching `Red {Tag, Induced=true}`.
