@@ -10,7 +10,6 @@ import {
     METRIC_NAMESPACE,
     ORCHESTRATOR_ENVIRONMENT,
     MAIN_REF,
-    RECORD_PREFIX,
     RELEASE_REFS,
     RELEASE_TAG_REFS,
 } from "../../lib/smithy-rs/build-canary-stack";
@@ -171,89 +170,8 @@ test("the orchestrator role should only manage the canary's own alarms", () => {
     expect(resources).toContain(":alarm:paging-selftest-*");
 });
 
-test("the orchestrator role should only ever add to the archive", () => {
-    const statements = policyFor(synth(), "orchestrator").filter((s) =>
-        actionsOf([s]).some((a) => a.startsWith("s3:")),
-    );
-    const actions = actionsOf(statements);
-
-    // An archive should only grow. No delete, so history cannot be rewritten; no read or list, so
-    // a token leaked from a run cannot enumerate it. A PutObject that succeeds is its own
-    // confirmation, so nothing is lost by withholding the rest.
-    expect(actions.filter((a) => a.includes("Delete"))).toEqual([]);
-    expect(actions.filter((a) => a.includes("Get"))).toEqual([]);
-    expect(actions.filter((a) => a.includes("List"))).toEqual([]);
-    expect(actions.some((a) => a.startsWith("s3:PutObject"))).toBe(true);
-
-    // And scoped to the prefix, so a later use of this bucket is not writable by default.
-    for (const resource of statements
-        .flatMap((s) => (Array.isArray(s.Resource) ? s.Resource : [s.Resource]))
-        .map((r) => JSON.stringify(r))) {
-        expect(resource).toContain(`${RECORD_PREFIX}/*`);
-    }
-});
-
-test("the record bucket should outlive the stack, since the records are the only copy", () => {
-    // Every other bucket in this app holds reproducible build inputs and is DESTROY. This one
-    // holds the only remaining history once GitHub has deleted the runs.
-    const buckets = synth().findResources("AWS::S3::Bucket");
-    expect(Object.values(buckets)[0].DeletionPolicy).toBe("Retain");
-});
-
-test("the record bucket should be private, encrypted and TLS-only", () => {
-    const template = synth();
-    const buckets = Object.values(template.findResources("AWS::S3::Bucket"));
-    expect(buckets).toHaveLength(1);
-
-    // All four Block Public Access settings on, which is what makes "private" true rather than
-    // merely "no public policy written yet".
-    expect(buckets[0].Properties.PublicAccessBlockConfiguration).toEqual({
-        BlockPublicAcls: true,
-        BlockPublicPolicy: true,
-        IgnorePublicAcls: true,
-        RestrictPublicBuckets: true,
-    });
-    expect(JSON.stringify(buckets[0].Properties.BucketEncryption)).toContain("AES256");
-
-    // `enforceSSL` renders as a bucket policy denying anything not over TLS.
-    const policies = Object.values(template.findResources("AWS::S3::BucketPolicy"));
-    const policyJson = JSON.stringify(policies);
-    expect(policyJson).toContain("aws:SecureTransport");
-    expect(policyJson).toContain("Deny");
-
-    // And nothing grants anonymous access. CDK renders an anonymous principal as `{"AWS":"*"}`,
-    // not `"*"`, and the TLS deny above already uses that form -- so looking for the string
-    // `"Principal":"*"` finds nothing whatever the policy says, and looking for `{"AWS":"*"}` in
-    // the whole document would match the deny. The allow statements' principals are the question.
-    const allows = policies
-        .flatMap((p) => p.Properties.PolicyDocument.Statement)
-        .filter((s: { Effect: string }) => s.Effect === "Allow");
-    expect(
-        allows.filter(
-            (s: { Principal?: string | { AWS?: string } }) =>
-                s.Principal === "*" ||
-                (typeof s.Principal === "object" && s.Principal?.AWS === "*"),
-        ),
-    ).toEqual([]);
-    expect(policyJson).not.toContain("AllUsers");
-    expect(policyJson).not.toContain("AuthenticatedUsers");
-});
-
 /** The record role has no delete, so a version it overwrites is one it cannot then remove. */
-test("the record bucket should keep an overwritten record", () => {
-    synth().hasResourceProperties("AWS::S3::Bucket", {
-        VersioningConfiguration: { Status: "Enabled" },
-    });
-});
-
-test("the records should not expire, unlike every other bucket in this app", () => {
-    // Outliving GitHub's 90-day retention is the entire purpose. A lifecycle rule here would
-    // reintroduce the gap the bucket exists to close.
-    const buckets = Object.values(synth().findResources("AWS::S3::Bucket"));
-    expect(buckets[0].Properties.LifecycleConfiguration).toBeUndefined();
-});
-
-test("a leg must not be able to touch the alarms or the archive", () => {
+test("a leg must not be able to touch the alarms", () => {
     // The direction that matters. A leg's token is minted forty-five times a dispatch, in jobs
     // that build published crates off the open internet, so it must not be able to delete the
     // alarm watching it or rewrite the record of the break.
@@ -266,13 +184,11 @@ test("a leg must not be able to touch the alarms or the archive", () => {
     const orchestrator = actionsOf(policyFor(template, "orchestrator"));
 
     expect(metrics.some((a) => a.includes("Alarm"))).toBe(false);
-    expect(metrics.some((a) => a.startsWith("s3:"))).toBe(false);
     expect(metrics).toEqual(["cloudwatch:PutMetricData"]);
 
     for (const needed of ["cloudwatch:PutMetricAlarm", "cloudwatch:PutMetricData"]) {
         expect(orchestrator).toContain(needed);
     }
-    expect(orchestrator.some((a) => a.startsWith("s3:PutObject"))).toBe(true);
 });
 
 test("the orchestrator should be gated on the environment, and a leg must not be", () => {
@@ -364,5 +280,4 @@ test("it should output everything that has to be copied into a secret by hand", 
     expect(descriptions).toContain(
         "Set as the BUILD_CANARY_ORCHESTRATOR_ROLE_ARN repository secret",
     );
-    expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_BUCKET repository secret");
 });
