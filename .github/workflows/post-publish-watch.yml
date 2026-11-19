@@ -191,8 +191,12 @@ jobs:
         # against it is routine here, which is why the self-test checks that the hold is released.
         aws cloudwatch describe-alarms --alarm-name-prefix build-canary- \
           --query 'MetricAlarms[].AlarmName' --output text \
-          | tr '\t' '\n' | grep -v '^$' \
+          | tr '\t' '\n' \
           | while read -r old; do
+              # Skipped here rather than filtered with `grep -v`, which exits 1 on an empty list
+              # and under `set -o pipefail` ends the step before `put-metric-alarm`. The first
+              # release has no previous alarm, so no alarm would ever be created.
+              [[ -n "$old" ]] || continue
               echo "deleting previous alarm ${old}"
               aws cloudwatch delete-alarms --alarm-names "$old"
             done
