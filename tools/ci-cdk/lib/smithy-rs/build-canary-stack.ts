@@ -15,8 +15,9 @@ import { Construct } from "constructs";
  *
  * Its own, deliberately not shared with the `aws-sdk-rust-canary` namespace: two canaries on one
  * namespace could not be alarmed on independently. The metrics role is constrained to this
- * namespace, and the SDK canary's role is explicitly denied it — in `smithy-rs-canary-stack`, so
- * that half holds only once *that* stack is deployed. See the deploy notes in `bin/smithy-rs`.
+ * namespace, and the SDK canary's role is confined to its own — the latter in
+ * `smithy-rs-canary-stack`, so that half holds only once *that* stack is deployed. See the deploy
+ * notes in `bin/smithy-rs`.
  *
  * **The leg must emit to exactly this namespace**, or `PutMetricData` is denied by that condition
  * and the verdict is never recorded. The canary crate has a test that reads this file and compares.
@@ -57,6 +58,11 @@ export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
  * environment restricts which refs may use it and not who may push them. Enough to forge a page,
  * delete the alarms, and write to the archive. So the ruleset being active is a prerequisite for
  * deploying these roles, not a later hardening step.
+ *
+ * The gate's only bypass is the release automation, so no human account can create a tag these
+ * roles will trust — not an admin either. That is the strong form, and it is only correct while the
+ * release is actually cut by that automation: a release tagged by a person would be refused, and
+ * the symptom is a rejected push at release time rather than anything visible here.
  */
 export const RELEASE_REFS = [
     "refs/tags/release-????-??-??",
@@ -73,6 +79,9 @@ export const RELEASE_REFS = [
  */
 export const MAIN_REF = "refs/heads/main";
 
+/** {@link RELEASE_REFS} without {@link MAIN_REF}: what the leg role accepts, and all it accepts. */
+export const RELEASE_TAG_REFS = RELEASE_REFS.filter((ref) => ref !== MAIN_REF);
+
 /**
  * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
  *
@@ -87,42 +96,30 @@ export interface Properties extends StackProps {
 }
 
 /**
- * The three roles the build canary assumes, and the bucket holding one record per broken
- * release.
+ * The two roles the build canary assumes, and the bucket holding one record per broken release.
  *
  * The resolved-graph baselines are not here: they live in a directory in the repository, for the
  * reasons the canary crate's `baseline` module gives.
  *
- * The split that matters is leg versus orchestrator. Every leg needs to write a metric, and legs
- * run on whatever ref the release was cut from, forty at a time. The orchestrator is one job per
- * release: it arms the alarm, polls publish status, decides which legs to dispatch, and files the
- * record at the end. One role doing both would mean every leg — and anything else in the repository
- * able to assume that role — also held permission to delete the alarm watching it and to write into
- * the archive, so a branch could quietly disable the thing that pages the oncall.
+ * The split is leg versus orchestrator, and it is a split by *how far the token travels*. A leg's
+ * token is minted forty-five times per dispatch, in jobs that check out and build published crates
+ * from the open internet; it can write one metric in one namespace and nothing else. The
+ * orchestrator's is minted once per release, in a job that declares a GitHub environment a pull
+ * request's code cannot declare, and it arms the alarms, records its own verdicts about itself, and
+ * appends to the archive.
  *
- * The leg's permission set is therefore disjoint from the orchestrator's, and neither is a superset
- * of the other: the metrics role cannot touch alarms or the bucket, and neither orchestrator role
- * can write metrics. A `Red` datapoint and the alarm evaluating it are separate authorities.
- *
- * Telling a leg from the orchestrator is the difficult half. Both run in this repository from the
- * same release tag, so their tokens are identical in everything except the GitHub environment —
- * which is why the orchestrator's roles are gated on one, and why that gate is load-bearing rather
- * than decorative.
- *
- * The orchestrator's two roles share that environment, because a GitHub job declares exactly one.
- * So the boundary between *them* is not isolation — anything able to assume one can assume the
- * other — it is least privilege per step: the step that files a record holds no alarm permission,
- * so a bug in it cannot delete an alarm. Said plainly so nobody reads more into the split than is
- * there. If the orchestrator is ever divided into separate jobs, the two roles can take separate
- * environments without any change to their grants.
+ * Two roles rather than three. An earlier shape split the orchestrator's alarm and archive
+ * permissions, but both accepted *identical* tokens -- same repository, same environment, same
+ * refs -- so anything able to assume one could assume the other, and the division bought
+ * least-privilege per step rather than isolation. It cost a role, a repository secret, and a second
+ * credential switch inside one job. The leg role stays separate because its tokens are the
+ * numerous, least-trusted ones, and those must not be able to delete the alarm watching them.
  */
 export class BuildCanaryStack extends Stack {
-    /** Assumed by every leg, to record its verdict. */
+    /** Assumed by every leg, from a release tag, to record its verdict and nothing else. */
     public readonly metricsRole: GitHubOidcRole;
-    /** Assumed only from the orchestrator environment, to arm and disarm the alarm. */
-    public readonly alarmRole: GitHubOidcRole;
-    /** Assumed only from the orchestrator environment, to add a record to the archive. */
-    public readonly recordRole: GitHubOidcRole;
+    /** Assumed only from the orchestrator environment: alarms, its own verdicts, the archive. */
+    public readonly orchestratorRole: GitHubOidcRole;
     /** One record per release that broke, kept after the workflow run has been deleted. */
     public readonly recordBucket: Bucket;
 
@@ -140,19 +137,18 @@ export class BuildCanaryStack extends Stack {
         this.metricsRole = new GitHubOidcRole(this, "metrics", {
             name: "smithy-rs-build-canary-metrics",
             ...github,
-            // On a release tag, any job: requiring an environment would mean every leg declaring
-            // one, and a tag is only created by the release automation.
+            // Release tags only, and no environment. Requiring one would mean every leg
+            // declaring it, and a release tag is created only by the release automation, so the
+            // ref is enough on its own.
             //
-            // On `main` the orchestrator's environment is required as well, because `main` is also
-            // where maintainer-triggered workflows run a pull request's checked-out code in jobs
-            // holding `id-token: write` -- `manual-canary.yml`, called by `fork-canary.yml` from
-            // `pull_request_target`, and `manual-pull-request-bot.yml`. That code could otherwise
-            // mint a token this role accepts and write a `Red` datapoint, tripping the release's
-            // alarm and paging the oncall over nothing. It cannot declare an environment, because
-            // under `pull_request_target` and `workflow_call` the workflow definition comes from
-            // the base ref rather than from the pull request.
-            refs: RELEASE_REFS.filter((ref) => ref.startsWith("refs/tags/")),
-            alsoTrust: [{ environment: ORCHESTRATOR_ENVIRONMENT, refs: [MAIN_REF] }],
+            // `main` is deliberately absent. It is where maintainer-triggered workflows run a pull
+            // request's checked-out code in jobs holding `id-token: write` --
+            // `manual-canary.yml`, called by `fork-canary.yml` from `pull_request_target`, and
+            // `manual-pull-request-bot.yml`. Admitting `main` here would let that code mint a
+            // token this role accepts and write a `Red` datapoint, tripping the release's alarm
+            // and paging the oncall over a pull request. Anything of the canary's that legitimately
+            // runs from `main` uses the orchestrator role below, which is environment-gated.
+            refs: RELEASE_TAG_REFS,
         });
         this.metricsRole.oidcRole.addToPolicy(
             new PolicyStatement({
@@ -169,14 +165,16 @@ export class BuildCanaryStack extends Stack {
             }),
         );
 
-        this.alarmRole = new GitHubOidcRole(this, "alarms", {
-            name: "smithy-rs-build-canary-alarms",
+        this.orchestratorRole = new GitHubOidcRole(this, "orchestrator", {
+            name: "smithy-rs-build-canary-orchestrator",
             ...github,
             environment: ORCHESTRATOR_ENVIRONMENT,
             // The environment already restricts the refs; this narrows `release-*` to real tags.
+            // `main` is here, where it is absent from the leg role, because the environment is
+            // what a pull request's code cannot declare.
             refs: RELEASE_REFS,
         });
-        this.alarmRole.oidcRole.addToPolicy(
+        this.orchestratorRole.oidcRole.addToPolicy(
             new PolicyStatement({
                 // Create, delete and read back. The readback is what makes "the arming job is
                 // green" mean something, since it is the one job whose failure the paging
@@ -231,12 +229,19 @@ export class BuildCanaryStack extends Stack {
             removalPolicy: RemovalPolicy.RETAIN,
         });
 
-        this.recordRole = new GitHubOidcRole(this, "records", {
-            name: "smithy-rs-build-canary-records",
-            ...github,
-            environment: ORCHESTRATOR_ENVIRONMENT,
-            refs: RELEASE_REFS,
-        });
+        // Its own verdicts about itself: a failed dispatch, an unchecked release, a rigged
+        // break during the self-test. One job per release writes these, where a leg's are written
+        // forty-five at a time, which is why the leg role exists separately at all.
+        this.orchestratorRole.oidcRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["cloudwatch:PutMetricData"],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+                conditions: {
+                    StringEquals: { "cloudwatch:namespace": METRIC_NAMESPACE },
+                },
+            }),
+        );
         // Write only: no read, no delete, no list. An archive should only ever grow, and the
         // workflow needs nothing else — a `PutObject` that succeeds is its own confirmation, and
         // the keys carry the release, the run id and the attempt, so a write cannot land on an
@@ -245,7 +250,7 @@ export class BuildCanaryStack extends Stack {
         //
         // Scoped to the prefix even though the bucket holds nothing else, so a later use of this
         // bucket is not writable by the orchestrator by default.
-        this.recordBucket.grantPut(this.recordRole.oidcRole, `${RECORD_PREFIX}/*`);
+        this.recordBucket.grantPut(this.orchestratorRole.oidcRole, `${RECORD_PREFIX}/*`);
 
         // The ARNs and the bucket name have to be copied into repository secrets by hand, so emit
         // them rather than making someone dig through the console after deploying.
@@ -253,13 +258,9 @@ export class BuildCanaryStack extends Stack {
             value: this.metricsRole.oidcRole.roleArn,
             description: "Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret",
         });
-        new CfnOutput(this, "alarm-role-arn", {
-            value: this.alarmRole.oidcRole.roleArn,
-            description: "Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret",
-        });
-        new CfnOutput(this, "record-role-arn", {
-            value: this.recordRole.oidcRole.roleArn,
-            description: "Set as the BUILD_CANARY_RECORD_ROLE_ARN repository secret",
+        new CfnOutput(this, "orchestrator-role-arn", {
+            value: this.orchestratorRole.oidcRole.roleArn,
+            description: "Set as the BUILD_CANARY_ORCHESTRATOR_ROLE_ARN repository secret",
         });
         new CfnOutput(this, "record-bucket-name", {
             value: this.recordBucket.bucketName,
