@@ -65,15 +65,6 @@ impl<T: ToDocumentLossy> ToDocumentLossy for Vec<T> {
     type Document = Vec<T::Document>;
 
     fn to_document_lossy(&self) -> Self::Document {
-        self.as_slice().to_document_lossy()
-    }
-}
-
-/// For a list companion's getter, which returns a slice.
-impl<T: ToDocumentLossy> ToDocumentLossy for [T] {
-    type Document = Vec<T::Document>;
-
-    fn to_document_lossy(&self) -> Self::Document {
         self.iter().map(T::to_document_lossy).collect()
     }
 }
@@ -180,10 +171,6 @@ mod tests {
         let sparse = vec![Some(blob()), None];
         assert_eq!(
             sparse.to_document_lossy(),
-            vec![Some(Document::from("AQID")), None]
-        );
-        assert_eq!(
-            sparse.as_slice().to_document_lossy(),
             vec![Some(Document::from("AQID")), None]
         );
 

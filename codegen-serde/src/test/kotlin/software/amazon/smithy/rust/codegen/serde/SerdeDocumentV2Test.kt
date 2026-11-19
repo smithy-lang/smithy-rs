@@ -175,7 +175,7 @@ class SerdeDocumentV2Test {
                     )
                 }
 
-                unitTest("structure_companions_take_priority_over_the_document_fields") {
+                unitTest("structures_with_companions_write_their_document_fields") {
                     rustTemplate(
                         """
                         ##![allow(deprecated)]
@@ -209,13 +209,21 @@ class SerdeDocumentV2Test {
                         });
                         assert_eq!(json(&record), expected);
 
-                        // A set companion is written even after its `Document` field changes, as on the wire.
+                        // The `Document` fields are written, so changes to them are too. The companions are no
+                        // longer current, as on the wire.
                         record.payload = Some(Document::from("changed"));
                         record.payloads = Some(vec![]);
                         record.payload_map = None;
                         record.legacy = None;
                         record.nested.as_mut().unwrap().body = Document::Null;
-                        assert_eq!(json(&record), expected);
+                        assert_eq!(
+                            json(&record),
+                            #{serde_json}::json!({
+                                "payload": "changed",
+                                "payloads": [],
+                                "nested": { "body": null },
+                            }),
+                        );
 
                         // Without a companion, the current `Document` field is written.
                         let mut record = Record::builder().payload(Document::from("before")).build();

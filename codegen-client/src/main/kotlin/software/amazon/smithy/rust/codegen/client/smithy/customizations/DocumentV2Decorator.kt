@@ -158,11 +158,10 @@ internal fun documentV2CompanionsEnabled(codegenContext: ClientCodegenContext): 
 }
 
 /**
- * The companions of [shape]'s members, or none when [codegenContext]'s structures don't get companions. Code that
- * reads a generated structure's `Document` fields, such as the `serde` implementations from `codegen-serde`, must
- * read a set companion instead. See [DocumentV2Decorator].
+ * The companions of [shape]'s members, or none when [codegenContext]'s structures don't get companions. See
+ * [DocumentV2Decorator].
  */
-fun documentV2Companions(
+internal fun documentV2Companions(
     codegenContext: ClientCodegenContext,
     shape: StructureShape,
 ): List<DocumentV2Companion> =
