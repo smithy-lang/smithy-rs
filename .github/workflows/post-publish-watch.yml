@@ -176,6 +176,12 @@ jobs:
           fi
           printf '%s' "$arn"
         }
+        # CloudWatch may return a space as `+` or as `%20`, so both sides of the comparison below
+        # are normalised first. A cosmetic re-encoding must not stop the arming.
+        normalise_action() {
+          local s="${1//%20/ }"
+          printf '%s' "${s//+/ }"
+        }
         ACTION_ARN="$(fill_action "$ALARM")"
         INDUCED_ACTION_ARN="$(fill_action "$INDUCED_ALARM")"
 
@@ -228,22 +234,40 @@ jobs:
             echo "::error title=Alarm missing::put-metric-alarm succeeded but ${NAME} is not there"
             exit 1
           fi
-        done
-        echo "armed=true" >> "$GITHUB_OUTPUT"
 
-        for NAME in "$ALARM" "$INDUCED_ALARM"; do
+          # An alarm with the wrong action is armed in name only, so compare it -- but never print
+          # it. Filling the placeholders makes the ARN a string GitHub no longer masks, and both
+          # the job log and the job summary are public.
+          if [[ "$NAME" == "$INDUCED_ALARM" ]]; then
+            EXPECTED_ACTION="$INDUCED_ACTION_ARN"
+          else
+            EXPECTED_ACTION="$ACTION_ARN"
+          fi
+          ACTUAL_ACTION="$(aws cloudwatch describe-alarms --alarm-names "$NAME" \
+                             --query 'MetricAlarms[0].AlarmActions[0]' --output text)"
+          if [[ "$(normalise_action "$ACTUAL_ACTION")" != "$(normalise_action "$EXPECTED_ACTION")" ]]; then
+            echo "::error title=Wrong action::${NAME} does not carry the filled template"
+            exit 1
+          fi
+
           {
             echo "### Armed \`${NAME}\` at severity ${SEVERITY}"
             echo ""
+            # Which encoding came back, without the value.
+            if [[ "$ACTUAL_ACTION" == "$EXPECTED_ACTION" ]]; then
+              echo "The alarm action matches the filled template exactly."
+            else
+              echo "The alarm action matches the filled template once space encoding is normalised."
+            fi
+            echo ""
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          # The action verbatim, because how spaces in it are encoded is a question only observation
-          # settles.
           aws cloudwatch describe-alarms --alarm-names "$NAME" \
-            --query 'MetricAlarms[0].{State:StateValue,Actions:AlarmActions,MissingData:TreatMissingData,Dimensions:Dimensions}' \
+            --query 'MetricAlarms[0].{State:StateValue,MissingData:TreatMissingData,Dimensions:Dimensions}' \
             | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
         done
+        echo "armed=true" >> "$GITHUB_OUTPUT"
 
   dispatch-tier:
     name: Watch the publish window
