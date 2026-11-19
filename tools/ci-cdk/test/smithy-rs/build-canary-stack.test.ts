@@ -213,8 +213,20 @@ test("the record bucket should be private, encrypted and TLS-only", () => {
     expect(policyJson).toContain("aws:SecureTransport");
     expect(policyJson).toContain("Deny");
 
-    // And nothing grants anonymous access.
-    expect(policyJson).not.toContain('"Principal":"*"');
+    // And nothing grants anonymous access. CDK renders an anonymous principal as `{"AWS":"*"}`,
+    // not `"*"`, and the TLS deny above already uses that form -- so looking for the string
+    // `"Principal":"*"` finds nothing whatever the policy says, and looking for `{"AWS":"*"}` in
+    // the whole document would match the deny. The allow statements' principals are the question.
+    const allows = policies
+        .flatMap((p) => p.Properties.PolicyDocument.Statement)
+        .filter((s: { Effect: string }) => s.Effect === "Allow");
+    expect(
+        allows.filter(
+            (s: { Principal?: string | { AWS?: string } }) =>
+                s.Principal === "*" ||
+                (typeof s.Principal === "object" && s.Principal?.AWS === "*"),
+        ),
+    ).toEqual([]);
     expect(policyJson).not.toContain("AllUsers");
     expect(policyJson).not.toContain("AuthenticatedUsers");
 });
