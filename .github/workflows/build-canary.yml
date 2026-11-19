@@ -257,9 +257,20 @@ jobs:
                 print(f"- cargo target: `{d['target']}`{at}")
             # The versions, which is what a responder actually needs: a code and a message say
             # what the compiler objected to, not which published pair produced it.
+            # Stated as a fact about the graph, not as the cause. This list is every crate we
+            # publish that resolved twice, computed from the lockfile with no link to the error,
+            # so it names unrelated pairs as readily as the culprit. The rendered diagnostic below
+            # is what assigns blame.
             for dup in d.get('duplicate_versions') or []:
                 versions = ' and '.join(f"`{v}`" for v in dup['versions'])
-                print(f"- **two versions of `{dup['name']}` in one graph**: {versions}")
+                print(f"- `{dup['name']}` resolved twice in this graph: {versions}")
+            # The codes and the message say what the compiler objected to, never where. Only the
+            # rendered diagnostic carries the file and line, and it is capped at two.
+            for rendered in d.get('rendered') or []:
+                print()
+                print('```text')
+                print(rendered)
+                print('```')
         print()
         print("| step | attempt | ok | verdict |")
         print("|---|---|---|---|")

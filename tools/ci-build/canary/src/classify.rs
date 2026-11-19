@@ -137,6 +137,12 @@ impl StepOutcome {
     }
 }
 
+/// How many rendered diagnostics a report keeps.
+///
+/// The first error is usually the cause and the second its consequence. Past that a reader is
+/// reading a build log, which is what the evidence artifact is for.
+const RENDERED_KEEP: usize = 2;
+
 /// What a responder needs in order to know where to look, carried on the dimensioned metric and
 /// into the ticket.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,8 +150,16 @@ pub struct Diagnosis {
     /// Compiler error codes, in order of appearance: `E0308`, `E0432`, …
     #[serde(default)]
     pub codes: Vec<String>,
-    /// The first error's rendered message, truncated.
+    /// The first error's message, truncated. One line; [`Self::rendered`] is the whole diagnostic.
     pub summary: Option<String>,
+    /// The first errors as rustc renders them, carrying the file, line and column nothing else
+    /// here does. Cargo's JSON stdout is not echoed, so without this a compile break's location
+    /// reaches neither the job log nor the ticket.
+    ///
+    /// `default` for the same reason as [`Self::duplicate_versions`]: an older report must read
+    /// back, or its leg counts as having sent nothing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rendered: Vec<String>,
     /// The cargo target the first error came from, which distinguishes a break in the consumer's
     /// own code from one in a test target.
     pub target: Option<String>,
@@ -156,9 +170,10 @@ pub struct Diagnosis {
     pub target_version: Option<String>,
     /// Crates under test that resolved to more than one version in the same graph.
     ///
-    /// This is the version pair a page is supposed to name. See [`crate::lockfile`] for why it is
-    /// taken from the lockfile rather than the compiler's prose, and why it is only ever evidence
-    /// alongside a verdict reached some other way.
+    /// Computed from the lockfile with no link to the error, so it names unrelated pairs as
+    /// readily as the culprit — context, not a conclusion, and [`Self::rendered`] is what assigns
+    /// blame. See [`crate::lockfile`] for why it is taken from the lockfile rather than the
+    /// compiler's prose.
     ///
     /// `default` is load-bearing, not tidiness. `skip_serializing_if` omits this when it is empty,
     /// which is the common case — most compile breaks involve no duplicated crate at all — and
@@ -443,6 +458,17 @@ fn diagnose(outcome: &StepOutcome) -> Diagnosis {
                 d.codes.push(code.to_string());
             }
         }
+        // Not gated on `summary`, because the cap is what bounds this and the second error is
+        // worth keeping even though only the first names the target.
+        if d.rendered.len() < RENDERED_KEEP {
+            if let Some(rendered) = msg
+                .get("message")
+                .and_then(|m| m.get("rendered"))
+                .and_then(|r| r.as_str())
+            {
+                d.rendered.push(rendered.trim_end().to_string());
+            }
+        }
         if d.summary.is_none() {
             d.summary = msg
                 .get("message")
@@ -677,15 +703,18 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         let bare = Diagnosis {
             codes: vec!["E0308".into()],
             summary: Some("mismatched types".into()),
+            rendered: vec![],
             target: Some("aws_config".into()),
             target_version: None,
             duplicate_versions: vec![],
         };
         let json = serde_json::to_string(&bare).unwrap();
-        assert!(
-            !json.contains("duplicate_versions"),
-            "the empty case is omitted on the way out: {json}"
-        );
+        for omitted in ["duplicate_versions", "rendered"] {
+            assert!(
+                !json.contains(omitted),
+                "the empty case of {omitted} is omitted on the way out: {json}"
+            );
+        }
         assert_eq!(
             serde_json::from_str::<Diagnosis>(&json).expect("and must still read back"),
             bare
@@ -693,6 +722,7 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
 
         let full = Diagnosis {
             target_version: Some("1.10.1".into()),
+            rendered: vec!["error[E0308]: mismatched types\n --> src/main.rs:1:26".into()],
             duplicate_versions: vec![crate::lockfile::Duplicated {
                 name: "aws-smithy-schema".into(),
                 versions: vec!["0.2.1".into(), "1.2.0".into()],
@@ -712,6 +742,7 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert_eq!(d.codes, ["E0308"]);
         assert!(d.target_version.is_none());
         assert!(d.duplicate_versions.is_empty());
+        assert!(d.rendered.is_empty());
     }
 
     /// The enrichment must never cost a verdict. A lockfile that cannot be read, or is not there,
@@ -739,6 +770,42 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert_eq!(d.codes, ["E0308"]);
         assert_eq!(d.summary.as_deref(), Some("mismatched types"));
         assert_eq!(d.target.as_deref(), Some("clsfy"));
+    }
+
+    /// The code and the message say what the compiler objected to. Only the rendered diagnostic
+    /// says *where*, and a responder cannot act on `E0308` and "mismatched types" alone.
+    #[test]
+    fn a_compile_failure_keeps_the_rendered_diagnostic() {
+        let (_, d) = classify(&outcome(Step::Build, COMPILE_ERROR_JSON, "")).unwrap();
+        let first = d.rendered.first().expect("the rendered diagnostic is kept");
+        assert!(
+            first.contains("src/main.rs:1:26"),
+            "the file and line are the whole point: {first:?}"
+        );
+        // Trailing newline stripped, so a job summary does not gain a blank line per diagnostic.
+        assert!(!first.ends_with('\n'), "{first:?}");
+        // `failure-note` records carry no `rendered`, so they cannot crowd out a real one.
+        assert!(d.rendered.len() <= RENDERED_KEEP);
+    }
+
+    /// Two errors is the cap. Keeping every one of them would put a build log in a ticket.
+    #[test]
+    fn the_rendered_diagnostics_are_capped() {
+        let many: String = (0..6)
+            .map(|i| {
+                format!(
+                    r#"{{"reason":"compiler-message","target":{{"name":"x"}},"message":{{"level":"error","code":{{"code":"E030{i}"}},"message":"m{i}","rendered":"error[E030{i}]: m{i}\n --> src/l{i}.rs:1:1\n"}}}}
+"#
+                )
+            })
+            .collect();
+        let (_, d) = classify(&outcome(Step::Build, &many, "")).unwrap();
+        assert_eq!(d.rendered.len(), RENDERED_KEEP);
+        assert!(d.rendered[0].contains("src/l0.rs"), "{:?}", d.rendered[0]);
+        assert!(d.rendered[1].contains("src/l1.rs"), "{:?}", d.rendered[1]);
+        // All six codes are still named, because a code is one token and the list is the index
+        // into what the evidence artifact holds.
+        assert_eq!(d.codes.len(), 6);
     }
 
     #[test]

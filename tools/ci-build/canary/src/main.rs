@@ -409,6 +409,16 @@ fn main() -> anyhow::Result<()> {
                     report.stopped.unwrap(),
                 ),
             }
+            // The rendered diagnostics. Cargo's JSON stdout is deliberately not echoed, so this is
+            // the only place the file and line that broke reach someone reading the job log.
+            for rendered in report
+                .diagnosis
+                .as_ref()
+                .map(|d| d.rendered.as_slice())
+                .unwrap_or_default()
+            {
+                eprintln!("{rendered}");
+            }
             // Said in the job log, because that is the first thing anyone opens and a rigged leg
             // is otherwise indistinguishable from a real break there. Said for a green one too: a
             // manifest rigged to break that came back green is a finding about the rig.

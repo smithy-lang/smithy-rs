@@ -335,6 +335,7 @@ mod tests {
             diagnosis: Some(Diagnosis {
                 codes: vec!["E0308".into()],
                 summary: Some("mismatched types".into()),
+                rendered: vec![],
                 target: Some("aws_config".into()),
                 target_version: Some("1.10.1".into()),
                 duplicate_versions: vec![Duplicated {
