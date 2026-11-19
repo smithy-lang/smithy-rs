@@ -411,6 +411,37 @@ fn the_two_roles_are_used_by_the_jobs_they_were_made_for() {
     );
 }
 
+/// A workflow that must not lose a queued dispatch has to say so, not rely on the default.
+///
+/// `cancel-in-progress: false` keeps the run in flight, which is only half of it: GitHub's default
+/// `queue: single` keeps one *pending* run per group and cancels it when a third arrives. A
+/// cancelled run's legs die mid-flight, emit no datapoint and leave no report, so they arrive in
+/// the record as `unreported` — the signal reserved for a leg that died of a defect in the canary.
+/// Relying on the default therefore manufactures the very thing `cancel-in-progress: false` was set
+/// to avoid.
+#[test]
+fn a_workflow_that_refuses_to_cancel_also_refuses_to_drop_a_queued_run() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        let Some(concurrency) = wf.get("concurrency") else {
+            continue;
+        };
+        if concurrency
+            .get("cancel-in-progress")
+            .and_then(Value::as_bool)
+            != Some(false)
+        {
+            continue;
+        }
+        assert_eq!(
+            concurrency.get("queue").and_then(Value::as_str),
+            Some("max"),
+            "{name}.yml keeps its running job but leaves `queue` at the default, so a third \
+             dispatch cancels the pending one and its legs arrive as `unreported`"
+        );
+    }
+}
+
 /// A conditional job that keys on `needs.<job>.result` has to call a status-check function.
 ///
 /// GitHub applies an implicit `success()` to any `if:` that calls none, and that `success()` covers
@@ -1297,8 +1328,14 @@ fn aws_steps_are_skipped_when_unconfigured() {
 }
 
 /// A leg has to report before GitHub kills its job, or it emits nothing at all — and an absent
-/// datapoint cannot raise an alarm, which is worse than a red one. The leg tracks its own budget,
-/// so the job's timeout only has to leave room for it.
+/// datapoint cannot raise an alarm, which is worse than a red one.
+///
+/// Room for the budget alone is not enough, and asserting `>=` was the defect. The leg's clock
+/// starts inside `run-leg`, after the checkout, the toolchain, the musl target and cargo building
+/// this crate, and the report, the datapoint and the upload all come after it. Equal values let a
+/// hung command consume the job's whole wall clock from a later start, so GitHub kills it
+/// mid-flight and the leg arrives in `unreported` — the bucket meaning the canary broke — for a
+/// release that was in fact hanging.
 #[test]
 fn a_leg_job_outlives_the_legs_own_budget() {
     let wf = load("build-canary");
@@ -1308,11 +1345,20 @@ fn a_leg_job_outlives_the_legs_own_budget() {
         .and_then(Value::as_u64)
         .expect("a timeout");
     let own_budget = canary::leg::BUDGET.as_secs() / 60;
-
+    let margin = canary::leg::JOB_MARGIN.as_secs() / 60;
     assert!(
-        job_timeout >= own_budget,
-        "the job's {job_timeout} minutes is under the leg's own {own_budget}-minute budget, \
-         so GitHub would kill it before it could report"
+        job_timeout >= own_budget + margin,
+        "the job's {job_timeout} minutes does not leave the {margin} minutes the leg needs around \
+         its own {own_budget}-minute budget, so a hung command would be killed before reporting"
+    );
+    // And the margin has to be worth having. Satisfying the sum by shrinking it to nothing is the
+    // same defect in a different place: cargo building this crate is the dominant term outside the
+    // leg's own clock and routinely takes more than two minutes cold, before the toolchain and the
+    // musl target are counted, let alone the report and the upload afterwards.
+    assert!(
+        margin >= 3,
+        "a {margin}-minute margin does not cover building this crate, never mind the toolchain \
+         before it and the report and upload after it"
     );
     // And the whole thing has to fit inside the watcher's tick, or a leg could outlive the tick
     // that dispatched it and be re-dispatched alongside itself.

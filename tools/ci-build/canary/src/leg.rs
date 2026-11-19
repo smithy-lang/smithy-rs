@@ -39,9 +39,24 @@ use serde::{Deserialize, Serialize};
 use crate::classify::{self, Diagnosis, Step, StepOutcome, Verdict};
 use crate::scenarios::{Body, Checks, Leg, Profile};
 
-/// The leg's own deadline. Strictly under the watcher's 15-minute dispatch tick, so a leg can never
-/// outlive the tick that dispatched it and be re-dispatched alongside itself.
-pub const BUDGET: Duration = Duration::from_secs(14 * 60);
+/// The leg's own deadline, counted from inside `run-leg`.
+///
+/// Under the job's `timeout-minutes` by at least [`JOB_MARGIN`], and the job in turn under the
+/// watcher's 15-minute dispatch tick — so a leg can neither be killed before it reports nor outlive
+/// the tick that dispatched it and be re-dispatched alongside itself.
+pub const BUDGET: Duration = Duration::from_secs(10 * 60);
+
+/// The slack a leg's job needs on top of [`BUDGET`].
+///
+/// [`BUDGET`] starts counting inside `run-leg`. The job's `timeout-minutes` starts when the job
+/// does, and between the two sit the checkout, the toolchain, the musl target and cargo building
+/// this crate; after `run-leg` come the report, the datapoint and the evidence upload.
+///
+/// Hand a hung command all of [`BUDGET`] with no margin and GitHub kills the job first. The leg
+/// then writes no report, emits no datapoint and uploads no evidence — so a build that hangs, which
+/// is one of the things this canary exists to catch, pages nobody and arrives in the record as
+/// `unreported`: the bucket reserved for a leg that died of a defect in the canary itself.
+pub const JOB_MARGIN: Duration = Duration::from_secs(4 * 60);
 
 /// Attempts and spacing for one verdict class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1275,18 +1290,33 @@ version = "0.2.12"
         assert!(r.elapsed < budget);
     }
 
-    /// 6 minutes of retry fits inside the 14-minute budget with room for the work, which is the
-    /// arithmetic that keeps a leg under the watcher's 15-minute tick.
+    /// One exhausted infra step fits inside the budget with room for the work, which is the
+    /// arithmetic keeping a leg under the watcher's tick.
+    ///
+    /// *Two* no longer fit, and that is a deliberate trade. The budget dropped to leave the job's
+    /// wall clock a margin, because a leg killed by GitHub reports nothing at all and is filed as a
+    /// canary defect — strictly worse than a leg that gives up on its second run of bad luck. A leg
+    /// that does hit it returns `DeadlineReached` carrying `INFRA_FAIL`, which still emits a
+    /// datapoint, still exits 0 and still blames the runner rather than the release.
     #[test]
     fn one_exhausted_infra_step_fits_well_inside_the_budget() {
         let worst = Retry::for_verdict(Verdict::InfraFail);
         let waiting = worst.interval * (worst.attempts - 1);
         assert_eq!(waiting, Duration::from_secs(360));
         assert!(
-            waiting * 2 < BUDGET,
-            "two exhausted infra steps should still fit"
+            waiting < BUDGET,
+            "one exhausted infra step must fit inside the budget"
         );
-        assert!(BUDGET < Duration::from_secs(15 * 60), "under the tick");
+        assert!(
+            waiting + JOB_MARGIN <= BUDGET + JOB_MARGIN,
+            "and leave the job's margin untouched"
+        );
+        // The chain the whole arithmetic rests on: the leg finishes before its job, and the job
+        // before the tick that dispatched it.
+        assert!(
+            BUDGET + JOB_MARGIN <= Duration::from_secs(15 * 60),
+            "under the tick"
+        );
     }
 
     #[test]
