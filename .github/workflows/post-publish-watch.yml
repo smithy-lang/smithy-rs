@@ -455,7 +455,17 @@ jobs:
     needs: [alarms, dispatch-tier]
     # Ran-and-finished, either way. Not `always()`, which would also fire when the dispatch tier was
     # skipped because the canary is unarmed, and start a day of dispatching that nobody asked for.
-    if: needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure'
+    #
+    # `!cancelled()` is load-bearing and not decoration. GitHub applies an implicit `success()` to
+    # any `if:` that calls no status-check function, and `success()` covers *every* job in `needs` --
+    # so without it this condition is never even evaluated when `alarms` fails, and the whole day of
+    # checking is skipped. That matters more since arming fails deliberately on an incomplete paging
+    # chain: the loudest way to say "this release cannot page" would otherwise also stop it being
+    # checked. Calling `!cancelled()` suppresses the implicit `success()` while still refusing to
+    # start a day of dispatching for a watch somebody cancelled.
+    if: >
+      !cancelled() &&
+      (needs.dispatch-tier.result == 'success' || needs.dispatch-tier.result == 'failure')
     runs-on: ubuntu-latest
     # An hour of sleeping plus a few minutes of work: a checkout, a toolchain, the gate's own build,
     # and three API calls. Tight on purpose: without it a stuck step would hold a runner for the

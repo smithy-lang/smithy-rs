@@ -411,6 +411,42 @@ fn the_two_roles_are_used_by_the_jobs_they_were_made_for() {
     );
 }
 
+/// A conditional job that keys on `needs.<job>.result` has to call a status-check function.
+///
+/// GitHub applies an implicit `success()` to any `if:` that calls none, and that `success()` covers
+/// every job in `needs`. So a condition written to handle a failed upstream job is never evaluated
+/// when that job fails: GitHub skips the job before the expression runs. The symptom is a tier that
+/// quietly does not happen, which is the failure shape this whole file is about.
+///
+/// It is the floor tier that this bites. Its own comment says it must run when the dispatch tier
+/// failed, `an_arming_failure_does_not_stop_the_release_being_checked` requires the same of an
+/// arming failure, and arming now fails deliberately when the paging chain is incomplete — so
+/// without a status-check function, saying "this release cannot page" would also stop it being
+/// checked for a day.
+#[test]
+fn a_condition_that_handles_a_failed_job_calls_a_status_function() {
+    const STATUS_FUNCTIONS: &[&str] = &["always()", "cancelled()", "failure()", "success()"];
+
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let Some(condition) = job.get("if").and_then(Value::as_str) else {
+                continue;
+            };
+            if !condition.contains("needs.") || !condition.contains(".result") {
+                continue;
+            }
+            assert!(
+                STATUS_FUNCTIONS.iter().any(|f| condition.contains(f)),
+                "{name}.yml job {job_name} keys on an upstream job's result without calling a \
+                 status-check function, so GitHub's implicit success() skips it whenever any job \
+                 in `needs` fails -- including the case the condition was written for: \
+                 {condition:?}"
+            );
+        }
+    }
+}
+
 /// A newer release has to stop the old watch dispatching, and has to do it before the hour is
 /// slept.
 ///
