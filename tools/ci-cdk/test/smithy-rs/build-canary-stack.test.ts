@@ -123,10 +123,10 @@ const actionsOf = (statements: Statement[]): string[] =>
     statements.flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action]));
 
 test("it should create exactly two roles", () => {
-    // Two, not three. An alarm role and an archive role accepted identical tokens -- same
-    // repository, same environment, same refs -- so splitting them bought least privilege per step
-    // and no isolation. The leg role stays separate because its tokens are the numerous,
-    // least-trusted ones.
+    // Two, and not a third carved out of the orchestrator's permissions: any two roles split out
+    // of them would accept identical tokens -- same repository, same environment, same refs --
+    // which buys least privilege per step and no isolation. The leg role is separate because its
+    // tokens are the numerous, least-trusted ones.
     const roles = synth().findResources("AWS::IAM::Role");
     expect(
         Object.values(roles)
@@ -170,11 +170,10 @@ test("the orchestrator role should only manage the canary's own alarms", () => {
     expect(resources).toContain(":alarm:paging-selftest-*");
 });
 
-/** The record role has no delete, so a version it overwrites is one it cannot then remove. */
 test("a leg must not be able to touch the alarms", () => {
-    // The direction that matters. A leg's token is minted forty-five times a dispatch, in jobs
-    // that build published crates off the open internet, so it must not be able to delete the
-    // alarm watching it or rewrite the record of the break.
+    // The direction that matters. A leg's token is minted forty times in a release's matrix, in
+    // jobs that build published crates off the open internet, so it must not be able to delete the
+    // alarm watching it.
     //
     // The reverse is no longer a property and should not be asserted as one: the orchestrator
     // writes its own verdicts -- a failed dispatch, an unchecked release -- so it holds the leg's
@@ -198,7 +197,7 @@ test("the orchestrator should be gated on the environment, and a leg must not be
     expect(trustFor(template, "orchestrator").StringEquals[`${CLAIM}:environment`]).toBe(
         ORCHESTRATOR_ENVIRONMENT,
     );
-    // Conditioning the leg role on an environment would require all forty-five legs to declare
+    // Conditioning the leg role on an environment would require every leg in the matrix to declare
     // one. The release tag is what bounds it instead.
     expect(trustFor(template, "metrics").StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
 });

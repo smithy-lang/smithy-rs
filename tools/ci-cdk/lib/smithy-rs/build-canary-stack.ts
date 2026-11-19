@@ -34,11 +34,11 @@ export const METRIC_NAMESPACE = "smithy-rs-build-canary";
 export const ALARM_PREFIXES = ["build-canary", "paging-selftest"];
 
 /**
- * The GitHub environment a job must run in to assume either of the orchestrator's roles.
+ * The GitHub environment a job must run in to assume the orchestrator's role.
  *
- * Named for the job rather than for one of its permissions, because it gates both arming the alarm
- * and filing the release's record. A GitHub job declares exactly one environment, so the
- * orchestrator's roles have to share it; see the class docs for what that does and does not buy.
+ * Named for the job rather than for one of its permissions, because that job both arms the alarms
+ * and writes its own verdicts about the release. A GitHub job declares exactly one environment, so
+ * naming it after a single permission would mislead whoever adds the next one.
  */
 export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
 
@@ -53,10 +53,10 @@ export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
  * the author is a repository ruleset's job, and the ruleset has to be *enforcing* for this
  * condition to mean anything: while it only evaluates, anyone with write access can tag an
  * arbitrary commit `release-YYYY-MM-DD`, and code at that tag can assume the metrics role — or, if
- * its workflow declares the orchestrator's environment, the alarm and record roles too, since the
- * environment restricts which refs may use it and not who may push them. Enough to forge a page,
- * delete the alarms, and write to the archive. So the ruleset being active is a prerequisite for
- * deploying these roles, not a later hardening step.
+ * its workflow declares the orchestrator's environment, the orchestrator's role too, since the
+ * environment restricts which refs may use it and not who may push them. Enough to forge a page
+ * and delete the alarms. So the ruleset being active is a prerequisite for deploying these roles,
+ * not a later hardening step.
  *
  * The gate's only bypass is the release automation, so no human account can create a tag these
  * roles will trust — not an admin either. That is the strong form, and it is only correct while the
@@ -86,29 +86,29 @@ export interface Properties extends StackProps {
 }
 
 /**
- * The two roles the build canary assumes, and the bucket holding one record per broken release.
+ * The two roles the build canary assumes.
  *
- * The resolved-graph baselines are not here: they live in a directory in the repository, for the
- * reasons the canary crate's `baseline` module gives.
+ * Nothing durable is stored here. A release's record is a 14-day artifact, and the resolved-graph
+ * baselines live in a directory in the repository, for the reasons the canary crate's `baseline`
+ * module gives.
  *
  * The split is leg versus orchestrator, and it is a split by *how far the token travels*. A leg's
- * token is minted forty-five times per dispatch, in jobs that check out and build published crates
- * from the open internet; it can write one metric in one namespace and nothing else. The
- * orchestrator's is minted once per release, in a job that declares a GitHub environment a pull
- * request's code cannot declare, and it arms the alarms, records its own verdicts about itself, and
- * appends to the archive.
+ * token is minted once per leg, forty times in a release's matrix, in jobs that check out and
+ * build published crates from the open internet; it can write one metric in one namespace and
+ * nothing else. The orchestrator's is minted once per release, in a job that declares a GitHub
+ * environment a pull request's code cannot declare, and it arms the alarms and writes its own
+ * verdicts about itself.
  *
- * Two roles rather than three. An earlier shape split the orchestrator's alarm and archive
- * permissions, but both accepted *identical* tokens -- same repository, same environment, same
- * refs -- so anything able to assume one could assume the other, and the division bought
- * least-privilege per step rather than isolation. It cost a role, a repository secret, and a second
- * credential switch inside one job. The leg role stays separate because its tokens are the
- * numerous, least-trusted ones, and those must not be able to delete the alarm watching them.
+ * The leg role is separate because its tokens are the numerous, least-trusted ones, and those must
+ * not be able to delete the alarm watching them. The orchestrator's permissions are not split
+ * further than that: any two roles carved out of them would accept *identical* tokens -- same
+ * repository, same environment, same refs -- so anything able to assume one could assume the
+ * other, which buys least privilege per step and no isolation.
  */
 export class BuildCanaryStack extends Stack {
     /** Assumed by every leg, from a release tag, to record its verdict and nothing else. */
     public readonly metricsRole: GitHubOidcRole;
-    /** Assumed only from the orchestrator environment: alarms, its own verdicts, the archive. */
+    /** Assumed only from the orchestrator environment: the alarms, and its own verdicts. */
     public readonly orchestratorRole: GitHubOidcRole;
 
     constructor(scope: Construct, id: string, props: Properties) {
@@ -189,7 +189,7 @@ export class BuildCanaryStack extends Stack {
 
         // Its own verdicts about itself: a failed dispatch, an unchecked release, a rigged
         // break during the self-test. One job per release writes these, where a leg's are written
-        // forty-five at a time, which is why the leg role exists separately at all.
+        // forty at a time, which is why the leg role exists separately at all.
         this.orchestratorRole.oidcRole.addToPolicy(
             new PolicyStatement({
                 actions: ["cloudwatch:PutMetricData"],
@@ -201,8 +201,8 @@ export class BuildCanaryStack extends Stack {
             }),
         );
 
-        // The ARNs and the bucket name have to be copied into repository secrets by hand, so emit
-        // them rather than making someone dig through the console after deploying.
+        // Both ARNs have to be copied into repository secrets by hand, so emit them rather than
+        // making someone dig through the console after deploying.
         new CfnOutput(this, "metrics-role-arn", {
             value: this.metricsRole.oidcRole.roleArn,
             description: "Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret",
