@@ -185,6 +185,34 @@ jobs:
         ACTION_ARN="$(fill_action "$ALARM")"
         INDUCED_ACTION_ARN="$(fill_action "$INDUCED_ALARM")"
 
+        # An action that is well formed but points nowhere is rejected by the API, not by the
+        # checks above, and the CLI's error echoes the parameter it rejected -- into a public log.
+        # So print the error with the action and its account scrubbed, and if anything ARN-shaped
+        # survives, fall back to the error code: the CLI's wording is not ours to rely on.
+        TICKET_ACCOUNT="${ACTION_ARN#*:*:*:*:}"
+        TICKET_ACCOUNT="${TICKET_ACCOUNT%%:*}"
+        put_alarm() {
+          local err code
+          if err="$(aws cloudwatch put-metric-alarm "$@" 2>&1 >/dev/null)"; then
+            return 0
+          fi
+          for secret in "$ACTION_ARN" "$INDUCED_ACTION_ARN" "$TICKET_ACCOUNT"; do
+            err="${err//"$secret"/<redacted>}"
+            err="${err//"$(normalise_action "$secret")"/<redacted>}"
+          done
+          if [[ "$err" == *arn:aws* ]]; then
+            code="${err#*\(}"
+            code="${code%%\)*}"
+            if [[ "$code" != "$err" && -n "$code" ]]; then
+              err="$code"
+            else
+              err="withheld, because the error text carried the action"
+            fi
+          fi
+          echo "::error title=Arming rejected::put-metric-alarm failed: ${err}"
+          return 1
+        }
+
         # Delete every previous release's alarm. Not an optimisation: an alarm left behind keeps
         # evaluating a series nothing writes to any more, and `notBreaching` holds it at OK forever
         # while occupying a dedupe key a later release may want. Deleting one with an open ticket
@@ -201,7 +229,7 @@ jobs:
               aws cloudwatch delete-alarms --alarm-names "$old"
             done
 
-        aws cloudwatch put-metric-alarm \
+        put_alarm \
           --alarm-name "$ALARM" \
           --alarm-description "The post-publish canary went red for ${TAG}. RESOLVE_FAIL, COMPILE_FAIL, HARNESS_FAIL or RUNTIME_FAIL mean a published crate does not build for a consumer; INFRA_FAIL means the canary itself broke; Component=watcher means the legs were never dispatched, so the release is unchecked. The dimensioned copy of the Red metric carries the verdict, manifest, leg and toolchain." \
           --namespace smithy-rs-build-canary \
@@ -216,7 +244,7 @@ jobs:
         # The description has to make the test unmistakable from the ticket alone. A deliberate
         # ticket that reads like a real finding is worse than no test: it spends the responder's
         # trust, and the next real one is read as another drill.
-        aws cloudwatch put-metric-alarm \
+        put_alarm \
           --alarm-name "$INDUCED_ALARM" \
           --alarm-description "THIS IS A TEST. A canary leg for ${TAG} went red on a manifest that was deliberately rigged to break, to prove that a verdict reaches a human. No published crate is implicated by this ticket and no consumer is affected. A real break in this same release would arrive separately, under ${ALARM}. If you were not told to expect this, that itself is the finding: say so, because the alarm should have been withdrawn with the break." \
           --namespace smithy-rs-build-canary \

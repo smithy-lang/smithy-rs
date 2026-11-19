@@ -144,11 +144,46 @@ jobs:
           exit 1
         fi
 
+        # CloudWatch may return a space as `+` or as `%20`, so comparisons against the action go
+        # through this first. A cosmetic re-encoding must not fail the self-test.
+        normalise_action() {
+          local s="${1//%20/ }"
+          printf '%s' "${s//+/ }"
+        }
+
+        # An action that is well formed but points nowhere is rejected by the API, not by the
+        # checks above, and the CLI's error echoes the parameter it rejected -- into a public log.
+        # So print the error with the action and its account scrubbed, and if anything ARN-shaped
+        # survives, fall back to the error code: the CLI's wording is not ours to rely on.
+        TICKET_ACCOUNT="${ACTION_ARN#*:*:*:*:}"
+        TICKET_ACCOUNT="${TICKET_ACCOUNT%%:*}"
+        put_alarm() {
+          local err code
+          if err="$(aws cloudwatch put-metric-alarm "$@" 2>&1 >/dev/null)"; then
+            return 0
+          fi
+          for secret in "$ACTION_ARN" "$TICKET_ACCOUNT"; do
+            err="${err//"$secret"/<redacted>}"
+            err="${err//"$(normalise_action "$secret")"/<redacted>}"
+          done
+          if [[ "$err" == *arn:aws* ]]; then
+            code="${err#*\(}"
+            code="${code%%\)*}"
+            if [[ "$code" != "$err" && -n "$code" ]]; then
+              err="$code"
+            else
+              err="withheld, because the error text carried the action"
+            fi
+          fi
+          echo "::error title=Arming rejected::put-metric-alarm failed: ${err}"
+          return 1
+        }
+
         # Delete first. A previous attempt with this session name would otherwise be updated rather
         # than created, and an update does not re-send to the ticketing system.
         aws cloudwatch delete-alarms --alarm-names "$ALARM" || true
 
-        aws cloudwatch put-metric-alarm \
+        put_alarm \
           --alarm-name "$ALARM" \
           --alarm-description "Paging self-test. Not a real finding: this alarm exists only to check that a datapoint reaches a ticket, and is dispatched by hand. Safe to close." \
           --namespace smithy-rs-build-canary \
@@ -171,12 +206,7 @@ jobs:
 
         # An alarm with the wrong action is armed in name only, so compare it -- but never print
         # it. Filling the placeholders makes the ARN a string GitHub no longer masks, and both the
-        # job log and the job summary are public. CloudWatch may return a space as `+` or as `%20`,
-        # so normalise both sides; a cosmetic re-encoding must not fail the self-test.
-        normalise_action() {
-          local s="${1//%20/ }"
-          printf '%s' "${s//+/ }"
-        }
+        # job log and the job summary are public.
         ACTUAL_ACTION="$(aws cloudwatch describe-alarms --alarm-names "$ALARM" \
                            --query 'MetricAlarms[0].AlarmActions[0]' --output text)"
         if [[ "$(normalise_action "$ACTUAL_ACTION")" != "$(normalise_action "$ACTION_ARN")" ]]; then

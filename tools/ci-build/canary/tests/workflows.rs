@@ -239,11 +239,24 @@ fn the_filled_alarm_action_is_never_printed() {
         "INDUCED_ACTION_ARN",
         "ACTUAL_ACTION",
         "EXPECTED_ACTION",
+        // Derived from the action, and an account id of its own.
+        "TICKET_ACCOUNT",
     ];
 
     for name in WORKFLOWS {
         // Backslash continuations joined, so a command split across lines is judged whole.
         let script = raw(name).replace("\\\n", " ");
+
+        // Alarms go through the `put_alarm` wrapper, which scrubs the action out of the API's
+        // rejection message. The wrapper's own pass-through is the only call allowed; one carrying
+        // flags is a direct call, which would put the action straight back in the log.
+        for (at, _) in script.match_indices("aws cloudwatch put-metric-alarm") {
+            assert!(
+                script[at..].starts_with("aws cloudwatch put-metric-alarm \"$@\""),
+                "{name}.yml calls put-metric-alarm directly, bypassing the scrub in `put_alarm`"
+            );
+        }
+
         for line in script.lines() {
             if line.contains("AlarmActions") {
                 assert!(
@@ -514,10 +527,12 @@ fn alarm_commands(text: &str) -> Vec<AlarmCommand> {
     while let Some(first) = lines.next() {
         // The invocation itself, not a comment mentioning it: the arming step's prose refers to
         // `put-metric-alarm` too, and parsing that found no flags and failed confusingly.
-        if !first
-            .trim_start()
-            .starts_with("aws cloudwatch put-metric-alarm")
-        {
+        //
+        // Alarms are created through the `put_alarm` wrapper, which scrubs the action out of the
+        // API's rejection message. `the_filled_alarm_action_is_never_printed` is what stops a
+        // direct call appearing beside it.
+        // The trailing space keeps this off `put_alarm() {`, the wrapper's own definition.
+        if !first.trim_start().starts_with("put_alarm ") {
             continue;
         }
         // Backslash-continued: take lines until one does not end in a backslash.
