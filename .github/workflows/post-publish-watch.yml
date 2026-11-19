@@ -123,8 +123,8 @@ jobs:
         # `BUILD_CANARY_ENABLED` decides whether this job runs, not whether a verdict can reach a
         # person. Those are separate, and a release watched with a hole between them is the failure
         # this canary exists to remove -- so once the variable says production, an incomplete chain
-        # is an error rather than a notice nobody reads. The archive stays optional either way: it
-        # answers historical questions and no page depends on it.
+        # is an error rather than a notice nobody reads. A durable archive, deferred for now, would
+        # not join this list: it answers historical questions and no page depends on it.
         if [[ "$ENABLED" == "true" ]]; then
           echo "::error title=Paging chain incomplete::BUILD_CANARY_ENABLED is true, so a verdict must be able to reach a person, but ${MISSING[*]} is unset"
           exit 1

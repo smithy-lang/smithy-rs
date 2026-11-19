@@ -311,8 +311,8 @@ fn the_filled_alarm_action_is_never_printed() {
 /// this the canary can be switched on, run every leg, stay green, and page nobody — the failure it
 /// exists to remove, wearing its own clothes.
 ///
-/// The archive is deliberately not in the list. It answers historical questions and no page depends
-/// on it.
+/// A durable archive is deferred, and is deliberately not in the list should it come back: it
+/// answers historical questions and no page depends on it.
 #[test]
 fn enabling_the_canary_requires_the_whole_paging_chain() {
     let wf = load("post-publish-watch");

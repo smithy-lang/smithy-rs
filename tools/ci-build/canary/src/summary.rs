@@ -3,20 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! One durable record per release that broke.
+//! One record per release that broke, folded from every leg's report.
 //!
-//! # Why this exists at all, given the job log says the same thing
+//! # Why this exists at all, given the job logs say the same thing
 //!
-//! Because the job log stops existing. Workflow artifacts and logs are kept 90 days by default, and
-//! since October 2026 that same retention covers the workflow *runs* themselves — so three months
-//! after a release broke there is no log, no artifact, and no run. The red-leg evidence this
-//! repository uploads is kept 14 days, shorter still.
+//! Because they say it forty times. A run's evidence is spread across one log and one artifact per
+//! leg, so "what broke, and for whom" means opening them one at a time and knowing which to open.
+//! This folds them into a single object: the red legs with their diagnoses, and the legs that
+//! reported nothing.
 //!
-//! This canary exists because a break once went unnoticed for 21 hours. The question that gets
-//! asked afterwards is not "what does this run say" — someone is already looking at the run — it is
-//! "how often does this happen, and to what". That question is asked months later, by which time
-//! every trace has been deleted. So a release that broke gets one small object written somewhere
-//! durable, and the ability to answer it survives.
+//! It is kept 14 days, as an artifact. A durable archive outliving that is deferred. Artifacts and
+//! logs are kept 90 days by default, and since October 2026 that retention covers the workflow
+//! *runs* themselves, so three months after a release broke there is nothing left to count — but
+//! "how often does this happen, and to what" is a historical question rather than the one this
+//! canary exists for, and answering it cost a bucket and a third repository secret.
 //!
 //! This is not about keeping the diagnosis private. The job log is public and carries it already,
 //! for as long as the log exists.
@@ -24,7 +24,7 @@
 //! # Only when something broke
 //!
 //! A green release writes nothing. How often releases are green is a question for the metric, which
-//! has a datapoint per leg per run and is built for counting; the archive is for the rare case
+//! has a datapoint per leg per run and is built for counting; the record is for the rare case
 //! worth reading in full. `INFRA_FAIL` alone is not worth recording either — it says the runner
 //! broke, not the release — so the trigger is "some leg reached a hard verdict", which is exactly
 //! [`RunSummary::had_a_hard_verdict`].
@@ -32,8 +32,8 @@
 //! # A leg with no report is not a green leg
 //!
 //! The one thing this must never do is infer success from silence. A leg that died without
-//! reporting is a defect in the canary, and recording it as green in the permanent record would
-//! bury the only evidence of it. So [`summarize`] puts legs into four buckets — red, green,
+//! reporting is a defect in the canary, and recording it as green would bury the only evidence of
+//! it. So [`summarize`] puts legs into four buckets — red, green,
 //! superseded, unreported — and a leg reaches `green` only by having submitted a report that says
 //! so. `unreported` is the bucket that must be empty, and it is in the record so that it is visible
 //! when it is not.
@@ -110,8 +110,8 @@ pub struct RunSummary {
 impl RunSummary {
     /// Whether this run is worth recording: some leg blamed the published graph.
     ///
-    /// `INFRA_FAIL` does not count. It says the runner broke, and a permanent archive of runner
-    /// flakes would make the archive useless for its one question.
+    /// `INFRA_FAIL` does not count. It says the runner broke, and a record of runner flakes would
+    /// bury the releases that actually broke among them.
     pub fn had_a_hard_verdict(&self) -> bool {
         self.red.iter().any(|l| l.verdict.is_hard())
     }
@@ -386,8 +386,8 @@ mod tests {
         assert!(!s.had_a_hard_verdict(), "so there is nothing to record");
     }
 
-    /// The write trigger. A runner flake is not a release defect, and archiving it forever would
-    /// make the archive useless for the one question it answers.
+    /// The write trigger. A runner flake is not a release defect, and recording it would bury the
+    /// releases that actually broke.
     #[test]
     fn an_infra_fail_alone_is_not_worth_recording() {
         let legs = matrix();
@@ -447,8 +447,8 @@ mod tests {
     /// The condition nothing else in this system can see.
     ///
     /// Every other signal starts from a leg reaching a verdict. When no leg reaches anything there
-    /// is no verdict to be red, green or `INFRA_FAIL`, so the alarm sees nothing, the archive
-    /// writes nothing, and the per-leg "no report" warning cannot fire because no leg job ran to
+    /// is no verdict to be red, green or `INFRA_FAIL`, so the alarm sees nothing, the record has
+    /// nothing in it, and the per-leg "no report" warning cannot fire because no leg job ran to
     /// print it. A release going entirely unverified is the thing this canary exists to prevent,
     /// and it was the one thing it would not have reported.
     #[test]

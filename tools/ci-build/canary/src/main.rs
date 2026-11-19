@@ -210,8 +210,8 @@ enum Command {
     ///
     /// Every other signal here starts from a leg reaching a verdict. When no leg reaches anything
     /// there is no verdict to be red, green or even `INFRA_FAIL`, so the alarm sees nothing, the
-    /// archive writes nothing, and the per-leg "no report" warning cannot fire because no leg job
-    /// ran to print it. A release going entirely unverified is the condition this canary exists to
+    /// record has nothing in it, and the per-leg "no report" warning cannot fire because no leg
+    /// job ran to print it. A release going entirely unverified is the condition this canary exists to
     /// remove, and without this it is the one condition it would not report.
     ///
     /// Reads the decision `summarize` wrote. Emits nothing unless every leg is unreported, so it is

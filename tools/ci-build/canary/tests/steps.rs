@@ -505,8 +505,10 @@ fn an_enabled_canary_with_nothing_set_names_every_missing_secret() {
     }
 }
 
-/// The archive is optional in both states. It answers a historical question and no page depends on
-/// it, so a missing bucket must not be able to stop a release being watched.
+/// A durable archive is deferred, and if it comes back it must not join the paging chain.
+///
+/// It answers a historical question and no page depends on it, so a missing bucket must never be
+/// able to stop a release being watched.
 #[test]
 fn the_archive_is_not_part_of_the_enabled_state() {
     if !bash_available() {
