@@ -146,12 +146,40 @@ pub fn newest_floor_runs(
             tag: e.head_branch.clone(),
         });
 
-    // The previous release: the newest usable run from some *other* release tag. Anything that is
-    // not a release tag is excluded, so a run dispatched by hand from a branch cannot become the
-    // baseline every release is then measured against.
+    // The earliest run for *this* release, usable or not. Any run of ours existing means our tag
+    // did, which is what makes the cutoff below meaningful. Not filtered by `usable`, because a
+    // cancelled or still-running run of ours is just as much evidence that the tag was there.
+    let first_mine = entries
+        .iter()
+        .filter(|e| e.head_branch == tag)
+        .map(|e| e.created_at.as_str())
+        .min();
+
+    // The previous release: the newest usable run from some *other* release tag, dispatched before
+    // this release existed.
+    //
+    // That last clause is the one that is easy to leave out. Releases land within a day of each
+    // other about one time in eight, and when they do, the earlier release's floor tier keeps
+    // completing runs whose legs all exit `superseded` — no verdict, exit 0, so the run concludes
+    // `success` with nothing red in it. It is then both usable and the newest, so it becomes the
+    // baseline, and a green baseline makes every standing red leg look like news about *this*
+    // release. The window stops after one hour, which is the outcome the "already red" clause
+    // exists to prevent, reached through a run that built nothing.
+    //
+    // A run from the previous release started in the couple of minutes before ours could still have
+    // seen our tag and come back superseded, and still passes this filter. So this narrows the
+    // window rather than closing it.
+    //
+    // Only date-shaped tags count, so a stray `release-*` tag's run cannot become the baseline
+    // either — the same reason `watch::is_release_tag` exists.
     let previous = entries
         .iter()
-        .find(|e| usable(e) && e.head_branch != tag && e.head_branch.starts_with("release-"))
+        .find(|e| {
+            usable(e)
+                && e.head_branch != tag
+                && crate::watch::is_release_tag(&e.head_branch)
+                && first_mine.is_none_or(|first| e.created_at.as_str() < first)
+        })
         .map(|e| FloorRun {
             id: e.database_id,
             tag: e.head_branch.clone(),
@@ -354,6 +382,78 @@ mod tests {
          "displayTitle":"Build canary - all","headBranch":"release-2026-11-09",
          "createdAt":"2026-11-09T08:00:00Z"}
     ]"#;
+
+    /// A release landing mid-window must not hand the next release a baseline that built nothing.
+    ///
+    /// The earlier release's floor tier keeps completing runs after the newer tag appears. Their
+    /// legs all exit `superseded` — no verdict, exit 0 — so the run concludes `success` with
+    /// nothing red in it, and on time alone it would be the newest usable run from another
+    /// release. As a baseline it makes every standing red leg look like news, and the window stops
+    /// after an hour.
+    ///
+    /// Releases land within a day of each other about one time in eight, so this is the ordinary
+    /// case rather than a corner.
+    #[test]
+    fn a_superseded_run_from_the_previous_release_is_not_the_baseline() {
+        // 11-11 is ours, first dispatched at 10:00. 11-10's 09:00 run predates that and is real;
+        // its 11:00 run came after our tag existed, so its legs were superseded and it is green
+        // without having built anything.
+        const OVERLAPPING: &str = r#"[
+            {"databaseId":30,"status":"completed","conclusion":"success",
+             "displayTitle":"Build canary - all","headBranch":"release-2026-11-10",
+             "createdAt":"2026-11-11T11:00:00Z"},
+            {"databaseId":20,"status":"completed","conclusion":"failure",
+             "displayTitle":"Build canary - all","headBranch":"release-2026-11-11",
+             "createdAt":"2026-11-11T10:00:00Z"},
+            {"databaseId":10,"status":"completed","conclusion":"failure",
+             "displayTitle":"Build canary - all","headBranch":"release-2026-11-10",
+             "createdAt":"2026-11-10T09:00:00Z"}
+        ]"#;
+
+        let (mine, previous) = newest_floor_runs(OVERLAPPING, "release-2026-11-11").unwrap();
+        assert_eq!(mine.unwrap().id, 20);
+
+        let previous = previous.expect("the previous release's real run is still a baseline");
+        assert_eq!(
+            previous.id, 10,
+            "run 30 is newer and from another release, but it started after our tag existed, so \
+             its legs were superseded and its greenness says nothing"
+        );
+        assert_eq!(previous.tag, "release-2026-11-10");
+    }
+
+    /// And the cutoff must not throw away a legitimate baseline. Without a run of our own there is
+    /// nothing to compare against, so every previous-release run stays eligible.
+    #[test]
+    fn with_no_run_of_our_own_the_cutoff_excludes_nothing() {
+        const NO_RUN_YET: &str = r#"[
+            {"databaseId":40,"status":"completed","conclusion":"success",
+             "displayTitle":"Build canary - all","headBranch":"release-2026-11-10",
+             "createdAt":"2026-11-10T09:00:00Z"}
+        ]"#;
+        let (mine, previous) = newest_floor_runs(NO_RUN_YET, "release-2026-11-11").unwrap();
+        assert!(mine.is_none());
+        assert_eq!(previous.expect("still eligible").id, 40);
+    }
+
+    /// A stray tag's run cannot become the baseline either, for the same reason a stray tag cannot
+    /// answer "what is the newest release".
+    #[test]
+    fn a_run_from_a_tag_that_is_not_a_release_is_not_the_baseline() {
+        const STRAY: &str = r#"[
+            {"databaseId":50,"status":"completed","conclusion":"success",
+             "displayTitle":"Build canary - all","headBranch":"release-test",
+             "createdAt":"2026-11-10T23:00:00Z"},
+            {"databaseId":20,"status":"completed","conclusion":"failure",
+             "displayTitle":"Build canary - all","headBranch":"release-2026-11-11",
+             "createdAt":"2026-11-11T10:00:00Z"}
+        ]"#;
+        let (_, previous) = newest_floor_runs(STRAY, "release-2026-11-11").unwrap();
+        assert!(
+            previous.is_none(),
+            "release-test is not a release, so its run is not a baseline"
+        );
+    }
 
     /// Five selection rules at once, each of which fixes one of the old rule's defects.
     #[test]
