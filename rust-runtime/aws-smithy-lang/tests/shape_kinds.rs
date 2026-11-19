@@ -336,9 +336,4 @@ fn unknown_and_unsupported_kinds() {
         DiagnosticCode::UnsupportedFeature,
         "/shapes/a#S/type",
     );
-    rejects(
-        r#""a#S":{"type":"apply"}"#,
-        DiagnosticCode::UnsupportedFeature,
-        "/shapes/a#S/type",
-    );
 }

@@ -15,6 +15,136 @@
                 "SyntacticShapeIdTarget"
             ]
         },
+        "invalid/apply_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "apply_conflict.smithy",
+                "line": 8,
+                "column": 9,
+                "message": "Conflicting `smithy.api#documentation` trait found on shape `ex#S`. The previous trait was defined at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_conflict.smithy [5, 1]`, and a conflicting trait was defined at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_conflict.smithy [8, 9]`."
+            }
+        },
+        "invalid/apply_in_prelude_namespace": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "apply_in_prelude_namespace.smithy",
+                "line": 6,
+                "column": 14,
+                "message": "Trait `deprecated` applied to unknown shape `smithy.api#String`"
+            }
+        },
+        "invalid/apply_json_held_member_of_later_definition": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "b.json",
+                "line": 1,
+                "column": 38,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_held_member_of_later_definition/c.json [1, 38]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_held_member_of_later_definition/b.json [1, 38]`. Members differ: [m] vs []"
+            }
+        },
+        "invalid/apply_json_member_of_later_definition": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.json",
+                "line": 1,
+                "column": 38,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_member_of_later_definition/c.json [1, 38]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/apply_json_member_of_later_definition/a.json [1, 38]`. Members differ: [m] vs []"
+            }
+        },
+        "invalid/apply_json_prelude_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.json",
+                "line": 1,
+                "column": 105,
+                "message": "Trait `deprecated` applied to unknown shape `smithy.api#String`"
+            }
+        },
+        "invalid/apply_json_unknown_member": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.json",
+                "line": 1,
+                "column": 138,
+                "message": "Trait `required` applied to unknown shape `ex#S$m`"
+            }
+        },
+        "invalid/apply_json_unknown_member_pending": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.json",
+                "line": 1,
+                "column": 92,
+                "message": "Trait `required` applied to unknown shape `ex#S$m`"
+            }
+        },
+        "invalid/apply_prelude_namespace_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "b.smithy",
+                "line": 6,
+                "column": 24,
+                "message": "Cannot apply `smithy.api#deprecated` to an immutable prelude shape defined in `smithy.api`."
+            }
+        },
+        "invalid/apply_prelude_shape": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "apply_prelude_shape.smithy",
+                "line": 5,
+                "column": 25,
+                "message": "Cannot apply `smithy.api#documentation` to an immutable prelude shape defined in `smithy.api`."
+            }
+        },
+        "invalid/apply_unknown_target": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "apply_unknown_target.smithy",
+                "line": 9,
+                "column": 15,
+                "message": "Trait `documentation` applied to unknown shape `ex#Missing`"
+            }
+        },
         "invalid/merge_conflicting_trait": {
             "accepted": false,
             "errors": [
@@ -65,6 +195,84 @@
                 "line": 6,
                 "column": 5,
                 "message": "member shape targets an unresolved shape `smithy.example#InvalidShape`"
+            }
+        },
+        "invalid/syntax_apply_block_missing_closing": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_block_missing_closing.smithy",
+                "line": 9,
+                "column": 1,
+                "message": "Syntax error at line 9, column 1: Expected RBRACE('}') but found EOF"
+            }
+        },
+        "invalid/syntax_apply_missing_newline": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_missing_newline.smithy",
+                "line": 7,
+                "column": 20,
+                "message": "Syntax error at line 7, column 20: Expected a line break, but found IDENTIFIER('apply')"
+            }
+        },
+        "invalid/syntax_apply_missing_space": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_missing_space.smithy",
+                "line": 7,
+                "column": 8,
+                "message": "Syntax error at line 7, column 8: Expected one or more whitespace characters, but found LBRACE('{')"
+            }
+        },
+        "invalid/syntax_apply_missing_trait": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_missing_trait.smithy",
+                "line": 6,
+                "column": 1,
+                "message": "Syntax error at line 6, column 1: Expected one of AT('@'), LBRACE('{'); but found IDENTIFIER('string')"
+            }
+        },
+        "invalid/syntax_apply_traits_before": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_traits_before.smithy",
+                "line": 8,
+                "column": 1,
+                "message": "Syntax error at line 8, column 1: Traits applied to apply statement"
+            }
+        },
+        "invalid/syntax_apply_two_traits": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_apply_two_traits.smithy",
+                "line": 7,
+                "column": 29,
+                "message": "Syntax error at line 7, column 29: Expected a line break, but found AT('@')"
             }
         },
         "invalid/syntax_comma_ends_statement": {
@@ -288,6 +496,32 @@
                 "message": "set shapes cannot be used in Smithy version 2.0"
             }
         },
+        "invalid/syntax_space_before_trait_value": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_space_before_trait_value.smithy",
+                "line": 4,
+                "column": 16,
+                "message": "Syntax error at line 4, column 16: Expected IDENTIFIER but found LPAREN('(')"
+            }
+        },
+        "invalid/syntax_space_before_trait_value_apply": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "syntax_space_before_trait_value_apply.smithy",
+                "line": 6,
+                "column": 24,
+                "message": "Syntax error at line 6, column 24: Expected a line break, but found LPAREN('(')"
+            }
+        },
         "invalid/syntax_structure_without_body": {
             "accepted": false,
             "errors": [
@@ -405,12 +639,17 @@
                 "message": "Syntax error at line 1, column 16: Unsupported Smithy version number: 3.0"
             }
         },
-        "unsupported/spec_apply": {
+        "unsupported/apply_comment_after_keyword": {
             "accepted": true,
             "errors": [],
             "dangers": []
         },
-        "unsupported/spec_apply_block": {
+        "unsupported/apply_extra_property": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "unsupported/apply_newline_after_keyword": {
             "accepted": true,
             "errors": [],
             "dangers": []
@@ -436,6 +675,26 @@
             "dangers": []
         },
         "unsupported/version_1": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_apply_json": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_apply_namespaces": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_apply_order": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_apply_targets": {
             "accepted": true,
             "errors": [],
             "dangers": []
@@ -506,6 +765,41 @@
             "dangers": []
         },
         "valid/focused_unknown_control": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_apply_block_empty": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_apply_statements": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_apply_use": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_ast_empty_apply": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_block_apply_statement": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_apply": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_apply_block": {
             "accepted": true,
             "errors": [],
             "dangers": []
