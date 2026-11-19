@@ -57,6 +57,11 @@ export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
  * environment restricts which refs may use it and not who may push them. Enough to forge a page,
  * delete the alarms, and write to the archive. So the ruleset being active is a prerequisite for
  * deploying these roles, not a later hardening step.
+ *
+ * The gate's only bypass is the release automation, so no human account can create a tag these
+ * roles will trust — not an admin either. That is the strong form, and it is only correct while the
+ * release is actually cut by that automation: a release tagged by a person would be refused, and
+ * the symptom is a rejected push at release time rather than anything visible here.
  */
 export const RELEASE_REFS = [
     "refs/tags/release-????-??-??",
