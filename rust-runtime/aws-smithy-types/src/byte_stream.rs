@@ -519,7 +519,6 @@ impl AggregatedBytes {
 
     /// Convert this buffer into a `Vec<u8>`
     pub fn to_vec(self) -> Vec<u8> {
-        // flatten().collect() copied byte by byte, without knowing the final size
         let mut out = Vec::with_capacity(self.0.remaining());
         for segment in self.0.into_inner() {
             out.extend_from_slice(&segment);
