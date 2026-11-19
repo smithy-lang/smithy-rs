@@ -102,7 +102,7 @@ jobs:
       id: config
       env:
         ENABLED: ${{ vars.BUILD_CANARY_ENABLED }}
-        ALARM_ROLE: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        ORCHESTRATOR_ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
         # The legs' role, which this job never assumes. Checked here because a leg treats it as a
         # notice and carries on, so without this the whole matrix can run, go green, and record
@@ -111,7 +111,7 @@ jobs:
       run: |
         set -euo pipefail
         MISSING=()
-        [[ -n "$ALARM_ROLE" ]] || MISSING+=(BUILD_CANARY_ALARM_ROLE_ARN)
+        [[ -n "$ORCHESTRATOR_ROLE" ]] || MISSING+=(BUILD_CANARY_ORCHESTRATOR_ROLE_ARN)
         [[ -n "$TICKET_ARN_TEMPLATE" ]] || MISSING+=(BUILD_CANARY_TICKET_ARN_TEMPLATE)
         [[ -n "$METRICS_ROLE" ]] || MISSING+=(BUILD_CANARY_METRICS_ROLE_ARN)
 
@@ -135,11 +135,11 @@ jobs:
         # record verdicts, and no alarm watches them.
         echo "::notice title=No alarm::report-only -- verdicts are recorded but nothing pages (${MISSING[*]} unset)"
 
-    - name: Assume the alarm role
+    - name: Assume the orchestrator role
       if: steps.config.outputs.configured == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Arm
@@ -381,11 +381,11 @@ jobs:
     #
     # A ceiling reached with crates still outstanding records nothing: that is a finding to read,
     # not a release left unchecked, and the floor tier still runs after it.
-    - name: Is the metrics role configured
+    - name: Is the orchestrator role configured
       id: metrics
       if: always()
       env:
-        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
       run: |
         set -euo pipefail
         if [[ -n "$ROLE" ]]; then
@@ -394,11 +394,11 @@ jobs:
           echo "configured=false" >> "$GITHUB_OUTPUT"
         fi
 
-    - name: Assume the metrics role
+    - name: Assume the orchestrator role
       if: always() && steps.metrics.outputs.configured == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Record a failed dispatch
@@ -670,14 +670,14 @@ jobs:
     # This is the backstop for every cause of that: a dispatch accepted and dropped, a bad scenario
     # input, the matrix job failing to expand, the runs being cancelled.
     #
-    # The metrics role is assumed *before* the record role below, because the second assumption
-    # overwrites the first and this one has to happen while these credentials are the ones in
-    # effect. The two are never held at once.
-    - name: Is the metrics role configured
+    # Assumed again further down, before the archive write. Harmless now that both are the
+    # orchestrator's role -- the second assumption replaces identical credentials -- and kept as two
+    # steps because the archive's own configuration is not known until after this one runs.
+    - name: Is the orchestrator role configured
       id: metrics
       if: always() && steps.summarize.outputs.unchecked == 'true'
       env:
-        ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
       run: |
         set -euo pipefail
         if [[ -n "$ROLE" ]]; then
@@ -687,11 +687,11 @@ jobs:
           echo "::error title=Release unchecked::not one leg reported, and no metrics role is configured to say so"
         fi
 
-    - name: Assume the metrics role
+    - name: Assume the orchestrator role
       if: always() && steps.metrics.outputs.configured == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Record that the release was never checked
@@ -721,7 +721,7 @@ jobs:
       id: archive
       env:
         BUCKET: ${{ secrets.BUILD_CANARY_RECORD_BUCKET }}
-        ROLE: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+        ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
       run: |
         set -euo pipefail
         if [[ -n "$BUCKET" && -n "$ROLE" ]]; then
@@ -733,11 +733,11 @@ jobs:
 
     # Only a release that broke gets a permanent record. How often releases are green is a question
     # for the metric, which has a datapoint per leg per run and is built for counting.
-    - name: Assume the record role
+    - name: Assume the orchestrator role for the archive
       if: steps.summarize.outputs.record == 'true' && steps.archive.outputs.configured == 'true'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_RECORD_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Add it to the archive

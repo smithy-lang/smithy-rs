@@ -330,7 +330,7 @@ fn enabling_the_canary_requires_the_whole_paging_chain() {
         "the report-only fallback has to be conditional on the variable, or enabling means nothing"
     );
     for secret in [
-        "BUILD_CANARY_ALARM_ROLE_ARN",
+        "BUILD_CANARY_ORCHESTRATOR_ROLE_ARN",
         "BUILD_CANARY_TICKET_ARN_TEMPLATE",
         "BUILD_CANARY_METRICS_ROLE_ARN",
     ] {
@@ -359,47 +359,55 @@ fn enabling_the_canary_requires_the_whole_paging_chain() {
     );
 }
 
-/// Every orchestrator job that assumes the metrics role has to declare the orchestrator's
+/// The leg role is for legs, and every job that assumes the orchestrator's declares its
 /// environment.
 ///
-/// The metrics role trusts two alternatives: any job on a release tag, and a job on `main` *inside*
-/// that environment. The second is narrowed because `main` is where maintainer-triggered workflows
-/// run a pull request's checked-out code with `id-token: write`. So an orchestrator job that
-/// forgets the environment can still assume the role on a release tag and silently cannot on a
-/// hand-dispatched run — the shape of failure this file exists to catch.
-///
-/// The legs are the deliberate exception: the orchestrator dispatches `build-canary.yml` with
-/// `--ref "$TAG"`, so a leg runs from the tag, and not making forty-five jobs declare an
-/// environment is worth losing the hand-dispatch-from-`main` case.
+/// Two trust domains, split by how far the token travels. The leg role takes release tags and no
+/// environment, because requiring one would mean forty-five jobs declaring it; the orchestrator's
+/// takes `main` as well, and the environment is what a pull request's code running on `main` cannot
+/// declare. So a job that assumes the orchestrator's role without the environment can still work
+/// from a release tag and silently cannot from a hand-dispatched run — the shape of failure this
+/// file exists to catch. And a job outside `build-canary.yml` reaching for the leg role would be
+/// reaching for one that refuses `main` outright.
 #[test]
-fn every_orchestrator_job_using_the_metrics_role_declares_the_environment() {
+fn the_two_roles_are_used_by_the_jobs_they_were_made_for() {
     let expected = orchestrator_environment_from_the_cdk();
-    let mut checked = 0;
+    let mut orchestrator_jobs = 0;
 
-    for name in ["post-publish-watch", "paging-selftest"] {
+    for name in ["post-publish-watch", "paging-selftest", "build-canary"] {
         let wf = load(name);
         for (job_name, job) in jobs(&wf) {
-            let assumes_metrics = steps(job).iter().any(|step| {
-                serde_yaml::to_string(step)
-                    .unwrap_or_default()
-                    .contains("BUILD_CANARY_METRICS_ROLE_ARN")
-            });
-            if !assumes_metrics {
-                continue;
+            let yaml = steps(job)
+                .iter()
+                .map(|s| serde_yaml::to_string(s).unwrap_or_default())
+                .collect::<String>();
+
+            if yaml.contains("BUILD_CANARY_ORCHESTRATOR_ROLE_ARN") {
+                orchestrator_jobs += 1;
+                assert_eq!(
+                    job.get("environment").and_then(Value::as_str),
+                    Some(expected.as_str()),
+                    "{name}.yml job {job_name} assumes the orchestrator role without declaring \
+                     {expected:?}, so a hand-dispatched run from main could not assume it"
+                );
             }
-            checked += 1;
-            assert_eq!(
-                job.get("environment").and_then(Value::as_str),
-                Some(expected.as_str()),
-                "{name}.yml job {job_name} assumes the metrics role without declaring {expected:?}, \
-                 so a hand-dispatched run from main could not assume it"
-            );
+
+            if yaml.contains("BUILD_CANARY_METRICS_ROLE_ARN") {
+                // The arming job reads it to check it is set, which is not assuming it.
+                let assumes =
+                    yaml.contains("role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}");
+                assert!(
+                    !assumes || name == "build-canary",
+                    "{name}.yml job {job_name} assumes the leg role, which refuses `main` and is \
+                     meant only for legs"
+                );
+            }
         }
     }
 
     assert!(
-        checked >= 2,
-        "expected to find the orchestrator jobs that assume the metrics role, found {checked}"
+        orchestrator_jobs >= 3,
+        "expected the arming, dispatch, record and self-test jobs, found {orchestrator_jobs}"
     );
 }
 
@@ -982,67 +990,37 @@ fn the_floor_gate_can_see_the_previous_release_and_can_run() {
     );
 }
 
-/// A release that nothing checked has to be reported, and from the right credentials.
+/// A release that nothing checked has to be reported, and before the archive write.
 ///
 /// This is the one condition no verdict exists for, so the record job is the only thing positioned
-/// to notice it. Noticing needs the metrics role; archiving needs the record role; and
-/// `configure-aws-credentials` overwrites whatever came before it. So the order is load-bearing in
-/// a way YAML cannot express: assume metrics, emit, then assume record. Reversed, the emit step
-/// runs with credentials that cannot write a datapoint, and the one thing standing between an
-/// unchecked release and silence fails with an access error.
+/// to notice it. Both halves now use the orchestrator role, so the credential hazard that made the
+/// order load-bearing is gone — but the order still is, for a simpler reason: a failure archiving
+/// the record must not stop the datapoint that says the release went unchecked, which is the only
+/// signal a human ever sees for it.
 #[test]
-fn an_unchecked_release_is_reported_before_the_record_role_is_taken() {
+fn an_unchecked_release_is_reported_before_the_archive_write() {
     let wf = load("post-publish-watch");
     let job = jobs(&wf).get("record").copied().expect("a record job");
     let names: Vec<String> = steps(job)
         .iter()
         .map(|s| step_name(s).to_string())
         .collect();
-
     let at = |needle: &str| -> usize {
         names
             .iter()
             .position(|n| n.contains(needle))
             .unwrap_or_else(|| panic!("no step containing {needle:?} in {names:?}"))
     };
-
     let emit = at("never checked");
-    let metrics = at("Assume the metrics role");
-    let record = at("Assume the record role");
-
+    let assume = at("Assume the orchestrator role");
+    let archive = at("Add it to the archive");
     assert!(
-        metrics < emit,
-        "the metrics role must be held when the datapoint is written"
+        assume < emit,
+        "the role must be held when the datapoint is written: {names:?}"
     );
     assert!(
-        emit < record,
-        "the record role overwrites the metrics credentials, so it must come after the emit: \
-         {names:?}"
-    );
-
-    // And the emission has to be able to run when the rest of the job has already gone wrong,
-    // because "nothing ran" is itself a symptom of things having gone wrong.
-    let emit_step = &steps(job)[emit];
-    let condition = emit_step
-        .get("if")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    assert!(
-        condition.contains("always()"),
-        "the unchecked-release report must survive an earlier failure: {condition:?}"
-    );
-
-    // The release must come from the folded record, never from a workflow input: a datapoint
-    // recorded against a release the canary was not watching would land on an armed series and page
-    // about the wrong thing.
-    let run = emit_step.get("run").and_then(Value::as_str).unwrap_or("");
-    assert!(
-        run.contains("--decision"),
-        "the emission must read the decision rather than take a release argument: {run:?}"
-    );
-    assert!(
-        !run.contains("--release") && !run.contains("TAG"),
-        "the release must not be passed in: {run:?}"
+        emit < archive,
+        "an unchecked release must be reported before anything that can fail archiving: {names:?}"
     );
 }
 

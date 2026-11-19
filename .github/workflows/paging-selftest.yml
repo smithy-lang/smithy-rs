@@ -65,8 +65,7 @@ jobs:
       id: config
       env:
         SESSION: ${{ inputs.session }}
-        ROLE: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
-        METRICS_ROLE: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        ROLE: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
         ACTION: ${{ inputs.action }}
       run: |
@@ -82,10 +81,9 @@ jobs:
         echo "alarm=paging-selftest-${SESSION}" >> "$GITHUB_OUTPUT"
 
         MISSING=()
-        [[ -z "$ROLE" ]] && MISSING+=("BUILD_CANARY_ALARM_ROLE_ARN")
+        [[ -z "$ROLE" ]] && MISSING+=("BUILD_CANARY_ORCHESTRATOR_ROLE_ARN")
         # `fire` writes a datapoint, which is the metrics role's job, not the alarm role's -- the two
         # permission sets are disjoint on purpose.
-        [[ "$ACTION" == "fire" && -z "$METRICS_ROLE" ]] && MISSING+=("BUILD_CANARY_METRICS_ROLE_ARN")
         [[ "$ACTION" == "arm" && -z "$TICKET_ARN_TEMPLATE" ]] && MISSING+=("BUILD_CANARY_TICKET_ARN_TEMPLATE")
         if (( ${#MISSING[@]} > 0 )); then
           echo "::error title=Not configured::set ${MISSING[*]} before running this"
@@ -98,14 +96,14 @@ jobs:
       if: inputs.action == 'fire'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Assume the alarm role
       if: inputs.action != 'fire'
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.BUILD_CANARY_ALARM_ROLE_ARN }}
+        role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
     - name: Arm
