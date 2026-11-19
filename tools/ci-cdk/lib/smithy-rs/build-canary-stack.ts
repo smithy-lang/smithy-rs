@@ -15,8 +15,9 @@ import { Construct } from "constructs";
  *
  * Its own, deliberately not shared with the `aws-sdk-rust-canary` namespace: two canaries on one
  * namespace could not be alarmed on independently. The metrics role is constrained to this
- * namespace, and the SDK canary's role is explicitly denied it — in `smithy-rs-canary-stack`, so
- * that half holds only once *that* stack is deployed. See the deploy notes in `bin/smithy-rs`.
+ * namespace, and the SDK canary's role is confined to its own — the latter in
+ * `smithy-rs-canary-stack`, so that half holds only once *that* stack is deployed. See the deploy
+ * notes in `bin/smithy-rs`.
  *
  * **The leg must emit to exactly this namespace**, or `PutMetricData` is denied by that condition
  * and the verdict is never recorded. The canary crate has a test that reads this file and compares.

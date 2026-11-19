@@ -53,19 +53,24 @@ function metricStatements(): Statement[] {
  * The allow has no namespace condition and every pull request's canary job assumes this role, so
  * without the deny any CI job here could trip the build canary's alarm.
  */
-test("this role must not be able to write to the build canary's namespace", () => {
+test("this role may write only to its own namespace", () => {
+    // The property, not a particular mechanism for it. `manual-canary.yml` hands this role's
+    // credentials to a pull request's checked-out code, so what has to hold is that the code
+    // cannot write anywhere else -- the build canary's namespace above all, since a datapoint
+    // there pages an oncall.
     const statements = metricStatements();
+    expect(statements.filter((s) => s.Effect === "Deny")).toEqual([]);
 
-    const deny = statements.filter((s) => s.Effect === "Deny");
-    expect(deny).toHaveLength(1);
-    expect(deny[0].Condition).toEqual({
-        StringEquals: { "cloudwatch:namespace": METRIC_NAMESPACE },
-    });
-
-    // Left as it was: narrowing it would change a stack `aws-sdk-rust` also deploys.
     const allow = statements.filter((s) => s.Effect === "Allow");
     expect(allow).toHaveLength(1);
-    expect(allow[0].Condition).toBeUndefined();
+    expect(allow[0].Condition).toEqual({
+        StringEquals: { "cloudwatch:namespace": SDK_CANARY_NAMESPACE },
+    });
+
+    // An allow conditioned on one namespace cannot reach another, so naming the build canary's is
+    // belt and braces -- but it is the one that pages, and this is what would catch a later
+    // widening of the condition.
+    expect(allow[0].Condition?.StringEquals["cloudwatch:namespace"]).not.toBe(METRIC_NAMESPACE);
 });
 
 /** Equal namespaces would switch off this canary's own metrics, not weaken the build canary. */
