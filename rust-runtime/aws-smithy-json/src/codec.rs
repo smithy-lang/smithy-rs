@@ -9,7 +9,7 @@ use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::extension::SchemaExtensionKey;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::date_time::{DateTime, Format as TimestampFormat};
-use aws_smithy_types::{DocumentError, DocumentSettings, Number};
+use aws_smithy_types::{BigDecimal, Document, DocumentError, DocumentSettings, DocumentV2, Number};
 use std::sync::Arc;
 
 mod deserializer;
@@ -661,6 +661,41 @@ impl DocumentSettings for JsonCodecSettings {
             }
         })
     }
+
+    /// Coerces an arbitrary-precision decimal to a timestamp interpreted
+    /// as `epoch-seconds`, as [`Self::coerce_number_to_timestamp`] does.
+    ///
+    /// The JSON deserializer reads a number into a `DocumentV2::BigDecimal`
+    /// when no `f64` holds it exactly, such as epoch seconds with
+    /// nanoseconds (`1700000000.123456789`, which the serializer writes for
+    /// such a timestamp). When the decimal's text has no exponent and at
+    /// most nine fraction digits, this reads it exactly. Otherwise it reads
+    /// the number that a `Document` from the same JSON holds.
+    fn coerce_big_decimal_to_timestamp(&self, d: &BigDecimal) -> Result<DateTime, DocumentError> {
+        if matches!(self.default_timestamp_format, TimestampFormat::EpochSeconds) {
+            if let Ok(timestamp) = DateTime::from_str(d.as_ref(), TimestampFormat::EpochSeconds) {
+                return Ok(timestamp);
+            }
+        }
+        // `coerce_number_to_timestamp` rejects every number when the format isn't epoch-seconds.
+        match DocumentV2::BigDecimal(d.clone()).to_document_lossy() {
+            Document::Number(n) => self.coerce_number_to_timestamp(&n),
+            // Unreachable: a `BigDecimal` only holds text that `f64` parses.
+            other => Err(DocumentError::invalid_input(format!(
+                "cannot read {other:?} as epoch seconds"
+            ))),
+        }
+    }
+
+    /// Returns whether this codec honors `@jsonName`, as set by
+    /// [`JsonCodecSettingsBuilder::use_json_name`].
+    ///
+    /// A document that the [`JsonDeserializer`] reads keeps the object keys from
+    /// the wire, so reading a structure from it matches keys to members the way
+    /// the codec matches the fields of a structure it reads directly.
+    fn use_json_name(&self) -> bool {
+        matches!(self.field_mapper, JsonFieldMapper::UseJsonName)
+    }
 }
 
 /// JSON codec for schema-based serialization and deserialization.
@@ -772,6 +807,18 @@ mod tests {
     }
 
     #[test]
+    fn document_settings_use_json_name_follows_the_builder() {
+        assert!(DocumentSettings::use_json_name(
+            &JsonCodecSettings::default()
+        ));
+        let member_names = JsonCodecSettings::builder().use_json_name(false).build();
+        assert!(!DocumentSettings::use_json_name(&member_names));
+        assert!(!DocumentSettings::use_json_name(
+            &member_names.to_builder().build()
+        ));
+    }
+
+    #[test]
     fn document_settings_coerce_string_to_blob_decodes_base64() {
         let settings = JsonCodecSettings::default();
         // base64 of "hello"
@@ -870,6 +917,48 @@ mod tests {
             DocumentError::InvalidInput { .. } => {}
             other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn document_settings_coerce_big_decimal_to_timestamp() {
+        let decimal = |text: &str| text.parse::<BigDecimal>().unwrap();
+        let settings = JsonCodecSettings::default();
+
+        // Exact epoch-seconds text keeps its nanoseconds.
+        assert_eq!(
+            settings
+                .coerce_big_decimal_to_timestamp(&decimal("1700000000.123456789"))
+                .unwrap(),
+            DateTime::from_secs_and_nanos(1_700_000_000, 123_456_789)
+        );
+
+        // Other text is read as the number a `Document` holds, as `coerce_number_to_timestamp`
+        // reads it.
+        for text in ["17000000001234567891e-10", "1700000000.1234567891"] {
+            let Document::Number(n) = DocumentV2::BigDecimal(decimal(text)).to_document_lossy()
+            else {
+                panic!("{text} isn't a number");
+            };
+            assert_eq!(
+                settings
+                    .coerce_big_decimal_to_timestamp(&decimal(text))
+                    .unwrap(),
+                settings.coerce_number_to_timestamp(&n).unwrap(),
+                "{text}"
+            );
+        }
+
+        // A string timestamp format rejects decimals, as it rejects every number.
+        let settings = JsonCodecSettings::builder()
+            .default_timestamp_format(TimestampFormat::DateTime)
+            .build();
+        let err = settings
+            .coerce_big_decimal_to_timestamp(&decimal("1700000000.123456789"))
+            .unwrap_err();
+        assert!(
+            matches!(err, DocumentError::UnsupportedOperation { .. }),
+            "{err:?}"
+        );
     }
 
     #[test]

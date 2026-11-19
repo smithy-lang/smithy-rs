@@ -37,6 +37,7 @@ class ErrorGenerator(
     private val implCustomizations: List<ErrorImplCustomization>,
     private val structSettings: StructSettings,
     private val structureCustomizations: List<StructureCustomization> = emptyList(),
+    private val builderCustomizations: List<BuilderCustomization> = emptyList(),
 ) {
     private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val symbol = symbolProvider.toSymbol(shape)
@@ -125,7 +126,7 @@ class ErrorGenerator(
                                 }
                             }
                     },
-                ),
+                ) + builderCustomizations,
             ).render(this)
         }
     }

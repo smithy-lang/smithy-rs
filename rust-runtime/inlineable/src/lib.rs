@@ -16,6 +16,8 @@ mod client_http_checksum_required;
 mod client_idempotency_token;
 #[allow(unused)]
 mod constrained;
+#[allow(unused)]
+mod document_v2_slot;
 #[allow(dead_code)]
 mod ec2_query_errors;
 #[allow(unused)]

@@ -8,8 +8,7 @@ bug_fix: false
 ---
 
 Added `DocumentV2` to `aws-smithy-types`. `DocumentV2` represents the whole
-Smithy data model. `Document` is unchanged, and generated code doesn't use the
-new types yet.
+Smithy data model. `Document` is unchanged.
 
 - **Variants:** `DocumentV2` adds `Blob`, `Timestamp`, `BigInteger`, and
   `BigDecimal` variants, keeps object entries in insertion order with the new
@@ -17,8 +16,8 @@ new types yet.
 - **Conversions:** `From` converts a `Document` to a `DocumentV2` without loss.
   `DocumentV2::to_document_lossy` converts back, encoding blobs as base64
   strings, timestamps as epoch-seconds numbers, and arbitrary-precision numbers
-  as their text. `DocumentV2::try_to_document` returns an error for those values
-  instead.
+  as numbers, as `Document` reads them from JSON.
+  `DocumentV2::try_to_document` returns an error for those values instead.
 - **Serde:** with `--cfg aws_sdk_unstable` and the `serde-serialize` or
   `serde-deserialize` feature, `DocumentV2` implements serde's traits.
   `document::to_document_v2` and `document::from_document_v2` convert between it

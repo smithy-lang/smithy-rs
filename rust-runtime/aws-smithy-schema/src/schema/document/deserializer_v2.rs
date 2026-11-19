@@ -13,14 +13,15 @@ use aws_smithy_types::{
     BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings, DocumentV2,
 };
 
-use super::deserializer::{number_to_timestamp, resolve_member};
+use super::deserializer::{number_to_timestamp, resolve_member, uses_json_name};
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
 
 /// Walks a [`DocumentV2`] tree through the [`ShapeDeserializer`] interface.
 ///
 /// It works like [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer): structure
-/// members are matched by Smithy member name, unknown members are skipped, and attached
+/// members are matched by Smithy member name, or by `@jsonName` when the attached settings'
+/// [`DocumentSettings::use_json_name`] says so, unknown members are skipped, and attached
 /// [`DocumentSettings`] decide how strings and numbers become blobs and timestamps. The
 /// differences:
 ///
@@ -66,7 +67,9 @@ impl<'a> DocumentV2ShapeDeserializer<'a> {
     ///
     /// Without settings, a string is read as a blob by decoding standard base64, and as a
     /// timestamp by parsing RFC 3339 (`date-time`). A number is read as a timestamp in epoch
-    /// seconds.
+    /// seconds. So is a [`DocumentV2::BigDecimal`], such as epoch seconds with nanoseconds from
+    /// JSON: exactly when its text has no exponent and at most nine fraction digits, and as the
+    /// nearest number otherwise.
     pub fn new(document: &'a DocumentV2) -> Self {
         Self {
             cursor: document,
@@ -78,9 +81,11 @@ impl<'a> DocumentV2ShapeDeserializer<'a> {
     ///
     /// With settings, a string or number that is read as a blob or timestamp is converted by
     /// [`DocumentSettings::coerce_string_to_blob`],
-    /// [`DocumentSettings::coerce_string_to_timestamp`], or
-    /// [`DocumentSettings::coerce_number_to_timestamp`]. Native blobs and timestamps don't use
-    /// the settings.
+    /// [`DocumentSettings::coerce_string_to_timestamp`],
+    /// [`DocumentSettings::coerce_number_to_timestamp`], or, for a
+    /// [`DocumentV2::BigDecimal`], [`DocumentSettings::coerce_big_decimal_to_timestamp`].
+    /// Native blobs and timestamps don't use the settings. A structure's members are matched by
+    /// `@jsonName` when [`DocumentSettings::use_json_name`] returns `true`.
     pub fn new_with_settings(
         document: &'a DocumentV2,
         settings: Option<Arc<dyn DocumentSettings>>,
@@ -142,6 +147,27 @@ fn big_decimal_from_text(text: &str) -> Result<BigDecimal, SerdeError> {
         .map_err(|e| SerdeError::invalid_input(format!("cannot parse {text:?} as bigDecimal: {e}")))
 }
 
+/// Reads a `BigDecimal` as epoch seconds when there are no settings, as
+/// `DiscriminatedDocument::as_timestamp` does. A JSON reader keeps epoch seconds with
+/// nanoseconds as a `BigDecimal`, because no `f64` holds them exactly.
+///
+/// Text that [`Format::EpochSeconds`] parses, which has no exponent and at most nine fraction
+/// digits, is read exactly. Other text is read as the number that the `Document` from
+/// [`DocumentV2::to_document_lossy`] holds, which is what reading a `Document` from the same
+/// JSON gives.
+fn big_decimal_to_timestamp(d: &BigDecimal) -> Result<DateTime, SerdeError> {
+    if let Ok(timestamp) = DateTime::from_str(d.as_ref(), Format::EpochSeconds) {
+        return Ok(timestamp);
+    }
+    match DocumentV2::BigDecimal(d.clone()).to_document_lossy() {
+        Document::Number(n) => number_to_timestamp(&n),
+        // Unreachable: a `BigDecimal` only holds text that `f64` parses.
+        other => Err(SerdeError::invalid_input(format!(
+            "cannot read {other:?} as epoch seconds"
+        ))),
+    }
+}
+
 impl ShapeDeserializer for DocumentV2ShapeDeserializer<'_> {
     fn read_struct(
         &mut self,
@@ -152,9 +178,10 @@ impl ShapeDeserializer for DocumentV2ShapeDeserializer<'_> {
             .cursor
             .as_object()
             .ok_or_else(|| type_mismatch("struct (map)", self.cursor))?;
+        let use_json_name = uses_json_name(self.settings.as_deref());
         for (name, value) in members {
             // Unknown members are skipped, like the JSON deserializer does.
-            if let Some(member_schema) = resolve_member(schema, name) {
+            if let Some(member_schema) = resolve_member(schema, name, use_json_name) {
                 consumer(member_schema, &mut self.child(value))?;
             }
         }
@@ -265,6 +292,10 @@ impl ShapeDeserializer for DocumentV2ShapeDeserializer<'_> {
                 .coerce_number_to_timestamp(n)
                 .map_err(SerdeError::from),
             (DocumentV2::Number(n), None) => number_to_timestamp(n),
+            (DocumentV2::BigDecimal(d), Some(settings)) => settings
+                .coerce_big_decimal_to_timestamp(d)
+                .map_err(SerdeError::from),
+            (DocumentV2::BigDecimal(d), None) => big_decimal_to_timestamp(d),
             (DocumentV2::String(s), Some(settings)) => settings
                 .coerce_string_to_timestamp(s)
                 .map_err(SerdeError::from),
@@ -396,6 +427,97 @@ mod tests {
                 ("name".to_string(), "Iago".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn read_struct_matches_json_names_when_settings_use_them() {
+        static M_NICKNAME: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Pet", "nickname"),
+            ShapeType::String,
+            "nickname",
+            0,
+        )
+        .with_json_name("Nickname");
+        static M_OWNER: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Pet", "owner"),
+            ShapeType::Structure,
+            "owner",
+            1,
+        );
+        static PET_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Pet"),
+            ShapeType::Structure,
+            &[&M_NICKNAME, &M_OWNER],
+        );
+        static M_OWNER_NAME: Schema<'static> = Schema::new_member(
+            shape_id!("smithy.example", "Owner", "name"),
+            ShapeType::String,
+            "name",
+            0,
+        )
+        .with_json_name("Name");
+        static OWNER_SCHEMA: Schema<'static> = Schema::new_struct(
+            shape_id!("smithy.example", "Owner"),
+            ShapeType::Structure,
+            &[&M_OWNER_NAME],
+        );
+
+        #[derive(Debug)]
+        struct Naming(bool);
+        impl DocumentSettings for Naming {
+            fn protocol_id(&self) -> &str {
+                "smithy.example#Naming"
+            }
+            fn use_json_name(&self) -> bool {
+                self.0
+            }
+        }
+
+        // The `owner` member has no `@jsonName`, so its member name is its key in both modes.
+        let document = DocumentV2::Object(DocumentObject::from([
+            ("Nickname".to_string(), DocumentV2::from("json name")),
+            (
+                "owner".to_string(),
+                DocumentV2::Object(DocumentObject::from([
+                    ("name".to_string(), DocumentV2::from("member name")),
+                    ("Name".to_string(), DocumentV2::from("json name")),
+                ])),
+            ),
+            ("nickname".to_string(), DocumentV2::from("member name")),
+        ]));
+        let read = |settings: Option<Arc<dyn DocumentSettings>>| {
+            let mut seen = Vec::new();
+            DocumentV2ShapeDeserializer::new_with_settings(&document, settings)
+                .read_struct(&PET_SCHEMA, &mut |member, sub| {
+                    if member.member_index() == Some(1) {
+                        sub.read_struct(&OWNER_SCHEMA, &mut |name, value| {
+                            seen.push(("owner.name", value.read_string(name)?));
+                            Ok(())
+                        })
+                    } else {
+                        seen.push(("nickname", sub.read_string(member)?));
+                        Ok(())
+                    }
+                })
+                .unwrap();
+            seen
+        };
+        let expected = |source: &str| {
+            vec![
+                ("owner.name", source.to_string()),
+                ("nickname", source.to_string()),
+            ]
+        };
+        // Members are visited in the document's order.
+        assert_eq!(
+            read(Some(Arc::new(Naming(true)))),
+            vec![
+                ("nickname", "json name".to_string()),
+                ("owner.name", "json name".to_string()),
+            ]
+        );
+        assert_eq!(read(Some(Arc::new(Naming(false)))), expected("member name"));
+        assert_eq!(read(None), expected("member name"));
     }
 
     #[test]
@@ -566,6 +688,51 @@ mod tests {
             deser(&DocumentV2::BigInteger(big_integer("1"))).read_timestamp(&prelude::TIMESTAMP),
             Err(SerdeError::TypeMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn big_decimal_timestamps_are_exact_epoch_seconds() {
+        for (text, timestamp) in [
+            (
+                "1700000000.123456789",
+                DateTime::from_secs_and_nanos(1_700_000_000, 123_456_789),
+            ),
+            ("-1.5", DateTime::from_secs_and_nanos(-2, 500_000_000)),
+        ] {
+            let document = DocumentV2::BigDecimal(big_decimal(text));
+            assert_eq!(
+                deser(&document)
+                    .read_timestamp(&prelude::TIMESTAMP)
+                    .unwrap(),
+                timestamp,
+                "{text}"
+            );
+        }
+
+        // Without exact epoch-seconds text, the value is read as the number a `Document` holds.
+        for text in ["17000000001234567891e-10", "1700000000.1234567891"] {
+            let document = DocumentV2::BigDecimal(big_decimal(text));
+            let v1 = document.to_document_lossy();
+            assert_eq!(
+                deser(&document)
+                    .read_timestamp(&prelude::TIMESTAMP)
+                    .unwrap(),
+                super::super::DocumentShapeDeserializer::new(&v1)
+                    .read_timestamp(&prelude::TIMESTAMP)
+                    .unwrap(),
+                "{text}"
+            );
+        }
+
+        // With settings, the settings decide. `MarkerSettings` keeps the default
+        // `coerce_big_decimal_to_timestamp`, which calls its `coerce_number_to_timestamp`.
+        let document = DocumentV2::BigDecimal(big_decimal("1700000000.123456789"));
+        assert_eq!(
+            with_settings(&document)
+                .read_timestamp(&prelude::TIMESTAMP)
+                .unwrap(),
+            DateTime::from_secs(2)
+        );
     }
 
     #[test]

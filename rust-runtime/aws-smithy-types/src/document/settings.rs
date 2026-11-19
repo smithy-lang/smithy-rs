@@ -21,11 +21,13 @@
 //! for how these methods feed into the `as_blob` / `as_timestamp`
 //! coercion path.
 
-use crate::{DateTime, DocumentError, Number};
+use super::document_v2::nearest_number;
+use crate::{BigDecimal, DateTime, DocumentError, Number};
 
 /// Protocol-specific settings used by
 /// [`DiscriminatedDocument`](super::DiscriminatedDocument)'s
-/// format-aware accessors.
+/// format-aware accessors, and by the document deserializers in
+/// `aws-smithy-schema` when they read a typed shape from a document.
 ///
 /// Implementations live alongside the format-specific codec they apply
 /// to. For example, the JSON codec's `JsonDocumentSettings` will
@@ -96,5 +98,41 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
             "protocol {} does not support coercing a number to a timestamp",
             self.protocol_id()
         )))
+    }
+
+    /// Coerces an arbitrary-precision decimal to a timestamp.
+    ///
+    /// A [`DocumentV2`](super::DocumentV2) read from JSON holds a number as a
+    /// [`BigDecimal`] when no `f64` holds it exactly, such as epoch seconds with
+    /// nanoseconds (`1700000000.123456789`).
+    ///
+    /// The default converts the decimal to the [`Number`] that a [`Document`](super::Document)
+    /// read from the same JSON holds (the nearest `f64` for a fraction) and calls
+    /// [`Self::coerce_number_to_timestamp`]. So an implementation that only overrides that
+    /// method treats the decimal as it treats any other number. An implementation that reads
+    /// numbers as epoch seconds can override this method to keep the exact fraction.
+    fn coerce_big_decimal_to_timestamp(&self, d: &BigDecimal) -> Result<DateTime, DocumentError> {
+        match nearest_number(d.as_ref()) {
+            Some(n) => self.coerce_number_to_timestamp(&n),
+            // Unreachable: a `BigDecimal` only holds text that `f64` parses.
+            None => Err(DocumentError::invalid_input(format!(
+                "{} is not a number",
+                d.as_ref()
+            ))),
+        }
+    }
+
+    /// Whether this protocol keys structure members by their `@jsonName`.
+    ///
+    /// Reading a structure from a document uses this to match the document's keys to
+    /// members. When it returns `true`, a member with the `@jsonName` trait matches only
+    /// its `@jsonName` value, and any other member matches its member name, as the JSON
+    /// codecs do on the wire. When it returns `false`, every member matches its member
+    /// name. A document built from a typed shape uses member names and has no settings.
+    ///
+    /// Defaults to `false`. A JSON protocol that honors `@jsonName`, such as
+    /// `aws.protocols#restJson1`, overrides it to return `true`.
+    fn use_json_name(&self) -> bool {
+        false
     }
 }

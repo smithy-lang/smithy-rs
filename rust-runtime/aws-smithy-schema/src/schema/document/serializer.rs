@@ -419,12 +419,13 @@ impl ShapeSerializer for DocumentShapeSerializer {
 
     /// Stores [`DocumentV2::to_document_lossy`], so this never fails for the value's contents.
     ///
-    /// The lossy encodings are the ones this serializer already uses for typed values: a blob
-    /// becomes a base64 string, a timestamp becomes epoch seconds, and an arbitrary-precision
-    /// number becomes its text. A `DocumentV2` member therefore produces the same `Document`
-    /// as a typed member holding the same value, and
+    /// That is the value a generated shape's public `Document` field holds when its
+    /// `DocumentV2` form is set, so
     /// [`DiscriminatedDocument::from_struct`](crate::document::DiscriminatedDocumentExt::from_struct)
-    /// keeps working for shapes that hold `DocumentV2` values.
+    /// builds the same `Document` from the shape whichever form it writes. Blobs and timestamps
+    /// get the encodings that `write_blob` and `write_timestamp` store: a base64 string and epoch
+    /// seconds. Arbitrary-precision numbers become numbers, while `write_big_integer` and
+    /// `write_big_decimal` store their text.
     fn write_document_v2(
         &mut self,
         schema: &Schema<'_>,
@@ -715,7 +716,8 @@ mod tests {
         let doc = ser.finish().unwrap();
         assert_eq!(doc.document(), &value.to_document_lossy());
 
-        // The same values written as typed members produce the same `Document`.
+        // `write_blob` and `write_timestamp` store the same `Document` that the
+        // downgrade gives the `Blob` and `Timestamp` variants.
         let mut ser = DocumentShapeSerializer::new();
         ser.write_blob(&prelude::BLOB, Blob::new(b"raw".to_vec()))
             .unwrap();
@@ -730,15 +732,21 @@ mod tests {
             Some(ser.finish().unwrap().document()),
             doc.document().as_object().unwrap().get("timestamp")
         );
+
+        // The downgrade gives a big integer the nearest number, and `write_big_integer` stores
+        // its text.
+        assert_eq!(
+            doc.document().as_object().unwrap()["items"],
+            Document::Array(vec![Document::Number(Number::Float(
+                123456789012345678901234567890.0
+            ))])
+        );
         let mut ser = DocumentShapeSerializer::new();
         ser.write_big_integer(&prelude::BIG_INTEGER, &big_integer)
             .unwrap();
         assert_eq!(
-            Some(ser.finish().unwrap().document()),
-            doc.document().as_object().unwrap()["items"]
-                .as_array()
-                .unwrap()
-                .first()
+            ser.finish().unwrap().document(),
+            &Document::String(big_integer.as_ref().to_owned())
         );
     }
 

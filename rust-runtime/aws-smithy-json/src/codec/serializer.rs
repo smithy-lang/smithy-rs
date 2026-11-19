@@ -19,6 +19,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 mod document_v2;
+mod typed_document;
 
 /// `true` iff `s` is non-empty and consists entirely of ASCII digits.
 fn is_ascii_digits(s: &str) -> bool {
@@ -397,6 +398,40 @@ impl JsonSerializer {
             (_, doc) => self.write_json_value(doc),
         }
     }
+
+    /// Writes `value`'s members as a JSON object, starting with a `__type`
+    /// member when `discriminator` is set. The caller writes any separator and
+    /// key before it.
+    fn write_struct_body(
+        &mut self,
+        discriminator: Option<&str>,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        self.output.push('{');
+        let saved_comma = self.needs_comma;
+        let saved_depth = self.map_depth;
+        let saved_map_key = self.expecting_map_key;
+        let saved_struct_context = self.in_struct_context;
+        self.needs_comma = false;
+        if let Some(id) = discriminator {
+            self.output.push_str("\"__type\":");
+            crate::serialize::JsonValueWriter::new(&mut self.output).string(id);
+            self.needs_comma = true;
+        }
+        // Reset map state so struct members don't trigger map-key logic.
+        // Restored after the struct body so an enclosing map resumes correctly.
+        self.map_depth = 0;
+        self.expecting_map_key = false;
+        // Mark the body as struct context so member-schema field names emit.
+        self.in_struct_context = true;
+        value.serialize_members(self)?;
+        self.output.push('}');
+        self.needs_comma = saved_comma;
+        self.map_depth = saved_depth;
+        self.expecting_map_key = saved_map_key;
+        self.in_struct_context = saved_struct_context;
+        Ok(())
+    }
 }
 
 impl aws_smithy_schema::codec::FinishSerializer for JsonSerializer {
@@ -412,25 +447,7 @@ impl ShapeSerializer for JsonSerializer {
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
-        self.output.push('{');
-        let saved_comma = self.needs_comma;
-        let saved_depth = self.map_depth;
-        let saved_map_key = self.expecting_map_key;
-        let saved_struct_context = self.in_struct_context;
-        self.needs_comma = false;
-        // Reset map state so struct members don't trigger map-key logic.
-        // Restored after the struct body so an enclosing map resumes correctly.
-        self.map_depth = 0;
-        self.expecting_map_key = false;
-        // Mark the body as struct context so member-schema field names emit.
-        self.in_struct_context = true;
-        value.serialize_members(self)?;
-        self.output.push('}');
-        self.needs_comma = saved_comma;
-        self.map_depth = saved_depth;
-        self.expecting_map_key = saved_map_key;
-        self.in_struct_context = saved_struct_context;
-        Ok(())
+        self.write_struct_body(None, value)
     }
 
     fn write_list(
@@ -633,6 +650,21 @@ impl ShapeSerializer for JsonSerializer {
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.write_json_value_v2(value)
+    }
+
+    /// Writes `value` as a JSON object whose first member is `__type`, holding the absolute
+    /// shape ID of `value.schema()`, followed by the members as
+    /// [`write_struct`](ShapeSerializer::write_struct) writes them.
+    ///
+    /// Returns [`SerdeError::InvalidInput`], and writes nothing, if the shape ID isn't absolute
+    /// (`namespace#Name`), or if a member of the shape has the key `__type` under these
+    /// settings, which would put two `__type` keys in the output.
+    fn write_typed_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        self.write_typed_struct(schema, value)
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {

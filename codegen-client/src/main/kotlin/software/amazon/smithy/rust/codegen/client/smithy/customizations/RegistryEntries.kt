@@ -12,18 +12,26 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
  * Emits the `TypeRegistry::builder()` entries for [shapes] — one
- * `insert_shape(Type::SCHEMA, |d| ...)` call per shape, where the closure
- * deserializes the shape from a `ShapeDeserializer` into a `TypeErasedBox`.
+ * `insert(Type::SCHEMA.shape_id().clone(), RegistryEntry::new(Type::SCHEMA, |d| ...))`
+ * call per shape, where the closure deserializes the shape from a
+ * `ShapeDeserializer` into a `TypeErasedBox`. Every entry is built with
+ * `RegistryEntry::with_serializable::<Type>()`, so
+ * `TypeRegistry::serialize_document` can write a document by the shape's schema.
  *
  * When [emitErrorConstructor] is set (for the service-wide and per-operation
- * error registries), each entry is emitted via `insert_error_shape` with an
+ * error registries), each entry is built with `RegistryEntry::new_error` and an
  * additional closure that boxes the reified value as a `dyn std::error::Error`,
  * letting the schema-serde error path attach it as the `source` of an unhandled
  * error. The shapes must be `@error` structures (their generated types implement
- * `std::error::Error`).
+ * `std::error::Error`). An error whose protocol error code differs from its shape
+ * name (an `@awsQueryError` code under awsQuery or awsQueryCompatible) gets that
+ * code through `RegistryEntry::with_error_code`, so registry lookups by wire code
+ * agree with the operation's own error dispatch, which uses the same
+ * `HttpBindingResolver.errorCode`.
  *
  * Shared by the primary type registry ([TypeRegistryDecorator]), the
  * service-wide error registry, and the per-operation error registries
@@ -43,45 +51,71 @@ internal fun registryEntries(
         val typeErasedBox = smithyTypes.resolve("type_erasure::TypeErasedBox")
         val shapeDeserializer = smithySchema.resolve("serde::ShapeDeserializer")
         val serdeError = smithySchema.resolve("serde::SerdeError")
+        // Without a protocol, the error code is the shape name, as in `HttpBindingResolver.errorCode`.
+        val httpBindingResolver = codegenContext.protocolImpl?.httpBindingResolver
 
         shapes.forEach { shape ->
             val type = symbolProvider.toSymbol(shape)
-            if (emitErrorConstructor) {
-                rustTemplate(
-                    """
-                    .insert_error_shape(
-                        #{Type}::SCHEMA,
+            val deserialize =
+                writable {
+                    rustTemplate(
+                        """
                         |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{TypeErasedBox}, #{SerdeError}> {
                             #{Result}::Ok(#{TypeErasedBox}::new(#{Type}::deserialize(d)?))
                         },
-                        |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{Box}<dyn #{StdError} + #{Send} + #{Sync}>, #{SerdeError}> {
-                            #{Result}::Ok(#{Box}::new(#{Type}::deserialize(d)?))
-                        },
+                        """,
+                        *preludeScope,
+                        "Type" to type,
+                        "ShapeDeserializer" to shapeDeserializer,
+                        "TypeErasedBox" to typeErasedBox,
+                        "SerdeError" to serdeError,
                     )
-                    """,
-                    *preludeScope,
-                    "Type" to type,
-                    "ShapeDeserializer" to shapeDeserializer,
-                    "TypeErasedBox" to typeErasedBox,
-                    "SerdeError" to serdeError,
-                    "StdError" to RuntimeType.StdError,
+                }
+            val entry =
+                if (emitErrorConstructor) {
+                    val errorCode = httpBindingResolver?.errorCode(shape)?.takeIf { it != shape.id.name }
+                    writable {
+                        rustTemplate(
+                            """
+                            #{RegistryEntry}::new_error(
+                                #{Type}::SCHEMA,
+                                #{Deserialize}
+                                |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{Box}<dyn #{StdError} + #{Send} + #{Sync}>, #{SerdeError}> {
+                                    #{Result}::Ok(#{Box}::new(#{Type}::deserialize(d)?))
+                                },
+                            )
+                            """,
+                            *preludeScope,
+                            "RegistryEntry" to smithySchema.resolve("registry::RegistryEntry"),
+                            "Type" to type,
+                            "Deserialize" to deserialize,
+                            "ShapeDeserializer" to shapeDeserializer,
+                            "SerdeError" to serdeError,
+                            "StdError" to RuntimeType.StdError,
+                        )
+                        if (errorCode != null) {
+                            rustTemplate(".with_error_code(${errorCode.dq()})")
+                        }
+                    }
+                } else {
+                    writable {
+                        rustTemplate(
+                            "#{RegistryEntry}::new(#{Type}::SCHEMA, #{Deserialize})",
+                            "RegistryEntry" to smithySchema.resolve("registry::RegistryEntry"),
+                            "Type" to type,
+                            "Deserialize" to deserialize,
+                        )
+                    }
+                }
+            rustTemplate(
+                """
+                .insert(
+                    #{Type}::SCHEMA.shape_id().clone(),
+                    #{Entry}.with_serializable::<#{Type}>(),
                 )
-            } else {
-                rustTemplate(
-                    """
-                    .insert_shape(
-                        #{Type}::SCHEMA,
-                        |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{TypeErasedBox}, #{SerdeError}> {
-                            #{Result}::Ok(#{TypeErasedBox}::new(#{Type}::deserialize(d)?))
-                        },
-                    )
-                    """,
-                    *preludeScope,
-                    "Type" to type,
-                    "ShapeDeserializer" to shapeDeserializer,
-                    "TypeErasedBox" to typeErasedBox,
-                    "SerdeError" to serdeError,
-                )
-            }
+                """,
+                "Type" to type,
+                "Entry" to entry,
+            )
         }
     }

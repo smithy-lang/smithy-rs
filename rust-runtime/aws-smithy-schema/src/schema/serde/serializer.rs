@@ -197,6 +197,34 @@ pub trait ShapeSerializer {
         }
     }
 
+    /// Writes a typed document: the structure `value` together with its
+    /// discriminator, the shape ID of `value.schema()`.
+    ///
+    /// `schema` is the schema of the position being written. The members are written
+    /// the way `write_struct` writes them, so the protocol applies their traits, like
+    /// `@jsonName` and `@timestampFormat`. The discriminator is written the
+    /// way the protocol writes a document's discriminator, like JSON's
+    /// `__type` member.
+    ///
+    /// [`TypeRegistry::serialize_document`](crate::registry::TypeRegistry::serialize_document)
+    /// calls this to write a discriminated document by the schema of the shape
+    /// it names.
+    ///
+    /// The default returns [`SerdeError::UnsupportedOperation`] and writes
+    /// nothing. Override it if the protocol supports documents. A serializer
+    /// that wraps or routes to another serializer must forward this method to
+    /// it, the same way it forwards `write_document`.
+    fn write_typed_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        let _ = (schema, value);
+        Err(SerdeError::unsupported(
+            "this serializer doesn't write typed documents",
+        ))
+    }
+
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError>;
 

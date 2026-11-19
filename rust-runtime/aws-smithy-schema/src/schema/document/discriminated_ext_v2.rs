@@ -62,7 +62,8 @@ pub trait DiscriminatedDocumentV2Ext: sealed::Sealed {
     /// This is the SEP's `Document.asShape(...)` for `DocumentV2`. `deserialize` is usually a
     /// generated shape's `deserialize` function. The document's settings, if any, are passed to
     /// the deserializer, so that strings and numbers from a protocol can be read as blobs and
-    /// timestamps.
+    /// timestamps, and so that a document from a JSON protocol that honors `@jsonName` is
+    /// matched by its wire names. A document without settings is matched by member names.
     ///
     /// # Errors
     ///

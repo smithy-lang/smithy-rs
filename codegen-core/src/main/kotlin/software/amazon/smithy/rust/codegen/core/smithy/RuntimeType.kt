@@ -534,6 +534,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
 
+        fun documentV2(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("DocumentV2")
+
         fun format(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("date_time::Format")
 
         fun retryErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")

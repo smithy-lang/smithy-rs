@@ -1116,6 +1116,14 @@ impl<'s, 'b, 'a> ShapeSerializer for BindingRouter<'s, 'b, 'a> {
         self.body.write_document_v2(schema, value)
     }
 
+    fn write_typed_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        self.body.write_typed_document(schema, value)
+    }
+
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.body.write_null(schema)
     }
@@ -1677,6 +1685,14 @@ mod tests {
             self.output.extend_from_slice(b"document_v2");
             Ok(())
         }
+        fn write_typed_document(
+            &mut self,
+            _: &Schema<'_>,
+            _: &dyn SerializableStruct,
+        ) -> Result<(), SerdeError> {
+            self.output.extend_from_slice(b"typed_document");
+            Ok(())
+        }
         fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1872,6 +1888,57 @@ mod tests {
             )
             .unwrap();
         assert_eq!(request.body().bytes().unwrap(), b"{document_v2}");
+    }
+
+    /// The router forwards `write_typed_document` to the body codec. Inheriting the trait
+    /// default would reject the value.
+    #[test]
+    fn typed_document_body_member_reaches_the_body_codec() {
+        static TYPED_MEMBER: Schema<'static> = Schema::new_member(
+            crate::shape_id!("test", "TypedStruct", "typed"),
+            ShapeType::Structure,
+            "typed",
+            0,
+        );
+        static TYPED_STRUCT: Schema<'static> = Schema::new_struct(
+            crate::shape_id!("test", "TypedStruct"),
+            ShapeType::Structure,
+            &[&TYPED_MEMBER],
+        );
+        static EMPTY: Schema<'static> =
+            Schema::new_struct(crate::shape_id!("test", "Empty"), ShapeType::Structure, &[]);
+
+        struct Empty;
+        impl SerializableStruct for Empty {
+            fn schema(&self) -> &Schema<'_> {
+                &EMPTY
+            }
+
+            fn serialize_members(&self, _: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                Ok(())
+            }
+        }
+
+        struct TypedStruct;
+        impl SerializableStruct for TypedStruct {
+            fn schema(&self) -> &Schema<'_> {
+                &TYPED_STRUCT
+            }
+
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_typed_document(&TYPED_MEMBER, &Empty)
+            }
+        }
+
+        let request = make_protocol()
+            .serialize_request(
+                &TypedStruct,
+                &TYPED_STRUCT,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(request.body().bytes().unwrap(), b"{typed_document}");
     }
 
     /// A REST protocol resolves its route from the operation's `@http` template, so a path that

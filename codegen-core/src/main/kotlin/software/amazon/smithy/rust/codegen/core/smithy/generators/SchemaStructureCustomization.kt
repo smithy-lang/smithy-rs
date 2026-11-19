@@ -12,15 +12,24 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 /**
  * A [StructureCustomization] that generates a `Schema` implementation for the
  * structure, in a module of its own (see [SchemaGenerator.renderInOwnModule]).
+ *
+ * [documentV2Companions] is passed to [SchemaGenerator]. Set it when the
+ * structures have the companions that [DocumentV2Index] lists.
  */
 class SchemaStructureCustomization(
     private val codegenContext: CodegenContext,
+    private val documentV2Companions: Boolean = false,
 ) : StructureCustomization() {
     override fun section(section: StructureSection): Writable =
         when (section) {
             is StructureSection.AdditionalTraitImpls ->
                 writable {
-                    SchemaGenerator(codegenContext, this, section.shape).renderInOwnModule()
+                    SchemaGenerator(
+                        codegenContext,
+                        this,
+                        section.shape,
+                        documentV2Companions = documentV2Companions,
+                    ).renderInOwnModule()
                 }
             else -> emptySection
         }

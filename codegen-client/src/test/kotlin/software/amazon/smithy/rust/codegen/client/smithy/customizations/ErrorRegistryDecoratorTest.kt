@@ -9,12 +9,14 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 /**
@@ -344,6 +346,133 @@ class ErrorRegistryDecoratorTest {
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
                 )
+            }
+        }
+    }
+
+    /**
+     * An awsQueryCompatible service identifies `QueueMissing` by its `@awsQueryError` code in the
+     * `x-amzn-query-error` header. The error registries must match that code, as the operation's own dispatch does.
+     */
+    private val queryCompatibleModel =
+        """
+        ${'$'}version: "2"
+        namespace smithy.rust.codegen.test.schemaheaders
+
+        use aws.protocols#awsJson1_0
+        use aws.protocols#awsQueryCompatible
+        use aws.protocols#awsQueryError
+
+        @awsQueryCompatible
+        @awsJson1_0
+        service QueueService {
+            version: "1"
+            operations: [PurgeQueue, SendMessage]
+        }
+
+        operation PurgeQueue {
+            input := {}
+            output := {}
+            errors: [QueueMissing]
+        }
+
+        /// Models no errors.
+        operation SendMessage {
+            input := {}
+            output := {}
+        }
+
+        @awsQueryError(code: "AWS.SimpleQueueService.NonExistentQueue", httpResponseCode: 400)
+        @error("client")
+        structure QueueMissing {
+            message: String
+        }
+        """.asSmithyModel()
+
+    @Test
+    fun `error registries match the protocol's error codes`() {
+        clientIntegrationTest(queryCompatibleModel) { codegenContext, rustCrate ->
+            requireSchemaSerde(codegenContext)
+            val runtimeConfig = codegenContext.runtimeConfig
+            rustCrate.testModule {
+                rustTemplate(
+                    """
+                    use crate::operation::purge_queue::PurgeQueueError;
+                    use crate::types::error::QueueMissing;
+                    use crate::Client;
+                    use #{ProvideErrorMetadata};
+
+                    const CODE: &str = "AWS.SimpleQueueService.NonExistentQueue";
+
+                    fn client(query_error: Option<&str>) -> Client {
+                        let mut response = #{http_1x}::Response::builder().status(400);
+                        if let Some(query_error) = query_error {
+                            response = response.header("x-amzn-query-error", query_error);
+                        }
+                        let body = r##"{"__type":"smithy.rust.codegen.test.schemaheaders##QueueMissing","message":"gone"}"##;
+                        let response = response.body(#{SdkBody}::from(body)).unwrap();
+                        let (http_client, _request) = #{capture_request}(Some(response));
+                        let config = crate::Config::builder()
+                            .endpoint_url("http://localhost:1234")
+                            .http_client(http_client)
+                            .behavior_version_latest()
+                            .build();
+                        Client::from_conf(config)
+                    }
+
+                    fn reified<'a>(error: &'a (dyn std::error::Error + 'static)) -> Option<&'a QueueMissing> {
+                        error.source()?.downcast_ref::<QueueMissing>()
+                    }
+
+                    ##[test]
+                    fn entries_carry_the_query_error_code() {
+                        for registry in [
+                            &*crate::error_type_registry::REGISTRY,
+                            &*crate::operation::purge_queue::error_registry::REGISTRY,
+                        ] {
+                            let entry = registry.entry_for_error_code(CODE).expect("the code matches QueueMissing");
+                            assert_eq!(entry.schema().shape_id().shape_name(), "QueueMissing");
+                            assert_eq!(entry.error_code(), Some(CODE));
+                            // The shape name still matches, for a response without the header.
+                            assert!(registry.entry_for_error_code("QueueMissing").is_some());
+                        }
+                    }
+                    """,
+                    "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
+                    "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                    "http_1x" to CargoDependency.Http1x.toType(),
+                    "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+                )
+
+                tokioTest("the_modeling_operation_dispatches_on_the_query_error_code") {
+                    rustTemplate(
+                        """
+                        let error = client(Some(&format!("{CODE};Sender"))).purge_queue().send().await.unwrap_err();
+                        assert!(matches!(error.into_service_error(), PurgeQueueError::QueueMissing(_)));
+                        """,
+                    )
+                }
+
+                tokioTest("the_service_wide_registry_reads_the_query_error_code") {
+                    rustTemplate(
+                        """
+                        let error = client(Some(&format!("{CODE};Sender"))).send_message().send().await.unwrap_err();
+                        let error = error.into_service_error();
+                        assert_eq!(error.code(), Some(CODE));
+                        assert_eq!(reified(&error).expect("the code matches QueueMissing").message(), Some("gone"));
+                        """,
+                    )
+                }
+
+                tokioTest("the_service_wide_registry_reads_the_shape_name_without_the_header") {
+                    rustTemplate(
+                        """
+                        let error = client(None).send_message().send().await.unwrap_err().into_service_error();
+                        assert_eq!(error.code(), Some("QueueMissing"));
+                        assert_eq!(reified(&error).expect("the name matches QueueMissing").message(), Some("gone"));
+                        """,
+                    )
+                }
             }
         }
     }

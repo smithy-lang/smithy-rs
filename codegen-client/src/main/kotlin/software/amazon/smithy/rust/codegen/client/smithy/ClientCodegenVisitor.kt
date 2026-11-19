@@ -254,7 +254,12 @@ class ClientCodegenVisitor(
                                     shape,
                                 ) == true
                             ) {
-                                BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
+                                BuilderGenerator.renderIntoBuilderMethod(
+                                    this,
+                                    symbolProvider,
+                                    shape,
+                                    codegenDecorator.builderCustomizations(codegenContext, emptyList()),
+                                )
                             }
                         }
                     }
@@ -279,6 +284,7 @@ class ClientCodegenVisitor(
                             codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                             codegenContext.structSettings(),
                             codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                            codegenDecorator.builderCustomizations(codegenContext, emptyList()),
                         )
                     errorGenerator::renderStruct to errorGenerator::renderBuilder
                 }
