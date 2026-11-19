@@ -50,18 +50,22 @@ permissions:
   contents: read
 
 concurrency:
-  # Keyed on the scenario so a release's concurrent manifests never block each other: two ticks that
+  # Keyed on the scenario and the release, so a release's concurrent manifests never block each
+  # other and an abandoned release's dispatches never collide with the current one's: ticks that
   # dispatch different sets land in different groups and run side by side.
-  #
-  # `cancel-in-progress: false` means a repeated dispatch of the *same* set queues behind the run in
-  # flight rather than replacing it, and that direction is deliberate. A cancelled run's legs die
-  # mid-flight: they emit no datapoint and leave no report, so they arrive in the record as
-  # `unreported` and look exactly like legs that died silently -- the one signal reserved for a real
-  # defect. A queued run merely starts late and still reports everything. Overlap should be rare,
-  # since a leg is bounded inside the watcher's tick by an invariant test, but when it happens late
-  # beats lost.
   group: build-canary-${{ inputs.scenario }}-${{ inputs.tag }}
+  # A repeated dispatch of the *same* set has to queue behind the run in flight rather than
+  # replacing it. A cancelled run's legs die mid-flight: they emit no datapoint and leave no
+  # report, so they arrive in the record as `unreported` -- the one signal reserved for a leg that
+  # died of a defect in the canary. A queued run merely starts late and still reports everything.
+  #
+  # `cancel-in-progress: false` alone does not buy that. GitHub's default keeps one run in flight
+  # and one *pending*, and a third dispatch cancels the pending one -- manufacturing exactly the
+  # false defect signal this is meant to avoid. `queue: max` raises the pending limit to 100, which
+  # for forty-five legs an hour is far more headroom than this can use. It is rejected outright
+  # alongside `cancel-in-progress: true`, which is another reason the two belong together.
   cancel-in-progress: false
+  queue: max
 
 jobs:
   matrix:
