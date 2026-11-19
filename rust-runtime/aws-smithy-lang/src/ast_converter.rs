@@ -11,9 +11,11 @@
 //! are `{"target": ..., "traits": ...}`, and entity references are `{"target": ...}`
 //! wrappers. [`JsonLoader`](crate::json_loader::JsonLoader) streams one such [`Node`] per
 //! shape straight from its tokenizer, and the [IDL loader](crate::idl_loader) lowers its
-//! resolved syntax tree into the same layout. Both then call [`AstConverter::convert_shape`], so unknown properties,
-//! malformed shape bodies, duplicate references, trait nodes, declaration order, and
-//! source-located semantic diagnostics stay identical across representations.
+//! resolved syntax tree into the same layout. Both then call [`AstConverter::convert_entry`],
+//! so unknown properties, malformed shape bodies, duplicate references, trait nodes,
+//! declaration order, and source-located semantic diagnostics stay identical across
+//! representations. An IDL `apply` statement is lowered to the JSON AST
+//! `{"type": "apply", "traits": ...}` entry, so both forms of `apply` take the same path too.
 //!
 //! The converter owns the input's label, its diagnostics, and a shape-ID interner. It holds
 //! no tokenizer or syntax state, and nothing about any input representation leaks into the
@@ -37,6 +39,26 @@ use indexmap::IndexMap;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
+/// A converted entry of a document's `shapes`.
+// A transient return value, moved out right away; boxing would allocate once per shape.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum Entry {
+    /// A shape definition.
+    Shape(Shape),
+    /// An `apply` entry.
+    Apply(Apply),
+}
+
+/// Traits applied to a shape or member defined elsewhere: a JSON AST `"type": "apply"` entry
+/// or an IDL `apply` statement.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Apply {
+    /// The shape or member the traits are applied to.
+    pub(crate) target: ShapeId,
+    /// The applied traits in document order, each located where it was written.
+    pub(crate) traits: TraitMap,
+}
 
 /// Converts JSON-AST-shaped [`Node`] values into owned [`Shape`]s, collecting diagnostics.
 ///
@@ -443,12 +465,13 @@ impl AstConverter {
         ok.then_some(out)
     }
 
-    /// Converts one shape declaration, keyed by its absolute shape ID.
+    /// Converts one entry of a document's `shapes`, keyed by its absolute shape ID: a shape
+    /// definition, or an `apply` entry, whose key may also be a member ID.
     ///
-    /// `node` is the shape's JSON-AST-shaped object. Positions already attached to `node`
+    /// `node` is the entry's JSON-AST-shaped object. Positions already attached to `node`
     /// and its descendants are turned into the input's location table here, so a caller only
     /// has to record where each value came from.
-    pub(crate) fn convert_shape(&self, key: &str, mut node: Node) -> Option<Shape> {
+    pub(crate) fn convert_entry(&self, key: &str, mut node: Node) -> Option<Entry> {
         // One location table covers the shape, its members, references, and trait values.
         let mut pointer = String::with_capacity(8 + key.len());
         pointer.push_str("/shapes/");
@@ -456,12 +479,21 @@ impl AstConverter {
         let position = node.position();
         node.assign_locations(&self.source, &mut pointer, position);
         let location = node.source_location().clone();
+        let is_apply = node
+            .as_object()
+            .and_then(|object| object.get("type"))
+            .and_then(Node::as_str)
+            == Some("apply");
         let id = match self.intern(key) {
-            Some(id) if !id.is_member() => id,
+            Some(id) if is_apply || !id.is_member() => id,
             _ => {
                 self.error(
                     DiagnosticCode::InvalidShapeId,
-                    format!("shape key `{key}` is not an absolute root shape ID"),
+                    if is_apply {
+                        format!("`apply` key `{key}` is not an absolute shape ID")
+                    } else {
+                        format!("shape key `{key}` is not an absolute root shape ID")
+                    },
                     location,
                 );
                 return None;
@@ -483,14 +515,7 @@ impl AstConverter {
         let shape_type = match object.get("type").map(|t| (t, t.as_str())) {
             Some((_, Some(name))) => {
                 match name {
-                    "apply" => {
-                        self.error(
-                            DiagnosticCode::UnsupportedFeature,
-                            format!("`apply` to `{id}` is not supported"),
-                            property("type"),
-                        );
-                        return None;
-                    }
+                    "apply" => return self.apply(id, object, &location).map(Entry::Apply),
                     "set" => {
                         self.error(
                         DiagnosticCode::UnsupportedFeature,
@@ -572,7 +597,31 @@ impl AstConverter {
         if !ok || !traits_ok {
             return None;
         }
-        shape
+        shape.map(Entry::Shape)
+    }
+
+    /// Converts an `apply` entry. Like the reference implementation, an entry without traits is
+    /// valid even when nothing defines its target.
+    fn apply(
+        &self,
+        target: ShapeId,
+        mut object: NodeObject,
+        location: &SourceLocation,
+    ) -> Option<Apply> {
+        let ok = self.check_properties(
+            &object,
+            &["type", "traits"],
+            &format!("`apply` to `{target}`"),
+            location,
+        );
+        let traits = self.traits(object.remove("traits"));
+        if !ok {
+            return None;
+        }
+        Some(Apply {
+            target,
+            traits: traits?,
+        })
     }
 
     fn kind(

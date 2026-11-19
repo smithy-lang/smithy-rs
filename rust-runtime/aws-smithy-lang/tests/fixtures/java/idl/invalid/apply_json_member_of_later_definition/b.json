@@ -1,0 +1,1 @@
+{"smithy": "2.0", "shapes": {"ex#S$m": {"type": "apply", "traits": {"smithy.api#required": {}}}}}

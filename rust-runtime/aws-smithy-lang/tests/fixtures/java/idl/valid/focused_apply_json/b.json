@@ -1,0 +1,43 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Later": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#tags": ["b-inline"]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#tags": ["b-inline"]
+            }
+        },
+        "ex#Same$m": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": ["before"],
+                "smithy.api#required": {}
+            }
+        },
+        "ex#Same": {
+            "type": "structure",
+            "members": {
+                "m": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#tags": ["inline"]
+                    }
+                }
+            }
+        },
+        "ex#Later$m": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": ["b-apply-after"]
+            }
+        }
+    }
+}

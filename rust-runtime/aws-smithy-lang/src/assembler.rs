@@ -6,6 +6,7 @@
 //! [`ModelAssembler`]: combines Smithy IDL and JSON AST documents, existing models, shapes,
 //! metadata, and traits into a validated [`Model`].
 
+use crate::ast_converter::Apply;
 use crate::diagnostic::{
     Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, LoadErrorKind, SourceLocation,
 };
@@ -13,7 +14,7 @@ use crate::idl_loader;
 use crate::idl_loader::lower::{self, PendingSyntacticId};
 use crate::idl_loader::resolve::DeclarationIndex;
 use crate::idl_loader::syntax::IdlDocument;
-use crate::json_loader::{Document, JsonLoader, MAX_SUPPORTED_DEPTH};
+use crate::json_loader::{Document, FirstTrait, JsonLoader, MAX_SUPPORTED_DEPTH};
 use crate::knowledge::KnowledgeCache;
 use crate::model::{Model, ModelData};
 use crate::node::{Node, NodeObject, NodeValue};
@@ -46,13 +47,22 @@ use std::sync::Arc;
 ///   accepted, arrays are concatenated, and any other difference is a
 ///   [`TraitConflict`](DiagnosticCode::TraitConflict) error. So two files that define the same
 ///   shape with `@tags(["a"])` and `@tags(["b"])` define one shape with both tags. The traits
-///   of JSON AST documents, models, and shapes built in code merge first (in input order), then
-///   `add_trait` traits, then the traits of IDL documents (in input order), which decides the
-///   order of concatenated arrays (the specification leaves that order unspecified). The IDL
-///   syntactic sugar for default and enum values (`member: T = value` and enum
-///   `NAME = value`) is instead part of the definition, as in the reference implementation:
-///   different values in two definitions conflict, and an applied trait with the same ID
-///   replaces the value.
+///   of JSON AST documents (including `apply` entries, in document order), models, and shapes
+///   built in code merge first (in input order), then `add_trait` traits, then the traits
+///   written on shapes in IDL documents, then the traits of IDL `apply` statements (each in
+///   input order), which decides the order of concatenated arrays (the specification leaves
+///   that order unspecified). The IDL syntactic sugar for default and enum values
+///   (`member: T = value` and enum `NAME = value`) is instead part of the definition, as in the
+///   reference implementation: different values in two definitions conflict, and an applied trait
+///   with the same ID replaces the value.
+/// - **`apply`.** An IDL `apply` statement or JSON AST `"type": "apply"` entry applies traits to
+///   a shape or member defined anywhere, before or after it, and they merge like any other
+///   applied trait. A trait applied to a shape or member that nothing defines is an
+///   [`UnknownShape`](DiagnosticCode::UnknownShape) error; an `apply` without traits is
+///   accepted even then. As in the reference implementation, an IDL `apply` outside the
+///   `smithy.api` namespace cannot target any shape in it, with or without the prelude
+///   ([`PreludeConflict`](DiagnosticCode::PreludeConflict)), and the prelude's own shapes are
+///   not among the shapes an `apply` can target.
 /// - **Metadata.** Equal values for a key are accepted, two arrays are concatenated in input
 ///   order, and any other difference is a
 ///   [`MetadataConflict`](DiagnosticCode::MetadataConflict) error.
@@ -61,7 +71,8 @@ use std::sync::Arc;
 ///   one wins: a later [`put_metadata`](Self::put_metadata) value for a key, or a later shape
 ///   with the same ID (shapes of [models](Self::add_model) after [shapes](Self::add_shape)),
 ///   replaces an earlier one without a diagnostic. Shapes in the prelude namespace are ignored,
-///   with or without the prelude (see [`disable_prelude`](Self::disable_prelude)). Such a shape is merged with a document that defines it like any other definition, and its
+///   with or without the prelude (see [`disable_prelude`](Self::disable_prelude)). Such a shape
+///   is merged with a document that defines it like any other definition, and its
 ///   traits are merged when a document or [`add_trait`](Self::add_trait) first touches it.
 /// - **The prelude namespace.** With the prelude, a document's definition of a shape the
 ///   prelude defines is merged and compared like any other definition, then replaced by the
@@ -100,7 +111,7 @@ use std::sync::Arc;
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 ///
-/// Documents using `apply` or mixins, and shapes marked `@mixin`, are rejected with
+/// Documents using mixins, and shapes marked `@mixin`, are rejected with
 /// [`UnsupportedFeature`](DiagnosticCode::UnsupportedFeature).
 pub struct ModelAssembler {
     prelude: bool,
@@ -392,8 +403,10 @@ impl ModelAssembler {
         self
     }
 
-    /// The maximum number of shapes in each IDL or JSON document. For IDL, shapes generated
-    /// for inline operation input and output count too.
+    /// The maximum number of top-level entries in each IDL or JSON document: shapes and `apply`
+    /// statements or entries. For IDL, shapes generated for inline operation input and output
+    /// count too. Members and traits do not count; [`max_input_bytes`](Self::max_input_bytes)
+    /// and [`max_depth`](Self::max_depth) bound them.
     pub fn max_shapes(mut self, max: usize) -> Self {
         self.loader.max_shapes = max;
         self
@@ -491,6 +504,9 @@ impl ModelAssembler {
             definition_traits: HashSet::new(),
             duplicates: Vec::new(),
             deferred_traits: Vec::new(),
+            deferred_applies: Vec::new(),
+            pending_applies: IndexMap::new(),
+            unclaimed: Vec::new(),
             metadata: NodeObject::new(),
             diagnostics: DiagnosticSet::with_limit(loader.max_diagnostics),
             failure: None,
@@ -686,22 +702,30 @@ impl From<Document> for LoadedDocument {
 ///
 /// Applied traits merge in the reference implementation's order, which decides the order of
 /// concatenated arrays and which value a conflict reports as the previous one: JSON AST traits
-/// in document order as documents are merged, then [`add_trait`](ModelAssembler::add_trait)
-/// traits, then IDL traits in input order. (The reference implementation resolves every IDL
-/// trait as a forward reference once all inputs are loaded.)
+/// (of definitions and `apply` entries) in document order as documents are merged, then
+/// [`add_trait`](ModelAssembler::add_trait) traits, then the traits written on IDL shapes in
+/// input order, then the traits of IDL `apply` statements in input order. (The reference
+/// implementation resolves every IDL trait as a forward reference once all inputs are loaded,
+/// from a queue; an `apply` target is itself a forward reference, so its traits are queued only
+/// once the target resolves, after every trait written on a shape.) A JSON AST `apply` before
+/// the definition of its target is held in
+/// [`pending_applies`](Self::pending_applies) and merged first when the target is defined.
 ///
 /// Shapes built in code and the shapes of models are registered before any document (see
 /// `assemble_inner`), and follow the reference implementation's rules for such "created"
 /// shapes: a later one with the same ID replaces an earlier one, shapes in the prelude namespace
 /// are ignored, and a shape only joins the merge once a document defines it or a trait is applied
-/// to it. At that point its traits are applied, right after whatever touched it:
+/// to it. At that point its traits are applied, right after whatever touched it, as in the
+/// reference implementation:
 ///
-/// - a trait applied to it (by `add_trait`, a JSON AST document, or an IDL document): that
-///   trait first, then the shape's own traits; for a JSON AST definition, the remaining traits
-///   of the document follow, and the document's definition counts as the later one;
+/// - a trait applied by an `apply` or [`add_trait`](ModelAssembler::add_trait): that trait first,
+///   then the shape's own traits;
+/// - a JSON AST definition that applies traits: the definition's first trait in document order
+///   (see [`FirstTrait`]), then the shape's own traits, then the rest of the definition's
+///   traits. The definition counts as the later one (it provides the source locations);
 /// - a definition without applied traits (a JSON AST shape without traits, or any IDL shape,
-///   whose traits are deferred): the shape's own traits, and the document's definition counts
-///   as the earlier one.
+///   whose traits are deferred): the shape's own traits, and the definition counts as the
+///   earlier one.
 struct Merge {
     prelude: bool,
     /// Every shape: for a shape defined by documents, its kept definition with every applied
@@ -722,9 +746,19 @@ struct Merge {
     /// Later definitions of shapes in [`shapes`](Self::shapes), holding only their definition
     /// traits, compared by [`finish_duplicates`](Self::finish_duplicates).
     duplicates: Vec<Shape>,
-    /// Applied traits of IDL documents, merged by
-    /// [`apply_deferred_traits`](Self::apply_deferred_traits).
-    deferred_traits: Vec<DeferredTrait>,
+    /// Traits written on IDL shapes, merged by
+    /// [`apply_deferred_traits`](Self::apply_deferred_traits) after every other input.
+    deferred_traits: Vec<AppliedTrait>,
+    /// Traits of IDL `apply` statements, merged after
+    /// [`deferred_traits`](Self::deferred_traits).
+    deferred_applies: Vec<AppliedTrait>,
+    /// Traits of JSON AST `apply` entries whose target was not defined yet, by the target's
+    /// root shape ID, in document order. They are merged when the shape is defined, before its
+    /// own traits.
+    pending_applies: IndexMap<ShapeId, Vec<AppliedTrait>>,
+    /// `apply` traits whose target no definition merged so far has, reported by
+    /// [`report_unclaimed`](Self::report_unclaimed) if no definition has it at the end.
+    unclaimed: Vec<UnclaimedTrait>,
     metadata: NodeObject,
     diagnostics: DiagnosticSet,
     /// The first input-level failure (I/O, syntax, or resource limit).
@@ -733,9 +767,31 @@ struct Merge {
     syntactic_ids: Vec<PendingSyntacticId>,
 }
 
-/// Applied traits as `(target, trait, value, index)`, where `index` is the trait's position
-/// among its target's traits.
-type AppliedTraits = Vec<(ShapeId, ShapeId, Node, usize)>;
+/// A trait waiting to be merged into a shape or member: a trait of a definition, an IDL trait
+/// deferred until every other input is merged, or a trait of an `apply`.
+struct AppliedTrait {
+    /// The shape or member the trait is applied to.
+    target: ShapeId,
+    /// The trait's shape ID.
+    id: ShapeId,
+    /// The trait's value.
+    value: Node,
+    /// Where the trait goes among its target's traits if the target does not have it yet: its
+    /// index on its target in the definition that applied it. Only the traits written on a
+    /// shape's first IDL definition use it, which keeps them in source order;
+    /// [`merge_all`](Merge::merge_all) ignores it. `None` adds the trait last.
+    position: Option<usize>,
+}
+
+/// An applied trait whose target no definition had when it was merged.
+struct UnclaimedTrait {
+    /// The shape or member the trait is applied to.
+    target: ShapeId,
+    /// The trait's shape ID.
+    id: ShapeId,
+    /// Where the trait was applied.
+    location: SourceLocation,
+}
 
 impl Merge {
     fn failed(&mut self, err: LoadError) {
@@ -755,7 +811,8 @@ impl Merge {
                     Document {
                         metadata,
                         shapes,
-                        first_traits,
+                        mut first_traits,
+                        applies,
                     },
                 diagnostics,
                 syntactic_ids,
@@ -766,26 +823,102 @@ impl Merge {
                 for (key, value) in metadata.into_entries() {
                     self.metadata(key, value);
                 }
-                for mut shape in shapes.into_values() {
+                // `apply` entries are merged in document order among the definitions.
+                let mut applies = applies.into_iter().peekable();
+                for (index, mut shape) in shapes.into_values().enumerate() {
+                    while let Some(entry) = applies.next_if(|entry| entry.shapes_before <= index) {
+                        self.apply(entry.apply, defer_traits);
+                    }
                     if defer_traits {
                         // A first definition gets its traits back in source order.
                         let first = !self.shapes.contains_key(shape.id());
                         let applied = take_applied_traits(&mut shape, &definition_traits);
-                        self.deferred_traits.extend(applied.into_iter().map(
-                            |(target, id, value, position)| DeferredTrait {
-                                target,
-                                id,
-                                value,
-                                position: first.then_some(position),
-                            },
-                        ));
+                        self.deferred_traits
+                            .extend(applied.into_iter().map(|applied| AppliedTrait {
+                                position: applied.position.filter(|_| first),
+                                ..applied
+                            }));
                     }
-                    let first_trait = first_traits.get(shape.id()).cloned();
+                    let first_trait = first_traits.remove(shape.id());
                     self.definition(shape, &definition_traits, first_trait);
+                }
+                for entry in applies {
+                    self.apply(entry.apply, defer_traits);
                 }
             }
             Err(err) => self.failed(err),
         }
+    }
+
+    /// Merges the traits of an `apply` entry or statement. `deferred` is `true` for IDL
+    /// documents.
+    ///
+    /// As in the reference implementation, the traits of a JSON AST `apply` are applied in
+    /// document order, so an `apply` before the definition of its target is held and merged
+    /// first when the target is defined. The traits of an IDL `apply` are merged after every
+    /// trait written on an IDL shape (see [`Merge`]).
+    fn apply(&mut self, apply: Apply, deferred: bool) {
+        let Apply { target, traits } = apply;
+        for (id, value) in traits {
+            let applied = AppliedTrait {
+                target: target.clone(),
+                id,
+                value,
+                position: None,
+            };
+            if deferred {
+                self.deferred_applies.push(applied);
+            } else if self.shapes.contains_key(target.root_str()) {
+                self.merge_or_record_unclaimed(applied);
+            } else {
+                self.pending_applies
+                    .entry(target.root())
+                    .or_default()
+                    .push(applied);
+            }
+        }
+    }
+
+    /// Merges an applied trait. If no definition merged so far has its target, the trait is
+    /// recorded in [`unclaimed`](Self::unclaimed) and reported only if no definition has the
+    /// target once every input is merged: like the reference implementation, a later definition
+    /// can still provide it (and then usually conflicts with the earlier one).
+    fn merge_or_record_unclaimed(&mut self, applied: AppliedTrait) {
+        let AppliedTrait {
+            target,
+            id,
+            value,
+            position,
+        } = applied;
+        let location = value.source_location().clone();
+        if !self.merge_applied_trait(&target, id.clone(), value, position) {
+            self.unclaimed.push(UnclaimedTrait {
+                target,
+                id,
+                location,
+            });
+        }
+    }
+
+    /// Reports the [`unclaimed`](Self::unclaimed) traits whose target no definition has.
+    fn report_unclaimed(&mut self) {
+        for unclaimed in std::mem::take(&mut self.unclaimed) {
+            if !self.has_target(&unclaimed.target) {
+                self.unknown_target(&unclaimed.target, &unclaimed.id, unclaimed.location);
+            }
+        }
+    }
+
+    /// Reports a trait applied to a shape or member that nothing defines.
+    fn unknown_target(&mut self, target: &ShapeId, id: &ShapeId, location: SourceLocation) {
+        self.diagnostics.push(
+            Diagnostic::error(
+                DiagnosticCode::UnknownShape,
+                format!("trait `{id}` is applied to unknown shape `{target}`"),
+            )
+            .with_shape_id(target.clone())
+            .with_source_location(location),
+        );
     }
 
     /// Registers a shape built in code or taken from a model. As in the reference implementation,
@@ -824,7 +957,7 @@ impl Merge {
     /// If `id` is a shape built in code or taken from a model that nothing has touched yet, takes
     /// its traits so they can be applied in the order the reference implementation applies them,
     /// and returns them. From then on the shape is merged like a document definition.
-    fn touch_created(&mut self, id: &str) -> Option<AppliedTraits> {
+    fn touch_created(&mut self, id: &str) -> Option<Vec<AppliedTrait>> {
         if !self.created.remove(id) {
             return None;
         }
@@ -837,13 +970,13 @@ impl Merge {
 
     /// Adds one definition of a shape from a document. `definition_traits` lists which of its
     /// traits are part of the definition; every other trait is applied. `first_trait` is the
-    /// shape's first applied trait in document order as `(target, trait)`, when that is not
-    /// the [canonical one](crate::json_loader::canonical_first_trait).
+    /// definition's first trait in document order, for a JSON AST definition where that is not
+    /// the usual one (see [`FirstTrait`]).
     fn definition(
         &mut self,
         mut shape: Shape,
         definition_traits: &HashSet<(ShapeId, ShapeId)>,
-        first_trait: Option<(ShapeId, ShapeId)>,
+        first_trait: Option<FirstTrait>,
     ) {
         let id = shape.id().clone();
         if let Some(created_traits) = self.touch_created(id.as_str()) {
@@ -860,12 +993,14 @@ impl Merge {
                 self.merge_all(created_traits);
                 self.duplicates.push(created);
             } else {
-                // The reference implementation applies a JSON AST shape's traits in document order
-                // before defining it: the first one touches the shape built in code, whose traits
-                // follow, and this definition is the later one.
-                let first = first_trait_index(&applied, first_trait.as_ref());
-                let (target, trait_id, value, _) = applied.remove(first);
-                self.merge_trait(&target, trait_id, value, None);
+                // As in the reference implementation, which applies a JSON AST definition's
+                // traits in document order before defining the shape: the first trait touches
+                // the shape built in code, whose own traits follow, then the rest of the
+                // definition's traits. The definition is the later one.
+                let AppliedTrait {
+                    target, id, value, ..
+                } = applied.remove(first_trait_index(&applied, first_trait.as_ref()));
+                self.merge_trait(&target, id, value, None);
                 self.merge_all(created_traits);
                 self.merge_all(applied);
                 self.duplicates.push(shape);
@@ -875,7 +1010,27 @@ impl Merge {
         if !self.shapes.contains_key(&id) {
             self.add_definition_traits(&id, definition_traits);
             self.record_input_order(&id);
-            self.shapes.insert(id, shape);
+            // `get_mut` and `take` keep this O(1); `shift_remove` is O(n), which makes loading
+            // quadratic when `apply` entries come before their targets.
+            match self
+                .pending_applies
+                .get_mut(&id)
+                .map(std::mem::take)
+                .filter(|pending| !pending.is_empty())
+            {
+                None => {
+                    self.shapes.insert(id, shape);
+                }
+                Some(pending) => {
+                    // Traits applied earlier in document order come first.
+                    let own = take_applied_traits(&mut shape, definition_traits);
+                    self.shapes.insert(id, shape);
+                    for applied in pending {
+                        self.merge_or_record_unclaimed(applied);
+                    }
+                    self.merge_all(own);
+                }
+            }
             return;
         }
         // A later definition: its applied traits apply to the shape (and so to every
@@ -901,15 +1056,18 @@ impl Merge {
 
     /// Merges applied traits in order. A target that only a later definition has is reported
     /// as a conflict when the definitions are compared, so it is skipped here.
-    fn merge_all(&mut self, traits: AppliedTraits) {
-        for (target, id, value, _) in traits {
+    fn merge_all(&mut self, traits: Vec<AppliedTrait>) {
+        for AppliedTrait {
+            target, id, value, ..
+        } in traits
+        {
             self.merge_trait(&target, id, value, None);
         }
     }
 
-    /// Merges a trait applied by `add_trait` or an IDL document. If it touches a shape built in
-    /// code, that shape's own traits are applied right after it, as in the reference
-    /// implementation.
+    /// Merges a trait applied by `add_trait`, an `apply`, or an IDL document. If it touches a
+    /// shape built in code, that shape's own traits are applied right after it, as in the
+    /// reference implementation.
     fn merge_applied_trait(
         &mut self,
         target: &ShapeId,
@@ -925,11 +1083,14 @@ impl Merge {
         merged
     }
 
-    /// Merges the applied traits of IDL documents, after every other input and `add_trait`.
+    /// Merges the applied traits of IDL documents, after every other input and `add_trait`:
+    /// first the traits written on shapes, then the traits of `apply` statements, as in the
+    /// reference implementation. Then reports the traits of JSON AST `apply` entries whose
+    /// target was never defined.
     fn apply_deferred_traits(&mut self) {
         for deferred in std::mem::take(&mut self.deferred_traits) {
             // The target is a shape or member of the same document, so it exists.
-            let DeferredTrait {
+            let AppliedTrait {
                 target,
                 id,
                 value,
@@ -937,6 +1098,22 @@ impl Merge {
             } = deferred;
             self.merge_applied_trait(&target, id, value, position);
         }
+        for applied in std::mem::take(&mut self.deferred_applies) {
+            self.merge_or_record_unclaimed(applied);
+        }
+        for AppliedTrait {
+            target, id, value, ..
+        } in std::mem::take(&mut self.pending_applies)
+            .into_values()
+            .flatten()
+        {
+            self.unclaimed.push(UnclaimedTrait {
+                target,
+                id,
+                location: value.source_location().clone(),
+            });
+        }
+        self.report_unclaimed();
     }
 
     /// Compares every repeated definition with the kept one, now that every applied trait is known.
@@ -1134,29 +1311,25 @@ impl Merge {
     }
 }
 
-/// An applied trait of an IDL document, merged after every other input.
-struct DeferredTrait {
-    target: ShapeId,
-    id: ShapeId,
-    value: Node,
-    /// The trait's index on its target, for a shape's first definition.
-    position: Option<usize>,
-}
-
-/// Removes the applied traits of `shape` and its members, returning them as
-/// `(target, trait, value, index)` in declaration order, where `index` is the trait's position
-/// among its target's traits. Traits listed in `definition_traits` stay.
+/// Removes the applied traits of `shape` and its members, returning them in declaration order,
+/// each positioned at its index among its target's traits. Traits listed in `definition_traits`
+/// stay.
 fn take_applied_traits(
     shape: &mut Shape,
     definition_traits: &HashSet<(ShapeId, ShapeId)>,
-) -> AppliedTraits {
+) -> Vec<AppliedTrait> {
     let mut applied = Vec::new();
     let mut split = |target: &ShapeId, traits: &mut TraitMap| {
         for (index, (id, value)) in std::mem::take(traits).into_iter().enumerate() {
             if definition_traits.contains(&(target.clone(), id.clone())) {
                 traits.insert(id, value);
             } else {
-                applied.push((target.clone(), id, value, index));
+                applied.push(AppliedTrait {
+                    target: target.clone(),
+                    id,
+                    value,
+                    position: Some(index),
+                });
             }
         }
     };
@@ -1169,16 +1342,18 @@ fn take_applied_traits(
     applied
 }
 
-/// The index in `applied` (from [`take_applied_traits`]) of a JSON AST shape's first trait
-/// in document order: `first`, or else the canonical first trait, which is the first member
-/// trait or else the first shape trait (see
-/// [`canonical_first_trait`](crate::json_loader::canonical_first_trait)).
-fn first_trait_index(applied: &AppliedTraits, first: Option<&(ShapeId, ShapeId)>) -> usize {
+/// The index in `applied` (from [`take_applied_traits`], so shape traits before member traits,
+/// each in declaration order) of a JSON AST definition's first trait in document order:
+/// `first` if recorded, otherwise the usual first trait, which is the first member trait or else
+/// the first shape trait (see [`FirstTrait`]).
+fn first_trait_index(applied: &[AppliedTrait], first: Option<&FirstTrait>) -> usize {
     let found = match first {
-        Some((target, id)) => applied
+        Some(first) => applied
             .iter()
-            .position(|(t, i, _, _)| t == target && i == id),
-        None => applied.iter().position(|(target, ..)| target.is_member()),
+            .position(|applied| applied.target == first.target && applied.id == first.id),
+        None => applied
+            .iter()
+            .position(|applied| applied.target.is_member()),
     };
     found.unwrap_or(0)
 }

@@ -1,0 +1,4 @@
+{
+    "description": "A shape built in code, touched by a JSON AST apply: the applied trait comes first, then the shape's own traits.",
+    "steps": [{"addShapes": "shapes.json"}, {"addFile": "a.json"}]
+}

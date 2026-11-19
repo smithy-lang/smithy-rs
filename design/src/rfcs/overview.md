@@ -56,4 +56,4 @@
 - [RFC-0045: Configurable Serde](./rfc0045_configurable_serde.md)
 - [RFC-0047: Schema-driven server serde](./rfc0047_server_schema_serde.md)
 - [RFC-0048: Server protocol claims and multiprotocol dispatch](./rfc0048_server_protocol_claims.md)
-
+- [RFC-0049: Integrated standard server metrics](./rfc0049_integrated_server_metrics.md)
