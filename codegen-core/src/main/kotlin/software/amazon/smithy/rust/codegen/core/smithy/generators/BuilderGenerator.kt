@@ -80,8 +80,9 @@ sealed class BuilderSection(name: String) : Section(name) {
         BuilderSection("MemberValueInBuild")
 
     /**
-     * Hook to add setter calls, such as `.set_foo(self.foo)`, to the end of the chain in the crate-private
-     * `into_builder()` method that [BuilderGenerator.renderIntoBuilderMethod] renders on the structure.
+     * Hook to add setter calls, such as `.set_foo(self.foo)`, to the chain in the crate-private `into_builder()`
+     * method that [BuilderGenerator.renderIntoBuilderMethod] renders on the structure. They come before the member
+     * setters, which move the structure's fields, so they can still borrow those fields.
      */
     data class AdditionalIntoBuilderSetters(override val shape: StructureShape) :
         BuilderSection("AdditionalIntoBuilderSetters")
@@ -205,6 +206,7 @@ class BuilderGenerator(
                 Attribute.AllowUnused.render(implBlock)
                 implBlock.rustBlock("pub(crate) fn into_builder(self) -> #T", builderSymbol) {
                     write("Self::builder()")
+                    writeCustomizations(customizations, BuilderSection.AdditionalIntoBuilderSetters(shape))
                     for (member in members) {
                         val memberName = member.memberName.toSnakeCase()
                         val setter =
@@ -215,7 +217,6 @@ class BuilderGenerator(
                             }
                         write(".$setter(self.$memberName)")
                     }
-                    writeCustomizations(customizations, BuilderSection.AdditionalIntoBuilderSetters(shape))
                 }
             }
         }

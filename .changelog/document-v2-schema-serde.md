@@ -41,6 +41,13 @@ Schema serde can now write and read `DocumentV2` values.
   exactly. `JsonSerializer::write_discriminated_document_v2` and
   `JsonDeserializer::read_discriminated_document_v2` write and read the `__type`
   discriminator.
+- **Timestamps from big decimals:** reading a timestamp from a `DocumentV2`
+  accepts a `BigDecimal`, which is how JSON epoch seconds with nanoseconds such
+  as `1700000000.123456789` are read. The new provided method
+  `DocumentSettings::coerce_big_decimal_to_timestamp` in `aws-smithy-types`
+  converts it when settings are attached. Its default rounds to the nearest
+  number and calls `coerce_number_to_timestamp`, and `JsonCodecSettings` reads
+  the exact epoch seconds. Without settings, epoch-seconds text is read exactly.
 - **CBOR, XML, and Query:** the `aws-smithy-cbor`, `aws-smithy-xml`, and
   `aws-smithy-query` serializers reject every `DocumentV2` value with the same
   error as a `Document`, because their protocols have no document encoding.

@@ -56,6 +56,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSecti
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
@@ -75,11 +76,11 @@ import software.amazon.smithy.rust.codegen.core.util.shouldRedact
  * - `build()` keeps the companion and, when it is set, derives the public `Document` field from it with
  *   `DocumentV2::to_document_lossy`. Required-member checks and defaults apply to that derived value, so setting
  *   either form satisfies a required member.
- * - `into_builder()` carries the companion.
- * - A set companion always takes priority over the public `Document` field, whether it was set with a builder method
- *   or read from a response, and even if the `Document` field was changed afterwards. Every serializer, including the
- *   `serde` implementations from `codegen-serde`, writes the companion while it is set. There is no record of where a
- *   companion came from and no comparison against the `Document` field.
+ * - The public `Document` field can be changed after the struct is built or read from a response. A companion is
+ *   only used while it is current: while the public field still holds the companion's `to_document_lossy`
+ *   conversion (the inlineable's `current_companion`). After the field changes, `payload_v2()` returns `None`,
+ *   serializers write the field, and `into_builder()` leaves the companion out. So a change to the field is sent,
+ *   and an unchanged value read from a response is sent in its exact `DocumentV2` form.
  * - Equality and `Debug` output are unchanged: the slot always compares equal, and these structures use the manual
  *   `Debug` impls, which print only the modeled members.
  * - An ordinary union member that directly holds documents gets a second variant such as `JsonV2(DocumentV2)` and
@@ -311,8 +312,26 @@ private fun documentV2Scope(runtimeConfig: RuntimeConfig): Array<Pair<String, An
         "DocumentV2" to RuntimeType.documentV2(runtimeConfig),
         "DocumentV2Slot" to slotModule.resolve("DocumentV2Slot"),
         "public_value" to slotModule.resolve("public_value"),
+        "current_companion" to slotModule.resolve("current_companion"),
+        "into_current_companion" to slotModule.resolve("into_current_companion"),
     )
 }
+
+/**
+ * The structure's public field for [companion], as the `Option<&T>` that `current_companion` takes. A required
+ * member's field isn't an `Option` in some structures, such as outputs.
+ */
+private fun publicFieldRef(
+    codegenContext: ClientCodegenContext,
+    companion: DocumentV2Companion,
+): Writable =
+    writable {
+        if (codegenContext.symbolProvider.toSymbol(companion.member).isOptional()) {
+            rust("self.${companion.memberName}.as_ref()")
+        } else {
+            rustTemplate("#{Some}(&self.${companion.memberName})", *preludeScope)
+        }
+    }
 
 /**
  * Caches [DocumentV2Index.companions] by shape, because generators ask for a section once per member, as with
@@ -358,26 +377,26 @@ private class DocumentV2StructureCustomization(private val codegenContext: Clien
 
     private fun RustWriter.renderGetter(companion: DocumentV2Companion) {
         val optional = RustType.Option(companion.type)
-        val (returnType, conversion) =
+        val (returnType, deref) =
             if (companion.type.isDeref()) {
-                optional.asDeref() to "as_deref"
+                optional.asDeref() to ".map(::std::ops::Deref::deref)"
             } else {
-                optional.asRef() to "as_ref"
+                optional.asRef() to ""
             }
         val field = companion.unescapedMemberName
         rustTemplate(
             """
-            /// Returns the [`DocumentV2`](#{DocumentV2}) form of `$field`, if there is one.
+            /// Returns the [`DocumentV2`](#{DocumentV2}) form of `$field`, unless `$field` was changed
+            /// after this value was built or read.
             ///
             /// A value read from a response has it, and so does a value built with the
             /// `DocumentV2` builder methods. Reading or building the value sets the `$field` field
             /// to the same value with each `DocumentV2` converted by
             /// [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy).
             ///
-            /// While this returns `Some`, it takes priority over the `$field` field: serializing this
-            /// value, for example as part of a request, writes this form, even if `$field` was changed
-            /// afterwards. To send a changed `$field` instead, build a new value without the
-            /// `DocumentV2` form.
+            /// This returns `None` once `$field` no longer holds that conversion. While this returns
+            /// `Some`, serializing this value, for example as part of a request, writes this exact
+            /// form. Otherwise it writes `$field`.
             """,
             *scope,
         )
@@ -385,10 +404,12 @@ private class DocumentV2StructureCustomization(private val codegenContext: Clien
         rustTemplate(
             """
             pub fn ${companion.name}(&self) -> #{ReturnType} {
-                self.${companion.name}.0.$conversion()
+                #{current_companion}(self.${companion.name}.0.as_ref(), #{public})$deref
             }
             """,
+            *scope,
             "ReturnType" to returnType,
+            "public" to publicFieldRef(codegenContext, companion),
         )
     }
 }
@@ -464,8 +485,14 @@ private class DocumentV2BuilderCustomization(private val codegenContext: ClientC
                     }
 
                 is BuilderSection.AdditionalIntoBuilderSetters ->
+                    // These setters run before the member setters move the public fields, so the check can
+                    // borrow them.
                     companions.forEach { companion ->
-                        rust(".${companion.setterName}(self.${companion.name}.0)")
+                        rustTemplate(
+                            ".${companion.setterName}(#{into_current_companion}(self.${companion.name}.0, #{public}))",
+                            *scope,
+                            "public" to publicFieldRef(codegenContext, companion),
+                        )
                     }
 
                 else -> {}
@@ -512,7 +539,8 @@ private fun RustWriter.renderDocumentV2Methods(
         """
         The `DocumentV2` form takes priority over a value set with `$field` or [`$v1Setter`](Self::$v1Setter).
         When it is set, the built value's `$field` field holds the same value with each `DocumentV2` converted by
-        [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy).
+        [`DocumentV2::to_document_lossy`](#{DocumentV2}::to_document_lossy). If that field is changed after the
+        value is built, the change takes priority instead.
         """.trimIndent()
     val required =
         "This field is required. Setting either form satisfies the requirement.".takeIf { member.isRequired }

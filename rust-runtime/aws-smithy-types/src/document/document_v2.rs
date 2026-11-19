@@ -24,6 +24,8 @@ pub use de::from_document_v2;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 pub use ser::to_document_v2;
 
+pub(crate) use conversion::nearest_number;
+
 use super::{DocumentError, DocumentObject};
 use crate::{BigDecimal, BigInteger, DateTime, Number};
 use std::borrow::Cow;

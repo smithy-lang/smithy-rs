@@ -265,11 +265,22 @@ internal class BuilderGeneratorTest {
                     writable {
                         when (section) {
                             is BuilderSection.AdditionalFields -> rust("pub(crate) fallback: Option<String>,")
+                            is BuilderSection.AdditionalMethods ->
+                                rust(
+                                    """
+                                    pub fn fallback(mut self, input: String) -> Self {
+                                        self.fallback = Some(input);
+                                        self
+                                    }
+                                    """,
+                                )
                             is BuilderSection.MemberValueInBuild ->
                                 if (section.member.memberName == "value") {
                                     rust("self.value.or(self.fallback)")
                                 }
-                            is BuilderSection.AdditionalIntoBuilderSetters -> rust(""".other("from into_builder")""")
+                            // Borrows `self.value`, which the member setters move afterwards.
+                            is BuilderSection.AdditionalIntoBuilderSetters ->
+                                rust(".fallback(self.value.to_uppercase())")
                             else -> {}
                         }
                     }
@@ -297,10 +308,11 @@ internal class BuilderGeneratorTest {
                     assert_eq!(my_struct.value, "set");
                     assert_eq!(my_struct.other.as_deref(), Some("other"));
 
-                    // The customization's setter runs after the member setters.
+                    // The customization's setter runs before the member setters, so it can borrow their fields.
                     let builder = my_struct.into_builder();
                     assert_eq!(builder.get_value().as_deref(), Some("set"));
-                    assert_eq!(builder.get_other().as_deref(), Some("from into_builder"));
+                    assert_eq!(builder.get_other().as_deref(), Some("other"));
+                    assert_eq!(builder.fallback.as_deref(), Some("SET"));
                     """,
                 )
             }

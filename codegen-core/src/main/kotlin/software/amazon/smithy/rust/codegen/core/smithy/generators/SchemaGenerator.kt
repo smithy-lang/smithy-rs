@@ -103,8 +103,9 @@ class SchemaGenerator(
     val schemaPrefix: String? = null,
     /**
      * Whether structures have the `DocumentV2` companions that [DocumentV2Index] lists. When true, `serialize_members`
-     * writes a member that has one from the companion when it is set, and from the `Document` field otherwise, and
-     * `deserialize_members` reads the member into the companion.
+     * writes a member that has one from the companion when its getter returns it, and from the `Document` field
+     * otherwise, and `deserialize_members` reads the member into the companion. The getter returns the companion
+     * only while the `Document` field is unchanged, so a change to the field is what gets written.
      */
     private val documentV2Companions: Boolean = false,
     /**
@@ -303,8 +304,9 @@ class SchemaGenerator(
                     if (companion == null) {
                         rust(fieldWrite)
                     } else {
-                        // The member is written once. The companion takes priority, and the `Document` field is
-                        // written as before when the companion isn't set.
+                        // The member is written once. The companion takes priority while its getter returns it,
+                        // which is while the `Document` field still holds its lossy conversion. Otherwise the
+                        // `Document` field is written as before.
                         val companionWrite = writeMethodForShape(target, memberSchemaRef, member, documentV2 = true)
                         rust(
                             """
