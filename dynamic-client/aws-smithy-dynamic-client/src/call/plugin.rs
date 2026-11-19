@@ -29,7 +29,7 @@ use aws_smithy_types::config_bag::Layer;
 
 // Returns the operation plugin of one call. The plugin stores the same config as a generated
 // operation plugin.
-pub(super) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> StaticRuntimePlugin {
+pub(crate) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> StaticRuntimePlugin {
     let mut layer = Layer::new("DynamicOperation");
     layer.store_put(SharedRequestSerializer::new(DocumentSerializer));
     layer.store_put(SharedResponseDeserializer::new(DocumentDeserializer::new(

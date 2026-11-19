@@ -9,14 +9,14 @@ use crate::config;
 use crate::error::{DynamicOperationError, OperationNotFound};
 use crate::serde::check_input;
 use crate::DynamicClient;
-use aws_smithy_lang::ShapeId;
 use aws_smithy_runtime::client::orchestrator::invoke;
 use aws_smithy_runtime_api::client::interceptors::context::Input;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_types::Document;
-use plugin::{operation_plugin, per_call_plugins};
+pub(crate) use plugin::operation_plugin;
+use plugin::per_call_plugins;
 use std::fmt;
 use tracing::Instrument;
 
@@ -40,16 +40,14 @@ pub type CallResult = Result<DynamicOutput, SdkError<DynamicOperationError, Http
 #[must_use = "a call does nothing until it is sent"]
 pub struct CallBuilder {
     client: DynamicClient,
-    operation: Result<ShapeId, OperationNotFound>,
+    // The index of the operation in the client's operations.
+    operation: Result<usize, OperationNotFound>,
     input: Document,
     config_override: Option<config::Builder>,
 }
 
 impl CallBuilder {
-    pub(crate) fn new(
-        client: DynamicClient,
-        operation: Result<ShapeId, OperationNotFound>,
-    ) -> Self {
+    pub(crate) fn new(client: DynamicClient, operation: Result<usize, OperationNotFound>) -> Self {
         Self {
             client,
             operation,
@@ -85,8 +83,9 @@ impl CallBuilder {
 
     /// Sends the call.
     pub async fn send(self) -> CallResult {
-        let operation = self.operation.map_err(SdkError::construction_failure)?;
+        let index = self.operation.map_err(SdkError::construction_failure)?;
         let client = self.client;
+        let operation = &client.operations[index];
         let input = DynamicInput::new(self.input, client.schemas.clone(), operation.clone());
         // The input is checked before any interceptor runs, so every interceptor sees an input
         // that matches the input schema.
@@ -95,7 +94,7 @@ impl CallBuilder {
         let mut runtime_plugins = client
             .runtime_plugins
             .clone()
-            .with_operation_plugin(operation_plugin(&client, &operation));
+            .with_operation_plugin(client.operation_plugin(index));
         if let Some(config) = self.config_override {
             for plugin in per_call_plugins(&client, config) {
                 runtime_plugins = runtime_plugins.with_operation_plugin(plugin);
@@ -128,8 +127,12 @@ impl CallBuilder {
 // The debug output has no input values, because a value can be `@sensitive`.
 impl fmt::Debug for CallBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let operation = self
+            .operation
+            .as_ref()
+            .map(|index| self.client.operations[*index].as_str());
         f.debug_struct("CallBuilder")
-            .field("operation", &self.operation)
+            .field("operation", &operation)
             .finish_non_exhaustive()
     }
 }
@@ -879,5 +882,21 @@ mod tests {
             .err()
             .expect("a list is not a structure");
         assert_eq!(&InputErrorKind::NotAStructure, err.kind());
+    }
+
+    #[tokio::test]
+    async fn an_operation_plugin_is_built_on_the_first_call_and_kept() {
+        let client = client_with(Config::builder());
+        let get = client.operation_index("GetSprocket").unwrap();
+        let create = client.operation_index("CreateSprocket").unwrap();
+        assert!(client.operation_plugins[get].get().is_none());
+        client
+            .call("GetSprocket")
+            .input(sprocket("1"))
+            .send()
+            .await
+            .unwrap();
+        assert!(client.operation_plugins[get].get().is_some());
+        assert!(client.operation_plugins[create].get().is_none());
     }
 }

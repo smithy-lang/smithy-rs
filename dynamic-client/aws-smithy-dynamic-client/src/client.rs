@@ -5,7 +5,7 @@
 
 //! The dynamic client and its builder.
 
-use crate::call::CallBuilder;
+use crate::call::{operation_plugin, CallBuilder};
 use crate::error::{InputError, InputErrorKind, OperationNotFound};
 use crate::serde::check_input;
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
@@ -13,13 +13,13 @@ use aws_smithy_lang::shape::ServiceView;
 use aws_smithy_lang::ShapeId;
 #[cfg(test)]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugins, SharedRuntimePlugin};
 use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_schema::OperationSchema;
 #[cfg(test)]
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::Document;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use struct_value::StructValue;
 
 mod builder;
@@ -49,7 +49,10 @@ pub struct DynamicClient {
     pub(crate) schemas: Arc<RuntimeSchemaSet>,
     // The service's operations are sorted by name, so a call finds its operation by binary
     // search.
-    operations: Arc<[ShapeId]>,
+    pub(crate) operations: Arc<[ShapeId]>,
+    // The operation plugin of each operation, at the same index as in `operations`. Each plugin
+    // is built on the operation's first call, and later calls share it.
+    pub(crate) operation_plugins: Arc<[OnceLock<SharedRuntimePlugin>]>,
     // The service name is the service's SDK ID, or the service's shape name when the model has
     // no SDK ID. Generated clients use the same service name.
     pub(crate) sdk_id: Arc<str>,
@@ -86,7 +89,7 @@ impl DynamicClient {
     /// # }
     /// ```
     pub fn call(&self, operation: &str) -> CallBuilder {
-        let found = self.operation_id(operation).cloned();
+        let found = self.operation_index(operation);
         CallBuilder::new(self.clone(), found)
     }
 
@@ -100,7 +103,7 @@ impl DynamicClient {
     ///
     /// Fails with [`OperationNotFound`] when the service has no operation with that name.
     pub fn operation(&self, operation: &str) -> Result<OperationSchema<'_>, OperationNotFound> {
-        let id = self.operation_id(operation)?;
+        let id = &self.operations[self.operation_index(operation)?];
         Ok(self
             .schemas
             .operation(id)
@@ -152,11 +155,20 @@ impl DynamicClient {
         Ok(StructValue::new(value, self.schemas.clone(), shape.clone()))
     }
 
-    // Finds an operation of the service by its shape name.
-    fn operation_id(&self, operation: &str) -> Result<&ShapeId, OperationNotFound> {
+    // Returns the operation plugin of the operation at `index`, built on the operation's first
+    // call.
+    pub(crate) fn operation_plugin(&self, index: usize) -> SharedRuntimePlugin {
+        self.operation_plugins[index]
+            .get_or_init(|| {
+                SharedRuntimePlugin::new(operation_plugin(self, &self.operations[index]))
+            })
+            .clone()
+    }
+
+    // Finds the index of an operation of the service by its shape name.
+    pub(crate) fn operation_index(&self, operation: &str) -> Result<usize, OperationNotFound> {
         self.operations
             .binary_search_by(|id| id.name().cmp(operation))
-            .map(|index| &self.operations[index])
             .map_err(|_| OperationNotFound::new(operation.to_owned(), self.service().clone()))
     }
 

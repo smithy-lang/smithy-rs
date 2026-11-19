@@ -27,7 +27,7 @@ use aws_smithy_schema::protocol::{
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// A builder for a [`DynamicClient`].
 #[derive(Clone, Debug, Default)]
@@ -139,6 +139,7 @@ impl DynamicClientBuilder {
         operations.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
+            operation_plugins: operations.iter().map(|_| OnceLock::new()).collect(),
             operations: operations.into(),
             sdk_id: sdk_id(&service_view).into(),
             runtime_plugins,
