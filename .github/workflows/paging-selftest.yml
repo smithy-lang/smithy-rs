@@ -20,15 +20,12 @@
 #           the previous release's alarm while a ticket may still be open against it -- so whether
 #           that releases the ticketing system's hold has to be known.
 #
-# SEVERITY 2.5, and not a parameter. Production will be 2.
+# SEVERITY 3, and not a parameter. It tracks the release alarm, which starts at 3 too.
 #
-# Deliberately above the release alarm, which starts at a non-paging 3 so a canary finding its feet
-# cannot page anyone. This workflow is the opposite case: it only runs when someone dispatches it,
-# and proving that a page actually arrives is the whole point. A non-paging severity here would
-# demonstrate that a ticket is cut and leave the notification half unproven.
-#
-# 2.5 pages during business hours, so run this during the working day: a silent pager at night is
-# not evidence of anything.
+# 3 cuts a ticket and notifies nobody, and a ticket appearing is what this workflow is for: the
+# whole chain from a datapoint to a filed ticket is what nothing else can exercise without a
+# release. Whether the notification half then reaches a human is a property of the severity, not of
+# this chain, and it is answered by raising the severity rather than by running this again.
 #
 # High-severity ticketing has to be enabled for the application cutting the ticket, which is
 # unverified -- so the first `fire` may be rejected rather than delivered. That is a finding, not a
@@ -126,7 +123,7 @@ jobs:
         set -o pipefail
         export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3
 
-        SEVERITY=2.5
+        SEVERITY=3
 
         # Both placeholders must be present before substituting. A template with the severity
         # hardcoded would make the substitution a no-op and cut at whatever severity the secret

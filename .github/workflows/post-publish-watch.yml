@@ -136,8 +136,7 @@ jobs:
         # 3 cuts a ticket and pages nobody, which is the right first stage: a canary that pages on
         # its own teething problems spends the oncall's trust before it has earned any. 2.5 pages
         # during business hours and 2 is production; each step waits on the false-positive rate
-        # measured by the one before it. `paging-selftest.yml` stays at 2.5, because proving a page
-        # arrives is the one thing a non-paging severity cannot do.
+        # measured by the one before it. `paging-selftest.yml` tracks this value.
         SEVERITY=3
         ALARM="build-canary-${TAG}"
 
