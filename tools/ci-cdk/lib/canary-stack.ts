@@ -27,6 +27,10 @@ export interface OidcProps {
     roleName: string;
     roleGithubOrg: string;
     roleGithubRepo: string;
+    /** The organisation's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubOrgId: string;
+    /** The repository's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubRepoId: string;
     provider: OpenIdConnectProvider;
 }
 
@@ -61,6 +65,8 @@ export class CanaryStack extends Stack {
                 name: props.oidcProps.roleName,
                 githubOrg: props.oidcProps.roleGithubOrg,
                 githubRepo: props.oidcProps.roleGithubRepo,
+                githubOrgId: props.oidcProps.roleGithubOrgId,
+                githubRepoId: props.oidcProps.roleGithubRepoId,
                 oidcProvider: props.oidcProps.provider,
             });
 

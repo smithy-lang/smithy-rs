@@ -7,6 +7,7 @@ import { Effect, OpenIdConnectProvider, PolicyStatement } from "aws-cdk-lib/aws-
 import { ArnFormat, CfnOutput, RemovalPolicy, Stack, StackProps, Tags } from "aws-cdk-lib";
 import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
+import { SMITHY_RS } from "../github-repositories";
 import { Construct } from "constructs";
 
 /**
@@ -110,8 +111,7 @@ export class BuildCanaryStack extends Stack {
         Tags.of(this).add("stack", id);
 
         const github = {
-            githubOrg: "smithy-lang",
-            githubRepo: "smithy-rs",
+            ...SMITHY_RS,
             oidcProvider: props.githubActionsOidcProvider,
         };
 

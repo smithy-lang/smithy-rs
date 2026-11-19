@@ -7,6 +7,7 @@ import { OpenIdConnectProvider } from "aws-cdk-lib/aws-iam";
 import { Duration, RemovalPolicy, Stack, StackProps, Tags } from "aws-cdk-lib";
 import { CloudFrontS3Cdn } from "../constructs/cloudfront-s3-cdn";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
+import { SMITHY_RS } from "../github-repositories";
 import { Construct } from "constructs";
 
 export interface Properties extends StackProps {
@@ -25,8 +26,7 @@ export class PullRequestCdnStack extends Stack {
 
         this.smithyRsOidcRole = new GitHubOidcRole(this, "smithy-rs", {
             name: "smithy-rs-pull-request",
-            githubOrg: "smithy-lang",
-            githubRepo: "smithy-rs",
+            ...SMITHY_RS,
             oidcProvider: props.githubActionsOidcProvider,
         });
 

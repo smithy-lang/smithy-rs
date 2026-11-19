@@ -8,6 +8,7 @@ import { Template } from "aws-cdk-lib/assertions";
 import { CanaryStack } from "../lib/canary-stack";
 import { METRIC_NAMESPACE } from "../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../lib/oidc-provider-stack";
+import { SMITHY_RS } from "../lib/github-repositories";
 
 /** The SDK canary's own namespace, hardcoded in `canary-runner/src/run.rs`. */
 const SDK_CANARY_NAMESPACE = "aws-sdk-rust-canary";
@@ -27,8 +28,10 @@ function synth(): Template {
         oidcProps: {
             roleId: "smithy-rs",
             roleName: "smithy-rs-canary",
-            roleGithubOrg: "smithy-lang",
-            roleGithubRepo: "smithy-rs",
+            roleGithubOrg: SMITHY_RS.githubOrg,
+            roleGithubRepo: SMITHY_RS.githubRepo,
+            roleGithubOrgId: SMITHY_RS.githubOrgId,
+            roleGithubRepoId: SMITHY_RS.githubRepoId,
             provider: oidcStack.githubActionsOidcProvider,
         },
     });

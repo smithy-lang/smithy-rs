@@ -14,6 +14,7 @@ import { PullRequestCdnStack } from "../../lib/smithy-rs/pull-request-cdn-stack"
 import { BuildCanaryStack } from "../../lib/smithy-rs/build-canary-stack";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
+import { SMITHY_RS } from "../../lib/github-repositories";
 
 const app = new App({});
 const env = { region: "us-west-2" };
@@ -27,8 +28,10 @@ const githubActionsOidcProvider = oidcProviderStack.githubActionsOidcProvider;
 const oidcProps: OidcProps = {
     roleId: "smithy-rs",
     roleName: "smithy-rs-canary",
-    roleGithubOrg: "smithy-lang",
-    roleGithubRepo: "smithy-rs",
+    roleGithubOrg: SMITHY_RS.githubOrg,
+    roleGithubRepo: SMITHY_RS.githubRepo,
+    roleGithubOrgId: SMITHY_RS.githubOrgId,
+    roleGithubRepoId: SMITHY_RS.githubRepoId,
     provider: githubActionsOidcProvider,
 };
 
