@@ -194,6 +194,18 @@ enum Command {
         baseline: Option<PathBuf>,
     },
 
+    /// Print the newer `release-*` tag that has superseded this one, if there is one.
+    ///
+    /// Empty stdout means this is still the current release. The same question `run-leg` asks
+    /// before it builds, asked by the floor tier before it spends an hour: the concurrency group is
+    /// keyed on the tag, so two releases a day apart run two watches side by side and nothing else
+    /// stops the older one dispatching.
+    Superseded {
+        /// The release this watch is for.
+        #[arg(long)]
+        tag: String,
+    },
+
     /// Record that a release was never checked, which nothing else can notice.
     ///
     /// Every other signal here starts from a leg reaching a verdict. When no leg reaches anything
@@ -431,6 +443,17 @@ fn main() -> anyhow::Result<()> {
                 );
             }
             std::process::exit(report.exit_code());
+        }
+        Command::Superseded { tag } => {
+            // Silence means "keep going", and it covers both answers that mean that: this is the
+            // current release, or the remote could not be listed -- which `newest_release_tag`
+            // reports on stderr. Failing open is right because this is thrift rather than
+            // correctness; the leg's own check is what makes a straggler harmless.
+            if let Some(newest) = newest_release_tag()? {
+                if newest != tag {
+                    println!("{newest}");
+                }
+            }
         }
         Command::PublishStatus { repo } => {
             let declared = publish::declared(&repo)?;

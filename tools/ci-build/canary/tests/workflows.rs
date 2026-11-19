@@ -284,6 +284,60 @@ fn the_filled_alarm_action_is_never_printed() {
     }
 }
 
+/// A newer release has to stop the old watch dispatching, and has to do it before the hour is
+/// slept.
+///
+/// The concurrency group is keyed on the tag, so two releases hours apart run two watches side by
+/// side and the group does nothing across them. Without this check the abandoned watch dispatches
+/// its full matrix every hour for the rest of the day, and each of those runs then sits in the run
+/// listing as a candidate baseline for the *new* release's floor gate while containing no verdicts
+/// at all — which would make the new release's standing reds look like news.
+#[test]
+fn the_floor_tier_stops_when_a_newer_release_arrives() {
+    let wf = load("post-publish-watch");
+    let floor = jobs(&wf)
+        .get("floor-tier")
+        .copied()
+        .expect("a floor tier job");
+    let steps = steps(floor);
+
+    let position = |needle: &str| {
+        steps
+            .iter()
+            .position(|s| step_name(s).to_lowercase().contains(needle))
+            .unwrap_or_else(|| panic!("the floor tier must have a step matching {needle:?}"))
+    };
+    let check = position("superseded");
+    let sleep = position("wait out the hour");
+    let dispatch = position("dispatch this hour");
+
+    assert!(
+        check < sleep,
+        "the check belongs before the sleep, or an abandoned watch spends an hour per remaining \
+         hour discovering it has nothing to do"
+    );
+
+    // Both of the steps that cost something have to be gated on the answer.
+    for step in [sleep, dispatch] {
+        let condition = steps[step].get("if").and_then(Value::as_str).unwrap_or("");
+        assert!(
+            condition.contains("superseded"),
+            "{:?} is not gated on the supersession check: {condition:?}",
+            step_name(steps[step])
+        );
+    }
+
+    // And the dispatch asks again, because the release can land during the hour it just slept.
+    let script = steps[dispatch]
+        .get("run")
+        .and_then(Value::as_str)
+        .expect("the dispatch step runs a script");
+    assert!(
+        script.contains("superseded --tag"),
+        "the dispatch step must re-check after the sleep"
+    );
+}
+
 /// Merging must not arm the canary. The orchestrator triggers on a release tag, so without a gate
 /// landing the file would start a 24-hour, full-matrix watch on the next release — before the
 /// report-only window that exists to measure its false-positive rate has ever run.

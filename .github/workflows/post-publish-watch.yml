@@ -44,9 +44,10 @@ permissions:
   # the full matrix is roughly a thousand jobs, and a matrix is capped at 256 per run.
   actions: write
 concurrency:
-  # One watch per release. A newer release supersedes an older watch rather than running beside it:
-  # the older release's legs would exit without building anyway, since a leg checks for a newer
-  # release tag before it starts.
+  # Keyed on the release, so this cancels only another watch of the *same* tag: a re-dispatch by
+  # hand, or a tag pushed twice. Two releases hours apart run two watches side by side and the group
+  # does nothing about that. What does is the supersession check each floor hour makes, which stops
+  # the older watch dispatching, and the leg's own check, which stops a straggler building.
   group: post-publish-watch-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
 jobs:
@@ -453,10 +454,30 @@ jobs:
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
 
+    # Asked before the sleep, so a watch a newer release has abandoned costs a minute per remaining
+    # hour instead of an hour. A release landing *during* the sleep is caught by the second check
+    # below, which is what stops 45 legs being dispatched only to exit as superseded.
+    - name: Has a newer release superseded this watch
+      id: superseded
+      env:
+        TAG: ${{ needs.alarms.outputs.tag }}
+      run: |
+        set -euo pipefail
+        cd "${GITHUB_WORKSPACE}/tools/ci-build/canary"
+        NEWER="$(cargo run --quiet -- superseded --tag "$TAG")"
+        if [[ -n "$NEWER" ]]; then
+          echo "::notice title=Superseded::${NEWER} has been released, so ${TAG} is no longer watched"
+          echo "superseded=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "superseded=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Wait out the hour
+      if: steps.superseded.outputs.superseded != 'true'
       run: sleep 3600
 
     - name: Dispatch this hour's legs, unless this release has broken something new
+      if: steps.superseded.outputs.superseded != 'true'
       env:
         TAG: ${{ needs.alarms.outputs.tag }}
         HOUR: ${{ matrix.hour }}
@@ -464,6 +485,17 @@ jobs:
         REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
+        cd "${GITHUB_WORKSPACE}/tools/ci-build/canary"
+
+        # Again, because a release can land during the hour just slept. Dispatching a matrix that
+        # will exit as superseded wastes 45 runs and, worse, leaves them in the run listing as
+        # candidate baselines carrying no verdicts for the next release's gate to compare against.
+        NEWER="$(cargo run --quiet -- superseded --tag "$TAG")"
+        if [[ -n "$NEWER" ]]; then
+          echo "::notice title=Hour ${HOUR} skipped::${NEWER} was released during the hour"
+          echo "hour ${HOUR}: skipped -- superseded by ${NEWER}" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
 
         # Checked after the sleep rather than before, so the answer is current. A leg run takes
         # minutes, so by the time an hour starts, the previous hour's verdict is long settled.
