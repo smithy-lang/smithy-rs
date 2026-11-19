@@ -36,7 +36,7 @@ export const ALARM_PREFIXES = ["build-canary", "paging-selftest"];
  * The GitHub environment a job must run in to assume either of the orchestrator's roles.
  *
  * Named for the job rather than for one of its permissions, because it gates both arming the alarm
- * and writing the resolved-graph baselines. A GitHub job declares exactly one environment, so the
+ * and filing the release's record. A GitHub job declares exactly one environment, so the
  * orchestrator's roles have to share it; see the class docs for what that does and does not buy.
  */
 export const ORCHESTRATOR_ENVIRONMENT = "canary-orchestrator";
@@ -67,9 +67,9 @@ export const MAIN_REF = "refs/heads/main";
 /**
  * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
  *
- * **The Rust side must use the same prefix.** Unlike {@link METRIC_NAMESPACE}, this one is checked:
- * a test in the canary crate reads this file and compares, because a disagreement would make every
- * write denied and the archive silently empty.
+ * **The Rust side must use the same prefix.** A test in the canary crate reads this file and
+ * compares, as one does for {@link METRIC_NAMESPACE}, because a disagreement would make every write
+ * denied and the archive silently empty.
  */
 export const RECORD_PREFIX = "runs";
 
@@ -78,7 +78,11 @@ export interface Properties extends StackProps {
 }
 
 /**
- * The three roles the build canary assumes, and the bucket holding its baselines.
+ * The three roles the build canary assumes, and the bucket holding one record per broken
+ * release.
+ *
+ * The resolved-graph baselines are not here: they live in a directory in the repository, for the
+ * reasons the canary crate's `baseline` module gives.
  *
  * The split that matters is leg versus orchestrator. Every leg needs to write a metric, and legs
  * run on whatever ref the release was cut from, forty at a time. The orchestrator is one job per

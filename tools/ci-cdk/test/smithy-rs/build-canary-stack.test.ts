@@ -229,8 +229,8 @@ test("the records should not expire, unlike every other bucket in this app", () 
 test("a leg's permissions should be disjoint from the orchestrator's", () => {
     // The property the split exists for. If an orchestrator role could write metrics it could fake
     // a verdict; if the metrics role could touch alarms or the bucket, then every leg -- and
-    // anything else able to assume it -- could delete the alarm watching it or rewrite the
-    // baseline that decides whether it runs at all.
+    // anything else able to assume it -- could delete the alarm watching it, or rewrite the record
+    // that is the only account of the break surviving GitHub's retention.
     const template = synth();
     const metrics = new Set(actionsOf(policyFor(template, "metrics")));
     const orchestrator = new Set([
