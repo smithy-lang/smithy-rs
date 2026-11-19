@@ -250,7 +250,9 @@ jobs:
               # Skipped here rather than filtered with `grep -v`, which exits 1 on an empty list
               # and under `set -o pipefail` ends the step before `put-metric-alarm`. The first
               # release has no previous alarm, so no alarm would ever be created.
-              [[ -n "$old" ]] || continue
+              # `None` as well as empty: `--output text` prints it for a null, and
+              # `delete-alarms --alarm-names None` would fail and take the step with it.
+              [[ -n "$old" && "$old" != "None" ]] || continue
               echo "deleting previous alarm ${old}"
               aws cloudwatch delete-alarms --alarm-names "$old"
             done

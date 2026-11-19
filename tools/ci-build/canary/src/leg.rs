@@ -234,6 +234,16 @@ pub struct RealExec {
 /// not idle noticeably past its deadline, long enough not to spin.
 const POLL: Duration = Duration::from_millis(200);
 
+/// How long to wait for the output readers once the child is gone.
+///
+/// Normally they finish immediately: the child closed its ends of the pipes. The case this covers
+/// is a *killed* child that left something of its own behind — a hung test binary holding the write
+/// end — where EOF never arrives and joining would wait for a process the leg has no handle on.
+///
+/// Seconds rather than minutes because this is the tail of output from a command already judged
+/// failed. The verdict is decided from what was read before the deadline, not after it.
+const READER_GRACE: Duration = Duration::from_secs(5);
+
 /// Read one of the child's pipes to EOF on its own thread.
 ///
 /// Both pipes must be drained concurrently with the wait. Polling `try_wait` while the child writes
@@ -311,10 +321,27 @@ impl Exec for RealExec {
             std::thread::sleep(POLL);
         };
 
-        // Joining after the child is gone: both pipes are closed, so the readers finish promptly
-        // whether it exited or was killed, and whatever it managed to write is still captured.
-        let stdout = String::from_utf8_lossy(&out_reader.join().unwrap_or_default()).into_owned();
-        let stderr = String::from_utf8_lossy(&err_reader.join().unwrap_or_default()).into_owned();
+        // Killing cargo does not kill what cargo started. A hung test binary outlives it and keeps
+        // these pipes open, so EOF may never come and a plain `join()` waits for the grandchild --
+        // which hands back exactly the unbounded wait the deadline above exists to prevent. The
+        // budget was then a number the leg could not actually honour.
+        //
+        // So give the readers a few seconds to finish what they have and go on without them. What
+        // is lost is the tail of a hung command's output; what is kept is the leg returning, which
+        // is the difference between a reported verdict and a killed job that emits nothing.
+        let grace = std::time::Instant::now() + READER_GRACE;
+        while !(out_reader.is_finished() && err_reader.is_finished())
+            && std::time::Instant::now() < grace
+        {
+            std::thread::sleep(POLL);
+        }
+        let collect = |reader: std::thread::JoinHandle<Vec<u8>>| match reader.is_finished() {
+            true => String::from_utf8_lossy(&reader.join().unwrap_or_default()).into_owned(),
+            // Deliberately not joined: the thread is blocked on a pipe nothing will close.
+            false => String::new(),
+        };
+        let stdout = collect(out_reader);
+        let stderr = collect(err_reader);
 
         if self.verbose && !stderr.trim().is_empty() {
             eprintln!("{stderr}");
@@ -569,6 +596,55 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
 
 #[cfg(test)]
 mod tests {
+    /// A killed command that left a child behind must not hold the leg open.
+    ///
+    /// `kill` reaches cargo, not what cargo started. A hung test binary keeps the inherited write
+    /// end of these pipes, so the readers never see EOF — and a plain `join()` then waits for a
+    /// process the leg has no handle on, which is the unbounded wait the deadline exists to
+    /// prevent. The leg's budget was a number it could not honour.
+    ///
+    /// `bash -c 'sleep … & wait'` is that shape in miniature: killing bash leaves `sleep` holding
+    /// the pipe. Timed rather than asserted on output, because the symptom was duration.
+    #[test]
+    fn a_killed_command_that_leaves_a_child_behind_still_returns() {
+        if std::process::Command::new("bash")
+            .arg("-c")
+            .arg("true")
+            .status()
+            .is_err()
+        {
+            return; // no bash on this platform; the hazard is the same but unexercisable here
+        }
+        let budget = Duration::from_secs(2);
+        let orphan_lives_for = 30;
+
+        let mut exec = RealExec {
+            dir: std::env::temp_dir(),
+            verbose: false,
+        };
+        let command = Command {
+            step: Step::Build,
+            program: "bash".into(),
+            args: vec!["-c".into(), format!("sleep {orphan_lives_for} & wait")],
+            json: false,
+        };
+
+        let started = std::time::Instant::now();
+        let outcome = exec.run(&command, budget);
+        let took = started.elapsed();
+
+        assert!(outcome.timed_out, "the command outlived its budget");
+        assert!(
+            took < Duration::from_secs(orphan_lives_for / 2),
+            "run() took {took:?}, so it waited for the orphan rather than its own deadline"
+        );
+        // And the grace is what bounds the overshoot, not the orphan's lifetime.
+        assert!(
+            took < budget + READER_GRACE + Duration::from_secs(3),
+            "run() took {took:?}, past the budget plus the readers' grace"
+        );
+    }
+
     use super::*;
     use crate::scenarios;
     use crate::toolchain::{self, Version};
