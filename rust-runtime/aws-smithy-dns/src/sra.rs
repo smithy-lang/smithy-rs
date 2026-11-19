@@ -84,12 +84,19 @@ pub enum NameResolutionAddressTypes {
 
 const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(60);
 
+/// Refresh delay is the amount of time that needs to elapse between resolves on a given name.
+/// Unlike the CRT, we don't "ping" resolves at this interval, instead we lazily do them over time
+/// in response to lookup requests.
+const DEFAULT_REFRESH_DELAY: Duration = Duration::from_secs(6);
+
 /// Configuration options specific to an SRA Resolver
 #[derive(Clone)]
 pub struct SraResolverConfig {
     address_types: NameResolutionAddressTypes,
 
     resolution_ttl: Duration,
+
+    refresh_delay: Duration,
 
     clock: ClockFn,
 }
@@ -99,6 +106,7 @@ impl Default for SraResolverConfig {
         Self {
             address_types: NameResolutionAddressTypes::default(),
             resolution_ttl: DEFAULT_CACHE_TTL,
+            refresh_delay: DEFAULT_REFRESH_DELAY,
             #[allow(clippy::disallowed_methods)] // we're currently in a no-wasm module, so this is ok
             clock: Arc::new(Instant::now),
         }
@@ -121,6 +129,11 @@ impl SraResolverConfig {
     /// What TTL value to use for resolved addresses
     pub fn resolution_ttl(&self) -> Duration {
         self.resolution_ttl
+    }
+
+    /// Amount of time that needs to elapse between resolves for a given name
+    pub fn refresh_delay(&self) -> Duration {
+        self.refresh_delay
     }
 
     /// Clock function to use when computing time stamps
@@ -154,6 +167,12 @@ impl SraResolverConfigBuilder {
     /// Configures the time-to-live for each resolved address
     pub fn with_resolution_ttl(&mut self, ttl: Duration) -> &mut Self {
         self.config.resolution_ttl = ttl;
+        self
+    }
+
+    /// Configures the per-name delay between lookups
+    pub fn with_refresh_delay(&mut self, refresh_delay: Duration) -> &mut Self {
+        self.config.refresh_delay = refresh_delay;
         self
     }
 
@@ -311,15 +330,6 @@ where
         }
     }
 }
-
-// generation tests
-//
-// acquire with unhealthy promotion by necessity (new, add, demote, acquire)
-
-/// Amount of time that needs to elapse between resolves on a given name.  We may want to
-/// make this an external configuration option.  Unlike the CRT, we don't "ping" resolves at
-/// this interval, instead we lazily do them over time in response to lookups.
-const MINIMUM_DELAY_BETWEEN_RESOLVES: Duration = Duration::from_secs(1);
 
 /// Per-host-name struct that tracks resolved addresses, pending resolution requests, and more.
 struct HostEntry {
@@ -505,9 +515,11 @@ impl HostEntry {
         // if it's our first request or enough time has passed since the last one
         let mut should_spawn_resolve: bool = self.last_resolution_timepoint.is_none();
         if let Some(last_resolution_timepoint) = self.last_resolution_timepoint {
-            if now >= last_resolution_timepoint + MINIMUM_DELAY_BETWEEN_RESOLVES
-                && !self.pending_resolution
-            {
+            let refresh_delay = request
+                .request()
+                .refresh_delay()
+                .unwrap_or(self.config.refresh_delay());
+            if now >= last_resolution_timepoint + refresh_delay && !self.pending_resolution {
                 should_spawn_resolve = true;
             }
         }
@@ -1062,12 +1074,17 @@ mod testing {
 
     fn create_mock_internal_request(
         ttl_override: Option<Duration>,
+        refresh_delay_override: Option<Duration>,
     ) -> (ResolveRequestInternal, MockResultTarget) {
         let result = Arc::new(Mutex::new(None));
         let result_clone = result.clone();
         let mut request_builder = ResolveRequest::builder(MOCK_HOST);
         if let Some(duration) = ttl_override {
             request_builder.with_ttl(duration);
+        }
+
+        if let Some(duration) = refresh_delay_override {
+            request_builder.with_refresh_delay(duration);
         }
 
         let internal_request = ResolveRequestInternal {
@@ -1107,7 +1124,7 @@ mod testing {
         context: &mut HostEntryTestContext,
         ttl_override: Option<Duration>,
     ) {
-        let (request, result_target) = create_mock_internal_request(ttl_override);
+        let (request, result_target) = create_mock_internal_request(ttl_override, None);
 
         // submit a request and then check expected internal state
         context
@@ -1194,7 +1211,7 @@ mod testing {
         let mut result_targets = Vec::new();
 
         for _ in 0..count {
-            let (request, result_target) = create_mock_internal_request(None);
+            let (request, result_target) = create_mock_internal_request(None, None);
             context
                 .entry
                 .handle_resolve_request(request, &context.operation_handler_context);
@@ -1259,6 +1276,75 @@ mod testing {
         contains_local && contains_other
     }
 
+    fn submit_requests_with_refresh_delay_override(
+        context: &mut HostEntryTestContext,
+        count: usize,
+        delay_millis: u64,
+        refresh_delay: Duration,
+    ) -> Vec<MockResultTarget> {
+        let mut result_targets = Vec::new();
+
+        for _ in 0..count {
+            let (request, result_target) = create_mock_internal_request(None, Some(refresh_delay));
+            context
+                .entry
+                .handle_resolve_request(request, &context.operation_handler_context);
+
+            result_targets.push(result_target);
+
+            if delay_millis > 0 {
+                context.advance_time(Duration::from_millis(delay_millis));
+            }
+        }
+
+        result_targets
+    }
+
+    fn do_host_entry_multiple_lookups_multiple_results_test(
+        context: &mut HostEntryTestContext,
+        refresh_delay_override: Option<Duration>,
+    ) {
+        // in this test, we have the mock resolution alternate between two address sets, rather than
+        // one
+        //
+        // We verify that only the first set is seen until we let enough time elapse that a
+        // second background resolution attempt is done and then we should see the resolver
+        // use both sets
+        let result_targets_pre = submit_requests(context, 2, 100);
+        assert_eq!(2, context.entry.pending_requests.len());
+
+        // apply result and verify requests not pending and resolution not pending
+        apply_mock_result_to_context(context);
+
+        for result_target in result_targets_pre {
+            assert!(is_result_localhost(result_target));
+        }
+
+        // let enough time elapse that we re-resolve next request
+        let expected_delay = refresh_delay_override.unwrap_or(DEFAULT_REFRESH_DELAY);
+        context.advance_time(expected_delay);
+
+        let result_targets = match refresh_delay_override {
+            Some(duration) => submit_requests_with_refresh_delay_override(context, 1, 0, duration),
+            None => submit_requests(context, 1, 0),
+        };
+
+        // should have used the cached results, but also a resolve should be pending because enough
+        // time has passed
+        for result_target in result_targets {
+            assert!(is_result_localhost(result_target));
+        }
+        assert!(context.entry.pending_requests.is_empty());
+        assert!(context.entry.pending_resolution);
+
+        // apply the pending resolve
+        apply_mock_result_to_context(context);
+
+        // make a couple requests, we should get both address sets now immediately
+        let result_targets_post = submit_requests(context, 3, 100);
+        assert!(do_results_contain_both_host_sets(result_targets_post));
+    }
+
     #[test]
     fn host_entry_multiple_lookups_multiple_results() {
         // in this test, we have the mock resolution alternate between two address sets, rather than
@@ -1270,35 +1356,24 @@ mod testing {
         let mut context = HostEntryTestContext::default();
         initialize_resolution_test_context_multiple(&mut context);
 
-        let result_targets_pre = submit_requests(&mut context, 2, 100);
-        assert_eq!(2, context.entry.pending_requests.len());
+        do_host_entry_multiple_lookups_multiple_results_test(&mut context, None);
+    }
 
-        // apply result and verify requests not pending and resolution not pending
-        apply_mock_result_to_context(&mut context);
+    #[test]
+    fn host_entry_multiple_lookups_multiple_results_with_refresh_delay_override() {
+        // in this test, we have the mock resolution alternate between two address sets, rather than
+        // one
+        //
+        // We verify that only the first set is seen until we let enough time elapse that a
+        // second background resolution attempt is done and then we should see the resolver
+        // use both sets
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_multiple(&mut context);
 
-        for result_target in result_targets_pre {
-            assert!(is_result_localhost(result_target));
-        }
-
-        // let enough time elapse that we re-resolve next request
-        context.advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
-
-        let result_targets = submit_requests(&mut context, 1, 0);
-
-        // should have used the cached results, but also a resolve should be pending because enough
-        // time has passed
-        for result_target in result_targets {
-            assert!(is_result_localhost(result_target));
-        }
-        assert!(context.entry.pending_requests.is_empty());
-        assert!(context.entry.pending_resolution);
-
-        // apply the pending resolve
-        apply_mock_result_to_context(&mut context);
-
-        // make a couple requests, we should get both address sets now immediately
-        let result_targets_post = submit_requests(&mut context, 3, 100);
-        assert!(do_results_contain_both_host_sets(result_targets_post));
+        do_host_entry_multiple_lookups_multiple_results_test(
+            &mut context,
+            Some(Duration::from_secs(1)),
+        );
     }
 
     fn do_address_restricted_lookup_test(address_types: NameResolutionAddressTypes) {
@@ -1439,9 +1514,7 @@ mod testing {
         assert!(addresses.contains(&matching_address));
 
         // advance time enough to get a second background resolution
-        context
-            .mock_clock
-            .advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
+        context.mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
 
         // make enough resolve requests to be guaranteed to see both address sets, verify
         // address_to_ban never shows up
@@ -1500,9 +1573,7 @@ mod testing {
         assert!(context.entry.ipv4_addresses.empty());
 
         // advance time enough to get a second background resolution
-        context
-            .mock_clock
-            .advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
+        context.mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
 
         // make enough resolve requests to trigger a background resolution which will contain
         // LOCALHOST_IPV4, then make some more requests and verify LOCALHOST_IPV4 never shows up
@@ -1581,9 +1652,7 @@ mod testing {
         apply_mock_result_to_context(&mut context);
 
         // wait enough time for another background resolution to be triggerable
-        context
-            .mock_clock
-            .advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
+        context.mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
 
         // make a resolve request and apply it
         let _ = submit_requests(&mut context, 1, 100);
@@ -1721,9 +1790,7 @@ mod testing {
         apply_mock_result_to_context(&mut context);
 
         // wait enough time for another background resolution to be triggerable
-        context
-            .mock_clock
-            .advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
+        context.mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
 
         // make a resolve request and apply it
         let _ = submit_requests(&mut context, 1, 100);
@@ -1807,9 +1874,7 @@ mod testing {
         }
 
         // advance time enough for a re-resolve (which will also fail)
-        context
-            .mock_clock
-            .advance_time(MINIMUM_DELAY_BETWEEN_RESOLVES);
+        context.mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
 
         // make some more resolve requests; they'll trigger a re-resolve but also ultimately
         // fail when the background resolution fails

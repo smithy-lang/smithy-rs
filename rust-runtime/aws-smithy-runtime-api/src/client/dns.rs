@@ -56,8 +56,8 @@ pub type ResolveDnsResult = Result<Vec<IpAddr>, ResolveDnsError>;
 #[derive(Debug, Clone)]
 pub struct ResolveRequest {
     name: String,
-
     ttl: Option<Duration>,
+    refresh_delay: Option<Duration>,
 }
 
 impl ResolveRequest {
@@ -67,6 +67,7 @@ impl ResolveRequest {
             request: ResolveRequest {
                 name: name.to_string(),
                 ttl: None,
+                refresh_delay: None,
             },
         }
     }
@@ -78,9 +79,15 @@ impl ResolveRequest {
 
     /// optional per-request TTL override for a resolved address.  Only lookups
     /// triggered by this request will have the override TTL applied.  If not set, the resolver's
-    /// TTL will be ysed.
+    /// TTL will be used.
     pub fn ttl(&self) -> Option<Duration> {
         self.ttl
+    }
+
+    /// optional per-request override for the minimum delay between low-level resolution attempts.
+    /// If specified, takes precedence over the resolver's configuration.
+    pub fn refresh_delay(&self) -> Option<Duration> {
+        self.refresh_delay
     }
 }
 
@@ -100,6 +107,12 @@ impl ResolveRequestBuilder {
     /// triggered by this request will have the override TTL applied.
     pub fn with_ttl(&mut self, ttl: Duration) -> &mut Self {
         self.request.ttl = Some(ttl);
+        self
+    }
+
+    /// Overrides the resolver's minimum delay between low-level resolution attempts.
+    pub fn with_refresh_delay(&mut self, refresh_delay: Duration) -> &mut Self {
+        self.request.refresh_delay = Some(refresh_delay);
         self
     }
 }
