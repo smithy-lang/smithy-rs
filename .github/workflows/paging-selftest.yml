@@ -169,14 +169,37 @@ jobs:
           exit 1
         fi
 
-        # Printed verbatim because the encoding of spaces in the action -- `+` or `%20` -- is a
-        # question nobody can answer from the documentation, and this is the observation that
-        # settles it. The dimension `Tag` is the session, so this alarm cannot be tripped by a real
-        # release's legs.
-        echo "### Armed \`${ALARM}\` at severity ${SEVERITY}" >> "$GITHUB_STEP_SUMMARY"
-        echo '```' >> "$GITHUB_STEP_SUMMARY"
+        # An alarm with the wrong action is armed in name only, so compare it -- but never print
+        # it. Filling the placeholders makes the ARN a string GitHub no longer masks, and both the
+        # job log and the job summary are public. CloudWatch may return a space as `+` or as `%20`,
+        # so normalise both sides; a cosmetic re-encoding must not fail the self-test.
+        normalise_action() {
+          local s="${1//%20/ }"
+          printf '%s' "${s//+/ }"
+        }
+        ACTUAL_ACTION="$(aws cloudwatch describe-alarms --alarm-names "$ALARM" \
+                           --query 'MetricAlarms[0].AlarmActions[0]' --output text)"
+        if [[ "$(normalise_action "$ACTUAL_ACTION")" != "$(normalise_action "$ACTION_ARN")" ]]; then
+          echo "::error title=Wrong action::the alarm does not carry the filled template"
+          exit 1
+        fi
+
+        # The dimension `Tag` is the session, so this alarm cannot be tripped by a real release's
+        # legs.
+        {
+          echo "### Armed \`${ALARM}\` at severity ${SEVERITY}"
+          echo ""
+          # Which encoding came back, without the value.
+          if [[ "$ACTUAL_ACTION" == "$ACTION_ARN" ]]; then
+            echo "The alarm action matches the filled template exactly."
+          else
+            echo "The alarm action matches the filled template once space encoding is normalised."
+          fi
+          echo ""
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
         aws cloudwatch describe-alarms --alarm-names "$ALARM" \
-          --query 'MetricAlarms[0].{State:StateValue,Actions:AlarmActions,MissingData:TreatMissingData,Dimensions:Dimensions}' \
+          --query 'MetricAlarms[0].{State:StateValue,MissingData:TreatMissingData,Dimensions:Dimensions}' \
           | tee -a "$GITHUB_STEP_SUMMARY"
         echo '```' >> "$GITHUB_STEP_SUMMARY"
         echo "Next: run \`fire\` with session \`${ALARM#paging-selftest-}\` and check a ticket is cut." \
