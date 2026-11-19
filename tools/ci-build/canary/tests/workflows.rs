@@ -47,15 +47,35 @@ fn pinned_severity(text: &str) -> String {
     found[0].to_string()
 }
 
-/// The tag patterns of `RELEASE_REFS` in the CDK stack, with `refs/tags/` stripped.
-fn release_tag_patterns_from_the_cdk() -> Vec<String> {
+/// The CDK stack that declares the roles these workflows assume.
+fn build_canary_stack_ts() -> String {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
         .expect("repo root")
         .to_path_buf();
-    let ts = std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
-        .expect("the CDK stack should be readable from the repo");
+    std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
+        .expect("the CDK stack should be readable from the repo")
+}
+
+/// The GitHub environment the CDK gates the orchestrator's roles on.
+///
+/// Read from the stack rather than written here, because a workflow declaring a different name
+/// produces a token the role refuses — which looks like a permissions problem rather than a typo.
+fn orchestrator_environment_from_the_cdk() -> String {
+    let ts = build_canary_stack_ts();
+    ts.split_once("export const ORCHESTRATOR_ENVIRONMENT = \"")
+        .expect("ORCHESTRATOR_ENVIRONMENT not found in the CDK stack")
+        .1
+        .split_once('"')
+        .expect("unterminated ORCHESTRATOR_ENVIRONMENT")
+        .0
+        .to_string()
+}
+
+/// The tag patterns of `RELEASE_REFS` in the CDK stack, with `refs/tags/` stripped.
+fn release_tag_patterns_from_the_cdk() -> Vec<String> {
+    let ts = build_canary_stack_ts();
     let body = ts
         .split_once("export const RELEASE_REFS = [")
         .expect("RELEASE_REFS not found in the CDK stack")
@@ -282,6 +302,50 @@ fn the_filled_alarm_action_is_never_printed() {
             }
         }
     }
+}
+
+/// Every orchestrator job that assumes the metrics role has to declare the orchestrator's
+/// environment.
+///
+/// The metrics role trusts two alternatives: any job on a release tag, and a job on `main` *inside*
+/// that environment. The second is narrowed because `main` is where maintainer-triggered workflows
+/// run a pull request's checked-out code with `id-token: write`. So an orchestrator job that
+/// forgets the environment can still assume the role on a release tag and silently cannot on a
+/// hand-dispatched run — the shape of failure this file exists to catch.
+///
+/// The legs are the deliberate exception: the orchestrator dispatches `build-canary.yml` with
+/// `--ref "$TAG"`, so a leg runs from the tag, and not making forty-five jobs declare an
+/// environment is worth losing the hand-dispatch-from-`main` case.
+#[test]
+fn every_orchestrator_job_using_the_metrics_role_declares_the_environment() {
+    let expected = orchestrator_environment_from_the_cdk();
+    let mut checked = 0;
+
+    for name in ["post-publish-watch", "paging-selftest"] {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let assumes_metrics = steps(job).iter().any(|step| {
+                serde_yaml::to_string(step)
+                    .unwrap_or_default()
+                    .contains("BUILD_CANARY_METRICS_ROLE_ARN")
+            });
+            if !assumes_metrics {
+                continue;
+            }
+            checked += 1;
+            assert_eq!(
+                job.get("environment").and_then(Value::as_str),
+                Some(expected.as_str()),
+                "{name}.yml job {job_name} assumes the metrics role without declaring {expected:?}, \
+                 so a hand-dispatched run from main could not assume it"
+            );
+        }
+    }
+
+    assert!(
+        checked >= 2,
+        "expected to find the orchestrator jobs that assume the metrics role, found {checked}"
+    );
 }
 
 /// A newer release has to stop the old watch dispatching, and has to do it before the hour is

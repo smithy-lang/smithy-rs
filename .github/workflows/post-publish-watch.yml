@@ -313,6 +313,10 @@ jobs:
     # watching an unnamed release is not a thing that can be done.
     if: always() && needs.alarms.outputs.tag != ''
     runs-on: ubuntu-latest
+    # The orchestrator's environment, because this job assumes the metrics role and the metrics
+    # role accepts a job on `main` only from inside it. On a release tag the environment is not
+    # required, but declaring it costs nothing there and a hand-dispatched watch runs from `main`.
+    environment: canary-orchestrator
     permissions:
       contents: read
       # To record a failed dispatch, which is the watcher's own verdict about itself.

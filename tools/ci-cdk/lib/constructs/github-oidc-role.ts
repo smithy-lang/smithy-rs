@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { FederatedPrincipal, OpenIdConnectProvider, Role } from "aws-cdk-lib/aws-iam";
+import {
+    FederatedPrincipal,
+    OpenIdConnectProvider,
+    PolicyStatement,
+    Role,
+} from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 import { Tags } from "aws-cdk-lib";
 
@@ -39,6 +44,15 @@ export interface Properties {
      * `refs/tags/release-*` or `refs/heads/main`. Matched with `StringLike`, so `*` is a wildcard.
      */
     refs?: string[];
+    /**
+     * Further jobs that may assume the role, each as a trust statement of its own.
+     *
+     * A single statement ANDs its conditions, so one alternative's narrowing applies to all of
+     * them: a role that must accept any job on a release tag *and* only orchestrator jobs on
+     * `main` cannot say so in one block without requiring the environment on the tag too. Separate
+     * statements keep each alternative's conditions to itself.
+     */
+    alsoTrust?: { environment?: string; refs?: string[] }[];
 }
 
 /**
@@ -101,22 +115,6 @@ export class GitHubOidcRole extends Construct {
         Tags.of(this).add("construct-name", properties.name);
         Tags.of(this).add("construct-type", "GitHubOidcRole");
 
-        // Reject the shapes that would produce a role nobody can assume. A trust policy that
-        // matches nothing fails closed, which is safe but silent, and a role that cannot be assumed
-        // surfaces much later as an opaque permissions error in CI.
-        if (properties.environment !== undefined && properties.environment.length === 0) {
-            throw new Error(
-                `${properties.name}: environment is an empty string, which no job can match. ` +
-                    "Omit it to allow any job in the repository.",
-            );
-        }
-        if (properties.refs !== undefined && properties.refs.length === 0) {
-            throw new Error(
-                `${properties.name}: refs is an empty array, which no job can match. ` +
-                    "Omit it to allow any ref.",
-            );
-        }
-
         const {
             githubOrg: org,
             githubRepo: repo,
@@ -124,21 +122,9 @@ export class GitHubOidcRole extends Construct {
             githubRepoId: repoId,
         } = properties;
 
-        const stringEquals: Record<string, string> = {
-            // Enforced by the provider's client ID list too, but IAM's own examples all carry it
-            // and it costs one line.
-            [`${CLAIM}:aud`]: "sts.amazonaws.com",
-            // The ids, not `repository`: see the class docs on identifiers versus names.
-            [`${CLAIM}:repository_owner_id`]: orgId,
-            [`${CLAIM}:repository_id`]: repoId,
-        };
-        if (properties.environment !== undefined) {
-            stringEquals[`${CLAIM}:environment`] = properties.environment;
-        }
-
         // A `sub` condition as well, because IAM recommends that every role trusting GitHub's
         // provider evaluate it and a role without one is the shape AWS's identity-provider
-        // controls are designed to catch. Deliberately the coarse condition: the exact ids above
+        // controls are designed to catch. Deliberately the coarse condition: the exact ids below
         // do the real authorising, and both have to match, so this cannot widen anything.
         const subPatterns = [
             // Previous format, which carries no ids. Only reachable while this repository has
@@ -148,17 +134,55 @@ export class GitHubOidcRole extends Construct {
             // ids are pinned, because wildcarding those is what would make this name-based trust.
             `repo:*@${orgId}/*@${repoId}:*`,
         ];
-        const stringLike: Record<string, string | string[]> = {
-            [`${CLAIM}:sub`]: subPatterns,
-        };
-        if (properties.refs !== undefined) {
-            stringLike[`${CLAIM}:ref`] = properties.refs;
-        }
 
-        const conditions: Record<string, Record<string, string | string[]>> = {
-            StringEquals: stringEquals,
-            StringLike: stringLike,
+        /**
+         * One alternative's conditions. Each gets a statement of its own, so that widening one
+         * never widens another: a single block ANDs its conditions together, so an environment
+         * required for `main` would also be required for a release tag.
+         */
+        const conditionsFor = (
+            environment?: string,
+            refs?: string[],
+        ): Record<string, Record<string, string | string[]>> => {
+            // Reject the shapes that would produce an alternative nobody can match. A trust policy
+            // that matches nothing fails closed, which is safe but silent, and a role that cannot
+            // be assumed surfaces much later as an opaque permissions error in CI.
+            if (environment !== undefined && environment.length === 0) {
+                throw new Error(
+                    `${properties.name}: environment is an empty string, which no job can match. ` +
+                        "Omit it to allow any job in the repository.",
+                );
+            }
+            if (refs !== undefined && refs.length === 0) {
+                throw new Error(
+                    `${properties.name}: refs is an empty array, which no job can match. ` +
+                        "Omit it to allow any ref.",
+                );
+            }
+
+            const stringEquals: Record<string, string> = {
+                // Enforced by the provider's client ID list too, but IAM's own examples all carry
+                // it and it costs one line.
+                [`${CLAIM}:aud`]: "sts.amazonaws.com",
+                // The ids, not `repository`: see the class docs on identifiers versus names.
+                [`${CLAIM}:repository_owner_id`]: orgId,
+                [`${CLAIM}:repository_id`]: repoId,
+            };
+            if (environment !== undefined) {
+                stringEquals[`${CLAIM}:environment`] = environment;
+            }
+
+            const stringLike: Record<string, string | string[]> = {
+                [`${CLAIM}:sub`]: subPatterns,
+            };
+            if (refs !== undefined) {
+                stringLike[`${CLAIM}:ref`] = refs;
+            }
+
+            return { StringEquals: stringEquals, StringLike: stringLike };
         };
+
+        const conditions = conditionsFor(properties.environment, properties.refs);
 
         this.oidcRole = new Role(this, "oidc-role", {
             roleName: `${properties.name}-github-oidc-role`,
@@ -168,5 +192,19 @@ export class GitHubOidcRole extends Construct {
                 "sts:AssumeRoleWithWebIdentity",
             ),
         });
+
+        for (const trust of properties.alsoTrust ?? []) {
+            this.oidcRole.assumeRolePolicy?.addStatements(
+                new PolicyStatement({
+                    actions: ["sts:AssumeRoleWithWebIdentity"],
+                    principals: [
+                        new FederatedPrincipal(
+                            properties.oidcProvider.openIdConnectProviderArn,
+                            conditionsFor(trust.environment, trust.refs),
+                        ),
+                    ],
+                }),
+            );
+        }
     }
 }
