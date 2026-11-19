@@ -56,6 +56,15 @@ export const RELEASE_REFS = [
 ];
 
 /**
+ * The branch a by-hand dispatch runs from, split out because it is not trusted on the same terms.
+ *
+ * A release tag is created only by the release automation, so a job running from one is the
+ * canary's. `main` is also where maintainer-triggered workflows run a pull request's code, so jobs
+ * there are trusted only inside {@link ORCHESTRATOR_ENVIRONMENT}.
+ */
+export const MAIN_REF = "refs/heads/main";
+
+/**
  * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
  *
  * **The Rust side must use the same prefix.** Unlike {@link METRIC_NAMESPACE}, this one is checked:
@@ -118,9 +127,19 @@ export class BuildCanaryStack extends Stack {
         this.metricsRole = new GitHubOidcRole(this, "metrics", {
             name: "smithy-rs-build-canary-metrics",
             ...github,
-            // Not environment-gated: that claim would require all forty legs to declare one. The
-            // ref bounds it instead.
-            refs: RELEASE_REFS,
+            // On a release tag, any job: requiring an environment would mean every leg declaring
+            // one, and a tag is only created by the release automation.
+            //
+            // On `main` the orchestrator's environment is required as well, because `main` is also
+            // where maintainer-triggered workflows run a pull request's checked-out code in jobs
+            // holding `id-token: write` -- `manual-canary.yml`, called by `fork-canary.yml` from
+            // `pull_request_target`, and `manual-pull-request-bot.yml`. That code could otherwise
+            // mint a token this role accepts and write a `Red` datapoint, tripping the release's
+            // alarm and paging the oncall over nothing. It cannot declare an environment, because
+            // under `pull_request_target` and `workflow_call` the workflow definition comes from
+            // the base ref rather than from the pull request.
+            refs: RELEASE_REFS.filter((ref) => ref.startsWith("refs/tags/")),
+            alsoTrust: [{ environment: ORCHESTRATOR_ENVIRONMENT, refs: [MAIN_REF] }],
         });
         this.metricsRole.oidcRole.addToPolicy(
             new PolicyStatement({

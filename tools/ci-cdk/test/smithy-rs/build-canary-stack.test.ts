@@ -9,10 +9,12 @@ import {
     BuildCanaryStack,
     METRIC_NAMESPACE,
     ORCHESTRATOR_ENVIRONMENT,
+    MAIN_REF,
     RECORD_PREFIX,
     RELEASE_REFS,
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
+import { SMITHY_RS } from "../../lib/github-repositories";
 
 const CLAIM = "token.actions.githubusercontent.com";
 
@@ -51,6 +53,70 @@ function trustFor(
     );
     expect(roles).toHaveLength(1);
     return roles[0].Properties.AssumeRolePolicyDocument.Statement[0].Condition;
+}
+
+/** Every trust statement on the role whose name ends in `suffix`, in order. */
+function trustStatements(template: Template, suffix: string): Statement[] {
+    const roles = Object.values(template.findResources("AWS::IAM::Role")).filter((r) =>
+        String(r.Properties.RoleName).includes(`-${suffix}-`),
+    );
+    expect(roles).toHaveLength(1);
+    return roles[0].Properties.AssumeRolePolicyDocument.Statement;
+}
+
+/** A job's OIDC claims, as the provider presents them. */
+type Claims = Record<string, string>;
+
+const RELEASE_TAG = "refs/tags/release-2026-11-16";
+
+/** The claims a job in this repository presents, optionally declaring an environment. */
+function token(ref: string, environment?: string): Claims {
+    const claims: Claims = {
+        [`${CLAIM}:aud`]: "sts.amazonaws.com",
+        [`${CLAIM}:repository_owner_id`]: SMITHY_RS.githubOrgId,
+        [`${CLAIM}:repository_id`]: SMITHY_RS.githubRepoId,
+        [`${CLAIM}:sub`]: `repo:${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}:ref:${ref}`,
+        [`${CLAIM}:ref`]: ref,
+    };
+    if (environment !== undefined) {
+        claims[`${CLAIM}:environment`] = environment;
+    }
+    return claims;
+}
+
+const escapeRegExp = (literal: string): string => literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Whether any of a role's trust statements admits these claims.
+ *
+ * A small evaluator rather than assertions on the rendered JSON, because what this stack's security
+ * turns on is whether a given token can assume a given role — and with two alternatives per role
+ * that is no longer legible by reading condition blocks side by side. A condition on a claim the
+ * token does not carry matches nothing, which is how IAM behaves and is the direction that matters.
+ */
+function admits(statements: Statement[], claims: Claims): boolean {
+    // IAM's StringLike: `*` is any sequence of characters, `?` is exactly one. The `?` matters
+    // here -- it is what makes `release-????-??-??` admit a date and refuse `release-test`.
+    const like = (pattern: string, value: string): boolean => {
+        const expression = [...pattern]
+            .map((c) => (c === "*" ? ".*" : c === "?" ? "." : escapeRegExp(c)))
+            .join("");
+        return new RegExp(`^${expression}$`).test(value);
+    };
+
+    return statements.some((statement) => {
+        const condition = statement.Condition ?? {};
+        for (const [key, want] of Object.entries(condition.StringEquals ?? {})) {
+            if (claims[key] !== want) return false;
+        }
+        for (const [key, want] of Object.entries(condition.StringLike ?? {})) {
+            const value = claims[key];
+            if (value === undefined) return false;
+            const patterns = Array.isArray(want) ? want : [want];
+            if (!patterns.some((pattern) => like(pattern, value))) return false;
+        }
+        return true;
+    });
 }
 
 const actionsOf = (statements: Statement[]): string[] =>
@@ -185,9 +251,8 @@ test("a leg's permissions should be disjoint from the orchestrator's", () => {
     expect([...metrics].some((a) => a.startsWith("s3:"))).toBe(false);
 });
 
-test("the orchestrator's roles should be gated on the environment, and the legs' must not", () => {
+test("the orchestrator's roles should be gated on the environment, and a leg on a tag must not be", () => {
     const template = synth();
-
     // The environment is the only thing distinguishing the orchestrator from a leg: both run in
     // this repository from the same release tag, so their tokens are otherwise identical.
     for (const role of ["alarms", "records"]) {
@@ -195,10 +260,10 @@ test("the orchestrator's roles should be gated on the environment, and the legs'
             ORCHESTRATOR_ENVIRONMENT,
         );
     }
-
-    // The legs must not need an environment -- conditioning on the claim would *require* every leg
-    // to declare one, and they run by hand during the report-only window too.
-    expect(trustFor(template, "metrics").StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
+    // Conditioning the metrics role's *tag* alternative on an environment would require every leg
+    // to declare one. Its `main` alternative does require it, which the tests below cover.
+    const [onATag] = trustStatements(template, "metrics");
+    expect(onATag.Condition?.StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
 });
 
 /**
@@ -207,14 +272,62 @@ test("the orchestrator's roles should be gated on the environment, and the legs'
  */
 test("every role should only be assumable from a release tag or main", () => {
     const template = synth();
-
-    for (const role of ["metrics", "alarms", "records"]) {
+    for (const role of ["alarms", "records"]) {
         expect(trustFor(template, role).StringLike[`${CLAIM}:ref`]).toEqual(RELEASE_REFS);
     }
+
+    // The legs' role splits the two into separate statements, because `main` is not trusted on the
+    // same terms as a release tag.
+    const metrics = trustStatements(template, "metrics");
+    expect(metrics).toHaveLength(2);
+    expect(metrics[0].Condition?.StringLike[`${CLAIM}:ref`]).toEqual(
+        RELEASE_REFS.filter((ref) => ref.startsWith("refs/tags/")),
+    );
+    expect(metrics[1].Condition?.StringLike[`${CLAIM}:ref`]).toEqual([MAIN_REF]);
 
     // A date-shaped tag matches; a stray `release-test` must not.
     expect(RELEASE_REFS).toContain("refs/tags/release-????-??-??");
     expect(RELEASE_REFS.some((r) => r.includes("release-*"))).toBe(false);
+});
+
+test("a leg on a release tag can assume the metrics role", () => {
+    expect(admits(trustStatements(synth(), "metrics"), token(RELEASE_TAG))).toBe(true);
+});
+
+test("the orchestrator on main, inside its environment, can assume the metrics role", () => {
+    const claims = token(MAIN_REF, ORCHESTRATOR_ENVIRONMENT);
+    expect(admits(trustStatements(synth(), "metrics"), claims)).toBe(true);
+});
+
+/**
+ * `manual-canary.yml` -- dispatched by a maintainer, or called by `fork-canary.yml` from
+ * `pull_request_target`, whose ref is the default branch -- and `manual-pull-request-bot.yml` run
+ * on `main` and execute a pull request's checked-out code in jobs holding `id-token: write`. That
+ * code can mint a token with exactly these claims.
+ *
+ * Admitted, one `Red` datapoint carrying the current release's `Tag` would trip that release's
+ * alarm and page the oncall over a pull request. The code cannot declare an environment to get
+ * around this: under `pull_request_target` and `workflow_call` the workflow definition comes from
+ * the base ref, not from the pull request.
+ */
+test("a job on main running a pull request's code cannot assume the metrics role", () => {
+    expect(admits(trustStatements(synth(), "metrics"), token(MAIN_REF))).toBe(false);
+});
+
+test("no role should be assumable from any other ref, with or without the environment", () => {
+    const template = synth();
+    for (const role of ["metrics", "alarms", "records"]) {
+        const statements = trustStatements(template, role);
+        for (const ref of [
+            "refs/heads/some/feature-branch",
+            "refs/pull/5021/merge",
+            // Release-shaped but not date-shaped, which is the stray tag the patterns exclude.
+            "refs/tags/release-test",
+        ]) {
+            expect(admits(statements, token(ref))).toBe(false);
+            expect(admits(statements, token(ref, ORCHESTRATOR_ENVIRONMENT))).toBe(false);
+        }
+    }
 });
 
 test("it should output everything that has to be copied into a secret by hand", () => {
