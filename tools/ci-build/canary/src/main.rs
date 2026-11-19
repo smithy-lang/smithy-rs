@@ -564,7 +564,9 @@ fn main() -> anyhow::Result<()> {
                 show(&mine),
                 match &previous {
                     Some(r) => format!("{} ({})", r.id, r.tag),
-                    None => "none found, so every red leg will count as news".to_string(),
+                    None =>
+                        "none found, so nothing can be called news and the window keeps checking"
+                            .to_string(),
                 }
             );
             println!("{}", show(&mine));

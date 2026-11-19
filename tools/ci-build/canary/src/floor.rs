@@ -34,9 +34,9 @@
 //! previous release's runs are always there.
 //!
 //! When there is no previous release to compare against — the first release ever to run this, or a
-//! gap long enough to age the runs out — every red leg counts as news, so an absent baseline
-//! dispatches rather than skipping. Fail-open is the safe direction: it costs runner minutes and
-//! checks everything, where the opposite would skip hours nobody asked it to skip.
+//! gap long enough to age the runs out — whether a red leg is news cannot be decided, so the window
+//! keeps checking. Fail-open is the safe direction: it costs runner minutes and checks everything,
+//! where the opposite would skip hours nobody asked it to skip.
 //!
 //! # What this does not decide
 //!
@@ -198,8 +198,25 @@ pub fn decide(
         };
     }
 
-    let empty = BTreeSet::new();
-    let known = baseline.unwrap_or(&empty);
+    // No baseline means *unknown*, not "nothing was red before". Treating it as a clean previous
+    // release would make a standing red look like news and stop the remaining hours — which is the
+    // one thing the `not already red` clause exists to prevent, in the case with least to go on.
+    // Checking anyway costs runner minutes; not checking is the failure this canary is for.
+    let Some(known) = baseline else {
+        return Gate {
+            dispatch: true,
+            // Nothing can be called news without something to compare against, and a reader acting
+            // on this field would be acting on a guess. The reason names the red legs instead.
+            news: vec![],
+            reason: format!(
+                "{} leg(s) are red and there is no previous release to compare against, so \
+                 whether any of it is news about this release is unknown and the window keeps \
+                 checking: {}",
+                red.len(),
+                comma(red.iter().map(String::as_str))
+            ),
+        };
+    };
     let news: Vec<String> = red.difference(known).cloned().collect();
 
     if news.is_empty() {
@@ -218,8 +235,9 @@ pub fn decide(
     // The rest of the red set was already red before this release. Naming it matters: without it a
     // reader sees "3 legs are new" next to a run showing 23 red and cannot tell which is which.
     let already: Vec<&String> = red.intersection(known).collect();
-    let reason = match baseline.is_some() {
-        true => format!(
+    Gate {
+        dispatch: false,
+        reason: format!(
             "{} leg(s) went red that were not red before this release, so it has been reported and \
              a later hour would dedupe into the same ticket: {}. Already red beforehand, and \
              therefore not counted: {}",
@@ -227,17 +245,7 @@ pub fn decide(
             comma(news.iter().map(String::as_str)),
             comma(already.into_iter().map(String::as_str)),
         ),
-        false => format!(
-            "{} leg(s) are red and there is no previous release to compare against, so all of it \
-             counts as news: {}",
-            news.len(),
-            comma(news.iter().map(String::as_str)),
-        ),
-    };
-    Gate {
-        dispatch: false,
         news,
-        reason,
     }
 }
 
@@ -434,13 +442,19 @@ mod tests {
         );
     }
 
-    /// With no previous release to compare against, every red leg counts as news, so an absent
-    /// baseline dispatches rather than skipping.
+    /// With no previous release to compare against, whether a red leg is news is unknowable. The
+    /// window keeps checking rather than guessing: treating the absence as a clean baseline would
+    /// make a standing red stop hours 2-24, which is exactly what the `not already red` clause is
+    /// there to prevent.
     #[test]
-    fn no_baseline_dispatches_every_red_leg() {
+    fn no_baseline_keeps_checking() {
         let g = decide(Some(&set(&["ssstar--stable"])), None);
-        assert!(!g.dispatch);
-        assert_eq!(g.news, ["ssstar--stable"]);
+        assert!(g.dispatch);
+        assert!(
+            g.news.is_empty(),
+            "nothing is news without something to compare against: {:?}",
+            g.news
+        );
         assert!(
             g.reason.contains("no previous release"),
             "and it must say which rule it applied: {}",
