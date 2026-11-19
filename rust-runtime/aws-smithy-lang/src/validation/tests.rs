@@ -562,3 +562,127 @@ fn length_trait_matches_smithy_java() {
         ]
     );
 }
+
+fn length_model(length: &str) -> String {
+    format!(
+        r#"{{"smithy":"2.0","shapes":{{"ns.foo#S":{{"type":"string","traits":{{"smithy.api#length":{length}}}}}}}}}"#
+    )
+}
+
+#[test]
+fn length_requires_min_or_max() {
+    let json = ModelAssembler::new()
+        .add_json_str("t.json", length_model("{}"))
+        .assemble();
+    let idl = ModelAssembler::new()
+        .add_idl_str(
+            "t.smithy",
+            "$version: \"2\"\nnamespace ns.foo\n\n@length\nstring S\n",
+        )
+        .assemble();
+    assert_eq!(
+        (json.result().is_some(), idl.result().is_some()),
+        (false, false)
+    );
+}
+
+#[test]
+fn length_reads_negative_zero_as_zero() {
+    assert_eq!(
+        errors_file(&length_model(r#"{"min": 1, "max": -0}"#)),
+        ["[ERROR] ns.foo#S: A length trait is applied with a `min` value greater than its `max` value. | LengthTrait"]
+    );
+    assert_eq!(
+        errors_file(&length_model(r#"{"min": -0, "max": -1}"#)),
+        [
+            "[ERROR] ns.foo#S: A length trait is applied with a `min` value greater than its `max` value. | LengthTrait",
+            "[ERROR] ns.foo#S: A length trait is applied with a negative `max` value. | LengthTrait",
+        ]
+    );
+}
+
+#[test]
+fn length_rejects_integers_outside_i64() {
+    for length in [
+        r#"{"min": 9223372036854775808, "max": 1}"#,
+        r#"{"min": 18446744073709551615, "max": 1}"#,
+    ] {
+        let validated = ModelAssembler::new()
+            .add_json_str("t.json", length_model(length))
+            .assemble();
+        assert!(
+            validated
+                .diagnostics()
+                .iter()
+                .any(|d| d.validator() == Some("LengthTrait")),
+            "{length}: {:?}",
+            validated.diagnostics()
+        );
+    }
+}
+
+#[test]
+fn length_checks_shapes_a_document_adds_to_the_prelude_namespace() {
+    let json = r#"{"smithy":"2.0","shapes":{
+        "smithy.api#MyNew":{"type":"string","traits":{"smithy.api#length":{"min":5,"max":4}}},
+        "smithy.api#MyUnion":{"type":"union"}
+    }}"#;
+    let validators: Vec<_> = ModelAssembler::new()
+        .add_json_str("t.json", json)
+        .assemble()
+        .diagnostics()
+        .iter()
+        .map(|d| d.validator().unwrap_or_default().to_owned())
+        .collect();
+    assert_eq!(validators, ["UnionMembers", "LengthTrait"]);
+}
+
+#[test]
+fn length_checks_prelude_namespace_shapes_without_the_prelude() {
+    let validated = ModelAssembler::new()
+        .disable_prelude()
+        .add_json_str(
+            "t.json",
+            r#"{"smithy":"2.0","shapes":{"smithy.api#Bad":{"type":"string","traits":{"smithy.api#length":{"min":5,"max":4}}}}}"#,
+        )
+        .assemble();
+    assert!(
+        validated.result().is_none(),
+        "{:?}",
+        validated.diagnostics()
+    );
+}
+
+#[test]
+fn length_members_apply_and_locations() {
+    let member = r#""a#S":{"type":"structure","members":{"m":{"target":"smithy.api#String","traits":{"smithy.api#length":{"min":5,"max":4}}}}}"#;
+    assert_eq!(
+        check(member),
+        one(
+            InvalidTrait,
+            "/shapes/a#S/members/m/traits/smithy.api#length"
+        )
+    );
+    let root = r#""a#S":{"type":"string","traits":{"smithy.api#length":{"min":-1,"max":-2}}}"#;
+    assert_eq!(
+        check(root),
+        vec![
+            (
+                InvalidTrait,
+                "/shapes/a#S/traits/smithy.api#length".to_owned()
+            );
+            3
+        ]
+    );
+    let applied = ModelAssembler::new()
+        .add_idl_str(
+            "t.smithy",
+            "$version: \"2\"\nnamespace ns.foo\n\nstructure Struct {\n    m: String\n}\n\napply Struct$m @length(min: 5, max: 4)\n",
+        )
+        .assemble();
+    let d = applied.diagnostics().iter().next().expect("one diagnostic");
+    assert_eq!(d.shape_id().unwrap(), "ns.foo#Struct$m");
+    assert_eq!(d.validator(), Some("LengthTrait"));
+    let location = d.source_location().unwrap();
+    assert_eq!((location.line(), location.column()), (Some(8), Some(16)));
+}

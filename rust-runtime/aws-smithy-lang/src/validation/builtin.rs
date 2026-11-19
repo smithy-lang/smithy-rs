@@ -12,6 +12,7 @@
 use super::{DiagnosticSink, Validator};
 use crate::diagnostic::{escape_pointer_token, Diagnostic, DiagnosticCode, SourceLocation};
 use crate::model::Model;
+use crate::node::Node;
 use crate::prelude;
 use crate::shape::{MemberView, ShapeType, ShapeView};
 use crate::shape_id::ShapeId;
@@ -488,43 +489,52 @@ impl Validator for LengthTrait {
     }
 
     fn validate(&self, model: &Model, diagnostics: &mut DiagnosticSink<'_>) {
-        for shape in model
-            .shapes_with_trait(&traits::LENGTH)
-            .filter(|shape| !prelude::is_prelude_shape(shape.id()))
-        {
-            let Some(value) = shape.get_trait(&traits::LENGTH) else {
-                continue;
-            };
-            let bound = |name: &str| {
-                value
-                    .as_object()
-                    .and_then(|object| object.get(name))
-                    .and_then(|bound| bound.as_number())
-                    .and_then(|bound| bound.as_i64())
-            };
-            let (min, max) = (bound("min"), bound("max"));
-            let mut report = |message: &str| {
-                diagnostics.push(error(
-                    DiagnosticCode::InvalidTrait,
-                    message.to_owned(),
-                    shape.id(),
-                    value.source_location(),
-                ));
-            };
+        for shape in own_shapes(model) {
+            check_length(shape.id(), shape.get_trait(&traits::LENGTH), diagnostics);
+            for member in shape.members().iter() {
+                check_length(member.id(), member.get_trait(&traits::LENGTH), diagnostics);
+            }
+        }
+    }
+}
 
-            if min.is_some_and(|min| min < 0) {
-                report("A length trait is applied with a negative `min` value.");
-            }
-            if max.is_some_and(|max| max < 0) {
-                report("A length trait is applied with a negative `max` value.");
-            }
-            if let (Some(min), Some(max)) = (min, max) {
-                if min > max {
-                    report(
-                        "A length trait is applied with a `min` value greater than its `max` value.",
-                    );
-                }
-            }
+fn check_length(id: &ShapeId, value: Option<&Node>, diagnostics: &mut DiagnosticSink<'_>) {
+    let Some(value) = value else {
+        return;
+    };
+    let mut report = |message: &str| {
+        diagnostics.push(error(
+            DiagnosticCode::InvalidTrait,
+            message.to_owned(),
+            id,
+            value.source_location(),
+        ));
+    };
+    let object = value.as_object();
+    if object.is_none_or(|object| object.get("min").is_none() && object.get("max").is_none()) {
+        report("Error creating trait `length`: One of 'min' or 'max' must be provided.");
+        return;
+    }
+    let bound = |name: &str| {
+        let number = value.as_object()?.get(name)?.as_number()?;
+        number
+            .as_i64()
+            // Java's `longValue()` would wrap these
+            .or_else(|| number.as_u64().map(|n| n as i64))
+            // `-0` loads as `0.0`, Java reads it as the integer 0
+            .or_else(|| (number.as_f64() == 0.0).then_some(0))
+    };
+    let (min, max) = (bound("min"), bound("max"));
+
+    if min.is_some_and(|min| min < 0) {
+        report("A length trait is applied with a negative `min` value.");
+    }
+    if max.is_some_and(|max| max < 0) {
+        report("A length trait is applied with a negative `max` value.");
+    }
+    if let (Some(min), Some(max)) = (min, max) {
+        if min > max {
+            report("A length trait is applied with a `min` value greater than its `max` value.");
         }
     }
 }

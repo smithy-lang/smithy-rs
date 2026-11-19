@@ -54,9 +54,11 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
         "Target" | "UnitType" => InvalidTarget,
         "Target.UnresolvedShape" => UnresolvedReference,
         "ShapeIdConflict" => CaseConflict,
+        "LengthTrait" => InvalidTrait,
         "Model" => match fixture {
             "invalid/enum_member_not_unit" => InvalidTarget,
             "invalid/invalid_shape_id" => InvalidShapeId,
+            "invalid/length_missing_min_and_max" => InvalidTrait,
             "invalid/trait_not_definition" => InvalidTrait,
             "invalid/unknown_shape_type" => UnknownShapeType,
             other => panic!("{other}: map Java's generic `Model` event to a Rust code"),
