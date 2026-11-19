@@ -4,8 +4,7 @@
  */
 
 import { Effect, OpenIdConnectProvider, PolicyStatement } from "aws-cdk-lib/aws-iam";
-import { ArnFormat, CfnOutput, RemovalPolicy, Stack, StackProps, Tags } from "aws-cdk-lib";
-import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
+import { ArnFormat, CfnOutput, Stack, StackProps, Tags } from "aws-cdk-lib";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
 import { SMITHY_RS } from "../github-repositories";
 import { Construct } from "constructs";
@@ -82,15 +81,6 @@ export const MAIN_REF = "refs/heads/main";
 /** {@link RELEASE_REFS} without {@link MAIN_REF}: what the leg role accepts, and all it accepts. */
 export const RELEASE_TAG_REFS = RELEASE_REFS.filter((ref) => ref !== MAIN_REF);
 
-/**
- * The key prefix the durable records live under, as `runs/<release>/<run-id>-<attempt>/`.
- *
- * **The Rust side must use the same prefix.** A test in the canary crate reads this file and
- * compares, as one does for {@link METRIC_NAMESPACE}, because a disagreement would make every write
- * denied and the archive silently empty.
- */
-export const RECORD_PREFIX = "runs";
-
 export interface Properties extends StackProps {
     githubActionsOidcProvider: OpenIdConnectProvider;
 }
@@ -120,8 +110,6 @@ export class BuildCanaryStack extends Stack {
     public readonly metricsRole: GitHubOidcRole;
     /** Assumed only from the orchestrator environment: alarms, its own verdicts, the archive. */
     public readonly orchestratorRole: GitHubOidcRole;
-    /** One record per release that broke, kept after the workflow run has been deleted. */
-    public readonly recordBucket: Bucket;
 
     constructor(scope: Construct, id: string, props: Properties) {
         super(scope, id, props);
@@ -199,36 +187,6 @@ export class BuildCanaryStack extends Stack {
             }),
         );
 
-        // One object per release that broke, written when the run ends and kept indefinitely.
-        //
-        // This exists because the evidence in GitHub expires. Artifacts and logs are kept 90 days
-        // by default, and since October 2026 that retention covers the workflow runs themselves, so
-        // three months after a release broke there is no log, no artifact and no run. The red-leg
-        // evidence this repository uploads is kept 14 days. The question asked after an incident is
-        // "how often does this happen, and to what", and it is asked long after every trace has
-        // been deleted.
-        //
-        // Not about privacy: the job log is public and carries the same diagnosis for as long as it
-        // exists. Private anyway, because that is the default and there is no reason to relax it.
-        this.recordBucket = new Bucket(this, "record-bucket", {
-            blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-            encryption: BucketEncryption.S3_MANAGED,
-            // Not in the other buckets in this app, which predate it. Adds a bucket policy denying
-            // any request not over TLS; the AWS CLI always uses TLS, so there is nothing to break.
-            enforceSSL: true,
-            // An overwrite keeps the old record as a version, and the record role has no delete of
-            // any kind. The key carries the run id and attempt, so an overwrite should not happen
-            // at all; this is for when one does anyway.
-            versioned: true,
-            // No lifecycle expiration, unlike every other bucket here: outliving GitHub's retention
-            // is the entire purpose, a record is a few hundred kilobytes, and only a release that
-            // actually broke gets one.
-            //
-            // The bucket outlives the stack too, because once the runs are deleted these records
-            // are the only copy. The others here hold reproducible build inputs and are `DESTROY`.
-            removalPolicy: RemovalPolicy.RETAIN,
-        });
-
         // Its own verdicts about itself: a failed dispatch, an unchecked release, a rigged
         // break during the self-test. One job per release writes these, where a leg's are written
         // forty-five at a time, which is why the leg role exists separately at all.
@@ -242,15 +200,6 @@ export class BuildCanaryStack extends Stack {
                 },
             }),
         );
-        // Write only: no read, no delete, no list. An archive should only ever grow, and the
-        // workflow needs nothing else — a `PutObject` that succeeds is its own confirmation, and
-        // the keys carry the release, the run id and the attempt, so a write cannot land on an
-        // existing record. Withholding read also means a token leaked from a run cannot enumerate
-        // the history.
-        //
-        // Scoped to the prefix even though the bucket holds nothing else, so a later use of this
-        // bucket is not writable by the orchestrator by default.
-        this.recordBucket.grantPut(this.orchestratorRole.oidcRole, `${RECORD_PREFIX}/*`);
 
         // The ARNs and the bucket name have to be copied into repository secrets by hand, so emit
         // them rather than making someone dig through the console after deploying.
@@ -261,10 +210,6 @@ export class BuildCanaryStack extends Stack {
         new CfnOutput(this, "orchestrator-role-arn", {
             value: this.orchestratorRole.oidcRole.roleArn,
             description: "Set as the BUILD_CANARY_ORCHESTRATOR_ROLE_ARN repository secret",
-        });
-        new CfnOutput(this, "record-bucket-name", {
-            value: this.recordBucket.bucketName,
-            description: "Set as the BUILD_CANARY_RECORD_BUCKET repository secret",
         });
         new CfnOutput(this, "metric-namespace", {
             value: METRIC_NAMESPACE,
