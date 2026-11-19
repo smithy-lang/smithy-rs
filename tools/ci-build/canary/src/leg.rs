@@ -56,6 +56,9 @@ pub const BUDGET: Duration = Duration::from_secs(10 * 60);
 /// then writes no report, emits no datapoint and uploads no evidence — so a build that hangs, which
 /// is one of the things this canary exists to catch, pages nobody and arrives in the record as
 /// `unreported`: the bucket reserved for a leg that died of a defect in the canary itself.
+///
+/// Taking this out of [`BUDGET`] is also why [`Retry`]'s infra interval is two minutes rather than
+/// three: at three, two exhausted infra steps no longer fit in what is left.
 pub const JOB_MARGIN: Duration = Duration::from_secs(4 * 60);
 
 /// Attempts and spacing for one verdict class.
@@ -71,7 +74,7 @@ impl Retry {
         match v {
             Verdict::InfraFail => Retry {
                 attempts: 3,
-                interval: Duration::from_secs(3 * 60),
+                interval: Duration::from_secs(2 * 60),
             },
             Verdict::ResolveFail => Retry {
                 attempts: 2,
@@ -928,12 +931,13 @@ version = "0.2.12"
         assert_eq!(r.failed_step, Some(Step::Fetch));
         assert_eq!(r.stopped, Some(Stopped::AttemptsExhausted));
         assert_eq!(exec.calls.iter().filter(|s| **s == Step::Fetch).count(), 3);
+        let interval = Retry::for_verdict(Verdict::InfraFail).interval;
         assert_eq!(
             clock.slept,
-            [Duration::from_secs(180), Duration::from_secs(180)],
+            [interval, interval],
             "two waits between three attempts"
         );
-        assert_eq!(r.elapsed, Duration::from_secs(360), "6 minutes");
+        assert_eq!(r.elapsed, interval * 2, "one interval per wait and no more");
         assert_eq!(r.exit_code(), 0, "INFRA_FAIL lets the window continue");
     }
 
@@ -961,7 +965,8 @@ version = "0.2.12"
         assert_eq!(r.verdict, Some(Verdict::InfraFail));
         assert_eq!(r.stopped, Some(Stopped::AttemptsExhausted));
         // One wait for Fetch plus two for Build, all inside the budget.
-        assert_eq!(r.elapsed, Duration::from_secs(540));
+        let interval = Retry::for_verdict(Verdict::InfraFail).interval;
+        assert_eq!(r.elapsed, interval * 3);
         assert!(r.elapsed < BUDGET);
     }
 
@@ -1290,32 +1295,27 @@ version = "0.2.12"
         assert!(r.elapsed < budget);
     }
 
-    /// One exhausted infra step fits inside the budget with room for the work, which is the
-    /// arithmetic keeping a leg under the watcher's tick.
+    /// Two exhausted infra steps fit inside the budget with room for the work, and the budget fits
+    /// inside the job, and the job inside the watcher's tick. That chain is what keeps a leg from
+    /// being killed before it reports and from outliving the tick that dispatched it.
     ///
-    /// *Two* no longer fit, and that is a deliberate trade. The budget dropped to leave the job's
-    /// wall clock a margin, because a leg killed by GitHub reports nothing at all and is filed as a
-    /// canary defect — strictly worse than a leg that gives up on its second run of bad luck. A leg
-    /// that does hit it returns `DeadlineReached` carrying `INFRA_FAIL`, which still emits a
-    /// datapoint, still exits 0 and still blames the runner rather than the release.
+    /// The interval is two minutes rather than three for this reason. When the budget dropped to
+    /// leave the job a margin, three-minute intervals meant a leg hitting infrastructure trouble on
+    /// two separate steps gave up part-way through the second -- reporting `INFRA_FAIL`, which is
+    /// on the alarmed series and pages. Two minutes still spans four minutes of transient failure
+    /// per step, which is what the retry is for.
     #[test]
-    fn one_exhausted_infra_step_fits_well_inside_the_budget() {
+    fn two_exhausted_infra_steps_fit_well_inside_the_budget() {
         let worst = Retry::for_verdict(Verdict::InfraFail);
         let waiting = worst.interval * (worst.attempts - 1);
-        assert_eq!(waiting, Duration::from_secs(360));
+        assert_eq!(waiting, Duration::from_secs(240));
         assert!(
-            waiting < BUDGET,
-            "one exhausted infra step must fit inside the budget"
+            waiting * 2 < BUDGET,
+            "two exhausted infra steps should still fit, with room left for the work"
         );
-        assert!(
-            waiting + JOB_MARGIN <= BUDGET + JOB_MARGIN,
-            "and leave the job's margin untouched"
-        );
-        // The chain the whole arithmetic rests on: the leg finishes before its job, and the job
-        // before the tick that dispatched it.
         assert!(
             BUDGET + JOB_MARGIN <= Duration::from_secs(15 * 60),
-            "under the tick"
+            "the budget plus the job's margin has to fit the dispatch tick"
         );
     }
 
@@ -1335,7 +1335,10 @@ version = "0.2.12"
         assert_eq!(fetches[0].verdict, Some(Verdict::InfraFail));
         assert_eq!(fetches[0].at, Duration::ZERO);
         assert!(fetches[1].succeeded);
-        assert_eq!(fetches[1].at, Duration::from_secs(180));
+        assert_eq!(
+            fetches[1].at,
+            Retry::for_verdict(Verdict::InfraFail).interval
+        );
         assert!(r.is_green());
     }
 
