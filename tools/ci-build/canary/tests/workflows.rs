@@ -1429,40 +1429,47 @@ fn aws_steps_are_skipped_when_unconfigured() {
 /// datapoint cannot raise an alarm, which is worse than a red one.
 ///
 /// Room for the budget alone is not enough, and asserting `>=` was the defect. The leg's clock
-/// starts inside `run-leg`, after the checkout, the toolchain, the musl target and cargo building
-/// this crate, and the report, the datapoint and the upload all come after it. Equal values let a
-/// hung command consume the job's whole wall clock from a later start, so GitHub kills it
-/// mid-flight and the leg arrives in `unreported` — the bucket meaning the canary broke — for a
-/// release that was in fact hanging.
+/// starts inside `run-leg`, after the checkout, the toolchain and the musl target, and six more
+/// steps run after it. Equal values let a hung command consume the job's whole wall clock from a
+/// later start, so GitHub kills it mid-flight and the leg arrives in `unreported` — the bucket
+/// meaning the canary broke — for a release that was in fact hanging.
+///
+/// In seconds throughout. `BUDGET.as_secs() / 60` truncates, so a budget of 12½ minutes would be
+/// compared as 12 and thirty seconds of the thing under test would vanish. The values are whole
+/// minutes today; the arithmetic should not depend on that staying true.
 #[test]
 fn a_leg_job_outlives_the_legs_own_budget() {
     let wf = load("build-canary");
     let leg = jobs(&wf).get("leg").copied().expect("a leg job");
-    let job_timeout = leg
+    let job = leg
         .get("timeout-minutes")
         .and_then(Value::as_u64)
-        .expect("a timeout");
-    let own_budget = canary::leg::BUDGET.as_secs() / 60;
-    let margin = canary::leg::JOB_MARGIN.as_secs() / 60;
+        .expect("a timeout")
+        * 60;
+    let budget = canary::leg::BUDGET.as_secs();
+    let margin = canary::leg::JOB_MARGIN.as_secs();
+
     assert!(
-        job_timeout >= own_budget + margin,
-        "the job's {job_timeout} minutes does not leave the {margin} minutes the leg needs around \
-         its own {own_budget}-minute budget, so a hung command would be killed before reporting"
+        job >= budget + margin,
+        "the job's {job}s does not leave the {margin}s the leg needs around its own {budget}s \
+         budget, so a hung command would be killed before reporting"
     );
+
     // And the margin has to be worth having. Satisfying the sum by shrinking it to nothing is the
-    // same defect in a different place: cargo building this crate is the dominant term outside the
-    // leg's own clock and routinely takes more than two minutes cold, before the toolchain and the
-    // musl target are counted, let alone the report and the upload afterwards.
+    // same defect in a different place. The floor is the measured pre-leg cost -- about 45 seconds
+    // on Windows -- doubled, because the six steps after `run-leg` end in an STS call and an
+    // artifact upload and nobody has timed those.
     assert!(
-        margin >= 3,
-        "a {margin}-minute margin does not cover building this crate, never mind the toolchain \
-         before it and the report and upload after it"
+        margin >= 90,
+        "a {margin}s margin does not cover the measured 45s before the leg's clock starts plus \
+         six steps after it, ending in an STS call and an artifact upload"
     );
-    // And the whole thing has to fit inside the watcher's tick, or a leg could outlive the tick
-    // that dispatched it and be re-dispatched alongside itself.
-    let tick = canary::watch::INTERVAL.as_secs() / 60;
+
+    // The job has to finish strictly inside the watcher's tick, not merely by it: a leg still
+    // running when the next tick fires can be re-dispatched alongside itself.
+    let tick = canary::watch::INTERVAL.as_secs();
     assert!(
-        job_timeout <= tick,
-        "the job's {job_timeout} minutes exceeds the {tick}-minute dispatch tick"
+        job < tick,
+        "the job's {job}s is not strictly inside the {tick}s dispatch tick"
     );
 }

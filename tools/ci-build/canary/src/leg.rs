@@ -44,22 +44,28 @@ use crate::scenarios::{Body, Checks, Leg, Profile};
 /// Under the job's `timeout-minutes` by at least [`JOB_MARGIN`], and the job in turn under the
 /// watcher's 15-minute dispatch tick — so a leg can neither be killed before it reports nor outlive
 /// the tick that dispatched it and be re-dispatched alongside itself.
-pub const BUDGET: Duration = Duration::from_secs(10 * 60);
+pub const BUDGET: Duration = Duration::from_secs(12 * 60);
 
 /// The slack a leg's job needs on top of [`BUDGET`].
 ///
 /// [`BUDGET`] starts counting inside `run-leg`. The job's `timeout-minutes` starts when the job
-/// does, and between the two sit the checkout, the toolchain, the musl target and cargo building
-/// this crate; after `run-leg` come the report, the datapoint and the evidence upload.
+/// does, and between the two sit the checkout, the toolchain and the musl target; after `run-leg`
+/// come six more steps, ending in an STS call and an artifact upload.
+///
+/// Two minutes, against a measurement: the leg's clock was observed starting about 25 seconds into
+/// the job on Linux and about 45 on Windows. That leaves roughly 75 seconds for the six steps
+/// afterwards, which is the side nobody has measured -- hence more room than the pre-leg figure
+/// alone would justify.
 ///
 /// Hand a hung command all of [`BUDGET`] with no margin and GitHub kills the job first. The leg
 /// then writes no report, emits no datapoint and uploads no evidence — so a build that hangs, which
 /// is one of the things this canary exists to catch, pages nobody and arrives in the record as
 /// `unreported`: the bucket reserved for a leg that died of a defect in the canary itself.
 ///
-/// Taking this out of [`BUDGET`] is also why [`Retry`]'s infra interval is two minutes rather than
-/// three: at three, two exhausted infra steps no longer fit in what is left.
-pub const JOB_MARGIN: Duration = Duration::from_secs(4 * 60);
+/// [`Retry`]'s infra interval is two minutes rather than three partly for this: at three, two
+/// exhausted infra steps want twelve minutes of sleeping, which leaves a twelve-minute budget no
+/// room at all for the work between the waits.
+pub const JOB_MARGIN: Duration = Duration::from_secs(2 * 60);
 
 /// Attempts and spacing for one verdict class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
