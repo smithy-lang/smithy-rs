@@ -56,6 +56,8 @@ pub type ResolveDnsResult = Result<Vec<IpAddr>, ResolveDnsError>;
 #[derive(Debug, Clone)]
 pub struct ResolveRequest {
     name: String,
+
+    ttl: Option<Duration>,
 }
 
 impl ResolveRequest {
@@ -64,6 +66,7 @@ impl ResolveRequest {
         ResolveRequestBuilder {
             request: ResolveRequest {
                 name: name.to_string(),
+                ttl: None,
             },
         }
     }
@@ -71,6 +74,13 @@ impl ResolveRequest {
     /// the host name to perform a name resolution for
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// optional per-request TTL override for a resolved address.  Only lookups
+    /// triggered by this request will have the override TTL applied.  If not set, the resolver's
+    /// TTL will be ysed.
+    pub fn ttl(&self) -> Option<Duration> {
+        self.ttl
     }
 }
 
@@ -84,6 +94,13 @@ impl ResolveRequestBuilder {
     /// Create a new ResolveRequest instance
     pub fn build(&self) -> ResolveRequest {
         self.request.clone()
+    }
+
+    /// Overrides the resolver's default address TTL value with a different duration.  Only lookups
+    /// triggered by this request will have the override TTL applied.
+    pub fn with_ttl(&mut self, ttl: Duration) -> &mut Self {
+        self.request.ttl = Some(ttl);
+        self
     }
 }
 

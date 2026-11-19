@@ -84,14 +84,13 @@ impl std::fmt::Debug for ResolveRequestInternal {
 /// The result of a name resolution lookup attempt
 #[derive(Debug)]
 pub struct ResolveResult {
-    name: String,
+    request: ResolveRequest,
     result: ResolveDnsResult,
 }
 
 impl ResolveResult {
-    /// What host name this is a resolve result for
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn request(&self) -> &ResolveRequest {
+        &self.request
     }
 
     /// The result of looking up the host name
@@ -100,8 +99,8 @@ impl ResolveResult {
     }
 
     /// Creates a new builder for a ResolveResult instance
-    pub fn builder(name: String, result: ResolveDnsResult) -> ResolveResultBuilder {
-        ResolveResultBuilder::new(name, result)
+    pub fn builder(request: ResolveRequest, result: ResolveDnsResult) -> ResolveResultBuilder {
+        ResolveResultBuilder::new(request, result)
     }
 }
 
@@ -111,21 +110,15 @@ pub struct ResolveResultBuilder {
 }
 
 impl ResolveResultBuilder {
-    fn new(name: String, result: ResolveDnsResult) -> ResolveResultBuilder {
+    fn new(request: ResolveRequest, result: ResolveDnsResult) -> ResolveResultBuilder {
         ResolveResultBuilder {
-            result: ResolveResult { name, result },
+            result: ResolveResult { request, result },
         }
     }
 
     /// Create a new ResolveResult value
     pub fn build(self) -> ResolveResult {
         self.result
-    }
-}
-
-impl Default for ResolveResultBuilder {
-    fn default() -> Self {
-        todo!()
     }
 }
 
@@ -145,7 +138,7 @@ pub enum ResolverOperation {
 }
 
 /// Type signature for the function that performs background task name lookup resolution
-pub type ResolutionFunction = Box<dyn Fn(String) + Send + Sync>;
+pub type ResolutionFunction = Box<dyn Fn(ResolveRequest) + Send + Sync>;
 
 /// Configuration for the async recurrent task that handles all incoming ResolverOperation
 /// instances.  This context is passed into the operation handler function a caching resolver
@@ -200,17 +193,16 @@ impl<T> ResolverProcess<T> {
         // the operation input channel
         let resolver = internal_resolver.clone();
         let operation_channel = sender.downgrade();
-        let resolution_function: ResolutionFunction = Box::new(move |name| {
+        let resolution_function: ResolutionFunction = Box::new(move |request| {
             let handle = tokio::runtime::Handle::current();
-            let internal_name = name.to_string();
+            let internal_name = request.name().to_string();
             let internal_resolver = resolver.clone();
             let internal_channel = operation_channel.clone();
             handle.spawn(async move {
                 let result = internal_resolver.resolve_dns(&internal_name).await;
-                let caching_result = ResolverOperation::ResolveResult(ResolveResult {
-                    name: internal_name,
-                    result,
-                });
+                let caching_result = ResolverOperation::ResolveResult(
+                    ResolveResultBuilder::new(request, result).build(),
+                );
                 let strong_channel_option = internal_channel.upgrade();
                 if let Some(strong_channel) = strong_channel_option {
                     let _ = strong_channel.send(caching_result);

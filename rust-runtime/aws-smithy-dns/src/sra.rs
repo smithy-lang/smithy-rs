@@ -384,23 +384,24 @@ impl HostEntry {
     }
 
     /// Updates the entry with a newly-resolved address
-    fn on_address_resolved(&mut self, address: IpAddr) {
+    fn on_address_resolved(&mut self, address: IpAddr, ttl: Duration) {
         // filter if configured
         if !self.should_cache_address(&address) {
             return;
         }
 
-        let ttl = (self.config.clock)() + self.config.resolution_ttl;
+        let expiration_time = (self.config.clock)() + ttl;
 
         // If we already know about this address, just extend its TTL, regardless of any other
         // (healthy/unhealthy/banned) status
         if self.addresses_by_ttl.contains(&address) {
-            self.addresses_by_ttl.change_priority(&address, ttl);
+            self.addresses_by_ttl
+                .change_priority(&address, expiration_time);
             return;
         }
 
         // track the address by lifetime
-        self.addresses_by_ttl.push(address, ttl);
+        self.addresses_by_ttl.push(address, expiration_time);
 
         // add it to the correct set
         match address {
@@ -515,7 +516,7 @@ impl HostEntry {
             self.pending_resolution = true;
             self.last_resolution_timepoint = Some(now);
 
-            (context.resolution_function())(request.request().name().to_string());
+            (context.resolution_function())(request.request().clone());
         }
 
         // if no addresses are available and we have a background resolution in progress, enqueue
@@ -538,8 +539,9 @@ impl HostEntry {
 
         match result.result() {
             Ok(addresses) => {
+                let ttl = result.request().ttl().unwrap_or(self.config.resolution_ttl);
                 for address in addresses {
-                    self.on_address_resolved(*address);
+                    self.on_address_resolved(*address, ttl);
                 }
             }
             Err(err) => {
@@ -604,7 +606,7 @@ fn handle_resolve_request(
 }
 
 fn handle_resolve_result(state: &mut SraCachingResolverState, result: ResolveResult) {
-    if let Some(entry) = state.hosts.get_mut(result.name()) {
+    if let Some(entry) = state.hosts.get_mut(result.request().name()) {
         entry.handle_resolve_result(result);
     }
 }
@@ -903,7 +905,7 @@ mod testing {
         results: Vec<ResolveDnsResult>,
         current_index: usize,
         should_loop: bool,
-        resolutions: VecDeque<ResolveDnsResult>,
+        resolutions: VecDeque<ResolveResult>,
         call_count: usize,
     }
 
@@ -926,7 +928,7 @@ mod testing {
             self.results.push(result);
         }
 
-        fn resolve(&mut self) {
+        fn resolve(&mut self, request: ResolveRequest) {
             self.call_count += 1;
 
             if self.current_index >= self.results.len() && self.should_loop {
@@ -934,25 +936,32 @@ mod testing {
             }
 
             if self.current_index >= self.results.len() {
-                self.resolutions
-                    .push_back(Err(ResolveDnsError::new("Out of results")));
+                let result =
+                    ResolveResult::builder(request, Err(ResolveDnsError::new("Out of results")))
+                        .build();
+                self.resolutions.push_back(result);
                 return;
             }
 
             match &self.results[self.current_index] {
                 Ok(addresses) => {
-                    self.resolutions.push_back(Ok(addresses.clone()));
+                    let result = ResolveResult::builder(request, Ok(addresses.clone())).build();
+                    self.resolutions.push_back(result);
                 }
                 Err(error) => {
-                    self.resolutions
-                        .push_back(Err(ResolveDnsError::new(error.to_string())));
+                    let result = ResolveResult::builder(
+                        request,
+                        Err(ResolveDnsError::new(error.to_string())),
+                    )
+                    .build();
+                    self.resolutions.push_back(result);
                 }
             }
 
             self.current_index += 1;
         }
 
-        fn pop_resolution(&mut self) -> Option<ResolveDnsResult> {
+        fn pop_resolution(&mut self) -> Option<ResolveResult> {
             self.resolutions.pop_front()
         }
 
@@ -981,11 +990,11 @@ mod testing {
             self.results.lock().unwrap().add_result(result);
         }
 
-        fn resolve(&self) {
-            self.results.lock().unwrap().resolve()
+        fn resolve(&self, request: ResolveRequest) {
+            self.results.lock().unwrap().resolve(request)
         }
 
-        fn pop_resolution(&self) -> Option<ResolveDnsResult> {
+        fn pop_resolution(&self) -> Option<ResolveResult> {
             self.results.lock().unwrap().pop_resolution()
         }
 
@@ -1010,7 +1019,7 @@ mod testing {
             let mock_results = MockResolveFunctionWrapper::new();
             let results_clone = mock_results.clone();
             let mock_resolution_function: ResolutionFunction =
-                Box::new(move |_| results_clone.resolve());
+                Box::new(move |request| results_clone.resolve(request));
 
             let config = Arc::new(config_builder.build());
 
@@ -1051,21 +1060,24 @@ mod testing {
 
     type MockResultTarget = Arc<Mutex<Option<ResolveDnsResult>>>;
 
-    fn create_mock_internal_request() -> (ResolveRequestInternal, MockResultTarget) {
+    fn create_mock_internal_request(
+        ttl_override: Option<Duration>,
+    ) -> (ResolveRequestInternal, MockResultTarget) {
         let result = Arc::new(Mutex::new(None));
         let result_clone = result.clone();
-        let request = ResolveRequestInternal {
-            request: ResolveRequest::builder(MOCK_HOST).build(),
+        let mut request_builder = ResolveRequest::builder(MOCK_HOST);
+        if let Some(duration) = ttl_override {
+            request_builder.with_ttl(duration);
+        }
+
+        let internal_request = ResolveRequestInternal {
+            request: request_builder.build(),
             completion_callback: Box::new(move |res| {
                 result_clone.lock().unwrap().replace(res);
             }),
         };
 
-        (request, result)
-    }
-
-    fn convert_pending_result_to_resolve_result(pending_result: ResolveDnsResult) -> ResolveResult {
-        ResolveResult::builder(MOCK_HOST.to_string(), pending_result).build()
+        (internal_request, result)
     }
 
     fn is_result_localhost(result_target: MockResultTarget) -> bool {
@@ -1085,22 +1097,17 @@ mod testing {
         assert!(pending_result.is_some());
 
         // apply the resolve result to the host entry and verify expected state
-        context
-            .entry
-            .handle_resolve_result(convert_pending_result_to_resolve_result(
-                pending_result.unwrap(),
-            ));
+        context.entry.handle_resolve_result(pending_result.unwrap());
 
         assert!(context.entry.pending_requests.is_empty());
         assert!(!context.entry.pending_resolution);
     }
 
-    #[test]
-    fn host_entry_basic_lookup_and_resolve() {
-        let mut context = HostEntryTestContext::default();
-        initialize_resolution_test_context_single(&mut context);
-
-        let (request, result_target) = create_mock_internal_request();
+    fn do_host_entry_basic_lookup_and_resolve_test(
+        context: &mut HostEntryTestContext,
+        ttl_override: Option<Duration>,
+    ) {
+        let (request, result_target) = create_mock_internal_request(ttl_override);
 
         // submit a request and then check expected internal state
         context
@@ -1126,7 +1133,7 @@ mod testing {
         context.advance_time(Duration::from_millis(10));
 
         // apply result and verify requests not pending and resolution not pending
-        apply_mock_result_to_context(&mut context);
+        apply_mock_result_to_context(context);
 
         // additional expected:
         //   theres now an ipv4 entry in the cache
@@ -1134,9 +1141,10 @@ mod testing {
         //   both ipv4 and ipv6 addresses have the correct ttl (now + ttl)
         assert!(!context.entry.ipv4_addresses.empty());
         assert!(!context.entry.ipv6_addresses.empty());
-        let expected_ttl = context.mock_clock.get_current_time() + context.config.resolution_ttl;
+        let ttl = ttl_override.unwrap_or(context.config.resolution_ttl);
+        let expected_expiration = context.mock_clock.get_current_time() + ttl;
         assert_eq!(
-            expected_ttl,
+            expected_expiration,
             *context
                 .entry
                 .addresses_by_ttl
@@ -1145,7 +1153,7 @@ mod testing {
                 .1
         );
         assert_eq!(
-            expected_ttl,
+            expected_expiration,
             *context
                 .entry
                 .addresses_by_ttl
@@ -1162,6 +1170,22 @@ mod testing {
         assert_eq!(1, context.mock_results.get_call_count());
     }
 
+    #[test]
+    fn host_entry_basic_lookup_and_resolve() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        do_host_entry_basic_lookup_and_resolve_test(&mut context, None);
+    }
+
+    #[test]
+    fn host_entry_basic_lookup_and_resolve_with_ttl_override() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        do_host_entry_basic_lookup_and_resolve_test(&mut context, Some(Duration::from_secs(10)));
+    }
+
     fn submit_requests(
         context: &mut HostEntryTestContext,
         count: usize,
@@ -1170,7 +1194,7 @@ mod testing {
         let mut result_targets = Vec::new();
 
         for _ in 0..count {
-            let (request, result_target) = create_mock_internal_request();
+            let (request, result_target) = create_mock_internal_request(None);
             context
                 .entry
                 .handle_resolve_request(request, &context.operation_handler_context);
