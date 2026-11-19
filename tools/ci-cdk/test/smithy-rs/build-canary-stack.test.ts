@@ -12,6 +12,7 @@ import {
     MAIN_REF,
     RECORD_PREFIX,
     RELEASE_REFS,
+    RELEASE_TAG_REFS,
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 import { SMITHY_RS } from "../../lib/github-repositories";
@@ -122,16 +123,19 @@ function admits(statements: Statement[], claims: Claims): boolean {
 const actionsOf = (statements: Statement[]): string[] =>
     statements.flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action]));
 
-test("it should create exactly three roles", () => {
+test("it should create exactly two roles", () => {
+    // Two, not three. An alarm role and an archive role accepted identical tokens -- same
+    // repository, same environment, same refs -- so splitting them bought least privilege per step
+    // and no isolation. The leg role stays separate because its tokens are the numerous,
+    // least-trusted ones.
     const roles = synth().findResources("AWS::IAM::Role");
     expect(
         Object.values(roles)
             .map((r) => r.Properties.RoleName)
             .sort(),
     ).toEqual([
-        "smithy-rs-build-canary-alarms-github-oidc-role",
         "smithy-rs-build-canary-metrics-github-oidc-role",
-        "smithy-rs-build-canary-records-github-oidc-role",
+        "smithy-rs-build-canary-orchestrator-github-oidc-role",
     ]);
 });
 
@@ -148,8 +152,10 @@ test("the metrics role should only write metrics, and only to the canary's names
     });
 });
 
-test("the alarm role should only manage the canary's own alarms", () => {
-    const statements = policyFor(synth(), "alarms");
+test("the orchestrator role should only manage the canary's own alarms", () => {
+    const statements = policyFor(synth(), "orchestrator").filter((s) =>
+        actionsOf([s]).some((a) => a.includes("Alarm")),
+    );
 
     expect(actionsOf(statements).sort()).toEqual([
         "cloudwatch:DeleteAlarms",
@@ -165,8 +171,10 @@ test("the alarm role should only manage the canary's own alarms", () => {
     expect(resources).toContain(":alarm:paging-selftest-*");
 });
 
-test("the record role should only ever add to the archive", () => {
-    const statements = policyFor(synth(), "records");
+test("the orchestrator role should only ever add to the archive", () => {
+    const statements = policyFor(synth(), "orchestrator").filter((s) =>
+        actionsOf([s]).some((a) => a.startsWith("s3:")),
+    );
     const actions = actionsOf(statements);
 
     // An archive should only grow. No delete, so history cannot be rewritten; no read or list, so
@@ -245,57 +253,57 @@ test("the records should not expire, unlike every other bucket in this app", () 
     expect(buckets[0].Properties.LifecycleConfiguration).toBeUndefined();
 });
 
-test("a leg's permissions should be disjoint from the orchestrator's", () => {
-    // The property the split exists for. If an orchestrator role could write metrics it could fake
-    // a verdict; if the metrics role could touch alarms or the bucket, then every leg -- and
-    // anything else able to assume it -- could delete the alarm watching it, or rewrite the record
-    // that is the only account of the break surviving GitHub's retention.
+test("a leg must not be able to touch the alarms or the archive", () => {
+    // The direction that matters. A leg's token is minted forty-five times a dispatch, in jobs
+    // that build published crates off the open internet, so it must not be able to delete the
+    // alarm watching it or rewrite the record of the break.
+    //
+    // The reverse is no longer a property and should not be asserted as one: the orchestrator
+    // writes its own verdicts -- a failed dispatch, an unchecked release -- so it holds the leg's
+    // permission too. A leg's authority is a subset of the orchestrator's, deliberately.
     const template = synth();
-    const metrics = new Set(actionsOf(policyFor(template, "metrics")));
-    const orchestrator = new Set([
-        ...actionsOf(policyFor(template, "alarms")),
-        ...actionsOf(policyFor(template, "records")),
-    ]);
+    const metrics = actionsOf(policyFor(template, "metrics"));
+    const orchestrator = actionsOf(policyFor(template, "orchestrator"));
 
-    expect([...metrics].filter((a) => orchestrator.has(a))).toEqual([]);
-    expect([...orchestrator].some((a) => a.includes("PutMetricData"))).toBe(false);
-    expect([...metrics].some((a) => a.includes("Alarm"))).toBe(false);
-    expect([...metrics].some((a) => a.startsWith("s3:"))).toBe(false);
+    expect(metrics.some((a) => a.includes("Alarm"))).toBe(false);
+    expect(metrics.some((a) => a.startsWith("s3:"))).toBe(false);
+    expect(metrics).toEqual(["cloudwatch:PutMetricData"]);
+
+    for (const needed of ["cloudwatch:PutMetricAlarm", "cloudwatch:PutMetricData"]) {
+        expect(orchestrator).toContain(needed);
+    }
+    expect(orchestrator.some((a) => a.startsWith("s3:PutObject"))).toBe(true);
 });
 
-test("the orchestrator's roles should be gated on the environment, and a leg on a tag must not be", () => {
+test("the orchestrator should be gated on the environment, and a leg must not be", () => {
     const template = synth();
-    // The environment is the only thing distinguishing the orchestrator from a leg: both run in
-    // this repository from the same release tag, so their tokens are otherwise identical.
-    for (const role of ["alarms", "records"]) {
-        expect(trustFor(template, role).StringEquals[`${CLAIM}:environment`]).toBe(
-            ORCHESTRATOR_ENVIRONMENT,
-        );
-    }
-    // Conditioning the metrics role's *tag* alternative on an environment would require every leg
-    // to declare one. Its `main` alternative does require it, which the tests below cover.
-    const [onATag] = trustStatements(template, "metrics");
-    expect(onATag.Condition?.StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
+    // The environment is the only thing a pull request's code running on `main` cannot declare,
+    // which is why it and not the ref is what separates the orchestrator from everything else.
+    expect(trustFor(template, "orchestrator").StringEquals[`${CLAIM}:environment`]).toBe(
+        ORCHESTRATOR_ENVIRONMENT,
+    );
+    // Conditioning the leg role on an environment would require all forty-five legs to declare
+    // one. The release tag is what bounds it instead.
+    expect(trustFor(template, "metrics").StringEquals).not.toHaveProperty(`${CLAIM}:environment`);
 });
 
 /**
  * The ref is what bounds who can write the canary's series. A namespace has no owner, so the
  * metrics role's namespace condition does not.
  */
-test("every role should only be assumable from a release tag or main", () => {
+test("the orchestrator may run from main, and a leg only from a release tag", () => {
     const template = synth();
-    for (const role of ["alarms", "records"]) {
-        expect(trustFor(template, role).StringLike[`${CLAIM}:ref`]).toEqual(RELEASE_REFS);
-    }
 
-    // The legs' role splits the two into separate statements, because `main` is not trusted on the
-    // same terms as a release tag.
+    // The orchestrator needs `main` for the paging self-test and for a hand-dispatched watch, and
+    // the environment is what makes that safe.
+    expect(trustFor(template, "orchestrator").StringLike[`${CLAIM}:ref`]).toEqual(RELEASE_REFS);
+    expect(RELEASE_REFS).toContain(MAIN_REF);
+
+    // The leg role has no `main` at all, in one statement, so there is nothing to qualify.
     const metrics = trustStatements(template, "metrics");
-    expect(metrics).toHaveLength(2);
-    expect(metrics[0].Condition?.StringLike[`${CLAIM}:ref`]).toEqual(
-        RELEASE_REFS.filter((ref) => ref.startsWith("refs/tags/")),
-    );
-    expect(metrics[1].Condition?.StringLike[`${CLAIM}:ref`]).toEqual([MAIN_REF]);
+    expect(metrics).toHaveLength(1);
+    expect(metrics[0].Condition?.StringLike[`${CLAIM}:ref`]).toEqual(RELEASE_TAG_REFS);
+    expect(RELEASE_TAG_REFS).not.toContain(MAIN_REF);
 
     // A date-shaped tag matches; a stray `release-test` must not.
     expect(RELEASE_REFS).toContain("refs/tags/release-????-??-??");
@@ -306,9 +314,15 @@ test("a leg on a release tag can assume the metrics role", () => {
     expect(admits(trustStatements(synth(), "metrics"), token(RELEASE_TAG))).toBe(true);
 });
 
-test("the orchestrator on main, inside its environment, can assume the metrics role", () => {
+test("the orchestrator on main, inside its environment, can assume its role", () => {
     const claims = token(MAIN_REF, ORCHESTRATOR_ENVIRONMENT);
-    expect(admits(trustStatements(synth(), "metrics"), claims)).toBe(true);
+    expect(admits(trustStatements(synth(), "orchestrator"), claims)).toBe(true);
+});
+
+test("nothing on main can assume the leg role, environment or not", () => {
+    const statements = trustStatements(synth(), "metrics");
+    expect(admits(statements, token(MAIN_REF))).toBe(false);
+    expect(admits(statements, token(MAIN_REF, ORCHESTRATOR_ENVIRONMENT))).toBe(false);
 });
 
 /**
@@ -328,7 +342,7 @@ test("a job on main running a pull request's code cannot assume the metrics role
 
 test("no role should be assumable from any other ref, with or without the environment", () => {
     const template = synth();
-    for (const role of ["metrics", "alarms", "records"]) {
+    for (const role of ["metrics", "orchestrator"]) {
         const statements = trustStatements(template, role);
         for (const ref of [
             "refs/heads/some/feature-branch",
@@ -347,7 +361,8 @@ test("it should output everything that has to be copied into a secret by hand", 
     const descriptions = Object.values(outputs).map((o) => o.Description);
 
     expect(descriptions).toContain("Set as the BUILD_CANARY_METRICS_ROLE_ARN repository secret");
-    expect(descriptions).toContain("Set as the BUILD_CANARY_ALARM_ROLE_ARN repository secret");
-    expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_ROLE_ARN repository secret");
+    expect(descriptions).toContain(
+        "Set as the BUILD_CANARY_ORCHESTRATOR_ROLE_ARN repository secret",
+    );
     expect(descriptions).toContain("Set as the BUILD_CANARY_RECORD_BUCKET repository secret");
 });
