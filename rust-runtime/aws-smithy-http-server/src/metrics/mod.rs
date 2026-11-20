@@ -66,6 +66,7 @@ pub struct RequestMetrics {
     operation: Option<ShapeId>,
     operation_duration: Duration,
     concurrent_requests_count: usize,
+    request_id: Option<String>,
 }
 
 impl RequestMetrics {
@@ -121,6 +122,28 @@ impl RequestMetrics {
         // If a metrics publisher needs to include the current request, all they have to do is add
         // one to this count.
         self.concurrent_requests_count
+    }
+
+    /// The request's ID, if the service assigned one with [`ServerRequestIdProviderLayer`], which
+    /// requires the `request-id` feature.
+    ///
+    /// The ID is collected when the request is routed to an operation, so a request that was not
+    /// routed to an operation has none.
+    ///
+    #[cfg_attr(
+        feature = "request-id",
+        doc = "[`ServerRequestIdProviderLayer`]: crate::request::request_id::ServerRequestIdProviderLayer"
+    )]
+    #[cfg_attr(
+        not(feature = "request-id"),
+        doc = concat!(
+            "[`ServerRequestIdProviderLayer`]: https://docs.rs/aws-smithy-http-server/",
+            env!("CARGO_PKG_VERSION"),
+            "/aws_smithy_http_server/request/request_id/struct.ServerRequestIdProviderLayer.html",
+        ),
+    )]
+    pub fn request_id(&self) -> Option<&str> {
+        self.request_id.as_deref()
     }
 
     /// The [`ShapeId`] of the service that handled the request.

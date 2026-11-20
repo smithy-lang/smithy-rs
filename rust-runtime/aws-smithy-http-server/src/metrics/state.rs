@@ -95,6 +95,15 @@ impl MetricsState {
         OperationGuard { state: self.clone() }
     }
 
+    /// Records the request's [`ServerRequestId`](crate::request::request_id::ServerRequestId), if
+    /// metrics are enabled.
+    #[cfg(feature = "request-id")]
+    pub(crate) fn record_request_id(&self, request_id: &crate::request::request_id::ServerRequestId) {
+        if let Some(metrics) = &self.inner.metrics {
+            metrics.lock().unwrap_or_else(PoisonError::into_inner).request_id = Some(request_id.to_string());
+        }
+    }
+
     /// Records the operation the request was routed to, if metrics are enabled.
     pub(crate) fn record_operation(&self, operation: &ShapeId) {
         if let Some(metrics) = &self.inner.metrics {
@@ -160,12 +169,14 @@ struct InProgressMetrics {
     operation: Option<ShapeId>,
     operation_duration: OperationDuration,
     concurrent_requests_count: usize,
+    request_id: Option<String>,
 }
 
 impl InProgressMetrics {
     fn new(time_source: &SharedTimeSource, service: &ServiceIdentity, concurrent_requests_count: usize) -> Self {
         Self {
             concurrent_requests_count,
+            request_id: None,
             start_time: TimeAnchor {
                 instant: now(),
                 system_time: time_source.now(),
@@ -180,6 +191,7 @@ impl InProgressMetrics {
     fn finish(&self, end_time: Instant) -> RequestMetrics {
         RequestMetrics {
             concurrent_requests_count: self.concurrent_requests_count,
+            request_id: self.request_id.clone(),
             start_time: self.start_time,
             end_time,
             service: self.service.id.clone(),
