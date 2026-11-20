@@ -70,7 +70,7 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
 // `RELEASE_REFS` means anything; then this stack; then `smithy-rs-canary-stack` verified; then the
 // secrets. The roles are inert until the secrets exist and nothing pages until the alarm is armed,
 // so the two deploys are independent — what must not happen is paging secrets being set while the
-// SDK canary's role can still write this namespace. The pull-request CDN stack's identical trust
+// SDK canary's role can still write the build canary's namespace. The pull-request CDN stack's identical trust
 // change can go out whenever.
 new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
     githubActionsOidcProvider: githubActionsOidcProvider,

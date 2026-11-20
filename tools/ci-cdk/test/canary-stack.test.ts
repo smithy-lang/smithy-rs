@@ -49,10 +49,6 @@ function metricStatements(): Statement[] {
     );
 }
 
-/**
- * The allow has no namespace condition and every pull request's canary job assumes this role, so
- * without the deny any CI job here could trip the build canary's alarm.
- */
 test("this role may write only to its own namespace", () => {
     // The property, not a particular mechanism for it. `manual-canary.yml` hands this role's
     // credentials to a pull request's checked-out code, so what has to hold is that the code
@@ -73,7 +69,10 @@ test("this role may write only to its own namespace", () => {
     expect(allow[0].Condition?.StringEquals["cloudwatch:namespace"]).not.toBe(METRIC_NAMESPACE);
 });
 
-/** Equal namespaces would switch off this canary's own metrics, not weaken the build canary. */
+/**
+ * Equal namespaces would both switch off this canary's own metrics and let a pull request's code,
+ * which holds this role's credentials in `manual-canary.yml`, write the build canary's series.
+ */
 test("the two canaries must not share a namespace", () => {
     expect(METRIC_NAMESPACE).not.toEqual(SDK_CANARY_NAMESPACE);
 });

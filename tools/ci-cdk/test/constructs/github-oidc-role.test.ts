@@ -104,9 +104,8 @@ test("it should have an OIDC access role", () => {
 });
 
 test("it should authorise on the ids and never on the repository name", () => {
-    // A name-based condition is the thing this is replacing. `repository` changes on a rename, and
-    // the name it frees can be taken by another account, so it refuses the right caller and admits
-    // the wrong one.
+    // A condition on `repository` would change on a rename, and the name it frees can be taken by
+    // another account, so it would refuse the right caller and admit the wrong one.
     const condition = trustConditionFor(REPO) as {
         StringEquals: Record<string, string>;
     };

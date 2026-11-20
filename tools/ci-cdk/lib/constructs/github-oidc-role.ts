@@ -100,7 +100,7 @@ export interface Properties {
  * keys allow.
  *
  * A **transfer** is not covered: neither GitHub nor AWS documents whether a repository id survives
- * one, so a transfer may require this file to be updated.
+ * one, so the ids in `github-repositories.ts` have to be re-read after one.
  *
  * References: GitHub's OpenID Connect reference, "Immutable subject claims"; the IAM User Guide,
  * "Available keys for AWS OIDC federation", GitHub tab, "Use immutable identifiers, not names".
