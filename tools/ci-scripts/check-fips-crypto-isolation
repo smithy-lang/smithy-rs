@@ -49,13 +49,18 @@ FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 # The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is
 # a propagation failure.
 #
-# The same crate declared directly by a service crate is not a compliance finding. The only case
-# today is `aws-sdk-s3`, which HMACs the credential pair under a `fastrand` salt to key an
-# in-memory LRU of S3 Express session credentials; the code there is explicit that the salt need
-# not be cryptographically secure and that the point is to obfuscate a map key rather than to
-# protect anything. Nothing on a signing or checksum path, so routing it through AWS-LC would not
-# change what a FIPS build guarantees -- it is dependency hygiene, and reported as such below.
-# Tracked in smithy-rs#4909.
+# The same crate declared directly by a service crate is a weaker finding, and is reported as a
+# note rather than a failure. Of the crates sampled below that is `aws-sdk-s3`, which HMACs the
+# credential pair under a `fastrand` salt to key an in-memory LRU of S3 Express session
+# credentials; the code there is explicit that the salt need not be cryptographically secure and
+# that the point is to obfuscate a map key. Nothing on a signing or checksum path, so routing it
+# through AWS-LC would not change what a FIPS build guarantees. Tracked in smithy-rs#4909.
+#
+# Two direct declarations outside the sample are NOT benign, and this check does not see them:
+# `aws-sdk-s3control` computes `Content-MD5` with `md-5` on its `@httpChecksumRequired`
+# operations, and `aws-sdk-glacier` computes its SHA-256 tree hash with `ring` and installs it as
+# the SigV4 payload hash. Widening the loop to cover them needs a per-crate verdict first, since
+# the glacier one is on a signing path and the note below would misdescribe it.
 #
 # Distinguishing the two is the point of the reverse tree -- an allowlist of (service, crate) pairs
 # would pass a propagation regression that happened to land on an already-listed pair.
