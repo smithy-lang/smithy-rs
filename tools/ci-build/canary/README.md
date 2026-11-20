@@ -50,6 +50,28 @@ resolves three crates declared in `src/test_registry.rs` and assembled on disk a
 `local-registry`, instead of crates.io. Its five legs are excluded from `all` and dispatched by
 name, so the matrix can express 45 legs and a release runs 40.
 
+### Four scenarios are switched off, which is 20 legs
+
+`ssstar` and three `prior-aws-config-*` rows are commented out in the table. All four are red
+against the crates published today: the three `aws-config` rows fail `E0308` inside `aws-config`
+itself, on two majors of `aws-smithy-schema` in one graph, and `ssstar` fails on defects in its own
+source. Any hard verdict writes `Red {Tag}`, the series the release alarm watches, so these 20 legs
+would cut a ticket on **every release, forever**, about a break no release caused and whoever
+receives it cannot act on. An oncall who learns the canary's ticket is always the same ticket stops
+reading it, which costs more than 20 legs of coverage.
+
+They are commented rather than deleted because the break is real and each row is still the right
+row to be checking — withdrawing it stops the canary repeating itself, and fixes nothing. Each
+block carries its reason and its restore condition, and a test fails if an id is switched back on
+while it is still known-red.
+
+Worth separating from the stop rule below: the floor tier compares against the previous release, so
+a standing red leg does not cost the window its remaining hours. Paging is the reason these four are
+off. The cost is that `new-project` is now the only dependency scenario carrying the app body, so
+nine legs of the forty can reach a run-phase verdict.
+
+## How a leg runs
+
 Each leg renders a crate, resolves it against crates.io and builds it; the legs that can execute
 also run its assertions. The
 rendered manifests pin `edition = "2021"`, which pins the dependency resolver to v2. Resolver v3 is
