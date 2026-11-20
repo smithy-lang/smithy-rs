@@ -604,7 +604,9 @@ impl<'a> Inheritance<'a> {
             }
             if let Some(own) = local.get_mut(name) {
                 if own.target != mixin_member.target {
-                    self.diagnostics.push(member_conflict(own, mixin_member));
+                    let location = own.source.child("/target");
+                    self.diagnostics
+                        .push(member_conflict(own, location, mixin_member));
                 }
                 if !members.contains_key(name) {
                     // Moved, not copied; the stub left behind is skipped below.
@@ -618,8 +620,15 @@ impl<'a> Inheritance<'a> {
                     self.held.contains(&previous.id) || self.elided.contains_key(name);
                 if previous.target != mixin_member.target {
                     if has_own_traits {
+                        // A `$name` member is declared by the shape, so the reference
+                        // implementation reports the conflict where it is declared. A member with
+                        // only applied traits is a copy of the first mixin's member.
+                        let location = match self.elided.get(name) {
+                            Some(location) => location.clone(),
+                            None => previous.source.child("/target"),
+                        };
                         self.diagnostics
-                            .push(member_conflict(previous, mixin_member));
+                            .push(member_conflict(previous, location, mixin_member));
                         continue;
                     }
                     let error = self.error(
@@ -734,7 +743,11 @@ fn shape_traits(mixins: &[&Shape], own: TraitMap) -> TraitMap {
 }
 
 /// A member that keeps its target although a mixin member with its name has another one.
-fn member_conflict(own: &MemberShape, mixin_member: &MemberShape) -> Diagnostic {
+fn member_conflict(
+    own: &MemberShape,
+    location: SourceLocation,
+    mixin_member: &MemberShape,
+) -> Diagnostic {
     Diagnostic::error(
         DiagnosticCode::InvalidShape,
         format!(
@@ -743,7 +756,7 @@ fn member_conflict(own: &MemberShape, mixin_member: &MemberShape) -> Diagnostic 
         ),
     )
     .with_shape_id(own.id.clone())
-    .with_source_location(own.source.child("/target"))
+    .with_source_location(location)
 }
 
 /// Adds the traits that `mixin` passes on: all of them, except its `@mixin` trait and the

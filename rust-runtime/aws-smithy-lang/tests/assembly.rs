@@ -1069,6 +1069,33 @@ structure A with [M1, M2] {
 }
 
 #[test]
+fn elided_member_conflicts_are_located_at_the_member() {
+    // The reference implementation reports the conflict at `$x` (line 11, column 5).
+    let idl = r#"$version: "2"
+namespace ex
+
+@mixin
+structure M1 { x: String }
+
+@mixin
+structure M2 { x: Integer }
+
+structure S with [M1, M2] {
+    $x
+}
+"#;
+    let validated = Model::assembler().add_idl_str("a.smithy", idl).assemble();
+    let conflicts: Vec<_> = validated
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code() == DiagnosticCode::InvalidShape)
+        .collect();
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    let location = conflicts[0].source_location().expect("located");
+    assert_eq!((location.line(), location.column()), (Some(11), Some(5)));
+}
+
+#[test]
 fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
     let mixins = Model::from_json_str(
         "m.json",
