@@ -258,8 +258,6 @@ jobs:
             if d.get('target'):
                 at = f" at `{d['target_version']}`" if d.get('target_version') else ''
                 print(f"- cargo target: `{d['target']}`{at}")
-            # The versions, which is what a responder actually needs: a code and a message say
-            # what the compiler objected to, not which published pair produced it.
             # Stated as a fact about the graph, not as the cause. This list is every crate we
             # publish that resolved twice, computed from the lockfile with no link to the error,
             # so it names unrelated pairs as readily as the culprit. The rendered diagnostic below
@@ -301,11 +299,6 @@ jobs:
         echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
         echo "superseded=${SUPERSEDED}" >> "$GITHUB_OUTPUT"
 
-    # Only for a leg that reached a verdict. Without this the one artifact that says *what* broke is
-    # discarded with RUNNER_TEMP when the job ends: a page would name `COMPILE_FAIL` and an error
-    # code, and the exact set of published versions that produced it would be gone. Re-resolving
-    # later gives a different graph, because crates.io has moved on -- which is the whole reason a
-    # leg is a snapshot.
     # The join to the paging chain. A verdict becomes a datapoint here; everything before this point
     # writes to a job log, which pages nobody.
     #

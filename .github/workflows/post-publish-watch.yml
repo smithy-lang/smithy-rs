@@ -159,9 +159,9 @@ jobs:
         # reviewed edit rather than a secret rotation nobody sees.
         #
         # 3 cuts a ticket and pages nobody, which is the right first stage: a canary that pages on
-        # its own teething problems spends the oncall's trust before it has earned any. 2.5 pages
-        # during business hours and 2 is production; each step waits on the false-positive rate
-        # measured by the one before it. `paging-selftest.yml` tracks this value.
+        # its own teething problems spends the oncall's trust before it has earned any. Raising it
+        # is a reviewed edit once the measured false-positive rate justifies one.
+        # `paging-selftest.yml` pins the same value.
         SEVERITY=3
         ALARM="build-canary-${TAG}"
 
@@ -474,9 +474,8 @@ jobs:
     # platform's six-hour maximum.
     timeout-minutes: 75
     strategy:
-      # One at a time, which is what makes this 24 hourly cycles rather than 24 simultaneous ones.
-      # The hours are interchangeable -- each one sleeps and dispatches the same matrix -- so their
-      # order does not matter, only that one runs at a time.
+      # One at a time, which is what makes this 24 hourly cycles rather than 24 simultaneous
+      # ones. The hours are interchangeable, so only the one-at-a-time part matters.
       max-parallel: 1
       # An hour that fails for its own reasons must not cancel the rest: a runner that could not
       # reach GitHub for one dispatch says nothing about the next. Stopping early when the release

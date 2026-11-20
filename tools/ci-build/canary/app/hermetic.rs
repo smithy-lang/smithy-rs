@@ -374,13 +374,11 @@ async fn real_chain_reaches_links_two_four_and_five() {
 }
 
 // ---------------------------------------------------------------------------
-// Induced latency and loss. The loopback listener above drives the REAL default
-// hyper client (no `http_client` override), and a listener we own can be made
-// arbitrarily slow and can drop connections at will. These two checks do that.
+// Induced latency and loss. A listener we own can be made arbitrarily slow and
+// can drop connections at will.
 // ---------------------------------------------------------------------------
 
 /// A listener that sleeps `delay` before responding, then serves `200`.
-/// Returns the bound port.
 fn serve_slow(delay: Duration) -> (u16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
     let port = listener.local_addr().unwrap().port();
@@ -617,13 +615,9 @@ async fn presigned_url_is_structurally_fixed_and_byte_stable() {
         "signature is not lowercase hex: {sig}"
     );
 
-    // Golden value. Safe to commit because every input is version-independent:
-    // the full URI is
-    //   host canary-bucket.s3.us-east-1.amazonaws.com, path /canary-key,
-    //   x-id=GetObject, and the five SigV4 query params
-    // with no user-agent, SDK version or rustc version anywhere in the signed set
-    // (SignedHeaders is `host` alone, asserted above). So unlike a header-signed
-    // request, this does not drift on release.
+    // Golden value. Safe to commit because every signed input is fixed above:
+    // host canary-bucket.s3.us-east-1.amazonaws.com, path /canary-key,
+    // x-id=GetObject, and the five SigV4 query params.
     //
     // If this ever fails, it is a REAL change to the URL a customer receives --
     // canonicalization, the query set, or the signing math. Investigate before

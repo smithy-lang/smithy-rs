@@ -16,9 +16,8 @@
 #   fire    write one datapoint. The first fire should cut a ticket; a second fire with the same
 #           session should append to it rather than cut another.
 #   status  the alarm's current state and when it last changed, to watch it age back to OK.
-#   disarm  delete the alarm. Deleting is routine rather than exceptional -- every release deletes
-#           the previous release's alarm while a ticket may still be open against it -- so whether
-#           that releases the ticketing system's hold has to be known.
+#   disarm  delete the alarm, then re-read the ticket. Every release deletes the previous
+#           release's alarm while a ticket may still be open against it.
 #
 # SEVERITY 3, and not a parameter. It tracks the release alarm, which starts at 3 too.
 #
@@ -27,9 +26,8 @@
 # release. Whether the notification half then reaches a human is a property of the severity, not of
 # this chain, and it is answered by raising the severity rather than by running this again.
 #
-# High-severity ticketing has to be enabled for the application cutting the ticket, which is
-# unverified -- so the first `fire` may be rejected rather than delivered. That is a finding, not a
-# fault in this workflow.
+# The ticketing endpoint may refuse the first `fire` if it is not set up to accept one. That is a
+# finding, not a fault in this workflow.
 name: Paging self-test
 run-name: Paging self-test - ${{ inputs.action }} - ${{ inputs.session }}
 on:
@@ -254,12 +252,11 @@ jobs:
           echo "The alarm has a 60-second period, so allow a couple of minutes."
           echo ""
           echo "Check, in order:"
-          echo "1. A ticket was cut, with dedupe key \`${ALARM}\`, into the intended category and"
-          echo "   resolver group."
+          echo "1. A ticket was cut, with dedupe key \`${ALARM}\`, and reached the intended"
+          echo "   destination."
           echo "2. Fire again with the **same** session. The second datapoint must append to that"
           echo "   ticket rather than cut a second one, and the appended event must be *readable*"
-          echo "   on the ticket. If it appears only as a link, the chat filter needs widening to"
-          echo "   include modifications, not just creations."
+          echo "   on the ticket rather than appearing only as a link."
           echo "3. Then stop firing and run \`status\` until the alarm returns to OK, which is what"
           echo "   lets the ticket be closed rather than waiting for the next release."
         } >> "$GITHUB_STEP_SUMMARY"

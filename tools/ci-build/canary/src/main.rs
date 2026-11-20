@@ -114,9 +114,8 @@ enum Command {
         lockfile: PathBuf,
         /// The directory holding the baselines, one subdirectory per manifest.
         ///
-        /// A baseline never outlives the release it was taken during, so this is `RUNNER_TEMP` in
-        /// CI. Wrapping it in `actions/cache` buys survival across a re-run and changes nothing
-        /// here.
+        /// A baseline never outlives the release it was taken during, so this is `RUNNER_TEMP`
+        /// in CI.
         #[arg(long)]
         store_dir: PathBuf,
         /// Make the fresh graph the new baseline.

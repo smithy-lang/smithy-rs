@@ -183,9 +183,7 @@ pub fn status(declared: &[RuntimeCrate], index: &dyn PublishedIndex) -> anyhow::
         match index.versions(&want.name)?.get(&want.version) {
             None => outstanding.push(want.clone()),
             Some(&is_yanked) => {
-                // Present, so publishing happened and it is not outstanding. A yank is still worth
-                // naming: a consumer cannot resolve a yanked version, so the legs will go red and
-                // whoever reads the page needs to know the cause was a yank, not a code break.
+                // Present, so publishing happened: not outstanding. See [`Status::yanked`].
                 if is_yanked {
                     yanked.push(want.clone());
                 }
@@ -488,9 +486,8 @@ mod tests {
         );
     }
 
-    /// Exact membership, not "crates.io is at least as new as us". September 2026 republished
-    /// `aws-smithy-types` *downwards* after a yank, 1.7.0 to 1.6.4, so a greater-or-equal test
-    /// would have called 1.6.4 arrived while crates.io still only had the yanked 1.7.0.
+    /// The downward republish from the module docs, pinned: a greater-or-equal test would have
+    /// called 1.6.4 arrived.
     #[test]
     fn a_version_published_downwards_is_not_mistaken_for_arrived() {
         let declared = vec![want("aws-smithy-types", "1.6.4")];

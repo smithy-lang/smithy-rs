@@ -379,10 +379,8 @@ mod tests {
         assert!(r.files[Path::new("src/main.rs")].contains("Document::Object"));
     }
 
-    /// platform_tls compiles but must never run: it needs network egress, and a transient TLS
-    /// failure would be classified RUNTIME_FAIL — a hard verdict blaming the graph for a blip.
-    /// The one test that needs network egress must stay `#[ignore]`d, or a transient TLS failure
-    /// becomes a `RUNTIME_FAIL` — a hard verdict blaming the published graph for a blip.
+    /// `platform_tls` must stay `#[ignore]`d: it needs network egress, and a transient TLS failure
+    /// would be classified `RUNTIME_FAIL` — a hard verdict blaming the published graph for a blip.
     #[test]
     fn the_network_touching_test_is_ignore_gated() {
         let r = render_named("new-project--stable");

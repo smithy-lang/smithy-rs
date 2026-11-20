@@ -233,8 +233,6 @@ mod tests {
         }
     }
 
-    /// The state measured on 2026-11: stable 1.99.1 against a declared 1.94.1. All five survive,
-    /// with `stable-4` at 1.95 one release above the floor.
     #[test]
     fn today_all_five_survive_with_one_release_of_margin() {
         let c = resolve(v(1, 99, 1), v(1, 94, 1)).unwrap();
