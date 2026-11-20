@@ -82,7 +82,7 @@ class ServerServiceGenerator(
     /** Wraps the service expression `expr` in `MetricsService` if the service supports standard metrics. */
     private fun intoMetricsService(expr: String) =
         if (supportsStandardMetrics) {
-            "#{SmithyHttpServer}::metrics::MetricsService::new($expr, self.standard_metrics_enabled)"
+            "#{SmithyHttpServer}::metrics::MetricsService::new::<$serviceName>($expr, self.standard_metrics_enabled)"
         } else {
             expr
         }
@@ -989,7 +989,7 @@ class ServerServiceGenerator(
                     let svc = #{SmithyHttpServer}::schema::routing::MultiProtocolRoutingServiceBuilder::from_operation_handler_bindings_with_options(
                         schema, #{Registries}, [#{Handlers}], self.routing_options,
                     ).layer(self.layer).build().map_err(BuildError::Routing)?;
-                    let svc = #{SmithyHttpServer}::metrics::MetricsService::new(svc, self.standard_metrics_enabled);
+                    let svc = #{SmithyHttpServer}::metrics::MetricsService::new::<$serviceName>(svc, self.standard_metrics_enabled);
                     #{Ok}($serviceName { svc })
                 }
                 """,

@@ -12,10 +12,29 @@ use std::{
 
 use aws_smithy_async::time::SharedTimeSource;
 
+use crate::{service::ServiceShape, shape_id::ShapeId};
+
 use super::RequestMetrics;
 
 /// A callback invoked once the request is finished.
 pub(crate) type FinishCallback = Box<dyn FnOnce(Option<RequestMetrics>) + Send>;
+
+/// Facts about the service that are the same for every request.
+#[derive(Debug, Clone)]
+pub(crate) struct ServiceIdentity {
+    id: ShapeId,
+    version: Option<&'static str>,
+}
+
+impl ServiceIdentity {
+    pub(crate) fn of<Ser: ServiceShape>() -> Self {
+        Self {
+            id: Ser::ID,
+            // Generated services report an empty string for models that do not specify one.
+            version: Ser::VERSION.filter(|version| !version.is_empty()),
+        }
+    }
+}
 
 /// Per-request metrics state, shared by every component handling the request.
 ///
@@ -36,10 +55,10 @@ struct Inner {
 
 impl MetricsState {
     /// The wall clock is read from `time_source`, only if `enabled`.
-    pub(crate) fn new(enabled: bool, time_source: &SharedTimeSource) -> Self {
+    pub(crate) fn new(enabled: bool, time_source: &SharedTimeSource, service: &ServiceIdentity) -> Self {
         Self {
             inner: Arc::new(Inner {
-                metrics: enabled.then(|| Mutex::new(InProgressMetrics::new(time_source))),
+                metrics: enabled.then(|| Mutex::new(InProgressMetrics::new(time_source, service))),
                 callbacks: Mutex::new(Vec::new()),
             }),
         }
@@ -86,13 +105,15 @@ fn now() -> Instant {
 struct InProgressMetrics {
     start_time: Instant,
     start_system_time: SystemTime,
+    service: ServiceIdentity,
 }
 
 impl InProgressMetrics {
-    fn new(time_source: &SharedTimeSource) -> Self {
+    fn new(time_source: &SharedTimeSource, service: &ServiceIdentity) -> Self {
         Self {
             start_time: now(),
             start_system_time: time_source.now(),
+            service: service.clone(),
         }
     }
 
@@ -101,6 +122,8 @@ impl InProgressMetrics {
             start_time: self.start_time,
             end_time,
             start_system_time: self.start_system_time,
+            service: self.service.id.clone(),
+            service_version: self.service.version,
         }
     }
 }
@@ -125,5 +148,18 @@ impl Finisher {
 impl Drop for Finisher {
     fn drop(&mut self) {
         self.finish();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::metrics::test_util::{TestService, UnversionedTestService};
+
+    #[test]
+    fn empty_service_version_is_none() {
+        assert_eq!(ServiceIdentity::of::<TestService>().version, Some("2026-11-12"));
+        assert_eq!(ServiceIdentity::of::<UnversionedTestService>().version, None);
     }
 }

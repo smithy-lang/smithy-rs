@@ -9,19 +9,19 @@ use std::{
     task::{ready, Context, Poll},
 };
 
+use aws_smithy_async::time::SharedTimeSource;
 use bytes::Bytes;
 use tower::Service;
-
-use aws_smithy_async::time::SharedTimeSource;
 
 use crate::{
     body::{boxed, BoxBody},
     error::BoxError,
+    service::ServiceShape,
 };
 
 use super::{
     body::MetricsFinalizingBody,
-    state::{Finisher, MetricsState},
+    state::{Finisher, MetricsState, ServiceIdentity},
 };
 
 /// A [`Service`] that sets up per-request state for collecting standard server metrics, and
@@ -33,15 +33,18 @@ pub struct MetricsService<S> {
     inner: S,
     enabled: bool,
     time_source: SharedTimeSource,
+    service: ServiceIdentity,
 }
 
 impl<S> MetricsService<S> {
-    /// Wraps `inner`. Standard metrics are collected only if `enabled` is `true`.
-    pub fn new(inner: S, enabled: bool) -> Self {
+    /// Wraps `inner`, the routing service of the service `Ser`. Standard metrics are collected
+    /// only if `enabled` is `true`.
+    pub fn new<Ser: ServiceShape>(inner: S, enabled: bool) -> Self {
         Self {
             inner,
             enabled,
             time_source: SharedTimeSource::default(),
+            service: ServiceIdentity::of::<Ser>(),
         }
     }
 
@@ -51,6 +54,7 @@ impl<S> MetricsService<S> {
             inner: f(self.inner),
             enabled: self.enabled,
             time_source: self.time_source,
+            service: self.service,
         }
     }
 }
@@ -70,7 +74,7 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
-        let state = MetricsState::new(self.enabled, &self.time_source);
+        let state = MetricsState::new(self.enabled, &self.time_source, &self.service);
         req.extensions_mut().insert(state.clone());
         MetricsServiceFuture {
             inner: self.inner.call(req),
@@ -114,13 +118,12 @@ mod tests {
     };
 
     use aws_smithy_async::time::StaticTimeSource;
-
     use bytes::Bytes;
     use http_body::Frame;
     use http_body_util::{BodyExt, Full};
     use tower::{service_fn, Service, ServiceExt};
 
-    use crate::metrics::RequestExt;
+    use crate::metrics::{test_util::TestService, RequestExt};
 
     use super::*;
 
@@ -156,7 +159,7 @@ mod tests {
     #[tokio::test]
     async fn callbacks_run_in_order_once_body_is_fully_sent() {
         let log = Log::default();
-        let svc = MetricsService::new(service(&log, 3, ok), true);
+        let svc = MetricsService::new::<TestService>(service(&log, 3, ok), true);
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         assert_eq!(logged(&log), [], "the body has not been sent yet");
 
@@ -175,7 +178,7 @@ mod tests {
     #[tokio::test]
     async fn callbacks_receive_none_when_disabled() {
         let log = Log::default();
-        let svc = MetricsService::new(service(&log, 2, ok), false);
+        let svc = MetricsService::new::<TestService>(service(&log, 2, ok), false);
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         response.into_body().collect().await.unwrap();
         assert_eq!(logged(&log), [(0, false), (1, false)]);
@@ -184,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn callbacks_run_when_body_is_dropped_unsent() {
         let log = Log::default();
-        let svc = MetricsService::new(service(&log, 1, ok), true);
+        let svc = MetricsService::new::<TestService>(service(&log, 1, ok), true);
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         drop(response);
         assert_eq!(logged(&log), [(0, true)]);
@@ -206,7 +209,7 @@ mod tests {
 
         let log = Log::default();
         let failing = || Ok::<_, Infallible>(http::Response::new(FailingBody));
-        let svc = MetricsService::new(service(&log, 1, failing), true);
+        let svc = MetricsService::new::<TestService>(service(&log, 1, failing), true);
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         let mut body = response.into_body();
         assert!(body.frame().await.unwrap().is_err());
@@ -217,7 +220,7 @@ mod tests {
     async fn callbacks_run_when_inner_service_fails() {
         let log = Log::default();
         let failing = || Err::<http::Response<Full<Bytes>>, _>("failed");
-        let svc = MetricsService::new(service(&log, 1, failing), true);
+        let svc = MetricsService::new::<TestService>(service(&log, 1, failing), true);
         assert!(svc.oneshot(http::Request::new(())).await.is_err());
         assert_eq!(logged(&log), [(0, true)]);
     }
@@ -233,7 +236,7 @@ mod tests {
                 std::future::pending::<Result<http::Response<Full<Bytes>>, Infallible>>()
             })
         };
-        let mut svc = MetricsService::new(registered, true);
+        let mut svc = MetricsService::new::<TestService>(registered, true);
         let future = svc.ready().await.unwrap().call(http::Request::new(()));
         assert_eq!(logged(&log), []);
         drop(future);
@@ -252,7 +255,7 @@ mod tests {
                 async { ok() }
             })
         };
-        let svc = MetricsService::new(inner, true);
+        let svc = MetricsService::new::<TestService>(inner, true);
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
         response.into_body().collect().await.unwrap();
         assert_eq!(logged(&log), [(1, true)]);
@@ -276,7 +279,7 @@ mod tests {
                 }
             })
         };
-        let mut svc = MetricsService::new(inner, true);
+        let mut svc = MetricsService::new::<TestService>(inner, true);
         // The wall clock does not advance with tokio's paused clock, as it would not with a real clock either.
         svc.time_source = StaticTimeSource::new(START_SYSTEM_TIME).into();
         let response = svc.oneshot(http::Request::new(())).await.unwrap();
@@ -294,9 +297,32 @@ mod tests {
         assert_eq!(start_system_time, START_SYSTEM_TIME);
     }
 
+    #[tokio::test]
+    async fn metrics_identify_the_service() {
+        let seen = Arc::new(Mutex::new(None));
+        let inner = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { ok() }
+            })
+        };
+        let response = MetricsService::new::<TestService>(inner, true)
+            .oneshot(http::Request::new(()))
+            .await
+            .unwrap();
+        drop(response);
+
+        let metrics = seen.lock().unwrap().take().expect("callback received metrics");
+        assert_eq!(metrics.service(), &TestService::ID);
+        assert_eq!(metrics.service().name(), "TestService");
+        assert_eq!(metrics.service_version(), Some("2026-11-12"));
+    }
+
     #[test]
     fn map_preserves_enablement() {
-        assert!(MetricsService::new((), true).map(|()| 0).enabled);
-        assert!(!MetricsService::new((), false).map(|()| 0).enabled);
+        assert!(MetricsService::new::<TestService>((), true).map(|()| 0).enabled);
+        assert!(!MetricsService::new::<TestService>((), false).map(|()| 0).enabled);
     }
 }
