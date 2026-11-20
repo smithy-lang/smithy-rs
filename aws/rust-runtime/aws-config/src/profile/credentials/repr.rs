@@ -111,7 +111,7 @@ pub(crate) enum BaseProvider<'a> {
     /// A profile that gets its credentials from a credential daemon
     /// ```ini
     /// [profile dev]
-    /// daemon_credential = dev
+    /// credential_daemon = dev
     /// ```
     CredentialDaemon {
         profile: &'a str,
@@ -279,7 +279,7 @@ mod login_session {
 }
 
 mod credential_daemon {
-    pub(super) const DAEMON_CREDENTIAL: &str = "daemon_credential";
+    pub(super) const CREDENTIAL_DAEMON: &str = "credential_daemon";
 }
 
 const PROVIDER_NAME: &str = "ProfileFile";
@@ -443,17 +443,17 @@ fn invalid_sso_creds(profile: &Profile, left: &str, right: &str) -> ProfileFileE
 /// Example:
 /// ```ini
 /// [profile dev]
-/// daemon_credential = dev
+/// credential_daemon = dev
 /// ```
 ///
 /// Returns `Ok(None)` when the profile does not use a credential daemon. A profile that sets
-/// `daemon_credential` but is otherwise not valid gives a
+/// `credential_daemon` but is otherwise not valid gives a
 /// [`BaseProvider::CredentialDaemonFailClosed`], so that it never falls back to another source.
 fn credential_daemon_from_profile<'a>(
     profile_set: &'a ProfileSet,
     profile: &'a Profile,
 ) -> Result<Option<BaseProvider<'a>>, ProfileFileError> {
-    let Some(credential) = profile.get(credential_daemon::DAEMON_CREDENTIAL) else {
+    let Some(credential) = profile.get(credential_daemon::CREDENTIAL_DAEMON) else {
         return Ok(None);
     };
     let has_sso = profile.get(sso::SESSION_NAME).is_some() || profile.get(sso::START_URL).is_some();
@@ -463,7 +463,7 @@ fn credential_daemon_from_profile<'a>(
         profile.get(sso::ROLE_NAME),
     ) {
         (false, _, _) => None,
-        // An SSO profile without a role resolves as if `daemon_credential` were absent
+        // An SSO profile without a role resolves as if `credential_daemon` were absent
         (true, None, None) => return Ok(None),
         (true, Some(account_id), Some(role_name)) => Some((account_id, role_name)),
         // Exactly one of the two keys is set: return the error of the SSO provider
@@ -482,7 +482,7 @@ fn credential_daemon_from_profile<'a>(
     if profile.get(web_identity_token::TOKEN_FILE).is_some() {
         return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
             CredentialDaemonError::invalid_config(format!(
-                "profile `{profile_name}` has two credential sources, `daemon_credential` and \
+                "profile `{profile_name}` has two credential sources, `credential_daemon` and \
                  `{}`. Remove one of them.",
                 web_identity_token::TOKEN_FILE
             )),
@@ -492,7 +492,7 @@ fn credential_daemon_from_profile<'a>(
         let key = role::ROLE_ARN;
         return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
             CredentialDaemonError::invalid_config(format!(
-                "profile `{profile_name}` sets `daemon_credential` together with `{key}`; \
+                "profile `{profile_name}` sets `credential_daemon` together with `{key}`; \
                  a credential daemon profile cannot also assume a role. Put `{key}` in a \
                  separate profile with `source_profile = {profile_name}`."
             )),
@@ -501,7 +501,7 @@ fn credential_daemon_from_profile<'a>(
     if !validate_credential_name(credential) {
         return Ok(Some(BaseProvider::CredentialDaemonFailClosed(
             CredentialDaemonError::invalid_config(format!(
-                "profile `{profile_name}` has an invalid `daemon_credential`. A credential \
+                "profile `{profile_name}` has an invalid `credential_daemon`. A credential \
                  daemon credential name is 1 to 64 characters from `A-Z`, `a-z`, `0-9`, `.`, \
                  `_` and `-`, and does not start with `.`."
             )),

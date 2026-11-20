@@ -428,7 +428,7 @@ mod test {
             ]))
             .with_fs(Fs::from_slice(&[(
                 "/config",
-                "[profile dev]\ndaemon_credential = dev\n",
+                "[profile dev]\ncredential_daemon = dev\n",
             )]))
             .with_http_client(no_traffic_client())
             .with_sleep_impl(TokioSleep::new());

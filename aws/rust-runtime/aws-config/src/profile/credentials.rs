@@ -149,10 +149,10 @@ pub(crate) mod repr;
 ///
 /// ```ini
 /// [profile dev]
-/// daemon_credential = dev
+/// credential_daemon = dev
 /// ```
 ///
-/// `daemon_credential` is only read from the config file, not from the credentials file. A
+/// `credential_daemon` is only read from the config file, not from the credentials file. A
 /// profile that sets it gets its credentials only from the credential daemon, ahead of every
 /// other setting of the profile, and never falls back to another source. It can not also set
 /// `role_arn` or `web_identity_token_file`: to assume a role, use a separate profile with
@@ -1157,10 +1157,10 @@ mod credential_daemon_tests {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     use tokio::net::UnixListener;
 
-    // The reproducer scenario: a config file profile with `daemon_credential`, and
+    // The reproducer scenario: a config file profile with `credential_daemon`, and
     // `AWS_CREDENTIAL_DAEMON_SOCKET` pointing at a fake credential daemon.
     #[tokio::test]
-    async fn daemon_credential_profile_loads_from_credential_daemon() {
+    async fn credential_daemon_profile_loads_from_credential_daemon() {
         let dir = std::env::temp_dir().join(format!("cd-profile-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1191,7 +1191,7 @@ mod credential_daemon_tests {
         let profile_files = EnvConfigFiles::builder()
             .with_contents(
                 EnvConfigFileKind::Config,
-                "[profile dev]\ndaemon_credential = dev\n",
+                "[profile dev]\ncredential_daemon = dev\n",
             )
             .build();
         let provider = Builder::default()
@@ -1260,14 +1260,14 @@ mod credential_daemon_tests {
         use crate::credential_daemon::CredentialDaemonErrorCode::InvalidConfig;
         // an invalid name, and static keys that must not be used instead
         let provider = daemon_provider(
-            "[profile dev]\ndaemon_credential = a/b\naws_access_key_id = AKID\naws_secret_access_key = secret\n",
+            "[profile dev]\ncredential_daemon = a/b\naws_access_key_id = AKID\naws_secret_access_key = secret\n",
             "/nonexistent/daemon.sock",
         );
         assert_fails_closed(&provider, InvalidConfig).await;
 
         // `role_arn` in the credential daemon profile
         let provider = daemon_provider(
-            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\nsource_profile = base\n\
+            "[profile dev]\ncredential_daemon = dev\nrole_arn = arn:aws:iam::123456789012:role/R\nsource_profile = base\n\
              [profile base]\naws_access_key_id = AKID\naws_secret_access_key = secret\n",
             "/nonexistent/daemon.sock",
         );
@@ -1277,7 +1277,7 @@ mod credential_daemon_tests {
         // before any STS call (the HTTP client allows no traffic)
         let provider = daemon_provider(
             "[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/R\nsource_profile = base\n\
-             [profile base]\ndaemon_credential = .base\n",
+             [profile base]\ncredential_daemon = .base\n",
             "/nonexistent/daemon.sock",
         );
         assert_fails_closed(&provider, InvalidConfig).await;
@@ -1311,14 +1311,14 @@ mod credential_daemon_tests {
             }
         };
         for config in [
-            "[profile dev]\ndaemon_credential = dev\nweb_identity_token_file = /token.jwt\n",
-            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n\
+            "[profile dev]\ncredential_daemon = dev\nweb_identity_token_file = /token.jwt\n",
+            "[profile dev]\ncredential_daemon = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n\
              web_identity_token_file = /token.jwt\n",
         ] {
             let message = message(config).await;
             assert!(
                 message.contains(
-                    "profile `dev` has two credential sources, `daemon_credential` and \
+                    "profile `dev` has two credential sources, `credential_daemon` and \
                      `web_identity_token_file`. Remove one of them."
                 ),
                 "{config}: {message}"
@@ -1328,7 +1328,7 @@ mod credential_daemon_tests {
 
         // `role_arn` without `web_identity_token_file` keeps the `source_profile` advice
         let message = message(
-            "[profile dev]\ndaemon_credential = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n",
+            "[profile dev]\ncredential_daemon = dev\nrole_arn = arn:aws:iam::123456789012:role/R\n",
         )
         .await;
         assert!(
@@ -1354,7 +1354,7 @@ mod credential_daemon_tests {
         listener.set_nonblocking(true).unwrap();
 
         let provider = daemon_provider(
-            "[profile dev]\ndaemon_credential = dev\nsso_session = s\nsso_account_id = 0123\n\
+            "[profile dev]\ncredential_daemon = dev\nsso_session = s\nsso_account_id = 0123\n\
              [sso-session s]\nsso_region = us-east-1\nsso_start_url = https://example.com/start\n",
             socket.to_str().unwrap(),
         );
@@ -1397,7 +1397,7 @@ mod credential_daemon_unsupported_tests {
         let profile_files = EnvConfigFiles::builder()
             .with_contents(
                 EnvConfigFileKind::Config,
-                "[profile dev]\ndaemon_credential = dev\n",
+                "[profile dev]\ncredential_daemon = dev\n",
             )
             .build();
         let provider = Builder::default()
