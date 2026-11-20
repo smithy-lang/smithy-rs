@@ -8,7 +8,7 @@ use std::{
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Mutex, PoisonError,
+        Arc, Mutex, OnceLock, PoisonError,
     },
     time::{Duration, Instant},
 };
@@ -39,37 +39,121 @@ impl ServiceIdentity {
     }
 }
 
+/// Invokes `callbacks` in order, each with a clone of `metrics`.
+///
+/// A panicking callback is logged and does not prevent the remaining callbacks from running.
+fn run_callbacks(callbacks: Vec<FinishCallback>, metrics: Option<RequestMetrics>) {
+    for callback in callbacks {
+        let metrics = metrics.clone();
+        if catch_unwind(AssertUnwindSafe(|| callback(metrics))).is_err() {
+            tracing::error!("an `on_finish` callback panicked");
+        }
+    }
+}
+
 /// Per-request metrics state, shared by every component handling the request.
 ///
-/// `MetricsService` stores this in the request extensions. Components that need the state after
-/// passing the request inward must clone it out of the extensions first. Clones share the same
-/// state.
+/// Stored in the request extensions, either by `MetricsService`, or by `RequestExt::on_finish` if
+/// a callback is registered before the request reaches a `MetricsService`. A state created by
+/// `on_finish` is uninitialized until a `MetricsService` takes it over. Components that need the
+/// state after passing the request inward must clone it out of the extensions first. Clones share
+/// the same state, as do copies of the request's extensions.
 #[derive(Clone)]
 pub(crate) struct MetricsState {
     inner: Arc<Inner>,
 }
 
 struct Inner {
-    // Put the Option outside the Mutex, so we can see None without locking.
-    metrics: Option<Mutex<InProgressMetrics>>,
+    /// Set once, by the `MetricsService` that takes the request over: `None` if standard metrics
+    /// are disabled. Put the Option outside the Mutex, so we can see None without locking.
+    metrics: OnceLock<Option<Mutex<InProgressMetrics>>>,
     /// Registered by `RequestExt::on_finish`, in order of registration.
     callbacks: Mutex<Vec<FinishCallback>>,
 }
 
+impl Inner {
+    /// The metrics being collected, if the state is initialized and metrics are enabled.
+    fn metrics(&self) -> Option<&Mutex<InProgressMetrics>> {
+        self.metrics.get().and_then(Option::as_ref)
+    }
+}
+
+impl Drop for Inner {
+    /// Invokes, with `None`, callbacks that the request never finished for: those registered on a
+    /// state no `MetricsService` took over, or after the request finished.
+    fn drop(&mut self) {
+        let callbacks = mem::take(self.callbacks.get_mut().unwrap_or_else(PoisonError::into_inner));
+        run_callbacks(callbacks, None);
+    }
+}
+
+/// The metrics a `MetricsService` collects for a request it takes over: `None` if disabled.
+type Initial = Option<Mutex<InProgressMetrics>>;
+
 impl MetricsState {
-    /// The wall clock is read from `time_source`, only if `enabled`.
-    ///
-    /// `concurrent_requests_count` is the number of other requests in progress when this one started.
+    /// A provisional state that a `MetricsService` has not yet taken over. Until then, its only
+    /// purpose is to store callbacks.
+    pub(crate) fn uninitialized() -> Self {
+        Self {
+            inner: Arc::new(Inner {
+                metrics: OnceLock::new(),
+                callbacks: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// An initialized state, as a `MetricsService` would create. See [`Self::take_over`].
+    #[cfg(test)]
     pub(crate) fn new(
         enabled: bool,
         time_source: &SharedTimeSource,
         service: &ServiceIdentity,
         concurrent_requests_count: usize,
     ) -> Self {
+        Self::initialized(Self::initial(enabled, time_source, service, concurrent_requests_count))
+    }
+
+    /// Takes over `request` for a `MetricsService` starting to handle it, and returns its state.
+    ///
+    /// If the request carries an uninitialized `MetricsState`, that state is initialized, keeping
+    /// the callbacks already registered on it. Otherwise, a new state is initialized and stored in
+    /// the request extensions, overwriting any `MetricsState` already stored. (The request might
+    /// already carry an initialized `MetricsState` in the presence of middleware that does unusual
+    /// things like cloning requests or passing a request object from one Smithy service to another
+    /// Smithy service within the same process.)
+    pub(crate) fn take_over<B>(
+        request: &mut http::Request<B>,
+        enabled: bool,
+        time_source: &SharedTimeSource,
+        service: &ServiceIdentity,
+        concurrent_requests_count: usize,
+    ) -> Self {
+        let initial = Self::initial(enabled, time_source, service, concurrent_requests_count);
+        let initial = match request.extensions().get::<MetricsState>() {
+            Some(carried) => match carried.inner.metrics.set(initial) {
+                Ok(()) => return carried.clone(),
+                Err(initial) => initial,
+            },
+            None => initial,
+        };
+        let state = Self::initialized(initial);
+        request.extensions_mut().insert(state.clone());
+        state
+    }
+
+    fn initial(
+        enabled: bool,
+        time_source: &SharedTimeSource,
+        service: &ServiceIdentity,
+        concurrent_requests_count: usize,
+    ) -> Initial {
+        enabled.then(|| Mutex::new(InProgressMetrics::new(time_source, service, concurrent_requests_count)))
+    }
+
+    fn initialized(initial: Initial) -> Self {
         Self {
             inner: Arc::new(Inner {
-                metrics: enabled
-                    .then(|| Mutex::new(InProgressMetrics::new(time_source, service, concurrent_requests_count))),
+                metrics: OnceLock::from(initial),
                 callbacks: Mutex::new(Vec::new()),
             }),
         }
@@ -77,14 +161,14 @@ impl MetricsState {
 
     /// Records how the request turned out, if metrics are enabled. Replaces any earlier outcome.
     pub(crate) fn record_outcome(&self, outcome: Outcome) {
-        if let Some(metrics) = &self.inner.metrics {
+        if let Some(metrics) = self.inner.metrics() {
             metrics.lock().unwrap_or_else(PoisonError::into_inner).outcome = Some(outcome);
         }
     }
 
     /// Records the response's status code and outcome, if metrics are enabled.
     pub(crate) fn record_response(&self, status_code: http::StatusCode, outcome: Outcome) {
-        if let Some(metrics) = &self.inner.metrics {
+        if let Some(metrics) = self.inner.metrics() {
             let mut metrics = metrics.lock().unwrap_or_else(PoisonError::into_inner);
             metrics.status_code = Some(status_code);
             metrics.outcome = Some(outcome);
@@ -94,7 +178,7 @@ impl MetricsState {
     /// Records that an execution of the operation's handler (and its model plugins) began. The
     /// execution ends when the returned guard is dropped.
     pub(crate) fn start_operation(&self) -> OperationGuard {
-        if let Some(metrics) = &self.inner.metrics {
+        if let Some(metrics) = self.inner.metrics() {
             metrics
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -108,20 +192,20 @@ impl MetricsState {
     /// metrics are enabled.
     #[cfg(feature = "request-id")]
     pub(crate) fn record_request_id(&self, request_id: &crate::request::request_id::ServerRequestId) {
-        if let Some(metrics) = &self.inner.metrics {
+        if let Some(metrics) = self.inner.metrics() {
             metrics.lock().unwrap_or_else(PoisonError::into_inner).request_id = Some(request_id.clone());
         }
     }
 
     /// Records the operation the request was routed to, if metrics are enabled.
     pub(crate) fn record_operation(&self, operation: &ShapeId) {
-        if let Some(metrics) = &self.inner.metrics {
+        if let Some(metrics) = self.inner.metrics() {
             metrics.lock().unwrap_or_else(PoisonError::into_inner).operation = Some(operation.clone());
         }
     }
 
     fn is_enabled(&self) -> bool {
-        self.inner.metrics.is_some()
+        self.inner.metrics().is_some()
     }
 
     pub(crate) fn push_callback(&self, callback: FinishCallback) {
@@ -139,15 +223,9 @@ impl MetricsState {
         let end_time = now();
         // Neither lock is held while taking the other, or while running callbacks.
         let callbacks = mem::take(&mut *(self.inner.callbacks).lock().unwrap_or_else(PoisonError::into_inner));
-        let metrics = (self.inner.metrics)
-            .as_ref()
+        let metrics = (self.inner.metrics())
             .map(|metrics| metrics.lock().unwrap_or_else(PoisonError::into_inner).finish(end_time));
-        for callback in callbacks {
-            let metrics = metrics.clone();
-            if catch_unwind(AssertUnwindSafe(|| callback(metrics))).is_err() {
-                tracing::error!("an `on_finish` callback panicked");
-            }
-        }
+        run_callbacks(callbacks, metrics);
     }
 
     #[cfg(test)]
@@ -251,7 +329,7 @@ pub(crate) struct OperationGuard {
 
 impl Drop for OperationGuard {
     fn drop(&mut self) {
-        if let Some(metrics) = &self.state.inner.metrics {
+        if let Some(metrics) = self.state.inner.metrics() {
             metrics
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -431,6 +509,58 @@ mod tests {
 
     fn enabled_state() -> MetricsState {
         MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>(), 0)
+    }
+
+    #[test]
+    fn callbacks_registered_after_the_request_finishes_receive_none_when_the_state_is_dropped() {
+        let state = enabled_state();
+        state.finish();
+        let received = Arc::new(Mutex::new(Vec::new()));
+        state.push_callback(Box::new({
+            let received = received.clone();
+            move |metrics| received.lock().unwrap().push(metrics.is_some())
+        }));
+        assert!(
+            received.lock().unwrap().is_empty(),
+            "the state still holds the callback"
+        );
+        drop(state);
+        assert_eq!(*received.lock().unwrap(), [false]);
+    }
+
+    #[test]
+    fn taking_over_initializes_a_carried_uninitialized_state() {
+        let carried = MetricsState::uninitialized();
+        assert!(!carried.is_enabled());
+        let mut request = http::Request::new(());
+        request.extensions_mut().insert(carried.clone());
+        let taken = MetricsState::take_over(
+            &mut request,
+            true,
+            &Default::default(),
+            &ServiceIdentity::of::<TestService>(),
+            0,
+        );
+        assert!(Arc::ptr_eq(&taken.inner, &carried.inner));
+        assert!(carried.is_enabled());
+    }
+
+    #[test]
+    fn taking_over_replaces_an_initialized_state() {
+        let carried = enabled_state();
+        let mut request = http::Request::new(());
+        request.extensions_mut().insert(carried.clone());
+        let taken = MetricsState::take_over(
+            &mut request,
+            false,
+            &Default::default(),
+            &ServiceIdentity::of::<TestService>(),
+            0,
+        );
+        assert!(!Arc::ptr_eq(&taken.inner, &carried.inner));
+        let in_request = request.extensions().get::<MetricsState>().expect("a state");
+        assert!(Arc::ptr_eq(&in_request.inner, &taken.inner));
+        assert!(carried.is_enabled() && !taken.is_enabled());
     }
 
     #[tokio::test(start_paused = true)]
