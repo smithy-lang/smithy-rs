@@ -46,8 +46,12 @@ What it does and doesn't cover:
 - A dependency entry is only checked if it has a `path` key. A version-only
   entry is an intentional pin to a published line. To keep depending on an older
   line deliberately, declare it as a separate renamed, version-only entry
-  alongside the current path dependency, as `aws-smithy-http-server-metrics`
-  does with `aws-smithy-http-server-065`.
+  alongside the current path dependency, like this:
+
+  ```toml
+  aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+  aws-smithy-http-server-065 = { package = "aws-smithy-http-server", version = "0.65" }
+  ```
 - Paths are never resolved. `aws-config` points at the generated SDK tree, which
   is gitignored and normally absent when the audit runs, so the `path` key is
   treated purely as a marker and the dependency's version comes from the runtime
