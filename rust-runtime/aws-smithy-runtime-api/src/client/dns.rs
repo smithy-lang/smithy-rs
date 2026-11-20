@@ -45,8 +45,6 @@ new_type_future! {
     pub struct DnsFuture<'a, Vec<IpAddr>, ResolveDnsError>;
 }
 
-/////////////////////////////
-
 /// Result of performing a DNS lookup
 pub type ResolveDnsResult = Result<Vec<IpAddr>, ResolveDnsError>;
 
@@ -251,11 +249,9 @@ impl HostEventBuilder {
 /// Unit result type for our public API(s)
 pub type ResolverResult = Result<(), BoxError>;
 
-/////////////////////////////
-
 /// Trait for resolving domain names
 pub trait ResolveDns: fmt::Debug + Send + Sync {
-    /// Asynchronously resolve the given domain name
+    /// Deprecated - Asynchronously resolve the given domain name
     fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>;
 
     /// Asynchronously resolve the given domain name, with extensibility
