@@ -271,14 +271,14 @@ mod tests {
         }
     }
 
-    /// The matrix a record is ever built from: the release matrix, excluding the test-registry
+    /// The matrix a record is ever built from: the release matrix, which is the whole
     /// legs. Those are dispatched by name when somebody is testing the canary, never by a release,
     /// so counting them would put five permanently `unreported` legs in every record -- the signal
     /// reserved for a leg that died silently.
     fn matrix() -> Vec<Leg> {
         let clamped = toolchain::resolve(Version::new(1, 99, 1), Version::new(1, 94, 1))
             .expect("a real span");
-        scenarios::release_legs(&clamped.kept)
+        scenarios::legs(&clamped.kept)
     }
 
     fn green_report(leg_id: &str) -> Report {

@@ -947,7 +947,7 @@ fn the_alarms_watch_the_series_a_red_leg_writes() {
     )
     .expect("the toolchain span should resolve")
     .kept;
-    let legs = canary::scenarios::release_legs(&kept);
+    let legs = canary::scenarios::legs(&kept);
     let leg = legs.first().expect("the release matrix has legs").clone();
     let mut rigged = leg.clone();
     rigged.induced = Some("a requirement moved on purpose".to_string());
@@ -1007,39 +1007,6 @@ fn the_alarms_watch_the_series_a_red_leg_writes() {
              set exactly, so this alarm would never see the datapoint"
         );
     }
-}
-
-/// `all` must mean the release matrix, not every leg the matrix can express.
-///
-/// The test-registry legs resolve a graph committed to this repository, so they can say nothing
-/// about a release. Including them in `all` would cost twenty-five runs a release — one per floor
-/// hour plus the publish window — re-proving a graph that only moves when somebody commits a change
-/// to it. Worse, it would put their verdicts on the release's own alarmed series, so a deliberately
-/// broken test family would page as though a published crate had broken.
-///
-/// Asserted here because the filter lives in YAML, where the Rust-side marker cannot reach it. The
-/// marker and the filter have to agree, and nothing but this test says so.
-#[test]
-fn the_all_scenario_excludes_the_test_registry_legs() {
-    let raw = raw("build-canary");
-    let all_branch = raw
-        .lines()
-        .skip_while(|l| !l.contains("if want == 'all'"))
-        .take(10)
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(
-        !all_branch.is_empty(),
-        "the matrix job must have an `all` branch"
-    );
-    assert!(
-        all_branch.contains("test_registry"),
-        "`all` must filter out the test-registry legs, or a release runs them: {all_branch}"
-    );
-    assert!(
-        all_branch.contains("not l.get('test_registry')"),
-        "and it must exclude them rather than select them: {all_branch}"
-    );
 }
 
 /// Overlapping dispatches must queue, never cancel.

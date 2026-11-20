@@ -45,10 +45,7 @@ Forty legs per release:
   narrow `serialization` manifest, because CI excludes `aws-smithy-http-client` on those targets and
   a consumer manifest reaches it transitively; and `large-generated-clients` resolves `aws-sdk-ec2`.
 
-Nine manifests back the forty: one per dependency scenario, plus those three. A seventh scenario
-resolves three crates declared in `src/test_registry.rs` and assembled on disk as a cargo
-`local-registry`, instead of crates.io. Its five legs are excluded from `all` and dispatched by
-name, so the matrix can express 45 legs and a release runs 40.
+Nine manifests back the forty: one per dependency scenario, plus those three.
 
 ### Four scenarios are switched off, which is 20 legs
 

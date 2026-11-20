@@ -174,9 +174,7 @@ impl Resolved {
 /// module exists. So the exercise meant to prove the diagnosis is readable would have proved the
 /// opposite, silently. Found by inducing the break and reading the report rather than by a test.
 fn is_under_test(name: &str) -> bool {
-    ENTIRE_SMITHY_RUNTIME.contains(&name)
-        || AWS_SDK_RUNTIME.contains(&name)
-        || name.starts_with(crate::test_registry::PREFIX)
+    ENTIRE_SMITHY_RUNTIME.contains(&name) || AWS_SDK_RUNTIME.contains(&name)
 }
 
 /// Order versions by their numeric components rather than as text.
