@@ -57,8 +57,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    # The alarm role is assumed only from here. This is also the only thing that distinguishes this
-    # job from a leg, since both run in this repository.
+    # The orchestrator role is assumed only from inside this environment, which is also the only
+    # thing that distinguishes this job from a leg, since both run in this repository.
     environment: canary-orchestrator
     steps:
     - name: Check the configuration and the session name
@@ -82,24 +82,24 @@ jobs:
 
         MISSING=()
         [[ -z "$ROLE" ]] && MISSING+=("BUILD_CANARY_ORCHESTRATOR_ROLE_ARN")
-        # `fire` writes a datapoint, which is the metrics role's job, not the alarm role's -- the two
-        # permission sets are disjoint on purpose.
+        # Only `arm` substitutes into the template, so the other three actions can run without it.
         [[ "$ACTION" == "arm" && -z "$TICKET_ARN_TEMPLATE" ]] && MISSING+=("BUILD_CANARY_TICKET_ARN_TEMPLATE")
         if (( ${#MISSING[@]} > 0 )); then
           echo "::error title=Not configured::set ${MISSING[*]} before running this"
           exit 1
         fi
 
-    # `fire` needs the metrics role; everything else needs the alarm role. They are disjoint, and a
-    # job holding both would defeat the split.
-    - name: Assume the metrics role
+    # One credential step per half, on mutually exclusive conditions, so exactly one runs: `fire`
+    # writes a datapoint and every other action manages the alarm. The orchestrator role carries
+    # both permissions.
+    - name: Assume the orchestrator role to write a datapoint
       if: inputs.action == 'fire'
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.BUILD_CANARY_ORCHESTRATOR_ROLE_ARN }}
         aws-region: us-west-2
 
-    - name: Assume the alarm role
+    - name: Assume the orchestrator role to manage the alarm
       if: inputs.action != 'fire'
       uses: aws-actions/configure-aws-credentials@v4
       with:

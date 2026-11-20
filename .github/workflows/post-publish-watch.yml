@@ -19,10 +19,10 @@
 #                   not durable: index propagation lags a release, so a graph that resolved cleanly
 #                   at minute 15 can resolve differently at minute 75.
 #
-# SCOPE. The dispatch and floor tiers need no AWS credential -- they only ask for legs, and a leg
-# writes its verdict to its own job log. Only the final record job touches AWS, and it degrades to
-# writing the record as an artifact when the bucket is not configured, so this workflow is useful
-# before the stack is deployed.
+# SCOPE. The floor tier needs no AWS credential -- it only asks for legs, and a leg writes its
+# verdict to its own job log. The arming job, the dispatch tier and the record job assume the
+# orchestrator role, and each skips the step needing it when the role is unset -- so before the
+# stack is deployed a release is still watched, and the record is still kept as an artifact.
 name: Post-publish watch
 run-name: Post-publish watch - ${{ inputs.tag || github.ref_name }}
 on:
@@ -39,9 +39,9 @@ on:
         default: ''
 permissions:
   contents: read
-  # To dispatch `build-canary.yml`. No workflow in this repository asked for this before, and it is
-  # the only write permission here: the legs are dispatched, never run inline, because 24 hours of
-  # the full matrix is roughly a thousand jobs, and a matrix is capped at 256 per run.
+  # To dispatch `build-canary.yml`, and the only repository write this workflow takes -- the jobs
+  # add `id-token: write` of their own. The legs are dispatched, never run inline, because 24 hours
+  # of the full matrix is roughly a thousand jobs, and a matrix is capped at 256 per run.
   actions: write
 concurrency:
   # Keyed on the release, so this cancels only another watch of the *same* tag: a re-dispatch by
@@ -339,7 +339,7 @@ jobs:
     # watching an unnamed release is not a thing that can be done.
     if: always() && needs.alarms.outputs.tag != ''
     runs-on: ubuntu-latest
-    # The orchestrator's environment, because this job assumes the metrics role and the metrics
+    # The orchestrator's environment, because this job assumes the orchestrator role and that
     # role accepts a job on `main` only from inside it. On a release tag the environment is not
     # required, but declaring it costs nothing there and a hand-dispatched watch runs from `main`.
     environment: canary-orchestrator
@@ -600,10 +600,11 @@ jobs:
     permissions:
       contents: read
       actions: read
-      # To assume the record role. Harmless when the role is not configured: the step that uses it
-      # is skipped and the record is kept as an artifact instead.
+      # To assume the orchestrator role, needed only to report that a release went unchecked.
+      # Harmless when it is not configured: that step is skipped and the record is still an
+      # artifact.
       id-token: write
-    # The record role is assumed only from this environment, which is also the only thing
+    # The orchestrator role is assumed only from this environment, which is also the only thing
     # distinguishing this job from a leg -- both run in this repository from the same release tag.
     environment: canary-orchestrator
     steps:
@@ -693,7 +694,7 @@ jobs:
           echo "configured=true" >> "$GITHUB_OUTPUT"
         else
           echo "configured=false" >> "$GITHUB_OUTPUT"
-          echo "::error title=Release unchecked::not one leg reported, and no metrics role is configured to say so"
+          echo "::error title=Release unchecked::not one leg reported, and no orchestrator role is configured to say so"
         fi
 
     - name: Assume the orchestrator role

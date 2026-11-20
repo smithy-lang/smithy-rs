@@ -172,8 +172,9 @@ jobs:
     permissions:
       contents: read
       # To assume the metrics role and record a verdict. Not environment-gated: that claim would
-      # require every single leg to declare one. The role is narrowed by ref instead, so a leg can
-      # only emit from a release tag or `main`.
+      # require every leg in the matrix to declare one. The role is narrowed by ref instead --
+      # release tags only, never `main`, so a pull request's code running from `main` cannot mint a
+      # token it accepts.
       id-token: write
     strategy:
       # Every leg has its own verdict, so one red leg must not cancel the rest.

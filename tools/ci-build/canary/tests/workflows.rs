@@ -1374,10 +1374,13 @@ fn the_self_test_requires_both_arn_placeholders_before_substituting() {
     );
 }
 
-/// The metrics and alarm roles are disjoint on purpose: one writes datapoints, the other manages
-/// the alarm evaluating them. A single run holding both would undo that split.
+/// The two credential steps are mutually exclusive, so exactly one runs.
+///
+/// `fire` writes a datapoint and every other action manages the alarm. Both halves need the
+/// orchestrator role, which carries both permissions, so overlapping conditions would take the
+/// credential twice in one run for no reason and a gap would leave an action with none.
 #[test]
-fn the_self_test_never_holds_both_roles_at_once() {
+fn the_self_test_takes_its_credential_exactly_once() {
     let wf = load("paging-selftest");
     let job = jobs(&wf).get("selftest").copied().expect("a selftest job");
 
@@ -1392,11 +1395,11 @@ fn the_self_test_never_holds_both_roles_at_once() {
             .to_string()
     };
 
-    let metrics = condition_for("Assume the metrics role");
-    let alarms = condition_for("Assume the alarm role");
+    let metrics = condition_for("Assume the orchestrator role to write a datapoint");
+    let alarms = condition_for("Assume the orchestrator role to manage the alarm");
     assert!(
         metrics.contains("== 'fire'"),
-        "only `fire` writes a datapoint, so only it should take the metrics role: {metrics:?}"
+        "only `fire` writes a datapoint, so only it should take that credential: {metrics:?}"
     );
     assert!(
         alarms.contains("!= 'fire'"),
