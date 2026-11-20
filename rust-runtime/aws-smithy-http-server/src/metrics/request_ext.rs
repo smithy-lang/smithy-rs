@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{state::MetricsState, RequestMetrics};
+use super::{
+    state::{MetricsState, PendingCallbacks},
+    RequestMetrics,
+};
 
 /// Extension methods on [`http::Request`] for accessing standard server metrics.
 ///
@@ -15,10 +18,10 @@ pub trait RequestExt: sealed::Sealed {
     /// The callback receives the standard server metrics collected for the request, or `None` if
     /// standard metrics are disabled. Callbacks are invoked in the order they were registered.
     ///
-    /// This method should be called from a [Layer] or [Plugin] configured via the service's server
-    /// SDK. If this method is called from elsewhere, such as from a [Layer] applied around the
-    /// service rather than through its configuration, the result is a no-op, and the callback will
-    /// never be invoked.
+    /// This method may be called from a [Layer] or [Plugin] configured via the service's server
+    /// SDK, or from a [Layer] applied around the service. A callback registered before the request
+    /// reaches the service is invoked once the request finishes, like any other. If the request
+    /// never reaches the Smithy service, the callback is never invoked.
     ///
     /// [Layer]: tower::Layer
     /// [Plugin]: crate::plugin::Plugin
@@ -32,10 +35,13 @@ impl<B> RequestExt for http::Request<B> {
     where
         F: FnOnce(Option<RequestMetrics>) + Send + 'static,
     {
-        // `&mut self` not really necessary, but keeping it to avoid tying our hands later.
         match self.extensions().get::<MetricsState>() {
             Some(state) => state.push_callback(Box::new(callback)),
-            None => tracing::debug!("request has no metrics state; `on_finish` callback will not be invoked"),
+            // The service takes over pending callbacks when the request reaches it.
+            None => self
+                .extensions_mut()
+                .get_or_insert_default::<PendingCallbacks>()
+                .push(Box::new(callback)),
         }
     }
 }
@@ -55,7 +61,13 @@ mod tests {
 
     #[test]
     fn registers_callbacks_in_order() {
-        let state = MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>(), 0);
+        let state = MetricsState::new(
+            true,
+            &Default::default(),
+            &ServiceIdentity::of::<TestService>(),
+            0,
+            Vec::new(),
+        );
         let mut req = http::Request::new(());
         req.extensions_mut().insert(state.clone());
         req.on_finish(|_| {});
@@ -65,7 +77,13 @@ mod tests {
 
     #[test]
     fn registers_callbacks_when_disabled() {
-        let state = MetricsState::new(false, &Default::default(), &ServiceIdentity::of::<TestService>(), 0);
+        let state = MetricsState::new(
+            false,
+            &Default::default(),
+            &ServiceIdentity::of::<TestService>(),
+            0,
+            Vec::new(),
+        );
         let mut req = http::Request::new(());
         req.extensions_mut().insert(state.clone());
         req.on_finish(|_| {});
@@ -73,14 +91,19 @@ mod tests {
     }
 
     #[test]
-    fn drops_callbacks_without_state() {
+    fn callbacks_without_state_are_held_until_the_request_is_dropped() {
         let captured = Arc::new(());
         let mut req = http::Request::new(());
         req.on_finish({
             let captured = captured.clone();
             move |_| drop(captured)
         });
-        // The callback, and the clone it captured, were dropped rather than retained.
-        assert_eq!(Arc::strong_count(&captured), 1);
+        assert_eq!(Arc::strong_count(&captured), 2, "the request holds the callback");
+        drop(req);
+        assert_eq!(
+            Arc::strong_count(&captured),
+            1,
+            "a request that never reaches a service drops its callbacks"
+        );
     }
 }

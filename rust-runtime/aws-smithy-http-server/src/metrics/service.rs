@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     body::MetricsFinalizingBody,
-    state::{ConcurrentRequests, Finisher, MetricsState, ServiceIdentity},
+    state::{ConcurrentRequests, Finisher, MetricsState, PendingCallbacks, ServiceIdentity},
     Outcome,
 };
 
@@ -84,11 +84,18 @@ where
         } else {
             (0, None)
         };
+        // Callbacks registered before the request reached the service run before any registered later.
+        let callbacks = req
+            .extensions_mut()
+            .remove::<PendingCallbacks>()
+            .map(|pending| pending.take())
+            .unwrap_or_default();
         let state = MetricsState::new(
             self.enabled,
             &self.time_source,
             &self.service,
             concurrent_requests_count,
+            callbacks,
         );
         req.extensions_mut().insert(state.clone());
         MetricsServiceFuture {
@@ -576,6 +583,30 @@ mod tests {
         let mut request = http::Request::new(());
         request.extensions_mut().insert(id.clone());
         assert_eq!(reported_request_id(request).await, Some(id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn callbacks_registered_before_the_service_are_adopted() {
+        let log = Log::default();
+        let metrics_service = MetricsService::new::<TestService>(service(&log, 1, ok), true);
+        // A layer around the whole service, which registers a callback before the request reaches it.
+        let outer = {
+            let log = log.clone();
+            let mut metrics_service = Some(metrics_service);
+            tower::service_fn(move |mut req: http::Request<()>| {
+                let log = log.clone();
+                req.on_finish(move |metrics| log.lock().unwrap().push((99, metrics.is_some())));
+                metrics_service.take().expect("called once").oneshot(req)
+            })
+        };
+        let response = outer.oneshot(http::Request::new(())).await.unwrap();
+        assert_eq!(logged(&log), [], "callbacks run once the request finishes");
+        response.into_body().collect().await.unwrap();
+        assert_eq!(
+            logged(&log),
+            [(99, true), (0, true)],
+            "callbacks registered earlier run first, with the request's metrics"
+        );
     }
 
     #[test]
