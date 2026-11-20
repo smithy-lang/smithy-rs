@@ -121,7 +121,8 @@ where
         let result = ready!(this.inner.poll(cx));
         let finisher = this.finisher.take().expect("polled after completion");
         Poll::Ready(result.map(|mut response| {
-            finisher.record_outcome(Outcome::take_from_response(&mut response));
+            let outcome = Outcome::take_from_response(&mut response);
+            finisher.record_response(response.status(), outcome);
             response.map(|body| boxed(MetricsFinalizingBody::new(body, finisher)))
         }))
     }
@@ -391,6 +392,7 @@ mod tests {
             let metrics = metrics_for(with_status(status), true).await;
             let outcome = metrics.outcome().expect("a response was produced");
             assert_eq!(outcome.summary(), (result, "internal"), "{status}");
+            assert_eq!(metrics.status_code().map(|code| code.as_u16()), Some(status));
         }
     }
 
@@ -425,6 +427,11 @@ mod tests {
         let metrics = metrics_for(response, true).await;
         let outcome = metrics.outcome().expect("a response was produced");
         assert_eq!(outcome.summary(), ("server", "internal"));
+        assert_eq!(
+            metrics.status_code(),
+            Some(http::StatusCode::OK),
+            "the status sent before the body failed"
+        );
     }
 
     #[tokio::test]
@@ -451,6 +458,7 @@ mod tests {
         assert!(result.is_err());
         let metrics = seen.lock().unwrap().take().expect("callback received metrics");
         assert!(metrics.outcome().is_none());
+        assert!(metrics.status_code().is_none());
     }
 
     /// Serves a request through a `MetricsService`, with the route wrapped in `RecordOperation` if
