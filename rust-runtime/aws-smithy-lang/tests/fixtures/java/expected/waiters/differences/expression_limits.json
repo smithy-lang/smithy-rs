@@ -1,0 +1,53 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": true,
+    "events": [],
+    "waiters": {
+        "ex#Long": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name || name",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#Nested": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "(((((((((((((((((((((((((((((((((name)))))))))))))))))))))))))))))))))",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

@@ -14,6 +14,7 @@
 //! | [`TopDownIndex`] | Every operation and resource contained in a service or resource. |
 //! | [`OperationIndex`] | Normalized input/output, effective errors within a service, and which operations bind a structure. |
 //! | [`BottomUpIndex`] | The parents of an operation or resource within one service, reporting ambiguity instead of guessing. |
+//! | [`PaginatedIndex`] | The effective pagination of an operation within one service, resolved to the input and output members it names. |
 //! | [`RelationshipIndex`] | Outgoing and incoming relationships of any shape or member. |
 //!
 //! Enter through [`Model::knowledge`](crate::Model::knowledge). Every index handle is a cheap,
@@ -81,15 +82,18 @@
 //! ```
 //!
 //! Applied traits are not relationships: custom trait definitions may be absent from a model.
-//! Indexes that interpret trait values (nullability, HTTP bindings, pagination, and so on) are
-//! not provided, because the loader preserves trait values without validating them.
+//! The loader also preserves trait values without validating them. An index that interprets
+//! trait values, such as [`PaginatedIndex`], therefore decodes them when queried and returns an
+//! error for a value it cannot interpret, rather than treating that value as absent.
 
 mod bottom_up;
 mod operations;
+mod paginated;
 mod top_down;
 
 pub use bottom_up::{AmbiguousParentError, BottomUpIndex, EntityView, ParentBinding, ParentChain};
 pub use operations::{OperationIndex, OperationKnowledge};
+pub use paginated::{PaginatedIndex, PaginationIndexError, PaginationInfo};
 pub use top_down::TopDownIndex;
 
 use crate::model::ModelData;
@@ -141,6 +145,11 @@ impl<'m> Knowledge<'m> {
     /// Service-scoped parents of operations and resources.
     pub fn bottom_up(self) -> BottomUpIndex<'m> {
         BottomUpIndex::new(self.relationships())
+    }
+
+    /// Service-scoped pagination of operations.
+    pub fn paginated(self) -> PaginatedIndex<'m> {
+        PaginatedIndex::new(self.relationships())
     }
 }
 

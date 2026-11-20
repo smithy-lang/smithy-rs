@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Agreement with Java Smithy 1.74.0 on checked-in IDL fixtures. See `fixtures/java/README.md`.
+//! Agreement with Java Smithy 1.74.1 on checked-in IDL fixtures. See `fixtures/java/README.md`.
 
 use aws_smithy_lang::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 use aws_smithy_lang::validation::Validated;

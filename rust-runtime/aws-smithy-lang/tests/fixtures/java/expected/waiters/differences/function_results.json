@@ -1,0 +1,136 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": true,
+    "events": [
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#EndsWith",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a booleanEquals comparator must return a `boolean` type, but this acceptor was statically determined to return a `number` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MaxBy",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (max_by(items, &count).name): Object field 'count' does not exist in object with properties [name, labels, items] (1:16)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MaxBy",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (max_by(items, &count).name): Object field 'name' extraction performed on number (1:23)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#Merge",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (merge(labels, `{\"env\": \"prod\"}`).env): Object field 'env' does not exist in object with properties [] (1:34)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#Merge",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a stringEquals comparator must return a `string` type, but this acceptor was statically determined to return a `null` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#SortBy",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (sort_by(items, &name)[0].name): Object field 'name' extraction performed on null (1:26)"
+        }
+    ],
+    "waiters": {
+        "ex#EndsWith": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "ends_with(name, 'z')",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MaxBy": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "max_by(items, &count).name",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#Merge": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "merge(labels, `{\"env\": \"prod\"}`).env",
+                                "expected": "prod",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#SortBy": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "sort_by(items, &name)[0].name",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

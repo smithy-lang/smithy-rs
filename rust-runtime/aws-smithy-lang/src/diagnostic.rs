@@ -442,6 +442,29 @@ impl fmt::Display for SourceLocation {
     }
 }
 
+/// A [`SourceLocation`] that equality and hashing ignore, for decoded values whose equality
+/// should not depend on where they were loaded from, like [`Node`](crate::Node) equality.
+#[derive(Clone, Default)]
+pub(crate) struct Location(pub(crate) SourceLocation);
+
+impl PartialEq for Location {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for Location {}
+
+impl std::hash::Hash for Location {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
+impl fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
 /// Escapes one RFC 6901 reference token.
 pub(crate) fn escape_pointer_token(token: &str) -> String {
     let mut out = String::with_capacity(token.len());

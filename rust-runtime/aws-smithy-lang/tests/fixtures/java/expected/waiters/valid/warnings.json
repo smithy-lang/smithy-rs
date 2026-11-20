@@ -1,0 +1,258 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": true,
+    "events": [
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#ArrayComparesString",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a allStringEquals comparator must return a `array` type, but this acceptor was statically determined to return a `string` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#BooleanComparesString",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a booleanEquals comparator must return a `boolean` type, but this acceptor was statically determined to return a `string` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MissingInputOutputField",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (name): Object field 'name' does not exist in object with properties [input, output] (1:1)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MissingInputOutputField",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a stringEquals comparator must return a `string` type, but this acceptor was statically determined to return a `null` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MissingMember",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (nmae): Object field 'nmae' does not exist in object with properties [name, count, items] (1:1)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MissingMember",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a stringEquals comparator must return a `string` type, but this acceptor was statically determined to return a `null` type."
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.JmespathEventDanger.W.0",
+            "severity": "DANGER",
+            "shape": "ex#MissingProjectedMember",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (items[].ready): Object field 'ready' does not exist in object with properties [id] (1:9)"
+        },
+        {
+            "id": "WaitableTraitJmespathProblem.ReturnTypeMismatch.W.0",
+            "severity": "DANGER",
+            "shape": "ex#StringComparesNumber",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a stringEquals comparator must return a `string` type, but this acceptor was statically determined to return a `number` type."
+        },
+        {
+            "id": "WaitableTraitInvalidErrorType.W.1",
+            "severity": "WARNING",
+            "shape": "ex#UnmodeledErrorId",
+            "message": "Waiter `W`, acceptor 1: errorType 'other#NotFound' not found on operation. This operation defines the following errors: [ex#NotFound]"
+        },
+        {
+            "id": "WaitableTraitInvalidErrorType.W.1",
+            "severity": "WARNING",
+            "shape": "ex#UnmodeledErrorName",
+            "message": "Waiter `W`, acceptor 1: errorType 'ThrottlingException' not found on operation. This operation defines the following errors: [ex#NotFound]"
+        }
+    ],
+    "waiters": {
+        "ex#ArrayComparesString": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "name",
+                                "expected": "a",
+                                "comparator": "allStringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#BooleanComparesString": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "name",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MissingInputOutputField": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "inputOutput": {
+                                "path": "name",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MissingMember": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "nmae",
+                                "expected": "a",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MissingProjectedMember": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "items[].ready",
+                                "expected": "a",
+                                "comparator": "anyStringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#StringComparesNumber": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "count",
+                                "expected": "1",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#UnmodeledErrorId": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "errorType": "other#NotFound"
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#UnmodeledErrorName": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "errorType": "ThrottlingException"
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}
