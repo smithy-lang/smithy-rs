@@ -57,7 +57,8 @@ On a host event:
 On IP TTL expiration:
    Remove the ip from the resolver cache completely
 
-IP TTL expiration (or promotion) is processed lazily.
+IP TTL expiration (or promotion) is processed lazily and only when a successful resolve completes.
+This means that in the event of an outage, the address cache will be preserved regardless of TTL.
 
  */
 
@@ -509,8 +510,6 @@ impl HostEntry {
         request: ResolveRequestInternal,
         context: &OperationHandlerContext,
     ) {
-        self.purge_expired();
-
         let now = (self.config.clock)();
         // if it's our first request or enough time has passed since the last one
         let mut should_spawn_resolve: bool = self.last_resolution_timepoint.is_none();
@@ -546,11 +545,12 @@ impl HostEntry {
     /// a failure, then fail all pending requests.  Otherwise, apply all resolved addresses
     /// to the cached state appropriately, then attempt to complete pending requests normally.
     fn handle_resolve_result(&mut self, result: ResolveResult) {
-        self.purge_expired();
         self.pending_resolution = false;
 
         match result.result() {
             Ok(addresses) => {
+                // lazily purge expired addresses only after a successful resolve.
+                self.purge_expired();
                 let ttl = result.request().ttl().unwrap_or(self.config.resolution_ttl);
                 for address in addresses {
                     self.on_address_resolved(*address, ttl);
@@ -577,8 +577,6 @@ impl HostEntry {
 
     /// Applies a host event to a host's entry in the resolver
     fn handle_host_event(&mut self, event: HostEvent) {
-        self.purge_expired();
-
         if let HostEventInformation::AddressPenalty(penalty) = event.event_data() {
             self.handle_address_penalty(event.address(), penalty)
         }
@@ -1412,10 +1410,10 @@ mod testing {
     }
 
     #[test]
-    fn host_entry_addresses_expire() {
+    fn host_entry_addresses_expire_manual() {
         // resolve and then let enough time pass to expire the original addresses
         let mut context = HostEntryTestContext::default();
-        initialize_resolution_test_context_single(&mut context);
+        initialize_resolution_test_context_multiple(&mut context);
 
         let result_targets = submit_requests(&mut context, 1, 100);
         assert_eq!(1, context.entry.pending_requests.len());
@@ -1441,24 +1439,51 @@ mod testing {
         assert!(context.entry.addresses_by_ttl.is_empty());
         assert!(context.entry.ipv6_addresses.empty());
         assert!(context.entry.ipv4_addresses.empty());
+    }
 
-        // new resolve with result
+    #[test]
+    fn host_entry_addresses_expire_lazy() {
+        // resolve and then let enough time pass to expire the original addresses
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_multiple(&mut context);
+
         let _ = submit_requests(&mut context, 1, 100);
         assert_eq!(1, context.entry.pending_requests.len());
 
         // apply result
         apply_mock_result_to_context(&mut context);
 
-        // let enough time pass for expiration, new resolve, should be pending and addresses empty
-        context.advance_time(context.config.resolution_ttl);
-        let _ = submit_requests(&mut context, 1, 100);
-        assert_eq!(1, context.entry.pending_requests.len());
-        assert!(context.entry.addresses_by_ttl.is_empty());
-        assert!(context.entry.ipv6_addresses.empty());
-        assert!(context.entry.ipv4_addresses.empty());
+        let current_addresses: Vec<IpAddr> = context
+            .entry
+            .addresses_by_ttl
+            .iter()
+            .map(|val| val.0.clone())
+            .collect();
+        assert!(!current_addresses.is_empty());
 
-        // background resolution function should have been called three times
-        assert_eq!(3, context.mock_results.get_call_count());
+        // let enough time pass, manually purge expired, and then check address state
+        context
+            .mock_clock
+            .advance_time(context.config.resolution_ttl);
+
+        // new resolve with result
+        let _ = submit_requests(&mut context, 1, 100);
+
+        // should still have old addresses
+        for address in &current_addresses {
+            assert!(context.entry.addresses_by_ttl.contains(address));
+        }
+
+        // apply result, which should trigger a purge of the old, expired addresses
+        apply_mock_result_to_context(&mut context);
+
+        // previous address set should be gone/replaced
+        for address in &current_addresses {
+            assert!(!context.entry.addresses_by_ttl.contains(address));
+        }
+
+        // background resolution function should have been called twice
+        assert_eq!(2, context.mock_results.get_call_count());
     }
 
     fn do_host_entry_fatal_host_event_bans_address(address_to_ban: IpAddr) {
