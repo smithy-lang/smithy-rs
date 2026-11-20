@@ -7,8 +7,10 @@
 
 pub use aws_smithy_dynamic_client_api::config_key::{Applies, ConfigKey, EndpointBuiltIn};
 
+pub use crate::auth::AuthSchemeParams;
 pub use aws_smithy_runtime::client::identity::IdentityCache;
 pub use aws_smithy_runtime::client::retries::RetryPartition;
+pub use aws_smithy_runtime_api::client::auth::{AuthSchemeId, AuthSchemePreference};
 pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 pub use aws_smithy_types::retry::RetryConfig;
@@ -18,6 +20,10 @@ pub use aws_types::region::Region;
 
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime::client::auth::no_auth::NoAuthRuntimePluginV2;
+use aws_smithy_runtime_api::client::auth::{
+    ResolveAuthSchemeOptions, SharedAuthSchemeOptionResolver,
+};
 use aws_smithy_runtime_api::client::http::{HttpClient, SharedHttpClient};
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
 use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
@@ -26,6 +32,7 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder
 use aws_smithy_runtime_api::client::runtime_plugin::{
     RuntimePlugin, SharedRuntimePlugin, StaticRuntimePlugin,
 };
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use aws_smithy_types::config_bag::Layer;
 use std::any::{type_name, TypeId};
@@ -73,6 +80,8 @@ pub struct Builder {
     pub(crate) timeout_config: Option<TimeoutConfig>,
     pub(crate) retry_partition: Option<RetryPartition>,
     pub(crate) identity_cache: Option<SharedIdentityCache>,
+    pub(crate) auth_scheme_resolver: Option<SharedAuthSchemeOptionResolver>,
+    pub(crate) auth_scheme_preference: Option<AuthSchemePreference>,
     pub(crate) stalled_stream_protection: Option<StalledStreamProtectionConfig>,
     pub(crate) retry_classifiers: Vec<SharedRetryClassifier>,
     pub(crate) interceptors: Vec<SharedInterceptor>,
@@ -164,6 +173,80 @@ impl Builder {
     /// Without one, the default lazy cache is used.
     pub fn identity_cache(mut self, identity_cache: impl ResolveCachedIdentity + 'static) -> Self {
         self.identity_cache = Some(SharedIdentityCache::new(identity_cache));
+        self
+    }
+
+    /// Sets the auth scheme resolver. For each call, the resolver returns the auth schemes to
+    /// try, in order.
+    ///
+    /// Without one, each call tries the operation's auth schemes from the model, as listed by
+    /// [`AuthSchemeParams::auth_schemes`]. A resolver gets the same [`AuthSchemeParams`]:
+    ///
+    /// ```
+    /// use aws_smithy_dynamic_client::config::{AuthSchemeParams, Config};
+    /// use aws_smithy_runtime_api::client::auth::{
+    ///     AuthSchemeOption, AuthSchemeOptionResolverParams, AuthSchemeOptionsFuture,
+    ///     ResolveAuthSchemeOptions,
+    /// };
+    /// use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+    /// use aws_smithy_types::config_bag::ConfigBag;
+    ///
+    /// // Tries the operation's auth schemes in reverse order.
+    /// #[derive(Debug)]
+    /// struct Reversed;
+    ///
+    /// impl ResolveAuthSchemeOptions for Reversed {
+    ///     fn resolve_auth_scheme_options_v2<'a>(
+    ///         &'a self,
+    ///         params: &'a AuthSchemeOptionResolverParams,
+    ///         _cfg: &'a ConfigBag,
+    ///         _components: &'a RuntimeComponents,
+    ///     ) -> AuthSchemeOptionsFuture<'a> {
+    ///         let params = params.get::<AuthSchemeParams>().expect("a dynamic client call");
+    ///         let options = params.auth_schemes().iter().rev().cloned();
+    ///         AuthSchemeOptionsFuture::ready(Ok(options.map(AuthSchemeOption::from).collect()))
+    ///     }
+    /// }
+    ///
+    /// let config = Config::builder().auth_scheme_resolver(Reversed).build();
+    /// ```
+    pub fn auth_scheme_resolver(
+        mut self,
+        auth_scheme_resolver: impl ResolveAuthSchemeOptions + 'static,
+    ) -> Self {
+        self.auth_scheme_resolver = Some(auth_scheme_resolver.into_shared());
+        self
+    }
+
+    /// Sets the auth scheme preference. Each call tries the preferred auth schemes first, in the
+    /// preference's order, and then the rest of its auth schemes.
+    ///
+    /// The preference only reorders the auth schemes of a call. A preferred scheme that the call
+    /// does not have is ignored.
+    ///
+    /// ```
+    /// use aws_smithy_dynamic_client::config::Config;
+    /// use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+    ///
+    /// let config = Config::builder()
+    ///     .auth_scheme_preference([HTTP_BEARER_AUTH_SCHEME_ID])
+    ///     .build();
+    /// ```
+    pub fn auth_scheme_preference(
+        mut self,
+        auth_scheme_preference: impl Into<AuthSchemePreference>,
+    ) -> Self {
+        self.auth_scheme_preference = Some(auth_scheme_preference.into());
+        self
+    }
+
+    /// Allows calls with no auth.
+    ///
+    /// Each call tries `noAuth` after the auth schemes of its operation. So a call with no
+    /// identity for any of those schemes is sent with no auth.
+    pub fn allow_no_auth(mut self) -> Self {
+        self.runtime_plugins
+            .push(NoAuthRuntimePluginV2::new().into_shared());
         self
     }
 
@@ -288,6 +371,8 @@ impl Builder {
             },
             retry_partition: later.retry_partition.or(self.retry_partition),
             identity_cache: later.identity_cache.or(self.identity_cache),
+            auth_scheme_resolver: later.auth_scheme_resolver.or(self.auth_scheme_resolver),
+            auth_scheme_preference: later.auth_scheme_preference.or(self.auth_scheme_preference),
             stalled_stream_protection: later
                 .stalled_stream_protection
                 .or(self.stalled_stream_protection),
@@ -319,6 +404,7 @@ impl Builder {
         components.set_sleep_impl(self.sleep_impl);
         components.set_time_source(self.time_source);
         components.set_identity_cache(self.identity_cache);
+        components.set_auth_scheme_option_resolver(self.auth_scheme_resolver);
         for retry_classifier in self.retry_classifiers {
             components.push_retry_classifier(retry_classifier);
         }
@@ -347,6 +433,9 @@ impl Builder {
         }
         if let Some(stalled_stream_protection) = self.stalled_stream_protection {
             layer.store_put(stalled_stream_protection);
+        }
+        if let Some(auth_scheme_preference) = self.auth_scheme_preference {
+            layer.store_put(auth_scheme_preference);
         }
         #[cfg(feature = "aws")]
         if let Some(region) = self.region {
@@ -466,6 +555,7 @@ impl From<&SdkConfig> for Builder {
             timeout_config: sdk_config.timeout_config().cloned(),
             identity_cache: sdk_config.identity_cache(),
             stalled_stream_protection: sdk_config.stalled_stream_protection(),
+            auth_scheme_preference: sdk_config.auth_scheme_preference().cloned(),
             region: sdk_config.region().cloned(),
             credentials_provider: sdk_config.credentials_provider(),
             disable_clock_skew_correction: sdk_config.disable_clock_skew_correction(),
