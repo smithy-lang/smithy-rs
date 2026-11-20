@@ -46,8 +46,24 @@ pub(crate) struct ElidedMember {
     pub(crate) id: ShapeId,
     /// Where the member is declared.
     pub(crate) location: SourceLocation,
-    /// The traits written on the member.
+    /// The traits written on the member, which are applied traits.
     pub(crate) traits: TraitMap,
+    /// The member's value assignment (`= value`), if any. As in the reference implementation,
+    /// it is part of the definition that writes it rather than an applied trait.
+    pub(crate) assigned: TraitMap,
+}
+
+/// A `$name` member whose target comes from a mixin, as [`Lowerer::elided_member`] receives it.
+struct ElidedSyntax<'a> {
+    /// The absolute ID of the shape that declares it.
+    container: &'a str,
+    name: &'a str,
+    /// The `traits` object of the member, including its value assignment.
+    traits: Option<Node>,
+    /// The trait ID of the value assignment, if the member has one.
+    assignment: Option<&'a str>,
+    pointer: String,
+    span: Span,
 }
 
 /// An unquoted node value that was resolved to an absolute shape ID string.
@@ -630,8 +646,11 @@ impl<'a> Lowerer<'a> {
                 let value = self
                     .node(Some(scope), value)
                     .with_position(self.position(value.span()));
-                // An invalid ID is reported when the shape is converted.
-                if let (Ok(member), Ok(trait_shape)) = (
+                // An invalid ID is reported when the shape is converted. A `$name` member whose
+                // target comes from a mixin keeps its assignment with the definition instead
+                // (see `ElidedMember`).
+                if let (false, Ok(member), Ok(trait_shape)) = (
+                    from_mixin,
                     ShapeId::new(&format!("{container}${name}")),
                     ShapeId::new(&trait_id),
                 ) {
@@ -639,10 +658,19 @@ impl<'a> Lowerer<'a> {
                 }
                 sugar.push((trait_id, value));
             }
+            let assignment = sugar.first().map(|(id, _)| id.clone());
             let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let Some(target) = target else {
                 if from_mixin {
-                    self.elided_member(container, name, traits, member_pointer(), name_span);
+                    let elided = ElidedSyntax {
+                        container,
+                        name,
+                        traits,
+                        assignment: assignment.as_deref(),
+                        pointer: member_pointer(),
+                        span: name_span,
+                    };
+                    self.elided_member(elided);
                 }
                 continue;
             };
@@ -697,14 +725,15 @@ impl<'a> Lowerer<'a> {
     /// Records a `$name` member whose target comes from a mixin. Its traits are converted as
     /// the traits of an `apply` to the member, which the assembler merges like the traits written
     /// on any other member.
-    fn elided_member(
-        &mut self,
-        container: &str,
-        name: &str,
-        traits: Option<Node>,
-        pointer: String,
-        span: Span,
-    ) {
+    fn elided_member(&mut self, elided: ElidedSyntax<'_>) {
+        let ElidedSyntax {
+            container,
+            name,
+            traits,
+            assignment,
+            pointer,
+            span,
+        } = elided;
         let id = format!("{container}${name}");
         let mut object = NodeObject::new();
         object.insert(
@@ -716,13 +745,20 @@ impl<'a> Lowerer<'a> {
         }
         let node = Node::from(object).with_position(self.position(span));
         let location = self.at(pointer, span);
-        if let Some(Entry::Apply(Apply { target, traits })) =
+        if let Some(Entry::Apply(Apply { target, mut traits })) =
             self.converter.convert_entry(&id, node)
         {
+            let mut assigned = TraitMap::new();
+            // A trait written with the same ID as the assignment conflicts with it, so the trait
+            // with that ID is the assignment.
+            if let Some((id, value)) = assignment.and_then(|id| traits.shift_remove_entry(id)) {
+                assigned.insert(id, value);
+            }
             self.elided_members.push(ElidedMember {
                 id: target,
                 location,
                 traits,
+                assigned,
             });
         }
     }

@@ -42,8 +42,17 @@ pub(super) struct Resolution<'a> {
 pub(super) struct ElidedMembers {
     /// The location of the definition, which identifies it: an IDL document defines a shape once.
     pub(super) definition: SourceLocation,
-    /// Where each member is declared, by name.
-    pub(super) members: IndexMap<String, SourceLocation>,
+    /// The members, by name.
+    pub(super) members: IndexMap<String, ElidedDeclaration>,
+}
+
+/// One `$name` member of a definition whose target comes from a mixin.
+pub(super) struct ElidedDeclaration {
+    /// Where the member is declared.
+    pub(super) location: SourceLocation,
+    /// Its value assignment (`= value`), if any, which belongs to this definition. Traits applied
+    /// to the member replace it, as they replace the value assignment of a declared member.
+    pub(super) assigned: TraitMap,
 }
 
 /// A later definition of a shape with mixins.
@@ -479,7 +488,7 @@ struct Inheritance<'a> {
     /// Traits held for members the shape does not declare; see [`Resolution`].
     held: HeldTraits<'a>,
     /// The shape's `$name` members whose targets come from a mixin.
-    elided: &'a IndexMap<String, SourceLocation>,
+    elided: &'a IndexMap<String, ElidedDeclaration>,
     diagnostics: &'a mut DiagnosticSet,
 }
 
@@ -624,7 +633,7 @@ impl<'a> Inheritance<'a> {
                         // implementation reports the conflict where it is declared. A member with
                         // only applied traits is a copy of the first mixin's member.
                         let location = match self.elided.get(name) {
-                            Some(location) => location.clone(),
+                            Some(elided) => elided.location.clone(),
                             None => previous.source.child("/target"),
                         };
                         self.diagnostics
@@ -685,11 +694,15 @@ impl<'a> Inheritance<'a> {
             let Some(mut traits) = inherited.remove(name.as_str()) else {
                 continue;
             };
-            // A declared member may also have applied traits that another definition holds.
+            // A declared member may also have applied traits that another definition holds. A
+            // `$name` member's value assignment comes first, so applied traits replace it.
+            let elided = self.elided.get(name);
             let mut own = if is_local {
                 std::mem::take(&mut member.traits)
             } else {
-                TraitMap::new()
+                elided
+                    .map(|elided| elided.assigned.clone())
+                    .unwrap_or_default()
             };
             own.extend(self.held.own_traits(&member.id));
             let introduced = own.keys().cloned().collect();
@@ -698,8 +711,8 @@ impl<'a> Inheritance<'a> {
             }
             member.traits = traits;
             member.inherited = Some(Box::new(InheritedMember { introduced }));
-            if let Some(location) = self.elided.get(name) {
-                member.source = location.clone();
+            if let Some(elided) = elided {
+                member.source = elided.location.clone();
             }
         }
         members
@@ -708,7 +721,7 @@ impl<'a> Inheritance<'a> {
     /// Reports each `$name` member that no mixin provides. Like the reference implementation, the
     /// traits written on it are dropped with it, without a diagnostic.
     fn check_elided_members(&mut self, members: &Members) {
-        for (name, location) in self.elided {
+        for (name, elided) in self.elided {
             if members.get(name).is_some_and(MemberShape::is_inherited) {
                 continue;
             }
@@ -724,7 +737,7 @@ impl<'a> Inheritance<'a> {
                     ),
                 )
                 .with_shape_id(member)
-                .with_source_location(location.clone()),
+                .with_source_location(elided.location.clone()),
             );
         }
     }
