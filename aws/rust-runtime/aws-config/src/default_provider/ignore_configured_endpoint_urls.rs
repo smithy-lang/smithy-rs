@@ -4,9 +4,11 @@
  */
 
 use crate::environment::parse_bool;
+use crate::profile::ProfileSet;
 use crate::provider_config::ProviderConfig;
 use aws_runtime::env_config::EnvConfigValue;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_types::os_shim_internal::Env;
 
 mod env {
     pub(super) const IGNORE_CONFIGURED_ENDPOINT_URLS: &str = "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS";
@@ -28,11 +30,21 @@ pub async fn ignore_configured_endpoint_urls_provider(
 ) -> Option<bool> {
     let env = provider_config.env();
     let profiles = provider_config.profile().await;
+    ignore_configured_endpoint_urls(&env, profiles)
+}
 
+/// Load the value for "ignore configured endpoint URLs" from `env` and an already parsed profile
+///
+/// Same sources and precedence as [`ignore_configured_endpoint_urls_provider`], for callers that
+/// can't await the profile.
+pub(crate) fn ignore_configured_endpoint_urls(
+    env: &Env,
+    profiles: Option<&ProfileSet>,
+) -> Option<bool> {
     EnvConfigValue::new()
         .env(env::IGNORE_CONFIGURED_ENDPOINT_URLS)
         .profile(profile_key::IGNORE_CONFIGURED_ENDPOINT_URLS)
-        .validate(&env, profiles, parse_bool)
+        .validate(env, profiles, parse_bool)
         .map_err(
             |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for 'ignore configured endpoint URLs' setting"),
         )

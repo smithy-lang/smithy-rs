@@ -5,6 +5,7 @@
 
 //! Configuration Options for Credential Providers
 
+use crate::default_provider::ignore_configured_endpoint_urls::ignore_configured_endpoint_urls;
 use crate::env_service_config::EnvServiceConfig;
 use crate::profile;
 #[allow(deprecated)]
@@ -227,7 +228,8 @@ impl ProviderConfig {
         let service_config = EnvServiceConfig {
             env: self.env(),
             env_config_sections: profiles.cloned().unwrap_or_default(),
-            ignore_configured_endpoint_urls: false,
+            ignore_configured_endpoint_urls: ignore_configured_endpoint_urls(&self.env, profiles)
+                .unwrap_or_default(),
         };
 
         let mut builder = SdkConfig::builder()
@@ -485,8 +487,13 @@ impl ProviderConfig {
 #[cfg(test)]
 mod test {
     use super::ProviderConfig;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_types::os_shim_internal::Env;
+    use aws_types::service_config::ServiceConfigKey;
+    use aws_types::SdkConfig;
     use std::time::Duration;
 
     // The inner clients (STS, SSO, ...) used by the default chain are built from
@@ -525,5 +532,77 @@ mod test {
         let sdk_config = ProviderConfig::empty().client_config();
         assert!(sdk_config.timeout_config().is_none());
         assert_eq!(3, sdk_config.retry_config().unwrap().max_attempts());
+    }
+
+    // The endpoint URL an STS client built from `sdk_config` picks up from the env or profile
+    fn sts_endpoint_url(sdk_config: &SdkConfig) -> Option<String> {
+        let key = ServiceConfigKey::builder()
+            .service_id("STS")
+            .env("AWS_ENDPOINT_URL")
+            .profile("endpoint_url")
+            .build()
+            .unwrap();
+        sdk_config.service_config()?.load_config(key)
+    }
+
+    // The inner clients must honor `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS` like clients built by
+    // `ConfigLoader::load()` do, without changing anything when it isn't set.
+    #[test]
+    fn client_config_ignores_configured_endpoint_urls_from_env() {
+        for endpoint_url in [
+            ("AWS_ENDPOINT_URL", "http://localhost:8888"),
+            ("AWS_ENDPOINT_URL_STS", "http://localhost:9999"),
+        ] {
+            let conf = ProviderConfig::empty().with_env(Env::from_slice(&[endpoint_url]));
+            assert_eq!(
+                Some(endpoint_url.1.to_string()),
+                sts_endpoint_url(&conf.client_config())
+            );
+
+            let conf = ProviderConfig::empty().with_env(Env::from_slice(&[
+                endpoint_url,
+                ("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true"),
+            ]));
+            assert_eq!(None, sts_endpoint_url(&conf.client_config()));
+        }
+    }
+
+    #[tokio::test]
+    async fn client_config_ignores_configured_endpoint_urls_from_profile() {
+        async fn sts_endpoint_url_from_profile(profile: String) -> Option<String> {
+            #[allow(deprecated)]
+            let profile_files = ProfileFiles::builder()
+                .with_contents(ProfileFileKind::Config, profile)
+                .build();
+            let conf = ProviderConfig::empty()
+                .with_env(Env::from_slice(&[]))
+                .with_profile_config(Some(profile_files), None);
+            // `client_config()` only sees the profile once it has been parsed
+            conf.try_profile().await.expect("valid profile");
+            sts_endpoint_url(&conf.client_config())
+        }
+
+        for (endpoint_url, expected) in [
+            (
+                "endpoint_url = http://localhost:8888",
+                "http://localhost:8888",
+            ),
+            (
+                "services = local\n[services local]\nsts =\n  endpoint_url = http://localhost:9999",
+                "http://localhost:9999",
+            ),
+        ] {
+            assert_eq!(
+                Some(expected.to_string()),
+                sts_endpoint_url_from_profile(format!("[default]\n{endpoint_url}")).await
+            );
+            assert_eq!(
+                None,
+                sts_endpoint_url_from_profile(format!(
+                    "[default]\nignore_configured_endpoint_urls = true\n{endpoint_url}"
+                ))
+                .await
+            );
+        }
     }
 }
