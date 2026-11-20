@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn registers_callbacks_in_order() {
-        let state = MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>());
+        let state = MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>(), 0);
         let mut req = http::Request::new(());
         req.extensions_mut().insert(state.clone());
         req.on_finish(|_| {});
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn registers_callbacks_when_disabled() {
-        let state = MetricsState::new(false, &Default::default(), &ServiceIdentity::of::<TestService>());
+        let state = MetricsState::new(false, &Default::default(), &ServiceIdentity::of::<TestService>(), 0);
         let mut req = http::Request::new(());
         req.extensions_mut().insert(state.clone());
         req.on_finish(|_| {});

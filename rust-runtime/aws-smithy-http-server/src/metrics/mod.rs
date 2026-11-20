@@ -65,6 +65,7 @@ pub struct RequestMetrics {
     outcome: Option<Outcome>,
     operation: Option<ShapeId>,
     operation_duration: Duration,
+    concurrent_requests_count: usize,
 }
 
 impl RequestMetrics {
@@ -107,6 +108,19 @@ impl RequestMetrics {
     /// [layer]: tower::Layer
     pub fn operation_duration(&self) -> Duration {
         self.operation_duration
+    }
+
+    /// The number of requests to the Smithy service that had started but not finished, measured
+    /// just before this request started. This request is *not* included in the count.
+    pub fn concurrent_requests_count(&self) -> usize {
+        // Excluding the current request is a departure from certain traditions, but is a deliberate
+        // choice here. It has the nice property that under a Poisson arrival assumption, the
+        // distribution of these values will approximate the distribution of a counter sampled at
+        // random points in time.
+        //
+        // If a metrics publisher needs to include the current request, all they have to do is add
+        // one to this count.
+        self.concurrent_requests_count
     }
 
     /// The [`ShapeId`] of the service that handled the request.
