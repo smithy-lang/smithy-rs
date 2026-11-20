@@ -21,11 +21,24 @@ import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws
 import { Construct } from "constructs";
 import { GitHubOidcRole } from "./constructs/github-oidc-role";
 
+/**
+ * The namespace `canary-runner` writes this canary's metrics to.
+ *
+ * Duplicated from `canary-runner/src/run.rs` rather than imported, because this is CDK and that is
+ * Rust. A disagreement denies every `PutMetricData` the canary makes, so the canary's own failure
+ * metric would stop arriving — which looks like a healthy canary.
+ */
+export const SDK_CANARY_NAMESPACE = "aws-sdk-rust-canary";
+
 export interface OidcProps {
     roleId: string;
     roleName: string;
     roleGithubOrg: string;
     roleGithubRepo: string;
+    /** The organisation's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubOrgId: string;
+    /** The repository's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubRepoId: string;
     provider: OpenIdConnectProvider;
 }
 
@@ -60,6 +73,8 @@ export class CanaryStack extends Stack {
                 name: props.oidcProps.roleName,
                 githubOrg: props.oidcProps.roleGithubOrg,
                 githubRepo: props.oidcProps.roleGithubRepo,
+                githubOrgId: props.oidcProps.roleGithubOrgId,
+                githubRepoId: props.oidcProps.roleGithubRepoId,
                 oidcProvider: props.oidcProps.provider,
             });
 
@@ -78,12 +93,26 @@ export class CanaryStack extends Stack {
                 }),
             );
 
-            // Grant permission to put metric data to CloudWatch
+            // Grant permission to put metric data to CloudWatch, in this canary's own namespace
+            // and no other.
+            //
+            // `PutMetricData` has no resource-level permissions, so `*` is the only accepted
+            // resource and `cloudwatch:namespace` is the sole lever available. The condition
+            // matters because every pull request's canary job assumes this role, and
+            // `manual-canary.yml` hands the credentials to the pull request's own checked-out
+            // code -- so an unconditioned allow lets any pull request write to any namespace in
+            // the account, the build canary's included, and page its oncall.
+            //
+            // `canary-runner` writes this one literal and nothing else, in both of this stack's
+            // deployments, so narrowing costs it nothing.
             this.githubOidcRole.oidcRole.addToPolicy(
                 new PolicyStatement({
                     actions: ["cloudwatch:PutMetricData"],
                     effect: Effect.ALLOW,
                     resources: ["*"],
+                    conditions: {
+                        StringEquals: { "cloudwatch:namespace": SDK_CANARY_NAMESPACE },
+                    },
                 }),
             );
         }

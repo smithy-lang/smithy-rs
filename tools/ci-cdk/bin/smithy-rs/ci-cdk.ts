@@ -11,8 +11,10 @@
 import "source-map-support/register";
 import { App } from "aws-cdk-lib";
 import { PullRequestCdnStack } from "../../lib/smithy-rs/pull-request-cdn-stack";
+import { BuildCanaryStack } from "../../lib/smithy-rs/build-canary-stack";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
+import { SMITHY_RS } from "../../lib/github-repositories";
 
 const app = new App({});
 const env = { region: "us-west-2" };
@@ -26,8 +28,10 @@ const githubActionsOidcProvider = oidcProviderStack.githubActionsOidcProvider;
 const oidcProps: OidcProps = {
     roleId: "smithy-rs",
     roleName: "smithy-rs-canary",
-    roleGithubOrg: "smithy-lang",
-    roleGithubRepo: "smithy-rs",
+    roleGithubOrg: SMITHY_RS.githubOrg,
+    roleGithubRepo: SMITHY_RS.githubRepo,
+    roleGithubOrgId: SMITHY_RS.githubOrgId,
+    roleGithubRepoId: SMITHY_RS.githubRepoId,
     provider: githubActionsOidcProvider,
 };
 
@@ -39,5 +43,36 @@ new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
 new CanaryStack(app, "smithy-rs-canary-stack", {
     lambdaExecutionRole: "smithy-rs-canary-lambda-exec-role",
     oidcProps,
+    env,
+});
+
+// The post-publish build canary's two roles. A separate stack so it can be deployed on its own,
+// because it depends only on the OIDC provider.
+//
+// Deploy it as `deploy --exclusively smithy-rs-build-canary-stack`. Not `npm run deploy`, which
+// passes `--all` and would also roll the pull-request CDN and the SDK canary; and not a bare
+// `deploy <name>` either, because CDK includes a stack's dependencies and the `Fn::ImportValue` of
+// the provider makes `oidc-provider-stack` one of them. `--exclusively` is what limits the change
+// to this stack, and the provider is already deployed — the roles the existing workflows assume
+// could not work otherwise.
+//
+// `smithy-rs-canary-stack` needs deploying too, also `--exclusively`, and that one is the risk.
+// It confines the SDK canary's role to the SDK canary's own metric namespace — until it is
+// deployed that role's `PutMetricData` allow has no namespace condition, and a pull request's code
+// running in `manual-canary.yml` holds its credentials, so it could forge a verdict here. But the
+// same deploy also rewrites a *live* role's trust policy, because `GitHubOidcRole` is shared:
+// `smithy-rs-canary-github-oidc-role` gains exact `repository_owner_id` and `repository_id`
+// conditions it has never had, and every pull request's canary job assumes it. Verify by
+// dispatching `manual-canary.yml` on a pull request straight afterwards; that is the path the new
+// conditions would break.
+//
+// Order: the release-tag ruleset enforcing, which is a prerequisite rather than a step and is why
+// `RELEASE_REFS` means anything; then this stack; then `smithy-rs-canary-stack` verified; then the
+// secrets. The roles are inert until the secrets exist and nothing pages until the alarm is armed,
+// so the two deploys are independent — what must not happen is paging secrets being set while the
+// SDK canary's role can still write the build canary's namespace. The pull-request CDN stack's identical trust
+// change can go out whenever.
+new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
+    githubActionsOidcProvider: githubActionsOidcProvider,
     env,
 });
