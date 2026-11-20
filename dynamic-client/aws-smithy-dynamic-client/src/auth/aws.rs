@@ -68,6 +68,7 @@ pub(crate) fn store_operation_auth(
 mod tests {
     use crate::config::{BehaviorVersion, Config, Region};
     use crate::DynamicClient;
+    use aws_credential_types::provider::SharedCredentialsProvider;
     use aws_credential_types::Credentials;
     use aws_smithy_async::time::StaticTimeSource;
     use aws_smithy_http_client::test_util::infallible_client_fn;
@@ -167,6 +168,33 @@ mod tests {
         };
         assert_eq!("eu-west-1", scope(0));
         assert_eq!("us-west-2", scope(1));
+    }
+
+    #[tokio::test]
+    async fn the_last_identity_resolver_or_credentials_provider_for_sigv4_wins() {
+        let other = || {
+            SharedCredentialsProvider::new(Credentials::new("OTHER", "secret", None, None, "test"))
+        };
+        // The test config sets the credentials provider first, so the resolver set later wins.
+        let (client, sent) = test_client(
+            SIGNED,
+            Config::builder().identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, other()),
+        );
+        // A credentials provider set after the resolver wins.
+        let (later_client, later_sent) = test_client(
+            SIGNED,
+            Config::builder()
+                .identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, other())
+                .credentials_provider(Credentials::for_tests()),
+        );
+        client.call("GetThing").send().await.unwrap();
+        later_client.call("GetThing").send().await.unwrap();
+        let access_key = |sent: &Sent| {
+            let authorization = header(sent, 0, "authorization").unwrap();
+            authorization.split(['=', '/']).nth(1).unwrap().to_owned()
+        };
+        assert_eq!("OTHER", access_key(&sent));
+        assert_eq!("ANOTREAL", access_key(&later_sent));
     }
 
     #[tokio::test]

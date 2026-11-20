@@ -1,0 +1,67 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Bearer": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#httpBearerAuth": {}
+            }
+        },
+        "smithy.example#Basic": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#httpBasicAuth": {}
+            }
+        },
+        "smithy.example#HeaderKey": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#httpApiKeyAuth": {
+                    "name": "Authorization",
+                    "in": "header",
+                    "scheme": "ApiKey"
+                }
+            }
+        },
+        "smithy.example#QueryKey": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#httpApiKeyAuth": {
+                    "name": "api_key",
+                    "in": "query"
+                }
+            }
+        },
+        "smithy.example#GetThing": {
+            "type": "operation"
+        }
+    }
+}
