@@ -92,17 +92,18 @@ sha2 = { version = "0.11", optional = true }
 # `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
 # explicitly by those features rather than defaulting to the non-FIPS one.
 #
-# The floor is 1.18 to match the requirement `rustls` declares, so the digest path asks for the same
-# AWS-LC line as the TLS path.
+# The floor is 1.18.1, on the `1.18` line `rustls` declares, so the digest path asks for the same
+# AWS-LC as the TLS path.
 #
-# It is also an advisory floor, not an API one: the aws-lc-rs APIs used here compile against 1.16.1.
-# Versions before 1.17.3 allow `aws-lc-fips-sys` 0.13.1, which RUSTSEC-2026-0042 and -0043 patch only
-# in 0.13.13 and 0.13.12.
+# It is not an API floor: the aws-lc-rs APIs used here compile against 1.16.1. It is the first
+# version whose requirements for both `-sys` crates exclude every version with an open advisory or a
+# known build failure. It also selects the AWS-LC-FIPS 4.x module, which is on the CMVP Modules In
+# Process list rather than certificated.
 #
 # Keep this in step with `aws-sigv4`'s. Cargo resolves one `aws-lc-rs` 1.x for the whole graph, so
 # they cannot drift apart at build time, but the declared requirements should still agree. See that
-# crate's Cargo.toml for the advisory table and the full rationale.
-aws-lc-rs = { version = "1.18", optional = true, default-features = false }
+# crate's Cargo.toml for the version table and the full rationale.
+aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 
 [dev-dependencies]
 bytes-utils = "0.1.2"

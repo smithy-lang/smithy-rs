@@ -29,7 +29,7 @@ aws-sdk-dynamodb = { version = "...", default-features = false, features = [
 
 Two stay regardless: `sigv4a` declares `p256`, which brings its own `hmac` and `sha2`, never called because the backend they serve isn't compiled; and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects. Neither signs a request or computes a checksum.
 
-`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18"`, matching what `rustls` declares so that signing, checksums and TLS all ask for the same line. If your own manifest pins `aws-lc-rs` below that, it will need raising.
+`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, it will need raising. Note that `aws-lc-rs` 1.18 is where the FIPS build moved from the AWS-LC-FIPS 3.x module, which holds FIPS 140-3 certificates #5314 and #5298, to 4.x, which is on the [CMVP Modules In Process list](https://csrc.nist.gov/Projects/cryptographic-module-validation-program/modules-in-process/Modules-In-Process-List). This floor selects 4.x and leaves no way to request 3.x through these crates.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 

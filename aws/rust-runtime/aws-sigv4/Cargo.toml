@@ -114,30 +114,42 @@ ecdsa = { version = "0.17.0", optional = true }
 # so that the AWS-LC build (non-FIPS vs FIPS) is chosen explicitly by those features rather than
 # defaulting to the non-FIPS one.
 #
-# The floor is 1.18 to match the requirement `rustls` declares, so that the signing path and the TLS
-# path ask for the same AWS-LC line. Cargo would unify them to one version either way — it resolves a
+# The floor is 1.18.1, which sits on the `1.18` line `rustls` declares, so the signing path and the
+# TLS path ask for the same AWS-LC. Cargo would unify them to one version either way — it resolves a
 # single `aws-lc-rs` 1.x for the whole graph, and incompatible requirements force a downgrade
 # elsewhere or fail outright rather than producing two copies — so this is not about preventing
-# duplicate builds. It is about the requirements saying the same thing as the crate they will be
+# duplicate builds. It is about the requirements naming the same line as the crate they will be
 # resolved alongside, and about `minimal-versions --direct`: that leg pins direct dependencies to
-# their declared minimum, so a lower floor here would have CI exercising an AWS-LC line no build
-# actually ships.
+# their declared minimum, so the floor is the version CI actually exercises.
 #
-# The floor is also an advisory floor, not an API one: the aws-lc-rs APIs used here compile against
-# 1.16.1. Every version from 1.17.3 up has declared ranges for *both* `-sys` crates that exclude
-# every version with an open advisory, which matters because this crate offers both AWS-LC arms:
+# The floor is not an API one: the aws-lc-rs APIs used here compile against 1.16.1. It is chosen so
+# that the declared requirements for *both* `-sys` crates exclude every version with an open
+# advisory or a known build failure. Both arms matter here, because this crate offers both; and the
+# declared requirement matters rather than what a fresh resolve happens to pick, because a
+# consumer's lockfile may already hold an excluded version.
 #
 #   aws-lc-rs   aws-lc-sys req   aws-lc-fips-sys req
 #   1.16.1      ^0.38.0   BAD    ^0.13.1           BAD
 #   1.16.2      ^0.39.0   ok     ^0.13.1           BAD
 #   1.17.0      ^0.41.0   ok     ^0.13.1           BAD
 #   1.17.3      ^0.43.0   ok     ^0.13.16          ok
+#   1.18.0      ^0.44.0   BAD    ^0.14.0           BAD
 #   1.18.1      ^0.45.0   ok     ^0.14.2           ok
 #
-# `aws-lc-sys` needs >= 0.39.0 for RUSTSEC-2026-0044 and -0048 (and >= 0.38.0 for -0045, -0046,
-# -0047); `aws-lc-fips-sys` needs >= 0.13.13 for RUSTSEC-2026-0042 and >= 0.13.12 for -0043, which
-# the 0.14 line satisfies as well.
-aws-lc-rs = { version = "1.18", optional = true, default-features = false }
+# Through 1.17.x the exclusions are advisories: `aws-lc-sys` needs >= 0.39.0 for RUSTSEC-2026-0044
+# and -0048 (and >= 0.38.0 for -0045 through -0047); `aws-lc-fips-sys` needs >= 0.13.13 for
+# RUSTSEC-2026-0042 and >= 0.13.12 for -0043, which the 0.14 line satisfies as well. The two 1.18.0
+# exclusions are build failures instead: `^0.44.0` cannot reach `aws-lc-sys` 0.45.0, where Clang
+# builds with `-flto` in `CFLAGS` were fixed, and 0.44.0 is the only 0.44.x; and `^0.14.0` admits
+# `aws-lc-fips-sys` 0.14.0 and 0.14.1, neither of which builds with Clang 20 or newer. 1.18.1 is the
+# first release whose requirements exclude both.
+#
+# One consequence to be aware of, because it is the point of the FIPS arm: 1.18.0 is where
+# `aws-lc-fips-sys` moved from the AWS-LC-FIPS 3.x module to 4.x. 3.x holds FIPS 140-3 certificates
+# #5314 and #5298; 4.x has completed testing by an accredited lab and is on the CMVP Modules In
+# Process list, so it has no certificate yet. This floor therefore picks 4.x and leaves no way to
+# ask for 3.x through this crate: a consumer requirement of `<1.18.0` is unsatisfiable against it.
+aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 crypto-bigint = { version = "0.7.10", optional = true }
 subtle = { version = "2.6.0", optional = true }
 # 0.3.35 is the minimum version that compiles on Rust 1.80+ (earlier versions hit a type inference bug)
