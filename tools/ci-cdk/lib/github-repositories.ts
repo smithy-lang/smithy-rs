@@ -7,8 +7,8 @@
  * The GitHub repositories whose workflows assume a role deployed from here, with their ids.
  *
  * The ids are what the trust policies authorise on, because organisation and repository names are
- * mutable and a freed name can be claimed by another account. They survive a rename, so this file
- * changes only if a repository is replaced outright.
+ * mutable and a freed name can be claimed by another account. They survive a rename. A transfer is
+ * undocumented either way, so re-read them after one.
  *
  * Read them with `gh api repos/ORG/REPO --jq '{repository_id: .id, owner_id: .owner.id}'`. A wrong
  * value here produces a role nobody can assume, which surfaces as an opaque permissions error in

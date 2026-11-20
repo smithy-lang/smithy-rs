@@ -6,11 +6,9 @@
 # Additional CI checks for the CDK that provisions this repository's own CI infrastructure: the
 # GitHub Actions OIDC provider, and the IAM roles that workflows assume to reach AWS.
 #
-# None of this was checked anywhere before. `check-tools` builds and tests
-# `tools/ci-cdk/canary-runner`, which is the Rust part; the TypeScript was never compiled, linted or
-# tested by CI -- including the jest suite that pins the trust policy of every role a workflow can
-# assume. A trust policy is exactly the kind of thing that should not first be exercised by a
-# deployment.
+# `check-tools` covers the Rust half, `tools/ci-cdk/canary-runner`. This covers the TypeScript,
+# including the jest suite that pins the trust policy of every role a workflow can assume. A trust
+# policy is exactly the kind of thing that should not first be exercised by a deployment.
 #
 # The build image provides node at /opt/nodejs and puts it on PATH, so this needs no setup. These
 # checks were verified against that same node version.

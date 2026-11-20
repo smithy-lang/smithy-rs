@@ -24,7 +24,7 @@ import { Construct } from "constructs";
 export const METRIC_NAMESPACE = "smithy-rs-build-canary";
 
 /**
- * Alarm name prefixes the alarm role may manage.
+ * Alarm name prefixes the orchestrator role may manage.
  *
  * `build-canary-*` is the canary's own, one alarm per release. `paging-selftest-*` belongs to a
  * hand-dispatched workflow that exercises datapoint to ticket on its own, without a release and
@@ -89,8 +89,8 @@ export interface Properties extends StackProps {
  * The two roles the build canary assumes.
  *
  * Nothing durable is stored here. A release's record is a 14-day artifact, and the resolved-graph
- * baselines live in a directory in the repository, for the reasons the canary crate's `baseline`
- * module gives.
+ * baselines are a directory on the runner rather than a bucket, for the reasons the canary crate's
+ * `baseline` module gives.
  *
  * The split is leg versus orchestrator, and it is a split by *how far the token travels*. A leg's
  * token is minted once per leg, forty times in a release's matrix, in jobs that check out and

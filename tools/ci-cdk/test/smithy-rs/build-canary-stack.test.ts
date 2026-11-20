@@ -90,9 +90,9 @@ const escapeRegExp = (literal: string): string => literal.replace(/[.*+?^${}()|[
  * Whether any of a role's trust statements admits these claims.
  *
  * A small evaluator rather than assertions on the rendered JSON, because what this stack's security
- * turns on is whether a given token can assume a given role — and with two alternatives per role
- * that is no longer legible by reading condition blocks side by side. A condition on a claim the
- * token does not carry matches nothing, which is how IAM behaves and is the direction that matters.
+ * turns on is whether a given token can assume a given role, and a condition block read side by
+ * side does not answer that. A condition on a claim the token does not carry matches nothing, which
+ * is how IAM behaves and is the direction that matters.
  */
 function admits(statements: Statement[], claims: Claims): boolean {
     // IAM's StringLike: `*` is any sequence of characters, `?` is exactly one. The `?` matters
@@ -175,9 +175,8 @@ test("a leg must not be able to touch the alarms", () => {
     // jobs that build published crates off the open internet, so it must not be able to delete the
     // alarm watching it.
     //
-    // The reverse is no longer a property and should not be asserted as one: the orchestrator
-    // writes its own verdicts -- a failed dispatch, an unchecked release -- so it holds the leg's
-    // permission too. A leg's authority is a subset of the orchestrator's, deliberately.
+    // The reverse is not a property: the orchestrator writes its own verdicts -- a failed
+    // dispatch, an unchecked release -- so a leg's authority is a subset of its, deliberately.
     const template = synth();
     const metrics = actionsOf(policyFor(template, "metrics"));
     const orchestrator = actionsOf(policyFor(template, "orchestrator"));
