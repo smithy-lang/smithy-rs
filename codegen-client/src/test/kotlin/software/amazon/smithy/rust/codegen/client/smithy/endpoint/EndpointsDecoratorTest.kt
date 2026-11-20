@@ -432,6 +432,68 @@ class EndpointsDecoratorTest {
                             // bucket_name is unset and marked as required on the model, so we'll refuse to construct this request
                             let err = client.test_operation().send().await.expect_err("param missing");
                             assert_eq!(format!("{}", err), "failed to construct request");
+
+                            // an empty bucket name counts as unset
+                            let err = client.test_operation().bucket("").send().await.expect_err("param empty");
+                            assert_eq!(format!("{}", err), "failed to construct request");
+                        }
+
+                        ##[tokio::test]
+                        async fn whitespace_only_required_param_is_kept() {
+                            use #{NeverClient};
+                            use #{TokioSleep};
+                            use aws_smithy_runtime_api::box_error::BoxError;
+                            use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
+                            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                            use aws_smithy_types::config_bag::ConfigBag;
+                            use aws_smithy_types::timeout::TimeoutConfig;
+                            use std::sync::{Arc, Mutex};
+                            use std::time::Duration;
+                            use $moduleName::{
+                                config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
+                                config::Intercept, config::SharedAsyncSleep, Client, Config,
+                            };
+
+                            ##[derive(Clone, Debug, Default)]
+                            struct BucketParam(Arc<Mutex<Option<String>>>);
+                            impl Intercept for BucketParam {
+                                fn name(&self) -> &'static str {
+                                    "BucketParam"
+                                }
+
+                                fn read_before_transmit(
+                                    &self,
+                                    _context: &BeforeTransmitInterceptorContextRef<'_>,
+                                    _runtime_components: &RuntimeComponents,
+                                    cfg: &mut ConfigBag,
+                                ) -> Result<(), BoxError> {
+                                    let params = cfg
+                                        .load::<EndpointResolverParams>()
+                                        .expect("params set in config");
+                                    let params: &Params = params.get().expect("correct type");
+                                    *self.0.lock().unwrap() = params.bucket().map(ToString::to_string);
+                                    Ok(())
+                                }
+                            }
+
+                            let interceptor = BucketParam::default();
+                            let config = Config::builder()
+                                .behavior_version_latest()
+                                .http_client(NeverClient::new())
+                                .interceptor(interceptor.clone())
+                                .timeout_config(
+                                    TimeoutConfig::builder()
+                                        .operation_timeout(Duration::from_millis(30))
+                                        .build(),
+                                )
+                                .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+                                .a_bool_param(false)
+                                .build();
+                            let client = Client::from_conf(config);
+
+                            // A whitespace-only value is a real value (e.g. the S3 object key " "), not a missing one
+                            let _ = client.test_operation().bucket(" ").send().await;
+                            assert_eq!(interceptor.0.lock().unwrap().as_deref(), Some(" "));
                         }
                         """,
                         "NeverClient" to
