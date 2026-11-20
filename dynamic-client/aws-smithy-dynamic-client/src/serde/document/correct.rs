@@ -24,7 +24,7 @@ const ENUM: ShapeId = ShapeId::from_static("smithy.api#enum");
 
 // Fills the members of `schema`, a structure or union schema, that `members` leaves out.
 // TODO(aws-smithy-schema): Compute the fill values once per structure, and keep them in a schema
-// extension, once schema extensions are safe on recursive schemas.
+// extension, once schemas carry `@default` and `@required`.
 pub(super) fn fill_missing(
     schemas: &RuntimeSchemaSet,
     schema: &Schema<'_>,
