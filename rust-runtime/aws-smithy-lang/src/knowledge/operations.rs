@@ -129,7 +129,7 @@ impl fmt::Debug for OperationIndex<'_> {
 #[derive(Clone, Copy)]
 pub struct OperationKnowledge<'m> {
     operation: OperationView<'m>,
-    node: u32,
+    pub(crate) node: u32,
     relationships: RelationshipIndex<'m>,
 }
 

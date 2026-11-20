@@ -1,0 +1,176 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#BooleanExpectsNeither",
+            "message": "Waiter `W`, acceptor 0: Waiter acceptors with a booleanEquals comparator must set their `expected` value to 'true' or 'false', but found 'yes'."
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageOnRetry",
+            "message": "Waiter `W`, acceptor 1: The `message` property is only valid on acceptors with a `failure` state, but found state `retry`."
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MessageOnSuccess",
+            "message": "Waiter `W`, acceptor 0: The `message` property is only valid on acceptors with a `failure` state, but found state `success`."
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MinDelayAboveDefaultMaxDelay",
+            "message": "`smithy.waiters#waitable` trait waiter named `W` has a `minDelay` value of 121 that is greater than its `maxDelay` value of 120"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MinDelayAboveMaxDelay",
+            "message": "`smithy.waiters#waitable` trait waiter named `W` has a `minDelay` value of 10 that is greater than its `maxDelay` value of 5"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#NoSuccessState",
+            "message": "No success state matcher found for `smithy.waiters#waitable` trait waiter named `W`"
+        }
+    ],
+    "waiters": {
+        "ex#BooleanExpectsNeither": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "ready",
+                                "expected": "yes",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageOnRetry": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "name"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MessageOnSuccess": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": "name"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MinDelayAboveDefaultMaxDelay": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 121,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MinDelayAboveMaxDelay": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 10,
+                "maxDelay": 5,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#NoSuccessState": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "retry",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

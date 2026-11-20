@@ -1,0 +1,64 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "TraitTarget",
+            "severity": "ERROR",
+            "shape": "ex#InputEventStream",
+            "message": "Trait `smithy.waiters#waitable` cannot be applied to `ex#InputEventStream`. This trait may only be applied to shapes that match the following selector: operation :not(-[input, output]-> structure > member > union[trait|streaming])"
+        },
+        {
+            "id": "TraitTarget",
+            "severity": "ERROR",
+            "shape": "ex#NotAnOperation",
+            "message": "Trait `smithy.waiters#waitable` cannot be applied to `ex#NotAnOperation`. This trait may only be applied to shapes that match the following selector: operation :not(-[input, output]-> structure > member > union[trait|streaming])"
+        },
+        {
+            "id": "TraitTarget",
+            "severity": "ERROR",
+            "shape": "ex#OutputEventStream",
+            "message": "Trait `smithy.waiters#waitable` cannot be applied to `ex#OutputEventStream`. This trait may only be applied to shapes that match the following selector: operation :not(-[input, output]-> structure > member > union[trait|streaming])"
+        }
+    ],
+    "waiters": {
+        "ex#InputEventStream": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#OutputEventStream": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}
