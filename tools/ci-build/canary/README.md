@@ -31,23 +31,27 @@ consumer writing `aws-config = "~1.10"` does.
 
 ## What it checks
 
-Sixty legs per release:
+Forty legs per release:
 
-- **Ten dependency scenarios × five compiler versions.** The first five scenarios are manifests we
-  write; the last five take their requirements on us from a third party's real `Cargo.toml`, which
-  is the point of those rows — patching their requirements would destroy the evidence. The compiler
+- **Six dependency scenarios × five compiler versions.** The first two are manifests we write; the
+  other four take their requirements on us from a third party's real `Cargo.toml`, which is the
+  point of those rows — patching their requirements would destroy the evidence. The compiler
   versions are the current stable and the four behind it, clamped at the `rust-version` the crates
   declare.
 - **Ten build-axis legs**, which vary target or profile rather than dependencies, and so are not
   multiplied by the compiler axis. Four reuse the `new-project` manifest (`musl`, `aarch64`,
-  `windows`, `release-profile`); the other six need manifests of their own, because the client path
-  does not build for those targets at all — `wasm-native` and `wasm-wasip2` use `wasm`, the three
-  exotic targets `i686`, `powerpc` and `powerpc64` use the narrow `serialization` manifest, and
-  `large-generated-clients` has its own.
+  `windows`, `release-profile`); the other six need manifests of their own — `wasm-native` and
+  `wasm-wasip2` use `wasm` to reach `aws-smithy-wasm`; `i686`, `powerpc` and `powerpc64` use the
+  narrow `serialization` manifest, because CI excludes `aws-smithy-http-client` on those targets and
+  a consumer manifest reaches it transitively; and `large-generated-clients` resolves `aws-sdk-ec2`.
 
-Thirteen manifests back all sixty: one per dependency scenario, plus those three.
+Nine manifests back the forty: one per dependency scenario, plus those three. A seventh scenario
+resolves three crates declared in `src/test_registry.rs` and assembled on disk as a cargo
+`local-registry`, instead of crates.io. Its five legs are excluded from `all` and dispatched by
+name, so the matrix can express 45 legs and a release runs 40.
 
-Each leg renders a crate, resolves it against crates.io, builds it, and runs its assertions. The
+Each leg renders a crate, resolves it against crates.io and builds it; the legs that can execute
+also run its assertions. The
 rendered manifests pin `edition = "2021"`, which pins the dependency resolver to v2. Resolver v3 is
 MSRV-aware and would quietly resolve *older* crates on an old toolchain, turning a real break into a
 green leg.
@@ -109,31 +113,32 @@ The **dispatch tier** covers the publish window, when crates are arriving one at
 graph is changing under consumers. It ticks every 15 minutes, resolves every manifest, and
 dispatches legs only for the manifests whose graph actually moved — a tick with no publish in it
 resolves exactly what the previous tick did, so running the whole matrix to re-prove it buys
-nothing. It
-ends when `publish-status` reports that every declared runtime crate has arrived.
+nothing. It ends when `publish-status` reports that every declared runtime crate has arrived, or at
+a three-hour ceiling with crates still outstanding, which is itself a finding.
 
 The **floor tier** then runs hourly for 24 hours with no gate, because a graph can break without
 anything in this repository moving: a third-party crate publishes, and a consumer's resolution
 changes.
 
-A hard verdict stops the remaining hours. The team has already been paged, and later hours would
-dedupe into the same ticket and page nobody. `INFRA_FAIL` does not stop it: a registry hiccup is
-expected to clear.
+A hard verdict on a leg that was not already red before this release stops the remaining hours. The
+team has already been paged, and later hours would dedupe into the same ticket and page nobody. A
+leg red for a reason nobody has fixed is not news and does not stop it, and nor does `INFRA_FAIL`: a
+registry hiccup is expected to clear.
 
 ## Where the evidence goes
 
-Three places, with different lifetimes, because the useful life of each differs.
+Three places, with different lifetimes.
 
 - **The job log** carries the full diagnosis and is the fastest way in while the run exists.
-- **An artifact per leg**, kept 14 days. Every leg uploads its `report.json`; a leg that reached a
+- **An artifact per leg**, kept 14 days. Every leg that ran uploads its `report.json`; a leg that reached a
   verdict also uploads the rendered crate and its `Cargo.lock`, which is the reproduction recipe.
   A green leg has nothing to reproduce, and a superseded leg uploads nothing because it never built.
 - **One record per release**, folded from every leg's report and kept 14 days as an artifact.
 
 A permanent archive of those records is deliberately deferred. It would answer "how often does this
-happen, and to what" -- artifacts, logs and now the runs themselves are kept 90 days, so three
-months on there is nothing left to count -- but that is a historical question, not the one this
-canary exists for, and it cost a durable bucket and a third secret to answer. The hooks for it are
+happen, and to what" -- artifacts, logs and the runs themselves are kept 90 days, so three months
+on there is nothing left to count -- but that is a historical question, not the one this canary
+exists for, and it cost a durable bucket and a third IAM role to answer. The hooks for it are
 gone rather than dormant, so adding it later is a deliberate change rather than flipping a switch.
 
 The record never infers success from silence. A leg that died without reporting is a defect in the
