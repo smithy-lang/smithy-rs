@@ -1096,6 +1096,40 @@ structure S with [M1, M2] {
 }
 
 #[test]
+fn retargeted_inherited_member_conflicts_when_assembled() {
+    // Like the reference implementation: "Member conflicts with an inherited mixin member:
+    // `ex#M$x`", and the member keeps the target set in code.
+    let model = Model::from_idl_str(
+        "m.smithy",
+        "$version: \"2\"\nnamespace ex\n@mixin\nstructure M { x: String }\n\
+         structure S with [M] {}\n",
+    )
+    .unwrap();
+    let structure = |id: &'static str| {
+        let shape = model.expect_shape(&ShapeId::from_static(id)).unwrap();
+        shape.as_structure().unwrap().shape().clone()
+    };
+    let s = structure("ex#S");
+    let x = s.member("x").unwrap();
+    let retargeted = s
+        .to_builder()
+        .add_member(x.to_builder().target("smithy.api#Integer").build().unwrap())
+        .build()
+        .unwrap();
+    let validated = Model::assembler()
+        .add_shape(structure("ex#M"))
+        .add_shape(retargeted)
+        .assemble();
+    let conflicts: Vec<_> = validated
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code() == DiagnosticCode::InvalidShape)
+        .collect();
+    assert_eq!(conflicts.len(), 1, "{:?}", validated.diagnostics());
+    assert_eq!(conflicts[0].shape_id().unwrap().as_str(), "ex#S$x");
+}
+
+#[test]
 fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
     let mixins = Model::from_json_str(
         "m.json",

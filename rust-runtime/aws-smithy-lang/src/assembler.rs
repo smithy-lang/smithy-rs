@@ -1016,7 +1016,7 @@ impl Merge {
             // As in the reference implementation, a shape with mixins is merged like a document
             // definition of its declared form, so that what is applied to its mixins reaches it.
             let id = shape.id().clone();
-            let (declared, member_traits) = declared_form(shape);
+            let declared = declared_form(shape);
             if self.created.remove(&id) {
                 // It replaces an earlier shape built in code, which nothing has touched yet, so
                 // replacing the entry is the same as adding the first definition. Replacing it in
@@ -1025,11 +1025,6 @@ impl Merge {
                 self.shapes[&id] = declared;
             } else {
                 self.definition(declared, &HashSet::new(), None);
-            }
-            for (member, traits) in member_traits {
-                for (trait_id, value) in traits {
-                    self.merge_trait(&member, trait_id, value, None);
-                }
             }
             return;
         }
@@ -1598,32 +1593,31 @@ fn trait_map<'a>(
     }
 }
 
-/// Splits a shape with resolved mixins (built in code or taken from a model) into its declared
-/// form, as if a document defined it: its own traits, and the members it declares rather than
-/// inherits. Also returns the own traits of its inherited members, by member ID.
-fn declared_form(mut shape: Shape) -> (Shape, Vec<(ShapeId, TraitMap)>) {
+/// Turns a shape with resolved mixins (built in code or taken from a model) into its declared
+/// form, as if a document defined it: its own traits, and every member with only its own traits.
+///
+/// Like the reference implementation's `LoaderShapeMap.moveCreatedShapeToOperations`, inherited
+/// members stay as declared members, so resolving the shape again treats them as redefinitions:
+/// a member whose target was changed in code is reported as conflicting with the mixin's, rather
+/// than silently replaced by it, and members keep their source locations.
+fn declared_form(mut shape: Shape) -> Shape {
     let common = shape.common_mut();
     if let Some(mixins) = &mut common.mixins {
         let introduced = std::mem::take(&mut mixins.introduced);
         common.traits.retain(|id, _| introduced.contains(id));
     }
-    let mut member_traits = Vec::new();
-    if let Some(members) = shape.named_members_mut() {
-        members.retain(|_, member| {
-            let Some(inherited) = member.inherited.take() else {
-                return true;
-            };
-            let own: TraitMap = std::mem::take(&mut member.traits)
-                .into_iter()
-                .filter(|(id, _)| inherited.introduced.contains(id))
-                .collect();
-            if !own.is_empty() {
-                member_traits.push((member.id.clone(), own));
-            }
-            false
-        });
+    for member in shape
+        .named_members_mut()
+        .into_iter()
+        .flat_map(|m| m.values_mut())
+    {
+        if let Some(inherited) = member.inherited.take() {
+            member
+                .traits
+                .retain(|id, _| inherited.introduced.contains(id));
+        }
     }
-    (shape, member_traits)
+    shape
 }
 
 /// Returns `true` if two values were loaded from the same place, like the reference
