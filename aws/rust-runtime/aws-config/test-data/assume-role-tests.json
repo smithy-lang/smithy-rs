@@ -649,7 +649,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev"
+          "credential_daemon": "dev"
         }
       },
       "selected_profile": "A"
@@ -669,7 +669,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "aws_access_key_id": "abc123",
           "aws_secret_access_key": "def456"
         }
@@ -691,7 +691,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "credential_process": "/bin/creds"
         }
       },
@@ -716,7 +716,7 @@
           "source_profile": "B"
         },
         "B": {
-          "daemon_credential": "dev"
+          "credential_daemon": "dev"
         }
       },
       "selected_profile": "A"
@@ -745,7 +745,7 @@
           "source_profile": "B"
         },
         "B": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "aws_access_key_id": "abc123",
           "aws_secret_access_key": "def456"
         }
@@ -772,7 +772,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "role_arn": "arn:aws:iam::123456789:role/RoleA",
           "source_profile": "B"
         },
@@ -784,7 +784,7 @@
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` sets `daemon_credential` together with `role_arn`; a credential daemon profile cannot also assume a role. Put `role_arn` in a separate profile with `source_profile = A`."
+      "Error": "INVALID_CONFIG: profile `A` sets `credential_daemon` together with `role_arn`; a credential daemon profile cannot also assume a role. Put `role_arn` in a separate profile with `source_profile = A`."
     }
   },
   {
@@ -792,14 +792,14 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "web_identity_token_file": "/token.jwt"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has two credential sources, `daemon_credential` and `web_identity_token_file`. Remove one of them."
+      "Error": "INVALID_CONFIG: profile `A` has two credential sources, `credential_daemon` and `web_identity_token_file`. Remove one of them."
     }
   },
   {
@@ -811,7 +811,7 @@
           "source_profile": "B"
         },
         "B": {
-          "daemon_credential": "a/b",
+          "credential_daemon": "a/b",
           "aws_access_key_id": "abc123",
           "aws_secret_access_key": "def456"
         }
@@ -819,7 +819,7 @@
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `B` has an invalid `daemon_credential`"
+      "Error": "INVALID_CONFIG: profile `B` has an invalid `credential_daemon`"
     }
   },
   {
@@ -827,13 +827,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": ""
+          "credential_daemon": ""
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -841,13 +841,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "credential_daemon": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -855,13 +855,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": ".dev"
+          "credential_daemon": ".dev"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -869,13 +869,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "a/b"
+          "credential_daemon": "a/b"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -883,13 +883,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "a b"
+          "credential_daemon": "a b"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -897,13 +897,13 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dév"
+          "credential_daemon": "dév"
         }
       },
       "selected_profile": "A"
     },
     "output": {
-      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `credential_daemon`. A credential daemon credential name is 1 to 64 characters"
     }
   },
   {
@@ -911,7 +911,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          "credential_daemon": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       },
       "selected_profile": "A"
@@ -931,7 +931,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "A.b_c-1"
+          "credential_daemon": "A.b_c-1"
         }
       },
       "selected_profile": "A"
@@ -951,7 +951,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev."
+          "credential_daemon": "dev."
         }
       },
       "selected_profile": "A"
@@ -971,7 +971,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "DeV"
+          "credential_daemon": "DeV"
         }
       },
       "selected_profile": "A"
@@ -991,7 +991,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_session": "foo",
           "sso_account_id": "0123",
           "sso_role_name": "testrole"
@@ -1022,7 +1022,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_start_url": "https://foo.bar",
           "sso_region": "us-east-7",
           "sso_account_id": "0123",
@@ -1048,7 +1048,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_account_id": "0123",
           "sso_role_name": "testrole"
         }
@@ -1070,7 +1070,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_session": "foo",
           "sso_account_id": "0123"
         }
@@ -1092,7 +1092,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_session": "foo",
           "sso_role_name": "testrole"
         }
@@ -1114,7 +1114,7 @@
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_session": "oops",
           "sso_account_id": "0123"
         }
@@ -1127,11 +1127,11 @@
     }
   },
   {
-    "docs": "credential daemon: SSO session without account and role resolves as if daemon_credential were absent",
+    "docs": "credential daemon: SSO session without account and role resolves as if credential_daemon were absent",
     "input": {
       "profiles": {
         "A": {
-          "daemon_credential": "dev",
+          "credential_daemon": "dev",
           "sso_session": "foo"
         }
       },

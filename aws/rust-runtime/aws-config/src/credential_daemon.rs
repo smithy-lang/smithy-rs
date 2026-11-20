@@ -10,28 +10,30 @@
 //! connection of its own, and reads one newline-terminated reply.
 //!
 //! This provider is part of the profile credentials provider. A profile in the shared config
-//! file selects it with the `daemon_credential` key:
+//! file selects it with the `credential_daemon` key:
 //!
 //! ```ini
 //! [profile dev]
-//! daemon_credential = dev
+//! credential_daemon = dev
 //! ```
 //!
 //! The socket is looked up on every fetch, and only the first of these locations that applies
 //! is used:
-//! 1. `AWS_CREDENTIAL_DAEMON_SOCKET`, if it is an absolute path. An empty or relative value
-//!    counts as unset.
-//! 2. `$HOME/.aws/credential-daemon.sock`, if anything is there: a socket, a symbolic link, or
+//! 1. The path set with [`CredentialDaemonBuilder::socket_path`], if it is an absolute path.
+//! 2. `AWS_CREDENTIAL_DAEMON_SOCKET`, if it is an absolute path.
+//! 3. `$HOME/.aws/credential-daemon.sock`, if anything is there: a socket, a symbolic link, or
 //!    a link whose target is missing. `HOME` is read from the environment, and this location
 //!    is skipped when `HOME` is unset, empty or relative.
 //!
+//! An empty or relative value of location 1 or 2 counts as unset.
+//!
 //! When no location applies, the provider fails with NOT_RUNNING without dialing. When location
-//! 2 is a link whose target is missing, the NOT_RUNNING error names the link and its target.
+//! 3 is a link whose target is missing, the NOT_RUNNING error names the link and its target.
 //! Otherwise the provider dials only the location it found, and a NOT_RUNNING error names it
-//! (for location 2, the link's path, not its target).
+//! (for location 3, the link's path, not its target).
 //!
 //! The provider needs the `credential-daemon` cargo feature and a Unix platform. Without them,
-//! a profile that sets `daemon_credential` fails with
+//! a profile that sets `credential_daemon` fails with
 //! [`CredentialDaemonErrorCode::UnsupportedPlatform`].
 
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
@@ -127,7 +129,7 @@ impl CredentialDaemonError {
         Self::new(
             CredentialDaemonErrorCode::UnsupportedPlatform,
             format!(
-                "profile `{profile}` sets `daemon_credential`, but this build of the SDK can not \
+                "profile `{profile}` sets `credential_daemon`, but this build of the SDK can not \
                  talk to a credential daemon. It needs the `credential-daemon` feature of \
                  `aws-config` and a Unix platform."
             ),
@@ -221,7 +223,7 @@ mod provider_impl {
     use tokio::net::UnixStream;
 
     pub(super) const SOCKET_ENV_VAR: &str = "AWS_CREDENTIAL_DAEMON_SOCKET";
-    /// Location 2, relative to `HOME`.
+    /// Location 3, relative to `HOME`.
     const HOME_SOCKET: &str = ".aws/credential-daemon.sock";
 
     /// Longest reply line, in bytes, not counting the newline.
@@ -240,6 +242,7 @@ mod provider_impl {
     pub struct CredentialDaemonProvider {
         credential: String,
         sso_role: Option<(String, String)>,
+        socket_path: Option<PathBuf>,
         env: Env,
         connect_timeout: Duration,
         call_timeout: Duration,
@@ -269,7 +272,7 @@ mod provider_impl {
                     .as_ref()
                     .map(|(account, role)| (account.as_str(), role.as_str())),
             );
-            let path = resolve_socket(&self.env)?;
+            let path = resolve_socket(self.socket_path.as_deref(), &self.env)?;
             tracing::debug!(socket = %path.display(), credential = %self.credential, "loading credentials from the credential daemon");
             let reply = call(
                 &path,
@@ -297,6 +300,7 @@ mod provider_impl {
         provider_config: Option<ProviderConfig>,
         credential: Option<String>,
         sso_role: Option<(String, String)>,
+        socket_path: Option<PathBuf>,
         connect_timeout: Option<Duration>,
         call_timeout: Option<Duration>,
     }
@@ -325,6 +329,15 @@ mod provider_impl {
             self
         }
 
+        /// The path of the credential daemon's socket.
+        ///
+        /// It is checked before `AWS_CREDENTIAL_DAEMON_SOCKET` and
+        /// `$HOME/.aws/credential-daemon.sock`. An empty or relative path counts as unset.
+        pub fn socket_path(mut self, path: impl Into<PathBuf>) -> Self {
+            self.socket_path = Some(path.into());
+            self
+        }
+
         /// How long to wait for the connection to the credential daemon. Defaults to 1 second.
         pub fn connect_timeout(mut self, timeout: Duration) -> Self {
             self.connect_timeout = Some(timeout);
@@ -348,6 +361,7 @@ mod provider_impl {
             CredentialDaemonProvider {
                 credential: self.credential.unwrap_or_default(),
                 sso_role: self.sso_role,
+                socket_path: self.socket_path,
                 env: conf.env(),
                 connect_timeout: self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT),
                 call_timeout: self.call_timeout.unwrap_or(DEFAULT_CALL_TIMEOUT),
@@ -362,7 +376,19 @@ mod provider_impl {
 
     /// Finds the socket of the credential daemon. Only the first location that applies is
     /// used, and nothing is tried after a failed dial.
-    pub(super) fn resolve_socket(env: &Env) -> Result<PathBuf, CredentialDaemonError> {
+    pub(super) fn resolve_socket(
+        socket_path: Option<&Path>,
+        env: &Env,
+    ) -> Result<PathBuf, CredentialDaemonError> {
+        if let Some(path) = socket_path.filter(|path| !path.as_os_str().is_empty()) {
+            if path.is_absolute() {
+                return Ok(path.to_path_buf());
+            }
+            tracing::debug!(
+                "the socket path setting is ignored because it is not an absolute path: {}",
+                path.display()
+            );
+        }
         if let Some(path) = env_value(env, SOCKET_ENV_VAR) {
             let path = PathBuf::from(path);
             if path.is_absolute() {
@@ -1630,7 +1656,7 @@ mod provider_test {
         let home = TempDir::new();
         let link = link_home_socket(home.path(), &daemon.socket);
         let env = home_env(home.path(), &[]);
-        assert_eq!(link, resolve_socket(&env).unwrap());
+        assert_eq!(link, resolve_socket(None, &env).unwrap());
         let creds = provider(env).provide_credentials().await.unwrap();
         assert_eq!("ASIADAEMON", creds.access_key_id());
         assert_eq!(1, daemon.requests().len());
@@ -1642,7 +1668,10 @@ mod provider_test {
         let home = TempDir::new();
         let socket = home_socket(home.path());
         let _listener = bind_socket(&socket);
-        assert_eq!(socket, resolve_socket(&home_env(home.path(), &[])).unwrap());
+        assert_eq!(
+            socket,
+            resolve_socket(None, &home_env(home.path(), &[])).unwrap()
+        );
     }
 
     // A regular file at location 2 still applies, and the dial fails with no fall-through.
@@ -1653,7 +1682,7 @@ mod provider_test {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "not a socket").unwrap();
         let env = home_env(home.path(), &[]);
-        assert_eq!(path, resolve_socket(&env).unwrap());
+        assert_eq!(path, resolve_socket(None, &env).unwrap());
         let err = provider_error(env).await;
         assert_eq!(Code::NotRunning, err.code());
         assert!(
@@ -1694,7 +1723,7 @@ mod provider_test {
         let home = TempDir::new();
         let link = link_home_socket(home.path(), &missing);
         let env = home_env(home.path(), &[]);
-        let err = resolve_socket(&env).unwrap_err();
+        let err = resolve_socket(None, &env).unwrap_err();
         assert_eq!(Code::NotRunning, err.code());
         let err = provider_error(env).await;
         assert_eq!(Code::NotRunning, err.code());
@@ -1715,15 +1744,15 @@ mod provider_test {
     async fn socket_resolution_no_link() {
         let home = TempDir::new();
         let env = home_env(home.path(), &[]);
-        assert_no_location(&resolve_socket(&env).unwrap_err());
+        assert_no_location(&resolve_socket(None, &env).unwrap_err());
         assert_no_location(&provider_error(env).await);
         // `$HOME/.aws` is there, but the socket isn't
         std::fs::create_dir_all(home.path().join(".aws")).unwrap();
-        assert_no_location(&resolve_socket(&home_env(home.path(), &[])).unwrap_err());
+        assert_no_location(&resolve_socket(None, &home_env(home.path(), &[])).unwrap_err());
         // `$HOME/.aws` is a file
         let file_home = TempDir::new();
         std::fs::write(file_home.path().join(".aws"), "").unwrap();
-        assert_no_location(&resolve_socket(&home_env(file_home.path(), &[])).unwrap_err());
+        assert_no_location(&resolve_socket(None, &home_env(file_home.path(), &[])).unwrap_err());
     }
 
     // Cases `no-link-home-unset` and `no-link-home-relative`: location 2 is skipped when
@@ -1743,7 +1772,7 @@ mod provider_test {
             vec![("HOME", "relative/home")],
             vec![("HOME", relative_home)],
         ] {
-            assert_no_location(&resolve_socket(&Env::from_slice(&vars)).unwrap_err());
+            assert_no_location(&resolve_socket(None, &Env::from_slice(&vars)).unwrap_err());
             assert_no_location(&provider_error(Env::from_slice(&vars)).await);
         }
     }
@@ -1756,20 +1785,20 @@ mod provider_test {
         let link = link_home_socket(home.path(), &daemon.socket);
         assert_eq!(
             PathBuf::from("/somewhere/daemon.sock"),
-            resolve_socket(&home_env(
-                home.path(),
-                &[(SOCKET_ENV_VAR, "/somewhere/daemon.sock")]
-            ))
+            resolve_socket(
+                None,
+                &home_env(home.path(), &[(SOCKET_ENV_VAR, "/somewhere/daemon.sock")])
+            )
             .unwrap()
         );
         // a relative or empty env var counts as unset
         for value in ["relative/daemon.sock", ""] {
             assert_eq!(
                 link,
-                resolve_socket(&home_env(home.path(), &[(SOCKET_ENV_VAR, value)])).unwrap()
+                resolve_socket(None, &home_env(home.path(), &[(SOCKET_ENV_VAR, value)])).unwrap()
             );
             assert_no_location(
-                &resolve_socket(&Env::from_slice(&[(SOCKET_ENV_VAR, value)])).unwrap_err(),
+                &resolve_socket(None, &Env::from_slice(&[(SOCKET_ENV_VAR, value)])).unwrap_err(),
             );
         }
     }
@@ -1794,6 +1823,96 @@ mod provider_test {
             "{err}"
         );
         assert!(daemon.requests().is_empty());
+    }
+
+    fn socket_path_provider(socket_path: &Path, env: Env) -> CredentialDaemonProvider {
+        CredentialDaemonProvider::builder()
+            .configure(&ProviderConfig::empty().with_env(env))
+            .credential("dev")
+            .socket_path(socket_path)
+            .build()
+    }
+
+    // The socket path setting wins over the env var and location 3.
+    #[tokio::test]
+    async fn socket_resolution_setting_wins() {
+        let setting = FakeDaemon::start(vec![reply_line(success(&in_15_minutes()))]);
+        let env_daemon = FakeDaemon::start(vec![reply_line(success(&in_15_minutes()))]);
+        let home = TempDir::new();
+        link_home_socket(home.path(), &env_daemon.socket);
+        let env = home_env(
+            home.path(),
+            &[(SOCKET_ENV_VAR, env_daemon.socket.to_str().unwrap())],
+        );
+        assert_eq!(
+            setting.socket,
+            resolve_socket(Some(&setting.socket), &env).unwrap()
+        );
+        assert_eq!(
+            setting.socket,
+            resolve_socket(Some(&setting.socket), &home_env(home.path(), &[])).unwrap()
+        );
+        socket_path_provider(&setting.socket, env)
+            .provide_credentials()
+            .await
+            .unwrap();
+        assert_eq!(1, setting.requests().len());
+        assert!(env_daemon.requests().is_empty());
+    }
+
+    // The setting names a path with nothing listening: NOT_RUNNING naming it, and neither the
+    // env var nor location 3 is tried.
+    #[tokio::test]
+    async fn socket_resolution_setting_not_running_no_fallback() {
+        let env_daemon = FakeDaemon::start(vec![reply_line(success(&in_15_minutes()))]);
+        let home = TempDir::new();
+        link_home_socket(home.path(), &env_daemon.socket);
+        let missing = home.path().join("missing.sock");
+        let env = home_env(
+            home.path(),
+            &[(SOCKET_ENV_VAR, env_daemon.socket.to_str().unwrap())],
+        );
+        let err = socket_path_provider(&missing, env)
+            .provide_credentials()
+            .await
+            .unwrap_err();
+        let err = daemon_error(&err);
+        assert_eq!(Code::NotRunning, err.code());
+        assert!(
+            err.to_string()
+                .contains(&format!("`{}`", missing.display())),
+            "{err}"
+        );
+        assert!(env_daemon.requests().is_empty());
+    }
+
+    // An empty or relative setting counts as unset: the env var is next, then location 3.
+    #[tokio::test]
+    async fn socket_resolution_setting_empty_or_relative() {
+        let daemon = FakeDaemon::start(vec![reply_line(success(&in_15_minutes()))]);
+        let home = TempDir::new();
+        let link = link_home_socket(home.path(), &daemon.socket);
+        for value in ["", "relative/daemon.sock"] {
+            let setting = Path::new(value);
+            assert_eq!(
+                PathBuf::from("/somewhere/daemon.sock"),
+                resolve_socket(
+                    Some(setting),
+                    &home_env(home.path(), &[(SOCKET_ENV_VAR, "/somewhere/daemon.sock")])
+                )
+                .unwrap()
+            );
+            assert_eq!(
+                link,
+                resolve_socket(Some(setting), &home_env(home.path(), &[])).unwrap()
+            );
+            assert_no_location(&resolve_socket(Some(setting), &Env::from_slice(&[])).unwrap_err());
+            socket_path_provider(setting, daemon.env())
+                .provide_credentials()
+                .await
+                .unwrap();
+        }
+        assert_eq!(2, daemon.requests().len());
     }
 
     #[tokio::test]

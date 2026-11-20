@@ -52,7 +52,7 @@ fn create_token_provider(
             profile,
             ..
         } => Err(TokenError::not_loaded(format!(
-            "profile `{profile}` uses `daemon_credential`, so its SSO session lives in the \
+            "profile `{profile}` uses `credential_daemon`, so its SSO session lives in the \
              credential daemon; services that use bearer tokens need an SSO session stored in \
              files (an `sso_session` in the shared config file with a token in the SSO cache)"
         ))),
@@ -272,19 +272,19 @@ mod test {
     #[tokio::test]
     async fn credential_daemon_profile_with_sso_has_no_sso_session() {
         let err = token_error(
-            "[profile dev]\ndaemon_credential = dev\nsso_session = s\nsso_account_id = 0123\nsso_role_name = role\n\
+            "[profile dev]\ncredential_daemon = dev\nsso_session = s\nsso_account_id = 0123\nsso_role_name = role\n\
              [sso-session s]\nsso_region = us-east-1\nsso_start_url = https://example.com/start\n",
         )
         .await;
         assert!(
-            err.contains("profile `dev` uses `daemon_credential`, so its SSO session lives in the credential daemon"),
+            err.contains("profile `dev` uses `credential_daemon`, so its SSO session lives in the credential daemon"),
             "{err}"
         );
     }
 
     #[tokio::test]
     async fn invalid_credential_daemon_profile_is_a_configuration_error() {
-        let err = token_error("[profile dev]\ndaemon_credential = .dev\n").await;
+        let err = token_error("[profile dev]\ncredential_daemon = .dev\n").await;
         assert!(err.contains("INVALID_CONFIG"), "{err}");
     }
 }

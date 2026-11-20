@@ -184,7 +184,7 @@ pub(super) fn merge_in(
 }
 
 /// Profile keys that are only read from the config file. They are ignored in the credentials file.
-const CONFIG_FILE_ONLY_KEYS: &[&str] = &["daemon_credential"];
+const CONFIG_FILE_ONLY_KEYS: &[&str] = &["credential_daemon"];
 
 fn merge_into_base(
     target: &mut dyn Section,
@@ -385,12 +385,12 @@ mod tests {
 
     #[test]
     #[traced_test]
-    fn daemon_credential_is_only_read_from_the_config_file() {
+    fn credential_daemon_is_only_read_from_the_config_file() {
         let raw = |section: &'static str, value: &'static str| -> RawProfileSet<'static> {
             let mut profile: RawProfileSet<'_> = HashMap::new();
             profile.insert(section, {
                 let mut out = HashMap::new();
-                out.insert(Cow::Borrowed("daemon_credential"), value.into());
+                out.insert(Cow::Borrowed("credential_daemon"), value.into());
                 out
             });
             profile
@@ -403,10 +403,10 @@ mod tests {
         merge_in(&mut base, raw("dev", "b"), EnvConfigFileKind::Credentials);
         assert_eq!(
             Some("a"),
-            base.get_profile("dev").unwrap().get("daemon_credential")
+            base.get_profile("dev").unwrap().get("credential_daemon")
         );
         assert!(logs_contain(
-            "`daemon_credential` is only read from the config file; ignored in the credentials file"
+            "`credential_daemon` is only read from the config file; ignored in the credentials file"
         ));
 
         // and it can not add the key either
@@ -414,7 +414,7 @@ mod tests {
         merge_in(&mut base, raw("dev", "b"), EnvConfigFileKind::Credentials);
         assert_eq!(
             None,
-            base.get_profile("dev").unwrap().get("daemon_credential")
+            base.get_profile("dev").unwrap().get("credential_daemon")
         );
     }
 
