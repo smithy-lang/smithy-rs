@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{service::ServiceShape, shape_id::ShapeId};
+use crate::{operation::OperationShape, service::ServiceShape, shape_id::ShapeId};
 
 /// A service shape for tests.
 pub(crate) struct TestService;
@@ -23,4 +23,14 @@ impl ServiceShape for UnversionedTestService {
     const VERSION: Option<&'static str> = Some("");
     type Protocol = ();
     type Operations = ();
+}
+
+/// An operation shape for tests.
+pub(crate) struct TestOperation;
+
+impl OperationShape for TestOperation {
+    const ID: ShapeId = ShapeId::new("test#TestOperation", "test", "TestOperation");
+    type Input = ();
+    type Output = ();
+    type Error = ();
 }

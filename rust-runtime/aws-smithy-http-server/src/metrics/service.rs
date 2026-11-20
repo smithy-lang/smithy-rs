@@ -127,7 +127,13 @@ mod tests {
     use http_body_util::{BodyExt, Full};
     use tower::{service_fn, Service, ServiceExt};
 
-    use crate::metrics::{test_util::TestService, Fault, ModeledOutcome, RequestExt, RequestMetrics, SuccessOutcome};
+    use crate::{
+        metrics::{
+            test_util::{TestOperation, TestService},
+            Fault, ModeledOutcome, RecordOperation, RequestExt, RequestMetrics, SuccessOutcome,
+        },
+        operation::OperationShape,
+    };
 
     use super::*;
 
@@ -431,6 +437,44 @@ mod tests {
         assert!(result.is_err());
         let metrics = seen.lock().unwrap().take().expect("callback received metrics");
         assert!(metrics.outcome().is_none());
+    }
+
+    /// Serves a request through a `MetricsService`, with the route wrapped in `RecordOperation` if
+    /// `routed`, and returns the metrics received by an `on_finish` callback registered inside it.
+    async fn operation_metrics(routed: bool) -> RequestMetrics {
+        let seen = Arc::new(Mutex::new(None));
+        let inner = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { ok() }
+            })
+        };
+        let inner = if routed {
+            tower::util::Either::Left(RecordOperation::new::<TestOperation>(inner))
+        } else {
+            tower::util::Either::Right(inner)
+        };
+        let response = MetricsService::new::<TestService>(inner, true)
+            .oneshot(http::Request::new(()))
+            .await
+            .unwrap();
+        drop(response);
+        let metrics = seen.lock().unwrap().take();
+        metrics.expect("callback received metrics")
+    }
+
+    #[tokio::test]
+    async fn routed_requests_record_the_operation() {
+        let metrics = operation_metrics(true).await;
+        assert_eq!(metrics.operation(), Some(&<TestOperation as OperationShape>::ID));
+    }
+
+    #[tokio::test]
+    async fn unrouted_requests_have_no_operation() {
+        let metrics = operation_metrics(false).await;
+        assert_eq!(metrics.operation(), None);
     }
 
     #[test]

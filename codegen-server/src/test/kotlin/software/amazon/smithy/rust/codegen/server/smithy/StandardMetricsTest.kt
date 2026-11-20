@@ -248,6 +248,9 @@ internal class StandardMetricsTest {
                                 _ => "unknown",
                             };
                             assert_eq!((result, source), (expected_result, expected_source), "{body} ({status})");
+                            // Routing chose the operation, even when the framework rejected the request before the handler ran.
+                            let operation = metrics.operation().map(|id| id.absolute());
+                            assert_eq!(operation, Some("test.outcome##Classify"), "{body} ({status})");
                         }
                         """,
                         *scope,

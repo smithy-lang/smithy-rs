@@ -87,6 +87,19 @@ class ServerServiceGenerator(
             expr
         }
 
+    /**
+     * Wraps the route service expression `expr` of operation `operationStructName` so that it records the
+     * operation for standard metrics, if the service supports them.
+     */
+    private fun recordOperation(
+        operationStructName: String,
+        expr: String,
+    ) = if (supportsStandardMetrics) {
+        "#{SmithyHttpServer}::metrics::RecordOperation::new::<crate::operation_shape::$operationStructName>($expr)"
+    } else {
+        expr
+    }
+
     /** The legacy (non-schema) routing service type, routing to `route`. */
     private fun legacyRoutingService(route: String) =
         "#{SmithyHttpServer}::routing::RoutingService<#{Router}<$route>, #{Protocol}>"
@@ -407,7 +420,7 @@ class ServerServiceGenerator(
                         S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send$syncBound + 'static,
                         S::Future: Send + 'static,
                     {
-                        self.$fieldName = Some($routeType::new(svc));
+                        self.$fieldName = Some($routeType::new(${recordOperation(structName, "svc")}));
                         self
                     }
                     """,
@@ -581,6 +594,7 @@ class ServerServiceGenerator(
                         for (operationShape in operations) {
                             val fieldName = builderFieldNames.getValue(operationShape)
                             val specFunctions = requestSpecMap.getValue(operationShape)
+                            val operationStructName = operationStructNames.getValue(operationShape)
                             emitRouteEntries(specFunctions) { isClone ->
                                 val accessor =
                                     if (isClone) {
@@ -593,7 +607,7 @@ class ServerServiceGenerator(
                                     """
                                     $accessor.unwrap_or_else(|| {
                                         let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
-                                        #{SmithyHttpServer}::routing::Route::new(svc)
+                                        #{SmithyHttpServer}::routing::Route::new(${recordOperation(operationStructName, "svc")})
                                     })
                                     """,
                                     "SmithyHttpServer" to smithyHttpServer,
@@ -956,8 +970,10 @@ class ServerServiceGenerator(
                 operations.map { operation ->
                     writable {
                         val field = builderFieldNames.getValue(operation)
-                        val handler = "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new(#{SmithyHttpServer}::operation::SchemaMissingFailure))"
                         val operationName = operationStructNames.getValue(operation)
+                        val missing =
+                            recordOperation(operationName, "#{SmithyHttpServer}::operation::SchemaMissingFailure")
+                        val handler = "self.$field.unwrap_or_else(|| #{SmithyHttpServer}::routing::SyncRoute::new($missing))"
                         rustTemplate("(<crate::operation_shape::$operationName as #{SmithyHttpServer}::operation::SchemaOperationShape>::SCHEMA, $handler)", *codegenScope)
                     }
                 }.join(",")
