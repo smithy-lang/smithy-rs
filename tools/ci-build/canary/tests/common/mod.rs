@@ -5,18 +5,15 @@
 
 //! Running one of the canary's workflow steps, for real, against a stand-in `aws`.
 //!
-//! `tests/workflows.rs` asserts properties of these workflows by reading them. That catches a great
-//! deal and it missed two defects that only running the steps revealed:
+//! `tests/workflows.rs` asserts properties of these workflows by reading them. Two kinds of defect
+//! survive that and fail only when a step runs:
 //!
-//! * the previous-alarm delete filtered blank lines with `grep -v`, which exits 1 on an empty list
-//!   and under `set -o pipefail` ended the step before `put-metric-alarm` — so no alarm was ever
-//!   created, on any release, and the next release had nothing to delete either.
-//! * the record job parsed `key_prefix` out of a decision that no longer carried it, which is a
-//!   `KeyError` at release time and compiles perfectly.
+//! * a shell construct whose exit status ends the step — `grep -v` on an empty list under
+//!   `set -o pipefail`, which stops the arming job before `put-metric-alarm`.
+//! * a Python snippet reading a key the JSON it parses does not carry, which compiles perfectly
+//!   and is a `KeyError` at release time.
 //!
-//! Both are invisible to a reader of the YAML and obvious the first time the script runs. Two
-//! reviewers found the first one independently, each by writing a stand-in `aws`; this is that,
-//! kept.
+//! Both are invisible to a reader of the YAML and obvious the first time the script runs.
 //!
 //! The step is extracted from the shipped workflow rather than copied, so these cannot drift from
 //! what runs, and is executed the way GitHub executes it: `bash --noprofile --norc -eo pipefail`.
@@ -145,9 +142,8 @@ impl Outcome {
 
     /// Assert something does not appear in the log, refusing to do so vacuously.
     ///
-    /// An empty log is not evidence of absence. A step that died before producing output satisfies
-    /// every absence assertion trivially, which is how a run of the shell version of this reported
-    /// eleven passes while its step never got past its first command.
+    /// An empty log is not evidence of absence: a step that died before producing output satisfies
+    /// every absence assertion trivially, reporting a pass for a step that never ran a command.
     pub fn log_lacks(&self, needle: &str) {
         assert!(
             !self.log.is_empty(),

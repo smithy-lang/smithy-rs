@@ -517,9 +517,8 @@ mod tests {
     /// and counting our own tests as breaks would answer it wrongly in the direction that matters.
     #[test]
     fn the_record_says_when_a_red_leg_was_rigged() {
-        // Cleared explicitly, not taken as it comes: during the stage that tests the paging chain
-        // one manifest really is rigged, and a fixture that changed meaning then would fail the
-        // very commit that rigs it.
+        // Cleared explicitly, not taken as it comes: while a manifest is rigged to test the
+        // paging chain, a fixture that changed meaning would fail the very commit that rigs it.
         let plain = Leg {
             induced: None,
             ..matrix().remove(0)

@@ -305,11 +305,11 @@ impl Exec for RealExec {
         let out_reader = drain(child.stdout.take());
         let err_reader = drain(child.stderr.take());
 
-        // The bound that makes a hang reportable. Without it this was `output()`, which blocks
-        // until the child exits: a stalled network read in `generate-lockfile` or a toolchain
-        // download meant the leg never returned, GitHub killed the job at `timeout-minutes`, and a
-        // killed job runs no further steps and so emits *nothing*. Nothing is worse than a red
-        // verdict, because an absent datapoint cannot raise an alarm.
+        // The bound that makes a hang reportable. `output()` blocks until the child exits, so a
+        // stalled network read in `generate-lockfile` or a toolchain download would keep the leg
+        // from returning; GitHub then kills the job at `timeout-minutes`, and a killed job runs no
+        // further steps and so emits *nothing*. Silence is worse than a red verdict, because an
+        // absent datapoint cannot raise an alarm.
         let started = std::time::Instant::now();
         let status = loop {
             match child.try_wait() {
@@ -329,8 +329,8 @@ impl Exec for RealExec {
 
         // Killing cargo does not kill what cargo started. A hung test binary outlives it and keeps
         // these pipes open, so EOF may never come and a plain `join()` waits for the grandchild --
-        // which hands back exactly the unbounded wait the deadline above exists to prevent. The
-        // budget was then a number the leg could not actually honour.
+        // which hands back exactly the unbounded wait the deadline above exists to prevent,
+        // making the budget a number the leg cannot honour.
         //
         // So give the readers a few seconds to finish what they have and go on without them. What
         // is lost is the tail of a hung command's output; what is kept is the leg returning, which
@@ -459,7 +459,7 @@ pub struct Report {
     /// incident, and by then the commit that rigged it has been reverted.
     ///
     /// Always serialized, including `false`, so that the record states it positively rather than by
-    /// omission — and `default` so the reports written before this field existed still read back.
+    /// omission — and `default` so a report with no `induced` field still reads back.
     /// A field that is skipped on the way out and has no default is a report that cannot be read,
     /// which is indistinguishable from a leg that never reported.
     #[serde(default)]
@@ -781,10 +781,10 @@ mod tests {
                 stdout: if code != 0 {
                     self.stdout.clone()
                 } else if command.step == Step::Test {
-                    // A successful run phase has to look like one. The classifier now requires
-                    // evidence that assertions actually ran, so a fake that returned nothing here
-                    // would be modelling a leg that proves nothing — and the tests would be
-                    // asserting against a shape the real harness never produces.
+                    // A successful run phase has to look like one. The classifier requires
+                    // evidence that assertions ran, so a fake returning nothing here would model a
+                    // leg that proves nothing, and the tests would assert against a shape the real
+                    // harness never produces.
                     HARNESS_TEN_PASSED.to_string()
                 } else {
                     String::new()
@@ -816,9 +816,8 @@ mod tests {
 
     const COMPILE_ERROR: &str = r#"{"reason":"compiler-message","target":{"name":"canary-build-check"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
 
-    /// The same error the real `prior-aws-config-1-10--stable` leg reported — a row since
-    /// withdrawn from the table for being red, though the diagnosis it produced is why this
-    /// fixture exists: the failing target is a dependency, not the consumer's own crate.
+    /// The error the `prior-aws-config-1-10--stable` leg reported — a withdrawn row, kept for the
+    /// diagnosis it produced: the failing target is a dependency, not the consumer's own crate.
     const COMPILE_ERROR_IN_AWS_CONFIG: &str = r#"{"reason":"compiler-message","target":{"name":"aws_config"},"message":{"level":"error","code":{"code":"E0308"},"message":"mismatched types"}}"#;
 
     /// The shape of that leg's real lockfile: `aws-config` once, `aws-smithy-schema` twice, and a
@@ -1340,8 +1339,8 @@ version = "0.2.12"
         assert!(!json.contains("verdict"), "{json}");
     }
 
-    /// And a leg that did run is still green, so the stricter `is_green` has not broken the
-    /// ordinary case.
+    /// A leg that ran and found nothing is green, which is the case `is_green`'s superseded check
+    /// must not catch.
     #[test]
     fn a_leg_that_ran_and_found_nothing_is_still_green() {
         let leg = leg_named("new-project--stable");
@@ -1380,11 +1379,11 @@ version = "0.2.12"
     /// inside the job, and the job inside the watcher's tick. That chain is what keeps a leg from
     /// being killed before it reports and from outliving the tick that dispatched it.
     ///
-    /// The interval is two minutes rather than three for this reason. When the budget dropped to
-    /// leave the job a margin, three-minute intervals meant a leg hitting infrastructure trouble on
-    /// two separate steps gave up part-way through the second -- reporting `INFRA_FAIL`, which is
-    /// on the alarmed series and pages. Two minutes still spans four minutes of transient failure
-    /// per step, which is what the retry is for.
+    /// The interval is two minutes rather than three for this reason: with a budget that leaves
+    /// the job a margin, three-minute intervals let a leg hitting infrastructure trouble on two
+    /// separate steps give up part-way through the second -- reporting `INFRA_FAIL`, which is on
+    /// the alarmed series and pages. Two minutes still spans four minutes of transient failure per
+    /// step, which is what the retry is for.
     #[test]
     fn two_exhausted_infra_steps_fit_well_inside_the_budget() {
         let worst = Retry::for_verdict(Verdict::InfraFail);
@@ -1508,7 +1507,7 @@ version = "0.2.12"
         );
     }
 
-    /// Reports written before the field existed have to keep reading back. A report that will not
+    /// A report with no `induced` field has to keep reading back. A report that will not
     /// deserialize is counted as a leg that never reported, which is the signal reserved for a leg
     /// that died silently — so a parse failure here would file real red legs as canary defects.
     #[test]

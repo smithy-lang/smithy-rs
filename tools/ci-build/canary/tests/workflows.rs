@@ -549,7 +549,7 @@ fn a_workflow_that_refuses_to_cancel_also_refuses_to_drop_a_queued_run() {
 ///
 /// It is the floor tier that this bites. Its own comment says it must run when the dispatch tier
 /// failed, `an_arming_failure_does_not_stop_the_release_being_checked` requires the same of an
-/// arming failure, and arming now fails deliberately when the paging chain is incomplete — so
+/// arming failure, and arming fails deliberately when the paging chain is incomplete — so
 /// without a status-check function, saying "this release cannot page" would also stop it being
 /// checked for a day.
 #[test]
@@ -872,12 +872,8 @@ fn alarm_commands(text: &str) -> Vec<AlarmCommand> {
     let mut lines = text.lines();
     while let Some(first) = lines.next() {
         // The invocation itself, not a comment mentioning it: the arming step's prose refers to
-        // `put-metric-alarm` too, and parsing that found no flags and failed confusingly.
-        //
-        // Alarms are created through the `put_alarm` wrapper, which scrubs the action out of the
-        // API's rejection message. `the_filled_alarm_action_is_never_printed` is what stops a
-        // direct call appearing beside it.
-        // The trailing space keeps this off `put_alarm() {`, the wrapper's own definition.
+        // `put-metric-alarm` too, and a prose line carries no flags to parse. The trailing space
+        // keeps this off `put_alarm() {`, the wrapper's own definition.
         if !first.trim_start().starts_with("put_alarm ") {
             continue;
         }
@@ -1095,10 +1091,9 @@ fn a_repeated_dispatch_queues_rather_than_cancelling_its_predecessor() {
 /// Two ways this degrades silently rather than breaking loudly, both of which have to be ruled out
 /// in YAML because neither is visible from the Rust side.
 ///
-/// Scoping the run listing to this release's tag — which the gate it replaced did, with
-/// `--branch "$TAG"` — makes the baseline permanently unfindable. The gate then treats every red
-/// leg as news and behaves exactly as the old rule did, on every release, with nothing to show that
-/// anything is wrong.
+/// Scoping the run listing to this release's tag with `--branch "$TAG"` makes the baseline
+/// permanently unfindable. The gate then treats every red leg as news, on every release, with
+/// nothing to show that anything is wrong.
 ///
 /// And the gate is a command in this crate rather than a shell one-liner, because deciding from the
 /// verdicts in two runs is not something to trust to `jq`. That needs a checkout and a toolchain in
@@ -1147,8 +1142,8 @@ fn the_floor_gate_can_see_the_previous_release_and_can_run() {
          restores the rule this replaced: {listing_line:?}"
     );
 
-    // And the decision must come from the verdicts, never from a run's conclusion — the whole
-    // reason an infrastructure failure can no longer stop the window.
+    // And the decision must come from the verdicts, never from a run's conclusion, so that an
+    // infrastructure failure cannot stop the window.
     assert!(
         !gate.contains("conclusion'] == 'failure'") && !gate.contains("conclusion\"] == \"failure"),
         "the gate must not read a run's conclusion: {gate}"

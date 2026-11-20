@@ -513,8 +513,8 @@ fn summarize_test_run(stdout: &str) -> Option<String> {
     //     thread 'NAME' (ID) panicked at FILE:LINE:COL:
     //     the message
     //
-    // Reporting the `panicked at` line itself instead gives a thread name and a file position and
-    // no reason — which is what a real connector failure produced before this.
+    // Reporting the `panicked at` line itself gives a thread name and a file position and no
+    // reason, as a real connector failure showed.
     let lines: Vec<&str> = stdout.lines().map(str::trim).collect();
     let why = lines
         .iter()
@@ -733,8 +733,8 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert_eq!(serde_json::from_str::<Diagnosis>(&json).unwrap(), full);
     }
 
-    /// A report written before these fields existed must still read, so that adding a field to the
-    /// diagnosis never silently drops older records.
+    /// A report without the version fields must still read, so that adding a field to the
+    /// diagnosis never silently drops a record.
     #[test]
     fn a_diagnosis_without_the_version_fields_still_reads() {
         let old = r#"{"codes":["E0308"],"summary":"mismatched types","target":"aws_config"}"#;

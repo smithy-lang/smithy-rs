@@ -46,7 +46,8 @@ case "$*" in
   *"describe-alarms --alarm-name-prefix"*)
     # What the previous-release listing returns. Empty is the first release; `None` is what
     # `--output text` prints for a null; tab-separated names are the ordinary case. All three go
-    # through the same loop, and two of them used to end the step before it armed anything.
+    # through the same loop, and two of them end the step before it arms anything unless the loop
+    # skips them rather than filtering them out.
     printf '%s\n' "${{EXISTING:-}}"
     ;;
   *"length(MetricAlarms)"*) echo "1" ;;
@@ -108,12 +109,11 @@ fn arm_selftest(mode: &str) -> Outcome {
         .run()
 }
 
-/// The defect that prompted all of this.
+/// An empty previous-alarm listing must not end the step.
 ///
-/// The previous-alarm delete filtered blank lines with `grep -v`, which exits 1 when it matches
-/// nothing. Under `set -o pipefail` that failed the pipeline and `set -e` ended the step — before
-/// `put-metric-alarm`. Nothing matches on the first release, so no alarm was ever created, and the
-/// next release had nothing to delete either: the canary could not arm, ever.
+/// Filtering it with `grep -v` exits 1 on no match, which under `set -o pipefail` and `set -e`
+/// ends the step before `put-metric-alarm`. The first release has nothing to delete, so no alarm
+/// gets created, and no later release has anything to delete either: the canary never arms.
 #[test]
 fn arming_works_when_there_is_no_previous_alarm_to_delete() {
     if !bash_available() {
@@ -133,8 +133,8 @@ fn arming_works_when_there_is_no_previous_alarm_to_delete() {
     );
 }
 
-/// `--output text` prints `None` for a null, and `delete-alarms --alarm-names None` would fail --
-/// taking the arming step with it, the same way the blank line used to.
+/// `--output text` prints `None` for a null, and `delete-alarms --alarm-names None` fails --
+/// taking the arming step with it, as a blank line would.
 #[test]
 fn arming_survives_a_previous_alarm_listing_of_none() {
     if !bash_available() {
@@ -426,8 +426,8 @@ fn a_complete_paging_chain_is_configured_and_says_nothing() {
 
 /// Enabled has to mean a verdict can reach a person.
 ///
-/// The variable decides whether the orchestrator runs, not whether paging works, and the three
-/// places that notice a missing secret all treated it as a notice. So the canary could be switched
+/// The variable decides whether the orchestrator runs, not whether paging works, and the places
+/// that notice a missing secret elsewhere carry on without paging. So the canary can be switched
 /// on, run every leg, stay green and page nobody — the failure it exists to remove.
 #[test]
 fn enabling_the_canary_without_the_whole_chain_fails() {

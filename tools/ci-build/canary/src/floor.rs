@@ -327,9 +327,9 @@ mod tests {
     /// failed. `aws-esdk--stable` above failed at checkout: its job is red and it reached no verdict
     /// at all, so the published graph is not implicated and it must not stop the window.
     ///
-    /// This is the clause that restores a property the old rule broke. `INFRA_FAIL` was given exit
-    /// 0 precisely so infrastructure could not stop the window, and reading the job conclusion
-    /// bypassed that for any infrastructure failure happening before the classifier ran.
+    /// `INFRA_FAIL` exits 0 so infrastructure cannot stop the window. Reading the job's
+    /// conclusion instead of this step's would bypass that for any infrastructure failure
+    /// happening before the classifier runs.
     #[test]
     fn a_leg_is_red_only_when_its_verdict_failed() {
         let red = red_legs(VIEW).unwrap();
@@ -455,7 +455,7 @@ mod tests {
         );
     }
 
-    /// Five selection rules at once, each of which fixes one of the old rule's defects.
+    /// Five selection rules at once, each of which has to hold on its own.
     #[test]
     fn it_picks_the_newest_completed_full_matrix_run_for_each_release() {
         let (mine, previous) = newest_floor_runs(LISTING, "release-2026-11-11").unwrap();
@@ -505,9 +505,9 @@ mod tests {
         assert!(g.reason.contains("nothing wrong"), "{}", g.reason);
     }
 
-    /// The defect this module exists for. One leg red for a reason nobody has fixed made hour one
-    /// answer "already broken" on every release forever, so hours 2–24 never ran — the tier that
-    /// exists to catch a late break was the one tier guaranteed not to.
+    /// The defect this module exists for. A leg red for a reason nobody has fixed must not make
+    /// hour one answer "already broken", or hours 2–24 never run — and the tier that exists to
+    /// catch a late break would be the one guaranteed not to.
     #[test]
     fn a_leg_that_was_already_red_is_not_news() {
         let standing = set(&["ssstar--stable", "ssstar--stable-1"]);
@@ -562,11 +562,10 @@ mod tests {
         );
     }
 
-    /// A break that cleared stops latching. The old rule read a hundred runs of history with no
-    /// time window, so one failure answered yes for the rest of the day even after the graph
-    /// settled.
+    /// A break that cleared stops latching. Reading a hundred runs of history with no time window
+    /// would let one failure answer yes for the rest of the day, even after the graph settled.
     #[test]
-    fn a_break_that_cleared_no_longer_stops_the_window() {
+    fn a_break_that_cleared_does_not_stop_the_window() {
         // Hour 3 found something; hour 4 is the newest completed run and found nothing.
         let g = decide(Some(&set(&[])), Some(&set(&[])));
         assert!(g.dispatch, "{}", g.reason);

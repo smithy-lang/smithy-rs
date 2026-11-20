@@ -204,9 +204,9 @@ impl fmt::Display for WatchReport {
         )?;
         match self.stopped {
             Stopped::PublishingComplete => f.write_str("publishing finished"),
-            // Deliberately not naming a duration. The ceiling is configurable, and the first
-            // version of this line said "the 3-hour ceiling" while running against an
-            // eight-second one.
+            // Deliberately not naming a duration: the ceiling is configurable, so "the 3-hour
+            // ceiling" is wrong wherever it is not three hours -- the tests run it at eight
+            // seconds.
             Stopped::CeilingReached => {
                 f.write_str("the ceiling was reached with crates still outstanding")
             }
@@ -1031,7 +1031,7 @@ mod tests {
         );
     }
 
-    /// ...but only once. A manifest that cannot resolve for the length of the window used to ask
+    /// ...but only once. A manifest that cannot resolve for the length of the window must not ask
     /// for the same matrix on every tick, reaching the same verdict each time — twelve of them on
     /// a three-hour window. Found by running the watcher against a registry that could not serve
     /// six of the manifests: all six appeared in `dispatched` on all six ticks.

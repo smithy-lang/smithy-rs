@@ -299,7 +299,7 @@ pub const SCENARIOS: &[Scenario] = &[
 /// Every platform here is one this repository's CI already builds — see [`CI_RUNNERS`] for why that
 /// is a hard constraint rather than a preference. Two consequences of applying it:
 ///
-/// * **macOS is gone.** `macos`, `darwin` and `apple` appear nowhere in `.github/workflows/` or
+/// * **No macOS leg.** `macos`, `darwin` and `apple` appear nowhere in `.github/workflows/` or
 ///   `tools/ci-scripts/`. The project does not build for macOS, so the canary must not either: a red
 ///   macOS leg would name a platform nobody has agreed to support, which is not actionable.
 /// * **musl is aarch64, not x86_64.** CI's musl coverage is `aarch64-unknown-linux-musl`, added by
