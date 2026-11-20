@@ -117,6 +117,7 @@ impl DynamicClientBuilder {
             .auth_scheme_resolver
             .get_or_insert_with(|| DefaultAuthSchemeResolver.into_shared());
         let puts = std::mem::take(&mut config.puts);
+        let auth_schemes = std::mem::take(&mut config.auth_schemes);
         let ConfigParts {
             mut layer,
             mut components,
@@ -127,8 +128,14 @@ impl DynamicClientBuilder {
         ));
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
+        crate::auth::http::store_service_auth(&service_view, &mut components);
         #[cfg(feature = "aws")]
         crate::auth::aws::store_service_auth(&service_view, &mut layer, &mut components);
+        // Pushed after the modeled schemes, so a user's scheme replaces a modeled one with the
+        // same ID.
+        for auth_scheme in auth_schemes {
+            components.push_auth_scheme(auth_scheme);
+        }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
         if let Some(puts) = puts_plugin(&puts) {

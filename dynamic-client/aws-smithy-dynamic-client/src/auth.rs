@@ -19,6 +19,7 @@ use std::borrow::Cow;
 
 #[cfg(feature = "aws")]
 pub(crate) mod aws;
+pub(crate) mod http;
 
 /// The parameters an auth scheme resolver gets for one call.
 ///
@@ -273,13 +274,13 @@ mod tests {
         );
     }
 
-    // `TestBearer` is an auth scheme for `httpBearerAuth` that adds an `x-signed-by` header.
+    // `TestScheme` is an auth scheme that adds an `x-signed-by` header with its scheme ID.
     #[derive(Debug)]
-    struct TestBearer;
+    struct TestScheme(AuthSchemeId);
 
-    impl AuthScheme for TestBearer {
+    impl AuthScheme for TestScheme {
         fn scheme_id(&self) -> AuthSchemeId {
-            HTTP_BEARER_AUTH_SCHEME_ID
+            self.0.clone()
         }
 
         fn identity_resolver(
@@ -294,7 +295,7 @@ mod tests {
         }
     }
 
-    impl Sign for TestBearer {
+    impl Sign for TestScheme {
         fn sign_http_request(
             &self,
             request: &mut HttpRequest,
@@ -305,7 +306,7 @@ mod tests {
         ) -> Result<(), BoxError> {
             request
                 .headers_mut()
-                .insert("x-signed-by", "httpBearerAuth");
+                .insert("x-signed-by", self.0.inner().to_owned());
             Ok(())
         }
     }
@@ -330,7 +331,7 @@ mod tests {
     type SignedBy = Arc<Mutex<Vec<Option<String>>>>;
 
     // Returns a client for `service` of the auth test model, with `config` layered over the test
-    // config. The test config has the `TestBearer` scheme and a token for it.
+    // config. The test config has a `TestScheme` for `httpBearerAuth` and a token for it.
     fn test_client(service: &str, config: crate::config::Builder) -> (DynamicClient, SignedBy) {
         let signed_by = SignedBy::default();
         let seen = signed_by.clone();
@@ -349,7 +350,7 @@ mod tests {
         let test_plugin = StaticRuntimePlugin::new().with_runtime_components(
             RuntimeComponentsBuilder::new("TestAuth")
                 .with_endpoint_resolver(Some(StaticUriEndpointResolver::uri("https://example.com")))
-                .with_auth_scheme(TestBearer)
+                .with_auth_scheme(TestScheme(HTTP_BEARER_AUTH_SCHEME_ID))
                 .with_identity_resolver(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("token", None)),
         );
         let client = DynamicClient::builder()
@@ -424,5 +425,18 @@ mod tests {
             test_client("smithy.example#Gadgets", Config::builder().allow_no_auth());
         client.call("PutGadget").send().await.unwrap();
         assert_eq!(vec![None], recorded(&signed_by));
+    }
+
+    #[tokio::test]
+    async fn a_pushed_auth_scheme_serves_a_custom_auth_trait() {
+        const CUSTOM_AUTH: AuthSchemeId = AuthSchemeId::new("customAuth");
+        let (client, signed_by) = test_client(
+            GIZMOS,
+            Config::builder()
+                .push_auth_scheme(TestScheme(CUSTOM_AUTH))
+                .identity_resolver(CUSTOM_AUTH, Token::new("token", None)),
+        );
+        client.call("ShareGizmo").send().await.unwrap();
+        assert_eq!(vec![Some("customAuth".to_owned())], recorded(&signed_by));
     }
 }
