@@ -29,8 +29,10 @@ use std::fmt;
 /// The index checks only what resolution needs: well-formed trait values, an effective
 /// `inputToken` and `outputToken`, and members that exist. It does not check member targets
 /// or whether members are required. Pagination that cannot be resolved is a
-/// [`PaginationIndexError`] rather than `None`. (The reference implementation's index omits
-/// such pagination, relying on model validation to have rejected it.)
+/// [`PaginationIndexError`] rather than `None`. (When a token is missing or does not resolve,
+/// the reference implementation's index returns no information, and it leaves out a
+/// `pageSize` or `items` that does not resolve. It relies on model validation to have
+/// rejected such models.)
 ///
 /// Answers are computed per query from the cached relationship index.
 ///

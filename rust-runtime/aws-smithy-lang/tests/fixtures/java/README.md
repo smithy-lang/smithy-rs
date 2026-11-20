@@ -150,12 +150,14 @@ Java decodes only if Java also rejects the model.
   - `projected_message`: a projected `message`, such as `items[].reason`, is accepted here.
     Java checks the element type by appending `[0]`, which indexes each projected value
     instead, so it rejects the message.
-  - `argument_types`: a function argument of the wrong type is a warning here and an error in
-    Java. This crate only reports errors that do not depend on the types it infers.
+  - `argument_types`: a function argument of the wrong type whose sample in Java might have
+    another type is a warning here; Java reports an error when its sample has the wrong type.
+    This crate reports an error only where Java's sample is certain to have the wrong type
+    (see `waiters::validator`).
   - `function_results`: Java's linter gets the result types of `ends_with`, `max_by`,
     `sort_by`, and `merge` wrong, and reports DANGER events for valid expressions.
-  - `expression_limits`: expressions longer than 2048 bytes or with more than 32 nesting
-    tokens are rejected here without parsing, so that model content cannot exhaust the stack.
+  - `expression_limits`: expressions longer than 2048 bytes or nested more than 32 levels
+    deep are rejected here without parsing, so that model content cannot exhaust the stack.
 
 ## Regenerating
 

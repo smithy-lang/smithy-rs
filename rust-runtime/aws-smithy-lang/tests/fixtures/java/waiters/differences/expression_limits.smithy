@@ -1,6 +1,6 @@
 // Expressions beyond this crate's size limits, which it rejects without parsing so that model
 // content cannot exhaust the stack of the recursive JMESPath parser: `Long`'s path is 2052
-// bytes long, more than 2048, and `Nested`'s has 33 nesting tokens, more than 32. The
+// bytes long, more than 2048, and `Nested`'s nests 33 levels deep, more than 32. The
 // reference implementation has no limits.
 $version: "2"
 

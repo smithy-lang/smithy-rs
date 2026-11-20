@@ -33,9 +33,15 @@ const STREAMING: ShapeId = ShapeId::from_static("smithy.api#streaming");
 ///   or output has an event stream;
 /// - a JMESPath `path` or `message` that does not parse, calls an unknown function, or calls a
 ///   function with the wrong number of arguments;
-/// - an expression longer than 2048 bytes, or with more than 32 nesting tokens (`(`, `[`,
-///   `{`, `!`, `&`, `*`), which the validator does not parse, so that model content cannot
-///   exhaust the stack;
+/// - a function argument of the wrong type, where the call is evaluated against the value the
+///   whole expression is and the reference implementation is certain to reject the argument
+///   too: a literal, an expression reference, `!`, a comparison, or a path of member names and
+///   indexes that selects from no map and from no shape twice (and, where the function takes
+///   an array of numbers or strings, does not end at a list whose `@length` allows no
+///   elements);
+/// - an expression longer than 2048 bytes, or nested more than 32 levels deep in brackets,
+///   parentheses, braces, projections, `!`, and `&`, which the validator does not parse, so
+///   that model content cannot exhaust the stack;
 /// - a waiter whose `minDelay` is greater than its `maxDelay`, or with no `success`
 ///   acceptor;
 /// - a `message` on an acceptor whose state is not `failure`;
@@ -51,7 +57,7 @@ const STREAMING: ShapeId = ShapeId::from_static("smithy.api#streaming");
 ///   lists directly (it can still name an error the model does not define);
 /// - a path known not to evaluate to the type its comparator compares; and
 /// - other problems static analysis finds in an expression, such as selecting a member a
-///   structure does not have, or passing a function an argument of the wrong type.
+///   structure does not have, or passing a function any other argument of the wrong type.
 ///
 /// Expressions are evaluated against the operation's output, or for an `inputOutput`
 /// matcher against an object with `input` and `output` members; a `message` is always
@@ -68,8 +74,9 @@ const STREAMING: ShapeId = ShapeId::from_static("smithy.api#streaming");
 ///   beyond its size limits, expressions the two JMESPath parsers disagree about, and waiter
 ///   names that differ only by case on the same operation, which the specification forbids
 ///   but the reference implementation does not check.
-/// - A function argument of the wrong type is a warning; the reference implementation reports
-///   an error.
+/// - Other function arguments of the wrong type, such as the result of another function, a
+///   projection, or a path that selects from a shape twice, are warnings; the reference
+///   implementation reports an error for many of them.
 /// - A `message` whose type cannot be known is accepted; the reference implementation
 ///   requires its sample evaluation to produce a string or an array of strings.
 /// - Warnings for the same expression can differ.

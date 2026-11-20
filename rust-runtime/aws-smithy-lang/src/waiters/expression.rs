@@ -11,28 +11,34 @@
 //! fields are unknown, the result of joining different types), it is marked [`Type::Any`], and
 //! nothing that depends on it is reported.
 //!
-//! Only problems that do not depend on the inferred type are errors: an unknown function or a
-//! call with the wrong number of arguments. Everything that depends on the inferred type is a
-//! warning. The reference implementation instead lints by evaluating the expression against
-//! sample data built from the model, and reports some of the same problems as errors; this
-//! checker reports no error that the reference implementation's linter does not.
+//! Errors are problems that do not depend on the inferred type (an unknown function, a call
+//! with the wrong number of arguments) and function arguments of the wrong type where the
+//! reference implementation is certain to find the wrong type too. Everything else that
+//! depends on the inferred type is a warning. The reference implementation instead lints by
+//! evaluating the expression against sample data built from the model, and reports some of the
+//! same problems as errors; this checker reports no error that the reference implementation's
+//! linter does not.
 
 use crate::diagnostic::Severity;
 use crate::shape::{ShapeType, ShapeView};
+use crate::shape_id::ShapeId;
 use jmespath::ast::{Ast, Comparator};
 use jmespath::{ErrorReason, Variable};
 use std::fmt;
+
+const LENGTH: ShapeId = ShapeId::from_static("smithy.api#length");
 
 /// The longest expression the validator parses, in bytes. The longest in the checked-in AWS
 /// models is about 200 bytes so this leaves an order of magnitude of wiggle room.
 pub(super) const MAX_LENGTH: usize = 2048;
 
-/// The most nesting tokens (`(`, `[`, `{`, `!`, `&`, and `*`) an expression may contain.
+/// The deepest an expression may nest, as estimated by [`nesting_depth`].
 ///
-/// The `jmespath` parser is recursive. Its recursion depth can only grow past a small
-/// constant (the number of binding powers) at one of these tokens, so limiting them bounds
-/// the depth. 32 leaves room on a 2 MiB thread for the worst case in an unoptimized build;
-/// the checked-in AWS models use at most 7.
+/// The `jmespath` parser is recursive and does not limit its depth, so the validator bounds
+/// the nesting before parsing. Between two levels the parser's recursion can only deepen by a
+/// small constant (one call per binding power), and the checker's recursion follows the parse.
+/// 32 leaves room on a 2 MiB thread for the worst case in an unoptimized build.
+// TODO(jmespath#N): delete `nesting_depth` once a `jmespath` release limits its own recursion.
 pub(super) const MAX_NESTING: usize = 32;
 
 /// Why an expression could not be parsed.
@@ -40,7 +46,7 @@ pub(super) const MAX_NESTING: usize = 32;
 pub(super) enum ParseError {
     /// The expression is longer than [`MAX_LENGTH`].
     TooLong(usize),
-    /// The expression has more nesting tokens than [`MAX_NESTING`].
+    /// The expression nests deeper than [`MAX_NESTING`].
     TooNested(usize),
     /// The expression is not valid JMESPath.
     Syntax {
@@ -57,10 +63,10 @@ impl fmt::Display for ParseError {
                 f,
                 "is {length} bytes long, longer than the {MAX_LENGTH} bytes this validator parses"
             ),
-            ParseError::TooNested(count) => write!(
+            ParseError::TooNested(depth) => write!(
                 f,
-                "has {count} nesting tokens (`(`, `[`, `{{`, `!`, `&`, or `*`), more than the \
-                 {MAX_NESTING} this validator parses"
+                "nests {depth} levels deep (counting brackets, parentheses, braces, \
+                 projections, `!`, and `&`), deeper than the {MAX_NESTING} this validator parses"
             ),
             ParseError::Syntax {
                 line,
@@ -97,6 +103,7 @@ pub(super) fn analyze<'m>(expression: &str, root: &Type<'m>) -> Result<Analysis<
     let ast = parse(expression)?;
     let mut checker = Checker {
         problems: Vec::new(),
+        at_root: true,
     };
     let result = checker.check(&ast, root);
     Ok(Analysis {
@@ -109,9 +116,9 @@ fn parse(expression: &str) -> Result<Ast, ParseError> {
     if expression.len() > MAX_LENGTH {
         return Err(ParseError::TooLong(expression.len()));
     }
-    let nesting = nesting_tokens(expression);
-    if nesting > MAX_NESTING {
-        return Err(ParseError::TooNested(nesting));
+    let depth = nesting_depth(expression);
+    if depth > MAX_NESTING {
+        return Err(ParseError::TooNested(depth));
     }
     jmespath::parse(expression).map_err(|error| ParseError::Syntax {
         // The parser counts lines and columns from 0.
@@ -124,25 +131,163 @@ fn parse(expression: &str) -> Result<Ast, ParseError> {
     })
 }
 
-/// Counts the tokens at which the parser's recursion can deepen. The count over-approximates:
-/// characters inside string literals are counted too. `&&` (and) and `!=` (not equal) are not
-/// nesting tokens.
-fn nesting_tokens(expression: &str) -> usize {
-    let mut count = 0;
-    let mut chars = expression.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '&' if chars.peek() == Some(&'&') => {
-                chars.next();
+/// Estimates, from above, how deeply the `jmespath` parser nests when it parses `expression`.
+///
+/// Tokens are read as the `jmespath` lexer reads them, so the contents of `'...'`, `"..."`,
+/// and `` `...` `` are skipped. A level is open:
+///
+/// - inside a parenthesis, a brace, a multi-select or function's brackets, or a filter's
+///   condition, until the closing token;
+/// - after `!`, or a projection (`*`, `[*]`, `[]`, a slice, or the part after a filter's
+///   `]`), until the enclosing level closes, a `,`, or an operator that binds more loosely
+///   than a projection (`|`, `||`, `&&`, or a comparison);
+/// - after `&`, until the enclosing level closes or a `,`. The referenced expression
+///   absorbs every operator, so levels open before the `&` stay open as long.
+///
+/// A plain index such as `[0]` does not nest. The estimate is the most levels open at once.
+/// It can be larger than the parser's real nesting, but not smaller: where the parser returns
+/// from a level at a different token, it is at a token where the estimate keeps the level
+/// open, or at a parse error, after which the parser reads nothing more.
+fn nesting_depth(expression: &str) -> usize {
+    #[derive(Default)]
+    struct Level {
+        /// Whether this is a filter's condition, which a projection follows.
+        filter: bool,
+        /// Levels that close at a loosely binding operator.
+        open: usize,
+        /// Levels that close only at a `,` or the end of this level.
+        pinned: usize,
+    }
+
+    let bytes = expression.as_bytes();
+    // The expression itself is a level that the depth does not count.
+    let mut levels = vec![Level::default()];
+    let (mut depth, mut deepest) = (0, 0);
+    let mut index = 0;
+    while let Some(&byte) = bytes.get(index) {
+        index += 1;
+        let next = bytes.get(index).copied();
+        let nested = levels.len() > 1;
+        let level = levels
+            .last_mut()
+            .expect("the expression level is never closed");
+        match byte {
+            b'\'' | b'"' | b'`' => {
+                // The text ends at the first delimiter that a backslash does not escape.
+                while let Some(&inner) = bytes.get(index) {
+                    index += match inner {
+                        b'\\' => 2,
+                        _ => 1,
+                    };
+                    if inner == byte {
+                        break;
+                    }
+                }
             }
-            '!' if chars.peek() == Some(&'=') => {
-                chars.next();
+            b'(' | b'{' => {
+                levels.push(Level::default());
+                depth += 1;
             }
-            '(' | '[' | '{' | '!' | '&' | '*' => count += 1,
+            b'[' => match next {
+                Some(b']') => {
+                    index += 1;
+                    level.open += 1;
+                    depth += 1;
+                }
+                Some(b'?') => {
+                    index += 1;
+                    levels.push(Level {
+                        filter: true,
+                        ..Level::default()
+                    });
+                    depth += 1;
+                }
+                _ => match index_or_projection(&bytes[index..]) {
+                    Some((length, projection)) => {
+                        index += length;
+                        if projection {
+                            level.open += 1;
+                            depth += 1;
+                        }
+                    }
+                    None => {
+                        levels.push(Level::default());
+                        depth += 1;
+                    }
+                },
+            },
+            // An unmatched closing token is a parse error.
+            b')' | b'}' | b']' if nested => {
+                let closed = levels.pop().expect("the level is nested");
+                depth -= 1 + closed.open + closed.pinned;
+                if closed.filter {
+                    levels.last_mut().expect("the level was nested").open += 1;
+                    depth += 1;
+                }
+            }
+            b'!' | b'&' | b'|' | b'=' | b'<' | b'>' => match (byte, next) {
+                (b'!' | b'=' | b'<' | b'>', Some(b'='))
+                | (b'&', Some(b'&'))
+                | (b'|', Some(b'|')) => {
+                    index += 1;
+                    depth -= level.open;
+                    level.open = 0;
+                }
+                (b'!', _) => {
+                    level.open += 1;
+                    depth += 1;
+                }
+                (b'&', _) => {
+                    level.pinned += level.open + 1;
+                    level.open = 0;
+                    depth += 1;
+                }
+                // `|`, `<`, `>`, or a lone `=`, which the lexer rejects.
+                _ => {
+                    depth -= level.open;
+                    level.open = 0;
+                }
+            },
+            b'*' => {
+                level.open += 1;
+                depth += 1;
+            }
+            b',' => {
+                depth -= level.open + level.pinned;
+                level.open = 0;
+                level.pinned = 0;
+            }
             _ => {}
         }
+        deepest = deepest.max(depth);
     }
-    count
+    deepest
+}
+
+/// When `rest`, the text after a `[`, starts with an index (`0]`), a slice (`1:-1]`), or a
+/// wildcard (`*]`), returns its length through the `]` and whether it is a projection: a
+/// slice or a wildcard. Whitespace may separate the tokens, as the lexer allows.
+fn index_or_projection(rest: &[u8]) -> Option<(usize, bool)> {
+    let is_space = |byte: &u8| matches!(byte, b' ' | b'\t' | b'\n' | b'\r');
+    let end = rest
+        .iter()
+        .position(|byte| !(byte.is_ascii_digit() || b"-:*".contains(byte) || is_space(byte)))?;
+    if rest[end] != b']' {
+        return None;
+    }
+    let body = &rest[..end];
+    let mut tokens = body.iter().filter(|byte| !is_space(byte));
+    let projection = if body.contains(&b'*') {
+        // Only a lone `*` is a wildcard index.
+        if tokens.next() != Some(&b'*') || tokens.next().is_some() {
+            return None;
+        }
+        true
+    } else {
+        tokens.next()?;
+        body.contains(&b':')
+    };
+    Some((end + 1, projection))
 }
 
 /// The 1-based line and column, in characters, of byte `offset` in `expression`.
@@ -326,8 +471,21 @@ impl fmt::Display for Expected {
     }
 }
 
+/// How many levels of nested arrays [`join`] compares element by element. Deeper elements
+/// are `Any`. A modeled list is expanded one level per comparison, so without a limit the
+/// recursion would be as deep as the lists nest, and endless for lists that contain each
+/// other. The other type walkers here do not recurse over the model: [`Type::resolve`],
+/// [`Type::element`], [`Type::mismatch`], and `Param::rejects` look one level down, and
+/// [`literal`] walks a JSON literal, which is at most [`MAX_LENGTH`] bytes.
+const MAX_JOIN_DEPTH: usize = 32;
+
 /// The type of a value that is either `a` or `b`.
 fn join<'m>(a: Type<'m>, b: Type<'m>) -> Type<'m> {
+    join_at(a, b, 0)
+}
+
+/// [`join`] at `depth` levels of arrays.
+fn join_at<'m>(a: Type<'m>, b: Type<'m>, depth: usize) -> Type<'m> {
     match (a, b) {
         (Type::Shape(a), Type::Shape(b)) if a.id() == b.id() => Type::Shape(a),
         (a, b) => match (a.resolve(), b.resolve()) {
@@ -336,7 +494,11 @@ fn join<'m>(a: Type<'m>, b: Type<'m>) -> Type<'m> {
             (Type::Number, Type::Number) => Type::Number,
             (Type::String, Type::String) => Type::String,
             (Type::Expref, Type::Expref) => Type::Expref,
-            (Type::Array(a), Type::Array(b)) => Type::Array(Box::new(join(*a, *b))),
+            (Type::Array(a), Type::Array(b)) => Type::Array(Box::new(if depth < MAX_JOIN_DEPTH {
+                join_at(*a, *b, depth + 1)
+            } else {
+                Type::Any
+            })),
             (Type::Object(Object::Members(a)), Type::Object(Object::Members(b)))
                 if a.id() == b.id() =>
             {
@@ -439,6 +601,118 @@ impl Param {
     }
 }
 
+/// The type of the reference implementation's sample value for `ast`, a function argument
+/// evaluated against `root`, or `Any` where static analysis cannot be certain of it.
+///
+/// The reference implementation lints an expression by evaluating it against sample data
+/// built from the model. A structure or union sample has every member, and a list sample has
+/// `min(max(2, min), max)` elements for its `@length`. A map sample's keys are generated, so
+/// a field name cannot be relied on to select one. A member's sample is a value of any type
+/// when it is visited again, which can only happen once the shape it is selected from repeats
+/// on the path from the root. Selecting a field or an index from a value that is not an
+/// object or an array gives a value of any type. So the type is certain for:
+///
+/// - a literal and an expression reference;
+/// - `!` and comparisons, which give a boolean or null, both of which every typed parameter
+///   rejects; and
+/// - a path of member names and indexes from the root that does not select from a map or
+///   from the same shape twice. A member that does not exist is null in both.
+fn sample_type<'m>(ast: &Ast, root: &Type<'m>) -> Type<'m> {
+    match ast {
+        Ast::Literal { value, .. } => literal(value),
+        Ast::Expref { .. } => Type::Expref,
+        Ast::Not { .. } | Ast::Comparison { .. } => Type::Boolean,
+        _ => sample_path(ast, root).unwrap_or(Type::Any),
+    }
+}
+
+/// The type of the reference implementation's sample value for a path of member names and
+/// indexes from `root`, or `None` when `ast` is not such a path or its type is not certain.
+/// The elements of a list are `Any` when its sample is empty.
+fn sample_path<'m>(ast: &Ast, root: &Type<'m>) -> Option<Type<'m>> {
+    let mut steps = Vec::new();
+    let mut node = ast;
+    while let Ast::Subexpr { lhs, rhs, .. } = node {
+        steps.push(&**rhs);
+        node = lhs;
+    }
+    steps.push(node);
+
+    // The shapes selected from so far, which must not repeat.
+    let mut selected = Vec::new();
+    let mut select = |value: &Type<'m>| match value {
+        Type::Shape(shape) if selected.contains(&shape.id()) => false,
+        Type::Shape(shape) => {
+            selected.push(shape.id());
+            true
+        }
+        _ => true,
+    };
+    let mut current = root.clone();
+    for step in steps.into_iter().rev() {
+        if matches!(step, Ast::Identity { .. }) {
+            continue;
+        }
+        if !select(&current) {
+            return None;
+        }
+        current = match (step, current.resolve()) {
+            (Ast::Field { name, .. }, Type::Object(Object::Members(shape))) => shape
+                .member(name)
+                .map_or(Type::Null, |member| Type::Shape(member.target_shape())),
+            (Ast::Field { name, .. }, Type::Object(Object::Fields(fields))) => fields
+                .into_iter()
+                .find(|(field, _)| field == name)
+                .map_or(Type::Null, |(_, value)| value),
+            (Ast::Index { idx, .. }, Type::Array(element)) => {
+                let Type::Shape(list) = &current else {
+                    return None;
+                };
+                let length = sample_length(list);
+                let index = match i64::from(*idx) {
+                    from_end if from_end < 0 => length + from_end,
+                    index => index,
+                };
+                if (0..length).contains(&index) {
+                    *element
+                } else {
+                    Type::Null
+                }
+            }
+            _ => return None,
+        };
+    }
+    Some(match (&current, current.resolve()) {
+        // Where the reference implementation requires an array of numbers or strings, it
+        // rejects elements of any type too, so only an empty sample makes them uncertain.
+        (Type::Shape(list), Type::Array(_)) if sample_length(list) == 0 => {
+            Type::Array(Box::new(Type::Any))
+        }
+        (_, resolved) => resolved,
+    })
+}
+
+/// The number of elements in the reference implementation's sample of a list.
+fn sample_length(list: &ShapeView<'_>) -> i64 {
+    let bound = |key: &str| {
+        let bound = list
+            .get_trait(&LENGTH)?
+            .as_object()?
+            .get(key)?
+            .as_number()?;
+        // Truncated, as the reference implementation's `intValue` does.
+        Some(bound.as_f64() as i64)
+    };
+    let mut length = 2;
+    if let Some(min) = bound("min") {
+        length = length.max(min);
+    }
+    if let Some(max) = bound("max") {
+        length = length.min(max);
+    }
+    length
+}
+
 /// The parameters of a standard JMESPath function: the positional parameters and, for a
 /// variadic function, the type of the remaining arguments. The arities are the reference
 /// implementation's.
@@ -465,6 +739,9 @@ fn signature(name: &str) -> Option<(&'static [Param], Option<Param>)> {
 
 struct Checker {
     problems: Vec<Problem>,
+    /// Whether the value being checked against is the root, the value the whole expression is
+    /// evaluated against.
+    at_root: bool,
 }
 
 impl Checker {
@@ -478,6 +755,14 @@ impl Checker {
 
     fn warn(&mut self, offset: usize, message: String) {
         self.report(Severity::Warning, offset, message);
+    }
+
+    /// Checks `ast` evaluated against `current`, a value derived from the root.
+    fn check_derived<'m>(&mut self, ast: &Ast, current: &Type<'m>) -> Type<'m> {
+        let at_root = std::mem::replace(&mut self.at_root, false);
+        let result = self.check(ast, current);
+        self.at_root = at_root;
+        result
     }
 
     /// Checks `ast` evaluated against a value of type `current`, returning the type of the
@@ -501,7 +786,7 @@ impl Checker {
         let mut result = self.check_node(node, current);
         for parent in spine.into_iter().rev() {
             result = match parent {
-                Ast::Subexpr { rhs, .. } => self.check(rhs, &result),
+                Ast::Subexpr { rhs, .. } => self.check_derived(rhs, &result),
                 Ast::Or { rhs, .. } | Ast::And { rhs, .. } => {
                     let right = self.check(rhs, current);
                     join(result, right)
@@ -557,7 +842,7 @@ impl Checker {
                 let left = self.check(lhs, current).resolve();
                 match left {
                     Type::Array(element) => {
-                        Type::Array(Box::new(projected(self.check(rhs, &element))))
+                        Type::Array(Box::new(projected(self.check_derived(rhs, &element))))
                     }
                     other => {
                         // Flatten, object values, and slices report their own problems and
@@ -572,7 +857,7 @@ impl Checker {
                                 ),
                             );
                         }
-                        self.check(rhs, &Type::Any);
+                        self.check_derived(rhs, &Type::Any);
                         match other {
                             Type::Any => Type::Any,
                             _ => Type::Null,
@@ -648,7 +933,7 @@ impl Checker {
             }
             Ast::Expref { ast, .. } => {
                 // Outside a function argument, the referenced expression is never evaluated.
-                self.check(ast, &Type::Any);
+                self.check_derived(ast, &Type::Any);
                 Type::Expref
             }
             Ast::Function { name, args, offset } => self.function(name, args, current, *offset),
@@ -777,7 +1062,7 @@ impl Checker {
         let mut expref_result = Type::Any;
         for arg in args {
             if let Ast::Expref { ast, .. } = arg {
-                expref_result = self.check(ast, &element);
+                expref_result = self.check_derived(ast, &element);
             }
         }
 
@@ -807,7 +1092,15 @@ impl Checker {
                     .or(variadic)
                     .unwrap_or(Param::Any);
                 if param.rejects(value) {
-                    self.warn(
+                    // The reference implementation reports an error when its sample of the
+                    // argument has the wrong type. Report one too when that is certain.
+                    let severity = if self.at_root && param.rejects(&sample_type(arg, current)) {
+                        Severity::Error
+                    } else {
+                        Severity::Warning
+                    };
+                    self.report(
+                        severity,
                         offset_of(arg).unwrap_or(offset),
                         format!(
                             "argument {index} of `{name}` must be {}, but is {}",
@@ -890,19 +1183,137 @@ mod tests {
     use super::*;
     use crate::{Model, ShapeId};
 
+    /// A xorshift generator, so that the random test below is the same on every run: a stack
+    /// overflow aborts the test binary, which leaves no failing case to shrink or persist, so
+    /// a failure must be reproducible by running the test again.
+    struct Rng(u64);
+
+    impl Rng {
+        fn below(&mut self, n: usize) -> usize {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            (self.0 % n as u64) as usize
+        }
+    }
+
+    /// A random expression with at most `depth` nested constructs. Most parse.
+    fn random_expression(rng: &mut Rng, depth: usize) -> String {
+        const LEAVES: &[&str] = &["a", "@", "'x'", "`1`", "\"q\"", "a[0]", "a.b"];
+        let leaf = LEAVES[rng.below(LEAVES.len())];
+        if depth == 0 || rng.below(50) == 0 {
+            return leaf.to_owned();
+        }
+        let e = random_expression(rng, depth - 1);
+        // The right-hand side of `.` must start with a name, `*`, `{`, `[`, or `&`.
+        let dot = |e: &str| match e.as_bytes() {
+            [b'a'..=b'z' | b'"' | b'*' | b'{' | b'&', ..] => e.to_owned(),
+            [b'[', next, ..] if !matches!(next, b'?' | b']') => e.to_owned(),
+            _ => format!("[{e}]"),
+        };
+        match rng.below(30) {
+            0 => format!("({e})"),
+            1 => format!("f({e})"),
+            2 => format!("f({leaf}, {e})"),
+            3 => format!("[{e}]"),
+            4 => format!("[{leaf}, {e}]"),
+            5 => format!("{{k: {e}}}"),
+            6 => format!("{leaf}[?{e}]"),
+            7 => format!("{e}[?{leaf}]"),
+            8 => format!("!{e}"),
+            // `&&` would be the and operator.
+            9 => format!("& {e}"),
+            10 => format!("{leaf}[*].{}", dot(&e)),
+            11 => format!("{e}[*]"),
+            12 => format!("*.{}", dot(&e)),
+            13 => format!("{e}.*"),
+            14 => format!("{e}[]"),
+            15 => format!("{leaf}[].{}", dot(&e)),
+            16 => format!("{e}[1:]"),
+            17 => format!("{leaf}[::-1].{}", dot(&e)),
+            18 => format!("{leaf} | {e}"),
+            19 => format!("{e} | {leaf}"),
+            20 => format!("{leaf} || {e}"),
+            21 => format!("{e} || {leaf}"),
+            22 => format!("{leaf} && {e}"),
+            23 => format!("{e} && {leaf}"),
+            24 => format!("{leaf} == {e}"),
+            25 => format!("{e} < {leaf}"),
+            26 => format!("{leaf}.{}", dot(&e)),
+            27 => format!("{e}.{}", dot(leaf)),
+            28 => format!("{leaf}[?{leaf}].{}", dot(&e)),
+            _ => format!("{leaf} | {leaf} || {leaf} && {leaf} == {leaf}.{}", dot(&e)),
+        }
+    }
+
+    /// The most levels the parser has open at once while it parses `ast`, as [`nesting_depth`]
+    /// counts them: a function's or multi-select's elements, a filter's condition, a
+    /// projection's right-hand side, and the operands of `!` and `&`. A left-hand operand is
+    /// parsed before the construct it belongs to starts, so it adds nothing. (Grouping
+    /// parentheses and the binding-power ladder leave no level here.)
+    fn ast_levels(ast: &Ast) -> usize {
+        match ast {
+            Ast::Function { args, .. } | Ast::MultiList { elements: args, .. } => {
+                1 + args.iter().map(ast_levels).max().unwrap_or(0)
+            }
+            Ast::MultiHash { elements, .. } => {
+                1 + elements
+                    .iter()
+                    .map(|pair| ast_levels(&pair.value))
+                    .max()
+                    .unwrap_or(0)
+            }
+            Ast::Not { node, .. } | Ast::Expref { ast: node, .. } => 1 + ast_levels(node),
+            // A filter's condition and the projection after it are each one level.
+            Ast::Projection { lhs, rhs, .. } => ast_levels(lhs).max(1 + ast_levels(rhs)),
+            Ast::Condition {
+                predicate, then, ..
+            } => ast_levels(predicate).max(ast_levels(then)),
+            Ast::Flatten { node, .. } | Ast::ObjectValues { node, .. } => ast_levels(node),
+            Ast::Subexpr { lhs, rhs, .. }
+            | Ast::Or { lhs, rhs, .. }
+            | Ast::And { lhs, rhs, .. }
+            | Ast::Comparison { lhs, rhs, .. } => ast_levels(lhs).max(ast_levels(rhs)),
+            Ast::Identity { .. }
+            | Ast::Field { .. }
+            | Ast::Index { .. }
+            | Ast::Literal { .. }
+            | Ast::Slice { .. } => 0,
+        }
+    }
+
     #[test]
-    fn counts_nesting_tokens() {
-        assert_eq!(nesting_tokens("a.b"), 0);
-        assert_eq!(nesting_tokens("length(a[?b == 'x' && c != d]) > `0`"), 2);
-        assert_eq!(nesting_tokens("!a && &b && {c: d[*]}"), 5);
-        // A real expression from the AWS models.
-        assert_eq!(
-            nesting_tokens(
+    fn estimates_nesting_depth() {
+        for (expression, depth) in [
+            ("a.b", 0),
+            // String and literal contents and plain indexes do not nest.
+            ("name == '*********************************'", 0),
+            (r#""(" == `"[{"` && '\'[' && `"\`("`"#, 0),
+            ("a[0].b[-1].c[ 2 ]", 0),
+            // Levels close at their closing token.
+            ("f(a) || [b] || {k: c} || (d)", 1),
+            ("f(g(h(a)))", 3),
+            // `!` and projections close at a loosely binding operator, and stack until then.
+            ("!!a || !b", 2),
+            ("a[*].b[*].c[].d.*.e[1:].f", 5),
+            ("a[*].b || c[].d | e.* == f[::-1]", 1),
+            // A filter's condition is a level, and so is the projection after it.
+            ("a[?b[?c]]", 2),
+            ("a[?b].c[?d].e", 2),
+            // `&` closes only at a `,` or its level's closing token, and so does every level
+            // open when it starts.
+            ("& a || & b", 2),
+            ("!& a || !& b", 4),
+            ("f(& a, & b, !c)", 2),
+            // The deepest expression in the checked-in AWS models.
+            (
                 "length(services[?!(length(deployments) == `1` && runningCount == \
-                 desiredCount)]) == `0`"
+                 desiredCount)]) == `0`",
+                5,
             ),
-            5
-        );
+        ] {
+            assert_eq!(nesting_depth(expression), depth, "{expression}");
+        }
     }
 
     #[test]
@@ -919,21 +1330,84 @@ mod tests {
         assert!(matches!(parse(&nested), Err(ParseError::TooNested(33))));
         let nested = format!("{}a{}", "(".repeat(MAX_NESTING), ")".repeat(MAX_NESTING));
         assert!(parse(&nested).is_ok());
+
+        // Long expressions that do not nest are accepted.
+        let indexes: String = (0..40).map(|i| format!("a{i}[{i}].")).collect();
+        assert!(parse(&format!("{indexes}a")).is_ok());
+        let calls = format!("length(a){}", " || length(a)".repeat(40));
+        assert!(parse(&calls).is_ok());
     }
 
     #[test]
-    fn parses_the_worst_case_at_the_nesting_limit() {
-        // Each repetition climbs every binding power before the next nesting token, which is
-        // the deepest the parser recurses per token. This runs on the test harness's 2 MiB
-        // thread, so it also checks the limit leaves room in unoptimized builds.
-        let worst = format!(
-            "{}a{}",
-            "f(a | a || a && a == a.".repeat(MAX_NESTING),
-            ")".repeat(MAX_NESTING)
-        );
-        assert_eq!(nesting_tokens(&worst), MAX_NESTING);
-        let analysis = analyze(&worst, &Type::Any).unwrap();
-        assert!(!analysis.problems.is_empty(), "`f` is not a function");
+    fn parses_the_worst_case_of_each_level_at_the_nesting_limit() {
+        // The ladder climbs every binding power, which is as deep as the parser recurses
+        // between two levels. These run on the test harness's 2 MiB thread, so they also check
+        // that the limit leaves room in unoptimized builds.
+        const LADDER: &str = "a | a || a && a == a";
+        for (repeated, closing) in [
+            (format!("f({LADDER}."), ")"),
+            ("(a | a || a && a == ".to_owned(), ")"),
+            (format!("{LADDER}.["), "]"),
+            (format!("{LADDER}.{{k: "), "}"),
+            (format!("{LADDER}[?"), "]"),
+            (format!("{LADDER}.&"), ""),
+            ("!".to_owned(), ""),
+            ("a | a || a && a == !f(".to_owned(), ")"),
+            ("a[*].".to_owned(), ""),
+            ("*.".to_owned(), ""),
+            ("a[0:1].".to_owned(), ""),
+            ("a[].".to_owned(), ""),
+            ("a[?a].".to_owned(), ""),
+            // A projection of a call: the checker recurses through both.
+            (format!("f({LADDER}."), ")[*][]"),
+            (format!("({LADDER}.f("), ")[])[]"),
+        ] {
+            let expression = |n: usize| format!("{}a{}", repeated.repeat(n), closing.repeat(n));
+            let n = (1..=MAX_NESTING)
+                .take_while(|&n| nesting_depth(&expression(n)) <= MAX_NESTING)
+                .last()
+                .unwrap();
+            let deepest = expression(n);
+            assert_eq!(nesting_depth(&deepest), MAX_NESTING, "{deepest}");
+            if let Err(err) = analyze(&deepest, &Type::Any) {
+                panic!("{deepest}: {err}");
+            }
+            assert!(
+                matches!(
+                    analyze(&expression(n + 1), &Type::Any),
+                    Err(ParseError::TooNested(_))
+                ),
+                "{repeated}"
+            );
+        }
+    }
+
+    #[test]
+    fn parses_random_expressions_within_the_limit() {
+        // An expression the estimate accepts must parse and check without exhausting the
+        // stack, which would abort the test binary, and must not open more levels than
+        // estimated.
+        let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+        let mut near_the_limit = 0;
+        for _ in 0..20_000 {
+            let nesting = 1 + rng.below(60);
+            let expression = random_expression(&mut rng, nesting);
+            let depth = nesting_depth(&expression);
+            if expression.len() > MAX_LENGTH || depth > MAX_NESTING {
+                continue;
+            }
+            let ast = parse(&expression).unwrap_or_else(|err| panic!("{expression}: {err}"));
+            let levels = ast_levels(&ast);
+            assert!(
+                levels <= depth,
+                "{expression}: estimated {depth} levels, but the parser opens {levels}"
+            );
+            analyze(&expression, &Type::Any).unwrap();
+            if depth > MAX_NESTING - 4 {
+                near_the_limit += 1;
+            }
+        }
+        assert!(near_the_limit > 300, "{near_the_limit} near the limit");
     }
 
     #[test]
@@ -971,10 +1445,15 @@ mod tests {
                     "data": {"target": "smithy.api#Blob"},
                     "doc": {"target": "smithy.api#Document"},
                     "items": {"target": "ex#Items"},
+                    "ids": {"target": "ex#Ids"},
+                    "none": {"target": "ex#None"},
                     "tags": {"target": "ex#Tags"},
                     "next": {"target": "ex#Output"}
                 }},
                 "ex#Items": {"type": "list", "member": {"target": "ex#Item"}},
+                "ex#Ids": {"type": "list", "member": {"target": "smithy.api#String"}},
+                "ex#None": {"type": "list", "member": {"target": "smithy.api#String"},
+                    "traits": {"smithy.api#length": {"max": 0}}},
                 "ex#Item": {"type": "structure", "members": {
                     "id": {"target": "smithy.api#String"},
                     "size": {"target": "smithy.api#Long"},
@@ -1125,7 +1604,7 @@ mod tests {
                 "length(count)",
                 "number",
                 vec![
-                    "Warning 7: argument 0 of `length` must be a `string`, an `array`, or an \
+                    "Error 7: argument 0 of `length` must be a `string`, an `array`, or an \
                      `object`, but is a `number`",
                 ],
             ),
@@ -1150,6 +1629,112 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    #[test]
+    fn joins_nested_lists_to_a_bounded_depth() {
+        // Two lists that contain each other, and two valid chains of lists far deeper than any
+        // real model. `||` joins the types of its operands element by element.
+        const DEPTH: usize = 10_000;
+        let mut shapes = vec![
+            r#""ex#Output": {"type": "structure", "members": {
+                "cyclicA": {"target": "ex#CyclicA"},
+                "cyclicB": {"target": "ex#CyclicB"},
+                "deepA": {"target": "ex#DeepA0"},
+                "deepB": {"target": "ex#DeepB0"}
+            }}"#
+            .to_owned(),
+            r#""ex#CyclicA": {"type": "list", "member": {"target": "ex#CyclicB"}}"#.to_owned(),
+            r#""ex#CyclicB": {"type": "list", "member": {"target": "ex#CyclicA"}}"#.to_owned(),
+        ];
+        for chain in ["A", "B"] {
+            for depth in 0..DEPTH {
+                let member = match depth + 1 {
+                    DEPTH => "smithy.api#String".to_owned(),
+                    next => format!("ex#Deep{chain}{next}"),
+                };
+                shapes.push(format!(
+                    r#""ex#Deep{chain}{depth}": {{"type": "list", "member": {{"target": "{member}"}}}}"#
+                ));
+            }
+        }
+        let model = Model::from_json_str(
+            "m.json",
+            &format!(r#"{{"smithy": "2.0", "shapes": {{{}}}}}"#, shapes.join(",")),
+        )
+        .unwrap();
+        for expression in ["cyclicA || cyclicB", "deepA || deepB"] {
+            let (result, problems) = check(&model, expression);
+            assert_eq!(result, "array<array>", "{expression}");
+            assert_eq!(problems, Vec::<String>::new(), "{expression}");
+        }
+    }
+
+    #[test]
+    fn argument_types_are_errors_where_the_reference_sample_is_certain() {
+        use Severity::{Error, Warning};
+        let model = model();
+        let mut failures = Vec::new();
+        for (expression, severity) in [
+            ("length(count)", Error),
+            ("abs(@)", Error),
+            ("abs(items[0].id)", Error),
+            ("abs(items[-1].id)", Error),
+            // Out of range of the two-element sample, so null.
+            ("abs(items[2])", Error),
+            ("length(nmae)", Error),
+            ("abs('x')", Error),
+            ("abs(`[1]`)", Error),
+            ("abs(&count)", Error),
+            ("abs(!ready)", Error),
+            ("abs(name == 'x')", Error),
+            ("sum(ids)", Error),
+            ("count == `1` || length(count) > `0`", Error),
+            ("[length(count)]", Error),
+            // The reference implementation's sample is a value of any type, an empty array,
+            // or not certain to have the inferred type.
+            ("length(next.count)", Warning),
+            ("abs(items[0].children[0].id)", Warning),
+            // A field of null is a value of any type.
+            ("abs(items[2].id)", Warning),
+            ("sum(none)", Warning),
+            ("abs(tags.anything)", Warning),
+            ("abs(max_by(items, &size))", Warning),
+            ("abs(items[].id)", Warning),
+            ("abs(name || name)", Warning),
+            ("next.length(count)", Warning),
+            ("items[?abs(id) > `0`]", Warning),
+            ("map(&abs(id), items)", Warning),
+        ] {
+            let (_, problems) = check(&model, expression);
+            let arguments: Vec<_> = problems
+                .iter()
+                .filter(|problem| problem.contains(": argument "))
+                .collect();
+            let expected = format!("{severity:?} ");
+            if arguments.len() != 1 || !arguments[0].starts_with(&expected) {
+                failures.push(format!("{expression}: {problems:#?}"));
+            }
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+
+        let shape = |id| {
+            model
+                .expect_shape(&ShapeId::from_static(id))
+                .unwrap()
+                .expect_shape()
+                .unwrap()
+        };
+        let root = Type::input_output(shape("ex#Item"), shape("ex#Output"));
+        for (expression, severity) in [
+            ("length(output.count)", Error),
+            ("abs(input.id)", Error),
+            ("length(output.next.count)", Warning),
+        ] {
+            let analysis = analyze(expression, &root).unwrap();
+            let severities: Vec<_> = analysis.problems.iter().map(|p| p.severity).collect();
+            assert_eq!(severities, [severity], "{expression}");
+        }
     }
 
     #[test]

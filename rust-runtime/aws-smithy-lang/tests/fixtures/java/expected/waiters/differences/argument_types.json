@@ -5,12 +5,12 @@
         {
             "id": "WaitableTrait",
             "severity": "ERROR",
-            "shape": "ex#GetThing",
-            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (length(count) > `0`): length function argument 0 error: Expected one of [string, array, object], but found number (1:8)"
+            "shape": "ex#GetNext",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (length(next.count) > `0`): length function argument 0 error: Expected one of [string, array, object], but found number (1:12)"
         }
     ],
     "waiters": {
-        "ex#GetThing": [
+        "ex#GetNext": [
             {
                 "name": "W",
                 "documentation": null,
@@ -19,7 +19,30 @@
                         "state": "success",
                         "matcher": {
                             "output": {
-                                "path": "length(count) > `0`",
+                                "path": "length(next.count) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#GetNextNext": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "length(next.next.count) > `0`",
                                 "expected": "true",
                                 "comparator": "booleanEquals"
                             }

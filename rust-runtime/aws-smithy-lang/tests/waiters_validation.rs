@@ -362,8 +362,9 @@ fn limits_the_size_of_expressions() {
             (
                 Severity::Error,
                 DiagnosticCode::ResourceLimit,
-                "waiter `W` acceptor 1: `path` has 33 nesting tokens (`(`, `[`, `{`, `!`, `&`, \
-                 or `*`), more than the 32 this validator parses"
+                "waiter `W` acceptor 1: `path` nests 33 levels deep (counting brackets, \
+                 parentheses, braces, projections, `!`, and `&`), deeper than the 32 this \
+                 validator parses"
             ),
         ]
     );

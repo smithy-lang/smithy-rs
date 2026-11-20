@@ -5,6 +5,12 @@
         {
             "id": "WaitableTrait",
             "severity": "ERROR",
+            "shape": "ex#ElementArgumentType",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (sum(ids) > `0`): sum function argument 0 error: Expected an array of number, but found string at index 0 (1:5)"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
             "shape": "ex#EmptyPath",
             "message": "Waiter `W`, acceptor 0: Invalid JMESPath expression (): Syntax error at line 1 column 1: Expected ['@', 'A-Z|a-z|_', '`', '*', '{', '[', '[]', '&', '!', '[?', '('], but found EOF"
         },
@@ -13,6 +19,18 @@
             "severity": "ERROR",
             "shape": "ex#InputOutputPathSyntax",
             "message": "Waiter `W`, acceptor 0: Invalid JMESPath expression (input.): Syntax error at line 1 column 7: Expected ['[', '{', '*', 'A-Z|a-z|_'], but found EOF"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#LiteralArgumentType",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (abs('x') > `0`): abs function argument 0 error: Expected argument to be number, but found string (1:5)"
+        },
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#MemberArgumentType",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (length(count) > `0`): length function argument 0 error: Expected one of [string, array, object], but found number (1:8)"
         },
         {
             "id": "WaitableTrait",
@@ -70,6 +88,29 @@
         }
     ],
     "waiters": {
+        "ex#ElementArgumentType": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "sum(ids) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
         "ex#EmptyPath": [
             {
                 "name": "W",
@@ -105,6 +146,52 @@
                                 "path": "input.",
                                 "expected": "a",
                                 "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#LiteralArgumentType": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "abs('x') > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#MemberArgumentType": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "length(count) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
                             }
                         },
                         "message": null

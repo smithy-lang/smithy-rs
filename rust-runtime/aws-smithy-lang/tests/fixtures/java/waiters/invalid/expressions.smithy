@@ -1,5 +1,6 @@
-// Invalid JMESPath expressions, and messages whose result is known not to be a string or an
-// array of strings. Each operation's trait has one problem.
+// Invalid JMESPath expressions, function arguments of the wrong type, and messages whose
+// result is known not to be a string or an array of strings. Each operation's trait has one
+// problem.
 $version: "2"
 
 namespace ex
@@ -45,6 +46,21 @@ operation TooManyArguments {
 
 @waitable(W: { acceptors: [{ state: "success", matcher: { output: { path: "contains(ids)", expected: "true", comparator: "booleanEquals" } } }] })
 operation TooFewArguments {
+    output: Thing
+}
+
+@waitable(W: { acceptors: [{ state: "success", matcher: { output: { path: "length(count) > `0`", expected: "true", comparator: "booleanEquals" } } }] })
+operation MemberArgumentType {
+    output: Thing
+}
+
+@waitable(W: { acceptors: [{ state: "success", matcher: { output: { path: "abs('x') > `0`", expected: "true", comparator: "booleanEquals" } } }] })
+operation LiteralArgumentType {
+    output: Thing
+}
+
+@waitable(W: { acceptors: [{ state: "success", matcher: { output: { path: "sum(ids) > `0`", expected: "true", comparator: "booleanEquals" } } }] })
+operation ElementArgumentType {
     output: Thing
 }
 

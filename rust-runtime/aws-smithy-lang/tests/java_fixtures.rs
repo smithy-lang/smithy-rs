@@ -381,7 +381,13 @@ fn pagination_matches_java() {
 /// the diagnostics this crate reports for each instead, as `waiter_diagnostics` describes
 /// them. Each fixture explains its difference.
 const WAITER_DIFFERENCES: &[(&str, &[&str])] = &[
-    ("argument_types", &["ex#GetThing Warning InvalidTrait"]),
+    (
+        "argument_types",
+        &[
+            "ex#GetNext Warning InvalidTrait",
+            "ex#GetNextNext Warning InvalidTrait",
+        ],
+    ),
     (
         "expression_limits",
         &[
