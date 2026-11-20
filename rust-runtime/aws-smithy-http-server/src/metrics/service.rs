@@ -302,9 +302,9 @@ mod tests {
 
         let metrics = seen.lock().unwrap().take().expect("callback received metrics");
         // Ends when the body is fully sent, not when it is dropped.
-        let (start, start_system_time) = metrics.start_time();
-        assert_eq!(metrics.end_time() - start, HANDLING + SENDING);
-        assert_eq!(start_system_time, START_SYSTEM_TIME);
+        let start = metrics.start_time();
+        assert_eq!(metrics.end_time() - start.instant, HANDLING + SENDING);
+        assert_eq!(start.system_time, START_SYSTEM_TIME);
     }
 
     #[tokio::test]
