@@ -15,59 +15,32 @@ rust-version = "1.94.1"
 
 [features]
 default = ["rustcrypto"]
-# Use the RustCrypto crates (`md-5`, `sha1`, `sha2`) for SHA-1/SHA-256/MD5 digests. This is the
-# default and is not FIPS-validated.
+# RustCrypto backend (`md-5`, `sha1`, `sha2`): SHA-1/SHA-256/MD5. Default, not FIPS-validated.
+# Those crates are optional and gated here, which is the only way to express their absence:
+# features are additive, so "RustCrypto unless AWS-LC" is not expressible.
 #
-# Those crates are optional dependencies gated on this feature, so that a build which selects an
-# AWS-LC backend and disables the default features does not compile them at all. Additive features
-# cannot express "on unless AWS-LC is", so the only way to keep RustCrypto out of a FIPS build is to
-# make enabling it a choice.
-#
-# This is a behaviour change shipping under a patch version. `--no-default-features` used to be a
-# no-op here -- the crate had no `[features]` section before this work -- and now loses the
-# backend; the recovery is to name `rustcrypto`. `crypto.rs` emits a `compile_error!` naming the fix.
-#
-# 0.66.0 was the first choice here and does not work. Cargo treats a 0.x minor as incompatible, so
-# `aws-sdk-s3`'s published `aws-smithy-checksums = "0.65.1"` requirement rejects it: when
-# `check-semver-hazards` patches this crate into the last released SDK, Cargo reports `patch
-# aws-smithy-checksums v0.66.0 was not used in the crate graph`, s3 keeps the registry copy, and
-# this crate's change goes untested there. A 0.65.x patch keeps that requirement satisfied.
+# This breaks `--no-default-features`, which was a no-op before this work -- the crate had no
+# `[features]` section -- and now has no backend. `crypto.rs` emits a `compile_error!` naming the
+# fix. It ships as a 0.65.x patch rather than 0.66.0 because Cargo treats a 0.x minor as
+# incompatible: `aws-sdk-s3`'s published `aws-smithy-checksums = "0.65.1"` would reject 0.66.0, so
+# `check-semver-hazards` would leave s3 on the registry copy and never test this change.
 rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
-# Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the non-FIPS AWS-LC build.
+# aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
+# that keeps `rustcrypto` the default is WASM, where aws-lc-rs supports only emscripten.
 #
-# Needs a C/C++ compiler, and works on every target aws-lc-rs supports. That is most of what
-# the SDK supports, but not all of it: per
-# https://aws.github.io/aws-lc-rs/platform_support.html the only WASM target aws-lc-rs supports
-# is wasm32-unknown-emscripten, so `wasm32-unknown-unknown` and the WASI targets must stay on
-# `rustcrypto`. This is the reason `rustcrypto` remains the default rather than this feature.
-#
-# Two details about the spelling below, both consequences of `default-features = false` on the
-# dependency, which means the AWS-LC build has to be named explicitly:
-# - `aws-lc-rs-fips` does not stack on this feature, so enabling `aws-lc-rs-fips` alone compiles
-#   only `aws-lc-fips-sys`, not both AWS-LC builds. (rustls stacks its `fips` on its `aws_lc_rs`
-#   feature and so always builds both.)
-# - This names aws-lc-rs's `aws-lc-sys` feature rather than its `non-fips` feature, because
-#   `non-fips` and `fips` are mutually exclusive there — aws-lc-rs fails its build if both are
-#   on — and that would make this feature and `aws-lc-rs-fips` impossible to enable together,
-#   something `--all-features` and feature unification across a workspace do routinely. With both
-#   on, both AWS-LC builds compile and aws-lc-rs uses the FIPS one.
+# Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
+# `fips` and would make the two arms impossible to enable together -- something `--all-features`
+# does routinely. The arms are siblings rather than stacked, so a FIPS build compiles only the
+# validated library.
 aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
-# Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the FIPS 140-3 validated AWS-LC build.
-# Takes precedence over `aws-lc-rs` when both are enabled.
+# aws-lc-rs backend on the FIPS 140-3 validated AWS-LC build. Takes precedence over `aws-lc-rs`.
 #
-# Named for the backend it selects, as its `aws-lc-rs` sibling is, rather than `fips`: on a
-# generated SDK crate a bare `fips` would sit next to `Config::use_fips`, which selects a
-# FIPS-compliant *endpoint* and is unrelated to which module performs the cryptography.
-#
-# Supported on a subset of the targets above: x86_64 and aarch64 Linux (gnu and musl), `arm`
-# musleabi/musleabihf, powerpc/powerpc64/powerpc64le gnu, macOS, 64-bit Windows MSVC, and x86_64
-# FreeBSD. Not i686, not riscv64, not s390x, not mips, not NetBSD, not iOS, not Android, not WASM.
-# The missing i686 support is why CI excludes this crate from its i686 `--all-features` leg.
-# Requires a C/C++ compiler, CMake, and Go at build time, plus bindgen on targets without
-# pre-generated FIPS bindings, which is everything except 64-bit Linux and macOS.
+# Named for the backend rather than `fips`, which on a generated SDK crate would sit next to
+# `Config::use_fips`: that selects a FIPS-compliant *endpoint* and says nothing about which
+# implementation does the cryptography. See the crate docs for target support and build tools.
 aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
-# Internal: selects the aws-lc-rs digest backend. Do not enable directly; use
-# `aws-lc-rs` or `aws-lc-rs-fips` instead so that an AWS-LC build is also selected.
+# Internal: selects the aws-lc-rs backend without naming an AWS-LC build. Use `aws-lc-rs` or
+# `aws-lc-rs-fips`.
 __aws-lc-rs = ["dep:aws-lc-rs"]
 
 [dependencies]
@@ -82,27 +55,17 @@ http-body-1x = {package = "http-body", version = "1.0.1"}
 http-body-util = "0.1.3"
 pin-project-lite = "0.2.14"
 tracing = "0.1.44"
-# RustCrypto digest backend, used unless an AWS-LC arm is selected. Optional and gated on the
-# `rustcrypto` feature, so that an AWS-LC build with `default-features = false` does not compile
-# them.
+# RustCrypto digest backend, gated on `rustcrypto` so an AWS-LC build can leave it out.
 md-5 = { version = "0.11", optional = true }
 sha1 = { version = "0.11", optional = true }
 sha2 = { version = "0.11", optional = true }
 # aws-lc-rs digest backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features.
-# `default-features = false` so that the AWS-LC build (non-FIPS vs FIPS) is chosen
-# explicitly by those features rather than defaulting to the non-FIPS one.
+# `default-features = false` so those features name the AWS-LC build rather than defaulting to the
+# non-FIPS one.
 #
-# The floor is 1.18.1, on the `1.18` line `rustls` declares, so the digest path asks for the same
-# AWS-LC as the TLS path.
-#
-# It is not an API floor: the aws-lc-rs APIs used here compile against 1.16.1. It is the first
-# version whose requirements for both `-sys` crates exclude every version with an open advisory or a
-# known build failure. It also selects the AWS-LC-FIPS 4.x module, which is on the CMVP Modules In
-# Process list rather than certificated.
-#
-# Keep this in step with `aws-sigv4`'s. Cargo resolves one `aws-lc-rs` 1.x for the whole graph, so
-# they cannot drift apart at build time, but the declared requirements should still agree. See that
-# crate's Cargo.toml for the version table and the full rationale.
+# Keep the floor in step with `aws-sigv4`'s. Cargo resolves one `aws-lc-rs` 1.x for the whole
+# graph, so they cannot drift apart at build time, but the declared requirements should still
+# agree. See that crate's Cargo.toml for why this version.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 
 [dev-dependencies]
@@ -111,18 +74,14 @@ pretty_assertions = "1.3"
 tokio = { version = "1.49.0", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
-# These are the RustCrypto backend. Making them optional means a deliberate AWS-LC build
-# (`--no-default-features` plus an AWS-LC arm) does not compile them at all, so there is nothing for
-# udeps to flag there. This list is still required for one configuration: `--all-features`, which CI
-# runs udeps under, enables `rustcrypto` *and* an AWS-LC arm, so the crates are present while the cfg
-# routes around them. They are the live backend in a default build, so they are not dead
-# dependencies -- only dead in that combination.
+# Needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto` *and* an
+# AWS-LC arm, so these are compiled while the cfg routes around them. They are the live backend in
+# a default build, and absent entirely from a `--no-default-features` AWS-LC build.
 [package.metadata.cargo-udeps.ignore]
 normal = ["md-5", "sha1", "sha2"]
 
 [package.metadata.docs.rs]
-# `all-features` is off because the `aws-lc-rs-fips` feature builds aws-lc-fips-sys, which can't
-# build on docs.rs. `sdk-lints` grants this crate an exception for that reason.
+# `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
 all-features = false
 features = ["rustcrypto", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]

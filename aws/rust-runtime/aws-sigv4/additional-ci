@@ -12,15 +12,13 @@ C_RED='\033[1;31m'
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
-# Both crypto backends are optional dependencies, so a build naming neither has no crypto at all.
-# That configuration is the breaking part of this crate's 1.7.0: `--no-default-features --features
-# sign-http,http1` compiled on 1.6.x and does not here. The `compile_error!` in `crypto.rs` exists
-# so that the build says what to do about it instead of failing on an unresolved `hmac` import from
-# inside a private module, which is what a consumer would otherwise have to diagnose.
+# `--no-default-features --features sign-http,http1` compiled on 1.6.x and has no crypto backend
+# here. The `compile_error!` in `crypto.rs` makes that build say what to do about it instead of
+# reporting unresolved `crypto::` imports at the call sites.
 #
-# Asserted here because nothing else can. The condition is a feature combination, so it is invisible
-# to the crate's own test suite; and deleting the `compile_error!` does not break any build, it only
-# makes the failure less legible -- a regression with no symptom other than a worse message.
+# Asserted here because nothing else can: the condition is a feature combination, invisible to the
+# test suite, and deleting the `compile_error!` breaks no build -- it only makes the failure less
+# legible, a regression with no other symptom.
 echo "### Checking that a build with no crypto backend explains itself"
 
 output="$(cargo check --no-default-features --features sign-http,http1 2>&1 || true)"
@@ -32,9 +30,9 @@ if ! grep -q "requires a crypto backend" <<<"${output}"; then
     exit 1
 fi
 
-# The diagnostic has to come first. `rustc` reports a `compile_error!` ahead of the unresolved
-# imports that follow from the same missing backend, and that ordering is the whole value of it:
-# the consumer reads the actionable line, not the three that are consequences.
+# The diagnostic has to come first, which is the whole value of it: `rustc` reports a
+# `compile_error!` ahead of the unresolved imports that follow from the same missing backend, so
+# the consumer reads the actionable line rather than its consequences.
 first_error="$(grep -m1 '^error' <<<"${output}")"
 if ! grep -q "requires a crypto backend" <<<"${first_error}"; then
     echo -e "${C_RED}The crypto backend diagnostic must be the first error reported, but the first${C_RESET}" >&2

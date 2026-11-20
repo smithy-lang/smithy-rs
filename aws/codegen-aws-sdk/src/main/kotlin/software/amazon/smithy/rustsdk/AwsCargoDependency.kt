@@ -22,13 +22,10 @@ object AwsCargoDependency {
     /**
      * `aws-runtime`, declared with `default-features = false`.
      *
-     * Its only default feature is `rustcrypto`, which it forwards to `aws-sigv4`. Leaving the defaults
-     * on here would re-enable the RustCrypto backend for every generated crate no matter what the
-     * consumer asks for, which would defeat `aws-lc-fips` entirely -- the backend would be *added* to
-     * RustCrypto rather than substituted for it.
-     *
-     * The backend arrives instead via the generated crate's `rustcrypto` feature, which is on by
-     * default and forwards here -- see `AwsFluentClientDecorator`.
+     * Its only default is `rustcrypto`, which it forwards to `aws-sigv4`. Leaving the defaults on
+     * would add RustCrypto to every generated crate regardless of what the consumer asks for, so
+     * `aws-lc-fips` would supplement it rather than substitute for it. The backend arrives instead
+     * via the generated crate's default-on `rustcrypto` feature; see `AwsFluentClientDecorator`.
      */
     fun awsRuntime(runtimeConfig: RuntimeConfig) =
         runtimeConfig.awsRuntimeCrate("aws-runtime").copy(defaultFeatures = false)

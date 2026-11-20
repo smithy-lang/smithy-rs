@@ -27,42 +27,39 @@
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
 //! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
 //!
-//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over
-//! `rustcrypto`, so enabling more than one — which Cargo feature unification does routinely —
-//! resolves to the strongest backend rather than failing to build.
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over `rustcrypto`, so enabling
+//! more than one — which Cargo feature unification does routinely — resolves to the strongest
+//! backend rather than failing to build.
 //!
 //! ## Platform support
 //!
-//! Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` is the default:
-//! it is the only backend that builds everywhere the SDK does.
+//! `rustcrypto` is the default because it is the only backend that builds everywhere the SDK does.
+//! Both AWS-LC backends are per-target; see
+//! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
+//! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
+//! `wasm32-unknown-emscripten`. `aws-lc-rs-fips` additionally needs CMake and Go and covers fewer
+//! targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported target
+//! fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
-//! - `aws-lc-rs` needs a C/C++ compiler and works on every target
-//!   [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html). The only WASM
-//!   target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI
-//!   targets have to stay on `rustcrypto`.
-//! - `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset of those targets:
-//!   Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
-//!
-//! Enabling either feature on a target its AWS-LC build doesn't support fails while building
-//! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
+//! crate's `Cargo.toml` documents the declared floor.
 //!
 //! ## What ends up in the dependency tree
 //!
-//! `md-5`, `sha1` and `sha2` are optional dependencies gated on `rustcrypto`, so a build that
-//! selects an AWS-LC backend and turns the default features off does not compile them at all:
+//! `md-5`, `sha1` and `sha2` are optional and gated on `rustcrypto`, so an AWS-LC build with the
+//! default features off does not compile them:
 //!
 //! ```sh
 //! cargo build --no-default-features --features aws-lc-rs-fips
 //! ```
 //!
-//! That is the point of the arrangement. Cargo features are additive and cannot express "on
-//! unless AWS-LC is", so excluding RustCrypto has to be something the build asks for. Leaving the
-//! default features on keeps the three crates compiled, because `rustcrypto` is the default — the
-//! AWS-LC backend still wins at the call site, by the precedence above.
+//! Features are additive and cannot express "on unless AWS-LC is", so dropping RustCrypto has to
+//! be something the build asks for. Leaving the defaults on keeps the three crates compiled; the
+//! AWS-LC backend still wins at the call site.
 //!
-//! MD5 is only available on the `rustcrypto` backend, since aws-lc-rs does not expose it and it
-//! is not FIPS-approved. No public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is
-//! deprecated and resolves to CRC-32.
+//! MD5 is `rustcrypto`-only, since aws-lc-rs does not expose it and it is not FIPS-approved. No
+//! public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is deprecated and resolves to
+//! CRC-32.
 //!
 //! CRC-32, CRC-32C, and CRC-64/NVME are not cryptographic and are unaffected by this choice.
 

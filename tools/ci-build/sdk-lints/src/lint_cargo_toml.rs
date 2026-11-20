@@ -172,10 +172,11 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
     Ok(errors)
 }
 
-/// Crates exempt from the `all-features = true` docs.rs convention.
+/// Crates skipped by the [`DocsRs`] lint.
 ///
-/// Each of these has a FIPS feature that builds `aws-lc-fips-sys`, which cannot build on
-/// docs.rs, so they pin an explicit feature list instead.
+/// Each one owns a FIPS feature that builds `aws-lc-fips-sys`, which docs.rs cannot build, so
+/// `all-features = true` is not available to them and they pin an explicit feature list instead.
+/// Crates that merely forward to such a feature keep the convention and stay off this list.
 const DOCS_RS_ALL_FEATURES_EXEMPT: &[&str] = &[
     "aws-smithy-http-client",
     "aws-smithy-checksums",

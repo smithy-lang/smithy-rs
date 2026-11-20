@@ -207,7 +207,8 @@ lazy_static! {
     // checkout, so these `default-features = false` declarations would otherwise leave `aws-sigv4`
     // with no backend. Older published SDKs have no such feature and compile RustCrypto
     // unconditionally, so naming it there would fail with "unknown feature" instead. It is also the
-    // only valid backend for this bundle regardless: aws-lc-rs does not build for WASM.
+    // only backend available to this bundle, which targets wasm32-wasip2: aws-lc-rs supports no
+    // WASM target other than emscripten.
     //
     // Once a release containing the optional backend is added to NOTABLE_SDK_RELEASE_TAGS, this can
     // become unconditional for those tags.

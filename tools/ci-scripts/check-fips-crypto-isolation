@@ -7,22 +7,20 @@
 # Asserts that a FIPS build of a generated service crate compiles no non-validated crypto
 # implementation, and that a default build still compiles one.
 #
-# This check exists because the failure mode it guards is silent. The RustCrypto crates are
-# optional dependencies of `aws-sigv4` and `aws-smithy-checksums` now, but "optional" only keeps
-# them out if *every* crate on the path to them declares its dependency with
-# `default-features = false` and forwards the choice. That path is three declarations deep
-# (service crate -> `aws-runtime` -> `aws-sigv4`), and a build that drops the propagation anywhere
-# along it compiles cleanly, behaves correctly, and passes every other test in CI while quietly
-# compiling the implementation the FIPS build was supposed to exclude. Nothing else in the suite
-# would notice.
+# The failure mode this guards is silent. The RustCrypto crates are optional now, but "optional"
+# only keeps them out if *every* crate on the path declares its dependency with
+# `default-features = false` and forwards the choice -- three declarations deep, from the service
+# crate through `aws-runtime` to `aws-sigv4`. A build that drops the propagation anywhere along it
+# compiles cleanly, behaves correctly, and passes every other test in CI while compiling the
+# implementation the FIPS build was meant to exclude.
 #
-# It works on resolved features rather than on build output, so it needs a lockfile but no
-# compiler, no C toolchain, and no `aws-lc-fips-sys` build. That matters: this is the one check
-# that can assert the FIPS graph on a machine that cannot build the FIPS module.
+# It reads resolved features rather than build output, so it needs a lockfile but no compiler, no C
+# toolchain and no `aws-lc-fips-sys` build -- the only check that can assert the FIPS graph on a
+# machine that cannot build the FIPS module.
 #
 # Run from the directory holding the generated SDK workspace. Both full-SDK actions invoke it:
-# `check-only-aws-sdk-services`, which is the one GitHub Actions dispatches, and
-# `check-aws-sdk-services`, which is local-only.
+# `check-only-aws-sdk-services`, which GitHub Actions dispatches, and the local-only
+# `check-aws-sdk-services`.
 
 C_RED='\033[1;31m'
 C_GREEN='\033[1;32m'
@@ -41,10 +39,10 @@ fi
 # crypto libraries that reach an SDK binary, neither of which is the validated module. Presence
 # alone is not the failure -- who reaches them is, which is what the reverse tree below decides.
 #
-# `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent from this list. They are
-# RustCrypto crates that a `sigv4a` FIPS build still compiles, and that is understood and
-# documented: the first two do the integer math of the SigV4a key derivation defined by the signing
-# spec, and the last two are no longer called but cannot be dropped, because `sigv4a` has to keep
+# `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent. A `sigv4a` FIPS build
+# still compiles them, which is understood and documented: `crypto-bigint` does the integer math
+# of the SigV4a key derivation defined by the signing spec (`subtle` comes along underneath it),
+# and `p256`/`ecdsa` are no longer called but cannot be dropped, because `sigv4a` has to keep
 # declaring them and Cargo features cannot express "only when `rustcrypto` is also on".
 FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 
@@ -85,17 +83,14 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     checked=$((checked + 1))
     echo -e "${C_YELLOW}## Checking ${crate}${C_RESET}"
 
-    # Deliberately without `sigv4a`, which is the one configuration this check cannot assert.
-    # `sigv4a` has to declare `p256` unconditionally -- Cargo features cannot say "only when
-    # `rustcrypto` is also on" -- and `ecdsa` underneath it pulls in `hmac` and `sha2`, so a FIPS
-    # build with `sigv4a` compiles two crates on the forbidden list below by a route nothing can
-    # close. They are the same versions this crate declares for its own backend, which a FIPS build
-    # leaves off, so one copy each reached only through `p256`. Adding
-    # `sigv4a` here would make this check red with no fix available. What keeps that honest is that
-    # the cfg in `aws-sigv4`'s `crypto` module leaves the RustCrypto backend uncompiled in a FIPS
-    # build, so nothing calls them; `aws-sigv4`'s crate docs state it, and a graph is the wrong
-    # instrument for "present but unreachable". Note the asymmetry if you change this: `p256` and
-    # `ecdsa` are exempt by name below, their `hmac` and `sha2` are not.
+    # Deliberately without `sigv4a`, the one configuration this check cannot assert. `sigv4a` has
+    # to declare `p256` unconditionally, and `sha2` arrives under `p256` while `hmac` arrives under
+    # `ecdsa`'s RFC 6979 nonce derivation, so a `sigv4a` FIPS build compiles two crates on the
+    # forbidden list by a route nothing can close. Adding `sigv4a` here would make this check red
+    # with no fix available. What keeps that honest is the cfg in `aws-sigv4`'s `crypto` module,
+    # which leaves the RustCrypto backend uncompiled in a FIPS build so nothing calls them; a graph
+    # is the wrong instrument for "present but unreachable". Note the asymmetry if you change this:
+    # `p256` and `ecdsa` are exempt by name above, their `hmac` and `sha2` are not.
     fips_args=(-p "${crate}" --no-default-features --features aws-lc-fips -e normal)
     fips_tree="$(cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
 
@@ -106,12 +101,10 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     fi
 
     for dep in "${FORBIDDEN_IN_FIPS[@]}"; do
-        # Collect every version of it in the graph, since the reverse walk below has to name one.
+        # Collect every version in the graph, since the reverse walk below has to name one.
         # `cargo tree -i` takes a package spec, and a bare name is an error rather than a match
-        # once a crate has resolved to two versions -- which is not hypothetical here: enabling
-        # `sigv4a` puts `hmac` 0.12 and `sha2` 0.10 in the tree underneath `p256` alongside the
-        # 0.13 and 0.11 the backends declare. Passing the bare name there, and discarding the
-        # error, would leave the walk with no output to match an owner against, so a real
+        # once a crate has resolved to two versions. Passing the bare name and discarding that
+        # error would leave the walk with no output to match an owner against, so a real
         # propagation break would be reported as the benign note at the bottom of this loop.
         grep -q "^${dep} " <<<"${fips_tree}" || continue
         versions=()
@@ -154,9 +147,8 @@ ${parents}"
             done
 
             # Reached without passing through either backend crate, so the service crate declares
-            # it itself. Not a compliance finding -- see BACKEND_OWNERS above -- but reported so
-            # the output stays an honest account of what a FIPS build compiles rather than a bare
-            # pass.
+            # it itself: not a compliance finding (see BACKEND_OWNERS above), but reported so the
+            # output is an account of what a FIPS build compiles rather than a bare pass.
             if [[ "${via_backend}" == "false" ]]; then
                 echo "   note: ${spec} is in the FIPS graph, declared by the service crate rather"
                 echo "         than reached through a backend. Not a compliance finding; it is not"
@@ -165,9 +157,9 @@ ${parents}"
         done
     done
 
-    # The other half of the propagation. Making the backend optional means a build that forwards
-    # nothing gets no crypto, so the default path has to be asserted too -- and this is cheap
-    # insurance against "fixing" a FIPS failure by breaking every ordinary consumer.
+    # The other half: an optional backend that nothing forwards leaves a default build with no
+    # crypto, so assert that too. Cheap insurance against "fixing" a FIPS failure by breaking every
+    # ordinary consumer.
     default_tree="$(cargo tree -p "${crate}" -e normal --prefix none 2>/dev/null | sort -u)"
     for dep in hmac sha2; do
         if ! grep -q "^${dep} " <<<"${default_tree}"; then

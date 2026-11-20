@@ -105,10 +105,9 @@ fn warn_legacy_client_default_is_changing(behavior_version: BehaviorVersion) {
 
 /// Say so when a FIPS build resolves to the legacy TLS stack, which is not FIPS.
 ///
-/// `aws-lc-fips` routes the default HTTPS client's TLS through the FIPS 140-3 validated build of
-/// AWS-LC, but it can only do that for the hyper 1.x client. The legacy client's TLS is
-/// `rustls` 0.21 on `ring`, so a build that resolves to it has FIPS signing and checksums over
-/// non-FIPS TLS — and would otherwise have no way to find that out.
+/// `aws-lc-fips` can only route TLS through the FIPS 140-3 validated build of AWS-LC for the
+/// hyper 1.x client. The legacy client's TLS is `rustls` 0.21 on `ring`, so a build that resolves
+/// to it has non-FIPS TLS and would otherwise have no way to find that out.
 ///
 /// Called at the same points as [`warn_legacy_client_default_is_changing`], since the condition is
 /// the same: the legacy client is what got selected.
@@ -119,10 +118,11 @@ fn warn_legacy_client_is_not_fips(behavior_version: BehaviorVersion) {
             behavior_version = ?behavior_version,
             "`aws-lc-fips` is enabled, but this build resolves to the legacy hyper 0.14.x HTTP \
              client, whose TLS is rustls 0.21 on ring rather than the FIPS 140-3 validated build \
-             of AWS-LC. Request signing and checksums are still FIPS; TLS is not, so this build \
-             is not end-to-end FIPS. Use `BehaviorVersion::v2026_01_12()` or later to select the \
-             hyper 1.x client, or drop the legacy stack (the `rustls` / `legacy-https-client` \
-             feature on your AWS SDK crate, or `aws-smithy-runtime/tls-rustls`).",
+             of AWS-LC, so this build is not end-to-end FIPS. Enable \
+             `aws-smithy-runtime/default-https-client` to select the hyper 1.x client, and use \
+             `BehaviorVersion::v2026_01_12()` or later; or drop the legacy stack (the `rustls` / \
+             `legacy-https-client` feature on your AWS SDK crate, or \
+             `aws-smithy-runtime/tls-rustls`).",
         );
     };
 

@@ -28,9 +28,9 @@ pushd "${PROBE_DIR}" &>/dev/null
 
 # cargo-hack logs `info: running ... (k/TOTAL)` for combos in the partition and `info: skipping`
 # for the rest. --depth 1 keeps the set small and fast.
-# `--at-least-one-of` must match the invocation in `check-aws-config`, both so that the combination
-# count this script verifies lines up with the one actually run in CI, and because a build selecting
-# no crypto backend does not compile -- see that script for why.
+# `--at-least-one-of` mirrors the flag `check-aws-config` passes, so that this script verifies
+# partitioning under the same cargo-hack arguments CI uses. The probe crate has no crypto features
+# of its own, so the flag only drops its bare `--no-default-features` combination.
 HACK_ARGS=(check --feature-powerset --exclude-all-features --depth 1 --at-least-one-of rustcrypto,aws-lc-fips)
 
 total_run=0

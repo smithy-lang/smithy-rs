@@ -5,9 +5,8 @@
 
 //! [aws-lc-rs](https://github.com/aws/aws-lc-rs) crypto backend.
 //!
-//! With the `aws-lc-rs-fips` feature, these operations are performed by the FIPS 140-3 validated
-//! build of AWS-LC. With `aws-lc-rs` alone they are performed by the same implementations in a build that
-//! is not operating in FIPS mode.
+//! The feature chooses which AWS-LC library this links: `aws-lc-rs-fips` links `aws-lc-fips-sys`,
+//! the FIPS 140-3 validated build, and `aws-lc-rs` alone links `aws-lc-sys`, which is not.
 
 use super::SHA256_OUTPUT_SIZE;
 use aws_lc_rs::{digest, hmac};
@@ -74,13 +73,14 @@ pub(crate) fn ecdsa_p256_sha256_sign_der(private_key: &[u8], message: &[u8]) -> 
 
 /// Wraps a raw P-256 private scalar in the DER encoding aws-lc-rs accepts.
 ///
-/// aws-lc-rs can only import an ECDSA private key from DER or PKCS#8, never from the raw scalar
-/// that SigV4a's key derivation produces, so build the RFC 5915 `ECPrivateKey` around it. Its
-/// `publicKey` field is optional and omitted here; AWS-LC derives the public point from the
-/// scalar while parsing.
+/// Of aws-lc-rs's three ways to import an ECDSA private key, DER and PKCS#8 take the scalar inside
+/// a structure and `from_private_key_and_public_key` takes it raw but also demands the public
+/// point, which costs the scalar multiplication this backend exists to avoid. So wrap the scalar in
+/// an RFC 5915 `ECPrivateKey`, whose optional `publicKey` field is omitted; AWS-LC derives the
+/// public point while parsing.
 ///
-/// Every field is fixed size for P-256, so the encoding is a constant prefix and suffix around
-/// the scalar rather than a general-purpose DER writer.
+/// Every field is fixed size for P-256, so this is a constant prefix and suffix around the scalar
+/// rather than a general-purpose DER writer.
 ///
 /// # Panics
 /// Panics if `private_key` is not 32 bytes, which is what makes the fixed lengths below correct.

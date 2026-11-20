@@ -19,68 +19,32 @@ http1 = ["dep:http"]
 sign-http = ["dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
 sigv4a = ["dep:p256", "dep:ecdsa", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
-# Use the RustCrypto crates (`hmac`, `sha2`, and `p256` under `sigv4a`) for HMAC-SHA256,
-# SHA-256, and ECDSA-P256. This is the default and is not FIPS-validated.
+# RustCrypto backend (`hmac`, `sha2`): HMAC-SHA256, SHA-256, ECDSA-P256. Default, not
+# FIPS-validated. Those two crates are optional and gated here, which is the only way to express
+# their absence: features are additive, so "RustCrypto unless AWS-LC" is not expressible.
 #
-# `hmac` and `sha2` are optional dependencies gated on this feature, so that a build which selects
-# an AWS-LC backend and disables the default features does not compile them at all. That is the
-# point of this arrangement: additive features cannot express "on unless AWS-LC is", so the only
-# way to keep RustCrypto out of a FIPS build is to make enabling it a choice.
-#
-# This is a behaviour change shipping under a minor version. `--no-default-features --features
-# sign-http,http1` compiled on 1.6.x and loses its backend here; the recovery is to name
-# `rustcrypto` alongside the other features. `crypto.rs` emits a `compile_error!` naming the fix
-# rather than letting the build fail on an unresolved `hmac` import.
-#
-# A major was the first choice here and does not work. `aws_runtime::auth::SigningOptions` carries
-# a `payload_override: Option<SignableBody<'static>>`, so this crate's types are part of
-# `aws-runtime`'s public API, and generated clients construct them through their own `aws-sigv4`
-# dependency. The two crates therefore have to move on one compatibility line. `aws-runtime` is
-# staying on 1.x (see the comment in its manifest), so a 2.0.0 here would split `SignableBody` in
-# two for every already-released client that sets that field -- which `check-semver-hazards`
-# catches as a type mismatch when it patches this crate into the last released SDK.
+# This breaks `--no-default-features --features sign-http,http1`, which compiled on 1.6.x and now
+# has no backend. `crypto.rs` emits a `compile_error!` naming the fix. It ships under a minor
+# rather than a major because `aws_runtime::auth::SigningOptions` carries a
+# `payload_override: Option<SignableBody<'static>>`, so a 2.0.0 here would split `SignableBody`
+# for every released client that sets it, and `aws-runtime` is staying on 1.x.
 rustcrypto = ["dep:hmac", "dep:sha2"]
-# Use aws-lc-rs for HMAC-SHA256, SHA-256, and ECDSA-P256, backed by the non-FIPS AWS-LC build.
+# aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
+# that keeps `rustcrypto` the default is WASM, where aws-lc-rs supports only emscripten.
 #
-# Needs a C/C++ compiler, and works on every target aws-lc-rs supports. That is most of what
-# the SDK supports, but not all of it: per
-# https://aws.github.io/aws-lc-rs/platform_support.html the only WASM target aws-lc-rs supports
-# is wasm32-unknown-emscripten, so `wasm32-unknown-unknown` and the WASI targets must stay on
-# `rustcrypto`. This is the reason `rustcrypto` remains the default rather than this feature.
-#
-# Two details about the spelling below, both consequences of `default-features = false` on the
-# dependency, which means the AWS-LC build has to be named explicitly:
-# - `aws-lc-rs-fips` does not stack on this feature, so enabling `aws-lc-rs-fips` alone compiles
-#   only `aws-lc-fips-sys`, not both AWS-LC builds. (rustls stacks its `fips` on its `aws_lc_rs`
-#   feature and so always builds both.)
-# - This names aws-lc-rs's `aws-lc-sys` feature rather than its `non-fips` feature, because
-#   `non-fips` and `fips` are mutually exclusive there — aws-lc-rs fails its build if both are
-#   on — and that would make this feature and `aws-lc-rs-fips` impossible to enable together,
-#   something `--all-features` and feature unification across a workspace do routinely. With both
-#   on, both AWS-LC builds compile and aws-lc-rs uses the FIPS one.
+# Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
+# `fips` and would make the two arms impossible to enable together -- something `--all-features`
+# does routinely. The arms are siblings rather than stacked, so a FIPS build compiles only the
+# validated library.
 aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
-# Use aws-lc-rs for HMAC-SHA256, SHA-256, and ECDSA-P256, backed by the FIPS 140-3 validated
-# AWS-LC build. Takes precedence over `aws-lc-rs` when both are enabled.
+# aws-lc-rs backend on the FIPS 140-3 validated AWS-LC build. Takes precedence over `aws-lc-rs`.
 #
-# Named for the backend it selects, as its `aws-lc-rs` sibling is, rather than `fips`: on a
-# generated SDK crate a bare `fips` would sit next to `Config::use_fips`, which selects a
-# FIPS-compliant *endpoint* and is unrelated to which module performs the cryptography.
-#
-# Supported on a subset of the targets above: x86_64 and aarch64 Linux (gnu and musl), `arm`
-# musleabi/musleabihf, powerpc/powerpc64/powerpc64le gnu, macOS, 64-bit Windows MSVC, and x86_64
-# FreeBSD. Not i686, not riscv64, not s390x, not mips, not NetBSD, not iOS, not Android, not WASM.
-# The missing i686 support is why CI excludes this crate from its i686 `--all-features` leg.
-# Requires a C/C++ compiler, CMake, and Go at build time, plus bindgen on targets without
-# pre-generated FIPS bindings, which is everything except 64-bit Linux and macOS.
-#
-# Some RustCrypto crates remain compiled in a `sigv4a` + `aws-lc-rs-fips` build, none of which
-# performs FIPS-relevant cryptography: `crypto-bigint`, for the integer math of the SigV4a key
-# derivation defined by the signing spec, plus `p256` and the `ecdsa` it pulls in, which the
-# signing path no longer calls but which `sigv4a` must keep declaring, because Cargo features are
-# additive and cannot express "only when `rustcrypto` is also on".
+# Named for the backend rather than `fips`, which on a generated SDK crate would sit next to
+# `Config::use_fips`: that selects a FIPS-compliant *endpoint* and says nothing about which
+# implementation does the cryptography. See the crate docs for target support and build tools.
 aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
-# Internal: selects the aws-lc-rs crypto backend. Do not enable directly; use `aws-lc-rs` or
-# `aws-lc-rs-fips` instead so that an AWS-LC build is also selected.
+# Internal: selects the aws-lc-rs backend without naming an AWS-LC build. Use `aws-lc-rs` or
+# `aws-lc-rs-fips`.
 __aws-lc-rs = ["dep:aws-lc-rs"]
 
 [dependencies]
@@ -95,60 +59,41 @@ hex = "0.4.3"
 http0 = { package = "http" , version = "0.2.12", optional = true }
 http = { version = "1.3.1", optional = true }
 percent-encoding = { version = "2.3.1", optional = true }
-# RustCrypto crypto backend, used unless an AWS-LC arm is selected. `hmac` and `sha2` are optional
-# and gated on the `rustcrypto` feature, so that an AWS-LC build with `default-features = false`
-# does not compile them. `p256` and `ecdsa` stay behind `sigv4a`, since they are only needed for
-# SigV4a -- and they cannot be gated on `rustcrypto` as well, because features are additive and
-# `sigv4a` has to keep naming them even when AWS-LC does the signing.
+# RustCrypto backend, gated on `rustcrypto` so an AWS-LC build can leave it out. `p256` and `ecdsa`
+# stay behind `sigv4a` instead: features are additive, so `sigv4a` has to keep naming them even
+# when AWS-LC does the signing.
 hmac = { version = "0.13", optional = true }
 sha2 = { version = "0.11", optional = true }
 p256 = { version = "0.14.0", features = ["ecdsa"], optional = true }
-# Only for `ecdsa::hazmat::sign_prehashed_rfc6979`, which `p256` imports privately rather than
-# re-exporting. No features are named because `p256`'s `ecdsa` feature already turns on
-# `ecdsa-core/algorithm`, and its default `pem` reaches `ecdsa/der` for `Signature::to_der`, so this
-# resolves to the same `ecdsa` 0.17 that `p256` uses rather than adding a second copy. See
-# `crypto::rustcrypto_impl::ecdsa_p256_sha256_sign_der` for why the function is needed; a version
-# skew that broke the unification would fail to compile there.
+# Only for `ecdsa::hazmat::sign_prehashed_rfc6979`, which `p256` imports privately. No features are
+# named: `p256`'s own feature set already turns on everything used here, so this unifies with the
+# `ecdsa` 0.17 `p256` uses rather than adding a second copy. A skew that broke the unification would
+# fail to compile in `crypto::rustcrypto_impl`.
 ecdsa = { version = "0.17.0", optional = true }
-# aws-lc-rs crypto backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features. `default-features = false`
-# so that the AWS-LC build (non-FIPS vs FIPS) is chosen explicitly by those features rather than
-# defaulting to the non-FIPS one.
+# aws-lc-rs backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features. `default-features = false`
+# so those features name the AWS-LC build rather than defaulting to the non-FIPS one.
 #
-# The floor is 1.18.1, which sits on the `1.18` line `rustls` declares, so the signing path and the
-# TLS path ask for the same AWS-LC. Cargo would unify them to one version either way — it resolves a
-# single `aws-lc-rs` 1.x for the whole graph, and incompatible requirements force a downgrade
-# elsewhere or fail outright rather than producing two copies — so this is not about preventing
-# duplicate builds. It is about the requirements naming the same line as the crate they will be
-# resolved alongside, and about `minimal-versions --direct`: that leg pins direct dependencies to
-# their declared minimum, so the floor is the version CI actually exercises.
+# `1.18` is the line `rustls` declares, so signing and TLS ask for the same AWS-LC. Cargo resolves
+# one `aws-lc-rs` 1.x graph-wide regardless, so that is about the requirements agreeing, not about
+# duplicate builds; and about `minimal-versions --direct`, which makes the floor the version CI
+# exercises. Within the line, 1.18.1 rather than 1.18.0 because of the `-sys` requirements:
 #
-# The floor is not an API one: the aws-lc-rs APIs used here compile against 1.16.1. It is chosen so
-# that the declared requirements for *both* `-sys` crates exclude every version with an open
-# advisory or a known build failure. Both arms matter here, because this crate offers both; and the
-# declared requirement matters rather than what a fresh resolve happens to pick, because a
-# consumer's lockfile may already hold an excluded version.
+#   aws-lc-rs   aws-lc-sys   aws-lc-fips-sys
+#   1.18.0      ^0.44.0      ^0.14.0
+#   1.18.1      ^0.45.0      ^0.14.2
 #
-#   aws-lc-rs   aws-lc-sys req   aws-lc-fips-sys req
-#   1.16.1      ^0.38.0   BAD    ^0.13.1           BAD
-#   1.16.2      ^0.39.0   ok     ^0.13.1           BAD
-#   1.17.0      ^0.41.0   ok     ^0.13.1           BAD
-#   1.17.3      ^0.43.0   ok     ^0.13.16          ok
-#   1.18.0      ^0.44.0   BAD    ^0.14.0           BAD
-#   1.18.1      ^0.45.0   ok     ^0.14.2           ok
+# `^0.44.0` cannot reach `aws-lc-sys` 0.45.0, which fixed Clang builds with `-flto` in `CFLAGS`, and
+# 0.44.0 is the only 0.44.x; `^0.14.0` admits `aws-lc-fips-sys` 0.14.0 and 0.14.1, which do not
+# build with Clang 20 or newer. So the floor is a build-support choice: the APIs used here compile
+# against 1.16.1, and every line from 1.17.3 up already clears the open `-sys` advisories
+# (`aws-lc-sys` >= 0.39.0 for RUSTSEC-2026-0044 and -0048, >= 0.38.0 for -0045 through -0047;
+# `aws-lc-fips-sys` >= 0.13.13 for -0042, >= 0.13.12 for -0043).
 #
-# Through 1.17.x the exclusions are advisories: `aws-lc-sys` needs >= 0.39.0 for RUSTSEC-2026-0044
-# and -0048 (and >= 0.38.0 for -0045 through -0047); `aws-lc-fips-sys` needs >= 0.13.13 for
-# RUSTSEC-2026-0042 and >= 0.13.12 for -0043, which the 0.14 line satisfies as well. The two 1.18.0
-# exclusions are build failures instead: `^0.44.0` cannot reach `aws-lc-sys` 0.45.0, where Clang
-# builds with `-flto` in `CFLAGS` were fixed, and 0.44.0 is the only 0.44.x; and `^0.14.0` admits
-# `aws-lc-fips-sys` 0.14.0 and 0.14.1, neither of which builds with Clang 20 or newer. 1.18.1 is the
-# first release whose requirements exclude both.
-#
-# One consequence to be aware of, because it is the point of the FIPS arm: 1.18.0 is where
-# `aws-lc-fips-sys` moved from the AWS-LC-FIPS 3.x module to 4.x. 3.x holds FIPS 140-3 certificates
-# #5314 and #5298; 4.x has completed testing by an accredited lab and is on the CMVP Modules In
-# Process list, so it has no certificate yet. This floor therefore picks 4.x and leaves no way to
-# ask for 3.x through this crate: a consumer requirement of `<1.18.0` is unsatisfiable against it.
+# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4.x module, so a requirement of
+# `<1.18.0`, which is the 3.x module, is unsatisfiable against this floor. aws-lc-rs changes module
+# line in a minor release and Cargo takes that automatically within `1.x`, so a deployment that
+# must stay on one module should bound its own `aws-lc-rs` requirement. FIPS.md in aws/aws-lc
+# carries the validation status of each module.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 crypto-bigint = { version = "0.7.10", optional = true }
 subtle = { version = "2.6.0", optional = true }
@@ -168,9 +113,8 @@ proptest = "1.2"
 serde = "1.0.228"
 serde_derive = "1.0.228"
 serde_json = "1.0.146"
-# The SigV4a MRAP test hashes a canonical request itself to check the signature against the
-# published AWS public key. Declared here as well as behind `rustcrypto` above, so the test still
-# compiles on an AWS-LC build, where the optional normal dependency isn't there.
+# The SigV4a MRAP test hashes a canonical request itself. Declared here as well as behind
+# `rustcrypto` above so it compiles on an AWS-LC build, where the optional normal dep is absent.
 sha2 = "0.11"
 time = { version = "0.3.35", features = ["parsing"] }
 
@@ -185,20 +129,14 @@ name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
 
-# These four are the RustCrypto backend. Making them optional means a deliberate AWS-LC build
-# (`--no-default-features` plus an AWS-LC arm) does not compile them at all, so there is nothing for
-# udeps to flag there. This list is still required for one configuration: `--all-features`, which CI
-# runs udeps under, enables `rustcrypto` *and* an AWS-LC arm, so the crates are present while the cfg
-# routes around them. They are the live backend in a default build, so they are not dead
-# dependencies -- only dead in that combination. `p256` is additionally used by the test-side SigV4a
-# verifier on both backends, which doesn't save it here because cargo-udeps only inspects the lib
-# target.
+# Needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto` *and* an
+# AWS-LC arm, so these are compiled while the cfg routes around them. They are the live backend in
+# a default build, and absent entirely from a `--no-default-features` AWS-LC build.
 [package.metadata.cargo-udeps.ignore]
 normal = ["hmac", "sha2", "p256", "ecdsa"]
 
 [package.metadata.docs.rs]
-# `all-features` is off because the `aws-lc-rs-fips` feature builds aws-lc-fips-sys, which can't
-# build on docs.rs. `sdk-lints` grants this crate an exception for that reason.
+# `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
 all-features = false
 features = ["sign-http", "sign-eventstream", "sigv4a", "http0-compat", "http1", "rustcrypto", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]

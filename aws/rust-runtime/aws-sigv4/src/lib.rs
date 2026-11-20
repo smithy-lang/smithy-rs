@@ -20,70 +20,53 @@
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
 //! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
 //!
-//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either takes precedence over
-//! `rustcrypto`, so enabling more than one — which Cargo feature unification does routinely —
-//! resolves to the strongest backend rather than failing to build.
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over `rustcrypto`, so enabling
+//! more than one — which Cargo feature unification does routinely — resolves to the strongest
+//! backend rather than failing to build.
 //!
 //! ## Platform support
 //!
-//! Both aws-lc-rs backends are a per-target capability, which is why `rustcrypto` is the default:
-//! it is the only backend that builds everywhere the SDK does.
+//! `rustcrypto` is the default because it is the only backend that builds everywhere the SDK does.
+//! Both AWS-LC backends are per-target; see
+//! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
+//! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
+//! `wasm32-unknown-emscripten`. `aws-lc-rs-fips` additionally needs CMake and Go and covers fewer
+//! targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported target
+//! fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
-//! - `aws-lc-rs` needs a C/C++ compiler and works on every target
-//!   [aws-lc-rs supports](https://aws.github.io/aws-lc-rs/platform_support.html). The only WASM
-//!   target it supports is `wasm32-unknown-emscripten`, so `wasm32-unknown-unknown` and the WASI
-//!   targets have to stay on `rustcrypto`.
-//! - `aws-lc-rs-fips` additionally needs CMake and Go, and covers a subset of those targets:
-//!   Linux (gnu and musl), macOS, Windows MSVC, and FreeBSD. Not iOS, not Android, not WASM.
-//!
-//! Enabling either feature on a target its AWS-LC build doesn't support fails while building
-//! `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
+//! crate's `Cargo.toml` documents the declared floor.
 //!
 //! ## What ends up in the dependency tree
 //!
-//! Selecting an AWS-LC backend always changes which implementation runs. Whether it also keeps
-//! the RustCrypto crates out of the build depends on how the build is spelled.
-//!
-//! `hmac` and `sha2` are optional dependencies gated on `rustcrypto`, so a build that selects an
-//! AWS-LC backend and turns the default features off does not compile them at all:
+//! `hmac` and `sha2` are optional and gated on `rustcrypto`, so an AWS-LC build with the default
+//! features off does not compile them:
 //!
 //! ```sh
 //! cargo build --no-default-features --features sign-http,http1,aws-lc-rs-fips
 //! ```
 //!
-//! That is the point of the arrangement. Cargo features are additive and cannot express "on
-//! unless AWS-LC is", so excluding RustCrypto has to be something the build asks for. Leaving the
-//! defaults on keeps both crates compiled, because `rustcrypto` is one of them — the AWS-LC
-//! backend still wins at the call site, by the precedence above.
+//! Features are additive and cannot express "on unless AWS-LC is", so dropping RustCrypto has to
+//! be something the build asks for. Leaving the defaults on keeps both crates compiled; the AWS-LC
+//! backend still wins at the call site.
 //!
-//! `sigv4a` behaves differently. It declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and
-//! `zeroize` unconditionally, so enabling it compiles them under every backend, and `ecdsa` pulls
-//! `hmac` and `sha2` back in underneath it. Adding `sigv4a` to the command above therefore
-//! reintroduces that chain. Under an AWS-LC backend none of it performs FIPS-relevant
-//! cryptography:
+//! `sigv4a` is unconditional: it declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and `zeroize`
+//! under every backend, with `sha2` arriving under `p256` and `hmac` under `ecdsa`'s RFC 6979 nonce
+//! derivation. None of it performs FIPS-relevant cryptography on an AWS-LC backend. `p256` and
+//! `ecdsa` are the ECDSA implementation for `rustcrypto` only, and the signing path does not reach
+//! them otherwise; `crypto-bigint` does the 256-bit integer math of
+//! [`sign::v4a::generate_signing_key`], which is the key derivation the SigV4a specification
+//! defines rather than a primitive. They stay unconditional because a feature cannot be made
+//! conditional on another feature being absent.
 //!
-//! - `p256` and `ecdsa` are the ECDSA implementation only for the `rustcrypto` backend; the
-//!   signing path does not reach them otherwise. They stay unconditional because a feature cannot
-//!   be made conditional on another feature being absent. `ecdsa` is declared directly only so
-//!   that `hazmat::sign_prehashed_rfc6979` can be named; `p256` puts it in the tree either way.
-//! - `hmac` and `sha2` arrive through `ecdsa`'s RFC 6979 nonce derivation and through `p256`. They
-//!   resolve to the same versions this crate declares for its own backend, so they are one copy
-//!   each rather than two -- but a FIPS build leaves this crate's declarations off and still
-//!   compiles them for `p256`, so `sigv4a` is what puts them in that build.
-//! - `crypto-bigint` is used on every backend, for the 256-bit integer math in
-//!   [`sign::v4a::generate_signing_key`]. That is the key derivation the SigV4a specification
-//!   defines, not a cryptographic primitive. Two majors resolve here: the 0.5 this crate declares
-//!   for that KDF, and the 0.7 that `elliptic-curve` depends on.
+//! SigV4 output does not depend on the backend: HMAC-SHA256 is deterministic, and both backends are
+//! held to the same known-answer vectors and signing test suite.
 //!
-//! SigV4 output is unchanged by the choice of backend. HMAC-SHA256 is deterministic, and both
-//! backends are held to the same known-answer vectors and to the shared signing test suite.
-//!
-//! SigV4a output is not. ECDSA leaves the choice of per-signature nonce to the implementation, and
-//! the backends differ. RustCrypto derives it from the private scalar and the message digest per
-//! RFC 6979, so the same inputs always produce the same signature and [`sign::v4a`]'s tests pin
-//! those bytes. AWS-LC's is not reproducible: signing one string to sign twice yields two
-//! different signatures, so the suite verifies them rather than comparing. Both are valid
-//! signatures over the same string to sign, and a verifier accepts either.
+//! SigV4a output does. ECDSA leaves the per-signature nonce to the implementation. RustCrypto
+//! derives it per RFC 6979, so the same inputs always produce the same signature and
+//! [`sign::v4a`]'s tests pin those bytes; AWS-LC randomizes it, so signing one input twice yields
+//! two different signatures and those tests verify rather than compare. Both are valid over the
+//! same string to sign.
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(

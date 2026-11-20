@@ -5,25 +5,20 @@
 
 //! Internal abstraction over the cryptographic implementations this crate can be built against.
 //!
-//! Two backends are supported, selected at compile time:
-//! - [RustCrypto](https://github.com/RustCrypto) (`rustcrypto`, enabled by default). Not
-//!   FIPS-validated.
-//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
-//!   FIPS 140-3 validated build of AWS-LC; `aws-lc-rs-fips` wins if both are enabled).
+//! Covers HMAC-SHA256 and SHA-256 for SigV4, and ECDSA-P256 signing for SigV4a. Two backends,
+//! selected at compile time: [RustCrypto](https://github.com/RustCrypto) (`rustcrypto`, default,
+//! not FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or
+//! `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins if both are
+//! enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
-//! If the features for both backends are enabled, aws-lc-rs is selected.
-//!
-//! What the backend covers: HMAC-SHA256 and SHA-256 for SigV4, plus ECDSA-P256 signing for
-//! SigV4a. The SigV4a key derivation in [`crate::sign::v4a::generate_signing_key`] also does
-//! 256-bit integer math with `crypto-bigint`; that is the KDF the signing spec defines rather
-//! than a cryptographic primitive, so it stays on `crypto-bigint` in a FIPS build.
+//! [`crate::sign::v4a::generate_signing_key`] also does 256-bit integer math with `crypto-bigint`.
+//! That is the KDF the signing spec defines rather than a primitive, so it is not routed here.
 
 /// Size in bytes of a SHA-256 digest, and so of an HMAC-SHA256 tag.
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
 
-// Both backends are selected by feature and both sets of dependencies are optional, so a build
-// that names neither has no crypto at all. Say so here, rather than letting it surface as an
-// unresolved `hmac` import from inside this module.
+// Both backends' dependencies are optional, so a build naming neither has no crypto at all. Say so
+// here, rather than letting it surface as unresolved `crypto::` imports at the call sites.
 #[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or \
@@ -73,16 +68,15 @@ mod tests {
 
     #[test]
     fn hmac_sha256_known_answer() {
-        // Split across two `update` calls to exercise the multi-step path the signing key
-        // derivation relies on.
+        // Split across two `update` calls so that incremental feeding is covered too.
         let mut hmac = HmacSha256::new(RFC4231_TC2_KEY);
         hmac.update(b"what do ya want ");
         hmac.update(b"for nothing?");
         assert_eq!(RFC4231_TC2_TAG, hex::encode(hmac.finalize()));
     }
 
-    // SigV4a signatures are non-deterministic, so this checks the signature verifies rather
-    // than comparing bytes. `p256` is the verifier on both backends, which makes this a
+    // Verifies rather than comparing bytes, because AWS-LC randomizes the ECDSA nonce and so has
+    // no fixed expected signature. `p256` is the verifier on both backends, which makes this a
     // cross-implementation check when aws-lc-rs is the signer.
     #[test]
     #[cfg(feature = "sigv4a")]

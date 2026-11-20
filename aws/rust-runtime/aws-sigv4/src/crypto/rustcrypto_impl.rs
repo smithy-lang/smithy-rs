@@ -65,13 +65,10 @@ pub(crate) fn ecdsa_p256_sha256_sign_der(private_key: &[u8], message: &[u8]) -> 
     // so the signature is unchanged: same RFC 6979 deterministic nonce, same empty additional
     // data.
     //
-    // Both copies this function owns, `repr` and `scalar`, are wiped on the way out; the
-    // `private_key` slice is the caller's and is left alone. `SigningKey` got the wipe for free:
-    // it implements `ZeroizeOnDrop` and its `Drop` zeroizes the secret scalar, whereas
-    // `NonZeroScalar` implements `Zeroize` but has no `Drop`, so dropping one leaves the scalar in
-    // memory. `Zeroizing` supplies the `Drop` that type is missing. The `FieldBytes` that
-    // `from_repr` takes by value is still an unwiped stack copy; that one is not reachable through
-    // this API.
+    // `repr` and `scalar` are wiped on the way out; the `private_key` slice is the caller's and is
+    // left alone. `SigningKey` got the wipe for free via `ZeroizeOnDrop`, whereas `NonZeroScalar`
+    // implements `Zeroize` but has no `Drop`, so `Zeroizing` supplies it. The `FieldBytes` that
+    // `from_repr` takes by value is still an unwiped stack copy, not reachable through this API.
     let repr = Zeroizing::new(
         <[u8; P256_PRIVATE_KEY_SIZE]>::try_from(private_key)
             .expect("a P-256 private scalar is 32 bytes"),

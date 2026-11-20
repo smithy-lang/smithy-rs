@@ -21,11 +21,10 @@ sed -i '/"examples\//d' Cargo.toml
 # workspace (local dev and any non-matrix caller).
 PARTITION="${1:-}"
 
-# Runs here because this is the full-SDK action GitHub Actions actually dispatches;
-# `check-aws-sdk-services` runs `cargo test --all-features` over every service crate and is a
-# local-only target. Asserting on resolved features is the one check no test can replace -- a
-# non-validated crypto crate re-entering a FIPS build changes nothing a test could observe -- so
-# losing it to an undispatched action meant it never ran.
+# Runs here because this is the full-SDK action GitHub Actions dispatches; its sibling
+# `check-aws-sdk-services`, which also runs it, is a local-only target. Asserting on resolved
+# features is the one check no test can replace -- a non-validated crypto crate re-entering a FIPS
+# build changes nothing a test could observe -- so putting it only there would mean it never ran.
 #
 # Once per workspace, not once per shard: it reads the lockfile, which every leg shares. Ahead of
 # `cargo check` because it takes seconds and should fail before the expensive work.

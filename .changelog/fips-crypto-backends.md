@@ -27,15 +27,23 @@ aws-sdk-dynamodb = { version = "...", default-features = false, features = [
 ] }
 ```
 
-Two stay regardless: `sigv4a` declares `p256`, which brings its own `hmac` and `sha2`, never called because the backend they serve isn't compiled; and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects. Neither signs a request or computes a checksum.
+Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256`, which brings `sha2` and `hmac` with it but is never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
 
-`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, it will need raising. Note that `aws-lc-rs` 1.18 is where the FIPS build moved from the AWS-LC-FIPS 3.x module, which holds FIPS 140-3 certificates #5314 and #5298, to 4.x, which is on the [CMVP Modules In Process list](https://csrc.nist.gov/Projects/cryptographic-module-validation-program/modules-in-process/Modules-In-Process-List). This floor selects 4.x and leaves no way to request 3.x through these crates.
+`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, it will need raising.
+
+**Which AWS-LC-FIPS module you get follows the resolved `aws-lc-rs` version, and Cargo will upgrade it for you.** `aws-lc-rs` changes module line in a minor release — 1.18.0 moved from the 3.x module to 4.x — so a `1.x` requirement picks up the next one automatically. If your compliance posture is tied to a specific module, bound your own requirement rather than relying on ours. To stay on 4.x:
+
+```toml
+aws-lc-rs = ">=1.18.1, <1.21.0"
+```
+
+[FIPS.md in aws/aws-lc](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md) lists the validation status and certificate numbers for each module.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 
 ## Breaking changes
 
-Making the RustCrypto crates optional is the only way to express their absence, and Cargo features are additive, so there is no way to say "RustCrypto unless AWS-LC is selected" without a `rustcrypto` feature that a FIPS build leaves off. The consequence is that `default-features = false` now drops the crypto backend on four crates. Each affected build fails to compile with a message naming the fix, rather than silently losing cryptography:
+Cargo features are additive, so "RustCrypto unless AWS-LC is selected" is not expressible; making RustCrypto a `rustcrypto` feature that a FIPS build leaves off is the only way to express its absence. The consequence is that `default-features = false` now drops the crypto backend on four crates. Each affected build fails to compile with a message naming the fix, rather than silently losing cryptography:
 
 ```
 error: aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or `aws-lc-rs-fips` feature.
@@ -57,4 +65,4 @@ aws-sigv4 = { version = "1.6", default-features = false, features = ["sign-http"
 aws-sigv4 = { version = "1.7", default-features = false, features = ["sign-http", "http1", "rustcrypto"] }
 ```
 
-All of these ship below a major deliberately: a major on any one would split the released SDK's dependency graph, since `aws-runtime`'s invocation-id types are public surface of every generated SDK crate and `aws-sigv4`'s `SignableBody` is part of `aws-runtime`'s public API. A flag that previously did nothing is the narrower thing to break. The [announcement](https://github.com/awslabs/aws-sdk-rust/discussions/1464) has the reasoning.
+All of these ship below a major deliberately: a major on any one would split the released SDK's dependency graph, since `aws-runtime`'s invocation-id types are public surface of every generated SDK crate and `aws-sigv4`'s `SignableBody` is part of `aws-runtime`'s public API. The [announcement](https://github.com/awslabs/aws-sdk-rust/discussions/1464) has the reasoning.

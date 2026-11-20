@@ -45,10 +45,8 @@ pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8])
     );
 
     // `SecretKey::from_slice`, which the `SigningKey` path went through, took 24 to 32 bytes and
-    // left-padded anything short, so that path signed a short key rather than rejecting it. Pad
-    // here rather than in a backend, so both backends accept the same range: AWS-LC takes a fixed
-    // 32 bytes and would otherwise refuse a key the RustCrypto arm accepts. The length check above
-    // is what keeps this range identical to `SecretKey`'s.
+    // left-padded anything short rather than rejecting it. Both backends now take a fixed 32, so
+    // pad here to keep the accepted range what it was; the assert above is the other half of that.
     //
     // `repr` is wiped on the way out. The `signing_key` slice is the caller's and is left alone.
     let mut repr = Zeroizing::new([0u8; P256_PRIVATE_KEY_SIZE]);

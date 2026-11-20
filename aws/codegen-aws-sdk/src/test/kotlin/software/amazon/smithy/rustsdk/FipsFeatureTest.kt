@@ -11,14 +11,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import kotlin.io.path.readText
 
 /**
- * The generated `aws-lc-fips` feature is the single switch that routes a service crate's
- * cryptography through the FIPS 140-3 validated build of AWS-LC. It fans out to three runtime
- * crates, and the checksums arm has to be scoped: naming `aws-smithy-checksums/aws-lc-rs-fips`
- * unconditionally would make Cargo add that crate to every service crate, including the ones that
- * never otherwise use it.
- *
- * The name is deliberately not `fips`: that would sit alongside `Config::use_fips`, which selects
- * a FIPS-compliant endpoint and is unrelated to which module performs the cryptography.
+ * The generated `aws-lc-fips` feature fans out to three runtime crates, and its checksums arm has
+ * to be scoped: `dep/feat` requires `dep` to be a declared dependency, so naming
+ * `aws-smithy-checksums/aws-lc-rs-fips` unconditionally would produce an invalid manifest for
+ * every service crate that has no checksum operations.
  */
 internal class FipsFeatureTest {
     companion object {
@@ -93,12 +89,11 @@ internal class FipsFeatureTest {
         /**
          * Generates [checksumModel] and returns its `Cargo.toml`.
          *
-         * The `http_request_checksum` inlineable refers to `crate::presigning`, which is
-         * `#[cfg]`-gated on `http-02x`. `AwsPresigningDecorator` declares that feature only for
-         * models with presignable shapes, so it has to be declared here to keep the generated
-         * crate compiling. See `InlineableTestDependenciesTest`. The plain model must *not* get
-         * these, since without a presignable shape it has no `http` dependency for `dep:http` to
-         * name.
+         * The `http_request_checksum` inlineable refers to `crate::presigning`, whose deprecated
+         * http 0.2.x conversions are `#[cfg]`-gated on `http-02x`, and `AwsPresigningDecorator`
+         * declares that feature only for models with presignable shapes. See
+         * `InlineableTestDependenciesTest`. The plain model must *not* get these: with no
+         * presignable shape it has no `http` dependency for `dep:http` to name.
          */
         private fun checksumCargoToml() =
             awsSdkIntegrationTest(checksumModel) { _, rustCrate ->
@@ -152,18 +147,11 @@ internal class FipsFeatureTest {
     }
 
     /**
-     * The three tests below cover the `rustcrypto` counterpart to `aws-lc-fips`, and they are the
-     * codegen half of a guarantee no other test in the repo can make.
-     *
-     * The RustCrypto crates are optional dependencies of `aws-sigv4` and `aws-smithy-checksums`,
-     * and a service crate declares both of those with `default-features = false` so that opting
-     * into `aws-lc-fips` stops *compiling* the non-validated implementation rather than merely
-     * routing around it. Cargo offers no way for a consumer to switch off a transitive crate's
-     * default features, so every crate on the path has to forward the choice, and a service crate
-     * is the last link. Drop the generated `rustcrypto` feature and the FIPS build still succeeds
-     * while an ordinary build loses its backend; drop `default-features = false` and both builds
-     * still succeed while the FIPS one silently compiles RustCrypto again. Neither shows up as a
-     * behavioural failure, which is why these are asserted on the manifest.
+     * The `rustcrypto` counterpart to `aws-lc-fips`, asserted on the manifest because neither way
+     * of breaking it shows up as a behavioural failure: drop the generated `rustcrypto` feature
+     * and an ordinary build loses its backend while the FIPS build still succeeds; drop
+     * `default-features = false` and both succeed while the FIPS build quietly compiles RustCrypto
+     * again. A service crate is the last link in the chain that forwards the choice.
      */
     @Test
     fun `rustcrypto feature covers signing and checksums for a service with checksum operations`() {

@@ -3,19 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Internal abstraction over the cryptographic digest implementations this crate can be
-//! built against.
+//! Internal abstraction over the digest implementations this crate can be built against.
 //!
-//! Two backends are supported, selected at compile time:
-//! - [RustCrypto](https://github.com/RustCrypto/hashes) (`rustcrypto`, enabled by default). Not
-//!   FIPS-validated.
-//! - [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
-//!   FIPS 140-3 validated build of AWS-LC; `aws-lc-rs-fips` wins if both are enabled).
+//! Two backends, selected at compile time: [RustCrypto](https://github.com/RustCrypto/hashes)
+//! (`rustcrypto`, default, not FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs)
+//! (`aws-lc-rs`, or `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins
+//! if both are enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
-//! If the features for both backends are enabled, aws-lc-rs is selected. MD5 is only available
-//! on the RustCrypto backend: aws-lc-rs does not expose it, and it is not a FIPS-approved
-//! algorithm. Nothing in this crate reaches MD5 through a public API, since
-//! [`crate::ChecksumAlgorithm::Md5`] is deprecated and resolves to CRC-32.
+//! MD5 is RustCrypto-only: aws-lc-rs does not expose it and it is not FIPS-approved. No public API
+//! reaches it, since [`crate::ChecksumAlgorithm::Md5`] is deprecated and resolves to CRC-32.
 
 use bytes::Bytes;
 use std::fmt::Debug;
@@ -35,9 +31,8 @@ pub(crate) trait Digest: Default + Debug + Send + Sync {
     fn output_size() -> u64;
 }
 
-// Both backends are selected by feature and both sets of dependencies are optional, so a build
-// that names neither has no digests at all. Say so here, rather than letting it surface as an
-// unresolved `sha2` import from inside this module.
+// Both backends' dependencies are optional, so a build naming neither has no digests at all. Say
+// so here, rather than letting it surface as unresolved `crypto::` imports at the call sites.
 #[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-smithy-checksums requires a digest backend: enable the `rustcrypto` (default), \
