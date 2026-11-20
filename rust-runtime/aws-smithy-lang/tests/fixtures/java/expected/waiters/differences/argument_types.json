@@ -1,0 +1,60 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#GetNext",
+            "message": "Waiter `W`, acceptor 0: Problem found in JMESPath expression (length(next.count) > `0`): length function argument 0 error: Expected one of [string, array, object], but found number (1:12)"
+        }
+    ],
+    "waiters": {
+        "ex#GetNext": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "length(next.count) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#GetNextNext": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "length(next.next.count) > `0`",
+                                "expected": "true",
+                                "comparator": "booleanEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

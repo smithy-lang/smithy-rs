@@ -1,7 +1,7 @@
 # Java compatibility fixtures
 
 `valid/` and `invalid/` contain small Smithy JSON AST documents. `expected/` records how
-`software.amazon.smithy:smithy-model:1.74.0` handles them:
+`software.amazon.smithy:smithy-model:1.74.1` handles them:
 
 - `expected/outcomes.json`: whether Java accepts each fixture, and the IDs of any ERROR or
   DANGER validation events.
@@ -98,14 +98,80 @@ regenerate after changing `FILE` or moving the pinned Smithy version.
 an equivalent model (including the order of merged arrays and metadata) with the same source
 files, and that rejected cases report corresponding diagnostic codes.
 
+## Pagination fixtures
+
+`paginated/` contains `.smithy` or `.json` models for `knowledge::PaginatedIndex`. Unlike
+`knowledge/` fixtures, they are assembled with full validation, including Java's
+`PaginatedTraitValidator`, and regenerating fails if Java reports an ERROR or DANGER event:
+the index is meant to agree with Java only on valid models. `expected/paginated/NAME.json`
+records Java's `PaginatedIndex` answer for every service and every operation of the model,
+`null` where Java has no pagination information. Otherwise it records the effective trait,
+the input and output structures, and every member of each resolved path.
+
+`tests/java_fixtures.rs` checks that every Rust query succeeds and gives the same answer.
+`paginated/paginated.smithy` is also the valid model of the crate's pagination unit tests.
+
+For invalid models, this crate intentionally differs from Java's index. The unit tests cover
+these cases:
+
+- An `inputToken` or `outputToken` that is missing or does not resolve is an error here; Java
+  returns no pagination information.
+- A `pageSize` or `items` value that does not resolve is an error here; Java omits it.
+- An output path with an empty member name is an error here. Java splits paths with
+  `Pattern.split`, which drops trailing empty names, so `token.` resolves to `token`.
+
+## Waiter fixtures
+
+`waiters/GROUP/` contains `.smithy` models with `smithy.waiters#waitable` traits. Java
+assembles each with full validation and the trait definitions and validators of
+`software.amazon.smithy:smithy-waiters:1.74.1`; Rust assembles each with
+`waiters::validator()` and no trait definitions.
+`expected/waiters/GROUP/NAME.json` records whether Java accepts the fixture (no ERROR event),
+its ERROR, DANGER, and WARNING events, and each operation's waiters as Java's typed
+`WaitableTrait` decodes them, with defaults applied.
+
+`tests/java_fixtures.rs` maps each Java event to a severity (DANGER is a warning) and a
+diagnostic code, and compares the set of shapes, severities, and codes with Rust's
+diagnostics. The number and wording of diagnostics, and parser offsets, are not compared. Where
+both implementations decode a trait, the waiters must be equal; Rust may fail to decode a value
+Java decodes only if Java also rejects the model.
+
+- `valid/`: Java accepts, and so does Rust, with warnings on the same shapes.
+- `invalid/`: both reject, with errors on the same shapes. Each operation has one problem.
+  Java stops before validation when a trait value cannot be decoded, and stops before the
+  waiter validators when a trait value or target is invalid, so each fixture only has
+  problems that Java finds in the same phase.
+- `differences/`: this crate deliberately disagrees. `WAITER_DIFFERENCES` in the test records
+  Rust's diagnostics for each, and the test fails if Java starts to agree:
+  - `same_operation_names`: two waiter names of one operation that differ only by case are an
+    error here. Java only compares names across operations; the specification forbids both.
+  - `unknown_message_type`: a `message` whose type static analysis cannot know is accepted
+    here. Java requires its sample evaluation to produce a string or an array of strings.
+  - `projected_message`: a projected `message`, such as `items[].reason`, is accepted here.
+    Java checks the element type by appending `[0]`, which indexes each projected value
+    instead, so it rejects the message.
+  - `argument_types`: a function argument of the wrong type whose sample in Java might have
+    another type is a warning here; Java reports an error when its sample has the wrong type.
+    This crate reports an error only where Java's sample is certain to have the wrong type
+    (see `waiters::validator`).
+  - `function_results`: Java's linter gets the result types of `ends_with`, `max_by`,
+    `sort_by`, and `merge` wrong, and reports DANGER events for valid expressions.
+  - `expression_limits`: expressions longer than 2048 bytes or nested more than 32 levels
+    deep are rejected here without parsing, so that model content cannot exhaust the stack.
+
 ## Regenerating
 
-After adding or changing a fixture, regenerate `expected/` with JDK 17+ and the pinned
-Smithy jars (for example, from the Gradle cache populated by building smithy-rs):
+After adding or changing a fixture, regenerate `expected/` with JDK 17+ and the Smithy jars
+of the version smithy-rs pins in `gradle/libs.versions.toml` (for example, from the Gradle
+cache populated by building smithy-rs). `Regenerate.java`'s `VERSION` must match. It also writes
+the prelude this crate embeds, `src/prelude/prelude-VERSION.json` (see `src/prelude/README.md`):
 
 ```bash
 cd rust-runtime/aws-smithy-lang/tests/fixtures/java
+V=1.74.1
 G=~/.gradle/caches/modules-2/files-2.1/software.amazon.smithy
-CP=$(ls $G/smithy-model/1.74.0/*/smithy-model-1.74.0.jar):$(ls $G/smithy-utils/1.74.0/*/smithy-utils-1.74.0.jar):$(ls $G/smithy-jmespath/1.74.0/*/smithy-jmespath-1.74.0.jar)
+CP=$(for jar in smithy-model smithy-utils smithy-jmespath smithy-model-jmespath smithy-waiters; do
+    ls $G/$jar/$V/*/$jar-$V.jar
+done | paste -sd: -)
 java -cp "$CP" Regenerate.java .
 ```
