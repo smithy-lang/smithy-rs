@@ -363,7 +363,7 @@ fn enabling_the_canary_requires_the_whole_paging_chain() {
 /// environment.
 ///
 /// Two trust domains, split by how far the token travels. The leg role takes release tags and no
-/// environment, because requiring one would mean forty-five jobs declaring it; the orchestrator's
+/// environment, because requiring one would mean every leg in the matrix declaring it; the orchestrator's
 /// takes `main` as well, and the environment is what a pull request's code running on `main` cannot
 /// declare. So a job that assumes the orchestrator's role without the environment can still work
 /// from a release tag and silently cannot from a hand-dispatched run — the shape of failure this

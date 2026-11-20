@@ -496,7 +496,8 @@ jobs:
 
     # Asked before the sleep, so a watch a newer release has abandoned costs a minute per remaining
     # hour instead of an hour. A release landing *during* the sleep is caught by the second check
-    # below, which is what stops 45 legs being dispatched only to exit as superseded.
+    # below, which is what stops a full matrix of forty legs being dispatched only to exit as
+    # superseded.
     - name: Has a newer release superseded this watch
       id: superseded
       env:
@@ -528,8 +529,8 @@ jobs:
         cd "${GITHUB_WORKSPACE}/tools/ci-build/canary"
 
         # Again, because a release can land during the hour just slept. Dispatching a matrix that
-        # will exit as superseded wastes 45 runs and, worse, leaves them in the run listing as
-        # candidate baselines carrying no verdicts for the next release's gate to compare against.
+        # will exit as superseded wastes a run of forty legs and, worse, leaves it in the run
+        # listing as a candidate baseline carrying no verdicts for the next release's gate.
         NEWER="$(cargo run --quiet -- superseded --tag "$TAG")"
         if [[ -n "$NEWER" ]]; then
           echo "::notice title=Hour ${HOUR} skipped::${NEWER} was released during the hour"

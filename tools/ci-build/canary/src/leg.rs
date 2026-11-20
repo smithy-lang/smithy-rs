@@ -8,13 +8,13 @@
 //! # The retry policy is chosen by the verdict, not by the step
 //!
 //! This is what lets the table below be expressed directly rather than approximated. The same command
-//! — `cargo generate-lockfile` — gets six minutes of patience when the registry is unreachable and
+//! — `cargo generate-lockfile` — gets four minutes of patience when the registry is unreachable and
 //! one minute when cargo has *refused* to resolve, because those are different failures that happen
 //! to share a step.
 //!
 //! | Verdict of the attempt | Attempts | Spacing | Why |
 //! |---|---|---|---|
-//! | `INFRA_FAIL` | 3 | 3 min | a blip must persist 6 minutes to page |
+//! | `INFRA_FAIL` | 3 | 2 min | a blip must persist 4 minutes to page |
 //! | `RESOLVE_FAIL` | 2 | 1 min | waits for crates.io propagation, not for a blip |
 //! | any build or test verdict | 2 | immediate | `--offline` and deterministic; a retry only catches a flaky runner |
 //!
@@ -211,7 +211,7 @@ pub trait Exec {
     /// Run one command, giving up after `remaining`.
     ///
     /// The bound is the caller's remaining budget rather than a per-step constant, so there is no
-    /// second number to keep in step with the leg's 14-minute limit. An implementation that exceeds
+    /// second number to keep in step with [`BUDGET`]. An implementation that exceeds
     /// it hands the kill decision to GitHub, which reports nothing.
     fn run(&mut self, command: &Command, remaining: Duration) -> StepOutcome;
 
@@ -532,9 +532,8 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
         // whose failure mode changes between attempts is governed by the latest one.
         loop {
             attempt += 1;
-            // Each command may use whatever is left of the leg's budget and no more. Deriving it
-            // rather than configuring a per-step timeout means there is no second number to keep
-            // consistent with the 14-minute bound, and the leg cannot overrun however it fails.
+            // Each command may use whatever is left of the leg's budget and no more, so the leg
+            // cannot overrun however it fails.
             let remaining = budget.saturating_sub(clock.elapsed());
             let mut outcome = exec.run(&command, remaining);
             // Whether this leg has assertions is a property of the leg, not of the command, so the
@@ -1000,10 +999,10 @@ version = "0.2.12"
         assert!(clock.slept.is_empty(), "a green leg never sleeps");
     }
 
-    /// The core retry shape: three attempts, three minutes apart, so six minutes of waiting and then
-    /// a verdict.
+    /// The core retry shape: three attempts, two minutes apart, so four minutes of waiting and
+    /// then a verdict.
     #[test]
-    fn an_infra_failure_gets_three_attempts_six_minutes_apart() {
+    fn an_infra_failure_gets_three_attempts_two_minutes_apart() {
         let leg = leg_named("new-project--stable");
         let mut exec = FakeExec::failing(Step::Fetch, vec![1, 1, 1], "", "network unreachable");
         let mut clock = FakeClock::default();
@@ -1172,7 +1171,7 @@ version = "0.2.12"
         assert_eq!(clock.slept, [Duration::ZERO]);
     }
 
-    /// A refused resolution waits a minute, not three: it is waiting for crates.io propagation
+    /// A refused resolution waits a minute, not two: it is waiting for crates.io propagation
     /// rather than for a blip to clear.
     #[test]
     fn a_refused_resolution_waits_one_minute_and_retries_once() {
@@ -1360,7 +1359,7 @@ version = "0.2.12"
     #[test]
     fn the_deadline_stops_retrying_and_still_reports() {
         let leg = leg_named("new-project--stable");
-        // Enough room for one attempt but not for a three-minute wait.
+        // Enough room for one attempt but not for a two-minute wait.
         let budget = Duration::from_secs(100);
         let mut exec = FakeExec::failing(Step::Fetch, vec![1, 1, 1], "", "network unreachable");
         let mut clock = FakeClock::default();

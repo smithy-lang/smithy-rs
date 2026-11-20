@@ -62,8 +62,8 @@ concurrency:
   # `cancel-in-progress: false` alone does not buy that. GitHub's default keeps one run in flight
   # and one *pending*, and a third dispatch cancels the pending one -- manufacturing exactly the
   # false defect signal this is meant to avoid. `queue: max` raises the pending limit to 100, which
-  # for forty-five legs an hour is far more headroom than this can use. It is rejected outright
-  # alongside `cancel-in-progress: true`, which is another reason the two belong together.
+  # for one dispatch of forty legs an hour is far more headroom than this can use. It is rejected
+  # outright alongside `cancel-in-progress: true`, which is another reason the two belong together.
   cancel-in-progress: false
   queue: max
 

@@ -245,7 +245,7 @@ mod tests {
     }
 
     /// One more MSRV bump and the margin is gone. The point of the test is that the leg count falls
-    /// and the report says so, rather than ten legs turning red on a `rust-version` error.
+    /// and the report says so, rather than seven legs turning red on a `rust-version` error.
     #[test]
     fn an_msrv_bump_drops_toolchains_and_says_which() {
         let c = resolve(v(1, 99, 1), v(1, 96, 0)).unwrap();

@@ -45,7 +45,7 @@
 //! # Every verdict, including `INFRA_FAIL`
 //!
 //! One severity for all five, which means a runner failure can wake someone. The retry policy
-//! absorbs the transient cases — an `INFRA_FAIL` costs three attempts over six minutes before it is
+//! absorbs the transient cases — an `INFRA_FAIL` costs three attempts over four minutes before it is
 //! ever reported — and the verdict is on the second series, so a responder sees which kind it was
 //! before doing anything.
 

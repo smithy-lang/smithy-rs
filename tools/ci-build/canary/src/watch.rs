@@ -423,7 +423,8 @@ impl Resolver for CargoResolver {
 /// Asks crates.io whether every declared runtime crate has arrived.
 ///
 /// The declared set is read from the checkout once: it is a property of the tag being released, so
-/// re-reading it every tick would be thirteen file reads an hour for an answer that cannot change.
+/// re-reading it every tick would be a hundred and twenty file reads an hour for an answer that
+/// cannot change.
 /// Only the crates.io lookups repeat.
 pub struct CratesIoWatch {
     declared: Vec<crate::publish::RuntimeCrate>,

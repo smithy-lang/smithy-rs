@@ -22,12 +22,12 @@
 //! this module has to know about: `RUNNER_TEMP` is enough for a single job, and wrapping it in
 //! `actions/cache` — which caches a directory — adds survival across a manual re-run for one line
 //! of YAML. Cache entries are evicted after seven days without access and under a size cap, neither
-//! of which can reach a baseline being read twelve times an hour, and an evicted entry just
+//! of which can reach a baseline being read four times an hour, and an evicted entry just
 //! dispatches everything.
 //!
 //! # Why the key is per manifest and not per leg
 //!
-//! Five legs share each manifest, one per compiler version, and they all resolve the same graph: the
+//! Every leg sharing a manifest resolves the same graph, whatever its toolchain: the
 //! rendered manifests pin `edition = "2021"`, which pins the resolver to v2. Resolver v3 is
 //! MSRV-aware and *would* resolve differently per toolchain — which is why the edition is pinned,
 //! and the same pin is what makes one baseline per manifest correct rather than a simplification.

@@ -7,15 +7,19 @@
 //!
 //! Scenario × toolchain = one leg. Every leg has its own lockfile and its own verdict.
 //!
-//! The six dependency scenarios run at each surviving toolchain, so they give 6 × 5 = 30 legs. The
-//! ten build-axis legs are *separate* scenarios rather than extra dimensions on those six, so they
-//! are not multiplied by the toolchain axis and contribute 10 more. **40 legs.**
+//! Six dependency scenarios resolve crates.io and run at each surviving toolchain, so they give
+//! 6 × 5 = 30 legs. The ten build-axis legs are *separate* scenarios rather than extra dimensions
+//! on those six, so they are not multiplied by the toolchain axis and contribute 10 more.
+//! **40 legs per release.**
 //!
-//! Nine manifests back all 40: one per dependency scenario, plus `wasm`, `serialization` and
-//! `large-generated-clients`. The build-axis legs that vary only target or profile reuse the
-//! `new-project` manifest, which is why 9 manifests produce 40 legs.
+//! A seventh scenario resolves the on-disk test registry instead. Its five legs take what the
+//! matrix can express to 45, and they are excluded from `all` — see [`release_legs`].
 //!
-//! It was ten scenarios and sixty legs. Four rows are commented out in the table below, each with
+//! Nine manifests back the 40: one per crates.io dependency scenario, plus `wasm`, `serialization`
+//! and `large-generated-clients`. The build-axis legs that vary only target or profile reuse the
+//! `new-project` manifest.
+//!
+//! Four rows are commented out in the table below, each with
 //! its reason and what restoring it is gated on: they are red against the crates published today,
 //! and a leg that is red on arrival cuts a ticket on every release for something nobody can act on.
 //! See [`SCENARIOS`] for why that, and not the cost of the legs, is what disqualifies them.
@@ -32,7 +36,8 @@ pub enum Body {
     /// `tests/`. Used where the manifest resolves a client, so there is an API to call.
     CanaryApp,
     /// `fn main() {}`. Used where the point is that the graph *compiles*, not that it runs — the
-    /// third-party dependents and the server scenario.
+    /// third-party dependents, the server scenario, the test-registry row, and the `wasm` and
+    /// large-client manifests.
     Stub,
     /// An empty `src/lib.rs` and no binary.
     ///
@@ -139,11 +144,13 @@ pub struct BuildAxisLeg {
     pub reaches: &'static str,
 }
 
-/// The dependency scenarios: six live, four withdrawn and commented in place.
+/// The dependency scenarios: seven live — six resolving crates.io, one the on-disk test registry —
+/// and four withdrawn, commented in place.
 ///
-/// The first two are manifests we write. The rest inherit their requirements on us from a third
-/// party's `Cargo.toml`, which is the whole point of those rows — patching their feature set or
-/// requirements would destroy it.
+/// The first two are manifests we write, and `canary-test-registry` resolves a graph committed
+/// here. The four third-party rows inherit their requirements on us from someone else's
+/// `Cargo.toml`, which is the whole point of them — patching their feature set or requirements
+/// would destroy it.
 ///
 /// Each withdrawn row carries its own reason and the condition for putting it back. They are
 /// commented rather than deleted because every one of them is the right row to be checking; what
@@ -190,7 +197,8 @@ pub const SCENARIOS: &[Scenario] = &[
     // what to report.
     //
     // Restoring them is gated on the incompatibility being fixed, not on a decision about the
-    // canary. Uncomment, run `gen-matrix`, and the counts in the tests below move with them.
+    // canary. Uncomment, then update the hardcoded counts in the tests below and drop the id from
+    // `KNOWN_RED`, both of which fail until that is done.
     // ----------------------------------------------------------------------------------------
     //
     // Scenario {
@@ -325,8 +333,8 @@ pub const BUILD_AXIS: &[BuildAxisLeg] = &[
     BuildAxisLeg {
         id: "windows",
         manifest: "new-project",
-        // A real Windows runner, as `Rust Tests on Windows` uses. The design had this leg
-        // cross-compiled via cargo-xwin and so unable to execute a PE; on windows-latest it runs.
+        // A real Windows runner, as `Rust Tests on Windows` uses, so the leg executes the test
+        // binary rather than only cross-compiling a PE it cannot run.
         runner: "windows-latest",
         target: None,
         profile: Profile::Debug,
@@ -588,8 +596,8 @@ pub fn induced(manifest_id: &str) -> Option<&'static str> {
 
 /// Every rigged manifest, by id.
 ///
-/// Exists so the state is readable in one call: during the stage that tests the paging chain this
-/// should name exactly one manifest, and in normal operation none.
+/// Exists so the state is readable in one call: while a manifest is rigged to test the paging
+/// chain this should name exactly one, and in normal operation none.
 pub fn induced_manifests() -> Vec<&'static str> {
     manifests()
         .into_iter()
@@ -840,7 +848,7 @@ mod tests {
         assert_eq!(legs(&one).len(), 7 + 10);
     }
 
-    /// One scenario resolves a client and so carries the app body; the other five are stubs.
+    /// One scenario resolves a client and so carries the app body; the other six are stubs.
     ///
     /// The split decides how much of the matrix can report a run-phase verdict at all: a stub leg
     /// has no assertions, so it can only ever say `COMPILE_FAIL`, `RESOLVE_FAIL` or `INFRA_FAIL`.

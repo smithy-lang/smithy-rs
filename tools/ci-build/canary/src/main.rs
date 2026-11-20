@@ -75,7 +75,7 @@ enum Command {
         /// cancellation of its dispatcher. Omit when running a leg outside a release.
         #[arg(long)]
         tag: Option<String>,
-        /// Override the 14-minute self-deadline. For testing only.
+        /// Override the 12-minute self-deadline. For testing only.
         #[arg(long)]
         budget_secs: Option<u64>,
         /// Run whatever is already in `--dir` instead of rendering over it.

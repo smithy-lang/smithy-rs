@@ -223,7 +223,7 @@ pub fn summarize(run: Run, legs: &[Leg], reports: &[Report]) -> RunSummary {
 /// Walks rather than globbing a fixed depth, because the layout is whatever
 /// `actions/download-artifact` produced: one directory per artifact, each containing a report and
 /// possibly the leg's sources. A file that will not parse is reported and skipped — one malformed
-/// report must not cost the record of the other fifty-nine.
+/// report must not cost the record of the other thirty-nine.
 pub fn read_reports(root: &std::path::Path) -> anyhow::Result<Vec<Report>> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
