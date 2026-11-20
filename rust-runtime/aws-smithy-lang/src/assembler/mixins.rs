@@ -283,7 +283,7 @@ fn report_cycles(
         let user = entry.index();
         entry.or_default();
         for mixin in shapes[id].mixins() {
-            // A shape lists each mixin once (the loaders reject repeats), so a repeated edge can
+            // A shape lists each mixin once (the loaders drop repeats), so a repeated edge can
             // only be the one just added. Checking every user instead would be quadratic in the
             // number of shapes that use one mixin.
             let users = nodes.entry(mixin).or_default();

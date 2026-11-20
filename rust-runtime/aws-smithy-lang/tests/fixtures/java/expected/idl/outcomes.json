@@ -1055,6 +1055,11 @@
             "errors": [],
             "dangers": []
         },
+        "valid/focused_mixins_repeated": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
         "valid/focused_no_version": {
             "accepted": true,
             "errors": [],

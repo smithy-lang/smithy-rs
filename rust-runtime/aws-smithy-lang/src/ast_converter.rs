@@ -211,6 +211,11 @@ impl AstConverter {
     }
 
     fn ref_list(&self, object: &NodeObject, key: &str) -> Option<Vec<ShapeId>> {
+        self.refs(object, key, Repeats::Reject)
+    }
+
+    /// A list of shape references, `{"target": ...}`, under `key`.
+    fn refs(&self, object: &NodeObject, key: &str, repeats: Repeats) -> Option<Vec<ShapeId>> {
         let Some(node) = object.get(key) else {
             return Some(Vec::new());
         };
@@ -232,9 +237,10 @@ impl AstConverter {
                 ok = false;
                 continue;
             };
-            // These lists are unordered sets in Smithy; a repeated entry is a modeling error,
-            // not something to normalize silently.
             if let Some(&first) = first_index.get(&id) {
+                if repeats == Repeats::Ignore {
+                    continue;
+                }
                 self.diagnostics.borrow_mut().push(
                     Diagnostic::error_at(
                         DiagnosticCode::DuplicateReference,
@@ -583,10 +589,12 @@ impl AstConverter {
                 ok = false;
                 Vec::new()
             }
-            _ => self.ref_list(&object, "mixins").unwrap_or_else(|| {
-                ok = false;
-                Vec::new()
-            }),
+            _ => self
+                .refs(&object, "mixins", Repeats::Ignore)
+                .unwrap_or_else(|| {
+                    ok = false;
+                    Vec::new()
+                }),
         };
 
         let traits = self.traits(object.remove("traits"));
@@ -727,6 +735,17 @@ impl AstConverter {
             _ => unreachable!("every root shape type is handled"),
         })
     }
+}
+
+/// What a list of shape references does with an entry it already has.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Repeats {
+    /// Reports it. Lists such as a service's `operations` are unordered sets in Smithy, so a
+    /// repeated entry is a modeling error, not something to normalize silently.
+    Reject,
+    /// Ignores it. A shape's `mixins` are ordered, and like the reference implementation, which
+    /// keeps them in an ordered map, a repeated mixin has no effect.
+    Ignore,
 }
 
 /// Kind-specific JSON AST properties (in addition to `type`, `traits`, and `mixins`).
