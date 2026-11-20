@@ -29,15 +29,13 @@ aws-sdk-dynamodb = { version = "...", default-features = false, features = [
 
 Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256`, which brings `sha2` and `hmac` with it but is never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
 
-`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, it will need raising.
+`aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
-**Which AWS-LC-FIPS module you get follows the resolved `aws-lc-rs` version, and Cargo will upgrade it for you.** `aws-lc-rs` changes module line in a minor release — 1.18.0 moved from the 3.x module to 4.x — so a `1.x` requirement picks up the next one automatically. If your compliance posture is tied to a specific module, bound your own requirement rather than relying on ours. To stay on 4.x:
+**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. Today's floor selects the FIPS 4 module. To stay on it rather than moving to FIPS 5, bound your own requirement:
 
 ```toml
 aws-lc-rs = ">=1.18.1, <1.21.0"
 ```
-
-[FIPS.md in aws/aws-lc](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md) lists the validation status and certificate numbers for each module.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 

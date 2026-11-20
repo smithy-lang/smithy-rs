@@ -89,11 +89,10 @@ ecdsa = { version = "0.17.0", optional = true }
 # (`aws-lc-sys` >= 0.39.0 for RUSTSEC-2026-0044 and -0048, >= 0.38.0 for -0045 through -0047;
 # `aws-lc-fips-sys` >= 0.13.13 for -0042, >= 0.13.12 for -0043).
 #
-# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4.x module, so a requirement of
-# `<1.18.0`, which is the 3.x module, is unsatisfiable against this floor. aws-lc-rs changes module
-# line in a minor release and Cargo takes that automatically within `1.x`, so a deployment that
-# must stay on one module should bound its own `aws-lc-rs` requirement. FIPS.md in aws/aws-lc
-# carries the validation status of each module.
+# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4 module, so `<1.18.0`, the FIPS 3
+# module, is unsatisfiable against this floor. aws-lc-rs changes module in a minor release and
+# Cargo takes that automatically inside `1.x`, so a consumer who needs to stay on FIPS 4 rather
+# than move to FIPS 5 has to bound their own requirement at `<1.21.0`; the changelog says so.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 crypto-bigint = { version = "0.7.10", optional = true }
 subtle = { version = "2.6.0", optional = true }
