@@ -93,6 +93,8 @@ pub struct Builder {
     #[cfg(feature = "aws")]
     pub(crate) credentials_provider: Option<SharedCredentialsProvider>,
     #[cfg(feature = "aws")]
+    pub(crate) sigv4a_signing_region_set: Option<aws_types::region::SigningRegionSet>,
+    #[cfg(feature = "aws")]
     pub(crate) invocation_id_generator: Option<SharedInvocationIdGenerator>,
     #[cfg(feature = "aws")]
     pub(crate) disable_clock_skew_correction: Option<bool>,
@@ -311,7 +313,7 @@ impl Builder {
         self
     }
 
-    /// Sets the provider of the AWS credentials that sign requests.
+    /// Sets the provider of the AWS credentials that sign requests with SigV4 or SigV4a.
     #[cfg(feature = "aws")]
     pub fn credentials_provider(
         mut self,
@@ -385,6 +387,10 @@ impl Builder {
             #[cfg(feature = "aws")]
             credentials_provider: later.credentials_provider.or(self.credentials_provider),
             #[cfg(feature = "aws")]
+            sigv4a_signing_region_set: later
+                .sigv4a_signing_region_set
+                .or(self.sigv4a_signing_region_set),
+            #[cfg(feature = "aws")]
             invocation_id_generator: later
                 .invocation_id_generator
                 .or(self.invocation_id_generator),
@@ -411,10 +417,12 @@ impl Builder {
         for interceptor in self.interceptors {
             components.push_interceptor(interceptor);
         }
-        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
-        // uses SigV4a, as generated clients do.
         #[cfg(feature = "aws")]
         if let Some(credentials_provider) = self.credentials_provider {
+            components.set_identity_resolver(
+                aws_runtime::auth::sigv4a::SCHEME_ID,
+                credentials_provider.clone(),
+            );
             components
                 .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
         }
@@ -437,9 +445,15 @@ impl Builder {
         if let Some(auth_scheme_preference) = self.auth_scheme_preference {
             layer.store_put(auth_scheme_preference);
         }
+        // The region is also the SigV4 signing region.
         #[cfg(feature = "aws")]
         if let Some(region) = self.region {
+            layer.store_put(aws_types::region::SigningRegion::from(region.clone()));
             layer.store_put(region);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(sigv4a_signing_region_set) = self.sigv4a_signing_region_set {
+            layer.store_put(sigv4a_signing_region_set);
         }
         #[cfg(feature = "aws")]
         if let Some(invocation_id_generator) = self.invocation_id_generator {
@@ -558,6 +572,7 @@ impl From<&SdkConfig> for Builder {
             auth_scheme_preference: sdk_config.auth_scheme_preference().cloned(),
             region: sdk_config.region().cloned(),
             credentials_provider: sdk_config.credentials_provider(),
+            sigv4a_signing_region_set: sdk_config.sigv4a_signing_region_set().cloned(),
             disable_clock_skew_correction: sdk_config.disable_clock_skew_correction(),
             ..Default::default()
         }

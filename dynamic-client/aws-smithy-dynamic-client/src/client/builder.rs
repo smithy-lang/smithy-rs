@@ -127,6 +127,8 @@ impl DynamicClientBuilder {
         ));
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
+        #[cfg(feature = "aws")]
+        crate::auth::aws::store_service_auth(&service_view, &mut layer, &mut components);
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
         if let Some(puts) = puts_plugin(&puts) {
