@@ -290,6 +290,7 @@ mod test {
     };
     use aws_credential_types::provider::error::CredentialsError;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_http_client::test_util::capture_request;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::Region;
@@ -366,5 +367,38 @@ mod test {
             CredentialsError::ProviderError { .. } => { /* ok */ }
             _ => panic!("incorrect error variant"),
         }
+    }
+
+    #[tokio::test]
+    async fn ignore_configured_endpoint_urls() {
+        async fn sts_request_uri(extra_env: &[(&str, &str)]) -> String {
+            let mut env = vec![
+                (ENV_VAR_TOKEN_FILE, "/token.jwt"),
+                (ENV_VAR_ROLE_ARN, "arn:aws:iam::123456789123:role/test-role"),
+                (ENV_VAR_SESSION_NAME, "test-session"),
+                ("AWS_ENDPOINT_URL_STS", "http://localhost:9999"),
+            ];
+            env.extend_from_slice(extra_env);
+            let (http_client, request) = capture_request(None);
+            let provider = Builder::default()
+                .configure(
+                    &ProviderConfig::empty()
+                        .with_sleep_impl(TokioSleep::new())
+                        .with_http_client(http_client)
+                        .with_region(Some(Region::new("us-east-1")))
+                        .with_env(Env::from_slice(&env))
+                        .with_fs(Fs::from_slice(&[("/token.jwt", "token")])),
+                )
+                .build();
+            // Only the request matters; the empty response fails to parse
+            let _ = provider.credentials().await;
+            request.expect_request().uri().to_string()
+        }
+
+        assert_eq!("http://localhost:9999/", sts_request_uri(&[]).await);
+        assert_eq!(
+            "https://sts.us-east-1.amazonaws.com/",
+            sts_request_uri(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]).await
+        );
     }
 }
