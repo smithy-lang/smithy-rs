@@ -44,11 +44,10 @@ pub(crate) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> S
         .and_then(|shape| shape.as_shape())
         .and_then(|shape| shape.as_operation())
         .expect("the client's operations are operation shapes of the model");
-    layer.store_put(AuthSchemeOptionResolverParams::new(auth::params(
-        model,
-        &client.service_view(),
-        &operation_view,
-    )));
+    let auth_params = auth::params(model, &client.service_view(), &operation_view);
+    #[cfg(feature = "aws")]
+    auth::aws::store_operation_auth(&operation_view, auth_params.auth_schemes(), &mut layer);
+    layer.store_put(AuthSchemeOptionResolverParams::new(auth_params));
     // TODO(dynamic-client): Resolve the endpoint from the model's endpoint rules.
     layer.store_put(EndpointResolverParams::new(()));
     let components = RuntimeComponentsBuilder::new("DynamicOperation")

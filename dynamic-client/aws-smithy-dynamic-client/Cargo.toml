@@ -11,8 +11,9 @@ rust-version = "1.94.1"
 
 [features]
 default = ["aws", "default-https-client", "rt-tokio"]
-# The AWS settings: region, credentials provider, and invocation ID generator.
-aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types"]
+# The AWS settings: region, credentials provider, and invocation ID generator. Also the SigV4 and
+# SigV4a auth schemes.
+aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types", "aws-runtime/sigv4a"]
 # The default HTTP client, used when the config sets none.
 default-https-client = ["aws-smithy-runtime/default-https-client"]
 # The Tokio sleep, used when the config sets no sleep implementation.

@@ -17,6 +17,9 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::borrow::Cow;
 
+#[cfg(feature = "aws")]
+pub(crate) mod aws;
+
 /// The parameters an auth scheme resolver gets for one call.
 ///
 /// A resolver set with

@@ -1,0 +1,90 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Signed": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                },
+                {
+                    "target": "smithy.example#PutThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "aws.auth#sigv4": {
+                    "name": "gizmo"
+                }
+            }
+        },
+        "smithy.example#SignedA": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "aws.auth#sigv4a": {
+                    "name": "gizmo"
+                }
+            }
+        },
+        "smithy.example#GetThing": {
+            "type": "operation"
+        },
+        "smithy.example#PutThing": {
+            "type": "operation",
+            "traits": {
+                "aws.auth#unsignedPayload": {}
+            }
+        },
+        "aws.auth#sigv4": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {
+                    "selector": "service"
+                },
+                "smithy.api#authDefinition": {}
+            }
+        },
+        "aws.auth#sigv4a": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#trait": {
+                    "selector": "service"
+                },
+                "smithy.api#authDefinition": {}
+            }
+        },
+        "aws.auth#unsignedPayload": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {
+                    "selector": "operation"
+                }
+            }
+        }
+    }
+}
