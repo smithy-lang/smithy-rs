@@ -91,8 +91,9 @@ impl ChecksumBody<SdkBody> {
     }
 
     /// Calls `f` exactly once, when validation ends: when the data ends with a match, before the
-    /// mismatch error is yielded, on an inner-body error, or on drop. The data ends at a trailers
-    /// frame or at the end of the stream, whichever comes first.
+    /// mismatch error is yielded, on an inner-body error, or on drop. The data ends at the first of:
+    /// a data frame after which the inner body reports its end, a trailers frame, or the end of the
+    /// stream.
     pub fn with_completion(
         mut self,
         f: impl FnOnce(ValidationEnd) + Send + Sync + 'static,
@@ -107,10 +108,10 @@ impl ChecksumBody<SdkBody> {
     ) -> Poll<Option<Result<http_body_1x::Frame<Bytes>, aws_smithy_types::body::Error>>> {
         use http_body_1x::Body;
 
-        let this = self.project();
+        let mut this = self.project();
         let checksum = this.checksum;
 
-        match this.inner.poll_frame(cx) {
+        match this.inner.as_mut().poll_frame(cx) {
             Poll::Ready(Some(Ok(frame))) => {
                 let Some(data) = frame.data_ref() else {
                     // A trailers frame ends the data, and `SdkBody` stops reading at it, so the
@@ -124,14 +125,23 @@ impl ChecksumBody<SdkBody> {
                     "reading {} bytes from the body and updating the checksum calculation",
                     data.len()
                 );
-                let checksum = match checksum.as_mut() {
-                    Some(checksum) => checksum,
-                    None => {
-                        unreachable!("The checksum must exist because it's only taken out once the data has ended.");
-                    }
+                let Some(running) = checksum.as_mut() else {
+                    // The checksum was already verified, so the inner body broke its contract by
+                    // reporting its end too early. These bytes can't be validated.
+                    return Poll::Ready(Some(Err(
+                        "body yielded data after its end of stream".into()
+                    )));
                 };
+                running.update(data);
 
-                checksum.update(data);
+                if this.inner.is_end_stream() {
+                    // This is the last data frame. Verify before releasing it: a consumer that
+                    // knows the length, such as a server writing `Content-Length`, stops polling
+                    // once it has every byte, so an error on a later poll would never be seen.
+                    let checksum = checksum.take().expect("checked above");
+                    let verified = verify(checksum, this.precalculated_checksum, this.completion);
+                    return Poll::Ready(Some(verified.map(|()| frame)));
+                }
                 Poll::Ready(Some(Ok(frame)))
             }
             // Once the inner body has stopped returning data, check the checksum
@@ -356,9 +366,12 @@ mod tests {
     #[tokio::test]
     async fn completion_reports_matched_at_end_of_stream() {
         let recorded = Recorded::default();
-        let mut body =
-            ChecksumBody::new(SdkBody::from(TEXT), crc32(), calculate_crc32_checksum(TEXT))
-                .with_completion(recorded.completion());
+        let mut body = ChecksumBody::new(
+            text_without_end_hint(),
+            crc32(),
+            calculate_crc32_checksum(TEXT),
+        )
+        .with_completion(recorded.completion());
 
         body.frame().await.unwrap().unwrap();
         recorded.assert_ends(&[]);
@@ -373,7 +386,7 @@ mod tests {
     async fn completion_reports_mismatch_before_the_error_is_yielded() {
         let wrong_checksum = Bytes::from_static(&[0x00, 0x00, 0x00, 0x00]);
         let recorded = Recorded::default();
-        let mut body = ChecksumBody::new(SdkBody::from(TEXT), crc32(), wrong_checksum.clone())
+        let mut body = ChecksumBody::new(text_without_end_hint(), crc32(), wrong_checksum.clone())
             .with_completion(recorded.completion());
         let mismatched = ValidationEnd::Mismatched {
             expected: wrong_checksum,
@@ -411,9 +424,12 @@ mod tests {
     #[tokio::test]
     async fn completion_reports_dropped_when_the_body_is_dropped_before_its_end() {
         let recorded = Recorded::default();
-        let mut body =
-            ChecksumBody::new(SdkBody::from(TEXT), crc32(), calculate_crc32_checksum(TEXT))
-                .with_completion(recorded.completion());
+        let mut body = ChecksumBody::new(
+            text_without_end_hint(),
+            crc32(),
+            calculate_crc32_checksum(TEXT),
+        )
+        .with_completion(recorded.completion());
 
         body.frame().await.unwrap().unwrap();
         recorded.assert_ends(&[]);
@@ -435,6 +451,13 @@ mod tests {
         ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
             Poll::Ready(self.0.pop_front().map(Ok))
         }
+    }
+
+    /// `TEXT` in one data frame, from a body that doesn't report its end until it ends.
+    fn text_without_end_hint() -> SdkBody {
+        SdkBody::from_body_1_x(Frames(VecDeque::from([Frame::data(Bytes::from_static(
+            TEXT.as_bytes(),
+        ))])))
     }
 
     /// `TEXT` in one data frame, then a trailers frame.
@@ -496,5 +519,60 @@ mod tests {
             frame.unwrap();
         }
         assert!(body.is_end_stream());
+    }
+
+    #[tokio::test]
+    async fn a_mismatch_replaces_the_last_data_frame() {
+        let wrong_checksum = Bytes::from_static(&[0x00, 0x00, 0x00, 0x00]);
+        let mut body = ChecksumBody::new(SdkBody::from(TEXT), crc32(), wrong_checksum);
+
+        // `TEXT` is the only frame, so its frame is the last one and must carry the mismatch.
+        let error = body.frame().await.unwrap().unwrap_err();
+        assert!(error.downcast_ref::<Error>().is_some());
+        assert!(body.is_end_stream());
+    }
+
+    #[tokio::test]
+    async fn an_empty_body_is_verified_before_it_reports_its_end() {
+        let mut body = ChecksumBody::new(SdkBody::empty(), crc32(), calculate_crc32_checksum(TEXT));
+
+        assert!(!body.is_end_stream());
+        let error = body.frame().await.unwrap().unwrap_err();
+        assert!(error.downcast_ref::<Error>().is_some());
+    }
+
+    /// Reports its end from the start, but yields its frames anyway.
+    struct EndsEarly(VecDeque<Frame<Bytes>>);
+
+    impl http_body_1x::Body for EndsEarly {
+        type Data = Bytes;
+        type Error = std::io::Error;
+
+        fn poll_frame(
+            mut self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+            Poll::Ready(self.0.pop_front().map(Ok))
+        }
+
+        fn is_end_stream(&self) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn data_after_a_reported_end_is_an_error() {
+        let inner = EndsEarly(VecDeque::from([
+            Frame::data(Bytes::from_static(b"hello ")),
+            Frame::data(Bytes::from_static(b"world")),
+        ]));
+        let mut body = ChecksumBody::new(
+            SdkBody::from_body_1_x(inner),
+            crc32(),
+            calculate_crc32_checksum("hello "),
+        );
+
+        body.frame().await.unwrap().unwrap();
+        body.frame().await.unwrap().unwrap_err();
     }
 }
