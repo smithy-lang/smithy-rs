@@ -44,11 +44,14 @@ pub(crate) struct ResourceBindings {
 }
 
 impl ResourceBindings {
-    /// The target of an identifier, or else of a property, named `name`.
+    /// The target of a property, or else of an identifier, named `name`. A property wins, as in
+    /// the reference implementation, whose `ApplyResourceBasedTargets` sets the identifier's
+    /// target and then the property's. (A resource whose identifier is also a property is
+    /// invalid anyway.)
     pub(crate) fn target(&self, name: &str) -> Option<&str> {
-        self.identifiers
+        self.properties
             .get(name)
-            .or_else(|| self.properties.get(name))
+            .or_else(|| self.identifiers.get(name))
             .map(String::as_str)
     }
 }

@@ -127,7 +127,7 @@ mod mixins;
 ///   override inherited ones. A mixin's `@mixin` trait, and the `localTraits` it lists, are not
 ///   inherited. Traits applied to a mixin reach the shapes that use it.
 /// - An IDL `$name` member of a shape with mixins takes its target from the bound resource's
-///   identifier or property with that name, or else from the mixin member with that name.
+///   property or identifier with that name, or else from the mixin member with that name.
 /// - A shape whose mixin is missing or of another type, or whose mixins provide a member with
 ///   different targets, is reported and left out, and so is every shape that uses it (as a
 ///   shape whose mixin is missing). Shapes in a mixin cycle are reported and left out too, but

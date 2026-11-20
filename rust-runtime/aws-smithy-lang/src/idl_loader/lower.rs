@@ -660,8 +660,8 @@ impl<'a> Lowerer<'a> {
     }
 
     /// The target of a `$name` member, as in the reference implementation: the bound
-    /// resource's identifier, or else its property, with that name, or else (for a shape with
-    /// mixins) the mixin member with that name.
+    /// resource's property or identifier with that name (see [`ResourceBindings::target`]), or
+    /// else (for a shape with mixins) the mixin member with that name.
     fn elided(
         &mut self,
         binding: &Binding<'_>,

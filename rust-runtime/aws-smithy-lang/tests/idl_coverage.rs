@@ -351,6 +351,25 @@ operation A {}
 }
 
 #[test]
+fn elided_member_takes_the_property_target_like_the_reference_impl() {
+    // The reference implementation sets the identifier's target, then the property's. It also
+    // rejects a resource whose identifier is a property, which this crate does not check yet.
+    let model = idl(r#"$version: "2"
+namespace ex
+
+resource R {
+    identifiers: { id: String }
+    properties: { id: Integer }
+}
+
+structure S for R {
+    $id
+}
+"#);
+    assert_eq!(target(&model, "ex#S$id"), "smithy.api#Integer");
+}
+
+#[test]
 fn target_elision_in_every_placement() {
     let model = Model::assembler()
         .add_idl_str(
