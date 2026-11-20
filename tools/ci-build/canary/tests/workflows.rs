@@ -1,0 +1,1440 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Invariants of the canary's three GitHub workflows.
+//!
+//! These are properties that YAML cannot express and review does not reliably catch, in files where
+//! a mistake is quiet: a workflow is not compiled, and most of what is asserted here fails by doing
+//! nothing rather than by erroring.
+//!
+//! It is a test in this crate rather than a standalone script because `check-tools` already runs
+//! the crate's tests, so it needs no new CI wiring and cannot be forgotten.
+//!
+//! The syntax is already checked elsewhere: the repository's pre-commit configuration runs
+//! `check-yaml` and `pretty-format-yaml`. Nothing here duplicates that.
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use serde_yaml::Value;
+
+const WORKFLOWS: &[&str] = &["build-canary", "post-publish-watch", "paging-selftest"];
+
+/// Ticket severities anything here is allowed to cut.
+///
+/// A deliberately short list, because the failure it guards is a typo. `SEVERITY=25` or a severity
+/// left empty by a bad edit would still substitute into the alarm action and cut tickets at
+/// something nobody chose — and the first notice of that would be either a silent ticket or a
+/// paged oncall, depending on which way the typo fell.
+const SANCTIONED_SEVERITIES: &[&str] = &["5", "3", "2.5", "2"];
+
+/// The severity a workflow pins in its script, as written.
+///
+/// Extracted rather than asserted against a literal, because the value legitimately changes as the
+/// rollout proceeds. What must not change is that it is pinned at all.
+fn pinned_severity(text: &str) -> String {
+    let found: Vec<&str> = text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("SEVERITY="))
+        .collect();
+    assert_eq!(
+        found.len(),
+        1,
+        "expected exactly one pinned SEVERITY= line, found {found:?}"
+    );
+    found[0].to_string()
+}
+
+/// The CDK stack that declares the roles these workflows assume.
+fn build_canary_stack_ts() -> String {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("repo root")
+        .to_path_buf();
+    std::fs::read_to_string(root.join("tools/ci-cdk/lib/smithy-rs/build-canary-stack.ts"))
+        .expect("the CDK stack should be readable from the repo")
+}
+
+/// The GitHub environment the CDK gates the orchestrator's roles on.
+///
+/// Read from the stack rather than written here, because a workflow declaring a different name
+/// produces a token the role refuses — which looks like a permissions problem rather than a typo.
+fn orchestrator_environment_from_the_cdk() -> String {
+    let ts = build_canary_stack_ts();
+    ts.split_once("export const ORCHESTRATOR_ENVIRONMENT = \"")
+        .expect("ORCHESTRATOR_ENVIRONMENT not found in the CDK stack")
+        .1
+        .split_once('"')
+        .expect("unterminated ORCHESTRATOR_ENVIRONMENT")
+        .0
+        .to_string()
+}
+
+/// The tag patterns of `RELEASE_REFS` in the CDK stack, with `refs/tags/` stripped.
+fn release_tag_patterns_from_the_cdk() -> Vec<String> {
+    let ts = build_canary_stack_ts();
+    let body = ts
+        .split_once("export const RELEASE_REFS = [")
+        .expect("RELEASE_REFS not found in the CDK stack")
+        .1
+        .split_once(']')
+        .expect("unterminated RELEASE_REFS")
+        .0;
+    body.split('"')
+        .filter_map(|s| s.strip_prefix("refs/tags/"))
+        .map(str::to_string)
+        .collect()
+}
+
+fn workflow_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("repo root")
+        .join(".github/workflows")
+}
+
+fn load(name: &str) -> Value {
+    let path = workflow_dir().join(format!("{name}.yml"));
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+    serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("parsing {}: {e}", path.display()))
+}
+
+fn raw(name: &str) -> String {
+    std::fs::read_to_string(workflow_dir().join(format!("{name}.yml"))).expect("readable")
+}
+
+/// The jobs of a workflow, by name.
+fn jobs(wf: &Value) -> BTreeMap<String, &Value> {
+    wf.get("jobs")
+        .and_then(Value::as_mapping)
+        .expect("a workflow has jobs")
+        .iter()
+        .map(|(k, v)| (k.as_str().expect("a job name").to_string(), v))
+        .collect()
+}
+
+fn steps(job: &Value) -> Vec<&Value> {
+    job.get("steps")
+        .and_then(Value::as_sequence)
+        .map(|s| s.iter().collect())
+        .unwrap_or_default()
+}
+
+fn step_name(step: &Value) -> String {
+    step.get("name")
+        .or_else(|| step.get("uses"))
+        .and_then(Value::as_str)
+        .unwrap_or("(unnamed)")
+        .to_string()
+}
+
+/// The `on:` mapping. YAML 1.1 reads a bare `on` as the boolean `true`, which is why this is not
+/// simply a string lookup.
+fn triggers(wf: &Value) -> Vec<String> {
+    let on = wf
+        .get(Value::Bool(true))
+        .or_else(|| wf.get("on"))
+        .expect("a workflow has triggers");
+    on.as_mapping()
+        .expect("triggers are a mapping")
+        .keys()
+        .map(|k| k.as_str().expect("a trigger name").to_string())
+        .collect()
+}
+
+/// A workflow input reaching a `run:` block through `${{ }}` is substituted into the command *text*
+/// before any shell sees it, so a value carrying a quote and `$(...)` executes on the runner. Every
+/// input must arrive through `env` instead.
+///
+/// Every one of these workflows assumes an AWS role, so an injection here reaches AWS rather than
+/// only the runner.
+#[test]
+fn no_workflow_interpolates_into_a_run_block() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            for step in steps(job) {
+                if let Some(run) = step.get("run").and_then(Value::as_str) {
+                    assert!(
+                        !run.contains("${{"),
+                        "{name}.yml: {job_name}/{} interpolates into its run block",
+                        step_name(step)
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// A job without a timeout inherits GitHub's six-hour default. For a leg that would mean the
+/// 15-minute dispatch tick could be outlived by its own legs; for the floor tier it would mean a
+/// stuck sleep holding a runner for six hours.
+#[test]
+fn every_job_bounds_its_own_runtime() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let timeout = job.get("timeout-minutes").and_then(Value::as_u64);
+            assert!(
+                timeout.is_some_and(|t| t > 0 && t <= 360),
+                "{name}.yml: {job_name} has no usable timeout-minutes ({timeout:?}); \
+                 the platform cap is 360"
+            );
+        }
+    }
+}
+
+/// `id-token: write` is what lets a job mint an OIDC token and assume a role. A job holding it
+/// without assuming anything is unnecessary authority; a job assuming a role without it fails at
+/// runtime with a message that does not mention the permission.
+#[test]
+fn oidc_permission_and_role_assumption_go_together() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let has_permission = job
+                .get("permissions")
+                .and_then(|p| p.get("id-token"))
+                .and_then(Value::as_str)
+                == Some("write");
+            let assumes = steps(job).iter().any(|s| {
+                s.get("uses")
+                    .and_then(Value::as_str)
+                    .is_some_and(|u| u.contains("configure-aws-credentials"))
+            });
+            assert_eq!(
+                has_permission, assumes,
+                "{name}.yml: {job_name} has id-token:write={has_permission} but \
+                 assumes a role={assumes}; these must agree"
+            );
+        }
+    }
+}
+
+/// Internal ticket routing — the integration name, the category, the resolver group — must never be
+/// written into a file in a public repository. It would tell any reader which internal queue to aim
+/// at, and there is no precedent for any of it here.
+///
+/// The alarm action arrives as a template from a secret instead.
+#[test]
+fn no_workflow_contains_internal_ticket_routing() {
+    // Split so this file does not itself contain the literals it bans.
+    let banned = [
+        concat!("cwa", "-internal"),
+        concat!("arn:aws:", "cloudwatch::"),
+        concat!("SDKs", "+and+Tools"),
+    ];
+    for name in WORKFLOWS {
+        let text = raw(name);
+        for needle in banned {
+            assert!(
+                !text.contains(needle),
+                "{name}.yml contains internal ticket routing ({needle:?}); \
+                 it belongs in a secret"
+            );
+        }
+    }
+}
+
+/// The filled alarm action must never be printed, only compared.
+///
+/// GitHub masks a secret's exact value, but filling `{severity}` and `{dedupe}` produces a string
+/// it does not mask. Printing that publishes internal ticket routing, because both the job log and
+/// the job summary are public.
+///
+/// The runtime companion of [`no_workflow_contains_internal_ticket_routing`], which keeps the same
+/// routing out of the files themselves.
+#[test]
+fn the_filled_alarm_action_is_never_printed() {
+    // Variables holding the action once the placeholders are filled. The two helpers' locals are
+    // lower case and absent here: `printf` into a command substitution captures, not prints.
+    // `TICKET_ARN_TEMPLATE` is absent too, being the exact secret, which GitHub does mask.
+    const HOLDS_THE_ACTION: &[&str] = &[
+        "ACTION_ARN",
+        "INDUCED_ACTION_ARN",
+        "ACTUAL_ACTION",
+        "EXPECTED_ACTION",
+        // Derived from the action, and an account id of its own.
+        "TICKET_ACCOUNT",
+    ];
+
+    for name in WORKFLOWS {
+        // Backslash continuations joined, so a command split across lines is judged whole.
+        let script = raw(name).replace("\\\n", " ");
+
+        // Alarms go through the `put_alarm` wrapper, which scrubs the action out of the API's
+        // rejection message. The wrapper's own pass-through is the only call allowed; one carrying
+        // flags is a direct call, which would put the action straight back in the log.
+        for (at, _) in script.match_indices("aws cloudwatch put-metric-alarm") {
+            assert!(
+                script[at..].starts_with("aws cloudwatch put-metric-alarm \"$@\""),
+                "{name}.yml calls put-metric-alarm directly, bypassing the scrub in `put_alarm`"
+            );
+        }
+
+        for line in script.lines() {
+            if line.contains("AlarmActions") {
+                assert!(
+                    line.contains("$("),
+                    "{name}.yml reads AlarmActions without capturing the output, so the filled \
+                     action reaches the public job log: {line:?}"
+                );
+                assert!(
+                    !line.contains("tee") && !line.contains("GITHUB_STEP_SUMMARY"),
+                    "{name}.yml writes AlarmActions to the public job summary: {line:?}"
+                );
+            }
+
+            // Capturing is not enough: what is captured can still be echoed.
+            let trimmed = line.trim();
+            if trimmed.starts_with("echo ") || trimmed.starts_with("printf ") {
+                for held in HOLDS_THE_ACTION {
+                    assert!(
+                        !line.contains(held),
+                        "{name}.yml prints {held}, which holds the filled alarm action: {line:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Enabling the canary has to mean the whole paging chain is present.
+///
+/// `BUILD_CANARY_ENABLED` decides whether the orchestrator runs, not whether a verdict can reach a
+/// person, and the three places that notice a missing secret all treat it as a notice. So without
+/// this the canary can be switched on, run every leg, stay green, and page nobody — the failure it
+/// exists to remove, wearing its own clothes.
+///
+/// A durable archive is deferred, and is deliberately not in the list should it come back: it
+/// answers historical questions and no page depends on it.
+#[test]
+fn enabling_the_canary_requires_the_whole_paging_chain() {
+    let wf = load("post-publish-watch");
+    let alarms = jobs(&wf).get("alarms").copied().expect("an alarms job");
+    let step = steps(alarms)
+        .into_iter()
+        .find(|s| step_name(s).to_lowercase().contains("configured"))
+        .expect("a step deciding whether the alarm is configured");
+
+    let script = step.get("run").and_then(Value::as_str).expect("a script");
+    let env = serde_yaml::to_string(step.get("env").expect("an env block")).unwrap_or_default();
+
+    assert!(
+        env.contains("BUILD_CANARY_ENABLED"),
+        "the report-only fallback has to be conditional on the variable, or enabling means nothing"
+    );
+    for secret in [
+        "BUILD_CANARY_ORCHESTRATOR_ROLE_ARN",
+        "BUILD_CANARY_TICKET_ARN_TEMPLATE",
+        "BUILD_CANARY_METRICS_ROLE_ARN",
+    ] {
+        assert!(env.contains(secret), "the check has to read {secret}");
+        assert!(
+            script.contains(secret),
+            "and has to name {secret} when it is the one missing"
+        );
+    }
+    assert!(
+        !script.contains("BUILD_CANARY_RECORD"),
+        "the archive is optional and must not be able to stop a release being watched"
+    );
+
+    // The enabled branch has to end the step. A notice here is what the whole test is against.
+    let enabled_branch = script
+        .split_once("$ENABLED\" == \"true\"")
+        .expect("the script must branch on the variable")
+        .1;
+    let (branch, _) = enabled_branch
+        .split_once("\nfi")
+        .expect("an unterminated enabled branch");
+    assert!(
+        branch.contains("::error") && branch.contains("exit 1"),
+        "an incomplete chain while enabled has to fail, not warn: {branch:?}"
+    );
+}
+
+/// The leg role is for legs, and every job that assumes the orchestrator's declares its
+/// environment.
+///
+/// Two trust domains, split by how far the token travels. The leg role takes release tags and no
+/// environment, because requiring one would mean every leg in the matrix declaring it; the orchestrator's
+/// takes `main` as well, and the environment is what a pull request's code running on `main` cannot
+/// declare. So a job that assumes the orchestrator's role without the environment can still work
+/// from a release tag and silently cannot from a hand-dispatched run — the shape of failure this
+/// file exists to catch. And a job outside `build-canary.yml` reaching for the leg role would be
+/// reaching for one that refuses `main` outright.
+#[test]
+fn the_two_roles_are_used_by_the_jobs_they_were_made_for() {
+    let expected = orchestrator_environment_from_the_cdk();
+    let mut orchestrator_jobs = 0;
+
+    for name in ["post-publish-watch", "paging-selftest", "build-canary"] {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let yaml = steps(job)
+                .iter()
+                .map(|s| serde_yaml::to_string(s).unwrap_or_default())
+                .collect::<String>();
+
+            if yaml.contains("BUILD_CANARY_ORCHESTRATOR_ROLE_ARN") {
+                orchestrator_jobs += 1;
+                assert_eq!(
+                    job.get("environment").and_then(Value::as_str),
+                    Some(expected.as_str()),
+                    "{name}.yml job {job_name} assumes the orchestrator role without declaring \
+                     {expected:?}, so a hand-dispatched run from main could not assume it"
+                );
+            }
+
+            if yaml.contains("BUILD_CANARY_METRICS_ROLE_ARN") {
+                // The arming job reads it to check it is set, which is not assuming it.
+                let assumes =
+                    yaml.contains("role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}");
+                assert!(
+                    !assumes || name == "build-canary",
+                    "{name}.yml job {job_name} assumes the leg role, which refuses `main` and is \
+                     meant only for legs"
+                );
+            }
+        }
+    }
+
+    assert!(
+        orchestrator_jobs >= 3,
+        "expected the arming, dispatch, record and self-test jobs, found {orchestrator_jobs}"
+    );
+}
+
+/// Everything the crate calls a release, the IAM conditions must accept.
+///
+/// This shape is written in four places: the orchestrator's `case` statement, the CDK's
+/// `RELEASE_REFS` globs, `watch::is_release_tag`, and the tag ruleset. The first two are tied
+/// together by [`the_tag_check_accepts_exactly_what_the_roles_accept`]; this ties the third to them.
+///
+/// The relationship is containment, not equality, and the direction matters. If the crate accepted
+/// something IAM refused, a leg would build the release and then have its datapoint denied —
+/// silence where a verdict belongs. The converse is harmless and unavoidable: `StringLike` has only
+/// `?` and `*`, so `release-????-??-??.*` cannot say "at least one digit" and necessarily admits a
+/// bare trailing dot. The crate being the stricter of the two is what covers that slack.
+#[test]
+fn the_release_shape_is_no_looser_than_the_cdks() {
+    let patterns = release_tag_patterns_from_the_cdk();
+
+    // IAM `StringLike`: `?` is exactly one character, `*` any sequence including none.
+    let matches_iam = |tag: &str| {
+        patterns.iter().any(|pattern| {
+            let expression: String = pattern
+                .chars()
+                .map(|c| match c {
+                    '?' => ".".to_string(),
+                    '*' => ".*".to_string(),
+                    other => regex_escape(other),
+                })
+                .collect();
+            regex_lite_match(&expression, tag)
+        })
+    };
+
+    let mut accepted = 0;
+    for tag in [
+        "release-2026-11-16",
+        "release-2026-01-01",
+        "release-2026-09-30.2",
+        "release-2026-09-30.10",
+        "release-test",
+        "release-",
+        "release-2026-11-16.",
+        "release-2026-11-1",
+        "release-202X-11-16",
+        "untagged-abc",
+    ] {
+        if canary::watch::is_release_tag(tag) {
+            accepted += 1;
+            assert!(
+                matches_iam(tag),
+                "the crate calls {tag:?} a release but no IAM ref pattern admits it, so its \
+                 leg would build and then be denied its datapoint"
+            );
+        }
+    }
+    assert!(
+        accepted >= 4,
+        "only {accepted} of the samples were accepted, so this proved almost nothing"
+    );
+
+    // The known slack, asserted so that closing it elsewhere does not go unnoticed: a bare
+    // trailing dot is inexpressible in the glob and is caught by the crate instead.
+    assert!(matches_iam("release-2026-11-16."));
+    assert!(!canary::watch::is_release_tag("release-2026-11-16."));
+}
+
+/// Escape one character for use in the tiny matcher below.
+fn regex_escape(c: char) -> String {
+    match c {
+        '.' | '+' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|' | '\\' => format!("\\{c}"),
+        other => other.to_string(),
+    }
+}
+
+/// Anchored match for a pattern built only of literals, `.` and `.*`.
+///
+/// Hand-rolled because this crate has no regex dependency and adding one to compare two glob
+/// dialects would be the larger change.
+fn regex_lite_match(expression: &str, value: &str) -> bool {
+    fn go(pattern: &[char], value: &[char]) -> bool {
+        match pattern.first() {
+            None => value.is_empty(),
+            Some('.') if pattern.get(1) == Some(&'*') => {
+                (0..=value.len()).any(|skip| go(&pattern[2..], &value[skip..]))
+            }
+            Some('.') => !value.is_empty() && go(&pattern[1..], &value[1..]),
+            Some('\\') => match (pattern.get(1), value.first()) {
+                (Some(literal), Some(head)) if literal == head => go(&pattern[2..], &value[1..]),
+                _ => false,
+            },
+            Some(literal) => match value.first() {
+                Some(head) if head == literal => go(&pattern[1..], &value[1..]),
+                _ => false,
+            },
+        }
+    }
+    let pattern: Vec<char> = expression.chars().collect();
+    let value: Vec<char> = value.chars().collect();
+    go(&pattern, &value)
+}
+
+/// A workflow that must not lose a queued dispatch has to say so, not rely on the default.
+///
+/// `cancel-in-progress: false` keeps the run in flight, which is only half of it: GitHub's default
+/// `queue: single` keeps one *pending* run per group and cancels it when a third arrives. A
+/// cancelled run's legs die mid-flight, emit no datapoint and leave no report, so they arrive in
+/// the record as `unreported` — the signal reserved for a leg that died of a defect in the canary.
+/// Relying on the default therefore manufactures the very thing `cancel-in-progress: false` was set
+/// to avoid.
+#[test]
+fn a_workflow_that_refuses_to_cancel_also_refuses_to_drop_a_queued_run() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        let Some(concurrency) = wf.get("concurrency") else {
+            continue;
+        };
+        if concurrency
+            .get("cancel-in-progress")
+            .and_then(Value::as_bool)
+            != Some(false)
+        {
+            continue;
+        }
+        assert_eq!(
+            concurrency.get("queue").and_then(Value::as_str),
+            Some("max"),
+            "{name}.yml keeps its running job but leaves `queue` at the default, so a third \
+             dispatch cancels the pending one and its legs arrive as `unreported`"
+        );
+    }
+}
+
+/// A conditional job that keys on `needs.<job>.result` has to call a status-check function.
+///
+/// GitHub applies an implicit `success()` to any `if:` that calls none, and that `success()` covers
+/// every job in `needs`. So a condition written to handle a failed upstream job is never evaluated
+/// when that job fails: GitHub skips the job before the expression runs. The symptom is a tier that
+/// quietly does not happen, which is the failure shape this whole file is about.
+///
+/// It is the floor tier that this bites. Its own comment says it must run when the dispatch tier
+/// failed, `an_arming_failure_does_not_stop_the_release_being_checked` requires the same of an
+/// arming failure, and arming fails deliberately when the paging chain is incomplete — so
+/// without a status-check function, saying "this release cannot page" would also stop it being
+/// checked for a day.
+#[test]
+fn a_condition_that_handles_a_failed_job_calls_a_status_function() {
+    const STATUS_FUNCTIONS: &[&str] = &["always()", "cancelled()", "failure()", "success()"];
+
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let Some(condition) = job.get("if").and_then(Value::as_str) else {
+                continue;
+            };
+            if !condition.contains("needs.") || !condition.contains(".result") {
+                continue;
+            }
+            assert!(
+                STATUS_FUNCTIONS.iter().any(|f| condition.contains(f)),
+                "{name}.yml job {job_name} keys on an upstream job's result without calling a \
+                 status-check function, so GitHub's implicit success() skips it whenever any job \
+                 in `needs` fails -- including the case the condition was written for: \
+                 {condition:?}"
+            );
+        }
+    }
+}
+
+/// A newer release has to stop the old watch dispatching, and has to do it before the hour is
+/// slept.
+///
+/// The concurrency group is keyed on the tag, so two releases hours apart run two watches side by
+/// side and the group does nothing across them. Without this check the abandoned watch dispatches
+/// its full matrix every hour for the rest of the day, and each of those runs then sits in the run
+/// listing as a candidate baseline for the *new* release's floor gate while containing no verdicts
+/// at all — which would make the new release's standing reds look like news.
+#[test]
+fn the_floor_tier_stops_when_a_newer_release_arrives() {
+    let wf = load("post-publish-watch");
+    let floor = jobs(&wf)
+        .get("floor-tier")
+        .copied()
+        .expect("a floor tier job");
+    let steps = steps(floor);
+
+    let position = |needle: &str| {
+        steps
+            .iter()
+            .position(|s| step_name(s).to_lowercase().contains(needle))
+            .unwrap_or_else(|| panic!("the floor tier must have a step matching {needle:?}"))
+    };
+    let check = position("superseded");
+    let sleep = position("wait out the hour");
+    let dispatch = position("dispatch this hour");
+
+    assert!(
+        check < sleep,
+        "the check belongs before the sleep, or an abandoned watch spends an hour per remaining \
+         hour discovering it has nothing to do"
+    );
+
+    // Both of the steps that cost something have to be gated on the answer.
+    for step in [sleep, dispatch] {
+        let condition = steps[step].get("if").and_then(Value::as_str).unwrap_or("");
+        assert!(
+            condition.contains("superseded"),
+            "{:?} is not gated on the supersession check: {condition:?}",
+            step_name(steps[step])
+        );
+    }
+
+    // And the dispatch asks again, because the release can land during the hour it just slept.
+    let script = steps[dispatch]
+        .get("run")
+        .and_then(Value::as_str)
+        .expect("the dispatch step runs a script");
+    assert!(
+        script.contains("superseded --tag"),
+        "the dispatch step must re-check after the sleep"
+    );
+}
+
+/// Merging must not arm the canary. The orchestrator triggers on a release tag, so without a gate
+/// landing the file would start a 24-hour, full-matrix watch on the next release — before the
+/// report-only window that exists to measure its false-positive rate has ever run.
+#[test]
+fn the_orchestrator_is_armed_by_a_variable_and_not_by_merging() {
+    let wf = load("post-publish-watch");
+    assert!(
+        triggers(&wf).contains(&"push".to_string()),
+        "the orchestrator is expected to trigger on a release tag"
+    );
+
+    let jobs = jobs(&wf);
+
+    // Found rather than named, so restructuring the orchestrator cannot quietly move the gate off
+    // the entry point. Any job with no `needs` starts when the trigger fires.
+    let entry: Vec<&String> = jobs
+        .iter()
+        .filter(|(_, j)| j.get("needs").is_none())
+        .map(|(name, _)| name)
+        .collect();
+    assert!(!entry.is_empty(), "something must start the workflow");
+
+    for name in &entry {
+        let condition = jobs[*name]
+            .get("if")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("entry job {name} must be conditional"));
+        assert!(
+            condition.contains("vars.BUILD_CANARY_ENABLED"),
+            "entry job {name} is not gated on the arming variable: {condition:?}"
+        );
+    }
+
+    // And every other job must key on something upstream, so that an entry job skipped for being
+    // unarmed cannot leave a later tier running on its own.
+    for (name, job) in &jobs {
+        if entry.contains(&name) {
+            continue;
+        }
+        let condition = job
+            .get("if")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{name} must be conditional"));
+        assert!(
+            condition.contains("needs."),
+            "{name} does not key on an upstream job: {condition:?}"
+        );
+    }
+}
+
+/// The alarm has to exist before any leg can report. A verdict that lands first is a datapoint on a
+/// series nothing is evaluating, which is silence where a page should be — so the arming job must
+/// be upstream of the dispatch tier, not beside it.
+#[test]
+fn the_alarm_is_armed_before_any_leg_runs() {
+    let wf = load("post-publish-watch");
+    let jobs = jobs(&wf);
+    let alarms = jobs.get("alarms").expect("an alarms job");
+    let dispatch = jobs.get("dispatch-tier").expect("a dispatch tier");
+
+    let needs = serde_yaml::to_string(
+        dispatch
+            .get("needs")
+            .expect("dispatch-tier needs something"),
+    )
+    .expect("serialisable");
+    assert!(
+        needs.contains("alarms"),
+        "the dispatch tier must wait for the alarm: needs = {needs}"
+    );
+
+    // And the arming job must read the alarm back rather than trusting the API call, because it is
+    // the one job whose own failure no alarm can report.
+    let text = raw("post-publish-watch");
+    assert!(
+        text.contains("describe-alarms --alarm-names"),
+        "the arming job must read the alarm back after creating it"
+    );
+
+    // Severity in reviewed code, not inside the secret, so that raising it is a reviewed edit
+    // rather than a secret rotation nobody sees. The value legitimately changes as the rollout
+    // proceeds — 3 while the canary finds its feet, then 2.5, then 2 once a false-positive rate
+    // has been measured — so what is asserted is that it is pinned and sane, not what it equals.
+    let severity = pinned_severity(&text);
+    assert!(
+        SANCTIONED_SEVERITIES.contains(&severity.as_str()),
+        "arming severity {severity:?} is not one of {SANCTIONED_SEVERITIES:?}; a typo here \
+         would cut tickets at a severity nobody chose"
+    );
+    assert!(
+        alarms.get("environment").and_then(Value::as_str) == Some("canary-orchestrator"),
+        "arming needs the orchestrator environment, since the alarm role is gated on it"
+    );
+}
+
+/// A break we rigged ourselves has to page on its own alarm, apart from a real one.
+///
+/// A ticket's dedupe key is the name of the alarm that cut it, and there is one alarm per series.
+/// So if a rigged leg and a real break shared an alarm, a genuine break landing during a test
+/// release would collapse into the test's ticket and become invisible — the exact failure this
+/// canary exists to prevent, reintroduced by the act of testing it.
+///
+/// This is the half that lives in YAML. The other half — that a rigged leg writes to a different
+/// series at all — is asserted in `metric`, and the two have to agree or the alarm watches a series
+/// nothing writes to, which looks identical to a release with nothing wrong.
+#[test]
+fn a_rigged_break_is_armed_apart_from_a_real_one() {
+    let text = raw("post-publish-watch");
+
+    let assigned = |var: &str| -> String {
+        let prefix = format!("{var}=");
+        let found: Vec<&str> = text
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix(&prefix))
+            .collect();
+        assert_eq!(found.len(), 1, "expected one {var}= line, found {found:?}");
+        found[0].trim_matches('"').to_string()
+    };
+    let real = assigned("ALARM");
+    let rigged = assigned("INDUCED_ALARM");
+
+    assert_ne!(
+        real, rigged,
+        "one alarm name means one dedupe key, so a real break would dedupe into the test's ticket"
+    );
+    for name in [&real, &rigged] {
+        // Per release, so a straggler from a superseded release lands on a series whose alarm has
+        // been deleted rather than paging about a release nobody is shipping.
+        assert!(
+            name.contains("${TAG}"),
+            "alarm name {name:?} is not per-release"
+        );
+    }
+
+    // The alarm role is scoped by name prefix, so an alarm outside it is denied at
+    // `put-metric-alarm` — which fails the arming job rather than failing quietly, but only after
+    // the prefix has been got wrong in the first place.
+    let delete_prefix = text
+        .split_whitespace()
+        .skip_while(|w| *w != "--alarm-name-prefix")
+        .nth(1)
+        .expect("the arming job deletes the previous release's alarms by prefix")
+        .to_string();
+    for name in [&real, &rigged] {
+        assert!(
+            name.starts_with(&delete_prefix),
+            "alarm {name:?} is outside {delete_prefix:?}, so it is neither permitted by the role \
+             nor cleaned up by the next release"
+        );
+    }
+
+    // Exactly two alarms are created, and they are those two.
+    let created: Vec<String> = text
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("--alarm-name "))
+        .map(|rest| rest.trim().trim_end_matches('\\').trim().to_string())
+        .collect();
+    assert_eq!(
+        created,
+        ["\"$ALARM\"", "\"$INDUCED_ALARM\""],
+        "both alarms must be created, and nothing else"
+    );
+
+    // One of them, and only one, watches the series a rigged leg writes to. The dimension name is
+    // the crate's, so the series the legs emit to and the series the alarm evaluates cannot drift
+    // apart silently.
+    let marker = format!("Name={},Value=true", canary::metric::INDUCED);
+    assert_eq!(
+        text.lines().filter(|l| l.contains(&marker)).count(),
+        1,
+        "exactly one alarm should carry {marker}"
+    );
+
+    // And its description has to say it is a test, because the description is all the responder
+    // sees. A deliberate ticket that reads like a real finding spends the responder's trust, and
+    // the next real one gets read as another drill.
+    let descriptions: Vec<&str> = text
+        .lines()
+        .filter(|l| l.trim().starts_with("--alarm-description "))
+        .collect();
+    assert_eq!(descriptions.len(), 2, "one description per alarm");
+    assert_eq!(
+        descriptions
+            .iter()
+            .filter(|d| d.contains("THIS IS A TEST"))
+            .count(),
+        1,
+        "the rigged alarm's description must announce itself, and the real one must not"
+    );
+}
+
+/// One `aws cloudwatch put-metric-alarm` invocation, as the flags that decide what it watches.
+struct AlarmCommand {
+    namespace: String,
+    metric_name: String,
+    /// The `Name=…,Value=…` arguments, in order, with shell quoting removed.
+    dimensions: Vec<String>,
+}
+
+/// Split a command into arguments, keeping double-quoted arguments whole.
+///
+/// Enough of a shell for the arming step and no more: the only quoting it uses is `"…"` around
+/// dimension arguments, which must survive as single arguments because that is what makes each one
+/// a dimension rather than two.
+fn arguments(command: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    let mut started = false;
+    for c in command.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if started {
+                    args.push(std::mem::take(&mut current));
+                    started = false;
+                }
+            }
+            c => {
+                current.push(c);
+                started = true;
+            }
+        }
+    }
+    if started {
+        args.push(current);
+    }
+    args
+}
+
+/// Every `put-metric-alarm` invocation in a workflow, read out of the shipped YAML.
+///
+/// Reads the file rather than a copy of it, because the whole point is that these flags are a third
+/// copy of something the crate also declares.
+fn alarm_commands(text: &str) -> Vec<AlarmCommand> {
+    let mut commands = Vec::new();
+    let mut lines = text.lines();
+    while let Some(first) = lines.next() {
+        // The invocation itself, not a comment mentioning it: the arming step's prose refers to
+        // `put-metric-alarm` too, and a prose line carries no flags to parse. The trailing space
+        // keeps this off `put_alarm() {`, the wrapper's own definition.
+        if !first.trim_start().starts_with("put_alarm ") {
+            continue;
+        }
+        // Backslash-continued: take lines until one does not end in a backslash.
+        let mut whole = String::new();
+        let mut line = first.to_string();
+        loop {
+            let trimmed = line.trim_end();
+            let continues = trimmed.ends_with('\\');
+            whole.push(' ');
+            whole.push_str(trimmed.trim_end_matches('\\').trim());
+            if !continues {
+                break;
+            }
+            match lines.next() {
+                Some(next) => line = next.to_string(),
+                None => break,
+            }
+        }
+
+        let args = arguments(&whole);
+        let value_of = |flag: &str| -> String {
+            let at = args
+                .iter()
+                .position(|a| a == flag)
+                .unwrap_or_else(|| panic!("{flag} is missing from {whole:?}"));
+            args.get(at + 1)
+                .unwrap_or_else(|| panic!("{flag} has no value in {whole:?}"))
+                .clone()
+        };
+        let dimensions = {
+            let at = args
+                .iter()
+                .position(|a| a == "--dimensions")
+                .unwrap_or_else(|| panic!("--dimensions is missing from {whole:?}"));
+            args[at + 1..]
+                .iter()
+                .take_while(|a| !a.starts_with("--"))
+                .cloned()
+                .collect()
+        };
+        commands.push(AlarmCommand {
+            namespace: value_of("--namespace"),
+            metric_name: value_of("--metric-name"),
+            dimensions,
+        });
+    }
+    commands
+}
+
+/// Each alarm must watch the series a red leg actually writes.
+///
+/// The namespace, the metric name and the dimension set all exist twice: in this crate, and in the
+/// arming step's `put-metric-alarm` flags. The namespace exists a third time in the CDK stack, and
+/// a test in `metric.rs` checks those two agree; the `Induced` dimension name is already taken from
+/// the crate's constant. Nothing else checks the arming step's copy, and a mismatch there is
+/// the quietest failure available to this canary: the legs emit, the alarm sits at `OK` for the
+/// whole release, every job is green, and nothing pages. CloudWatch matches dimensions exactly, so
+/// one dimension too many on the alarmed datapoint is enough to cause it.
+///
+/// The expectation is *generated* by the code the legs use, with the release tag passed in as the
+/// same `${TAG}` the workflow substitutes — so what is compared is the real datapoint shape against
+/// the real arming flags, not two literals written next to each other.
+#[test]
+fn the_alarms_watch_the_series_a_red_leg_writes() {
+    use canary::metric;
+
+    let kept = canary::toolchain::resolve(
+        canary::toolchain::Version::new(1, 94, 1),
+        canary::toolchain::Version::new(1, 86, 0),
+    )
+    .expect("the toolchain span should resolve")
+    .kept;
+    let legs = canary::scenarios::legs(&kept);
+    let leg = legs.first().expect("the release matrix has legs").clone();
+    let mut rigged = leg.clone();
+    rigged.induced = Some("a requirement moved on purpose".to_string());
+
+    // The alarmed datapoint is the one carrying the fewest dimensions; the other is the diagnosis
+    // copy, which deliberately has more and which no alarm watches.
+    let alarmed = |l: &canary::scenarios::Leg| -> metric::Datapoint {
+        let written = metric::datapoints("${TAG}", l, Some(canary::classify::Verdict::CompileFail));
+        assert_eq!(
+            written.len(),
+            2,
+            "a red leg writes an alarmed and a diagnosis datapoint"
+        );
+        let fewest = written
+            .iter()
+            .min_by_key(|d| d.dimensions.len())
+            .expect("datapoints")
+            .clone();
+        let most = written
+            .iter()
+            .max_by_key(|d| d.dimensions.len())
+            .expect("datapoints");
+        assert!(
+            most.dimensions.len() > fewest.dimensions.len(),
+            "the diagnosis datapoint must be distinguishable from the alarmed one"
+        );
+        fewest
+    };
+
+    let expected = [alarmed(&leg), alarmed(&rigged)];
+    let armed = alarm_commands(&raw("post-publish-watch"));
+    assert_eq!(
+        armed.len(),
+        2,
+        "one alarm for a real break and one for a rigged one"
+    );
+
+    for (command, want) in armed.iter().zip(expected.iter()) {
+        assert_eq!(
+            command.namespace,
+            metric::NAMESPACE,
+            "the alarm watches a namespace the legs do not write to, so it can never fire"
+        );
+        assert_eq!(
+            command.metric_name,
+            metric::METRIC_NAME,
+            "the alarm watches a metric the legs do not write, so it can never fire"
+        );
+        let want: Vec<String> = want
+            .dimensions
+            .iter()
+            .map(|d| format!("Name={},Value={}", d.name, d.value))
+            .collect();
+        assert_eq!(
+            command.dimensions, want,
+            "the alarm's dimensions differ from the ones a red leg writes; CloudWatch matches the \
+             set exactly, so this alarm would never see the datapoint"
+        );
+    }
+}
+
+/// Overlapping dispatches must queue, never cancel.
+///
+/// Two ticks that dispatch different manifest sets land in different concurrency groups and run
+/// side by side. The case this pins down is a repeated dispatch of the *same* set, where
+/// `cancel-in-progress` decides between two outcomes that are not symmetric. Queued, the second run
+/// starts late and still reports every leg. Cancelled, the first run's legs die mid-flight: they
+/// emit no datapoint and leave no report, so they arrive in the record as `unreported` — which is
+/// the signal reserved for a leg that died silently, and is how a deliberate cancellation would get
+/// filed as a defect in the canary.
+///
+/// Asserted because the setting is one word, and the difference between its two values is invisible
+/// until ticks actually overlap.
+#[test]
+fn a_repeated_dispatch_queues_rather_than_cancelling_its_predecessor() {
+    let wf = load("build-canary");
+    let concurrency = wf
+        .get("concurrency")
+        .expect("the leg workflow must bound its own concurrency");
+
+    assert_eq!(
+        concurrency
+            .get("cancel-in-progress")
+            .and_then(Value::as_bool),
+        Some(false),
+        "cancelling in flight turns a leg that was deliberately superseded into a leg that looks \
+         like it died silently"
+    );
+
+    // And the group has to carry the scenario, or two ticks dispatching *different* sets would
+    // serialise behind each other for no reason.
+    let group = concurrency
+        .get("group")
+        .and_then(Value::as_str)
+        .expect("a concurrency group");
+    assert!(
+        group.contains("inputs.scenario"),
+        "the group must be per scenario set, or unrelated dispatches block each other: {group:?}"
+    );
+    assert!(
+        group.contains("inputs.tag"),
+        "and per release, or one release's dispatches would queue behind another's: {group:?}"
+    );
+}
+
+/// The floor hour's gate has to be able to see the previous release, and to run at all.
+///
+/// Two ways this degrades silently rather than breaking loudly, both of which have to be ruled out
+/// in YAML because neither is visible from the Rust side.
+///
+/// Scoping the run listing to this release's tag with `--branch "$TAG"` makes the baseline
+/// permanently unfindable. The gate then treats every red leg as news, on every release, with
+/// nothing to show that anything is wrong.
+///
+/// And the gate is a command in this crate rather than a shell one-liner, because deciding from the
+/// verdicts in two runs is not something to trust to `jq`. That needs a checkout and a toolchain in
+/// a job whose only other steps are a sleep and an API call, so their absence would fail every floor
+/// hour on the first real release and nowhere earlier.
+#[test]
+fn the_floor_gate_can_see_the_previous_release_and_can_run() {
+    let wf = load("post-publish-watch");
+    let job = jobs(&wf).get("floor-tier").copied().expect("a floor tier");
+    let all_steps = steps(job);
+
+    assert!(
+        all_steps
+            .iter()
+            .any(|s| s.get("uses").and_then(Value::as_str) == Some("actions/checkout@v4")),
+        "the gate runs a command from this repository, so the job has to check it out"
+    );
+    assert!(
+        all_steps.iter().any(|s| s
+            .get("uses")
+            .and_then(Value::as_str)
+            .is_some_and(|u| u.contains("rust-toolchain"))),
+        "and it needs a toolchain to build it"
+    );
+
+    let gate = all_steps
+        .iter()
+        .filter_map(|s| s.get("run").and_then(Value::as_str))
+        .find(|r| r.contains("floor-gate"))
+        .expect("the floor hour must decide with `floor-gate`");
+
+    // The listing has to span releases, so it must not be narrowed to this one.
+    let listing_line = gate
+        .lines()
+        .find(|l| l.contains("gh run list"))
+        .expect("the gate lists runs");
+    let listing_block: String = gate
+        .lines()
+        .skip_while(|l| !l.contains("gh run list"))
+        .take(3)
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        !listing_block.contains("--branch"),
+        "scoping the listing to this tag makes the previous release unfindable, which silently \
+         restores the rule this replaced: {listing_line:?}"
+    );
+
+    // And the decision must come from the verdicts, never from a run's conclusion, so that an
+    // infrastructure failure cannot stop the window.
+    assert!(
+        !gate.contains("conclusion'] == 'failure'") && !gate.contains("conclusion\"] == \"failure"),
+        "the gate must not read a run's conclusion: {gate}"
+    );
+}
+
+/// A release that nothing checked has to be reported, and before anything that can fail.
+///
+/// This is the one condition no verdict exists for -- no leg reported, so the alarm sees nothing
+/// and the per-leg "no report" warning cannot fire either -- which leaves the record job as the
+/// only thing positioned to notice it. Its datapoint is therefore the single signal a human ever
+/// gets, so it is written while the role is held and before the artifact upload, rather than after
+/// a step that could fail first.
+#[test]
+fn an_unchecked_release_is_reported_before_anything_that_can_fail() {
+    let wf = load("post-publish-watch");
+    let job = jobs(&wf).get("record").copied().expect("a record job");
+    let names: Vec<String> = steps(job)
+        .iter()
+        .map(|s| step_name(s).to_string())
+        .collect();
+    let at = |needle: &str| -> usize {
+        names
+            .iter()
+            .position(|n| n.contains(needle))
+            .unwrap_or_else(|| panic!("no step containing {needle:?} in {names:?}"))
+    };
+    let assume = at("Assume the orchestrator role");
+    let emit = at("never checked");
+    let artifact = at("Keep the record as an artifact");
+    assert!(
+        assume < emit,
+        "the role must be held when the datapoint is written: {names:?}"
+    );
+    assert!(
+        emit < artifact,
+        "an unchecked release must be reported before any step that could fail first: {names:?}"
+    );
+}
+
+/// The orchestrator's own tag check must accept exactly what the roles accept.
+///
+/// The roles are conditioned on `RELEASE_REFS`, so a tag outside it can reach this workflow but
+/// cannot assume anything. Checking the same shape here turns that into one clear error instead of
+/// a credentials failure three steps later, and keeps the two definitions from drifting apart.
+#[test]
+fn the_tag_check_accepts_exactly_what_the_roles_accept() {
+    let text = raw("post-publish-watch");
+
+    // The accepting arm of the `case`: patterns joined by `|`, ending in `) ;;`.
+    let arms: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("release-") && l.ends_with(") ;;"))
+        .collect();
+    assert_eq!(arms.len(), 1, "expected one accepting arm, found {arms:?}");
+    let mut accepted: Vec<String> = arms[0]
+        .trim_end_matches(") ;;")
+        .split('|')
+        .map(|p| p.trim().to_string())
+        .collect();
+    accepted.sort();
+
+    let mut expected = release_tag_patterns_from_the_cdk();
+    expected.sort();
+
+    assert_eq!(
+        accepted, expected,
+        "the shell check and the roles disagree on what a release tag looks like"
+    );
+}
+
+/// An arming failure must not stop the release being checked. Checking without being able to page
+/// still beats not checking, and the arming failure is loud in its own job. What the dispatch tier
+/// does need is to know *which* release.
+#[test]
+fn an_arming_failure_does_not_stop_the_release_being_checked() {
+    let wf = load("post-publish-watch");
+    let condition = jobs(&wf)
+        .get("dispatch-tier")
+        .expect("a dispatch tier")
+        .get("if")
+        .and_then(Value::as_str)
+        .expect("conditional");
+
+    assert!(
+        condition.contains("always()"),
+        "the dispatch tier must run even when arming failed: {condition:?}"
+    );
+    assert!(
+        condition.contains("needs.alarms.outputs.tag != ''"),
+        "but only when the release is identified: {condition:?}"
+    );
+    // Specifically *not* keyed on the arming job's success.
+    assert!(
+        !condition.contains("needs.alarms.result == 'success'"),
+        "keying on arming success would trade a day of checking for a paging gap: {condition:?}"
+    );
+}
+
+/// The tag is resolved once and read everywhere else. Two independent `case` statements would be
+/// two things to keep in step, and the one that drifted would watch the wrong release.
+#[test]
+fn the_release_tag_has_a_single_source() {
+    let text = raw("post-publish-watch");
+    // The error's title rather than its wording, which `the_tag_check_accepts_exactly_what_the_
+    // roles_accept` is free to change.
+    assert_eq!(
+        text.matches("title=Not a release tag").count(),
+        1,
+        "the tag should be validated in exactly one place"
+    );
+    // A job cannot reference its own `needs`, so the producing job must use its own step output.
+    assert!(
+        text.contains("TAG: ${{ steps.resolve.outputs.tag }}"),
+        "the arming job must read its own resolved tag"
+    );
+}
+
+/// The floor tier is 24 hourly cycles. As a matrix, "one at a time" is the only thing making it
+/// hourly rather than 24 simultaneous dispatches, and a gap in the hours would silently shorten the
+/// window.
+#[test]
+fn the_floor_tier_is_twenty_four_cycles_run_one_at_a_time() {
+    let wf = load("post-publish-watch");
+    let floor = jobs(&wf)
+        .get("floor-tier")
+        .copied()
+        .expect("a floor tier job");
+    let strategy = floor.get("strategy").expect("a matrix strategy");
+
+    let hours: Vec<u64> = strategy
+        .get("matrix")
+        .and_then(|m| m.get("hour"))
+        .and_then(Value::as_sequence)
+        .expect("an hour matrix")
+        .iter()
+        .map(|h| h.as_u64().expect("an hour number"))
+        .collect();
+    assert_eq!(
+        hours,
+        (1..=24).collect::<Vec<u64>>(),
+        "the floor tier must cover hours 1..24 with no gaps"
+    );
+
+    assert_eq!(
+        strategy.get("max-parallel").and_then(Value::as_u64),
+        Some(1),
+        "without max-parallel 1 the hours run at once and the tier is not hourly at all"
+    );
+    // One hour failing for its own reasons says nothing about the next, and cancelling the
+    // remaining 23 would turn a single transient into a lost day of checking.
+    assert_eq!(
+        strategy.get("fail-fast").and_then(Value::as_bool),
+        Some(false),
+        "fail-fast would let one bad hour cancel the rest of the window"
+    );
+
+    let timeout = floor
+        .get("timeout-minutes")
+        .and_then(Value::as_u64)
+        .expect("a timeout");
+    assert!(
+        timeout > 60,
+        "an hour-long sleep needs a timeout above 60 minutes, got {timeout}"
+    );
+}
+
+/// The self-test exists to cut tickets nobody asked for. Cutting high-severity tickets
+/// unnecessarily gets an application's ticketing access revoked, so the severity is pinned in
+/// reviewed code and must not be selectable at dispatch time.
+#[test]
+fn the_self_test_pins_its_severity_and_runs_only_by_hand() {
+    let text = raw("paging-selftest");
+
+    // Pinned, not chosen at dispatch time. Cutting high-severity tickets unnecessarily gets an
+    // application's ticketing access revoked, so this should be a reviewed edit rather than a
+    // dropdown choice made at 2am.
+    assert!(
+        !text.contains("inputs.severity"),
+        "severity must not be a dispatch input"
+    );
+    let severity = pinned_severity(&text);
+
+    // The value may change as the rollout proceeds, but never to 2 here. A full Sev2 pages
+    // immediately at any hour, and this workflow exists to cut tickets nobody asked for --
+    // repeatedly, by hand. 2 is correct for the canary once it has earned it; it is never correct
+    // for the self-test.
+    assert_ne!(
+        severity, "2",
+        "the self-test must never cut a full Sev2: it pages immediately and these tickets are fake"
+    );
+    assert!(
+        SANCTIONED_SEVERITIES.contains(&severity.as_str()),
+        "severity {severity:?} is not one of {SANCTIONED_SEVERITIES:?}"
+    );
+
+    let wf = load("paging-selftest");
+    assert_eq!(
+        triggers(&wf),
+        ["workflow_dispatch"],
+        "the self-test must never be triggered automatically"
+    );
+}
+
+/// The template's placeholders must be required to be *present* before substitution. Checking only
+/// for leftovers afterwards passes trivially for a template that hardcoded a value: the
+/// substitution is a no-op and nothing remains. A hardcoded severity would then defeat the pin
+/// above, and a hardcoded dedupe key would collapse every session into one ticket.
+#[test]
+fn the_self_test_requires_both_arn_placeholders_before_substituting() {
+    let text = raw("paging-selftest");
+    for placeholder in ["{severity}", "{dedupe}"] {
+        assert!(
+            text.contains(placeholder),
+            "the ARN template substitution must handle {placeholder}"
+        );
+    }
+    assert!(
+        text.contains("must contain ${PLACEHOLDER}"),
+        "the self-test must refuse a template that is missing a placeholder, \
+         not merely one with leftovers"
+    );
+}
+
+/// The two credential steps are mutually exclusive, so exactly one runs.
+///
+/// `fire` writes a datapoint and every other action manages the alarm. Both halves need the
+/// orchestrator role, which carries both permissions, so overlapping conditions would take the
+/// credential twice in one run for no reason and a gap would leave an action with none.
+#[test]
+fn the_self_test_takes_its_credential_exactly_once() {
+    let wf = load("paging-selftest");
+    let job = jobs(&wf).get("selftest").copied().expect("a selftest job");
+
+    let condition_for = |name: &str| -> String {
+        steps(job)
+            .iter()
+            .find(|s| step_name(s) == name)
+            .unwrap_or_else(|| panic!("expected a {name:?} step"))
+            .get("if")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{name:?} must be conditional"))
+            .to_string()
+    };
+
+    let metrics = condition_for("Assume the orchestrator role to write a datapoint");
+    let alarms = condition_for("Assume the orchestrator role to manage the alarm");
+    assert!(
+        metrics.contains("== 'fire'"),
+        "only `fire` writes a datapoint, so only it should take that credential: {metrics:?}"
+    );
+    assert!(
+        alarms.contains("!= 'fire'"),
+        "every action but `fire` manages the alarm: {alarms:?}"
+    );
+}
+
+/// Every AWS step must be skipped when its secret is absent, so the whole thing is inert before the
+/// stack is deployed rather than failing on an empty `role-to-assume`.
+#[test]
+fn aws_steps_are_skipped_when_unconfigured() {
+    let wf = load("build-canary");
+    let leg = jobs(&wf).get("leg").copied().expect("a leg job");
+    for name in ["Assume the metrics role", "Record the verdict"] {
+        let condition = steps(leg)
+            .iter()
+            .find(|s| step_name(s) == name)
+            .unwrap_or_else(|| panic!("expected a {name:?} step"))
+            .get("if")
+            .and_then(Value::as_str)
+            .unwrap_or_else(|| panic!("{name:?} must be conditional"));
+        assert!(
+            condition.contains("steps.metrics.outputs.configured == 'true'"),
+            "{name:?} is not gated on the metrics role being configured: {condition:?}"
+        );
+    }
+}
+
+/// A leg has to report before GitHub kills its job, or it emits nothing at all — and an absent
+/// datapoint cannot raise an alarm, which is worse than a red one.
+///
+/// Room for the budget alone is not enough. The leg's clock starts inside `run-leg`, after the
+/// checkout, the toolchain and the musl target, and six more steps run after it — so the job needs
+/// `BUDGET` plus `JOB_MARGIN`, which is what the 14 minutes is. Any less and a hung command is
+/// killed mid-flight: no report, no datapoint, and the leg arrives in `unreported` — the bucket
+/// meaning the canary broke — for a release that was in fact hanging.
+///
+/// In seconds throughout. `BUDGET.as_secs() / 60` truncates, so a budget of 12½ minutes would be
+/// compared as 12 and thirty seconds of the thing under test would vanish. The values are whole
+/// minutes today; the arithmetic should not depend on that staying true.
+#[test]
+fn a_leg_job_outlives_the_legs_own_budget() {
+    let wf = load("build-canary");
+    let leg = jobs(&wf).get("leg").copied().expect("a leg job");
+    let job = leg
+        .get("timeout-minutes")
+        .and_then(Value::as_u64)
+        .expect("a timeout")
+        * 60;
+    let budget = canary::leg::BUDGET.as_secs();
+    let margin = canary::leg::JOB_MARGIN.as_secs();
+
+    assert!(
+        job >= budget + margin,
+        "the job's {job}s does not leave the {margin}s the leg needs around its own {budget}s \
+         budget, so a hung command would be killed before reporting"
+    );
+
+    // And the margin has to be worth having. Satisfying the sum by shrinking it to nothing is the
+    // same defect in a different place. The floor is the measured pre-leg cost -- about 45 seconds
+    // on Windows -- doubled, because the six steps after `run-leg` end in an STS call and an
+    // artifact upload and nobody has timed those.
+    assert!(
+        margin >= 90,
+        "a {margin}s margin does not cover the measured 45s before the leg's clock starts plus \
+         six steps after it, ending in an STS call and an artifact upload"
+    );
+
+    // The job has to finish strictly inside the watcher's tick, not merely by it: a leg still
+    // running when the next tick fires can be re-dispatched alongside itself.
+    let tick = canary::watch::INTERVAL.as_secs();
+    assert!(
+        job < tick,
+        "the job's {job}s is not strictly inside the {tick}s dispatch tick"
+    );
+}
