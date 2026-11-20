@@ -31,7 +31,7 @@ Two cases stay regardless, neither of which signs a request or computes a checks
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
-**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. Today's floor selects the FIPS 4 module. To stay on it rather than moving to FIPS 5, bound your own requirement:
+**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. To stay on the FIPS 4 module today's floor selects, rather than moving to FIPS 5, bound your own requirement:
 
 ```toml
 aws-lc-rs = ">=1.18.1, <1.21.0"

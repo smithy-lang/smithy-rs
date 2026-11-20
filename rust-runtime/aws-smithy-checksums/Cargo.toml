@@ -63,9 +63,9 @@ sha2 = { version = "0.11", optional = true }
 # `default-features = false` so those features name the AWS-LC build rather than defaulting to the
 # non-FIPS one.
 #
-# Keep the floor in step with `aws-sigv4`'s. Cargo resolves one `aws-lc-rs` 1.x for the whole
-# graph, so they cannot drift apart at build time, but the declared requirements should still
-# agree. See that crate's Cargo.toml for why this version.
+# Keep the floor in step with `aws-sigv4`'s, and like it declare no upper bound. Cargo resolves one
+# `aws-lc-rs` 1.x for the whole graph, so the two cannot drift apart at build time, but the
+# declared requirements should still agree. See that crate's Cargo.toml for why this version.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 
 [dev-dependencies]
