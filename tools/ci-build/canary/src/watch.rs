@@ -679,9 +679,8 @@ mod tests {
     use super::*;
     use crate::test_support::tempdir;
 
-    /// Counting by title is what makes the confirmation precise. The floor tier dispatches
-    /// `scenario=all` every hour against the same tag, so counting every run would let its arrival
-    /// mask a dropped dispatch of ours.
+    /// Only runs bearing our title count, so the floor tier's hourly `scenario=all` runs cannot
+    /// mask a dropped dispatch.
     #[test]
     fn a_dispatch_is_confirmed_by_the_title_of_the_run_it_creates() {
         let listing = r#"[
@@ -708,9 +707,8 @@ mod tests {
         assert_eq!(runs_with_title("[]", &ours).unwrap(), 0);
     }
 
-    /// Zero is the signal for "the dispatch did not land", so it must not also be what an
-    /// unreadable listing produces — that would turn a `gh` problem into a false report that a
-    /// release went unchecked.
+    /// Zero is reserved for "the dispatch did not land", so an unreadable listing must not
+    /// produce it.
     #[test]
     fn an_unreadable_run_listing_is_an_error_rather_than_a_zero() {
         for bad in ["", "not json", "{\"runs\":[]}", "null"] {
@@ -996,9 +994,8 @@ mod tests {
         assert_eq!(d.calls[1], ["manifest-1"]);
     }
 
-    /// A manifest that will not resolve must still get legs, so that `RESOLVE_FAIL` is reported by
-    /// the thing that knows how to report it. Treating it as "unchanged" would silence the verdict
-    /// that says consumers cannot resolve the release at all.
+    /// A manifest that will not resolve must still get legs: `RESOLVE_FAIL` is the leg's verdict
+    /// to report.
     #[test]
     fn a_manifest_that_does_not_resolve_is_still_dispatched() {
         let dir = tempdir("watch-broken");

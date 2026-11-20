@@ -61,7 +61,7 @@ use crate::scenarios::Leg;
 ///
 /// Must equal `METRIC_NAMESPACE` in the CDK stack, which conditions the metrics role on it:
 /// `PutMetricData` takes no resource-level permissions, so the namespace is the only lever inside
-/// the call. [`tests::the_namespace_matches_the_cdk_stack`] checks the two agree.
+/// the call. `the_namespace_matches_the_cdk_stack` checks the two agree.
 ///
 /// A disagreement is denied by that condition, so the verdict is never recorded — and a verdict
 /// that was never recorded cannot raise an alarm, which is silence where a page should have been.
@@ -370,9 +370,7 @@ mod tests {
         }
     }
 
-    /// The rule that keeps an absent datapoint meaningful. A green leg writing `0` would make
-    /// "nothing arrived" indistinguishable from "it passed", and "nothing arrived" is the signature
-    /// of a leg that died without reporting.
+    /// The rule that keeps an absent datapoint meaningful.
     #[test]
     fn a_green_leg_writes_nothing() {
         let mut e = FakeEmitter::default();
@@ -552,10 +550,8 @@ mod tests {
         }
     }
 
-    /// A ticket's dedupe key comes from its alarm, and there is one alarm per series, so if a
-    /// rigged leg wrote to `Red {Tag}` then a real break landing in the same release would
-    /// collapse into the test's ticket and disappear — the exact failure the canary exists to
-    /// prevent, reintroduced by the act of testing it.
+    /// The separation [`datapoints`] documents, asserted: a rigged leg's alarmed series must
+    /// differ from a real break's.
     #[test]
     fn a_rigged_leg_pages_on_its_own_series() {
         let real = datapoints(
@@ -600,9 +596,7 @@ mod tests {
         );
     }
 
-    /// The marker says `true`, never the reason. A dimension value is part of a series identity, so
-    /// carrying prose that gets reworded between releases would start a new series each time — and
-    /// an alarm armed against the old one would then watch nothing.
+    /// The marker says `true`, never the reason, so rewording cannot start a new series.
     #[test]
     fn the_marker_does_not_carry_the_reason() {
         let a = datapoints(

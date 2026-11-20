@@ -383,16 +383,9 @@ mod tests {
          "createdAt":"2026-11-09T08:00:00Z"}
     ]"#;
 
-    /// A release landing mid-window must not hand the next release a baseline that built nothing.
-    ///
-    /// The earlier release's floor tier keeps completing runs after the newer tag appears. Their
-    /// legs all exit `superseded` — no verdict, exit 0 — so the run concludes `success` with
-    /// nothing red in it, and on time alone it would be the newest usable run from another
-    /// release. As a baseline it makes every standing red leg look like news, and the window stops
-    /// after an hour.
-    ///
-    /// Releases land within a day of each other about one time in eight, so this is the ordinary
-    /// case rather than a corner.
+    /// A release landing mid-window must not hand the next release a baseline that built nothing;
+    /// [`newest_floor_runs`] has the reason. This asserts that the previous release's real run
+    /// wins over its superseded one.
     #[test]
     fn a_superseded_run_from_the_previous_release_is_not_the_baseline() {
         // 11-11 is ours, first dispatched at 10:00. 11-10's 09:00 run predates that and is real;

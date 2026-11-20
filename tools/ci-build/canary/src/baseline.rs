@@ -218,12 +218,8 @@ impl fmt::Display for ResolveFailure {
     }
 }
 
-/// The stored form of a failure: the tick it happened on, then the error.
-///
-/// The tick number is load-bearing rather than decorative. It is what lets a record be left behind
-/// when a manifest recovers: suppression requires the stored tick to be the one immediately before
-/// the current one, so there is nothing to clear on success and a failed write degrades to
-/// dispatching rather than to skipping.
+/// The stored form of a failure: the tick it happened on, then the error. See [`gate_failure`] for
+/// what the tick is for.
 fn encode_failure(tick: u32, error: &str) -> String {
     format!("{tick}\n{error}")
 }

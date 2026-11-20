@@ -12,11 +12,8 @@
 //! This folds them into a single object: the red legs with their diagnoses, and the legs that
 //! reported nothing.
 //!
-//! It is kept 14 days, as an artifact. A durable archive outliving that is deferred. Artifacts and
-//! logs are kept 90 days by default, and since October 2026 that retention covers the workflow
-//! *runs* themselves, so three months after a release broke there is nothing left to count — but
-//! "how often does this happen, and to what" is a historical question rather than the one this
-//! canary exists for, and answering it cost a bucket and a third repository secret.
+//! It is kept 14 days, as an artifact. A durable archive is deferred, so this answers "what broke
+//! in this release" and not "how often does this happen".
 //!
 //! This is not about keeping the diagnosis private. The job log is public and carries it already,
 //! for as long as the log exists.

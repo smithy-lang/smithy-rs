@@ -37,7 +37,7 @@ use serde::Serialize;
 /// This mirrors `CrateSet.ENTIRE_SMITHY_RUNTIME` in `buildSrc/src/main/kotlin/CrateSet.kt`, which
 /// is the authoritative list — the same one `copyRuntimeCrates` assembles the release bundle from.
 /// It is duplicated here rather than parsed so that drift fails in CI, where
-/// [`tests::the_list_matches_crate_set_kt`] reads the Kotlin and compares, rather than failing at
+/// `the_list_matches_crate_set_kt` reads the Kotlin and compares, rather than failing at
 /// release time when the canary is the only thing watching.
 ///
 /// Deliberately absent: the six [`AWS_SDK_RUNTIME`] crates, which publish on the SDK's own train a
@@ -83,7 +83,7 @@ pub const ENTIRE_SMITHY_RUNTIME: &[&str] = &[
 /// The runtime crates that live in `aws/rust-runtime/` and publish on the SDK's own train.
 ///
 /// Mirrors `CrateSet.AWS_SDK_RUNTIME`, checked against it by
-/// [`tests::the_sdk_runtime_list_matches_crate_set_kt`].
+/// `the_sdk_runtime_list_matches_crate_set_kt`.
 ///
 /// These are deliberately *not* part of [`ENTIRE_SMITHY_RUNTIME`], because [`status`] must not wait
 /// for them: they arrive a median 39.6 hours after a smithy-rs release, which would hold the first

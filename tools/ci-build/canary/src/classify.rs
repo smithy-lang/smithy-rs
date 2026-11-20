@@ -608,8 +608,7 @@ mod tests {
         assert!(classify(&green(Step::Test, TEN_PASSED, true)).is_none());
     }
 
-    /// The false green this guards. `cargo test` exits 0 when it runs nothing, so if the body's
-    /// assertions stopped being rendered every client leg would report green having checked nothing.
+    /// The false green [`assertions_passed`] guards.
     #[test]
     fn a_green_run_phase_that_asserted_nothing_is_infra_not_green() {
         let nothing = "running 0 tests\n\
@@ -854,11 +853,8 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert!(!summary.contains("dns error"), "{summary}");
     }
 
-    /// The containment check for the timeout rule, and the reason it is decided before anything
-    /// reads the output. A `cargo build` killed mid-flight may already have emitted a perfectly
-    /// real-looking diagnostic — here an `E0308` — but it was killed, so the build never finished
-    /// and nothing about the published graph was established. Reading that diagnostic would page
-    /// about a break that was never shown to exist.
+    /// The containment check for the timeout rule: the same output, killed, must not be read as
+    /// the `E0308` it contains.
     #[test]
     fn a_killed_command_is_infra_even_when_it_emitted_a_diagnostic() {
         let mut o = outcome(Step::Build, COMPILE_ERROR_JSON, "");

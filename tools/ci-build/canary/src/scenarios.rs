@@ -580,7 +580,7 @@ pub fn release_legs(toolchains: &[Toolchain]) -> Vec<Leg> {
 /// Derived from the requirements rather than declared as a field, so the two cannot disagree. A
 /// manifest that names only crates from the test family can only be satisfied by that family, and
 /// one that names a real crate can only be satisfied by crates.io — there is no third possibility
-/// to encode, and [`tests::no_manifest_mixes_real_and_test_requirements`] is what keeps it that way.
+/// to encode, and `no_manifest_mixes_real_and_test_requirements` is what keeps it that way.
 pub fn uses_test_registry(scenario: &Scenario) -> bool {
     !scenario.deps.is_empty()
         && scenario

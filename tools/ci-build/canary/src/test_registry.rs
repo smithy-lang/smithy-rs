@@ -41,7 +41,7 @@
 //! every release about something nobody can act on, which is the same mistake as leaving a
 //! known-red row switched on.
 //!
-//! [`tests::the_committed_registry_resolves_to_one_major`] is what keeps that true.
+//! `the_committed_registry_resolves_to_one_major` is what keeps that true.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

@@ -603,13 +603,9 @@ pub fn run(leg: &Leg, exec: &mut dyn Exec, clock: &mut dyn Clock, budget: Durati
 mod tests {
     /// A killed command that left a child behind must not hold the leg open.
     ///
-    /// `kill` reaches cargo, not what cargo started. A hung test binary keeps the inherited write
-    /// end of these pipes, so the readers never see EOF — and a plain `join()` then waits for a
-    /// process the leg has no handle on, which is the unbounded wait the deadline exists to
-    /// prevent. The leg's budget was a number it could not honour.
-    ///
-    /// `bash -c 'sleep … & wait'` is that shape in miniature: killing bash leaves `sleep` holding
-    /// the pipe. Timed rather than asserted on output, because the symptom was duration.
+    /// `bash -c 'sleep … & wait'` is the shape [`RealExec::run`] guards against, in miniature:
+    /// killing bash leaves `sleep` holding the pipe. Timed rather than asserted on output, because
+    /// the symptom is duration.
     #[test]
     fn a_killed_command_that_leaves_a_child_behind_still_returns() {
         if std::process::Command::new("bash")
@@ -1191,10 +1187,7 @@ version = "0.2.12"
     /// The case the deadline exists for, against the real executor and a real hanging process.
     ///
     /// Everything else here uses a fake clock, which proves the retry arithmetic and nothing about
-    /// a command that never returns. This was `Command::output()` — it blocks until the child
-    /// exits, so a stalled network read meant the leg never came back, GitHub killed the job at
-    /// `timeout-minutes`, and a killed job runs no further steps and emits *nothing*. Silence is
-    /// worse than a red verdict, because an absent datapoint cannot raise an alarm.
+    /// a command that never returns.
     #[cfg(unix)]
     #[test]
     fn a_hanging_command_is_killed_and_reported_rather_than_waited_on() {
@@ -1455,8 +1448,6 @@ version = "0.2.12"
     /// live release: the rigged leg fails, the dispatched run concludes `failure`, and the floor
     /// tier reads that conclusion and skips every remaining hour.
     ///
-    /// The verdict itself is untouched — still reached, still reported, still emitted, still
-    /// ticketed. Only the stop decision changes.
     #[test]
     fn a_rigged_leg_never_stops_the_window_whatever_it_found() {
         for v in [
