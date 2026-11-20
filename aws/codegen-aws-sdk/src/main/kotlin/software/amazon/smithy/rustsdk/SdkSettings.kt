@@ -37,10 +37,8 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
 
         if (awsSdk.getMember("includeLegacyClient").isPresent) {
             logger.warning(
-                "`includeLegacyClient` is now a no-op and you may remove it from your configuration. " +
-                    "The legacy hyper 0.14.x stack is reached through the non-default `legacy-https-client` " +
-                    "feature, which is opt-in either way, so generated crates no longer need a codegen setting " +
-                    "to keep it out of the default dependency tree.",
+                "`includeLegacyClient` is now a no-op and can be removed. The legacy hyper 0.14.x stack is " +
+                    "reached through the non-default `legacy-https-client` feature, which is opt-in either way.",
             )
         }
     }
