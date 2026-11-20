@@ -32,6 +32,7 @@ use crate::{
 };
 
 use super::{OperationShape, SchemaOperationShape, StreamingOperationShape};
+use crate::metrics::{Fault, ModeledOutcome, SuccessOutcome};
 use aws_smithy_schema::serde::SerializableStruct;
 use aws_smithy_types::body::SdkBody;
 
@@ -172,6 +173,7 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
+        let collecting_metrics = crate::metrics::collecting(&req);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let selected = match selected_operation::<Op>(&parts.extensions) {
@@ -247,10 +249,33 @@ where
                 }
             };
             match service.oneshot((input, extractors)).await {
-                Ok(output) => Ok(protocol.serialize_response(operation.output(), &output)),
-                Err(err) => Ok(protocol.serialize_error(&err)),
+                Ok(output) => {
+                    let mut response = protocol.serialize_response(operation.output(), &output);
+                    if collecting_metrics {
+                        ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
+                    }
+                    Ok(response)
+                }
+                Err(err) => {
+                    let mut response = protocol.serialize_error(&err);
+                    if collecting_metrics {
+                        mark_modeled_error(&mut response, &err);
+                    }
+                    Ok(response)
+                }
             }
         })
+    }
+}
+
+/// Marks a response serialized from a modeled error with the outcome its `@error` trait declares.
+fn mark_modeled_error<B>(response: &mut http::Response<B>, error: &dyn crate::schema::HttpModeledError) {
+    // Generated errors always declare `@error`: Smithy requires it on operation errors, and the
+    // schema generator always includes it (an operation error enum reports its active variant's
+    // schema). Only a hand-written `HttpModeledError` whose schema lacks the trait goes unmarked,
+    // leaving the response to be classified by its status code.
+    if let Some(fault) = Fault::of_error_schema(error.schema()) {
+        ModeledOutcome::mark(response, Err(fault));
     }
 }
 
@@ -345,6 +370,7 @@ where
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
+        let collecting_metrics = crate::metrics::collecting(&req);
         Box::pin(async move {
             let (mut parts, body) = req.into_parts();
             let selected = match selected_operation::<Op>(&parts.extensions) {
@@ -393,8 +419,20 @@ where
                 }
             };
             match service.oneshot((input, extractors)).await {
-                Ok(output) => Ok(Op::serialize_streaming_output(output, protocol)),
-                Err(err) => Ok(protocol.serialize_error(&err)),
+                Ok(output) => {
+                    let mut response = Op::serialize_streaming_output(output, protocol);
+                    if collecting_metrics {
+                        ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
+                    }
+                    Ok(response)
+                }
+                Err(err) => {
+                    let mut response = protocol.serialize_error(&err);
+                    if collecting_metrics {
+                        mark_modeled_error(&mut response, &err);
+                    }
+                    Ok(response)
+                }
             }
         })
     }
@@ -632,6 +670,8 @@ pin_project! {
         S: Service<Input>,
     {
         service: Option<S>,
+        // Whether to mark a successful output with its outcome, for standard metrics.
+        collecting_metrics: bool,
         #[pin]
         inner: InnerAlias<Input, Protocol, B, S>,
         request_body_read_timeout: Option<RequestBodyReadTimeoutState>,
@@ -694,7 +734,14 @@ where
                 InnerProj::Inner { call } => {
                     let result = ready!(call.poll(cx));
                     let output = match result {
-                        Ok(ok) => ok.into_response(),
+                        Ok(ok) => {
+                            let mut response = ok.into_response();
+                            if *this.collecting_metrics {
+                                ModeledOutcome::mark(&mut response, Ok(SuccessOutcome {}));
+                            }
+                            response
+                        }
+                        // Generated code marks modeled errors with their outcome.
                         Err(err) => err.into_response(),
                     };
                     return Poll::Ready(Ok(output));
@@ -743,6 +790,7 @@ where
         });
         UpgradeFuture {
             service: Some(service),
+            collecting_metrics: crate::metrics::collecting(&req),
             inner: Inner::FromRequest {
                 inner: <Input as FromRequest<P, B>>::from_request(req),
             },

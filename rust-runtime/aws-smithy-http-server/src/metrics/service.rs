@@ -22,6 +22,7 @@ use crate::{
 use super::{
     body::MetricsFinalizingBody,
     state::{Finisher, MetricsState, ServiceIdentity},
+    Outcome,
 };
 
 /// A [`Service`] that sets up per-request state for collecting standard server metrics, and
@@ -105,7 +106,10 @@ where
         let this = self.project();
         let result = ready!(this.inner.poll(cx));
         let finisher = this.finisher.take().expect("polled after completion");
-        Poll::Ready(result.map(|response| response.map(|body| boxed(MetricsFinalizingBody::new(body, finisher)))))
+        Poll::Ready(result.map(|mut response| {
+            finisher.record_outcome(Outcome::take_from_response(&mut response));
+            response.map(|body| boxed(MetricsFinalizingBody::new(body, finisher)))
+        }))
     }
 }
 
@@ -123,7 +127,7 @@ mod tests {
     use http_body_util::{BodyExt, Full};
     use tower::{service_fn, Service, ServiceExt};
 
-    use crate::metrics::{test_util::TestService, RequestExt};
+    use crate::metrics::{test_util::TestService, Fault, ModeledOutcome, RequestExt, RequestMetrics, SuccessOutcome};
 
     use super::*;
 
@@ -318,6 +322,115 @@ mod tests {
         assert_eq!(metrics.service(), &TestService::ID);
         assert_eq!(metrics.service().name(), "TestService");
         assert_eq!(metrics.service_version(), Some("2026-11-12"));
+    }
+
+    /// Serves `response` through a `MetricsService` and returns the metrics received by an
+    /// `on_finish` callback, after reading the body to its end (if `read_body`) or dropping it.
+    async fn metrics_for<RespB>(response: http::Response<RespB>, read_body: bool) -> RequestMetrics
+    where
+        RespB: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        RespB::Error: Into<BoxError>,
+    {
+        let seen = Arc::new(Mutex::new(None));
+        let response = Arc::new(Mutex::new(Some(response)));
+        let inner = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                let response = response.lock().unwrap().take().unwrap();
+                async { Ok::<_, Infallible>(response) }
+            })
+        };
+        let response = MetricsService::new::<TestService>(inner, true)
+            .oneshot(http::Request::new(()))
+            .await
+            .unwrap();
+        assert!(
+            response.extensions().get::<ModeledOutcome>().is_none(),
+            "the marker is removed"
+        );
+        if read_body {
+            let _ = response.into_body().collect().await;
+        } else {
+            drop(response);
+        }
+        let metrics = seen.lock().unwrap().take();
+        metrics.expect("callback received metrics")
+    }
+
+    fn with_status(status: u16) -> http::Response<Full<Bytes>> {
+        let mut response = http::Response::new(Full::new(Bytes::from_static(b"body")));
+        *response.status_mut() = http::StatusCode::from_u16(status).unwrap();
+        response
+    }
+
+    #[tokio::test]
+    async fn unmarked_responses_are_classified_by_status() {
+        for (status, result) in [(200, "success"), (302, "success"), (404, "client"), (503, "server")] {
+            let metrics = metrics_for(with_status(status), true).await;
+            let outcome = metrics.outcome().expect("a response was produced");
+            assert_eq!(outcome.summary(), (result, "internal"), "{status}");
+        }
+    }
+
+    #[tokio::test]
+    async fn modeled_outcome_takes_precedence_over_status() {
+        let mut response = with_status(400);
+        response
+            .extensions_mut()
+            .insert(ModeledOutcome::new(Err(Fault::Server)));
+        let metrics = metrics_for(response, true).await;
+        let outcome = metrics.outcome().expect("a response was produced");
+        assert_eq!(outcome.summary(), ("server", "operation"));
+    }
+
+    #[tokio::test]
+    async fn body_failure_is_a_server_error() {
+        struct FailingBody;
+        impl http_body::Body for FailingBody {
+            type Data = Bytes;
+            type Error = std::io::Error;
+            fn poll_frame(
+                self: Pin<&mut Self>,
+                _: &mut Context<'_>,
+            ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+                Poll::Ready(Some(Err(std::io::Error::other("failed"))))
+            }
+        }
+        let mut response = http::Response::new(FailingBody);
+        response
+            .extensions_mut()
+            .insert(ModeledOutcome::new(Ok(SuccessOutcome {})));
+        let metrics = metrics_for(response, true).await;
+        let outcome = metrics.outcome().expect("a response was produced");
+        assert_eq!(outcome.summary(), ("server", "internal"));
+    }
+
+    #[tokio::test]
+    async fn dropped_body_keeps_the_response_outcome() {
+        let metrics = metrics_for(with_status(200), false).await;
+        let outcome = metrics.outcome().expect("a response was produced");
+        assert_eq!(outcome.summary(), ("success", "internal"));
+    }
+
+    #[tokio::test]
+    async fn no_response_has_no_outcome() {
+        let seen = Arc::new(Mutex::new(None));
+        let inner = {
+            let seen = seen.clone();
+            service_fn(move |mut req: http::Request<()>| {
+                let seen = seen.clone();
+                req.on_finish(move |metrics| *seen.lock().unwrap() = metrics);
+                async { Err::<http::Response<Full<Bytes>>, _>("failed") }
+            })
+        };
+        let result = MetricsService::new::<TestService>(inner, true)
+            .oneshot(http::Request::new(()))
+            .await;
+        assert!(result.is_err());
+        let metrics = seen.lock().unwrap().take().expect("callback received metrics");
+        assert!(metrics.outcome().is_none());
     }
 
     #[test]

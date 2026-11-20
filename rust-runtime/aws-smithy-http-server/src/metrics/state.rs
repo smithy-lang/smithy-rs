@@ -14,7 +14,7 @@ use aws_smithy_async::time::SharedTimeSource;
 
 use crate::{service::ServiceShape, shape_id::ShapeId};
 
-use super::RequestMetrics;
+use super::{Outcome, RequestMetrics};
 
 /// A callback invoked once the request is finished.
 pub(crate) type FinishCallback = Box<dyn FnOnce(Option<RequestMetrics>) + Send>;
@@ -64,6 +64,17 @@ impl MetricsState {
         }
     }
 
+    /// Records how the request turned out, if metrics are enabled. Replaces any earlier outcome.
+    pub(crate) fn record_outcome(&self, outcome: Outcome) {
+        if let Some(metrics) = &self.inner.metrics {
+            metrics.lock().unwrap_or_else(PoisonError::into_inner).outcome = Some(outcome);
+        }
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.inner.metrics.is_some()
+    }
+
     pub(crate) fn push_callback(&self, callback: FinishCallback) {
         // Pushing cannot leave the list inconsistent, so a poisoned lock is safe to use.
         (self.inner.callbacks)
@@ -96,6 +107,14 @@ impl MetricsState {
     }
 }
 
+/// Whether standard metrics are being collected for `request`.
+pub(crate) fn collecting<B>(request: &http::Request<B>) -> bool {
+    request
+        .extensions()
+        .get::<MetricsState>()
+        .is_some_and(MetricsState::is_enabled)
+}
+
 /// The current time, from tokio's clock so that tests can control it.
 fn now() -> Instant {
     tokio::time::Instant::now().into_std()
@@ -106,6 +125,7 @@ struct InProgressMetrics {
     start_time: Instant,
     start_system_time: SystemTime,
     service: ServiceIdentity,
+    outcome: Option<Outcome>,
 }
 
 impl InProgressMetrics {
@@ -114,6 +134,7 @@ impl InProgressMetrics {
             start_time: now(),
             start_system_time: time_source.now(),
             service: service.clone(),
+            outcome: None,
         }
     }
 
@@ -124,6 +145,7 @@ impl InProgressMetrics {
             start_system_time: self.start_system_time,
             service: self.service.id.clone(),
             service_version: self.service.version,
+            outcome: self.outcome.clone(),
         }
     }
 }
@@ -141,6 +163,13 @@ impl Finisher {
     pub(crate) fn finish(&mut self) {
         if let Some(state) = self.state.take() {
             state.finish();
+        }
+    }
+
+    /// Records how the request turned out, unless it has already finished.
+    pub(crate) fn record_outcome(&self, outcome: Outcome) {
+        if let Some(state) = &self.state {
+            state.record_outcome(outcome);
         }
     }
 }
