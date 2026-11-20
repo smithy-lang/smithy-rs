@@ -10,7 +10,6 @@ mod pool_metrics;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_smithy_http_server_metrics::DefaultMetricsPlugin;
 use aws_smithy_http_server_metrics::MetricsLayer;
 use clap::Parser;
 
@@ -89,8 +88,6 @@ pub async fn main() {
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
     let http_plugins = HttpPlugins::new()
-        // Apply the `DefaultMetricsPlugin` first
-        .push(DefaultMetricsPlugin)
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
@@ -104,6 +101,8 @@ pub async fn main() {
     let model_plugins = ModelPlugins::new().push(authz_plugin);
 
     let config = PokemonServiceConfig::builder()
+        // Collect standard server metrics, which `MetricsLayer` publishes below.
+        .enable_standard_metrics()
         // Set up shared state and middlewares.
         .layer(AddExtensionLayer::new(Arc::new(State::default())))
         // Handle `/ping` health check requests.

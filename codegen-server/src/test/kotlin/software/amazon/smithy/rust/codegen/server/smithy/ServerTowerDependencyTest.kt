@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * Generates servers for HTTP 0.x and 1.x with schemaSerde omitted, disabled, or enabled.
  * It compiles and runs Tower middleware that forwards a request and checks the successful response.
  * Generated serde must retain mainline's Tower 0.4 declaration; schema serde uses Tower 0.5 with util.
- * HTTP 1.x servers also exercise the metrics layer and plugin in both serde modes.
+ * HTTP 1.x servers also exercise the metrics layer, publishing standard metrics, in both serde modes.
  */
 internal class ServerTowerDependencyTest {
     @Test
@@ -148,8 +148,7 @@ internal class ServerTowerDependencyTest {
                             rustTemplate(
                                 """
                                 let config = crate::ExampleConfig::builder()
-                                    .http_plugin(#{Server}::plugin::HttpPlugins::new()
-                                        .push(#{Metrics}::plugin::DefaultMetricsPlugin))
+                                    .enable_standard_metrics()
                                     .build();
                                 let app = crate::Example::builder(config)
                                     .ping(|_input: crate::input::PingInput| async { crate::output::PingOutput {} })
@@ -183,7 +182,12 @@ internal class ServerTowerDependencyTest {
                                 drop(client);
                                 connection.await.unwrap().unwrap();
                                 server.await.unwrap();
-                                assert_eq!(sink.inspector.entries().len(), 1);
+                                let entries = sink.inspector.entries();
+                                assert_eq!(entries.len(), 1);
+                                // The layer around the service publishes the standard metrics.
+                                assert_eq!(entries[0].values["service"], "Example");
+                                assert_eq!(entries[0].values["operation"], "Ping");
+                                assert_eq!(entries[0].values["http_status_code"], "200");
                                 """,
                                 *scope,
                                 "Metrics" to context.runtimeConfig.smithyRuntimeCrate("smithy-http-server-metrics").toType(),

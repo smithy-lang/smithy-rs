@@ -189,10 +189,6 @@ impl<Protocol> IntoResponse<Protocol> for MetricsError {
         response
     }
 
-    #[cfg(not(any(
-        feature = "aws-smithy-http-server-065",
-        feature = "aws-smithy-legacy-http-server"
-    )))]
     fn into_response_with_protocol(
         self,
         protocol: &dyn aws_smithy_http_server::schema::ServerProtocol,
@@ -201,10 +197,6 @@ impl<Protocol> IntoResponse<Protocol> for MetricsError {
     }
 }
 
-#[cfg(not(any(
-    feature = "aws-smithy-http-server-065",
-    feature = "aws-smithy-legacy-http-server"
-)))]
 mod schema {
     use super::MetricsError;
     use aws_smithy_http_server::schema::HttpModeledError;
