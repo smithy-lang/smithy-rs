@@ -93,6 +93,34 @@ pub(crate) struct InheritedMember {
     pub(crate) introduced: HashSet<ShapeId>,
 }
 
+/// Removes trait `id` if it is one of a shape's or member's own traits: any trait without mixin
+/// data (`introduced` is `None`), or else one in `introduced`. Inherited traits stay.
+///
+/// The reference implementation's builders only hold own traits, so they can't remove inherited
+/// ones either. Unlike them, a builder here does not have the mixin shapes, so removing an own
+/// trait that overrides an inherited one removes its value until the shape is assembled again,
+/// which restores the inherited value.
+fn remove_own_trait(
+    traits: &mut TraitMap,
+    introduced: Option<&mut HashSet<ShapeId>>,
+    id: &ShapeId,
+) {
+    if introduced.is_none_or(|introduced| introduced.remove(id)) {
+        traits.shift_remove(id);
+    }
+}
+
+/// Removes every own trait of a shape or member (see [`remove_own_trait`]).
+fn clear_own_traits(traits: &mut TraitMap, introduced: Option<&mut HashSet<ShapeId>>) {
+    match introduced {
+        None => traits.clear(),
+        Some(introduced) => {
+            traits.retain(|id, _| !introduced.contains(id));
+            introduced.clear();
+        }
+    }
+}
+
 /// The traits of `traits` whose IDs are in `introduced`, or every trait without mixin data.
 pub(crate) fn introduced_traits<'a>(
     traits: &'a TraitMap,
@@ -553,17 +581,13 @@ impl BuilderCommon {
     }
 
     fn remove_trait(&mut self, id: &ShapeId) {
-        if let Some(mixins) = &mut self.mixins {
-            mixins.introduced.remove(id);
-        }
-        self.traits.shift_remove(id);
+        let introduced = self.mixins.as_mut().map(|m| &mut m.introduced);
+        remove_own_trait(&mut self.traits, introduced, id);
     }
 
     fn clear_traits(&mut self) {
-        if let Some(mixins) = &mut self.mixins {
-            mixins.introduced.clear();
-        }
-        self.traits.clear();
+        let introduced = self.mixins.as_mut().map(|m| &mut m.introduced);
+        clear_own_traits(&mut self.traits, introduced);
     }
 
     /// The ID of a member of this shape.
@@ -613,13 +637,17 @@ macro_rules! common_builder_methods {
             self
         }
 
-        /// Removes a trait by its shape ID.
+        /// Removes a trait by its shape ID. On a shape with mixins (from `to_builder`), only the
+        /// shape's own traits can be removed, as in the reference implementation: inherited
+        /// traits stay. Removing an own trait that overrides an inherited one removes its value
+        /// until the shape is assembled again, which restores the inherited value.
         pub fn remove_trait(mut self, id: &ShapeId) -> Self {
             self.common.remove_trait(id);
             self
         }
 
-        /// Removes every trait.
+        /// Removes every trait; on a shape with mixins, every own trait (see
+        /// [`remove_trait`](Self::remove_trait)).
         pub fn clear_traits(mut self) -> Self {
             self.common.clear_traits();
             self
@@ -837,12 +865,13 @@ impl MemberShapeBuilder {
         self
     }
 
-    /// Removes a trait by its shape ID.
+    /// Removes a trait by its shape ID. On an inherited member (from `to_builder`), only the
+    /// member's own traits can be removed, as in the reference implementation: inherited traits
+    /// stay. Removing an own trait that overrides an inherited one removes its value until the
+    /// shape is assembled again, which restores the inherited value.
     pub fn remove_trait(mut self, id: &ShapeId) -> Self {
-        if let Some(inherited) = &mut self.inherited {
-            inherited.introduced.remove(id);
-        }
-        self.traits.shift_remove(id);
+        let introduced = self.inherited.as_mut().map(|i| &mut i.introduced);
+        remove_own_trait(&mut self.traits, introduced, id);
         self
     }
 
@@ -1232,8 +1261,18 @@ macro_rules! named_member_shape {
                 self
             }
 
-            /// Removes a member by name, preserving the order of the others.
+            /// Removes a member by name, preserving the order of the others. On a shape with
+            /// mixins (from `to_builder`), an inherited member stays and only loses its own
+            /// traits, as in the reference implementation, where the mixins provide it.
             pub fn remove_member(mut self, name: &str) -> Self {
+                if self.common.mixins.is_some() {
+                    let member = self.members.get_mut(name);
+                    if let Some(member) = member.filter(|m| m.inherited.is_some()) {
+                        let introduced = member.inherited.as_mut().map(|i| &mut i.introduced);
+                        clear_own_traits(&mut member.traits, introduced);
+                        return self;
+                    }
+                }
                 self.members.shift_remove(name);
                 self
             }
@@ -2028,15 +2067,12 @@ mod tests {
         assert_eq!(rebuilt.mixins(), shape.mixins());
         assert_eq!(own(rebuilt.introduced_traits().collect()), ["a#u"]);
         assert_eq!(rebuilt.traits().len(), 2);
-        let cleared = rebuilt.to_builder().remove_trait(&u).build().unwrap();
-        assert!(own(cleared.introduced_traits().collect()).is_empty());
-        assert!(rebuilt
-            .to_builder()
-            .clear_traits()
-            .build()
-            .unwrap()
-            .traits()
-            .is_empty());
+        let removed = rebuilt.to_builder().remove_trait(&u).build().unwrap();
+        assert!(own(removed.introduced_traits().collect()).is_empty());
+        // Only own traits are cleared; the inherited `a#t` stays.
+        let cleared = rebuilt.to_builder().clear_traits().build().unwrap();
+        let ids: Vec<_> = cleared.traits().ids().map(ShapeId::to_string).collect();
+        assert_eq!(ids, ["a#t"]);
 
         let member = shape.member("x").unwrap();
         assert!(member.is_inherited());

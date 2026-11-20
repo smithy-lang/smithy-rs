@@ -1130,6 +1130,41 @@ fn retargeted_inherited_member_conflicts_when_assembled() {
 }
 
 #[test]
+fn builders_keep_inherited_traits_and_members() {
+    let model = Model::from_idl_str(
+        "m.smithy",
+        "$version: \"2\"\nnamespace ex\n@mixin\n@sensitive\nstructure M {\n    @required\n    x: String\n}\n\
+         structure S with [M] {\n    @documentation(\"own\")\n    x: String\n}\n",
+    )
+    .unwrap();
+    let s = model.expect_shape(&ShapeId::from_static("ex#S")).unwrap();
+    let s = s.as_structure().unwrap().shape().clone();
+    let sensitive = ShapeId::from_static("smithy.api#sensitive");
+    // As in the reference implementation, removing traits and members keeps what the mixins
+    // provide.
+    let removed = s.to_builder().remove_trait(&sensitive).build().unwrap();
+    assert!(removed.traits().contains(&sensitive));
+    let cleared = s.to_builder().clear_traits().build().unwrap();
+    assert!(cleared.traits().contains(&sensitive));
+    // A redefined member stays, as an inherited member without its own traits.
+    let without_x = s.to_builder().remove_member("x").build().unwrap();
+    let x = without_x.member("x").expect("inherited from M");
+    assert!(x.is_inherited());
+    assert!(x.traits().contains(&traits::REQUIRED));
+    assert!(!x.traits().contains(&traits::DOCUMENTATION));
+    // A member builder keeps inherited traits, and removes own ones.
+    let x = s.member("x").unwrap();
+    let x = x
+        .to_builder()
+        .remove_trait(&traits::REQUIRED)
+        .remove_trait(&traits::DOCUMENTATION)
+        .build()
+        .unwrap();
+    assert!(x.traits().contains(&traits::REQUIRED));
+    assert!(!x.traits().contains(&traits::DOCUMENTATION));
+}
+
+#[test]
 fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
     let mixins = Model::from_json_str(
         "m.json",
