@@ -52,7 +52,7 @@ pub struct Run {
     /// The `release-*` tag the legs built against.
     pub release: String,
     /// GitHub's run id, and the attempt, because a re-run keeps the id and increments the attempt.
-    /// Both are in the key, so re-running cannot overwrite the first attempt's record.
+    /// Both are recorded, so a record says which attempt produced it.
     pub run_id: String,
     pub run_attempt: u32,
     /// A link, which will outlive the run it points at. Kept anyway: while it resolves it is the
@@ -72,8 +72,8 @@ pub struct RedLeg {
     pub target: Option<String>,
     pub verdict: Verdict,
     pub failed_step: Option<Step>,
-    /// Carries the error codes, the message, and the versions — which is what makes the record
-    /// readable a year later without the lockfile beside it.
+    /// Carries the error codes, the message, and the versions, so the record reads without the
+    /// lockfile beside it.
     pub diagnosis: Option<Diagnosis>,
     pub elapsed_secs: u64,
     /// Present, and saying why, when this manifest was deliberately rigged to break.
@@ -420,8 +420,7 @@ mod tests {
         }
     }
 
-    /// The record has to carry the versions, because the artifact holding the lockfile expires
-    /// before the record does.
+    /// The record has to carry the versions, so reading it needs no second artifact.
     #[test]
     fn the_record_names_the_version_pair() {
         let legs = matrix();

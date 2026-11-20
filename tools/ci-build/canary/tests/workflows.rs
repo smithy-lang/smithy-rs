@@ -151,8 +151,8 @@ fn triggers(wf: &Value) -> Vec<String> {
 /// before any shell sees it, so a value carrying a quote and `$(...)` executes on the runner. Every
 /// input must arrive through `env` instead.
 ///
-/// This matters more now than when it was first written: two of these workflows assume an AWS role,
-/// so an injection here reaches AWS rather than just the runner.
+/// Every one of these workflows assumes an AWS role, so an injection here reaches AWS rather than
+/// only the runner.
 #[test]
 fn no_workflow_interpolates_into_a_run_block() {
     for name in WORKFLOWS {
@@ -930,10 +930,10 @@ fn alarm_commands(text: &str) -> Vec<AlarmCommand> {
 
 /// Each alarm must watch the series a red leg actually writes.
 ///
-/// That series' identity — namespace, metric name, dimension set — exists in three places: this
-/// crate, the CDK stack, and the arming step's `put-metric-alarm` flags. The namespace is checked
-/// against the CDK by a test in `metric.rs`, and the `Induced` dimension name is already taken from
-/// the crate's constant. The rest of the arming step's copy was unchecked, and a mismatch there is
+/// The namespace, the metric name and the dimension set all exist twice: in this crate, and in the
+/// arming step's `put-metric-alarm` flags. The namespace exists a third time in the CDK stack, and
+/// a test in `metric.rs` checks those two agree; the `Induced` dimension name is already taken from
+/// the crate's constant. Nothing else checks the arming step's copy, and a mismatch there is
 /// the quietest failure available to this canary: the legs emit, the alarm sits at `OK` for the
 /// whole release, every job is green, and nothing pages. CloudWatch matches dimensions exactly, so
 /// one dimension too many on the alarmed datapoint is enough to cause it.
@@ -1431,10 +1431,10 @@ fn aws_steps_are_skipped_when_unconfigured() {
 /// A leg has to report before GitHub kills its job, or it emits nothing at all — and an absent
 /// datapoint cannot raise an alarm, which is worse than a red one.
 ///
-/// Room for the budget alone is not enough, and asserting `>=` was the defect. The leg's clock
-/// starts inside `run-leg`, after the checkout, the toolchain and the musl target, and six more
-/// steps run after it. Equal values let a hung command consume the job's whole wall clock from a
-/// later start, so GitHub kills it mid-flight and the leg arrives in `unreported` — the bucket
+/// Room for the budget alone is not enough. The leg's clock starts inside `run-leg`, after the
+/// checkout, the toolchain and the musl target, and six more steps run after it — so the job needs
+/// `BUDGET` plus `JOB_MARGIN`, which is what the 14 minutes is. Any less and a hung command is
+/// killed mid-flight: no report, no datapoint, and the leg arrives in `unreported` — the bucket
 /// meaning the canary broke — for a release that was in fact hanging.
 ///
 /// In seconds throughout. `BUDGET.as_secs() / 60` truncates, so a budget of 12½ minutes would be

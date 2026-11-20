@@ -507,8 +507,9 @@ fn an_enabled_canary_with_nothing_set_names_every_missing_secret() {
 
 /// A durable archive is deferred, and if it comes back it must not join the paging chain.
 ///
-/// It answers a historical question and no page depends on it, so a missing bucket must never be
-/// able to stop a release being watched.
+/// It answers a historical question and no page depends on it. Asserted against `$GITHUB_OUTPUT`
+/// rather than the log, which a configured step leaves empty: nothing the step decides may name an
+/// archive secret, so this fails the day one joins the chain.
 #[test]
 fn the_archive_is_not_part_of_the_enabled_state() {
     if !bash_available() {

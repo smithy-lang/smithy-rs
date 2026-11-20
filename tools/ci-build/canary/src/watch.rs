@@ -61,8 +61,9 @@ pub const INTERVAL: Duration = Duration::from_secs(15 * 60);
 /// Whether a tag names a real release: `release-YYYY-MM-DD`, or `release-YYYY-MM-DD.N` for a second
 /// release on the same day.
 ///
-/// The same shape the orchestrator's tag check and the IAM `ref` conditions use, and it has to agree
-/// with both; `the_release_shape_agrees_with_the_cdk` in `tests/workflows.rs` is what checks that.
+/// The same shape the orchestrator's tag check and the IAM `ref` conditions use, and it has to be
+/// no looser than either; `the_release_shape_is_no_looser_than_the_cdks` in `tests/workflows.rs`
+/// is what checks that.
 ///
 /// Load-bearing rather than tidiness. The newest release is found by sorting tags lexically, and
 /// anything not date-shaped sorts *after* every `release-2…` tag — so a single `release-test` left

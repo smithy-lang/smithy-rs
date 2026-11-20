@@ -14,7 +14,7 @@
 //!
 //! A baseline never has to outlive the release it was taken during. The first tick of a release has
 //! no baseline and dispatches everything, which is the right answer anyway — a release just
-//! published, so the graph has certainly moved — and the floor tier that follows has no gate at all.
+//! published, so the graph has certainly moved — and the floor tier that follows never reads one.
 //! So the whole useful life of a baseline is one orchestrator job, which ticks every 15 minutes for
 //! at most three hours.
 //!
@@ -195,7 +195,7 @@ pub enum ResolveFailure {
     /// The first failure, a failure different from the previous tick's, or a failure after a tick
     /// that resolved. Dispatch: a leg reports it properly, with its retries and its evidence.
     New,
-    /// The previous tick failed in exactly the same way, and legs were dispatched for it then.
+    /// The previous tick failed in exactly the same way, so legs have already run on this failure.
     /// Dispatching again would re-run the same matrix to reach the same verdict.
     Repeated,
 }
@@ -328,9 +328,9 @@ impl BaselineDir {
 
     /// Record that this manifest failed to resolve on this tick, with this error.
     ///
-    /// Errors, deliberately, like [`Self::put`]: a store that silently accepts nothing would make
-    /// every failure read as new, which is merely wasteful — but the same silence on the read side
-    /// is what would make a failure read as a repeat, so neither side may be guessed at.
+    /// Errors, deliberately, like [`Self::put`]: a write that silently did nothing would leave the
+    /// gate looking as though it worked. The read side may degrade to `New`, which merely
+    /// dispatches; the write side may not guess.
     pub fn put_failure(&self, manifest_id: &str, tick: u32, error: &str) -> anyhow::Result<()> {
         write_replacing(
             &self.failure_path(manifest_id)?,

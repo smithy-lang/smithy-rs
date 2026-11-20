@@ -44,7 +44,9 @@
 //! so that a graph can migrate one dependency at a time. It breaks only when a type crosses the
 //! boundary, which is why the first leg above lists a duplicated `aws-smithy-json` that had nothing
 //! to do with the failure. So this module annotates a failure already established by other means,
-//! and never establishes one — [`crate::classify`] does not consult it, and must not.
+//! and never establishes one: [`crate::classify::classify`] decides a verdict from the step's own
+//! output alone, and [`crate::classify::Diagnosis::with_resolved_graph`] attaches this afterwards.
+//! That separation has to hold.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -167,8 +169,8 @@ impl Resolved {
 /// Whether a resolved package is one this canary is watching, as opposed to a third-party
 /// dependency that happens to be in the graph.
 ///
-/// The test family counts. Without it a rigged break would reach a ticket with the `duplicate`
-/// field empty — the one field that names *which* two versions collided, and the whole reason this
+/// The test family counts. Without it a rigged break would reach a ticket with the
+/// `duplicate_versions` field empty — the one field that names *which* two versions collided, and the whole reason this
 /// module exists. So the exercise meant to prove the diagnosis is readable would have proved the
 /// opposite, silently. Found by inducing the break and reading the report rather than by a test.
 fn is_under_test(name: &str) -> bool {

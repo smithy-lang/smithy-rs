@@ -58,8 +58,9 @@ enum Command {
     },
     /// Render a leg and run it: the six commands, the retries, the deadline.
     ///
-    /// Prints the report as JSON on stdout and exits 0 for green or `INFRA_FAIL`, non-zero for any
-    /// hard verdict — which is how a floor hour's exit code carries the stop decision.
+    /// Prints the report as JSON on stdout and exits 0 for green, `INFRA_FAIL` or a deliberately
+    /// rigged break, non-zero for any other hard verdict — which is how a floor hour's exit code
+    /// carries the stop decision.
     RunLeg {
         #[arg(long)]
         leg: String,
@@ -182,14 +183,14 @@ enum Command {
     /// Decide whether a floor hour is still worth dispatching.
     ///
     /// Skips the hour only when a leg went red that was **not** already red before this release.
-    /// See `floor` for the four defects in the rule this replaces, each of which came from asking
-    /// about the tag's history rather than about this release against what was already true.
+    /// See `floor` for why the comparison is against the previous release rather than against the
+    /// tag's own history.
     FloorGate {
         /// `gh run view --json jobs` for this release's run. Omit when there is none yet.
         #[arg(long)]
         this: Option<PathBuf>,
-        /// The same for the previous release's run. Omit when there is no previous release, which
-        /// degrades the rule to its old behaviour rather than to something untested.
+        /// The same for the previous release's run. Omit when there is no previous release: every
+        /// red leg then counts as news and the window keeps checking.
         #[arg(long)]
         baseline: Option<PathBuf>,
     },
@@ -228,7 +229,7 @@ enum Command {
     },
     /// Watch a release's publish window, dispatching legs for the manifests whose graph moved.
     ///
-    /// One run per release. Resolves every manifest on a 15-minute tick and stops when
+    /// One run per release. Resolves every crates.io manifest on a 15-minute tick and stops when
     /// every declared runtime crate has arrived, or at a three-hour ceiling.
     Watch {
         /// The release tag being watched. Legs are dispatched against it.
@@ -266,18 +267,18 @@ enum Command {
         #[arg(long)]
         ceiling_secs: Option<u64>,
     },
-    /// Fold a run's leg reports into one durable record, for a release that broke.
+    /// Fold a run's leg reports into one record, for a release that broke.
     ///
-    /// Writes `summary.json` into `--out` and prints, on stdout, the key it belongs under and
-    /// whether it is worth archiving at all. A run where nothing blamed the release is not.
+    /// Writes `summary.json` into `--out` and prints the decision on stdout: which release it is
+    /// for, and whether any leg blamed the release.
     Summarize {
         /// The `release-*` tag the legs built against.
         #[arg(long)]
         release: String,
         #[arg(long)]
         run_id: String,
-        /// A re-run keeps the id and increments this, and both are in the key, so re-running
-        /// cannot overwrite the first attempt's record.
+        /// A re-run keeps the id and increments this. Both are recorded, so a record says which
+        /// attempt produced it.
         #[arg(long, default_value_t = 1)]
         run_attempt: u32,
         #[arg(long)]

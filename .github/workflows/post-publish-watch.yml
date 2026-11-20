@@ -150,9 +150,9 @@ jobs:
         TAG: ${{ steps.resolve.outputs.tag }}
         TICKET_ARN_TEMPLATE: ${{ secrets.BUILD_CANARY_TICKET_ARN_TEMPLATE }}
       run: |
+        # `pipefail` is not the default for a `run:` step, and the delete below reads through a
+        # pipe.
         set -euo pipefail
-        # Not the default for a `run:` step, and the delete below reads through a pipe.
-        set -o pipefail
         export AWS_RETRY_MODE=standard AWS_MAX_ATTEMPTS=3
 
         # Severity lives here, in reviewed code, rather than inside the secret, so changing it is a

@@ -12,11 +12,10 @@
 # step, which is what lets the whole matrix run -- and its false-positive rate be measured -- while
 # still unable to wake an oncall.
 #
-# The emission is off until the metrics role is configured as a secret, so before the stack is
-# deployed this workflow behaves exactly as it did when it had no AWS access at all: it writes
-# verdicts to the job log and nothing else. It needs `id-token: write` to assume that role, which is
-# why every workflow input reaches a `run:` block through `env` and never through `${{ }}`
-# interpolation -- an injection here would now reach AWS.
+# The emission is off until the metrics role is configured as a secret: before the stack is
+# deployed, a leg writes its verdict to the job log and nothing else. The job holds
+# `id-token: write` to assume that role, which is why every workflow input reaches a `run:` block
+# through `env` and never through `${{ }}` interpolation -- an injection here reaches AWS.
 
 name: Build canary
 run-name: ${{ github.workflow }} - ${{ inputs.scenario }}
@@ -31,9 +30,9 @@ on:
         default: manual
       scenario:
         description: >
-          Leg ids or manifest names, comma-separated, or `all`. One scenario is one or two legs at a
-          couple of minutes where `all` is the whole matrix, which is why the filter exists rather than being
-          a convenience. The watcher passes the set of manifests whose graph moved on a tick, so
+          Leg ids or manifest names, comma-separated, or `all`. A leg id is one leg; a manifest
+          name is every toolchain's leg for it, five or nine; `all` is the forty legs a release
+          runs. The watcher passes the set of manifests whose graph moved on a tick, so
           every name given must match something -- a typo fails rather than quietly running a
           subset.
         type: string
@@ -86,9 +85,7 @@ jobs:
       working-directory: tools/ci-build/canary
       # Inputs come in through `env`, never interpolated into the script. `${{ }}` is substituted
       # into the command *text* before any shell sees it, so a value carrying a quote and `$(...)`
-      # would execute on the runner. Dispatch inputs need write access today, but this workflow is
-      # due to gain `id-token: write` and a role to assume, and at that point an injection here
-      # reaches AWS.
+      # would execute on a runner whose job can assume the metrics role.
       env:
         SCENARIO: ${{ inputs.scenario }}
       run: |
@@ -102,7 +99,7 @@ jobs:
 
         cargo run --quiet -- gen-matrix --stable "${STABLE}" --msrv "${MSRV}" > /tmp/all.json
 
-        # Filter by leg id or manifest name. `all` keeps everything.
+        # Filter by leg id or manifest name.
         python3 - "${SCENARIO}" <<'PY' > /tmp/legs.json
         import json, sys
         want = sys.argv[1]
@@ -210,8 +207,9 @@ jobs:
           TAG_ARG=(--tag "${RELEASE_TAG}")
         fi
 
-        # Exits 0 for green or INFRA_FAIL, non-zero for any hard verdict. That is how a floor hour's
-        # exit code carries the stop decision, since `needs:` can see success or failure but never why.
+        # Exits 0 for green, for INFRA_FAIL and for a deliberately rigged leg; non-zero for every
+        # other hard verdict. That is how a floor hour's exit code carries the stop decision, since
+        # `needs:` can see success or failure but never why.
         cargo run --quiet -- run-leg \
           --leg "${LEG_ID}" \
           --stable "${STABLE}" \
@@ -418,8 +416,7 @@ jobs:
       with:
         name: evidence-${{ matrix.leg.id }}
         path: ${{ runner.temp }}/evidence
-        # Long enough to investigate a release, short enough not to accumulate. The 24-hour window
-        # plus a working week. Shorter than the record written to the archive, which is the point of
-        # that record: the diagnosis has to outlive the thing holding the lockfile.
+        # Long enough to investigate a release -- the 24-hour window and the working week after
+        # it -- and short enough not to accumulate.
         retention-days: 14
         if-no-files-found: error

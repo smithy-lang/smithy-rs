@@ -6,7 +6,7 @@
 //! Turning a verdict into the datapoint an alarm can see.
 //!
 //! This is the join between the canary and the paging chain. Everything before it writes to a job
-//! log; this is where a verdict becomes something that can wake someone.
+//! log; this is where a verdict becomes something a responder is told about.
 //!
 //! # One metric, two series
 //!
@@ -44,7 +44,8 @@
 //!
 //! # Every verdict, including `INFRA_FAIL`
 //!
-//! One severity for all five, which means a runner failure can wake someone. The retry policy
+//! One severity for all five, which means a runner failure reaches the same ticket as a real
+//! break. The retry policy
 //! absorbs the transient cases — an `INFRA_FAIL` costs three attempts over four minutes before it is
 //! ever reported — and the verdict is on the second series, so a responder sees which kind it was
 //! before doing anything.

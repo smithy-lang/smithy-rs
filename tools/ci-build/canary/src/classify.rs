@@ -5,9 +5,9 @@
 
 //! Turning a failed command into a verdict.
 //!
-//! This is the piece where a wrong answer costs the most: every verdict pages at Sev2, so the
-//! classification does not decide *whether* someone is woken, it decides *what they are told to look
-//! at*. Reporting a real compile break as `INFRA_FAIL` sends the oncall to the runner instead of to
+//! This is the piece where a wrong answer costs the most: every verdict cuts the same ticket, so
+//! the classification does not decide *whether* a responder is called, it decides *what they are
+//! told to look at*. Reporting a real compile break as `INFRA_FAIL` sends the oncall to the runner instead of to
 //! the published graph.
 //!
 //! # The rule
@@ -89,7 +89,7 @@ impl fmt::Display for Verdict {
     }
 }
 
-/// The leg's commands, in the order a leg runs them. See [`crate::leg::commands`].
+/// The leg's commands. [`crate::leg::commands`] fixes the order they run in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Step {
@@ -334,7 +334,6 @@ fn resolution_was_refused(output: &str) -> bool {
     REFUSALS.iter().any(|m| output.contains(m))
 }
 
-/// The test harness ran and reported a failure, rather than the runner dying before it could.
 /// How many assertions actually passed, summed across the leg's test binaries.
 ///
 /// A client leg runs three: the bin target with no `#[test]` at all, the hermetic assertions, and
@@ -348,6 +347,7 @@ fn assertions_passed(stdout: &str) -> u32 {
         .sum()
 }
 
+/// The test harness ran and reported a failure, rather than the runner dying before it could.
 fn assertions_ran_and_failed(output: &str) -> bool {
     // Measured shapes:
     //   test result: FAILED. 1 passed; 1 failed; 0 ignored; ...
@@ -694,7 +694,7 @@ candidate versions found which didn't match: 1.9.4, 1.9.3, 1.9.1, ...
         assert!(classify(&o).is_none());
     }
 
-    /// Every shape a real `report.json` takes has to read back, because the durable record is built
+    /// Every shape a real `report.json` takes has to read back, because the record is built
     /// by deserializing them and a field that fails to parse is indistinguishable from a leg that
     /// never reported. The empty-diagnosis case is the one that bit: `skip_serializing_if` omits
     /// `duplicate_versions` whenever a break involves no duplicated crate, which is most of them.

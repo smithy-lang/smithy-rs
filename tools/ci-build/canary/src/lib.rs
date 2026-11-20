@@ -11,9 +11,9 @@
 //! on crates.io, across five compiler versions, for 24 hours — and a failure pages, with a verdict
 //! naming which part broke.
 //!
-//! This crate is the offline half: it owns the scenario table, the leg matrix, manifest rendering,
-//! the leg runner and the verdict classifier. Nothing here touches AWS or needs a credential, so all
-//! of it can be exercised on a laptop. Reporting a verdict as a metric, and alarming on it, live
+//! The scenario table, the leg matrix, manifest rendering, the leg runner and the verdict
+//! classifier need no credential, so all of that can be exercised on a laptop. Two modules are the
+//! exception: [`metric`] shells out to the AWS CLI and [`watch`] to `gh`. The alarm itself lives
 //! outside this crate.
 
 pub mod baseline;

@@ -41,7 +41,8 @@ use serde::Serialize;
 /// release time when the canary is the only thing watching.
 ///
 /// Deliberately absent: the six [`AWS_SDK_RUNTIME`] crates, which publish on the SDK's own train a
-/// median 39.6 hours later, so waiting for them would hold the floor tier open for days. Taking the
+/// median 39.6 hours later, so waiting for them would hold the first tier open until its timeout
+/// and the floor tier would never start. Taking the
 /// list from `CrateSet` excludes them by construction, and also excludes `aws-smithy-fuzz`, which is
 /// a directory under `rust-runtime/` but is in no `CrateSet` list and publishes nothing.
 pub const ENTIRE_SMITHY_RUNTIME: &[&str] = &[

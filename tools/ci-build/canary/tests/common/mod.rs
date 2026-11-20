@@ -50,8 +50,9 @@ fn repo_root() -> PathBuf {
 
 /// One step's `run:` script, by workflow, job and exact step name.
 ///
-/// The name is matched exactly. Substring matching reads more forgivingly and is a trap: `"Arm"` is
-/// inside `"Is the alarm configured"`, so the obvious spelling selects the wrong step.
+/// The name is matched exactly. A case-insensitive or partial match reads more forgivingly and is
+/// a trap: lowercased, `arm` is inside `is the alarm configured`, so the obvious spelling selects
+/// the wrong step.
 pub fn step_script(workflow: &str, job: &str, step: &str) -> String {
     let path = repo_root()
         .join(".github/workflows")

@@ -82,7 +82,7 @@ pub struct Rendered {
 /// ignored otherwise. Getting that wrong is not a cosmetic mistake: a test-registry leg rendered
 /// without the `.cargo/config.toml` would look for `ct-client` on crates.io, where it does not
 /// exist, and report `RESOLVE_FAIL` about a release that is perfectly fine. So it is an error
-/// rather than a default, and [`render`] refuses rather than guessing.
+/// rather than a default: this function refuses rather than guessing.
 pub fn render_with_registry(
     leg: &Leg,
     scenario: &Scenario,
@@ -119,8 +119,8 @@ pub fn render(leg: &Leg, scenario: &Scenario) -> Rendered {
     match leg.body {
         Body::CanaryApp => {
             for (c, r, feats) in APP_DEPS {
-                // The scenario's own declaration wins: a prior-line scenario pins `aws-config` to
-                // `~1.12` and the body must not quietly widen it.
+                // The scenario's own declaration wins: a scenario that narrows `tokio` or
+                // `aws-smithy-types` must not have it widened back to the body's requirement.
                 if !deps.iter().any(|(name, _, _)| name == c) {
                     deps.push(((*c).to_string(), (*r).to_string(), feats.to_vec()));
                 }

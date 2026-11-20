@@ -18,7 +18,8 @@
 //! # What this reproduces, and what it cannot
 //!
 //! It reproduces the *shape* that caused the outage this canary exists for: two majors of one crate
-//! in a single graph, with a type crossing between them. Measured, offline, from the table below:
+//! in a single graph, with a type crossing between them. Measured offline, with a second major of
+//! `ct-types` added to the table below:
 //!
 //! ```text
 //! Locking 4 packages
@@ -27,10 +28,10 @@
 //! error[E0308]: mismatched types: expected `ct_schema::Shared`, found `ct_types::Shared`
 //! ```
 //!
-//! It cannot reproduce the real publish path, or the timing of the real index propagating. It is
-//! better than a real release at everything else: any intermediate state of a release can be
-//! constructed here deliberately, including the ones that exist for ninety seconds and are
-//! therefore almost impossible to catch by waiting.
+//! It cannot reproduce the real publish path, or the timing of the real index propagating. What it
+//! can do that a real release cannot: any intermediate state can be constructed deliberately,
+//! including the ones that exist for ninety seconds and are almost impossible to catch by
+//! waiting.
 //!
 //! # The committed state is green, deliberately
 //!

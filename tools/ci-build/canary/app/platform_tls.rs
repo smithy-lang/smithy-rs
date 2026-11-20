@@ -28,14 +28,8 @@
 // below signing, so credentials are irrelevant to it by construction, and an
 // unauthenticated handshake is the correct instrument rather than a shortcut.
 //
-// Consequently this asserts ONE thing: that the failure we get back is a
-// *service* failure and not a *connector* failure. A service error means DNS
-// resolved, the TLS handshake completed, and a real HTTP response came back. A
-// connector error is the platform cert path failing, which is the break this
-// diagnostic is for.
-//
-// WHAT IS ACTUALLY MEASURED, AND WHAT IS NOT. Be careful with this one: an
-// earlier version of this comment claimed more than the evidence supports.
+// WHAT IS ACTUALLY MEASURED, AND WHAT IS NOT. Claim only what the evidence
+// below supports.
 //
 // Measured, against aws-smithy-http-client 1.5.2 and rustls-native-certs 0.8.5:
 //

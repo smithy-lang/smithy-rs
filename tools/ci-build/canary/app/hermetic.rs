@@ -243,7 +243,7 @@ fn reset_credential_env() {
         std::env::remove_var(k);
     }
     // An empty real file, not `/dev/null`: the null device is `NUL` on Windows, so a
-    // hardcoded unix path would mean something different on the Windows and macOS legs.
+    // hardcoded unix path would mean something different on the Windows leg.
     let empty = std::env::temp_dir().join("canary-poc-empty-aws-config");
     let _ = std::fs::write(&empty, "");
     std::env::set_var("AWS_CONFIG_FILE", &empty);
@@ -294,10 +294,11 @@ async fn resolve_from_chain() -> aws_credential_types::Credentials {
         .expect("the chain should have resolved")
 }
 
-/// Links 2, 3 and 4 of the real chain, in one test because they share process env and
-/// must not run concurrently -- cargo runs tests in parallel threads by default.
+/// Links 2, 4 and 5 of the real chain -- profile file, ECS and IMDS -- in one test because they
+/// share process env and must not run concurrently: cargo runs tests in parallel threads by
+/// default. Link 3, `WebIdentityToken`, is not exercised.
 #[tokio::test]
-async fn real_chain_reaches_links_two_three_and_four() {
+async fn real_chain_reaches_links_two_four_and_five() {
     // Link 2 -- the shared credentials file. The laptop and EC2-with-profile consumer.
     let path = std::env::temp_dir().join("canary-poc-credentials");
     std::fs::write(
@@ -316,7 +317,7 @@ async fn real_chain_reaches_links_two_three_and_four() {
     );
     let _ = std::fs::remove_file(&path);
 
-    // Link 3 -- EcsContainer. `validate_full_uri` permits loopback explicitly.
+    // Link 4 -- EcsContainer. `validate_full_uri` permits loopback explicitly.
     let (port, server) = serve_loopback(1, |_| {
         r#"{"AccessKeyId":"ASIAFROMECS","SecretAccessKey":"ecs-secret","Token":"ecs-token","Expiration":"2099-01-01T00:00:00Z"}"#.to_string()
     });
@@ -338,7 +339,7 @@ async fn real_chain_reaches_links_two_three_and_four() {
     );
     let _ = server.join();
 
-    // Link 4 -- IMDS, including the v2 token handshake. Three requests in order:
+    // Link 5 -- IMDS, including the v2 token handshake. Three requests in order:
     //   PUT /latest/api/token
     //   GET /latest/meta-data/iam/security-credentials/          -> profile name
     //   GET /latest/meta-data/iam/security-credentials/{profile} -> credentials JSON
