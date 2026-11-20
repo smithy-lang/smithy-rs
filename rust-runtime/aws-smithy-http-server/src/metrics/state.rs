@@ -39,6 +39,22 @@ impl ServiceIdentity {
     }
 }
 
+/// Callbacks registered with `RequestExt::on_finish` before the request reached a `MetricsService`,
+/// stored in the request extensions. The `MetricsService` takes them over when the request reaches
+/// it. Clones share the same callbacks.
+#[derive(Clone, Default)]
+pub(crate) struct PendingCallbacks(Arc<Mutex<Vec<FinishCallback>>>);
+
+impl PendingCallbacks {
+    pub(crate) fn push(&self, callback: FinishCallback) {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).push(callback);
+    }
+
+    pub(crate) fn take(&self) -> Vec<FinishCallback> {
+        mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+}
+
 /// Per-request metrics state, shared by every component handling the request.
 ///
 /// `MetricsService` stores this in the request extensions. Components that need the state after
@@ -60,17 +76,19 @@ impl MetricsState {
     /// The wall clock is read from `time_source`, only if `enabled`.
     ///
     /// `concurrent_requests_count` is the number of other requests in progress when this one started.
+    /// `callbacks` are invoked before any registered later.
     pub(crate) fn new(
         enabled: bool,
         time_source: &SharedTimeSource,
         service: &ServiceIdentity,
         concurrent_requests_count: usize,
+        callbacks: Vec<FinishCallback>,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 metrics: enabled
                     .then(|| Mutex::new(InProgressMetrics::new(time_source, service, concurrent_requests_count))),
-                callbacks: Mutex::new(Vec::new()),
+                callbacks: Mutex::new(callbacks),
             }),
         }
     }
@@ -389,7 +407,13 @@ mod tests {
     }
 
     fn enabled_state() -> MetricsState {
-        MetricsState::new(true, &Default::default(), &ServiceIdentity::of::<TestService>(), 0)
+        MetricsState::new(
+            true,
+            &Default::default(),
+            &ServiceIdentity::of::<TestService>(),
+            0,
+            Vec::new(),
+        )
     }
 
     #[tokio::test(start_paused = true)]
