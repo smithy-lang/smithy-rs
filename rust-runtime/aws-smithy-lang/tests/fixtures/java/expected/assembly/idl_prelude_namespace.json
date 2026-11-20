@@ -1,0 +1,24 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Uses": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#length": {
+                            "min": 1
+                        }
+                    }
+                },
+                "foo": {
+                    "target": "smithy.api#Foo"
+                }
+            }
+        },
+        "smithy.api#Foo": {
+            "type": "string"
+        }
+    }
+}

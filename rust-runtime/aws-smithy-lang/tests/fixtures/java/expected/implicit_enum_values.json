@@ -1,0 +1,22 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#E": {
+            "type": "enum",
+            "members": {
+                "X": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "X"
+                    }
+                },
+                "Y": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "Y"
+                    }
+                }
+            }
+        }
+    }
+}

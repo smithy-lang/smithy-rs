@@ -141,7 +141,12 @@ impl LoginCredentialsProvider {
         now: SystemTime,
     ) -> Result<LoginToken, LoginTokenError> {
         let dpop_auth_scheme = dpop::DPoPAuthScheme::new(&cached_token.dpop_key)?;
-        let client_config = SignInClientConfigBuilder::from(&inner.sdk_config)
+        let mut config_builder = SignInClientConfigBuilder::from(&inner.sdk_config);
+        if let Some(region) = &cached_token.sign_in_region {
+            tracing::debug!(region = %region, "using signInRegion from cached Login token for refresh");
+            config_builder.set_region(Some(region.clone()));
+        }
+        let client_config = config_builder
             .auth_scheme_resolver(dpop::DPoPAuthSchemeOptionResolver)
             .push_auth_scheme(dpop_auth_scheme)
             .build();
@@ -269,6 +274,7 @@ mod test {
     use aws_credential_types::provider::ProvideCredentials;
     use aws_sdk_signin::config::RuntimeComponents;
     use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
     use aws_smithy_runtime_api::client::{
         http::{
@@ -276,6 +282,7 @@ mod test {
             SharedHttpConnector,
         },
         orchestrator::{HttpRequest, HttpResponse},
+        result::ConnectorError,
     };
     use aws_smithy_types::body::SdkBody;
     use aws_types::os_shim_internal::{Env, Fs};
@@ -303,6 +310,8 @@ mod test {
         response: Option<MockResponse>,
         #[serde(default)]
         response_code: Option<u16>,
+        #[serde(default)]
+        expected_request_uri: Option<String>,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -382,11 +391,13 @@ mod test {
             let env = Env::from_slice(&[("HOME", "/home/user")]);
 
             // Setup mock HTTP client
+            let captured_requests: CapturedRequests = Default::default();
             let http_client = if self.mock_api_calls.is_empty() {
                 crate::test_case::no_traffic_client()
             } else {
                 aws_smithy_runtime_api::client::http::SharedHttpClient::new(TestHttpClient::new(
                     &self.mock_api_calls,
+                    captured_requests.clone(),
                 ))
             };
 
@@ -404,6 +415,35 @@ mod test {
 
             // Call provider once and validate result against all outcomes
             let result = dbg!(provider.provide_credentials().await);
+
+            // Validate the request URI and the DPoP proof's `htu` claim
+            let captured = captured_requests.lock().unwrap().clone();
+            for (idx, mock) in self.mock_api_calls.iter().enumerate() {
+                let Some(expected_uri) = &mock.expected_request_uri else {
+                    continue;
+                };
+                let (uri, dpop) = captured
+                    .get(idx)
+                    .unwrap_or_else(|| panic!("no request captured for mock call {idx}"));
+                assert_eq!(
+                    expected_uri, uri,
+                    "request URI mismatch for mock call {idx}"
+                );
+                let dpop = dpop
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("no DPoP header on request {idx}"));
+                let payload_b64 = dpop.split('.').nth(1).expect("DPoP JWT has a payload");
+                let payload = base64_simd::URL_SAFE_NO_PAD
+                    .decode_to_vec(payload_b64)
+                    .expect("valid base64url DPoP payload");
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&payload).expect("valid JSON DPoP payload");
+                assert_eq!(
+                    Some(expected_uri.as_str()),
+                    payload["htu"].as_str(),
+                    "DPoP htu mismatch for mock call {idx}"
+                );
+            }
 
             for outcome in &self.outcomes {
                 match outcome {
@@ -443,6 +483,12 @@ mod test {
                                 "refreshToken mismatch for {}",
                                 filename
                             );
+                            assert_eq!(
+                                expected.get("signInRegion"),
+                                actual.get("signInRegion"),
+                                "signInRegion mismatch for {}",
+                                filename
+                            );
                         }
                     }
                 }
@@ -450,16 +496,20 @@ mod test {
         }
     }
 
+    /// Request URI and `DPoP` header of each request the test connector received
+    type CapturedRequests = Arc<Mutex<Vec<(String, Option<String>)>>>;
+
     #[derive(Debug, Clone)]
     struct TestHttpClient {
         inner: SharedHttpConnector,
     }
 
     impl TestHttpClient {
-        fn new(mock_calls: &[MockApiCall]) -> Self {
+        fn new(mock_calls: &[MockApiCall], requests: CapturedRequests) -> Self {
             Self {
                 inner: SharedHttpConnector::new(TestHttpConnector {
                     mock_calls: mock_calls.to_vec(),
+                    requests,
                 }),
             }
         }
@@ -478,10 +528,15 @@ mod test {
     #[derive(Debug, Clone)]
     struct TestHttpConnector {
         mock_calls: Vec<MockApiCall>,
+        requests: CapturedRequests,
     }
 
     impl HttpConnector for TestHttpConnector {
-        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+        fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+            self.requests.lock().unwrap().push((
+                request.uri().to_string(),
+                request.headers().get("dpop").map(str::to_owned),
+            ));
             if let Some(mock) = self.mock_calls.first() {
                 if let Some(code) = mock.response_code {
                     return HttpConnectorFuture::ready(Ok(HttpResponse::new(
@@ -529,5 +584,264 @@ mod test {
             test.check().await;
         }
         Ok(())
+    }
+
+    /// With a Sign-In endpoint override, the region does not pick the host, so a
+    /// `signInRegion` that is not a valid host label must not stop the refresh.
+    #[tokio::test]
+    async fn endpoint_override_with_malformed_sign_in_region_refreshes() {
+        let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
+        let cache_path = "/home/user/.aws/login/cache/4b0ba8f99f075c0633e122fd73346ce203a3faf18ea0310eb2d29df1bab2e255.json";
+        let cached_token = serde_json::json!({
+            "accessToken": {
+                "accessKeyId": "OLDEXPIREDKEY",
+                "secretAccessKey": "oldExpiredSecretKey",
+                "sessionToken": "oldExpiredSessionToken",
+                "accountId": "012345678901",
+                "expiresAt": "2020-01-01T00:00:00Z"
+            },
+            "tokenType": "aws_sigv4",
+            "clientId": "arn:aws:signin:::devtools/same-device",
+            "refreshToken": "valid_refresh_token",
+            "dpopKey": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIPt/u8InPLpQeQLJTvVX+sNDzni8vMDMt3Liu+nMBigfoAoGCCqGSM49\nAwEHoUQDQgAEILkGG7rNOnxiIJlMgimY1UPP8eDMFP0DAY6WGjngP4bvTAiUCQ/I\nffut2379uP+OBCm2ovGpBOJRgrl1RspUOQ==\n-----END EC PRIVATE KEY-----\n",
+            "signInRegion": "bad region!"
+        });
+        let fs = Fs::from_map(HashMap::from([(
+            cache_path.to_string(),
+            serde_json::to_vec(&cached_token).unwrap(),
+        )]));
+        let env = Env::from_slice(&[
+            ("HOME", "/home/user"),
+            (
+                "AWS_ENDPOINT_URL_SIGNIN",
+                "https://signin-proxy.example.com",
+            ),
+        ]);
+        let mock: MockApiCall = serde_json::from_value(serde_json::json!({
+            "response": {
+                "tokenOutput": {
+                    "accessToken": {
+                        "accessKeyId": "NEWREFRESHEDKEY",
+                        "secretAccessKey": "newRefreshedSecretKey",
+                        "sessionToken": "newRefreshedSessionToken"
+                    },
+                    "refreshToken": "new_refresh_token",
+                    "expiresIn": 900
+                }
+            }
+        }))
+        .unwrap();
+        let requests = CapturedRequests::default();
+        // 2025-11-19T00:00:00Z, the same fixed time as the SEP test cases
+        let now = UNIX_EPOCH + Duration::from_secs(1763510400);
+        let provider_config = ProviderConfig::empty()
+            .with_env(env)
+            .with_fs(fs)
+            .with_http_client(TestHttpClient::new(&[mock], requests.clone()))
+            .with_region(Some(Region::from_static("us-east-2")))
+            .with_sleep_impl(TokioSleep::new())
+            .with_time_source(SharedTimeSource::new(StaticTimeSource::new(now)));
+        let provider = LoginCredentialsProvider::builder(session_arn)
+            .configure(&provider_config)
+            .build();
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("the endpoint override picks the host, so the refresh succeeds");
+        assert_eq!("NEWREFRESHEDKEY", creds.access_key_id());
+        let uris: Vec<_> = requests
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(uri, _)| uri.clone())
+            .collect();
+        assert_eq!(vec!["https://signin-proxy.example.com/v1/token"], uris);
+    }
+
+    /// How the first `CreateOAuth2Token` attempt fails before the retry succeeds
+    #[derive(Clone, Copy, Debug)]
+    enum FirstAttempt {
+        ServerError,
+        ConnectionReset,
+        Timeout,
+    }
+
+    #[derive(Debug)]
+    struct Attempt {
+        uri: String,
+        dpop: Vec<String>,
+        body: Vec<u8>,
+    }
+
+    /// Fails the first refresh attempt, answers every later one with a refreshed token, and
+    /// records what each attempt sent
+    #[derive(Clone, Debug)]
+    struct FlakySignIn {
+        first_attempt: FirstAttempt,
+        attempts: Arc<Mutex<Vec<Attempt>>>,
+    }
+
+    impl HttpClient for FlakySignIn {
+        fn http_connector(
+            &self,
+            _settings: &HttpConnectorSettings,
+            _components: &RuntimeComponents,
+        ) -> SharedHttpConnector {
+            SharedHttpConnector::new(self.clone())
+        }
+    }
+
+    impl HttpConnector for FlakySignIn {
+        fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+            let mut attempts = self.attempts.lock().unwrap();
+            attempts.push(Attempt {
+                uri: request.uri().to_string(),
+                dpop: request
+                    .headers()
+                    .get_all("dpop")
+                    .map(str::to_string)
+                    .collect(),
+                body: request.body().bytes().unwrap_or_default().to_vec(),
+            });
+            if attempts.len() == 1 {
+                return HttpConnectorFuture::ready(match self.first_attempt {
+                    FirstAttempt::ServerError => Ok(HttpResponse::new(
+                        500.try_into().unwrap(),
+                        SdkBody::from("{}"),
+                    )),
+                    FirstAttempt::ConnectionReset => Err(ConnectorError::io(
+                        std::io::Error::from(std::io::ErrorKind::ConnectionReset).into(),
+                    )),
+                    FirstAttempt::Timeout => Err(ConnectorError::timeout("read timed out".into())),
+                });
+            }
+            HttpConnectorFuture::ready(Ok(HttpResponse::new(
+                200.try_into().unwrap(),
+                SdkBody::from(
+                    r#"{
+                        "accessToken": {
+                            "accessKeyId": "NEWREFRESHEDKEY",
+                            "secretAccessKey": "newRefreshedSecretKey",
+                            "sessionToken": "newRefreshedSessionToken"
+                        },
+                        "expiresIn": 900,
+                        "refreshToken": "new_refresh_token"
+                    }"#,
+                ),
+            )))
+        }
+    }
+
+    /// A refresh attempt that fails with a retryable error is retried with a freshly signed
+    /// DPoP proof. RFC 9449 section 11.1 lets the server reject a proof whose `jti` it has
+    /// already seen, so replaying the first attempt's proof would turn a transient failure
+    /// into a failed refresh.
+    async fn check_retried_refresh(first_attempt: FirstAttempt) {
+        let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
+        let cache_path = "/home/user/.aws/login/cache/4b0ba8f99f075c0633e122fd73346ce203a3faf18ea0310eb2d29df1bab2e255.json";
+        let cached_token = serde_json::json!({
+            "accessToken": {
+                "accessKeyId": "OLDEXPIREDKEY",
+                "secretAccessKey": "oldExpiredSecretKey",
+                "sessionToken": "oldExpiredSessionToken",
+                "accountId": "012345678901",
+                "expiresAt": "2020-01-01T00:00:00Z"
+            },
+            "tokenType": "aws_sigv4",
+            "clientId": "arn:aws:signin:::devtools/same-device",
+            "refreshToken": "valid_refresh_token",
+            "dpopKey": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIPt/u8InPLpQeQLJTvVX+sNDzni8vMDMt3Liu+nMBigfoAoGCCqGSM49\nAwEHoUQDQgAEILkGG7rNOnxiIJlMgimY1UPP8eDMFP0DAY6WGjngP4bvTAiUCQ/I\nffut2379uP+OBCm2ovGpBOJRgrl1RspUOQ==\n-----END EC PRIVATE KEY-----\n"
+        });
+        let fs = Fs::from_map(HashMap::from([(
+            cache_path.to_string(),
+            serde_json::to_vec(&cached_token).unwrap(),
+        )]));
+        let sign_in = FlakySignIn {
+            first_attempt,
+            attempts: Default::default(),
+        };
+        // 2025-11-19T00:00:00Z, the same fixed time as the SEP test cases
+        let (time_source, sleep) =
+            instant_time_and_sleep(UNIX_EPOCH + Duration::from_secs(1763510400));
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[("HOME", "/home/user")]))
+            .with_fs(fs.clone())
+            .with_http_client(sign_in.clone())
+            .with_region(Some(Region::from_static("us-east-2")))
+            .with_sleep_impl(sleep)
+            .with_time_source(time_source);
+        let provider = LoginCredentialsProvider::builder(session_arn)
+            .configure(&provider_config)
+            .build();
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("the retry refreshes the token");
+        assert_eq!("NEWREFRESHEDKEY", creds.access_key_id());
+
+        {
+            let attempts = sign_in.attempts.lock().unwrap();
+            assert_eq!(2, attempts.len(), "{first_attempt:?} is retried once");
+            let proofs: Vec<_> = attempts
+                .iter()
+                .map(|attempt| {
+                    // RFC 9449 section 4.3 rejects a request with more than one DPoP header
+                    assert_eq!(1, attempt.dpop.len(), "one DPoP proof per attempt");
+                    let (header, payload) = dpop::test_util::verify_proof(&attempt.dpop[0]);
+                    assert_eq!(attempt.uri, payload["htu"]);
+                    (header, payload)
+                })
+                .collect();
+            // The refresh token is bound to the cached key (RFC 9449 section 5). Coordinates come
+            // from `openssl ec -pubout`, not from `p256`.
+            assert_eq!(
+                serde_json::json!({
+                    "kty": "EC",
+                    "crv": "P-256",
+                    "x": "ILkGG7rNOnxiIJlMgimY1UPP8eDMFP0DAY6WGjngP4Y",
+                    "y": "70wIlAkPyH37rdt-_bj_jgQptqLxqQTiUYK5dUbKVDk",
+                }),
+                proofs[0].0["jwk"]
+            );
+            assert_eq!(proofs[0].0, proofs[1].0, "both attempts prove the same key");
+            assert_ne!(
+                proofs[0].1["jti"], proofs[1].1["jti"],
+                "a retried attempt must not replay the first attempt's proof"
+            );
+            assert_eq!(
+                attempts[0].body, attempts[1].body,
+                "only the proof changes between attempts"
+            );
+        }
+
+        let cached: serde_json::Value =
+            serde_json::from_slice(&fs.read_to_end(cache_path).await.unwrap()).unwrap();
+        assert_eq!("NEWREFRESHEDKEY", cached["accessToken"]["accessKeyId"]);
+        assert_eq!("new_refresh_token", cached["refreshToken"]);
+        assert_eq!(
+            cached_token["dpopKey"], cached["dpopKey"],
+            "the refreshed session keeps the key it is bound to"
+        );
+
+        // The refreshed token is served from memory: one successful refresh, not one per call
+        provider.provide_credentials().await.unwrap();
+        assert_eq!(2, sign_in.attempts.lock().unwrap().len());
+    }
+
+    #[tokio::test]
+    async fn retried_refresh_after_server_error_signs_a_fresh_proof() {
+        check_retried_refresh(FirstAttempt::ServerError).await;
+    }
+
+    #[tokio::test]
+    async fn retried_refresh_after_connection_reset_signs_a_fresh_proof() {
+        check_retried_refresh(FirstAttempt::ConnectionReset).await;
+    }
+
+    #[tokio::test]
+    async fn retried_refresh_after_timeout_signs_a_fresh_proof() {
+        check_retried_refresh(FirstAttempt::Timeout).await;
     }
 }

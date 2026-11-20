@@ -19,12 +19,12 @@ use pin_project_lite::pin_project;
 use tower::Service;
 use tracing;
 
-use crate::default::DefaultMetrics;
 use crate::default::DefaultMetricsExtension;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
+use crate::default::SmithyMetrics;
 use crate::types::aws_smithy_http_server::operation::OperationShape;
 use crate::types::aws_smithy_http_server::plugin::HttpMarker;
 use crate::types::aws_smithy_http_server::plugin::Plugin;
@@ -50,7 +50,7 @@ pin_project! {
         WithMetrics {
             #[pin]
             inner: F,
-            metrics: metrique::AppendAndCloseOnDrop<DefaultMetrics, metrique_writer::BoxEntrySink>,
+            metrics: metrique::AppendAndCloseOnDrop<SmithyMetrics, metrique_writer::BoxEntrySink>,
             operation_timer_guard: Option<OwnedTimerGuard>
         },
         /// No sink available
@@ -278,7 +278,7 @@ where
                     };
                 };
 
-                let mut metrics = DefaultMetrics::default().append_on_drop(sink);
+                let mut metrics = SmithyMetrics::default().append_on_drop(sink);
 
                 metrics.default_request_metrics = Some(Slot::new(default_request_metrics));
 

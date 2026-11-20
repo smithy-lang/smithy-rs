@@ -1,0 +1,15 @@
+{
+  "recorded_utc": "2026-10-26T12:57:03.733719+00:00",
+  "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
+  "kernel": "Linux 5.10.270-283.1109.amzn2int.x86_64 x86_64 GNU/Linux",
+  "cpu": "Architecture:        x86_64\nCPU op-mode(s):      32-bit, 64-bit\nByte Order:          Little Endian\nCPU(s):              64\nOn-line CPU(s) list: 0-63\nThread(s) per core:  1\nCore(s) per socket:  64\nSocket(s):           1\nNUMA node(s):        1\nVendor ID:           AuthenticAMD\nCPU family:          25\nModel:               17\nModel name:          AMD EPYC 9R14\nStepping:            1\nCPU MHz:             3695.452\nBogoMIPS:            5199.99\nHypervisor vendor:   KVM\nVirtualization type: full\nL1d cache:           32K\nL1i cache:           32K\nL2 cache:            1024K\nL3 cache:            32768K\nNUMA node0 CPU(s):   0-63\nFlags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf tsc_known_freq pni pclmulqdq monitor ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch topoext perfctr_core invpcid_single ssbd ibrs ibpb stibp ibrs_enhanced vmmcall fsgsbase bmi1 avx2 smep bmi2 invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx512_bf16 clzero xsaveerptr rdpru wbnoinvd arat avx512vbmi pku ospke avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid flush_l1d\n",
+  "frames": 1048576,
+  "repeats": 9,
+  "command": "target/release/event-stream-limits-bench 1048576 9",
+  "source_sha256": {
+    "tools/event-stream-limits-bench/Cargo.lock": "284e2f2893cc8b6e9a5ce535ccbc693cc1332ed63fcd2df9a7e4f504515b7b3d",
+    "tools/event-stream-limits-bench/src/main.rs": "45e5817cb2af10ecc8de3811004e3294279ef4234e85c5ec9491d81d2a66abed",
+    "rust-runtime/inlineable/src/event_stream_message_timeout.rs": "973b1820cf074f40b69fb7bd5d966d7e13d20b5d5196fe21a98632146380442c",
+    "rust-runtime/inlineable/src/event_stream_poll_budget.rs": "3080669a36f4f8e1b51db026571effecd5879080f64a41de358d34bdb3696714"
+  }
+}

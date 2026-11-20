@@ -47,6 +47,12 @@ use tower::Service;
 /// Default duration for retaining an idle reusable connection.
 const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 
+/// Default TCP keepalive probe interval for newly created sockets.
+///
+/// 30 seconds keeps connections alive well within the idle timeout of
+/// NAT gateways and firewalls without adding meaningful overhead.
+const DEFAULT_TCP_KEEPALIVE: Duration = Duration::from_secs(30);
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 enum TriStateOption<T> {
     /// No option was set by the user, so construction applies its default.
@@ -107,6 +113,12 @@ pub struct Builder<Tls = TlsUnset> {
     tls: Tls,
 }
 
+/// Connection-pool builder with a TLS provider selected.
+///
+/// Created by [`Builder::tls_provider`]. HTTPS construction requires an enabled
+/// TLS provider feature.
+pub type HttpsBuilder = Builder<TlsProviderSelected>;
+
 impl Default for Builder<TlsUnset> {
     fn default() -> Self {
         Self {
@@ -114,7 +126,7 @@ impl Default for Builder<TlsUnset> {
             time_source: None,
             sleep_impl: None,
             tcp_nodelay: true,
-            tcp_keepalive: TriStateOption::NotSet,
+            tcp_keepalive: TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
             max_connections_per_host: None,
             reuse_scope: ConnectionReuseScope::default(),
             partitions: None,
@@ -272,6 +284,15 @@ impl<Tls> Builder<Tls> {
         self
     }
 
+    /// Returns whether an explicit partition set is configured.
+    ///
+    /// An explicitly supplied empty set also returns `true`. Clearing the set
+    /// with [`Self::set_partitions`] and `None` restores anonymous partition
+    /// construction.
+    pub fn has_explicit_partitions(&self) -> bool {
+        self.partitions.is_some()
+    }
+
     /// Declares the complete explicit partition set.
     pub fn partitions(mut self, partitions: impl IntoIterator<Item = Partition>) -> Self {
         self.partitions = Some(partitions.into_iter().collect());
@@ -367,6 +388,21 @@ impl Builder<TlsUnset> {
     }
 }
 
+impl Builder<TlsProviderSelected> {
+    /// Builds a pool whose connector performs TLS and ALPN negotiation.
+    pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        #[cfg(any(feature = "__rustls", feature = "s2n-tls"))]
+        {
+            self.build_https_enabled()
+        }
+        #[cfg(not(any(feature = "__rustls", feature = "s2n-tls")))]
+        {
+            // Provider has no variants here; exhaustiveness is compiler-checked.
+            match self.tls.provider {}
+        }
+    }
+}
+
 crate::cfg::cfg_tls! {
     impl Builder<TlsProviderSelected> {
         /// Sets provider-specific TLS configuration for HTTPS connections.
@@ -381,8 +417,8 @@ crate::cfg::cfg_tls! {
             self
         }
 
-        /// Builds a pool whose connector performs TLS and ALPN negotiation.
-        pub fn build_https(self) -> Result<ConnectionPool, BuildError> {
+        /// Selects the resolver for the HTTPS transport.
+        fn build_https_enabled(self) -> Result<ConnectionPool, BuildError> {
             let resolver = self.dns_resolver.clone();
             match resolver {
                 Some(resolver) => {
@@ -408,7 +444,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "__rustls")]
                 tls::Provider::Rustls(crypto_mode) => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, alpn_protocols| {
                             let mut connector =
@@ -431,7 +467,7 @@ crate::cfg::cfg_tls! {
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls => {
                     let tcp_nodelay = self.tcp_nodelay;
-                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+                    let tcp_keepalive = self.tcp_keepalive.clone().resolve(Some(DEFAULT_TCP_KEEPALIVE));
                     let transport = establish::from_cached_interface_connector(
                         move |interface, _alpn_protocols| {
                             let mut connector =
@@ -507,7 +543,10 @@ impl Builder<TlsUnset> {
     {
         validate_default_connector_interfaces(self.partitions.as_deref())?;
         let tcp_nodelay = self.tcp_nodelay;
-        let tcp_keepalive = self.tcp_keepalive.clone().resolve(None);
+        let tcp_keepalive = self
+            .tcp_keepalive
+            .clone()
+            .resolve(Some(DEFAULT_TCP_KEEPALIVE));
         let proxy_config = self.proxy_config.clone();
         let transport = if proxy_config.is_disabled() {
             establish::from_interface_connector(move |interface| {
@@ -798,7 +837,10 @@ mod tests {
     fn builder_preserves_unset_disabled_and_configured_settings() {
         let mut builder = Builder::default();
         assert_eq!(TriStateOption::NotSet, builder.idle_timeout);
-        assert_eq!(TriStateOption::NotSet, builder.tcp_keepalive);
+        assert_eq!(
+            TriStateOption::Set(DEFAULT_TCP_KEEPALIVE),
+            builder.tcp_keepalive
+        );
         assert!(builder.tcp_nodelay);
         assert_eq!(None, builder.max_connections_per_host);
         assert!(builder.partitions.is_none());

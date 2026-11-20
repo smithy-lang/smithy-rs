@@ -1,0 +1,6 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Doc": {"type": "string", "traits": {"smithy.api#documentation": "b"}}
+    }
+}

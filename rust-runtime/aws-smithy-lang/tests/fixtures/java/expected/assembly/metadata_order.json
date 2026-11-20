@@ -1,0 +1,11 @@
+{
+    "smithy": "2.0",
+    "metadata": {
+        "k": [
+            "put",
+            "model",
+            "file"
+        ]
+    },
+    "shapes": {}
+}

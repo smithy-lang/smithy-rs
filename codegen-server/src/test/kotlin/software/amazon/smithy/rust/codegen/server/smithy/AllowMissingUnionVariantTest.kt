@@ -50,25 +50,64 @@ class AllowMissingUnionVariantTest {
 
         structure UnionWithMissingVariantInput {
             member: UnionWithMissingVariantUnion,
+            // Every place a union can be read from, so the generated code for each compiles under the setting.
+            unions: UnionList,
+            sparseUnions: SparseUnionList,
+            unionMap: UnionMap,
+            sparseUnionMap: SparseUnionMap,
+            outer: OuterUnion,
+            constrained: ConstrainedUnion,
         }
 
         union UnionWithMissingVariantUnion {
             variant: String,
         }
+
+        list UnionList {
+            member: UnionWithMissingVariantUnion,
+        }
+
+        @sparse
+        list SparseUnionList {
+            member: UnionWithMissingVariantUnion,
+        }
+
+        map UnionMap {
+            key: String,
+            value: UnionWithMissingVariantUnion,
+        }
+
+        @sparse
+        map SparseUnionMap {
+            key: String,
+            value: UnionWithMissingVariantUnion,
+        }
+
+        union OuterUnion {
+            inner: UnionWithMissingVariantUnion,
+        }
+
+        union ConstrainedUnion {
+            @length(min: 1)
+            name: String,
+        }
         """.asSmithyModel()
 
-    private fun runWithAllowMissingUnionVariant(enabled: Boolean) =
-        serverIntegrationTest(
-            model,
-            IntegrationTestParams(
-                service = "test#AllowMissingUnionVariantService",
-                additionalSettings =
-                    ServerAdditionalSettings.builder()
-                        .allowMissingUnionVariant(enabled)
-                        .toObjectNode(),
-            ),
-            testCoverage = HttpTestType.Default,
-        ) { _, _ -> }
+    private fun runWithAllowMissingUnionVariant(
+        enabled: Boolean,
+        schemaSerde: Boolean = false,
+    ) = serverIntegrationTest(
+        model,
+        IntegrationTestParams(
+            service = "test#AllowMissingUnionVariantService",
+            additionalSettings =
+                ServerAdditionalSettings.builder()
+                    .allowMissingUnionVariant(enabled)
+                    .schemaSerde(schemaSerde)
+                    .toObjectNode(),
+        ),
+        testCoverage = HttpTestType.Default,
+    ) { _, _ -> }
 
     @Test
     fun `an empty union body parses to None when allowMissingUnionVariant is enabled`() {
@@ -82,5 +121,21 @@ class AllowMissingUnionVariantTest {
                 runWithAllowMissingUnionVariant(enabled = false)
             }
         error.message shouldContain "Union did not contain a valid variant."
+    }
+
+    @Test
+    fun `on the schema path an empty union body parses to None when allowMissingUnionVariant is enabled`() {
+        runWithAllowMissingUnionVariant(enabled = true, schemaSerde = true)
+    }
+
+    @Test
+    fun `on the schema path an empty union body fails the httpRequestTest when allowMissingUnionVariant is disabled`() {
+        val error =
+            assertThrows<CommandError> {
+                runWithAllowMissingUnionVariant(enabled = false, schemaSerde = true)
+            }
+        // The schema path rejects the request before the handler; the generated protocol test reports that
+        // rather than the deserializer's message.
+        error.message shouldContain "we expected operation handler to be invoked but it was not entered"
     }
 }

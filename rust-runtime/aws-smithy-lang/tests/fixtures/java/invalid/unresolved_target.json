@@ -1,0 +1,11 @@
+{
+  "smithy": "2.0",
+  "shapes": {
+    "ex#L": {
+      "type": "list",
+      "member": {
+        "target": "ex#Missing"
+      }
+    }
+  }
+}

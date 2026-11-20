@@ -1,0 +1,44 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.api#String": {
+            "type": "integer",
+            "traits": {
+                "smithy.api#documentation": "Not the prelude string."
+            }
+        },
+        "smithy.api#Foo": {
+            "type": "structure",
+            "members": {
+                "x": {
+                    "target": "smithy.api#String"
+                }
+            }
+        },
+        "smithy.api#Bar": {
+            "type": "structure",
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#Uses": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#length": {
+                            "min": 1
+                        }
+                    }
+                },
+                "foo": {
+                    "target": "smithy.api#Foo"
+                }
+            },
+            "traits": {
+                "smithy.api#Bar": {}
+            }
+        }
+    }
+}

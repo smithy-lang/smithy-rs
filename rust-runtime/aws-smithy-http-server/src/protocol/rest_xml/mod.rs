@@ -6,6 +6,8 @@
 pub mod rejection;
 pub mod router;
 pub mod runtime_error;
-
-/// [AWS restXml](https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html) protocol.
-pub struct RestXml;
+/// The `restXml` protocol.
+///
+/// The same type is used as the protocol type parameter of generated serde servers and, with
+/// `codegen.schemaSerde`, as the schema-driven protocol implementation.
+pub use crate::schema::protocol::RestXml;

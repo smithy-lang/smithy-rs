@@ -118,7 +118,8 @@ internal class EndpointTestGenerator(
                     rust(".${Identifier.of(id).rustName()}(#W)", generateValue(Value.fromNode(value)))
                 }
             }
-            rust(""".build().expect("invalid params")""")
+            // Skip the validators that `build()` runs, so the test checks the rule set alone
+            rust(""".${EndpointParamsGenerator.BUILD_WITHOUT_VALIDATORS}().expect("invalid params")""")
         }
 
     private fun generateValue(value: Value): Writable {

@@ -43,10 +43,10 @@ error: aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `
 
 | crate | from | to | what to do |
 |---|---|---|---|
-| `aws-sigv4` | 1.6.0 | 1.7.0 | add `rustcrypto` to a `--no-default-features` build |
-| `aws-smithy-checksums` | 0.65.0 | 0.65.1 | same |
-| `aws-runtime` | 1.10.0 | 1.11.0 | same; this flag was previously a no-op here |
-| `aws-config` | 1.12.0 | 1.13.0 | same |
+| `aws-sigv4` | 1.6.6 | 1.7.0 | add `rustcrypto` to a `--no-default-features` build |
+| `aws-smithy-checksums` | 0.65.1 | 0.65.2 | same |
+| `aws-runtime` | 1.10.4 | 1.11.0 | same; this flag was previously a no-op here |
+| `aws-config` | 1.13.3 | 1.14.0 | same |
 
 Generated SDK crates gain a default-on `rustcrypto` feature for the same reason; their `default` list already existed, so only a `default-features = false` build is affected.
 

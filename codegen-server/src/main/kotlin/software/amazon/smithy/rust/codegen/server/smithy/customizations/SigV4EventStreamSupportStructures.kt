@@ -145,8 +145,31 @@ object SigV4EventStreamSupportStructures {
                         SignedEventError::Event(err)
                     }
                 }
+
+                impl<E: #{Display}> #{Display} for SignedEventError<E> {
+                    fn fmt(&self, f: &mut #{Formatter}<'_>) -> #{fmt_Result} {
+                        match self {
+                            Self::Event(error) => #{Display}::fmt(error, f),
+                            Self::InvalidSignedEvent(error) => #{Display}::fmt(error, f),
+                        }
+                    }
+                }
+
+                impl<E: #{Error} + 'static> #{Error} for SignedEventError<E> {
+                    fn source(&self) -> #{Option}<&(dyn #{Error} + 'static)> {
+                        match self {
+                            Self::Event(error) => #{Some}(error),
+                            Self::InvalidSignedEvent(error) => #{Some}(error),
+                        }
+                    }
+                }
                 """,
                 "ExtractionError" to extractionError(runtimeConfig),
+                "Display" to RuntimeType.Display,
+                "Formatter" to RuntimeType.std.resolve("fmt::Formatter"),
+                "fmt_Result" to RuntimeType.std.resolve("fmt::Result"),
+                "Error" to RuntimeType.StdError,
+                *RuntimeType.preludeScope,
             )
         }
 

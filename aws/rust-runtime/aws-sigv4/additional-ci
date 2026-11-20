@@ -13,8 +13,8 @@ C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
 # Both crypto backends are optional dependencies, so a build naming neither has no crypto at all.
-# That configuration is the breaking part of this crate's 2.0.0: `--no-default-features --features
-# sign-http,http1` compiled on 1.6.0 and does not here. The `compile_error!` in `crypto.rs` exists
+# That configuration is the breaking part of this crate's 1.7.0: `--no-default-features --features
+# sign-http,http1` compiled on 1.6.x and does not here. The `compile_error!` in `crypto.rs` exists
 # so that the build says what to do about it instead of failing on an unresolved `hmac` import from
 # inside a private module, which is what a consumer would otherwise have to diagnose.
 #

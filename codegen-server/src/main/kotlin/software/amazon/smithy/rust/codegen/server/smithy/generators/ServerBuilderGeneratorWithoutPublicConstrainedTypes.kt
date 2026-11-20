@@ -80,14 +80,15 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
-    private val members: List<MemberShape> = shape.allMembers.values.toList()
+    private val members: List<MemberShape> =
+        shape.allMembers.values.toList()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val structureSymbol = symbolProvider.toSymbol(shape)
 
     private val builderSymbol = shape.serverBuilderSymbol(symbolProvider, false)
-    private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
+    private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
     private val codegenScope =

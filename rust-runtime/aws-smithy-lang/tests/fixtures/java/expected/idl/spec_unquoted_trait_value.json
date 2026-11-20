@@ -1,0 +1,12 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Documented": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "smithy.example#client"
+            }
+        }
+    }
+}

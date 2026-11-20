@@ -13,7 +13,7 @@ hyper = { version = "1", features = ["server"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "service"] }
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
-tower = "0.4"
+tower = "0.5"
 
 # These dependencies are only required for the `pokemon-service-tls` program.
 tokio-rustls = "0.26"
@@ -22,7 +22,7 @@ rustls-pemfile = "2"
 futures-util = { version = "0.3.29", default-features = false }
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
+pokemon-service-server-sdk = { package = "pokemon-service-server-schema-sdk", path = "../pokemon-service-server-schema-sdk/" }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]

@@ -1,0 +1,4 @@
+{
+    "description": "A concatenated metadata array takes the location of its last value, so the same value from that location is ignored afterwards: the models of a.json (k = []) and b.json (k = [\"x\"]) concatenate to [\"x\"] at b.json, and b.json added again as a file is ignored.",
+    "steps": [{"addModel": "a.json"}, {"addModel": "b.json"}, {"addFile": "b.json"}]
+}

@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "event-stream-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aws-smithy-http-server = { path = "../../../rust-runtime/aws-smithy-http-server" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream" }
+bytes = "1"
+futures-util = "0.3"
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+minicbor = { version = "2.2.1", features = ["alloc", "half"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net"] }
+tower = { version = "0.5", features = ["util"] }
+hyper = { version = "1", features = ["client", "server", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+rest-json-legacy = { package = "event-stream-bench-rest-json-legacy", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-rest-json-legacy/rust-server-codegen" }
+rest-json-schema = { package = "event-stream-bench-rest-json-schema", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-rest-json-schema/rust-server-codegen" }
+cbor-legacy = { package = "event-stream-bench-rpc-v2-cbor-legacy", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-rpc-v2-cbor-legacy/rust-server-codegen" }
+cbor-schema = { package = "event-stream-bench-rpc-v2-cbor-schema", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-rpc-v2-cbor-schema/rust-server-codegen" }
+multi-schema = { package = "event-stream-bench-multi-schema", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-multi-schema/rust-server-codegen" }
+multi-rest-json-schema = { package = "event-stream-bench-multi-rest-json-schema", path = "../../build/smithyprojections/codegen-server-test/event-stream-bench-multi-rest-json-schema/rust-server-codegen" }
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "event_streams"
+harness = false
+
+[profile.bench]
+debug = 1

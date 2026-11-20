@@ -1,0 +1,15 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#MyString": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "This is my string!",
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 10
+                }
+            }
+        }
+    }
+}

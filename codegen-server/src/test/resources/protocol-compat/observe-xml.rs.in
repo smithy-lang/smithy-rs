@@ -1,0 +1,8 @@
+fn record_xml(input: &crate::input::XmlBodyInput) {
+    *OBSERVED.lock().unwrap() = Some(json!({
+        "token":input.token, "text":input.text, "integer":input.integer,
+        "boolean":input.boolean, "timestamp":format!("{:?}",input.timestamp),
+        "list":input.list, "flat":input.flat, "map":input.map, "flat_map":input.flat_map,
+        "nested":format!("{:?}",input.nested), "choice":format!("{:?}",input.choice)
+    }));
+}

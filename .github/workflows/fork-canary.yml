@@ -85,7 +85,6 @@ jobs:
     outputs:
       commit_sha: ${{ steps.sha.outputs.result }}
     steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
       # Applying a label only requires `triage`, but running this spends the canary's AWS
       # credentials -- a higher bar than grooming issues. Check the labeler explicitly so the
       # restriction is enforced rather than assumed. Fails closed: if the permission cannot be

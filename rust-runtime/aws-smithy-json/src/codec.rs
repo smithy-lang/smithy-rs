@@ -6,6 +6,7 @@
 //! JSON codec implementation for schema-based serialization.
 
 use aws_smithy_schema::codec::Codec;
+use aws_smithy_schema::extension::SchemaExtensionKey;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::date_time::{DateTime, Format as TimestampFormat};
 use aws_smithy_types::{DocumentError, DocumentSettings, Number};
@@ -17,14 +18,52 @@ mod serializer;
 pub use deserializer::JsonDeserializer;
 pub use serializer::JsonSerializer;
 
+/// The JSON object keys (`"name":`) for one member schema, quoted and escaped once
+/// and cached on the schema by [`JSON_MEMBER_KEYS`].
+///
+/// Both [`JsonFieldMapper`] variants are cached because a schema is shared by every
+/// codec in the process, and codecs that honor `@jsonName` and codecs that ignore it
+/// can serialize the same shape.
+#[derive(Debug)]
+struct JsonMemberKeys {
+    /// `"<member name>":`
+    member_name: Box<str>,
+    /// `"<@jsonName value>":`, present only when the member has `@jsonName`.
+    json_name: Option<Box<str>>,
+}
+
+/// Quotes and escapes `name` as a JSON object key, including the trailing colon.
+fn encode_key(name: &str) -> Box<str> {
+    let escaped = crate::escape::escape_string(name);
+    let mut key = String::with_capacity(escaped.len() + 3);
+    key.push('"');
+    key.push_str(&escaped);
+    key.push_str("\":");
+    key.into_boxed_str()
+}
+
+/// Caches a member schema's JSON object keys, so the serializer writes each field
+/// name with one `push_str` instead of quoting and escaping it on every request.
+///
+/// Only requested for schemas that have a member name; see
+/// [`JsonFieldMapper::member_key`].
+static JSON_MEMBER_KEYS: SchemaExtensionKey<JsonMemberKeys> =
+    SchemaExtensionKey::new(|member| JsonMemberKeys {
+        member_name: encode_key(member.member_name().unwrap_or_default()),
+        json_name: member
+            .json_name()
+            .map(|json_name| encode_key(json_name.value())),
+    });
+
 /// Maps between Smithy member names and JSON wire field names.
 ///
 /// When `@jsonName` is enabled, the wire name may differ from the member name.
 /// This type handles the mapping in both directions.
 ///
-/// Nothing is cached, and cannot be: this is a fieldless `Copy` enum with
-/// nowhere to store a cache. Reverse lookups are a linear scan over the
-/// struct's members — see [`JsonFieldMapper::field_to_member`].
+/// The mapper itself is a fieldless `Copy` enum. Encoded keys for serialization are
+/// cached on the member schemas (see [`JsonFieldMapper::member_key`]); reverse
+/// lookups are a linear scan over the struct's members (see
+/// [`JsonFieldMapper::field_to_member`]).
 #[derive(Debug, Clone, Copy)]
 enum JsonFieldMapper {
     /// Uses member names directly, ignoring `@jsonName`.
@@ -34,21 +73,25 @@ enum JsonFieldMapper {
 }
 
 impl JsonFieldMapper {
-    /// Returns the JSON wire name for a member schema.
-    fn member_to_field<'a>(&self, member: &'a Schema<'a>) -> Option<&'a str> {
-        let name = member.member_name()?;
-        match self {
-            JsonFieldMapper::UseMemberName => Some(name),
-            JsonFieldMapper::UseJsonName => {
-                if let Some(jn) = member.json_name() {
-                    return Some(jn.value());
-                }
-                Some(name)
-            }
-        }
+    /// Returns the encoded JSON object key (`"name":`) for a member schema, or `None`
+    /// if the schema is not a member.
+    #[inline]
+    fn member_key<'s>(&self, member: &'s Schema<'_>) -> Option<&'s str> {
+        // Checked first so that schemas without a field name, such as a top-level
+        // structure, never allocate extension storage.
+        member.member_name()?;
+        let keys = member.extension(&JSON_MEMBER_KEYS);
+        Some(match self {
+            JsonFieldMapper::UseMemberName => &keys.member_name,
+            JsonFieldMapper::UseJsonName => keys.json_name.as_ref().unwrap_or(&keys.member_name),
+        })
     }
 
     /// Resolves a JSON wire field name to a member schema within a struct schema.
+    ///
+    /// Returns the first member whose wire name matches, so a field name shared by
+    /// several members (a member name equal to another member's `@jsonName`) always
+    /// resolves to the same member.
     ///
     /// This is `O(M)` in the number of struct members and is called once per field
     /// present on the wire, so deserializing a struct is `O(M²)` in the worst case.
@@ -58,11 +101,7 @@ impl JsonFieldMapper {
     /// to `Schema::member_schema`, which is itself a `find` over the members.
     ///
     /// Real member counts across AWS models are p50=2, p90=6, p99=20, so this is
-    /// not measurable for the large majority of structs. If it ever needs fixing,
-    /// the fix is a codegen-emitted name→index table, not a runtime cache:
-    /// `Schema::member_schema_by_index` is already `O(1)` and generated code
-    /// already matches on `member_index()` downstream, so only the name→index hop
-    /// is linear.
+    /// not measurable for the large majority of structs.
     fn field_to_member<'s>(
         &self,
         schema: &'s Schema<'s>,
@@ -71,9 +110,6 @@ impl JsonFieldMapper {
         match self {
             JsonFieldMapper::UseMemberName => schema.member_schema(field_name),
             JsonFieldMapper::UseJsonName => {
-                // Check @jsonName on each member. A HashMap cache behind a Mutex
-                // would be slower than this scan at realistic member counts; see
-                // the doc comment for the approach that would actually help.
                 for member in schema.members() {
                     if let Some(jn) = member.json_name() {
                         if jn.value() == field_name {
@@ -117,6 +153,22 @@ pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    /// When `true`, a timestamp must use exactly the wire form its resolved
+    /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
+    /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
+    /// and an IMF-fixdate string for `http-date`. Any other form is rejected.
+    /// When `false` (default) the deserializer is tolerant: a number is always
+    /// read as epoch seconds and a string for a `date-time` or `epoch-seconds`
+    /// member is parsed as an offset-aware `date-time`.
+    strict_timestamp_formats: bool,
+    dispatch_null_members: bool,
+    enforce_strictness: bool,
+    validate_skipped_values: bool,
+    validate_skipped_string_encoding: bool,
+    allow_integral_float_numbers: bool,
+    allow_leading_zeros: bool,
+    allow_trailing_decimal_point: bool,
+    allow_empty_integer_part: bool,
     /// Identifies the protocol that produced this codec — used by
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
@@ -132,6 +184,12 @@ pub struct JsonCodecSettings {
     /// this setting, so a sender configured for one form interoperates
     /// with a receiver configured for the other.
     use_string_for_arbitrary_precision: bool,
+    /// When `true`, a `bigInteger` or `bigDecimal` whose text is a valid decimal but not an
+    /// RFC 8259 JSON number (a leading `+`, leading zeros, `.5`, `1.`) is rewritten to the
+    /// equivalent JSON number on the raw-number path. When `false` (default) it is rejected with
+    /// [`SerdeError::InvalidInput`](aws_smithy_schema::serde::SerdeError). Has no effect when
+    /// `use_string_for_arbitrary_precision` is set.
+    normalize_arbitrary_precision: bool,
     /// Default Smithy namespace used to resolve relative shape IDs in
     /// JSON `__type` discriminator fields produced by services that
     /// emit relative names (e.g., awsJson1_0/1_1 senders).
@@ -146,20 +204,15 @@ pub struct JsonCodecSettings {
     /// `None` (default) preserves the prior behavior where relative
     /// names are left in the resulting map as plain string entries.
     default_namespace: Option<String>,
-    enforce_strictness: bool,
-    allow_integral_float_numbers: bool,
-    /// When `true`, a timestamp must use exactly the wire form its resolved
-    /// `@timestampFormat` (or the codec default) prescribes: a JSON number for
-    /// `epoch-seconds`, an RFC 3339 string without a UTC offset for `date-time`,
-    /// and an IMF-fixdate string for `http-date`. Servers enable this so that
-    /// malformed requests are rejected. When `false` (default) the deserializer
-    /// is tolerant, as clients are: a number is always read as epoch seconds and
-    /// a string for a `date-time` or `epoch-seconds` member is parsed as an
-    /// offset-aware `date-time`.
-    strict_timestamp_formats: bool,
 }
 
 impl JsonCodecSettings {
+    /// Whether null structure members are passed to the consumer instead of skipped.
+    /// Schema servers use this to clear optional fields while leaving required validation to builders.
+    pub fn dispatch_null_members(&self) -> bool {
+        self.dispatch_null_members
+    }
+
     /// Creates a builder for `JsonCodecSettings`.
     pub fn builder() -> JsonCodecSettingsBuilder {
         JsonCodecSettingsBuilder::default()
@@ -177,12 +230,24 @@ impl JsonCodecSettings {
         self.max_depth
     }
 
+    /// Whether timestamps must use exactly the wire form their format prescribes.
+    /// See [`JsonCodecSettingsBuilder::strict_timestamp_formats`].
+    pub fn strict_timestamp_formats(&self) -> bool {
+        self.strict_timestamp_formats
+    }
+
     /// Whether `bigInteger` and `bigDecimal` shapes emit as JSON
     /// strings (when `true`) or as raw JSON numbers
     /// (when `false`, the default). The read path is always lenient —
     /// `read_big_integer` and `read_big_decimal` accept either wire form.
     pub fn use_string_for_arbitrary_precision(&self) -> bool {
         self.use_string_for_arbitrary_precision
+    }
+
+    /// Whether non-JSON-number arbitrary-precision text is rewritten to the equivalent JSON
+    /// number (`true`) or rejected (`false`, the default). See the field documentation.
+    pub fn normalize_arbitrary_precision(&self) -> bool {
+        self.normalize_arbitrary_precision
     }
 
     /// Default Smithy namespace used to resolve relative shape IDs in
@@ -211,24 +276,26 @@ impl JsonCodecSettings {
             use_json_name: matches!(self.field_mapper, JsonFieldMapper::UseJsonName),
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            enforce_strictness: self.enforce_strictness,
+            validate_skipped_values: self.validate_skipped_values,
+            validate_skipped_string_encoding: self.validate_skipped_string_encoding,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
+            allow_leading_zeros: self.allow_leading_zeros,
+            allow_trailing_decimal_point: self.allow_trailing_decimal_point,
+            allow_empty_integer_part: self.allow_empty_integer_part,
+            strict_timestamp_formats: self.strict_timestamp_formats,
+            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            normalize_arbitrary_precision: self.normalize_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
-            enforce_strictness: self.enforce_strictness,
-            allow_integral_float_numbers: self.allow_integral_float_numbers,
-            strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
 
-    /// Whether timestamps must use exactly the wire form their format prescribes.
-    /// See [`JsonCodecSettingsBuilder::strict_timestamp_formats`].
-    pub fn strict_timestamp_formats(&self) -> bool {
-        self.strict_timestamp_formats
-    }
-
-    /// Returns the JSON wire name for a member schema.
-    pub(crate) fn member_to_field<'a>(&self, member: &'a Schema<'a>) -> Option<&'a str> {
-        self.field_mapper.member_to_field(member)
+    /// Returns the encoded JSON object key (`"name":`) for a member schema.
+    #[inline]
+    pub(crate) fn member_key<'s>(&self, member: &'s Schema<'_>) -> Option<&'s str> {
+        self.field_mapper.member_key(member)
     }
 
     /// Resolves a JSON wire field name to a member schema.
@@ -247,12 +314,19 @@ impl Default for JsonCodecSettings {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            validate_skipped_values: true,
+            validate_skipped_string_encoding: false,
+            allow_integral_float_numbers: false,
+            allow_leading_zeros: false,
+            allow_trailing_decimal_point: false,
+            allow_empty_integer_part: false,
+            strict_timestamp_formats: false,
+            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
+            normalize_arbitrary_precision: false,
             default_namespace: None,
-            enforce_strictness: false,
-            allow_integral_float_numbers: false,
-            strict_timestamp_formats: false,
         }
     }
 }
@@ -287,12 +361,19 @@ pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
+    strict_timestamp_formats: bool,
+    dispatch_null_members: bool,
+    enforce_strictness: bool,
+    validate_skipped_values: bool,
+    validate_skipped_string_encoding: bool,
+    allow_integral_float_numbers: bool,
+    allow_leading_zeros: bool,
+    allow_trailing_decimal_point: bool,
+    allow_empty_integer_part: bool,
     protocol_id: ShapeId<'static>,
     use_string_for_arbitrary_precision: bool,
+    normalize_arbitrary_precision: bool,
     default_namespace: Option<String>,
-    enforce_strictness: bool,
-    allow_integral_float_numbers: bool,
-    strict_timestamp_formats: bool,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -301,30 +382,79 @@ impl Default for JsonCodecSettingsBuilder {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
+            enforce_strictness: false,
+            validate_skipped_values: true,
+            validate_skipped_string_encoding: false,
+            allow_integral_float_numbers: false,
+            allow_leading_zeros: false,
+            allow_trailing_decimal_point: false,
+            allow_empty_integer_part: false,
+            strict_timestamp_formats: false,
+            dispatch_null_members: false,
             protocol_id: DEFAULT_JSON_CODEC_ID,
             use_string_for_arbitrary_precision: false,
+            normalize_arbitrary_precision: false,
             default_namespace: None,
-            enforce_strictness: false,
-            allow_integral_float_numbers: false,
-            strict_timestamp_formats: false,
         }
     }
 }
 
 impl JsonCodecSettingsBuilder {
-    /// Validates string contents and number syntax, rejects whitespace-only structure
-    /// bodies, and checks the range of floating-point epoch timestamps.
-    /// Disabled by default. Timestamp wire formats are controlled separately by
-    /// [`Self::strict_timestamp_formats`].
+    /// Enforces JSON grammar and request document validity. Disabled by default.
     pub fn enforce_strictness(mut self, value: bool) -> Self {
         self.enforce_strictness = value;
         self
     }
 
-    /// Accepts exactly integral JSON decimal/exponent numbers for integer members.
+    /// Whether discarded string contents are validated. Enabled by default.
+    ///
+    /// When enabled, escape syntax is checked without decoding Unicode escapes.
+    /// `enforce_strictness` applies only to values read. When disabled, strings and keys inside
+    /// discarded objects are scanned without decoding or validating escapes.
+    /// Container syntax, number/literal grammar, truncation, and depth limits
+    /// are still checked. Values actually read are unaffected.
+    pub fn validate_skipped_values(mut self, value: bool) -> Self {
+        self.validate_skipped_values = value;
+        self
+    }
+
+    /// Checks discarded strings for UTF-8 and unescaped control characters without
+    /// decoding or validating their escape sequences. Disabled by default.
+    pub fn validate_skipped_string_encoding(mut self, value: bool) -> Self {
+        self.validate_skipped_string_encoding = value;
+        self
+    }
+
+    /// Accepts exactly integral decimal/exponent numbers for integer members.
     /// Disabled by default; ordinary integer spellings retain exact parsing.
     pub fn allow_integral_float_numbers(mut self, value: bool) -> Self {
         self.allow_integral_float_numbers = value;
+        self
+    }
+
+    /// Permits leading zeros in JSON numbers even with `enforce_strictness(true)`.
+    /// Disabled by default. This matches the legacy JSON parser without relaxing
+    /// other grammar checks. Applies to read and skipped numbers alike.
+    pub fn allow_leading_zeros(mut self, value: bool) -> Self {
+        self.allow_leading_zeros = value;
+        self
+    }
+
+    /// Permits an empty fraction after a decimal point, such as `12.` or `12.e2`,
+    /// even with `enforce_strictness(true)`. Disabled by default. Integer members
+    /// additionally require `allow_integral_float_numbers(true)` and a whole value.
+    /// Applies to read and skipped numbers alike.
+    pub fn allow_trailing_decimal_point(mut self, value: bool) -> Self {
+        self.allow_trailing_decimal_point = value;
+        self
+    }
+
+    /// Permits negative fractions with no integer digits, such as `-.123` or
+    /// `-.123e2`, even with `enforce_strictness(true)`. Disabled by default.
+    /// Under strict number validation, `.123`, `-.`, and `-.e2` remain invalid.
+    /// Applies to read and skipped numbers alike.
+    pub fn allow_empty_integer_part(mut self, value: bool) -> Self {
+        self.allow_empty_integer_part = value;
         self
     }
 
@@ -344,6 +474,22 @@ impl JsonCodecSettingsBuilder {
     /// before returning an error. Defaults to 128.
     pub fn max_depth(mut self, value: u32) -> Self {
         self.max_depth = value;
+        self
+    }
+
+    /// Require timestamps to use exactly the wire form their resolved format
+    /// prescribes: a JSON number for `epoch-seconds`, an RFC 3339 string without
+    /// a UTC offset for `date-time`, an IMF-fixdate string for `http-date`.
+    /// Off by default; when enabled, any other form is rejected.
+    pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
+        self.strict_timestamp_formats = value;
+        self
+    }
+
+    /// Pass null structure members to the consumer. Defaults to false, preserving existing
+    /// codec callers; schema server readers decide how each null affects their builders.
+    pub fn dispatch_null_members(mut self, value: bool) -> Self {
+        self.dispatch_null_members = value;
         self
     }
 
@@ -371,6 +517,16 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Rewrites arbitrary-precision text that is a decimal but not a JSON number (`+007`, `.5`,
+    /// `1.`) to the equivalent JSON number instead of rejecting it. Defaults to `false`, so
+    /// existing callers keep rejecting it; AWS servers set it to `true`, matching their lenient
+    /// handling of such numbers on the read path (`allow_leading_zeros`,
+    /// `allow_trailing_decimal_point`).
+    pub fn normalize_arbitrary_precision(mut self, value: bool) -> Self {
+        self.normalize_arbitrary_precision = value;
+        self
+    }
+
     /// Sets the default Smithy namespace used to resolve relative shape
     /// IDs in JSON `__type` discriminator fields. When set, a relative
     /// `__type: "Capacity"` is lifted to `<namespace>#Capacity` on the
@@ -380,15 +536,6 @@ impl JsonCodecSettingsBuilder {
     /// Defaults to `None` — relative names are not lifted.
     pub fn default_namespace(mut self, namespace: impl Into<String>) -> Self {
         self.default_namespace = Some(namespace.into());
-        self
-    }
-
-    /// Require timestamps to use exactly the wire form their resolved format
-    /// prescribes: a JSON number for `epoch-seconds`, an RFC 3339 string without
-    /// a UTC offset for `date-time`, an IMF-fixdate string for `http-date`.
-    /// Off by default; servers turn it on so malformed requests are rejected.
-    pub fn strict_timestamp_formats(mut self, value: bool) -> Self {
-        self.strict_timestamp_formats = value;
         self
     }
 
@@ -403,12 +550,19 @@ impl JsonCodecSettingsBuilder {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
+            enforce_strictness: self.enforce_strictness,
+            validate_skipped_values: self.validate_skipped_values,
+            validate_skipped_string_encoding: self.validate_skipped_string_encoding,
+            allow_integral_float_numbers: self.allow_integral_float_numbers,
+            allow_leading_zeros: self.allow_leading_zeros,
+            allow_trailing_decimal_point: self.allow_trailing_decimal_point,
+            allow_empty_integer_part: self.allow_empty_integer_part,
+            strict_timestamp_formats: self.strict_timestamp_formats,
+            dispatch_null_members: self.dispatch_null_members,
             protocol_id: self.protocol_id,
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            normalize_arbitrary_precision: self.normalize_arbitrary_precision,
             default_namespace: self.default_namespace,
-            enforce_strictness: self.enforce_strictness,
-            allow_integral_float_numbers: self.allow_integral_float_numbers,
-            strict_timestamp_formats: self.strict_timestamp_formats,
         }
     }
 }
@@ -552,48 +706,6 @@ impl Codec for JsonCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn to_builder_round_trips_every_setting() {
-        // Regression guard: `to_builder` names each field explicitly, so a
-        // setting added later is silently reset to its default here while still
-        // compiling. That is how a codec rebuilt by a protocol wrapper (see
-        // `protocol::codec_with_bag_namespace`, which overrides only
-        // `default_namespace`) can lose strictness. Every setting below is set
-        // to the OPPOSITE of its default so a dropped field fails this test.
-        let original = JsonCodecSettings::builder()
-            .use_json_name(false)
-            .default_timestamp_format(TimestampFormat::HttpDate)
-            .max_depth(7)
-            .protocol_id(shape_id!("aws.protocols", "restJson1"))
-            .use_string_for_arbitrary_precision(true)
-            .default_namespace("com.example")
-            .enforce_strictness(true)
-            .allow_integral_float_numbers(true)
-            .strict_timestamp_formats(true)
-            .build();
-
-        let round_tripped = original.to_builder().build();
-
-        assert!(matches!(
-            round_tripped.field_mapper,
-            JsonFieldMapper::UseMemberName
-        ));
-        assert_eq!(
-            round_tripped.default_timestamp_format(),
-            TimestampFormat::HttpDate
-        );
-        assert_eq!(round_tripped.max_depth(), 7);
-        assert_eq!(
-            DocumentSettings::protocol_id(&round_tripped),
-            "aws.protocols#restJson1"
-        );
-        assert!(round_tripped.use_string_for_arbitrary_precision());
-        assert_eq!(round_tripped.default_namespace(), Some("com.example"));
-        assert!(round_tripped.enforce_strictness);
-        assert!(round_tripped.allow_integral_float_numbers);
-        assert!(round_tripped.strict_timestamp_formats());
-    }
 
     #[test]
     fn test_default_settings() {
@@ -742,5 +854,57 @@ mod tests {
             DocumentError::InvalidInput { .. } => {}
             other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn to_builder_round_trips_every_setting() {
+        // Regression guard: `to_builder` names each field explicitly, so a
+        // setting added later is silently reset to its default here while still
+        // compiling. That is how a codec rebuilt by a protocol wrapper (see
+        // `protocol::codec_with_bag_namespace`, which overrides only
+        // `default_namespace`) can lose strictness. Every setting below is set
+        // to the OPPOSITE of its default so a dropped field fails this test.
+        let original = JsonCodecSettings::builder()
+            .use_json_name(false)
+            .default_timestamp_format(TimestampFormat::HttpDate)
+            .max_depth(7)
+            .protocol_id(shape_id!("aws.protocols", "restJson1"))
+            .use_string_for_arbitrary_precision(true)
+            .default_namespace("com.example")
+            .enforce_strictness(true)
+            .validate_skipped_values(false)
+            .allow_integral_float_numbers(true)
+            .allow_leading_zeros(true)
+            .allow_trailing_decimal_point(true)
+            .allow_empty_integer_part(true)
+            .strict_timestamp_formats(true)
+            .dispatch_null_members(true)
+            .build();
+
+        let round_tripped = original.to_builder().build();
+
+        assert!(matches!(
+            round_tripped.field_mapper,
+            JsonFieldMapper::UseMemberName
+        ));
+        assert_eq!(
+            round_tripped.default_timestamp_format(),
+            TimestampFormat::HttpDate
+        );
+        assert_eq!(round_tripped.max_depth(), 7);
+        assert_eq!(
+            DocumentSettings::protocol_id(&round_tripped),
+            "aws.protocols#restJson1"
+        );
+        assert!(round_tripped.use_string_for_arbitrary_precision());
+        assert_eq!(round_tripped.default_namespace(), Some("com.example"));
+        assert!(round_tripped.enforce_strictness);
+        assert!(!round_tripped.validate_skipped_values);
+        assert!(round_tripped.allow_integral_float_numbers);
+        assert!(round_tripped.allow_leading_zeros);
+        assert!(round_tripped.allow_trailing_decimal_point);
+        assert!(round_tripped.allow_empty_integer_part);
+        assert!(round_tripped.strict_timestamp_formats());
+        assert!(round_tripped.dispatch_null_members());
     }
 }

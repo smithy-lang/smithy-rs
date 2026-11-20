@@ -1,0 +1,12 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.api#Foo": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Inline traits are accepted.",
+                "smithy.api#sensitive": {}
+            }
+        }
+    }
+}

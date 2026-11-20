@@ -322,7 +322,7 @@ class ClientCodegenVisitor(
         rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
             if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-                SchemaGenerator(codegenContext, this, shape).render()
+                SchemaGenerator(codegenContext, this, shape).renderInOwnModule()
             }
         }
         if (shape.isEventStream()) {

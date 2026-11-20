@@ -178,6 +178,40 @@
 //! | `server_error` | Server error indicator (5xx status code) |
 //! | `operation_time` | Timestamp that denotes operation time from pre-deserialization to post-serialization |
 //!
+//! # Contributing metrics dynamically
+//!
+//! Most metrics are recorded by code that can name the request's metrics entry
+//! type: the metrics layer, the default-metrics plugin, and operation handlers
+//! through their own `#[smithy_metrics(operation)]` field (see
+//! [`OperationMetrics`]). Prefer that whenever possible.
+//!
+//! Independently-owned middleware and libraries *cannot* name the entry type.
+//! For them, the metrics layer stores a [`SmithyMetricsPool`] in the request
+//! extensions. Pull it out and append a prefixed child metrics struct; it
+//! flattens into the single per-request entry when the request finishes:
+//!
+//! ```rust,ignore
+//! use aws_smithy_http_server_metrics::SmithyMetricsPool;
+//! use metrique::unit_of_work::metrics;
+//!
+//! #[metrics]
+//! struct MiddlewareMetrics {
+//!     middleware_calls: u64,
+//! }
+//!
+//! // `req` is the incoming request held by the middleware.
+//! if let Some(pool) = req.extensions().get::<SmithyMetricsPool>() {
+//!     pool.with_prefix(["middleware"])
+//!         .append(MiddlewareMetrics { middleware_calls: 1 });
+//! }
+//! ```
+//!
+//! Give each contributor a prefix distinct from the parent's fields and from
+//! every other contributor (via [`with_prefix`](metrique_util::MetricsPoolHandle::with_prefix)
+//! or [`with_exact_prefix`](metrique_util::MetricsPoolHandle::with_exact_prefix)).
+//! For how the pool resolves field-name collisions among its children, see the
+//! [`MetricsPool`](metrique_util::MetricsPool) crate-level documentation.
+//!
 //! # Platform support
 //!
 //! MIPS and PowerPC are currently not supported due to lack of
@@ -195,6 +229,7 @@ pub mod default;
 pub mod layer;
 pub mod operation;
 pub mod plugin;
+pub mod pool;
 pub mod service;
 pub mod traits;
 pub mod types;
@@ -203,5 +238,6 @@ pub use layer::builder::MetricsLayerBuilder;
 pub use layer::MetricsLayer;
 pub use operation::Metrics as OperationMetrics;
 pub use plugin::DefaultMetricsPlugin;
+pub use pool::SmithyMetricsPool;
 
 pub use aws_smithy_http_server_metrics_macro::smithy_metrics;

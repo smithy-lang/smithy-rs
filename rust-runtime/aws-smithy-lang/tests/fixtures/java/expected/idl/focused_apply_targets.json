@@ -1,0 +1,83 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Forward": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "Applied before the definition."
+            }
+        },
+        "ex#Marked": {
+            "type": "string",
+            "traits": {
+                "ex#marker": {},
+                "ex#reference": "ex#Forward"
+            }
+        },
+        "ex#Operation": {
+            "type": "operation",
+            "input": {
+                "target": "ex#OperationInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#OperationInput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#Structure": {
+            "type": "structure",
+            "members": {
+                "member": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#tags": [
+                            "before"
+                        ]
+                    }
+                },
+                "defaulted": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#default": "a",
+                        "smithy.api#tags": [
+                            "first",
+                            "second"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Same value.",
+                "smithy.api#sensitive": {}
+            }
+        },
+        "ex#marker": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#trait": {}
+            }
+        },
+        "ex#reference": {
+            "type": "string",
+            "traits": {
+                "smithy.api#idRef": {},
+                "smithy.api#trait": {}
+            }
+        }
+    }
+}

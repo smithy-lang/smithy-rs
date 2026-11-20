@@ -82,17 +82,21 @@ internal class EndpointTraitBindingsTest {
             unitTest(
                 "valid_prefix",
                 """
-                let inp = GetStatusInput { foo: Some("test_value".to_string()) };
+                let inp = GetStatusInput { foo: Some("test-value".to_string()) };
                 let prefix = inp.endpoint_prefix().unwrap();
-                assert_eq!(prefix.as_str(), "test_valuea.data.");
+                assert_eq!(prefix.as_str(), "test-valuea.data.");
                 """,
             )
             unitTest(
                 "invalid_prefix",
                 """
-                // not a valid URI component
+                // not a valid host label
                 let inp = GetStatusInput { foo: Some("test value".to_string()) };
-                inp.endpoint_prefix().expect_err("invalid uri component");
+                inp.endpoint_prefix().expect_err("spaces are not allowed in a host label");
+
+                // `_` is not permitted in a host label
+                let inp = GetStatusInput { foo: Some("test_value".to_string()) };
+                inp.endpoint_prefix().expect_err("underscores are not allowed in a host label");
                 """,
             )
 
@@ -111,6 +115,15 @@ internal class EndpointTraitBindingsTest {
                 // empty is invalid
                 let inp = GetStatusInput { foo: Some("".to_string()) };
                 inp.endpoint_prefix().expect_err("empty label is invalid");
+                """,
+            )
+
+            unitTest(
+                "host_label_cannot_escape_the_authority",
+                """
+                let inp = GetStatusInput { foo: Some("attacker.example:1".to_string()) };
+                inp.endpoint_prefix()
+                    .expect_err("a label containing `:` is not a valid host label");
                 """,
             )
         }
@@ -220,8 +233,8 @@ internal class EndpointTraitBindingsTest {
                             .expect_err("the endpoint should be invalid since it has an exclamation mark in it");
                         let err_fmt = format!("{}", DisplayErrorContext(err));
                         assert!(
-                            err_fmt.contains("endpoint prefix could not be built"),
-                            "expected '{}' to contain 'endpoint prefix could not be built'",
+                            err_fmt.contains("forms part of the endpoint host"),
+                            "expected '{}' to contain 'forms part of the endpoint host'",
                             err_fmt
                         );
 

@@ -4,6 +4,7 @@
  */
 
 use std::convert::Infallible;
+use std::sync::Arc;
 
 use crate::body::BoxBody;
 use crate::routing::request_spec::Match;
@@ -32,7 +33,10 @@ pub enum Error {
 /// [AWS restXml]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restxml-protocol.html
 #[derive(Debug, Clone)]
 pub struct RestRouter<S> {
-    routes: Vec<(RequestSpec, S)>,
+    // `Arc` so cloning the router, which the make-service wrappers do per connection,
+    // shares each `RequestSpec` and its regex's match cache. A cloned `Regex` gets a
+    // fresh, empty cache pool, so without the `Arc` every clone would rebuild it.
+    routes: Vec<(Arc<RequestSpec>, S)>,
 }
 
 impl<S> RestRouter<S> {
@@ -95,7 +99,10 @@ where
 impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
-        let mut routes: Vec<(RequestSpec, S)> = iter.into_iter().collect();
+        let mut routes: Vec<(Arc<RequestSpec>, S)> = iter
+            .into_iter()
+            .map(|(request_spec, route)| (Arc::new(request_spec), route))
+            .collect();
 
         // Sort them once by specificity, with the more specific routes sorted before the less
         // specific ones, so that when routing a request we can simply iterate through the routes
@@ -260,5 +267,32 @@ mod tests {
         for (svc_name, method, uri) in hits {
             assert_eq!(router.match_route(&req(&method, uri, None)).unwrap(), svc_name);
         }
+    }
+
+    #[test]
+    fn cloned_router_shares_request_specs() {
+        let request_specs: Vec<(RequestSpec, &'static str)> = vec![
+            (
+                RequestSpec::from_parts(
+                    Method::GET,
+                    vec![PathSegment::Literal(String::from("a")), PathSegment::Label],
+                    Vec::new(),
+                ),
+                "A",
+            ),
+            (
+                RequestSpec::from_parts(Method::POST, vec![PathSegment::Literal(String::from("b"))], Vec::new()),
+                "B",
+            ),
+        ];
+        let router: RestRouter<_> = request_specs.into_iter().collect();
+        let cloned = router.clone();
+
+        assert_eq!(cloned.routes.len(), 2);
+        for ((spec, _), (cloned_spec, _)) in router.routes.iter().zip(cloned.routes.iter()) {
+            assert!(Arc::ptr_eq(spec, cloned_spec));
+        }
+        assert_eq!(cloned.match_route(&req(&Method::GET, "/a/label", None)).unwrap(), "A");
+        assert_eq!(cloned.match_route(&req(&Method::POST, "/b", None)).unwrap(), "B");
     }
 }

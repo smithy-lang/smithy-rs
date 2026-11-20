@@ -1,0 +1,8 @@
+{
+    "description": "add_trait on a shape built in code: that trait first, then the shape's own traits.",
+    "steps": [
+        {"addShapes": "code.json"},
+        {"addTrait": "ex#S", "trait": "smithy.api#tags", "value": ["added"]},
+        {"addTrait": "ex#S$m", "trait": "smithy.api#tags", "value": ["added"]}
+    ]
+}

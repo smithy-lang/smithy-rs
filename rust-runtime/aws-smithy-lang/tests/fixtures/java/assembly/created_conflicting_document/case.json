@@ -1,0 +1,4 @@
+{
+    "description": "A shape built in code and a document definition with a different member target conflict.",
+    "steps": [{"addShapes": "code.json"}, {"addFile": "f.json"}]
+}

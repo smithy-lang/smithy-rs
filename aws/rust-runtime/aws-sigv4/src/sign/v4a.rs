@@ -81,7 +81,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         buf.put_i32(1);
         buf.put_slice(&fis);
         mac.update(&buf);
-        let k0 = U256::from_be_bytes(mac.finalize());
+        let k0 = U256::from_be_bytes(mac.finalize().into());
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.

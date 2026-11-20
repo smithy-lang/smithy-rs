@@ -1,0 +1,4 @@
+{
+    "description": "Metadata added in code merges first, then the metadata of models, then documents, whatever the call order.",
+    "steps": [{"addFile": "file.json"}, {"addModel": "model.json"}, {"putMetadata": "k", "value": ["put"]}]
+}

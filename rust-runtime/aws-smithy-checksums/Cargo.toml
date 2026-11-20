@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.65.1"
+version = "0.65.2"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -28,10 +28,10 @@ default = ["rustcrypto"]
 # backend; the recovery is to name `rustcrypto`. `crypto.rs` emits a `compile_error!` naming the fix.
 #
 # 0.66.0 was the first choice here and does not work. Cargo treats a 0.x minor as incompatible, so
-# `aws-sdk-s3`'s published `aws-smithy-checksums = "0.65.0"` requirement rejects it: when
+# `aws-sdk-s3`'s published `aws-smithy-checksums = "0.65.1"` requirement rejects it: when
 # `check-semver-hazards` patches this crate into the last released SDK, Cargo reports `patch
 # aws-smithy-checksums v0.66.0 was not used in the crate graph`, s3 keeps the registry copy, and
-# this crate's change goes untested there. 0.65.1 keeps that requirement satisfied.
+# this crate's change goes untested there. A 0.65.x patch keeps that requirement satisfied.
 rustcrypto = ["dep:md-5", "dep:sha1", "dep:sha2"]
 # Use aws-lc-rs for SHA-1/SHA-256 digests, backed by the non-FIPS AWS-LC build.
 #

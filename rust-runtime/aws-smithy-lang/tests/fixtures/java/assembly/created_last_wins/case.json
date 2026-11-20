@@ -1,0 +1,4 @@
+{
+    "description": "The same shape built in code twice, with different traits: the last one wins without a diagnostic.",
+    "steps": [{"addShapes": "first.json"}, {"addShapes": "second.json"}]
+}

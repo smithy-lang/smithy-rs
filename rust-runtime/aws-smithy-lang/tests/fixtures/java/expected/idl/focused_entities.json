@@ -1,0 +1,313 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#Batch": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#City": {
+            "type": "resource",
+            "identifiers": {
+                "cityId": {
+                    "target": "ex#CityId"
+                }
+            },
+            "properties": {
+                "name": {
+                    "target": "ex#Name"
+                }
+            },
+            "put": {
+                "target": "ex#PutCity"
+            },
+            "create": {
+                "target": "ex#CreateCity"
+            },
+            "read": {
+                "target": "ex#GetCity"
+            },
+            "update": {
+                "target": "ex#UpdateCity"
+            },
+            "delete": {
+                "target": "ex#DeleteCity"
+            },
+            "list": {
+                "target": "ex#ListCities"
+            },
+            "operations": [
+                {
+                    "target": "ex#Touch"
+                }
+            ],
+            "collectionOperations": [
+                {
+                    "target": "ex#Batch"
+                }
+            ],
+            "resources": [
+                {
+                    "target": "ex#Forecast"
+                }
+            ]
+        },
+        "ex#CityId": {
+            "type": "string"
+        },
+        "ex#CreateCity": {
+            "type": "operation",
+            "input": {
+                "target": "ex#CreateCityInput"
+            },
+            "output": {
+                "target": "ex#CreateCityOutput"
+            }
+        },
+        "ex#CreateCityInput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "ex#Name"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#CreateCityOutput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#DeleteCity": {
+            "type": "operation",
+            "input": {
+                "target": "ex#DeleteCityInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
+            "traits": {
+                "smithy.api#idempotent": {}
+            }
+        },
+        "ex#DeleteCityInput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#Forecast": {
+            "type": "resource",
+            "identifiers": {
+                "cityId": {
+                    "target": "ex#CityId"
+                }
+            }
+        },
+        "ex#GetCity": {
+            "type": "operation",
+            "input": {
+                "target": "ex#GetCityInput"
+            },
+            "output": {
+                "target": "ex#GetCityOutput"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#GetCityInput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#GetCityOutput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "ex#Name"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#ListCities": {
+            "type": "operation",
+            "input": {
+                "target": "smithy.api#Unit"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#Name": {
+            "type": "string"
+        },
+        "ex#Ping": {
+            "type": "operation",
+            "input": {
+                "target": "ex#PingInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#PingInput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "ex#Name"
+                },
+                "other": {
+                    "target": "other.ns#Name"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#PutCity": {
+            "type": "operation",
+            "input": {
+                "target": "ex#PutCityInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            },
+            "traits": {
+                "smithy.api#idempotent": {}
+            }
+        },
+        "ex#PutCityInput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "name": {
+                    "target": "ex#Name"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#Service": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "ex#Ping"
+                }
+            ],
+            "resources": [
+                {
+                    "target": "ex#City"
+                }
+            ],
+            "errors": [
+                {
+                    "target": "ex#ServiceError"
+                }
+            ],
+            "rename": {
+                "other.ns#Name": "OtherName"
+            }
+        },
+        "ex#ServiceError": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#error": "server"
+            }
+        },
+        "ex#Touch": {
+            "type": "operation",
+            "input": {
+                "target": "ex#TouchInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#TouchInput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#UpdateCity": {
+            "type": "operation",
+            "input": {
+                "target": "ex#UpdateCityInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#UpdateCityInput": {
+            "type": "structure",
+            "members": {
+                "cityId": {
+                    "target": "ex#CityId",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "other.ns#Name": {
+            "type": "string"
+        }
+    }
+}

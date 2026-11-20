@@ -88,6 +88,7 @@ async fn simple_integration_test() {
     let health_check_url = hyper::Uri::try_from(health_check_url).unwrap();
     let request = hyper::Request::builder()
         .uri(health_check_url)
+        .header("content-type", "application/json")
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .unwrap();
     let result = hyper_client.request(request).await.unwrap();
@@ -102,10 +103,10 @@ async fn health_check() {
     let url = common::base_url(server.port) + "/ping";
     let uri = url.parse::<hyper::Uri>().expect("invalid URL");
 
-    // Since the `/ping` route is not modeled in Smithy, we use a regular
-    // Hyper HTTP client to make a request to it.
+    // Use a regular Hyper client with the REST JSON identification header.
     let request = hyper::Request::builder()
         .uri(uri)
+        .header("content-type", "application/json")
         .body(http_body_util::Empty::<bytes::Bytes>::new())
         .expect("failed to build request");
 

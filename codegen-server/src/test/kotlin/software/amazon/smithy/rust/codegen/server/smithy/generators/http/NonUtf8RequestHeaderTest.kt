@@ -73,7 +73,7 @@ class NonUtf8RequestHeaderTest {
                             .toType().resolve("body::boxed"),
                     "Bytes" to RuntimeType.Bytes,
                     "Full" to CargoDependency.HttpBodyUtil01x.toType().resolve("Full"),
-                    "Tower" to RuntimeType.Tower,
+                    "Tower" to ServerCargoDependency.tower(codegenContext).toType(),
                     *RuntimeType.preludeScope,
                 )
 
