@@ -1198,6 +1198,60 @@ fn removing_a_retargeted_member_restores_the_inherited_one() {
 }
 
 #[test]
+fn mixin_diagnostics_point_at_the_mixins_list() {
+    // A repeated mixin is dropped, so the diagnostics can't point at an entry by its index in
+    // the shape's mixins; they point at the list.
+    let idl = r#"$version: "2"
+namespace ex
+
+@mixin
+structure M {}
+
+structure P {}
+
+structure Missing with [M, M, Nope] {}
+
+structure NotMixin with [M, M, P] {}
+"#;
+    let validated = Model::assembler().add_idl_str("a.smithy", idl).assemble();
+    let pointers: Vec<_> = validated
+        .diagnostics()
+        .iter()
+        .filter(|d| d.severity() == Severity::Error)
+        .map(|d| {
+            d.source_location()
+                .and_then(|l| l.pointer())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert_eq!(
+        pointers,
+        [Some("/shapes/ex#Missing/mixins".to_owned())],
+        "{:?}",
+        validated.diagnostics()
+    );
+    // The `Target` check runs once loading succeeds.
+    let idl = idl.replace("structure Missing with [M, M, Nope] {}\n", "");
+    let validated = Model::assembler().add_idl_str("a.smithy", idl).assemble();
+    let pointers: Vec<_> = validated
+        .diagnostics()
+        .iter()
+        .filter(|d| d.severity() == Severity::Error)
+        .map(|d| {
+            d.source_location()
+                .and_then(|l| l.pointer())
+                .map(str::to_owned)
+        })
+        .collect();
+    assert_eq!(
+        pointers,
+        [Some("/shapes/ex#NotMixin/mixins".to_owned())],
+        "{:?}",
+        validated.diagnostics()
+    );
+}
+
+#[test]
 fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
     let mixins = Model::from_json_str(
         "m.json",

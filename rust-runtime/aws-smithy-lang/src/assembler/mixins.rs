@@ -552,7 +552,7 @@ impl<'a> Inheritance<'a> {
     ) -> Option<Vec<&'a Shape>> {
         let (id, shape) = (self.id(), self.shape);
         let mut mixins = Vec::with_capacity(shape.mixins().len());
-        for (index, mixin) in shape.mixins().iter().enumerate() {
+        for mixin in shape.mixins() {
             let found = (!dropped.contains(mixin))
                 .then(|| shapes.get(mixin).or_else(|| prelude?.get(mixin)))
                 .flatten();
@@ -560,9 +560,9 @@ impl<'a> Inheritance<'a> {
                 let error = self.error(
                     DiagnosticCode::UnresolvedReference,
                     format!("cannot apply mixin `{mixin}` to `{id}`: `{mixin}` not found"),
-                    shape
-                        .source_location()
-                        .child(&format!("/mixins/{index}/target")),
+                    // The list, not the entry: the loaders drop repeated mixins, so an index into
+                    // `mixins()` may not be the entry's.
+                    shape.source_location().child("/mixins"),
                 );
                 self.diagnostics.push(error);
                 return None;

@@ -1723,8 +1723,9 @@ fn critical_checks(data: &ModelData, diagnostics: &mut DiagnosticSet) {
                 );
             }
         }
-        // Mixins resolved during merging, so they exist.
-        for (index, mixin) in shape.mixins().iter().enumerate() {
+        // Mixins resolved during merging, so they exist. Diagnostics point at the `mixins` list:
+        // the loaders drop repeated mixins, so an index into `mixins()` may not be the entry's.
+        for mixin in shape.mixins() {
             if !data
                 .root(mixin)
                 .is_some_and(|mixin| mixin.traits().contains(&traits::MIXIN))
@@ -1740,7 +1741,7 @@ fn critical_checks(data: &ModelData, diagnostics: &mut DiagnosticSet) {
                         ),
                     )
                     .with_shape_id(shape.id().clone())
-                    .with_source_location(source.child(&format!("/mixins/{index}/target"))),
+                    .with_source_location(source.child("/mixins")),
                 );
             }
         }
