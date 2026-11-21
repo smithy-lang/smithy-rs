@@ -157,6 +157,15 @@
                 "ex#R$x@smithy.api#default": "b.smithy"
             }
         },
+        "elided_default_sugar_location": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "b.smithy",
+                "ex#S$x": "b.smithy",
+                "ex#S$x@smithy.api#default": "b.smithy"
+            }
+        },
         "idl_prelude_namespace": {
             "accepted": true,
             "errors": [],

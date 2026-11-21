@@ -75,7 +75,16 @@ pub(super) struct Outcome {
     /// The held traits that no inherited member claimed, by member ID.
     pub(super) unclaimed: IndexMap<ShapeId, TraitMap>,
     /// The resolved later definitions of shapes that resolved, to compare with them.
-    pub(super) duplicates: Vec<Shape>,
+    pub(super) duplicates: Vec<ResolvedDuplicate>,
+}
+
+/// A later definition of a shape with mixins, resolved so it can be compared with the kept one.
+pub(super) struct ResolvedDuplicate {
+    pub(super) shape: Shape,
+    /// The `(member, trait)` pairs that the definition's `$name` sugar applies (see
+    /// [`ElidedDeclaration::sugar`]). Like the sugar of a declared member, they belong to the
+    /// definition, so an equal later definition provides their values and locations.
+    pub(super) sugar_traits: Vec<(ShapeId, ShapeId)>,
 }
 
 /// Resolves the mixins of every shape that has them, mixins before the shapes that use them.
@@ -141,6 +150,16 @@ pub(super) fn resolve(resolution: Resolution<'_>) -> Outcome {
             kept_member_traits,
         } in duplicates.remove(&id).unwrap_or_default()
         {
+            let sugar_traits = elided_members(&duplicate)
+                .iter()
+                .flat_map(|(name, elided)| {
+                    let member = member_id(&id, name);
+                    elided
+                        .sugar
+                        .keys()
+                        .map(move |id| (member.clone(), id.clone()))
+                })
+                .collect();
             let declared = Declared::take_from(&mut duplicate);
             let resolved = Inheritance {
                 shape: &duplicate,
@@ -155,7 +174,10 @@ pub(super) fn resolve(resolution: Resolution<'_>) -> Outcome {
             .resolve(shapes, prelude, &dropped);
             if let Some(resolved) = resolved {
                 resolved.put_into(&mut duplicate);
-                others.push(duplicate);
+                others.push(ResolvedDuplicate {
+                    shape: duplicate,
+                    sugar_traits,
+                });
             }
         }
         let declared = Declared::take_from(&mut shapes[&id]);

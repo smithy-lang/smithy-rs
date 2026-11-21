@@ -1239,14 +1239,16 @@ impl Merge {
                     });
                 continue;
             }
-            self.compare_duplicate(duplicate);
+            self.compare_duplicate(duplicate, &[]);
         }
     }
 
     /// Compares a later definition with the kept one. Like the reference implementation, an equal
     /// definition replaces the kept one (so the last of equal definitions provides the source
-    /// locations), with a note; a different one conflicts and is dropped.
-    fn compare_duplicate(&mut self, duplicate: Shape) {
+    /// locations), with a note; a different one conflicts and is dropped. `sugar_traits` are the
+    /// `(member, trait)` pairs the later definition's `$name` sugar applies, which belong to it
+    /// like definition traits.
+    fn compare_duplicate(&mut self, duplicate: Shape, sugar_traits: &[(ShapeId, ShapeId)]) {
         let id = duplicate.id().clone();
         let kept = &self.shapes[&id];
         let (location, kept_location) = (duplicate.source_location(), kept.source_location());
@@ -1280,7 +1282,11 @@ impl Merge {
             .shapes
             .get_mut(&id)
             .expect("duplicates have a kept shape");
-        adopt_locations(kept, &duplicate, &self.definition_traits);
+        let definition_traits = &self.definition_traits;
+        adopt_locations(kept, &duplicate, |member, id| {
+            let pair = (member.clone(), id.clone());
+            definition_traits.contains(&pair) || sugar_traits.contains(&pair)
+        });
     }
 
     /// Drops document definitions of shapes the prelude defines: as in the reference
@@ -1307,8 +1313,12 @@ impl Merge {
             duplicates: std::mem::take(&mut self.mixin_duplicates),
             diagnostics: &mut self.diagnostics,
         });
-        for duplicate in duplicates {
-            self.compare_duplicate(duplicate);
+        for mixins::ResolvedDuplicate {
+            shape,
+            sugar_traits,
+        } in duplicates
+        {
+            self.compare_duplicate(shape, &sugar_traits);
         }
         for (target, traits) in unclaimed {
             for (id, value) in traits {
@@ -1500,11 +1510,12 @@ fn first_trait_index(applied: &[AppliedTrait], first: Option<&FirstTrait>) -> us
 
 /// Gives `kept` the source locations of an equal later definition, which the reference
 /// implementation keeps instead: the shape's and its members' locations, and the values (with their
-/// locations) of the traits that are still definition traits.
+/// locations) of the traits that belong to the definition, as `is_definition_trait(member, trait)`
+/// says: definition traits that no applied trait replaced, and the traits of `$name` sugar.
 fn adopt_locations(
     kept: &mut Shape,
     duplicate: &Shape,
-    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+    is_definition_trait: impl Fn(&ShapeId, &ShapeId) -> bool,
 ) {
     kept.common_mut().source = duplicate.source_location().clone();
     for member in kept.members_mut() {
@@ -1513,7 +1524,7 @@ fn adopt_locations(
         };
         member.source = other.source.clone();
         for (id, value) in &other.traits {
-            if definition_traits.contains(&(member.id.clone(), id.clone())) {
+            if is_definition_trait(&member.id, id) {
                 if let Some(slot) = member.traits.get_mut(id) {
                     *slot = value.clone();
                 }
