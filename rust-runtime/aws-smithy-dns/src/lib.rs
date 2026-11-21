@@ -14,3 +14,9 @@ pub mod hickory;
 
 #[cfg(all(feature = "hickory-dns", not(target_family = "wasm")))]
 pub use hickory::HickoryDnsResolver;
+
+#[cfg(all(feature = "sra", not(target_family = "wasm")))]
+pub mod cache;
+
+#[cfg(all(feature = "sra", not(target_family = "wasm")))]
+pub mod sra;
