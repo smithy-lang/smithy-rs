@@ -5,6 +5,8 @@
 
 //! Loads, inspects, and round-trips every Smithy JSON AST model in `aws/sdk/aws-models`.
 
+use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex};
+use aws_smithy_lang::relationships::RelationshipIndex;
 use aws_smithy_lang::traits::{self, Documentation, DOCUMENTATION};
 use aws_smithy_lang::traversal::Walker;
 use aws_smithy_lang::{AstWriter, Model, ShapeId, ShapeType};
@@ -192,10 +194,9 @@ fn corpus_knowledge_invariants() {
     for path in corpus() {
         let model = load(&path);
         let name = path.display();
-        let knowledge = model.knowledge();
         let service = model.services().next().unwrap();
-        let operations = knowledge.operations();
-        let bottom_up = knowledge.bottom_up();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
 
         // Top-down matches an uncached walk restricted to containment edges.
         let walked: BTreeSet<String> = Walker::new()
@@ -275,7 +276,7 @@ fn corpus_knowledge_invariants() {
         }
 
         // Reverse relationship counts equal forward counts by kind.
-        let relationships = knowledge.relationships();
+        let relationships = model.knowledge::<RelationshipIndex<'_>>();
         let mut forward: BTreeMap<String, usize> = BTreeMap::new();
         let mut reverse: BTreeMap<String, usize> = BTreeMap::new();
         for shape in model.shapes() {
@@ -334,7 +335,7 @@ fn corpus_runtime_schemas() {
             "{name}"
         );
 
-        let operations = model.knowledge().operations();
+        let operations = model.knowledge::<OperationIndex<'_>>();
         for operation in scoped.operations() {
             let operation_id = ShapeId::new(operation.id().as_str()).unwrap();
             let knowledge = operations.get(&operation_id).unwrap();

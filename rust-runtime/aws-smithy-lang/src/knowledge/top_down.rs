@@ -5,7 +5,8 @@
 
 //! Complete service and resource closures.
 
-use super::Iter;
+use super::{Iter, KnowledgeIndex};
+use crate::model::Model;
 use crate::relationships::RelationshipIndex;
 use crate::shape::{OperationView, ResourceView, ServiceView, ShapeType};
 use crate::shape_id::ShapeId;
@@ -108,6 +109,12 @@ impl<'m> TopDownIndex<'m> {
             .collect();
         resources.sort_unstable_by(|a, b| a.id().cmp(b.id()));
         Iter::new(resources)
+    }
+}
+
+impl<'m> KnowledgeIndex<'m> for TopDownIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.knowledge::<RelationshipIndex<'_>>())
     }
 }
 

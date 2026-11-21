@@ -5,8 +5,9 @@
 
 //! Service-scoped pagination of operations.
 
-use super::{OperationIndex, TopDownIndex};
+use super::{KnowledgeIndex, OperationIndex, TopDownIndex};
 use crate::diagnostic::{fmt_located, SourceLocation};
+use crate::model::Model;
 use crate::node::Node;
 use crate::relationships::RelationshipIndex;
 use crate::shape::{MemberView, OperationView, ServiceView, StructureView};
@@ -37,6 +38,7 @@ use std::fmt;
 /// Answers are computed per query from the cached relationship index.
 ///
 /// ```
+/// use aws_smithy_lang::knowledge::PaginatedIndex;
 /// use aws_smithy_lang::{Model, ShapeId};
 ///
 /// let model = Model::from_idl_str("things.smithy", r#"
@@ -58,8 +60,7 @@ use std::fmt;
 /// "#)?;
 ///
 /// let info = model
-///     .knowledge()
-///     .paginated()
+///     .knowledge::<PaginatedIndex<'_>>()
 ///     .get(&ShapeId::from_static("ex#Things"), &ShapeId::from_static("ex#ListThings"))?
 ///     .expect("ListThings is paginated");
 ///
@@ -165,6 +166,12 @@ impl<'m> PaginatedIndex<'m> {
             page_size,
             items,
         }))
+    }
+}
+
+impl<'m> KnowledgeIndex<'m> for PaginatedIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.knowledge::<RelationshipIndex<'_>>())
     }
 }
 
