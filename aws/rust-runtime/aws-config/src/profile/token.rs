@@ -44,6 +44,18 @@ fn create_token_provider(
                 .start_url(sso_start_url)
                 .build_with(provider_config.env(), provider_config.fs()))
         }
+        crate::profile::credentials::repr::BaseProvider::CredentialDaemonFailClosed(err) => {
+            Err(TokenError::invalid_configuration(err))
+        }
+        crate::profile::credentials::repr::BaseProvider::CredentialDaemon {
+            sso: Some(_),
+            profile,
+            ..
+        } => Err(TokenError::not_loaded(format!(
+            "profile `{profile}` uses `daemon_credential`, so its SSO session lives in the \
+             credential daemon; services that use bearer tokens need an SSO session stored in \
+             files (an `sso_session` in the shared config file with a token in the SSO cache)"
+        ))),
         _ => Err(TokenError::not_loaded(
             "no sso-session configured in profile file",
         )),
@@ -236,4 +248,43 @@ mod test {
     make_test!(profile_keys);
     make_test!(profile_keys_case_insensitive);
     make_test!(profile_name);
+
+    async fn token_error(config: &str) -> String {
+        use crate::provider_config::ProviderConfig;
+        #[allow(deprecated)]
+        use aws_runtime::env_config::file::{EnvConfigFileKind, EnvConfigFiles};
+        use aws_smithy_types::error::display::DisplayErrorContext;
+        use aws_types::os_shim_internal::Env;
+
+        #[allow(deprecated)]
+        let profile_files = EnvConfigFiles::builder()
+            .with_contents(EnvConfigFileKind::Config, config)
+            .build();
+        let provider = super::ProfileFileTokenProvider::builder()
+            .configure(&ProviderConfig::empty().with_env(Env::from_slice(&[])))
+            .profile_files(profile_files)
+            .profile_name("dev")
+            .build();
+        let err = provider.provide_token().await.expect_err("no token");
+        format!("{}", DisplayErrorContext(&err))
+    }
+
+    #[tokio::test]
+    async fn credential_daemon_profile_with_sso_has_no_sso_session() {
+        let err = token_error(
+            "[profile dev]\ndaemon_credential = dev\nsso_session = s\nsso_account_id = 0123\nsso_role_name = role\n\
+             [sso-session s]\nsso_region = us-east-1\nsso_start_url = https://example.com/start\n",
+        )
+        .await;
+        assert!(
+            err.contains("profile `dev` uses `daemon_credential`, so its SSO session lives in the credential daemon"),
+            "{err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_credential_daemon_profile_is_a_configuration_error() {
+        let err = token_error("[profile dev]\ndaemon_credential = .dev\n").await;
+        assert!(err.contains("INVALID_CONFIG"), "{err}");
+    }
 }

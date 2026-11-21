@@ -179,12 +179,27 @@ pub(super) fn merge_in(
                 continue;
             }
         };
-        merge_into_base(section, raw_profile)
+        merge_into_base(section, raw_profile, kind)
     }
 }
 
-fn merge_into_base(target: &mut dyn Section, profile: HashMap<Cow<'_, str>, Cow<'_, str>>) {
+/// Profile keys that are only read from the config file. They are ignored in the credentials file.
+const CONFIG_FILE_ONLY_KEYS: &[&str] = &["daemon_credential"];
+
+fn merge_into_base(
+    target: &mut dyn Section,
+    profile: HashMap<Cow<'_, str>, Cow<'_, str>>,
+    kind: EnvConfigFileKind,
+) {
     for (k, v) in profile {
+        if matches!(kind, EnvConfigFileKind::Credentials)
+            && CONFIG_FILE_ONLY_KEYS
+                .iter()
+                .any(|config_only| k.eq_ignore_ascii_case(config_only))
+        {
+            tracing::warn!(profile = %target.name(), "`{k}` is only read from the config file; ignored in the credentials file");
+            continue;
+        }
         match validate_identifier(k.as_ref()) {
             Ok(k) => {
                 target.insert(k.to_owned(), Property::new(k.to_owned(), v.into()));
@@ -366,6 +381,41 @@ mod tests {
         assert!(logs_contain(
             "key ignored because `invalid key` was not a valid identifier"
         ));
+    }
+
+    #[test]
+    #[traced_test]
+    fn daemon_credential_is_only_read_from_the_config_file() {
+        let raw = |section: &'static str, value: &'static str| -> RawProfileSet<'static> {
+            let mut profile: RawProfileSet<'_> = HashMap::new();
+            profile.insert(section, {
+                let mut out = HashMap::new();
+                out.insert(Cow::Borrowed("daemon_credential"), value.into());
+                out
+            });
+            profile
+        };
+        let config = raw("profile dev", "a");
+
+        // the credentials file can not overwrite the config file's value
+        let mut base = EnvConfigSections::default();
+        merge_in(&mut base, config, EnvConfigFileKind::Config);
+        merge_in(&mut base, raw("dev", "b"), EnvConfigFileKind::Credentials);
+        assert_eq!(
+            Some("a"),
+            base.get_profile("dev").unwrap().get("daemon_credential")
+        );
+        assert!(logs_contain(
+            "`daemon_credential` is only read from the config file; ignored in the credentials file"
+        ));
+
+        // and it can not add the key either
+        let mut base = EnvConfigSections::default();
+        merge_in(&mut base, raw("dev", "b"), EnvConfigFileKind::Credentials);
+        assert_eq!(
+            None,
+            base.get_profile("dev").unwrap().get("daemon_credential")
+        );
     }
 
     #[test]
