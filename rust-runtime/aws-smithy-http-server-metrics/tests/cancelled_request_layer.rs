@@ -3,15 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// This test drives the modern (hyper 1.x) `aws-smithy-http-server` `serve` stack.
-// The legacy server features alias `aws-smithy-http-server`, `http`, and `hyper`
-// to their 0.x versions, which expose no `serve` entry point, so the imports
-// below would not resolve under them (for example `--all-features` in CI).
-#![cfg(not(any(
-    feature = "aws-smithy-http-server-065",
-    feature = "aws-smithy-legacy-http-server"
-)))]
-
 //! Regression test that a request cancelled mid-flight still emits its
 //! per-request metrics entry through [`MetricsLayer`], with cancellation-time
 //! child metrics flattened into it.

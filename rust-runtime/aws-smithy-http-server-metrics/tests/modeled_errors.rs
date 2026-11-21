@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg(not(any(
-    feature = "aws-smithy-http-server-065",
-    feature = "aws-smithy-legacy-http-server"
-)))]
-
 use aws_smithy_http_server::{
     extension::ModeledErrorExtension,
     response::IntoResponse,

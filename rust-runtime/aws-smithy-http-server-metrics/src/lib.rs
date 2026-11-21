@@ -3,33 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Metrics collection for Smithy Rust servers.
+//! Metrics publication for Smithy Rust servers.
 //!
-//! This crate provides two ways to collect metrics:
-//! 1. **Default metrics** via [`DefaultMetricsPlugin`] - collection of standard metrics at the operation level
-//! 2. **Custom metrics** via [`MetricsLayer`] - collection of custom metrics and standard metrics at the outer request level
+//! This crate provides [`MetricsLayer`], which publishes a [metrique] metrics entry for each
+//! request. Each entry can contain:
+//! 1. **Default metrics**: the standard server metrics collected by the server, if the generated
+//!    service config builder's `enable_standard_metrics()` method has been called. See [Default
+//!    metrics](#default-metrics) below.
+//! 2. **Custom metrics**: metrics you define, recorded by the layers, plugins, operation handlers,
+//!    and other middleware.
 //!
-//! # DefaultMetricsPlugin
+//! Each entry is published once its request has finished: its response has been fully sent, sending
+//! the response failed, or handling the request was abandoned.
 //!
-//! [`DefaultMetricsPlugin`] automatically collects standard metrics for every request at operation time.
-//! See the Collected Metrics section below:
+//! # Publishing default metrics
+//!
+//! Enable standard metrics in the service config, and add a [`MetricsLayer`] around the service:
 //!
 //! ```rust, ignore
-//! use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
-//! use aws_smithy_http_server::plugin::HttpPlugins;
+//! use aws_smithy_http_server_metrics::MetricsLayer;
+//! use tower::Layer;
 //!
-//! let http_plugins = HttpPlugins::new()
-//!     .push(DefaultMetricsPlugin);
+//! let config = PokemonServiceConfig::builder()
+//!     .enable_standard_metrics()
+//!     .build();
+//! let app = PokemonService::builder(config)
+//!     /* operation handlers */
+//!     .build()?;
+//! let app = MetricsLayer::new().layer(app);
 //! ```
 //!
-//! **Important**: [`DefaultMetricsPlugin`] requires a metrics sink to be configured,
-//! otherwise metrics collection will be skipped and an info log will be emitted.
-//!
-//! To use a custom sink, you can add a [`MetricsLayer`]. See the MetricsLayer section below.
-//!
-//! If no [`MetricsLayer`] exists, [`DefaultMetricsPlugin`] will use metrique's global sink for
-//! application-wide metrics, [`ServiceMetrics`](metrique::ServiceMetrics). It will therefore
-//! need to be configured, e.g.:
+//! [`MetricsLayer::new`] publishes to metrique's global sink for application-wide metrics,
+//! [`ServiceMetrics`](metrique::ServiceMetrics), which must be configured, e.g.:
 //!
 //! ```rust
 //! use metrique::ServiceMetrics;
@@ -63,17 +68,12 @@
 //! ServiceMetrics::attach_to_stream(emf);
 //! ```
 //!
-//! # MetricsLayer
+//! To publish to another sink, use [`MetricsLayer::new_with_sink`].
 //!
-//! Use [`MetricsLayer`] to customize metrics collection and/or define your own metrics:
+//! # Publishing custom metrics
 //!
-//! Default metrics from [`DefaultMetricsPlugin`]
-//! will be folded into metrics from this layer if it is in the service's HTTP plugins.
-//!
-//! A [`MetricsLayer`] can be used to customize the sink with the default metrics using
-//! [`MetricsLayer::new_with_sink`].
-//!
-//! For full control, use [`MetricsLayer::builder`].
+//! Use [`MetricsLayer::builder`] to define your own metrics, which are published alongside the
+//! default metrics.
 //!
 //! ```rust, ignore
 //! use aws_smithy_http_server_metrics::MetricsLayer;
@@ -100,13 +100,13 @@
 //!     })
 //!     .build();
 //!
-//! let app = app.layer(metrics_layer);
+//! let app = metrics_layer.layer(app);
 //! ```
 //!
 //! Use the `#[smithy_metrics]` macro to integrate with a metrique metrics struct.
 //!
-//! Use the `#[smithy_metrics(operation)` macro on a field for metrics access of that
-//! field in operation handlers.
+//! Use the `#[smithy_metrics(operation)` macro on a field for metrics access of that field in
+//! operation handlers.
 //!
 //! ```rust
 //! use aws_smithy_http_server_metrics::operation::Metrics;
@@ -145,50 +145,42 @@
 //! }
 //! ```
 //!
-//! For a complete example, see the [pokemon-service example](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service)
-//! for an example that uses CloudWatch EMF (Embedded Metric Format) as an output format.
+//! For a complete example, see the [pokemon-service
+//! example](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service) for an
+//! example that uses CloudWatch EMF (Embedded Metric Format) as an output format.
 //!
-//! # Collected Metrics
+//! # Default metrics
 //!
-//! ## DefaultMetricsPlugin
-//!
-//! The [`DefaultMetricsPlugin`] provides the following metrics by default.
-//!
-//! For fully successful requests/responses, these are guaranteed to be present if
-//! they have not been explicitly disabled in the builder configuration.
-//! Response metrics may not be present if the future is dropped before the backswing.
-//!
-//! ### Request Metrics
+//! When standard metrics are enabled, each entry contains the following default metrics, unless
+//! they have been disabled in the [`MetricsLayerBuilder`] configuration.
 //!
 //! | Metric | Description |
 //! |--------|-------------|
 //! | `service` | Name of the service |
-//! | `service_version` | Version of the service |
-//! | `operation` | Name of the operation being invoked |
-//! | `request_id` | Unique identifier for the request |
-//! | `outstanding_requests` | Number of concurrent requests counting any operation being processing in that moment |
-//!
-//! ### Response Metrics
-//!
-//! | Metric | Description |
-//! |--------|-------------|
+//! | `service_version` | Version of the service, if the model specifies one |
+//! | `operation` | Name of the operation the request was routed to; absent if it was not routed to an operation |
+//! | `request_id` | ID assigned to the request by `ServerRequestIdProviderLayer`; absent if none was assigned |
+//! | `outstanding_requests` | Number of requests to the service in progress when this request started, including this one |
 //! | `http_status_code` | HTTP status code of the response |
-//! | `success` | Success indicator (2xx status code) |
-//! | `client_error` | Client error indicator (4xx status code) |
-//! | `server_error` | Server error indicator (5xx status code) |
-//! | `operation_time` | Timestamp that denotes operation time from pre-deserialization to post-serialization |
+//! | `success` | Whether the request succeeded |
+//! | `client_error` | Whether the request failed because of the client |
+//! | `server_error` | Whether the request failed because of the server |
+//! | `operation_time` | Time spent executing the operation's handler and any model plugins; zero if they did not execute |
+//!
+//! `http_status_code`, `success`, `client_error` and `server_error` are absent if the service
+//! produced no response. Requests are classified as successes, client errors or server errors as
+//! described by [`Outcome`](aws_smithy_http_server::metrics::Outcome).
 //!
 //! # Contributing metrics dynamically
 //!
-//! Most metrics are recorded by code that can name the request's metrics entry
-//! type: the metrics layer, the default-metrics plugin, and operation handlers
-//! through their own `#[smithy_metrics(operation)]` field (see
+//! Most metrics are recorded by code that can name the request's metrics entry type: the metrics
+//! layer and operation handlers through their own `#[smithy_metrics(operation)]` field (see
 //! [`OperationMetrics`]). Prefer that whenever possible.
 //!
-//! Independently-owned middleware and libraries *cannot* name the entry type.
-//! For them, the metrics layer stores a [`SmithyMetricsPool`] in the request
-//! extensions. Pull it out and append a prefixed child metrics struct; it
-//! flattens into the single per-request entry when the request finishes:
+//! Independently-owned middleware and libraries *cannot* name the entry type. For them, the metrics
+//! layer stores a [`SmithyMetricsPool`] in the request extensions. Pull it out and append a
+//! prefixed child metrics struct; it flattens into the single per-request entry when the request
+//! finishes:
 //!
 //! ```rust,ignore
 //! use aws_smithy_http_server_metrics::SmithyMetricsPool;
@@ -206,10 +198,10 @@
 //! }
 //! ```
 //!
-//! Give each contributor a prefix distinct from the parent's fields and from
-//! every other contributor (via [`with_prefix`](metrique_util::MetricsPoolHandle::with_prefix)
-//! or [`with_exact_prefix`](metrique_util::MetricsPoolHandle::with_exact_prefix)).
-//! For how the pool resolves field-name collisions among its children, see the
+//! Give each contributor a prefix distinct from the parent's fields and from every other
+//! contributor (via [`with_prefix`](metrique_util::MetricsPoolHandle::with_prefix) or
+//! [`with_exact_prefix`](metrique_util::MetricsPoolHandle::with_exact_prefix)). For how the pool
+//! resolves field-name collisions among its children, see the
 //! [`MetricsPool`](metrique_util::MetricsPool) crate-level documentation.
 //!
 //! # Platform support
@@ -217,8 +209,8 @@
 //! MIPS and PowerPC are currently not supported due to lack of
 //! [`AtomicU64`](std::sync::atomic::AtomicU64) support. Once
 //! <https://github.com/smithy-lang/smithy-rs/pull/4487> and
-//! <https://github.com/awslabs/metrique/issues/183> are complete,
-//! we can use the latest metrique version and support these.
+//! <https://github.com/awslabs/metrique/issues/183> are complete, we can use the latest metrique
+//! version and support these.
 
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -228,7 +220,6 @@
 pub mod default;
 pub mod layer;
 pub mod operation;
-pub mod plugin;
 pub mod pool;
 pub mod service;
 pub mod traits;
@@ -237,7 +228,6 @@ pub mod types;
 pub use layer::builder::MetricsLayerBuilder;
 pub use layer::MetricsLayer;
 pub use operation::Metrics as OperationMetrics;
-pub use plugin::DefaultMetricsPlugin;
 pub use pool::SmithyMetricsPool;
 
 pub use aws_smithy_http_server_metrics_macro::smithy_metrics;
