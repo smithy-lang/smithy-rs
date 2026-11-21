@@ -58,10 +58,10 @@ struct ElidedSyntax<'a> {
     /// The absolute ID of the shape that declares it.
     container: &'a str,
     name: &'a str,
-    /// The `traits` object of the member, including the trait its `= value` sugar applies.
+    /// The `traits` object of the traits written on the member.
     traits: Option<Node>,
-    /// The ID of the trait the member's `= value` sugar applies, if it has the sugar.
-    sugar_trait: Option<&'a str>,
+    /// A `traits` object with the trait the member's `= value` sugar applies, if it has the sugar.
+    sugar: Option<Node>,
     pointer: String,
     span: Span,
 }
@@ -658,15 +658,24 @@ impl<'a> Lowerer<'a> {
                 }
                 sugar.push((trait_id, value));
             }
-            let sugar_trait = sugar.first().map(|(id, _)| id.clone());
-            let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let Some(target) = target else {
                 if from_mixin {
+                    // The sugar stays out of the written traits: it belongs to the definition, so
+                    // a written trait with the same ID must not merge with it (see `ElidedMember`).
+                    let no_annotations = Annotations {
+                        documentation: None,
+                        traits: Vec::new(),
+                    };
                     let elided = ElidedSyntax {
                         container,
                         name,
-                        traits,
-                        sugar_trait: sugar_trait.as_deref(),
+                        traits: self.traits(
+                            scope,
+                            &member.annotations,
+                            Vec::new(),
+                            &member_pointer,
+                        ),
+                        sugar: self.traits(scope, &no_annotations, sugar, &member_pointer),
                         pointer: member_pointer(),
                         span: name_span,
                     };
@@ -674,6 +683,7 @@ impl<'a> Lowerer<'a> {
                 }
                 continue;
             };
+            let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let mut object = NodeObject::new();
             object.insert("target", target);
             if let Some(traits) = traits {
@@ -730,11 +740,27 @@ impl<'a> Lowerer<'a> {
             container,
             name,
             traits,
-            sugar_trait,
+            sugar,
             pointer,
             span,
         } = elided;
         let id = format!("{container}${name}");
+        let location = self.at(pointer, span);
+        let written = self.as_apply(&id, traits, span);
+        let sugar = self.as_apply(&id, sugar, span);
+        if let (Some(written), Some(sugar)) = (written, sugar) {
+            self.elided_members.push(ElidedMember {
+                id: written.target,
+                location,
+                traits: written.traits,
+                sugar: sugar.traits,
+            });
+        }
+    }
+
+    /// Converts a `traits` object as the traits of an `apply` to `id`, which gives them their
+    /// locations and checks them like any other traits.
+    fn as_apply(&mut self, id: &str, traits: Option<Node>, span: Span) -> Option<Apply> {
         let mut object = NodeObject::new();
         object.insert(
             "type",
@@ -744,22 +770,9 @@ impl<'a> Lowerer<'a> {
             object.insert("traits", traits);
         }
         let node = Node::from(object).with_position(self.position(span));
-        let location = self.at(pointer, span);
-        if let Some(Entry::Apply(Apply { target, mut traits })) =
-            self.converter.convert_entry(&id, node)
-        {
-            let mut sugar = TraitMap::new();
-            // A trait written with the same ID as the sugar conflicts with it, so the trait with
-            // that ID is the one the sugar applies.
-            if let Some((id, value)) = sugar_trait.and_then(|id| traits.shift_remove_entry(id)) {
-                sugar.insert(id, value);
-            }
-            self.elided_members.push(ElidedMember {
-                id: target,
-                location,
-                traits,
-                sugar,
-            });
+        match self.converter.convert_entry(id, node) {
+            Some(Entry::Apply(apply)) => Some(apply),
+            _ => None,
         }
     }
 

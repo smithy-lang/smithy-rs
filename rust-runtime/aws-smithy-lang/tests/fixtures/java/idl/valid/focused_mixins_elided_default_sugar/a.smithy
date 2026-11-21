@@ -17,3 +17,15 @@ apply Applied$x @default("b")
 structure Repeated with [M] {
     $x = "a"
 }
+
+// A written `@default` doesn't merge with the sugar: the applied trait replaces it.
+structure Written with [M] {
+    @default("b")
+    $x = "a"
+}
+
+// Defined again in b.smithy without either, which gets the written `@default`.
+structure Equal with [M] {
+    @default("a")
+    $x = "a"
+}

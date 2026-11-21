@@ -21,6 +21,28 @@
             }
         ]
     },
+    "ex#Equal": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#default": "a"
+                },
+                "introduced": [
+                    "smithy.api#default"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
     "ex#Repeated": {
         "mixins": [
             "ex#M"
@@ -34,6 +56,28 @@
                 ],
                 "traits": {
                     "smithy.api#default": "a"
+                },
+                "introduced": [
+                    "smithy.api#default"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#Written": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#default": "b"
                 },
                 "introduced": [
                     "smithy.api#default"

@@ -16,6 +16,21 @@
                 "smithy.api#default": "b"
             }
         },
+        "ex#Equal": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#Equal$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#default": "a"
+            }
+        },
         "ex#M": {
             "type": "structure",
             "members": {
@@ -40,6 +55,21 @@
             "type": "apply",
             "traits": {
                 "smithy.api#default": "a"
+            }
+        },
+        "ex#Written": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#Written$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#default": "b"
             }
         }
     }
