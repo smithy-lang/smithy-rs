@@ -1,5 +1,5 @@
 {
-    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "generator": "software.amazon.smithy:smithy-model:1.74.1",
     "outcomes": {
         "invalid/duplicate_enum_value": {
             "accepted": false,
@@ -35,6 +35,30 @@
             "accepted": false,
             "errors": [
                 "Model"
+            ]
+        },
+        "invalid/length_min_greater_than_max": {
+            "accepted": false,
+            "errors": [
+                "LengthTrait"
+            ]
+        },
+        "invalid/length_missing_min_and_max": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ]
+        },
+        "invalid/length_negative_max": {
+            "accepted": false,
+            "errors": [
+                "LengthTrait"
+            ]
+        },
+        "invalid/length_negative_min": {
+            "accepted": false,
+            "errors": [
+                "LengthTrait"
             ]
         },
         "invalid/map_key_integer": {

@@ -22,7 +22,7 @@ use aws_smithy_lang::{Model, Node, NodeObject, NodeValue, ShapeId};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-const PINNED: &str = "1.73.0";
+const PINNED: &str = "1.74.1";
 /// The BDD stages of `CompileBdd.compileBdd` before the last, `compiled`, in order.
 const STAGES: [&str; 4] = ["unoptimized", "sifted", "costOptimized", "reversed"];
 
