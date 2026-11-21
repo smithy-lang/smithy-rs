@@ -35,6 +35,8 @@ pub const ENUM_VALUE: ShapeId = ShapeId::from_static("smithy.api#enumValue");
 pub const PRIVATE: ShapeId = ShapeId::from_static("smithy.api#private");
 /// `smithy.api#paginated`
 pub const PAGINATED: ShapeId = ShapeId::from_static("smithy.api#paginated");
+/// `smithy.api#length`
+pub const LENGTH: ShapeId = ShapeId::from_static("smithy.api#length");
 
 /// Converts between a trait's generic [`Node`] value and a typed Rust value.
 ///
