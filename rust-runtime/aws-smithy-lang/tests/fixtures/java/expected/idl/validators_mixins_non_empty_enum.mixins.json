@@ -1,0 +1,22 @@
+{
+    "smithy.example#NonEmptyEnum": {
+        "mixins": [
+            "smithy.example#NonEmptyEnumMixin"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#NonEmptyEnumMixin$VALUE"
+                ],
+                "traits": {
+                    "smithy.api#enumValue": "value"
+                },
+                "introduced": [],
+                "name": "VALUE",
+                "target": "smithy.api#Unit"
+            }
+        ]
+    }
+}

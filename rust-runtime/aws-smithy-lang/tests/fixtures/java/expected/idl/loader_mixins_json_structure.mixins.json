@@ -1,0 +1,27 @@
+{
+    "smithy.example#Baz": {
+        "mixins": [
+            "smithy.example#MyMixin"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#MyMixin$bar"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "bar",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "foo",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

@@ -1,0 +1,25 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#A": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#M": {
+            "type": "structure",
+            "members": {
+                "x": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        }
+    }
+}

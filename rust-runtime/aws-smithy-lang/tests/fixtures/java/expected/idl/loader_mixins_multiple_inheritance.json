@@ -1,0 +1,53 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "com.example#FinalStructure": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "com.example#MixinA"
+                },
+                {
+                    "target": "com.example#MixinB"
+                }
+            ],
+            "members": {}
+        },
+        "com.example#FinalStructure$member": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#pattern": "baz"
+            }
+        },
+        "com.example#MixinA": {
+            "type": "structure",
+            "members": {
+                "member": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#pattern": "foo",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "com.example#MixinB": {
+            "type": "structure",
+            "members": {
+                "member": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#internal": {},
+                        "smithy.api#pattern": "bar"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        }
+    }
+}

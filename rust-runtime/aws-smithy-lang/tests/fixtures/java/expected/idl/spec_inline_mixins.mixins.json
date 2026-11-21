@@ -1,0 +1,59 @@
+{
+    "smithy.example#GetUserOutput": {
+        "mixins": [
+            "smithy.example#BaseUser"
+        ],
+        "traits": {
+            "smithy.api#output": {}
+        },
+        "introduced": [
+            "smithy.api#output"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#BaseUser$userId"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "userId",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "username",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "smithy.example#PutUserInput": {
+        "mixins": [
+            "smithy.example#BaseUser"
+        ],
+        "traits": {
+            "smithy.api#input": {},
+            "smithy.api#references": [
+                {
+                    "resource": "smithy.example#User"
+                }
+            ]
+        },
+        "introduced": [
+            "smithy.api#input",
+            "smithy.api#references"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#BaseUser$userId"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "userId",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

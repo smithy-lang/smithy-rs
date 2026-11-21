@@ -16,14 +16,14 @@
 //! value is located at its key, a string in an array at itself, an object in an array at its
 //! first key, and every other value at the closest enclosing position.
 
-use super::resolve::{resolve_metadata, suffixes, DeclarationIndex, Scope};
+use super::resolve::{resolve_metadata, suffixes, DeclarationIndex, ResourceBindings, Scope};
 use super::syntax::{
     Annotations, ApplySyntax, IdlDocument, MemberNameSyntax, MemberSyntax, NodeSyntax,
     PropertySyntax, PropertyValueSyntax, ShapeBodySyntax, ShapeIdSyntax, ShapeKindSyntax,
     ShapeSyntax, Span, StatementSyntax, TraitValueSyntax,
 };
 use crate::assembler::{merge_trait_values, LoadedDocument};
-use crate::ast_converter::{AstConverter, Entry};
+use crate::ast_converter::{Apply, AstConverter, Entry};
 use crate::diagnostic::{
     escape_pointer_token, Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, Position,
     SourceLocation,
@@ -32,13 +32,39 @@ use crate::json_loader::{Document, DocumentApply};
 use crate::model::ModelData;
 use crate::node::{Node, NodeObject, NodeValue};
 use crate::prelude;
-use crate::shape::ShapeType;
+use crate::shape::{ShapeType, TraitMap};
 use crate::shape_id::ShapeId;
 use crate::traits;
-use indexmap::IndexMap;
 use std::collections::HashSet;
 
 const DEFAULT: &str = "smithy.api#default";
+
+/// A `$name` member of a shape with mixins whose target no bound resource provides. The
+/// assembler takes the target from the mixin member with the same name once mixins resolve.
+pub(crate) struct ElidedMember {
+    /// The member ID.
+    pub(crate) id: ShapeId,
+    /// Where the member is declared.
+    pub(crate) location: SourceLocation,
+    /// The traits written on the member, which are applied traits.
+    pub(crate) traits: TraitMap,
+    /// The trait the member's `= value` sugar applies (`@default`), if any. As in the reference
+    /// implementation, it is part of the definition that writes it rather than an applied trait.
+    pub(crate) sugar: TraitMap,
+}
+
+/// A `$name` member whose target comes from a mixin, as [`Lowerer::elided_member`] receives it.
+struct ElidedSyntax<'a> {
+    /// The absolute ID of the shape that declares it.
+    container: &'a str,
+    name: &'a str,
+    /// The `traits` object of the traits written on the member.
+    traits: Option<Node>,
+    /// A `traits` object with the trait the member's `= value` sugar applies, if it has the sugar.
+    sugar: Option<Node>,
+    pointer: String,
+    span: Span,
+}
 
 /// An unquoted node value that was resolved to an absolute shape ID string.
 pub(crate) struct PendingSyntacticId {
@@ -83,6 +109,7 @@ pub(crate) fn lower(
         converter: AstConverter::new(document.source.clone(), max_diagnostics),
         syntactic_ids: Vec::new(),
         definition_traits: HashSet::new(),
+        elided_members: Vec::new(),
         output: Document::default(),
     };
     lowerer.controls()?;
@@ -94,6 +121,7 @@ pub(crate) fn lower(
         converter,
         syntactic_ids,
         definition_traits,
+        elided_members,
         output,
         ..
     } = lowerer;
@@ -106,6 +134,7 @@ pub(crate) fn lower(
         diagnostics,
         syntactic_ids,
         definition_traits,
+        elided_members,
     })
 }
 
@@ -115,8 +144,18 @@ enum Binding<'a> {
     None,
     /// The `for` clause was already reported as invalid.
     Invalid,
-    /// Bound to a resource with these identifiers.
-    Resource(String, Option<&'a IndexMap<String, String>>),
+    /// Bound to a resource with these identifiers and properties.
+    Resource(String, Option<&'a ResourceBindings>),
+}
+
+/// Where an elided member's target comes from.
+enum Elision {
+    /// The bound resource's identifier or property.
+    Resource(Node),
+    /// A mixin member, once the assembler resolves mixins.
+    Mixin,
+    /// Nowhere; already reported.
+    Failed,
 }
 
 struct Lowerer<'a> {
@@ -127,6 +166,7 @@ struct Lowerer<'a> {
     /// Traits set by value assignments, which the Smithy reference implementation treats as part of
     /// the definition rather than as applied traits (see the assembler's `Merge`).
     definition_traits: HashSet<(ShapeId, ShapeId)>,
+    elided_members: Vec<ElidedMember>,
     output: Document,
 }
 
@@ -356,8 +396,7 @@ impl<'a> Lowerer<'a> {
         }
     }
 
-    /// `[{"target": ...}, ...]` for a `with [...]` clause, which the converter rejects with
-    /// `UnsupportedFeature`.
+    /// `[{"target": ...}, ...]` for a `with [...]` clause.
     fn mixins(&mut self, scope: &Scope<'_>, mixins: &[ShapeIdSyntax]) -> Option<Node> {
         let first = self.position(mixins.first()?.span);
         let values = mixins
@@ -527,8 +566,8 @@ impl<'a> Lowerer<'a> {
         let id = scope.resolve(resource);
         let index = self.index;
         if index.kind(&id) == Some(ShapeType::Resource) {
-            let identifiers = index.identifiers(&id);
-            Binding::Resource(id, identifiers)
+            let bindings = index.resource(&id);
+            Binding::Resource(id, bindings)
         } else {
             self.converter.error(
                 DiagnosticCode::InvalidTarget,
@@ -569,6 +608,7 @@ impl<'a> Lowerer<'a> {
                     format!("{pointer}/members/{}", escape_pointer_token(name))
                 }
             };
+            let mut from_mixin = false;
             let target = match (&member.target, &member.name) {
                 (Some(target), _) => Some(
                     Node::from(scope.resolve(target)).with_position(self.position(target.span)),
@@ -577,7 +617,14 @@ impl<'a> Lowerer<'a> {
                     Some(Node::from(prelude::UNIT.as_str()).with_position(self.position(name_span)))
                 }
                 (None, MemberNameSyntax::Elided(_)) => {
-                    self.elided(binding, name, has_mixins, member_pointer(), name_span)
+                    match self.elided(binding, name, has_mixins, member_pointer(), name_span) {
+                        Elision::Resource(target) => Some(target),
+                        Elision::Mixin => {
+                            from_mixin = true;
+                            None
+                        }
+                        Elision::Failed => None,
+                    }
                 }
                 (None, MemberNameSyntax::Named(_)) => {
                     // The parser requires a target for every other named member.
@@ -599,8 +646,11 @@ impl<'a> Lowerer<'a> {
                 let value = self
                     .node(Some(scope), value)
                     .with_position(self.position(value.span()));
-                // An invalid ID is reported when the shape is converted.
-                if let (Ok(member), Ok(trait_shape)) = (
+                // An invalid ID is reported when the shape is converted. A `$name` member whose
+                // target comes from a mixin keeps the sugar with its definition instead (see
+                // `ElidedMember`).
+                if let (false, Ok(member), Ok(trait_shape)) = (
+                    from_mixin,
                     ShapeId::new(&format!("{container}${name}")),
                     ShapeId::new(&trait_id),
                 ) {
@@ -608,10 +658,32 @@ impl<'a> Lowerer<'a> {
                 }
                 sugar.push((trait_id, value));
             }
-            let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let Some(target) = target else {
+                if from_mixin {
+                    // The sugar stays out of the written traits: it belongs to the definition, so
+                    // a written trait with the same ID must not merge with it (see `ElidedMember`).
+                    let no_annotations = Annotations {
+                        documentation: None,
+                        traits: Vec::new(),
+                    };
+                    let elided = ElidedSyntax {
+                        container,
+                        name,
+                        traits: self.traits(
+                            scope,
+                            &member.annotations,
+                            Vec::new(),
+                            &member_pointer,
+                        ),
+                        sugar: self.traits(scope, &no_annotations, sugar, &member_pointer),
+                        pointer: member_pointer(),
+                        span: name_span,
+                    };
+                    self.elided_member(elided);
+                }
                 continue;
             };
+            let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let mut object = NodeObject::new();
             object.insert("target", target);
             if let Some(traits) = traits {
@@ -625,7 +697,9 @@ impl<'a> Lowerer<'a> {
         entries
     }
 
-    /// The target of a `$name` member from its structure's resource binding.
+    /// The target of a `$name` member, as in the reference implementation: the bound
+    /// resource's property or identifier with that name (see [`ResourceBindings::target`]), or
+    /// else (for a shape with mixins) the mixin member with that name.
     fn elided(
         &mut self,
         binding: &Binding<'_>,
@@ -633,18 +707,18 @@ impl<'a> Lowerer<'a> {
         has_mixins: bool,
         pointer: String,
         span: Span,
-    ) -> Option<Node> {
+    ) -> Elision {
         let message = match binding {
-            Binding::Resource(_, Some(identifiers)) if identifiers.contains_key(name) => {
-                let target = identifiers[name].clone();
-                return Some(Node::from(target).with_position(self.position(span)));
+            Binding::Resource(_, Some(bindings)) if bindings.target(name).is_some() => {
+                let target = bindings.target(name).expect("checked above").to_owned();
+                return Elision::Resource(Node::from(target).with_position(self.position(span)));
             }
-            // Already reported: an invalid `for` clause, or mixins, which are unsupported.
-            Binding::Invalid => return None,
-            _ if has_mixins => return None,
+            // Already reported.
+            Binding::Invalid => return Elision::Failed,
+            _ if has_mixins => return Elision::Mixin,
             Binding::Resource(resource, _) => format!(
                 "cannot elide the target of `${name}`: resource `{resource}` has no identifier \
-                 named `{name}`"
+                 or property named `{name}`"
             ),
             Binding::None => {
                 format!("cannot elide the target of `${name}` without a `for` resource binding")
@@ -655,7 +729,51 @@ impl<'a> Lowerer<'a> {
             message,
             self.at(pointer, span),
         );
-        None
+        Elision::Failed
+    }
+
+    /// Records a `$name` member whose target comes from a mixin. Its traits are converted as
+    /// the traits of an `apply` to the member, which the assembler merges like the traits written
+    /// on any other member.
+    fn elided_member(&mut self, elided: ElidedSyntax<'_>) {
+        let ElidedSyntax {
+            container,
+            name,
+            traits,
+            sugar,
+            pointer,
+            span,
+        } = elided;
+        let id = format!("{container}${name}");
+        let location = self.at(pointer, span);
+        let written = self.as_apply(&id, traits, span);
+        let sugar = self.as_apply(&id, sugar, span);
+        if let (Some(written), Some(sugar)) = (written, sugar) {
+            self.elided_members.push(ElidedMember {
+                id: written.target,
+                location,
+                traits: written.traits,
+                sugar: sugar.traits,
+            });
+        }
+    }
+
+    /// Converts a `traits` object as the traits of an `apply` to `id`, which gives them their
+    /// locations and checks them like any other traits.
+    fn as_apply(&mut self, id: &str, traits: Option<Node>, span: Span) -> Option<Apply> {
+        let mut object = NodeObject::new();
+        object.insert(
+            "type",
+            Node::from("apply").with_position(self.position(span)),
+        );
+        if let Some(traits) = traits {
+            object.insert("traits", traits);
+        }
+        let node = Node::from(object).with_position(self.position(span));
+        match self.converter.convert_entry(id, node) {
+            Some(Entry::Apply(apply)) => Some(apply),
+            _ => None,
+        }
     }
 
     // --- Entity properties ------------------------------------------------------------------

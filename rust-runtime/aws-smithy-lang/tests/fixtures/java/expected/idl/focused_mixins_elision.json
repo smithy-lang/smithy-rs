@@ -1,0 +1,137 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#C": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#C$id": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "c"
+            }
+        },
+        "ex#GetR": {
+            "type": "operation",
+            "input": {
+                "target": "ex#GetRInput"
+            },
+            "output": {
+                "target": "ex#GetROutput"
+            },
+            "traits": {
+                "smithy.api#readonly": {}
+            }
+        },
+        "ex#GetRInput": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#GetROutput": {
+            "type": "structure",
+            "members": {
+                "name": {
+                    "target": "smithy.api#String"
+                },
+                "size": {
+                    "target": "smithy.api#Integer"
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
+            }
+        },
+        "ex#M": {
+            "type": "structure",
+            "members": {
+                "id": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {}
+                    }
+                },
+                "name": {
+                    "target": "smithy.api#String"
+                },
+                "other": {
+                    "target": "smithy.api#Integer"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "ex#O": {
+            "type": "operation",
+            "input": {
+                "target": "ex#OInput"
+            },
+            "output": {
+                "target": "smithy.api#Unit"
+            }
+        },
+        "ex#OInput": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {
+                "extra": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "ex#R": {
+            "type": "resource",
+            "identifiers": {
+                "id": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "properties": {
+                "name": {
+                    "target": "smithy.api#String"
+                },
+                "size": {
+                    "target": "smithy.api#Integer"
+                }
+            },
+            "read": {
+                "target": "ex#GetR"
+            }
+        },
+        "ex#S": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {
+                "size": {
+                    "target": "smithy.api#Integer"
+                }
+            }
+        }
+    }
+}

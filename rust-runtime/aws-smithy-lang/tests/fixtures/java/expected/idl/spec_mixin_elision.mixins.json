@@ -1,0 +1,24 @@
+{
+    "smithy.example#IdRequired": {
+        "mixins": [
+            "smithy.example#IdBearer"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#IdBearer$id"
+                ],
+                "traits": {
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#required"
+                ],
+                "name": "id",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}
