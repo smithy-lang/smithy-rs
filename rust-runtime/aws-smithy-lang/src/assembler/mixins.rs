@@ -50,9 +50,9 @@ pub(super) struct ElidedMembers {
 pub(super) struct ElidedDeclaration {
     /// Where the member is declared.
     pub(super) location: SourceLocation,
-    /// Its value assignment (`= value`), if any, which belongs to this definition. Traits applied
-    /// to the member replace it, as they replace the value assignment of a declared member.
-    pub(super) assigned: TraitMap,
+    /// The trait its `= value` sugar applies, if any, which belongs to this definition. Traits
+    /// applied to the member replace it, as they replace the sugar of a declared member.
+    pub(super) sugar: TraitMap,
 }
 
 /// A later definition of a shape with mixins.
@@ -694,14 +694,15 @@ impl<'a> Inheritance<'a> {
             let Some(mut traits) = inherited.remove(name.as_str()) else {
                 continue;
             };
-            // A declared member may also have applied traits that another definition holds. A
-            // `$name` member's value assignment comes first, so applied traits replace it.
+            // A declared member may also have applied traits that another definition holds. The
+            // trait a `$name` member's `= value` sugar applies comes first, so applied traits
+            // replace it.
             let elided = self.elided.get(name);
             let mut own = if is_local {
                 std::mem::take(&mut member.traits)
             } else {
                 elided
-                    .map(|elided| elided.assigned.clone())
+                    .map(|elided| elided.sugar.clone())
                     .unwrap_or_default()
             };
             own.extend(self.held.own_traits(&member.id));

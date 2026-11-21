@@ -165,7 +165,7 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
             "loader_mixins_conflict_error"
             | "focused_mixins_different_definitions"
             | "focused_mixins_duplicate_mixin_order"
-            | "focused_mixins_elided_value_assignment_conflict" => ShapeConflict,
+            | "focused_mixins_elided_default_sugar_conflict" => ShapeConflict,
             // Mixin cycles, and members inherited or redefined with different targets.
             "loader_mixins_detects_cycles1"
             | "loader_mixins_detects_cycles2"

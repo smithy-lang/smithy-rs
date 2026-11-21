@@ -48,9 +48,9 @@ pub(crate) struct ElidedMember {
     pub(crate) location: SourceLocation,
     /// The traits written on the member, which are applied traits.
     pub(crate) traits: TraitMap,
-    /// The member's value assignment (`= value`), if any. As in the reference implementation,
-    /// it is part of the definition that writes it rather than an applied trait.
-    pub(crate) assigned: TraitMap,
+    /// The trait the member's `= value` sugar applies (`@default`), if any. As in the reference
+    /// implementation, it is part of the definition that writes it rather than an applied trait.
+    pub(crate) sugar: TraitMap,
 }
 
 /// A `$name` member whose target comes from a mixin, as [`Lowerer::elided_member`] receives it.
@@ -58,10 +58,10 @@ struct ElidedSyntax<'a> {
     /// The absolute ID of the shape that declares it.
     container: &'a str,
     name: &'a str,
-    /// The `traits` object of the member, including its value assignment.
+    /// The `traits` object of the member, including the trait its `= value` sugar applies.
     traits: Option<Node>,
-    /// The trait ID of the value assignment, if the member has one.
-    assignment: Option<&'a str>,
+    /// The ID of the trait the member's `= value` sugar applies, if it has the sugar.
+    sugar_trait: Option<&'a str>,
     pointer: String,
     span: Span,
 }
@@ -647,8 +647,8 @@ impl<'a> Lowerer<'a> {
                     .node(Some(scope), value)
                     .with_position(self.position(value.span()));
                 // An invalid ID is reported when the shape is converted. A `$name` member whose
-                // target comes from a mixin keeps its assignment with the definition instead
-                // (see `ElidedMember`).
+                // target comes from a mixin keeps the sugar with its definition instead (see
+                // `ElidedMember`).
                 if let (false, Ok(member), Ok(trait_shape)) = (
                     from_mixin,
                     ShapeId::new(&format!("{container}${name}")),
@@ -658,7 +658,7 @@ impl<'a> Lowerer<'a> {
                 }
                 sugar.push((trait_id, value));
             }
-            let assignment = sugar.first().map(|(id, _)| id.clone());
+            let sugar_trait = sugar.first().map(|(id, _)| id.clone());
             let traits = self.traits(scope, &member.annotations, sugar, &member_pointer);
             let Some(target) = target else {
                 if from_mixin {
@@ -666,7 +666,7 @@ impl<'a> Lowerer<'a> {
                         container,
                         name,
                         traits,
-                        assignment: assignment.as_deref(),
+                        sugar_trait: sugar_trait.as_deref(),
                         pointer: member_pointer(),
                         span: name_span,
                     };
@@ -730,7 +730,7 @@ impl<'a> Lowerer<'a> {
             container,
             name,
             traits,
-            assignment,
+            sugar_trait,
             pointer,
             span,
         } = elided;
@@ -748,17 +748,17 @@ impl<'a> Lowerer<'a> {
         if let Some(Entry::Apply(Apply { target, mut traits })) =
             self.converter.convert_entry(&id, node)
         {
-            let mut assigned = TraitMap::new();
-            // A trait written with the same ID as the assignment conflicts with it, so the trait
-            // with that ID is the assignment.
-            if let Some((id, value)) = assignment.and_then(|id| traits.shift_remove_entry(id)) {
-                assigned.insert(id, value);
+            let mut sugar = TraitMap::new();
+            // A trait written with the same ID as the sugar conflicts with it, so the trait with
+            // that ID is the one the sugar applies.
+            if let Some((id, value)) = sugar_trait.and_then(|id| traits.shift_remove_entry(id)) {
+                sugar.insert(id, value);
             }
             self.elided_members.push(ElidedMember {
                 id: target,
                 location,
                 traits,
-                assigned,
+                sugar,
             });
         }
     }

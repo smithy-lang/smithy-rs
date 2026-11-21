@@ -6,7 +6,7 @@ structure M {
     x: String
 }
 
-// Only this definition assigns a default, so the two definitions differ.
+// Only this definition has a default, so the two definitions differ.
 structure S with [M] {
     $x = "a"
 }

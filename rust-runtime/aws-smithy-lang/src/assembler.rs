@@ -897,12 +897,12 @@ impl Merge {
                     self.apply(entry.apply, defer_traits);
                 }
                 // Their traits are written on the member, so they are merged like the traits of
-                // the shape's other members. A value assignment stays with this definition.
+                // the shape's other members. The trait its `= value` sugar applies stays with this definition.
                 for ElidedMember {
                     id,
                     location,
                     traits,
-                    assigned,
+                    sugar,
                 } in elided_members
                 {
                     let name = id.member().expect("elided members are members").to_owned();
@@ -919,7 +919,7 @@ impl Merge {
                             elided.len() - 1
                         }
                     };
-                    let declaration = mixins::ElidedDeclaration { location, assigned };
+                    let declaration = mixins::ElidedDeclaration { location, sugar };
                     elided[index].members.insert(name, declaration);
                     self.deferred_traits
                         .extend(traits.into_iter().map(|(trait_id, value)| AppliedTrait {
