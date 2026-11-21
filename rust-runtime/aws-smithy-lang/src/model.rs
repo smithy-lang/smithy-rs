@@ -7,7 +7,7 @@
 
 use crate::assembler::{Format, ModelAssembler};
 use crate::diagnostic::LoadError;
-use crate::knowledge::{Knowledge, KnowledgeCache};
+use crate::knowledge::{KnowledgeCache, KnowledgeIndex};
 use crate::node::{Node, NodeObject};
 use crate::shape::{
     MemberView, OperationView, ResourceView, ServiceView, Shape, ShapeExpectationError, ShapeRef,
@@ -258,13 +258,17 @@ impl Model {
         self.data.root_count()
     }
 
-    /// Derived, cached knowledge about the model: complete service and resource closures,
-    /// operation knowledge, parent lookups, and incoming relationships.
+    /// Derived knowledge about the model, as the index `I`: for example,
+    /// `model.knowledge::<TopDownIndex<'_>>()` for complete service and resource closures.
     ///
-    /// Indexes are computed on first use and shared by every clone of this model. See the
-    /// [`knowledge`](crate::knowledge) module.
-    pub fn knowledge(&self) -> Knowledge<'_> {
-        Knowledge::new(&self.data)
+    /// Any [`KnowledgeIndex`] can be acquired this way, including one defined in another crate.
+    /// The built-in indexes are cheap handles over data that is computed on first use and shared
+    /// by every clone of this model. See the [`knowledge`](crate::knowledge) module.
+    pub fn knowledge<'m, I>(&'m self) -> I
+    where
+        I: KnowledgeIndex<'m>,
+    {
+        I::from_model(self)
     }
 
     /// Returns `true` if the model has no root shapes (only possible without the prelude).

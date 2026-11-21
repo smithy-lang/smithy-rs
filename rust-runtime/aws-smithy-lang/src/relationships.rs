@@ -10,7 +10,7 @@
 //! (forward and reverse), the [`knowledge`](crate::knowledge) indexes built on it, and
 //! [`Walker`](crate::traversal::Walker).
 //!
-//! Every ordinary reference in a [`Model`](crate::Model) resolves, so each [`Relationship`]
+//! Every ordinary reference in a [`Model`] resolves, so each [`Relationship`]
 //! always has a target. Applied traits are not relationships: trait definitions may be absent.
 //!
 //! ```
@@ -32,7 +32,8 @@
 //! ```
 
 use crate::diagnostic::{escape_pointer_token, SourceLocation};
-use crate::model::ModelData;
+use crate::knowledge::KnowledgeIndex;
+use crate::model::{Model, ModelData};
 use crate::prelude;
 use crate::shape::{MemberShape, MemberView, Shape, ShapeRef, ShapeType, ShapeView};
 use crate::shape_id::ShapeId;
@@ -679,6 +680,12 @@ impl<'m> RelationshipIndex<'m> {
             node,
             edges: EdgeIds::Incoming(self.index.incoming_slice(node).iter()),
         }
+    }
+}
+
+impl<'m> KnowledgeIndex<'m> for RelationshipIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.data())
     }
 }
 

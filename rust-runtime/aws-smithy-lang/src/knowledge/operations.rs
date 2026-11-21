@@ -5,7 +5,8 @@
 
 //! Operation input, output, errors, and reverse bindings.
 
-use super::{Iter, TopDownIndex};
+use super::{Iter, KnowledgeIndex, TopDownIndex};
+use crate::model::Model;
 use crate::relationships::RelationshipIndex;
 use crate::relationships::RelationshipType;
 use crate::shape::{MembersView, OperationView, ShapeRef, ShapeType, StructureView};
@@ -116,6 +117,12 @@ impl<'m> OperationIndex<'m> {
             })
             .collect();
         Some(Iter::new(operations))
+    }
+}
+
+impl<'m> KnowledgeIndex<'m> for OperationIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.knowledge::<RelationshipIndex<'_>>())
     }
 }
 

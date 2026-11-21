@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Derived, cached knowledge about a [`Model`](crate::Model).
+//! Derived, cached knowledge about a [`Model`].
 //!
 //! Many common questions cannot be answered correctly from a shape's declared fields alone. A
 //! service's declared `operations`, for example, omit every operation bound through a
@@ -15,13 +15,15 @@
 //! | [`OperationIndex`] | Normalized input/output, effective errors within a service, and which operations bind a structure. |
 //! | [`BottomUpIndex`] | The parents of an operation or resource within one service, reporting ambiguity instead of guessing. |
 //! | [`PaginatedIndex`] | The effective pagination of an operation within one service, resolved to the input and output members it names. |
-//! | [`RelationshipIndex`] | Outgoing and incoming relationships of any shape or member. |
+//! | [`RelationshipIndex`](crate::relationships::RelationshipIndex) | Outgoing and incoming relationships of any shape or member. |
 //!
-//! Enter through [`Model::knowledge`](crate::Model::knowledge). Every index handle is a cheap,
-//! `Copy` borrow of the model. Indexes are computed on first use and shared by every clone of
-//! the model and by every thread; a model that never asks for knowledge pays nothing.
+//! Acquire an index with [`Model::knowledge`](crate::Model::knowledge) by naming its type, as
+//! in `model.knowledge::<TopDownIndex<'_>>()`. Every built-in index handle is a cheap, `Copy`
+//! borrow of the model. The data behind them is computed on first use and shared by every clone
+//! of the model and by every thread; a model that never asks for knowledge pays nothing.
 //!
 //! ```
+//! use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex, TopDownIndex};
 //! use aws_smithy_lang::{Model, ShapeId};
 //!
 //! const SERVICE: ShapeId = ShapeId::from_static("ex#Service");
@@ -35,11 +37,10 @@
 //!     "ex#Throttled": {"type": "structure", "traits": {"smithy.api#error": "client"}},
 //!     "ex#NotFound": {"type": "structure", "traits": {"smithy.api#error": "client"}}
 //! }}"#)?;
-//! let knowledge = model.knowledge();
 //!
 //! // The operation is reached only through a resource.
-//! let operations: Vec<_> = knowledge
-//!     .top_down()
+//! let operations: Vec<_> = model
+//!     .knowledge::<TopDownIndex<'_>>()
 //!     .get_contained_operations(&SERVICE)
 //!     .unwrap()
 //!     .map(|op| op.id().to_string())
@@ -47,7 +48,8 @@
 //! assert_eq!(operations, ["ex#GetThing"]);
 //!
 //! // Errors within the service: common service errors first.
-//! let operation = knowledge.operations().get(&GET_THING).unwrap();
+//! let operations = model.knowledge::<OperationIndex<'_>>();
+//! let operation = operations.get(&GET_THING).unwrap();
 //! let errors: Vec<_> = operation
 //!     .errors_in(&SERVICE)
 //!     .unwrap()
@@ -56,7 +58,8 @@
 //! assert_eq!(errors, ["ex#Throttled", "ex#NotFound"]);
 //!
 //! // The operation's parent chain within the service.
-//! let chain = knowledge.bottom_up().parent_chain(&SERVICE, &GET_THING)?.unwrap();
+//! let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
+//! let chain = bottom_up.parent_chain(&SERVICE, &GET_THING)?.unwrap();
 //! let chain: Vec<_> = chain.iter().map(|e| e.id().to_string()).collect();
 //! assert_eq!(chain, ["ex#Thing", "ex#Service"]);
 //! # Ok::<_, Box<dyn std::error::Error>>(())
@@ -85,6 +88,58 @@
 //! The loader also preserves trait values without validating them. An index that interprets
 //! trait values, such as [`PaginatedIndex`], therefore decodes them when queried and returns an
 //! error for a value it cannot interpret, rather than treating that value as absent.
+//!
+//! # Defining an index
+//!
+//! Any type that implements [`KnowledgeIndex`] can be acquired with
+//! [`Model::knowledge`](crate::Model::knowledge), including a type defined in another crate.
+//! There is nothing to register: naming the type selects its constructor. An index can build on
+//! other indexes by acquiring them from the model:
+//!
+//! ```
+//! use aws_smithy_lang::knowledge::{KnowledgeIndex, TopDownIndex};
+//! use aws_smithy_lang::shape::OperationView;
+//! use aws_smithy_lang::{Model, ShapeId};
+//!
+//! /// The `@readonly` operations of a service or resource.
+//! struct ReadonlyIndex<'m> {
+//!     top_down: TopDownIndex<'m>,
+//! }
+//!
+//! impl<'m> KnowledgeIndex<'m> for ReadonlyIndex<'m> {
+//!     fn from_model(model: &'m Model) -> Self {
+//!         Self { top_down: model.knowledge::<TopDownIndex<'_>>() }
+//!     }
+//! }
+//!
+//! impl<'m> ReadonlyIndex<'m> {
+//!     fn operations(&self, entity: &ShapeId) -> Option<Vec<OperationView<'m>>> {
+//!         const READONLY: ShapeId = ShapeId::from_static("smithy.api#readonly");
+//!         let operations = self.top_down.get_contained_operations(entity)?;
+//!         Some(operations.filter(|op| op.has_trait(&READONLY)).collect())
+//!     }
+//! }
+//!
+//! let model = Model::from_idl_str("things.smithy", r#"
+//! $version: "2"
+//! namespace ex
+//!
+//! service Things { resources: [Thing] }
+//! resource Thing { read: GetThing, delete: DeleteThing }
+//!
+//! @readonly
+//! operation GetThing {}
+//!
+//! @idempotent
+//! operation DeleteThing {}
+//! "#)?;
+//!
+//! let readonly = model.knowledge::<ReadonlyIndex<'_>>();
+//! let operations = readonly.operations(&ShapeId::from_static("ex#Things")).unwrap();
+//! assert_eq!(operations.len(), 1);
+//! assert_eq!(operations[0].id(), "ex#GetThing");
+//! # Ok::<_, Box<dyn std::error::Error>>(())
+//! ```
 
 mod bottom_up;
 mod operations;
@@ -96,8 +151,8 @@ pub use operations::{OperationIndex, OperationKnowledge};
 pub use paginated::{PaginatedIndex, PaginationIndexError, PaginationInfo};
 pub use top_down::TopDownIndex;
 
-use crate::model::ModelData;
-use crate::relationships::{RelationshipData, RelationshipIndex};
+use crate::model::{Model, ModelData};
+use crate::relationships::RelationshipData;
 use std::fmt;
 use std::iter::FusedIterator;
 use std::sync::OnceLock;
@@ -115,48 +170,25 @@ impl KnowledgeCache {
     }
 }
 
-/// Entry point to a model's knowledge indexes. Returned by
+/// An index of knowledge derived from a model, acquired with
 /// [`Model::knowledge`](crate::Model::knowledge).
-#[derive(Clone, Copy)]
-pub struct Knowledge<'m> {
-    data: &'m ModelData,
-}
-
-impl<'m> Knowledge<'m> {
-    pub(crate) fn new(data: &'m ModelData) -> Self {
-        Self { data }
-    }
-
-    /// Outgoing and incoming relationships of every shape and member.
-    pub fn relationships(self) -> RelationshipIndex<'m> {
-        RelationshipIndex::new(self.data)
-    }
-
-    /// Every operation and resource contained in a service or resource.
-    pub fn top_down(self) -> TopDownIndex<'m> {
-        TopDownIndex::new(self.relationships())
-    }
-
-    /// Operation input, output, errors, and reverse bindings.
-    pub fn operations(self) -> OperationIndex<'m> {
-        OperationIndex::new(self.relationships())
-    }
-
-    /// Service-scoped parents of operations and resources.
-    pub fn bottom_up(self) -> BottomUpIndex<'m> {
-        BottomUpIndex::new(self.relationships())
-    }
-
-    /// Service-scoped pagination of operations.
-    pub fn paginated(self) -> PaginatedIndex<'m> {
-        PaginatedIndex::new(self.relationships())
-    }
-}
-
-impl fmt::Debug for Knowledge<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Knowledge").finish_non_exhaustive()
-    }
+///
+/// Implement this trait to make a type available as `model.knowledge::<MyIndex<'_>>()`. The
+/// type may borrow the model for `'m` so its queries can return views such as
+/// [`ShapeView<'m>`](crate::shape::ShapeView). See
+/// [Defining an index](crate::knowledge#defining-an-index) for an example.
+///
+/// `from_model` runs on every acquisition and its result is not cached. The built-in indexes are
+/// cheap handles over data that the model computes once and shares. An index that computes and
+/// owns its data recomputes it each time it is acquired, so callers should keep the handle
+/// instead of acquiring it repeatedly.
+///
+/// `from_model` must not fail. An index whose answers can be invalid, such as
+/// [`PaginatedIndex`], returns errors from its query methods instead. It may acquire other
+/// indexes, but those dependencies must not form a cycle.
+pub trait KnowledgeIndex<'m>: Sized {
+    /// Builds this index for `model`.
+    fn from_model(model: &'m Model) -> Self;
 }
 
 /// An iterator over the results of a knowledge query.

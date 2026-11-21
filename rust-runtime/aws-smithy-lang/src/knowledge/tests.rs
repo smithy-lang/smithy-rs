@@ -5,6 +5,7 @@
 
 use super::*;
 use crate::model::Model;
+use crate::relationships::RelationshipIndex;
 use crate::relationships::RelationshipType::{self, *};
 use crate::shape::{OperationView, ShapeRef};
 use crate::shape_id::ShapeId;
@@ -44,7 +45,7 @@ fn ex(names: &[&str]) -> Vec<String> {
 #[test]
 fn top_down_includes_every_binding_kind_once_sorted() {
     let model = model();
-    let top_down = model.knowledge().top_down();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
     let operations = op_ids(
         top_down
             .get_contained_operations(&ShapeId::from_static("ex#Service"))
@@ -150,7 +151,7 @@ fn nested_resource_only_operation_is_found() {
 #[test]
 fn typed_conveniences_match_the_index() {
     let model = model();
-    let top_down = model.knowledge().top_down();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
     for service in model.services() {
         assert_eq!(
             op_ids(service.contained_operations()),
@@ -176,7 +177,7 @@ fn typed_conveniences_match_the_index() {
 #[test]
 fn operation_input_output_and_members() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
 
     let get = operations
         .get(&ShapeId::from_static("ex#GetThing"))
@@ -209,7 +210,7 @@ fn operation_input_output_and_members() {
 #[test]
 fn operation_errors() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
     let get = operations
         .get(&ShapeId::from_static("ex#GetThing"))
         .unwrap();
@@ -261,7 +262,7 @@ fn operation_errors() {
 #[test]
 fn operation_reverse_bindings() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
     assert_eq!(
         op_ids(
             operations
@@ -346,7 +347,7 @@ fn chain_ids(chain: &ParentChain<'_>) -> Vec<String> {
 #[test]
 fn bottom_up_unique_chains() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     assert_eq!(
         parent_ids(
             bottom_up
@@ -422,7 +423,7 @@ fn bottom_up_unique_chains() {
 #[test]
 fn bottom_up_reports_ambiguity() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
 
     // Bound directly to the service and through a resource.
     assert_eq!(
@@ -503,7 +504,7 @@ fn bottom_up_reports_ambiguity() {
 #[test]
 fn bottom_up_is_service_scoped() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     // `ex#Shared` is ambiguous in `ex#Service` but has one parent in `ex#Other`.
     assert_eq!(
         parent_ids(
@@ -602,7 +603,7 @@ fn one_parent_binding_twice_is_unique() {
         }}"#,
     )
     .unwrap();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     assert_eq!(
         parent_ids(
             bottom_up
@@ -627,7 +628,7 @@ fn one_parent_binding_twice_is_unique() {
 #[test]
 fn relationship_index_outgoing_and_incoming() {
     let model = model();
-    let relationships = model.knowledge().relationships();
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
     let outgoing: Vec<_> = relationships
         .get_outgoing(&ShapeId::from_static("ex#GetThing"))
         .unwrap()
@@ -720,7 +721,7 @@ fn relationship_index_outgoing_and_incoming() {
 /// Every edge appears exactly once in its source's outgoing list and once in its target's
 /// incoming list.
 fn assert_symmetric(model: &Model) {
-    let relationships = model.knowledge().relationships();
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
     let mut outgoing = BTreeMap::new();
     let mut incoming = BTreeMap::new();
     let count = |map: &mut BTreeMap<(String, u8, String), usize>,
@@ -774,8 +775,8 @@ fn caches_are_shared_by_clones_and_threads() {
     let model = model();
     let clone = model.clone();
     // Initialize through a clone; the original observes the same cache.
-    let first = clone.knowledge().relationships().index as *const _;
-    let second = model.knowledge().relationships().index as *const _;
+    let first = clone.knowledge::<RelationshipIndex<'_>>().index as *const _;
+    let second = model.knowledge::<RelationshipIndex<'_>>().index as *const _;
     assert!(std::ptr::eq(first, second));
 
     let fresh = Model::from_json_str("m", MODEL).unwrap();
@@ -784,43 +785,38 @@ fn caches_are_shared_by_clones_and_threads() {
             .map(|_| {
                 let model = fresh.clone();
                 scope.spawn(move || {
-                    let top_down = model.knowledge().top_down();
+                    let top_down = model.knowledge::<TopDownIndex<'_>>();
                     let ops = op_ids(
                         top_down
                             .get_contained_operations(&ShapeId::from_static("ex#Service"))
                             .unwrap(),
                     );
                     assert_eq!(ops.len(), 12);
-                    model.knowledge().relationships().index as *const _ as usize
+                    model.knowledge::<RelationshipIndex<'_>>().index as *const _ as usize
                 })
             })
             .collect();
         handles.into_iter().map(|h| h.join().unwrap()).collect()
     });
     assert!(addresses.windows(2).all(|w| w[0] == w[1]));
+    // An equivalent model loaded separately has its own cache.
+    assert_ne!(addresses[0], first as usize);
 }
 
 #[test]
 fn deterministic_across_independent_loads() {
     let snapshot = |model: &Model| {
-        let knowledge = model.knowledge();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
         let mut out = Vec::new();
         for service in model.services() {
             out.push(op_ids(service.contained_operations()));
             for op in service.contained_operations() {
-                if let Some(errors) = knowledge
-                    .operations()
-                    .get(op.id())
-                    .unwrap()
-                    .errors_in(service.id())
-                {
+                if let Some(errors) = operations.get(op.id()).unwrap().errors_in(service.id()) {
                     out.push(ids(errors, |e| e.id()));
                 }
                 out.push(ids(
-                    knowledge
-                        .bottom_up()
-                        .get_ancestors(service.id(), op.id())
-                        .unwrap(),
+                    bottom_up.get_ancestors(service.id(), op.id()).unwrap(),
                     |e| e.id(),
                 ));
             }
@@ -835,32 +831,38 @@ fn deterministic_across_independent_loads() {
 #[test]
 fn send_sync_and_debug() {
     fn assert<T: Send + Sync + Clone + std::fmt::Debug>(_: &T) {}
+    fn assert_copy<T: Copy>(_: &T) {}
     let model = model();
-    let knowledge = model.knowledge();
-    assert(&knowledge);
-    assert(&knowledge.relationships());
-    assert(&knowledge.top_down());
-    assert(&knowledge.operations());
-    assert(&knowledge.bottom_up());
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
+    let operations = model.knowledge::<OperationIndex<'_>>();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
+    let paginated = model.knowledge::<PaginatedIndex<'_>>();
+    assert(&relationships);
+    assert(&top_down);
+    assert(&operations);
+    assert(&bottom_up);
+    assert(&paginated);
+    assert_copy(&relationships);
+    assert_copy(&top_down);
+    assert_copy(&operations);
+    assert_copy(&bottom_up);
+    assert_copy(&paginated);
     assert(
-        &knowledge
-            .operations()
+        &operations
             .get(&ShapeId::from_static("ex#GetThing"))
             .unwrap(),
     );
     assert(
-        &knowledge
-            .relationships()
+        &relationships
             .get_incoming(&ShapeId::from_static("ex#Common"))
             .unwrap(),
     );
     assert(
-        &knowledge
-            .top_down()
+        &top_down
             .get_contained_operations(&ShapeId::from_static("ex#Service"))
             .unwrap(),
     );
-    let bottom_up = knowledge.bottom_up();
     assert(
         &bottom_up
             .get_direct_bindings(
@@ -887,7 +889,6 @@ fn send_sync_and_debug() {
     assert(&err);
     fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
     assert_error(&err);
-    assert_eq!(format!("{knowledge:?}"), "Knowledge { .. }");
 }
 
 #[test]
@@ -1049,7 +1050,7 @@ fn pagination<'m>(
     service: &str,
     operation: &str,
 ) -> Result<Option<PaginationInfo<'m>>, PaginationIndexError> {
-    model.knowledge().paginated().get(
+    model.knowledge::<PaginatedIndex<'_>>().get(
         &id(&format!("ex#{service}")),
         &id(&format!("ex#{operation}")),
     )
@@ -1468,7 +1469,7 @@ fn paginated_send_sync_and_debug() {
     fn assert<T: Send + Sync + Clone + std::fmt::Debug>(_: &T) {}
     fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
     let model = paginated_model(PAGINATED);
-    let index = model.knowledge().paginated();
+    let index = model.knowledge::<PaginatedIndex<'_>>();
     assert(&index);
     assert_eq!(format!("{index:?}"), "PaginatedIndex { .. }");
     assert(&resolved_pagination(&model, "Service", "ListAll"));
@@ -1665,7 +1666,9 @@ proptest! {
     #[test]
     fn knowledge_matches_oracles(graph in graph()) {
         let model = Model::from_json_str("generated", &graph.json()).unwrap();
-        let knowledge = model.knowledge();
+        let top_down = model.knowledge::<TopDownIndex<'_>>();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
         assert_symmetric(&model);
         let entities: Vec<String> = (0..RESOURCES)
             .map(|r| format!("ex#R{r}"))
@@ -1674,8 +1677,8 @@ proptest! {
 
         for start in (0..SERVICES).map(|s| format!("ex#S{s}")).chain((0..RESOURCES).map(|r| format!("ex#R{r}"))) {
             let expected = graph.closure(&start);
-            let ops = op_ids(knowledge.top_down().get_contained_operations(&id(&start)).unwrap());
-            let resources = ids(knowledge.top_down().get_contained_resources(&id(&start)).unwrap(), |r| r.id());
+            let ops = op_ids(top_down.get_contained_operations(&id(&start)).unwrap());
+            let resources = ids(top_down.get_contained_resources(&id(&start)).unwrap(), |r| r.id());
             let expected_ops: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#O")).cloned().collect();
             let expected_resources: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#R")).cloned().collect();
             prop_assert_eq!(ops, expected_ops);
@@ -1686,7 +1689,6 @@ proptest! {
             let service = format!("ex#S{s}");
             let closure = graph.closure(&service);
             for entity in &entities {
-                let bottom_up = knowledge.bottom_up();
                 if !closure.contains(entity) {
                     prop_assert!(bottom_up.get_direct_bindings(&id(&service), &id(entity)).is_none());
                     prop_assert!(bottom_up.parent_chain(&id(&service), &id(entity)).unwrap().is_none());
@@ -1735,7 +1737,7 @@ proptest! {
 
             for o in 0..OPS {
                 let op = format!("ex#O{o}");
-                let errors = knowledge.operations().get(&id(&op)).unwrap().errors_in(&id(&service));
+                let errors = operations.get(&id(&op)).unwrap().errors_in(&id(&service));
                 if !closure.contains(&op) {
                     prop_assert!(errors.is_none());
                     continue;

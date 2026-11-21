@@ -5,7 +5,8 @@
 
 //! Service-scoped parents of operations and resources.
 
-use super::{Iter, TopDownIndex};
+use super::{Iter, KnowledgeIndex, TopDownIndex};
+use crate::model::Model;
 use crate::relationships::RelationshipIndex;
 use crate::relationships::RelationshipType;
 use crate::shape::{ResourceView, ServiceView, ShapeRef, ShapeType, ShapeView};
@@ -363,6 +364,12 @@ impl<'m> BottomUpIndex<'m> {
 
     fn entity(&self, node: u32) -> EntityView<'m> {
         EntityView::new(self.relationships.root(node))
+    }
+}
+
+impl<'m> KnowledgeIndex<'m> for BottomUpIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.knowledge::<RelationshipIndex<'_>>())
     }
 }
 
