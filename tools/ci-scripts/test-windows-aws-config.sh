@@ -25,6 +25,12 @@ set -eu -o pipefail
 # exercises the `credential_process` provider, which is where the Windows-specific
 # `cmd.exe` handling lives (see the `credential_process` Windows integration
 # tests).
+#
+# `rustcrypto` has to be named explicitly alongside `--no-default-features`. The signing backend is
+# an optional dependency of `aws-sigv4` now, reached from here through `aws-config` -> `aws-runtime`,
+# and each of those declares the next with `default-features = false`, so dropping the defaults drops
+# the backend. Naming it keeps this leg on the pure-Rust backend, which is the point -- `aws-lc-fips`
+# would reintroduce the C toolchain requirement this script exists to avoid.
 
 if [[ ! -d "aws/sdk/build/aws-sdk/sdk" ]]; then
   echo "error: generated SDK not found at 'aws/sdk/build/aws-sdk'." >&2
@@ -32,7 +38,7 @@ if [[ ! -d "aws/sdk/build/aws-sdk/sdk" ]]; then
   exit 1
 fi
 
-FEATURES="credentials-process,rt-tokio"
+FEATURES="credentials-process,rt-tokio,rustcrypto"
 
 echo "Testing aws-config on Windows (--no-default-features --features ${FEATURES})"
 pushd "aws/rust-runtime/aws-config" &>/dev/null

@@ -1,6 +1,6 @@
 [package]
 name = "aws-sigv4"
-version = "1.6.6"
+version = "1.7.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
@@ -10,7 +10,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [features]
-default = ["sign-http", "http1"]
+default = ["sign-http", "http1", "rustcrypto"]
 http0-compat = ["dep:http0"]
 http1 = ["dep:http"]
 # NOTE: this deliberately does not enable `dep:http0`. Signing runs on `http` 1.x via
@@ -19,6 +19,33 @@ http1 = ["dep:http"]
 sign-http = ["dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
 sigv4a = ["dep:p256", "dep:ecdsa", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
+# RustCrypto backend (`hmac`, `sha2`): HMAC-SHA256, SHA-256, ECDSA-P256. Default, not
+# FIPS-validated. Those two crates are optional and gated here, which is the only way to express
+# their absence: features are additive, so "RustCrypto unless AWS-LC" is not expressible.
+#
+# This breaks `--no-default-features --features sign-http,http1`, which compiled on 1.6.x and now
+# has no backend. `crypto.rs` emits a `compile_error!` naming the fix. It ships under a minor
+# rather than a major because `aws_runtime::auth::SigningOptions` carries a
+# `payload_override: Option<SignableBody<'static>>`, so a 2.0.0 here would split `SignableBody`
+# for every released client that sets it, and `aws-runtime` is staying on 1.x.
+rustcrypto = ["dep:hmac", "dep:sha2"]
+# aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
+# that keeps `rustcrypto` the default is WASM, where aws-lc-rs supports only emscripten.
+#
+# Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
+# `fips` and would make the two arms impossible to enable together -- something `--all-features`
+# does routinely. The arms are siblings rather than stacked, so a FIPS build compiles only the
+# validated library.
+aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
+# aws-lc-rs backend on the FIPS 140-3 validated AWS-LC build. Takes precedence over `aws-lc-rs`.
+#
+# Named for the backend rather than `fips`, which on a generated SDK crate would sit next to
+# `Config::use_fips`: that selects a FIPS-compliant *endpoint* and says nothing about which
+# implementation does the cryptography. See the crate docs for target support and build tools.
+aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
+# Internal: selects the aws-lc-rs backend without naming an AWS-LC build. Use `aws-lc-rs` or
+# `aws-lc-rs-fips`.
+__aws-lc-rs = ["dep:aws-lc-rs"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -29,25 +56,51 @@ aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 bytes = "1.11.1"
 form_urlencoded = { version = "1.2.1", optional = true }
 hex = "0.4.3"
-hmac = "0.13"
 http0 = { package = "http" , version = "0.2.12", optional = true }
 http = { version = "1.3.1", optional = true }
-p256 = { version = "0.14.0", features = ["ecdsa"], optional = true }
-# Only for `ecdsa::hazmat::sign_prehashed_rfc6979`, which `p256` imports privately rather than
-# re-exporting. No features are named because `p256`'s `ecdsa` feature already turns on
-# `ecdsa-core/algorithm`, and its default `pem` reaches `ecdsa/der` for `Signature::to_der`, so this
-# resolves to the same `ecdsa` 0.17 that `p256` uses rather than adding a second copy. See
-# `sign::v4a::calculate_signature` for why the function is needed; a version skew that broke the
-# unification would fail to compile there.
-ecdsa = { version = "0.17.0", optional = true }
 percent-encoding = { version = "2.3.1", optional = true }
-sha2 = "0.11"
+# RustCrypto backend, gated on `rustcrypto` so an AWS-LC build can leave it out. `p256` and `ecdsa`
+# stay behind `sigv4a` instead: features are additive, so `sigv4a` has to keep naming them even
+# when AWS-LC does the signing.
+hmac = { version = "0.13", optional = true }
+sha2 = { version = "0.11", optional = true }
+p256 = { version = "0.14.0", features = ["ecdsa"], optional = true }
+# Only for `ecdsa::hazmat::sign_prehashed_rfc6979`, which `p256` imports privately. No features are
+# named: `p256`'s own feature set already turns on everything used here, so this unifies with the
+# `ecdsa` 0.17 `p256` uses rather than adding a second copy. A skew that broke the unification would
+# fail to compile in `crypto::rustcrypto_impl`.
+ecdsa = { version = "0.17.0", optional = true }
+# aws-lc-rs backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features. `default-features = false`
+# so those features name the AWS-LC build rather than defaulting to the non-FIPS one.
+#
+# `1.18` is the line `rustls` declares, so signing and TLS ask for the same AWS-LC. Cargo resolves
+# one `aws-lc-rs` 1.x graph-wide regardless, so that is about the requirements agreeing, not about
+# duplicate builds; and about `minimal-versions --direct`, which makes the floor the version CI
+# exercises. Within the line, 1.18.1 rather than 1.18.0 because of the `-sys` requirements:
+#
+#   aws-lc-rs   aws-lc-sys   aws-lc-fips-sys
+#   1.18.0      ^0.44.0      ^0.14.0
+#   1.18.1      ^0.45.0      ^0.14.2
+#
+# `^0.44.0` cannot reach `aws-lc-sys` 0.45.0, which fixed Clang builds with `-flto` in `CFLAGS`, and
+# 0.44.0 is the only 0.44.x; `^0.14.0` admits `aws-lc-fips-sys` 0.14.0 and 0.14.1, which do not
+# build with Clang 20 or newer. So the floor is a build-support choice: the APIs used here compile
+# against 1.16.1, and every line from 1.17.3 up already clears the open `-sys` advisories
+# (`aws-lc-sys` >= 0.39.0 for RUSTSEC-2026-0044 and -0048, >= 0.38.0 for -0045 through -0047;
+# `aws-lc-fips-sys` >= 0.13.13 for -0042, >= 0.13.12 for -0043).
+#
+# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4 module, so `<1.18.0`, the FIPS 3
+# module, is unsatisfiable against this floor. aws-lc-rs changes module in a minor release and
+# Cargo takes that automatically inside `1.x`. Do not add an upper bound here: that would deny
+# every consumer the next module. A consumer who needs to stay on FIPS 4 bounds their own
+# requirement at `<1.21.0`, which the changelog tells them.
+aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 crypto-bigint = { version = "0.7.10", optional = true }
 subtle = { version = "2.6.0", optional = true }
 # 0.3.35 is the minimum version that compiles on Rust 1.80+ (earlier versions hit a type inference bug)
 time = "0.3.35"
 tracing = "0.1.44"
-zeroize = { version = "1.8.0", optional = true }
+zeroize = { version = "^1.8.1", optional = true }
 
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util", "hardcoded-credentials"] }
@@ -60,6 +113,9 @@ proptest = "1.2"
 serde = "1.0.228"
 serde_derive = "1.0.228"
 serde_json = "1.0.146"
+# The SigV4a MRAP test hashes a canonical request itself. Declared here as well as behind
+# `rustcrypto` above so it compiles on an AWS-LC build, where the optional normal dep is absent.
+sha2 = "0.11"
 time = { version = "0.3.35", features = ["parsing"] }
 
 criterion = "0.8.2"
@@ -73,8 +129,20 @@ name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
 
+# `normal` is needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto`
+# *and* an AWS-LC arm, so these are compiled while the cfg routes around them. They are the live
+# backend in a default build, and absent entirely from a `--no-default-features` AWS-LC build.
+#
+# `development` is a false positive. `tests/sigv4a_mrap.rs` uses `sha2`, but CI runs udeps without
+# `--all-targets`, so it never inspects that test and reports the dev-dependency as unused.
+[package.metadata.cargo-udeps.ignore]
+normal = ["hmac", "sha2", "p256", "ecdsa"]
+development = ["sha2"]
+
 [package.metadata.docs.rs]
-all-features = true
+# `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
+all-features = false
+features = ["sign-http", "sign-eventstream", "sigv4a", "http0-compat", "http1", "rustcrypto", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]

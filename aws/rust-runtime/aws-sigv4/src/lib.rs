@@ -8,6 +8,65 @@
 /* End of automatically managed default lints */
 //! Provides functions for calculating Sigv4 signing keys, signatures, and
 //! optional utilities for signing HTTP requests and Event Stream messages.
+//!
+//! # Crypto backends
+//!
+//! HMAC-SHA256, SHA-256, and (under the `sigv4a` feature) ECDSA-P256 signing are performed by
+//! one of two backends, chosen by feature at compile time:
+//!
+//! | Feature | Implementation | FIPS 140-3 validated |
+//! |---|---|---|
+//! | `rustcrypto` (default) | the [RustCrypto](https://github.com/RustCrypto) crates | no |
+//! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
+//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//!
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over `rustcrypto`, so enabling
+//! more than one — which Cargo feature unification does routinely — resolves to the strongest
+//! backend rather than failing to build.
+//!
+//! ## Platform support
+//!
+//! `rustcrypto` is the default because it is the only backend that builds everywhere the SDK does.
+//! Both AWS-LC backends are per-target; see
+//! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
+//! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
+//! `wasm32-unknown-emscripten`. `aws-lc-rs-fips` additionally needs CMake and Go and covers fewer
+//! targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported target
+//! fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//!
+//! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
+//! crate's `Cargo.toml` documents the declared floor.
+//!
+//! ## What ends up in the dependency tree
+//!
+//! `hmac` and `sha2` are optional and gated on `rustcrypto`, so an AWS-LC build with the default
+//! features off does not compile them:
+//!
+//! ```sh
+//! cargo build --no-default-features --features sign-http,http1,aws-lc-rs-fips
+//! ```
+//!
+//! Features are additive and cannot express "on unless AWS-LC is", so dropping RustCrypto has to
+//! be something the build asks for. Leaving the defaults on keeps both crates compiled; the AWS-LC
+//! backend still wins at the call site.
+//!
+//! `sigv4a` is unconditional: it declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and `zeroize`
+//! under every backend, with `sha2` arriving under `p256` and `hmac` under `ecdsa`'s RFC 6979 nonce
+//! derivation. None of it performs FIPS-relevant cryptography on an AWS-LC backend. `p256` and
+//! `ecdsa` are the ECDSA implementation for `rustcrypto` only, and the signing path does not reach
+//! them otherwise; `crypto-bigint` does the 256-bit integer math of
+//! [`sign::v4a::generate_signing_key`], which is the key derivation the SigV4a specification
+//! defines rather than a primitive. They stay unconditional because a feature cannot be made
+//! conditional on another feature being absent.
+//!
+//! SigV4 output does not depend on the backend: HMAC-SHA256 is deterministic, and both backends are
+//! held to the same known-answer vectors and signing test suite.
+//!
+//! SigV4a output does. ECDSA leaves the per-signature nonce to the implementation. RustCrypto
+//! derives it per RFC 6979, so the same inputs always produce the same signature and
+//! [`sign::v4a`]'s tests pin those bytes; AWS-LC randomizes it, so signing one input twice yields
+//! two different signatures and those tests verify rather than compare. Both are valid over the
+//! same string to sign.
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
@@ -22,6 +81,7 @@ use std::fmt;
 
 pub mod sign;
 
+mod crypto;
 mod date_time;
 
 #[cfg(feature = "sign-eventstream")]
