@@ -1165,6 +1165,39 @@ fn builders_keep_inherited_traits_and_members() {
 }
 
 #[test]
+fn removing_a_retargeted_member_restores_the_inherited_one() {
+    // Like the reference implementation: `removeMember` gives the member back the target it
+    // inherits, so the shape assembles without a conflict.
+    let model = Model::from_idl_str(
+        "m.smithy",
+        "$version: \"2\"\nnamespace ex\n@mixin\nstructure M { x: String }\n\
+         structure S with [M] {}\n",
+    )
+    .unwrap();
+    let structure = |id: &'static str| {
+        let shape = model.expect_shape(&ShapeId::from_static(id)).unwrap();
+        shape.as_structure().unwrap().shape().clone()
+    };
+    let s = structure("ex#S");
+    let x = s.member("x").unwrap();
+    let retargeted = s
+        .to_builder()
+        .add_member(x.to_builder().target("smithy.api#Integer").build().unwrap())
+        .build()
+        .unwrap();
+    let restored = retargeted.to_builder().remove_member("x").build().unwrap();
+    let x = restored.member("x").expect("inherited from M");
+    assert_eq!(x.target().as_str(), "smithy.api#String");
+    assert!(x.is_inherited());
+    expect_model(
+        Model::assembler()
+            .add_shape(structure("ex#M"))
+            .add_shape(restored)
+            .assemble(),
+    );
+}
+
+#[test]
 fn a_shape_with_mixins_built_in_code_replaces_an_earlier_one() {
     let mixins = Model::from_json_str(
         "m.json",

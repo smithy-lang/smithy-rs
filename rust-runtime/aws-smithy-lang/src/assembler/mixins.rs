@@ -499,9 +499,16 @@ struct MemberLayout<'a> {
     members: Members,
     /// Whether each member, by index, is one the shape declares.
     is_local: Vec<bool>,
-    /// The traits each inherited member inherits, by member name: its mixin members' traits, a
-    /// later mixin's overriding an earlier one's.
-    inherited: HashMap<&'a str, TraitMap>,
+    /// What each inherited member inherits, by member name.
+    inherited: HashMap<&'a str, Inherits>,
+}
+
+/// What an inherited member inherits from its mixin members.
+struct Inherits {
+    /// The first mixin member's target.
+    target: ShapeId,
+    /// The mixin members' traits, a later mixin's overriding an earlier one's.
+    traits: TraitMap,
 }
 
 impl<'a> Inheritance<'a> {
@@ -604,12 +611,15 @@ impl<'a> Inheritance<'a> {
         let mut local = std::mem::take(&mut self.declared.members);
         let mut members = Members::with_capacity(local.len());
         let mut is_local = Vec::with_capacity(local.len());
-        let mut inherited: HashMap<&'a str, TraitMap> = HashMap::new();
+        let mut inherited: HashMap<&'a str, Inherits> = HashMap::new();
         for mixin_member in mixins.iter().flat_map(|mixin| mixin.members()) {
             let name = mixin_member.name();
-            let traits = inherited.entry(name).or_default();
+            let inherits = inherited.entry(name).or_insert_with(|| Inherits {
+                target: mixin_member.target.clone(),
+                traits: TraitMap::new(),
+            });
             for (trait_id, value) in &mixin_member.traits {
-                traits.insert(trait_id.clone(), value.clone());
+                inherits.traits.insert(trait_id.clone(), value.clone());
             }
             if let Some(own) = local.get_mut(name) {
                 if own.target != mixin_member.target {
@@ -691,7 +701,7 @@ impl<'a> Inheritance<'a> {
             mut inherited,
         } = layout;
         for ((name, member), is_local) in members.iter_mut().zip(is_local) {
-            let Some(mut traits) = inherited.remove(name.as_str()) else {
+            let Some(Inherits { target, mut traits }) = inherited.remove(name.as_str()) else {
                 continue;
             };
             // A declared member may also have applied traits that another definition holds. The
@@ -711,7 +721,7 @@ impl<'a> Inheritance<'a> {
                 traits.insert(trait_id, value);
             }
             member.traits = traits;
-            member.inherited = Some(Box::new(InheritedMember { introduced }));
+            member.inherited = Some(Box::new(InheritedMember { introduced, target }));
             if let Some(elided) = elided {
                 member.source = elided.location.clone();
             }

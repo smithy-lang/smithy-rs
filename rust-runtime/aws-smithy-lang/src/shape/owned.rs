@@ -86,11 +86,14 @@ impl ShapeMixins {
 }
 
 /// The provenance of a member inherited from one or more mixins.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct InheritedMember {
     /// The IDs of the member's own traits: the traits applied to it, or declared on a local
     /// redefinition, rather than inherited.
     pub(crate) introduced: HashSet<ShapeId>,
+    /// The target the member inherits (the first mixin member's), which a redefinition may
+    /// change, with a reported conflict.
+    pub(crate) target: ShapeId,
 }
 
 /// Removes trait `id` if it is one of a shape's or member's own traits: any trait without mixin
@@ -1262,14 +1265,16 @@ macro_rules! named_member_shape {
             }
 
             /// Removes a member by name, preserving the order of the others. On a shape with
-            /// mixins (from `to_builder`), an inherited member stays and only loses its own
-            /// traits, as in the reference implementation, where the mixins provide it.
+            /// mixins (from `to_builder`), an inherited member stays as the mixins provide it,
+            /// as in the reference implementation: it loses its own traits, and gets back the
+            /// target it inherits if a redefinition changed it.
             pub fn remove_member(mut self, name: &str) -> Self {
                 if self.common.mixins.is_some() {
                     let member = self.members.get_mut(name);
                     if let Some(member) = member.filter(|m| m.inherited.is_some()) {
-                        let introduced = member.inherited.as_mut().map(|i| &mut i.introduced);
-                        clear_own_traits(&mut member.traits, introduced);
+                        let inherited = member.inherited.as_mut().expect("checked above");
+                        member.target = inherited.target.clone();
+                        clear_own_traits(&mut member.traits, Some(&mut inherited.introduced));
                         return self;
                     }
                 }
