@@ -129,11 +129,15 @@ name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
 
-# Needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto` *and* an
-# AWS-LC arm, so these are compiled while the cfg routes around them. They are the live backend in
-# a default build, and absent entirely from a `--no-default-features` AWS-LC build.
+# `normal` is needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto`
+# *and* an AWS-LC arm, so these are compiled while the cfg routes around them. They are the live
+# backend in a default build, and absent entirely from a `--no-default-features` AWS-LC build.
+#
+# `development` is a false positive. `tests/sigv4a_mrap.rs` uses `sha2`, but CI runs udeps without
+# `--all-targets`, so it never inspects that test and reports the dev-dependency as unused.
 [package.metadata.cargo-udeps.ignore]
 normal = ["hmac", "sha2", "p256", "ecdsa"]
+development = ["sha2"]
 
 [package.metadata.docs.rs]
 # `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
