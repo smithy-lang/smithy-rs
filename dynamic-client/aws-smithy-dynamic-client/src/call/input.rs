@@ -64,6 +64,8 @@ impl SerializableStruct for DynamicInput {
 }
 
 // The debug output has no input values, because a value can be `@sensitive`.
+// TODO(dynamic-client): Print the input values and redact the `@sensitive` ones, as a generated
+// input does, by walking the input schema.
 impl fmt::Debug for DynamicInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DynamicInput").finish_non_exhaustive()

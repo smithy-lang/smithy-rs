@@ -29,6 +29,8 @@ impl DynamicOutput {
 }
 
 // The debug output has no output values, because a value can be `@sensitive`.
+// TODO(dynamic-client): Print the output values and redact the `@sensitive` ones, as a generated
+// output does, by walking the output schema.
 impl fmt::Debug for DynamicOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DynamicOutput").finish_non_exhaustive()
