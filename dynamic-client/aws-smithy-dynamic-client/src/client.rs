@@ -54,6 +54,12 @@ pub struct DynamicClient {
     pub(crate) operations: Arc<[ShapeId]>,
     // The operation plugin of each operation, at the same index as in `operations`. Each plugin
     // is built on the operation's first call, and later calls share it.
+    // TODO(dynamic-client): Also build what the client knows about the operation once, in the
+    // same `OnceLock`: member targets, fill values, error codes with `@awsQueryError`, retry
+    // kinds, output sensitivity, the idempotency token member, and streaming members. Build it
+    // with a `KnowledgeIndex` over the model, once
+    // https://github.com/smithy-lang/smithy-rs/pull/5061 merges. Then `serde` reads that
+    // once-built data, and stops walking the model on each call.
     pub(crate) operation_plugins: Arc<[OnceLock<SharedRuntimePlugin>]>,
     // The service name is the service's SDK ID, or the service's shape name when the model has
     // no SDK ID. Generated clients use the same service name.
