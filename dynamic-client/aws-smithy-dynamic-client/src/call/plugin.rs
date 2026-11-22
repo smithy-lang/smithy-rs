@@ -40,6 +40,9 @@ pub(crate) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> S
         operation.name().to_owned(),
         client.sdk_id.to_string(),
     ));
+    // TODO(aws-smithy-lang): Store `SensitiveOutput` for an operation whose output reaches a
+    // `@sensitive` shape, as generated clients do, once a `SensitiveIndex` exists. Until then, the
+    // orchestrator logs the whole response body at trace level, with any sensitive values in it.
     // TODO(dynamic-client): Resolve the operation's auth options from the model.
     layer.store_put(AuthSchemeOptionResolverParams::new(()));
     // TODO(dynamic-client): Resolve the endpoint from the model's endpoint rules.
