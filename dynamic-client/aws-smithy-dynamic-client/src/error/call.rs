@@ -79,8 +79,9 @@ pub enum InputErrorKind {
 }
 
 impl InputError {
-    pub(crate) fn new(path: String, schema: &Schema<'_>, kind: InputErrorKind) -> Self {
-        Self::for_shape(schema.shape_id().as_str().to_owned(), kind).with_path(path)
+    // An error about the value of `schema`. The path is empty until `under` adds segments.
+    pub(crate) fn new(schema: &Schema<'_>, kind: InputErrorKind) -> Self {
+        Self::for_shape(schema.shape_id().as_str().to_owned(), kind)
     }
 
     // An error about the whole value of the shape `shape`.
@@ -92,8 +93,11 @@ impl InputError {
         }
     }
 
-    fn with_path(mut self, path: String) -> Self {
-        self.path = path;
+    // Puts `segment`, a member name, map key, or list index, in front of the error's path.
+    pub(crate) fn under(mut self, segment: &str) -> Self {
+        let segment = segment.replace('~', "~0").replace('/', "~1");
+        self.path.insert_str(0, &segment);
+        self.path.insert(0, '/');
         self
     }
 

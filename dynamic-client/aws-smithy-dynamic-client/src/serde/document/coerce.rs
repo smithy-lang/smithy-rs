@@ -5,6 +5,9 @@
 
 // This module checks an input document against the input schema, before the protocol
 // serializes the document.
+//
+// An error gets its JSON pointer as it returns through each list, map, and structure. So a valid
+// input is checked with no allocation.
 
 use super::{model_member, target_schema};
 use crate::error::{InputError, InputErrorKind};
@@ -19,17 +22,15 @@ pub(crate) fn check_input(
     schema: &Schema<'_>,
     input: &Document,
 ) -> Result<(), InputError> {
-    let mut path = String::new();
-    check_value(schemas, schema, input, &mut path)
+    check_value(schemas, schema, input)
 }
 
 fn check_value(
     schemas: &RuntimeSchemaSet,
     schema: &Schema<'_>,
     value: &Document,
-    path: &mut String,
 ) -> Result<(), InputError> {
-    let error = |kind| Err(InputError::new(path.clone(), schema, kind));
+    let error = |kind| Err(InputError::new(schema, kind));
     match (schema.shape_type(), value) {
         (ShapeType::Boolean, Document::Bool(_))
         | (ShapeType::String, Document::String(_))
@@ -43,9 +44,8 @@ fn check_value(
             let member = schema.member().expect("list schemas have a member");
             let sparse = is_sparse(schemas, schema);
             for (index, item) in items.iter().enumerate() {
-                with_segment(path, &index.to_string(), |path| {
-                    check_entry(schemas, member, item, sparse, path)
-                })?;
+                check_entry(schemas, member, item, sparse)
+                    .map_err(|error| error.under(&index.to_string()))?;
             }
             Ok(())
         }
@@ -53,9 +53,7 @@ fn check_value(
             let member = schema.member().expect("map schemas have a value");
             let sparse = is_sparse(schemas, schema);
             for (key, entry) in entries {
-                with_segment(path, key, |path| {
-                    check_entry(schemas, member, entry, sparse, path)
-                })?;
+                check_entry(schemas, member, entry, sparse).map_err(|error| error.under(key))?;
             }
             Ok(())
         }
@@ -63,7 +61,7 @@ fn check_value(
             let Ok(target) = target_schema(schemas, schema) else {
                 return error(InputErrorKind::Unsupported);
             };
-            check_members(schemas, target, members, path)
+            check_members(schemas, target, members)
         }
         // TODO(dynamic-client): Accept blob, timestamp, and big number values once inputs are
         // DocumentV2. A blob takes a binary value only, and never a string. A timestamp takes
@@ -83,16 +81,11 @@ fn check_entry(
     member: &Schema<'_>,
     entry: &Document,
     sparse: bool,
-    path: &mut String,
 ) -> Result<(), InputError> {
     match entry {
         Document::Null if sparse => Ok(()),
-        Document::Null => Err(InputError::new(
-            path.clone(),
-            member,
-            InputErrorKind::WrongType,
-        )),
-        entry => check_value(schemas, member, entry, path),
+        Document::Null => Err(InputError::new(member, InputErrorKind::WrongType)),
+        entry => check_value(schemas, member, entry),
     }
 }
 
@@ -108,29 +101,18 @@ fn check_members(
     schemas: &RuntimeSchemaSet,
     schema: &Schema<'_>,
     members: &std::collections::HashMap<String, Document>,
-    path: &mut String,
 ) -> Result<(), InputError> {
     let set = members
         .iter()
         .filter(|(_, value)| !matches!(value, Document::Null));
     if schema.shape_type() == ShapeType::Union && set.clone().count() != 1 {
-        return Err(InputError::new(
-            path.clone(),
-            schema,
-            InputErrorKind::InvalidUnion,
-        ));
+        return Err(InputError::new(schema, InputErrorKind::InvalidUnion));
     }
     for (name, value) in set {
         let Some(member) = schema.member_schema(name) else {
-            return with_segment(path, name, |path| {
-                Err(InputError::new(
-                    path.clone(),
-                    schema,
-                    InputErrorKind::UnknownMember,
-                ))
-            });
+            return Err(InputError::new(schema, InputErrorKind::UnknownMember).under(name));
         };
-        with_segment(path, name, |path| check_value(schemas, member, value, path))?;
+        check_value(schemas, member, value).map_err(|error| error.under(name))?;
     }
     Ok(())
 }
@@ -143,20 +125,6 @@ fn fits<T: TryFrom<Number>>(
         Ok(_) => Ok(()),
         Err(_) => error(InputErrorKind::InvalidNumber),
     }
-}
-
-// Runs `check` with `segment` added to the JSON pointer `path`, then takes the segment off.
-fn with_segment(
-    path: &mut String,
-    segment: &str,
-    check: impl FnOnce(&mut String) -> Result<(), InputError>,
-) -> Result<(), InputError> {
-    let length = path.len();
-    path.push('/');
-    path.push_str(&segment.replace('~', "~0").replace('/', "~1"));
-    let result = check(path);
-    path.truncate(length);
-    result
 }
 
 #[cfg(test)]
@@ -274,6 +242,15 @@ mod tests {
         let input = object([("labels", object([("a", Document::Null)]))]);
         assert_eq!(
             Err(("/labels/a".to_owned(), InputErrorKind::WrongType)),
+            check(input)
+        );
+    }
+
+    #[test]
+    fn a_key_with_a_slash_or_a_tilde_is_escaped_in_the_path() {
+        let input = object([("labels", object([("a/b~c", number(1))]))]);
+        assert_eq!(
+            Err(("/labels/a~1b~0c".to_owned(), InputErrorKind::WrongType)),
             check(input)
         );
     }
