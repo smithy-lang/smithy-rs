@@ -67,6 +67,8 @@ pub(super) fn read_error(
 // and a `:url` suffix are dropped first, so an absolute code and a relative code both match.
 // TODO(aws-smithy-schema): Look the error up with `TypeRegistry::entry_for_error_code`, once a
 // registry can hold runtime-built schemas and deserializers.
+// TODO(dynamic-client): Also match the code of an error's `@awsQueryError` trait, for awsQuery
+// and awsQueryCompatible services. That code can differ from the shape name.
 fn find_error<'s>(errors: &[&'s Schema<'s>], code: &str) -> Option<&'s Schema<'s>> {
     let code = sanitize_error_code(code);
     errors
