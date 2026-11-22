@@ -159,7 +159,7 @@ impl DynamicClient {
         if !schema.is_structure() && !schema.is_union() {
             return Err(InputError::for_shape(
                 shape.as_str().to_owned(),
-                InputErrorKind::NotAStructure,
+                InputErrorKind::NotAStructureOrUnion,
             ));
         }
         check_input(&self.schemas, schema, &value)?;

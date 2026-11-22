@@ -75,7 +75,7 @@ pub enum InputErrorKind {
     /// The service reaches no shape with the given shape ID.
     UnknownShape,
     /// The shape is not a structure or a union.
-    NotAStructure,
+    NotAStructureOrUnion,
 }
 
 impl InputError {
@@ -127,7 +127,9 @@ impl fmt::Display for InputError {
             InputErrorKind::InvalidUnion => "must have exactly one member of",
             InputErrorKind::Unsupported => "can't be given as a document for",
             InputErrorKind::UnknownShape => "is for a shape the service doesn't reach:",
-            InputErrorKind::NotAStructure => "is for a shape that isn't a structure or union:",
+            InputErrorKind::NotAStructureOrUnion => {
+                "is for a shape that isn't a structure or union:"
+            }
         };
         write!(f, "the input value at `{path}` {problem} `{}`", self.shape)
     }

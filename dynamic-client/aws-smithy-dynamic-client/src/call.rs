@@ -915,7 +915,7 @@ mod tests {
             .struct_value(&shape("smithy.example#TagList"), object([]))
             .err()
             .expect("a list is not a structure");
-        assert_eq!(&InputErrorKind::NotAStructure, err.kind());
+        assert_eq!(&InputErrorKind::NotAStructureOrUnion, err.kind());
     }
 
     #[tokio::test]
