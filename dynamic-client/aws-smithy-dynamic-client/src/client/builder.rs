@@ -6,7 +6,7 @@
 // The builder for a dynamic client, and the steps of `build()`.
 
 use super::DynamicClient;
-use crate::config::{self, Applies, Put};
+use crate::config::{self, puts_plugin, Applies, ConfigParts, Put};
 use crate::error::{BuildError, MissingHttpClient};
 use crate::protocol::{detect_protocol, protocol_traits, AWS_QUERY};
 use aws_smithy_lang::endpoint_rules::{EndpointBdd, EndpointRuleSet, Parameters};
@@ -25,9 +25,10 @@ use aws_smithy_schema::protocol::{
     ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
-use std::collections::HashSet;
+use std::any::TypeId;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 /// A builder for a [`DynamicClient`].
 #[derive(Clone, Debug, Default)]
@@ -92,7 +93,8 @@ impl DynamicClientBuilder {
             .materialization(Materialization::Lazy)
             .build()
             .map_err(BuildError::schema_build_failed)?;
-        let protocol = match self.config.protocol {
+        let mut config = self.config;
+        let protocol = match config.protocol.take() {
             Some(protocol) => protocol,
             None => detect_protocol(&service_view).ok_or_else(|| {
                 BuildError::protocol_not_found(
@@ -107,69 +109,23 @@ impl DynamicClientBuilder {
         {
             return Err(BuildError::missing_service_version(service));
         }
-        let mut components = RuntimeComponentsBuilder::new("DynamicClientConfig");
-        components.set_http_client(self.config.http_client);
-        components.set_sleep_impl(self.config.sleep_impl);
-        components.set_time_source(self.config.time_source);
-        components.set_identity_cache(self.config.identity_cache);
-        for retry_classifier in self.config.retry_classifiers {
-            components.push_retry_classifier(retry_classifier);
-        }
-        for interceptor in self.config.interceptors {
-            components.push_interceptor(interceptor);
-        }
-        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
-        // uses SigV4a, as generated clients do.
-        #[cfg(feature = "aws")]
-        if let Some(credentials_provider) = self.config.credentials_provider {
-            components
-                .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
-        }
+        let puts = std::mem::take(&mut config.puts);
+        let ConfigParts {
+            mut layer,
+            mut components,
+            runtime_plugins: user_runtime_plugins,
+        } = config.into_parts("DynamicClientConfig");
         components.push_config_validator(SharedConfigValidator::base_client_config_fn(
             validate_http_client,
         ));
-        let mut layer = Layer::new("DynamicClientConfig");
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
-        if let Some(retry_config) = self.config.retry_config {
-            layer.store_put(retry_config);
-        }
-        if let Some(timeout_config) = self.config.timeout_config {
-            layer.store_put(timeout_config);
-        }
-        if let Some(retry_partition) = self.config.retry_partition {
-            layer.store_put(retry_partition);
-        }
-        if let Some(stalled_stream_protection) = self.config.stalled_stream_protection {
-            layer.store_put(stalled_stream_protection);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(region) = self.config.region {
-            layer.store_put(region);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(invocation_id_generator) = self.config.invocation_id_generator {
-            layer.store_put(invocation_id_generator);
-        }
-        #[cfg(feature = "aws")]
-        if let Some(disable_clock_skew_correction) = self.config.disable_clock_skew_correction {
-            layer.store_put(
-                aws_runtime::service_clock_skew::DisableClockSkewCorrection::from(
-                    disable_clock_skew_correction,
-                ),
-            );
-        }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
-        if !self.config.puts.is_empty() {
-            let mut puts = Layer::new("DynamicClientPuts");
-            for put in &self.config.puts {
-                (put.store)(&mut puts);
-            }
-            runtime_plugins = runtime_plugins
-                .with_client_plugin(StaticRuntimePlugin::new().with_config(puts.freeze()));
+        if let Some(puts) = puts_plugin(&puts) {
+            runtime_plugins = runtime_plugins.with_client_plugin(puts);
         }
-        let runtime_plugins = runtime_plugins.with_client_plugins(self.config.runtime_plugins);
+        let runtime_plugins = runtime_plugins.with_client_plugins(user_runtime_plugins);
         // The same check generated clients run when they are created.
         let mut cfg = ConfigBag::base();
         let components = runtime_plugins
@@ -179,17 +135,63 @@ impl DynamicClientBuilder {
             .validate_base_client_config(&cfg)
             .map_err(BuildError::invalid_config)?;
         // Runs after the last step that can fail, so a failed build logs no warning.
-        for key in unused_keys(&service_view, &self.config.puts) {
-            tracing::warn!(
-                key,
-                service = %service,
-                "the service does not use this config key, so its value has no effect"
-            );
-        }
+        let unused_keys = Mutex::default();
+        warn_unused_keys(&service_view, &puts, &unused_keys);
+        let mut operations: Vec<ShapeId> = schemas.operation_ids().cloned().collect();
+        operations.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(DynamicClient {
             schemas: Arc::new(schemas),
+            operation_plugins: operations.iter().map(|_| OnceLock::new()).collect(),
+            operations: operations.into(),
+            sdk_id: sdk_id(&service_view).into(),
+            unused_keys: Arc::new(unused_keys),
             runtime_plugins,
         })
+    }
+}
+
+// Returns the `sdkId` of the service's `aws.api#service` trait, or the service's shape name when
+// the trait is absent. Generated clients use the same service name.
+fn sdk_id(service: &ServiceView<'_>) -> String {
+    service
+        .get_trait(&AWS_API_SERVICE)
+        .and_then(|value| value.as_object())
+        .and_then(|value| value.get("sdkId"))
+        .and_then(|value| value.as_str())
+        .unwrap_or(service.id().name())
+        .to_owned()
+}
+
+// Logs one warning for each key set by `put` that the service never uses. Whether the service
+// uses a key is found once and kept in `unused`, so a later call with the same key does not walk
+// the service again.
+pub(crate) fn warn_unused_keys(
+    service: &ServiceView<'_>,
+    keys: &[Put],
+    unused: &Mutex<HashMap<TypeId, bool>>,
+) {
+    let mut unused = unused.lock().unwrap_or_else(PoisonError::into_inner);
+    let new: Vec<Put> = keys
+        .iter()
+        .filter(|key| !unused.contains_key(&key.type_id))
+        .cloned()
+        .collect();
+    if !new.is_empty() {
+        let names = unused_keys(service, &new);
+        for key in new {
+            unused.insert(key.type_id, names.contains(&key.name));
+        }
+    }
+    let mut seen = HashSet::new();
+    for key in keys
+        .iter()
+        .filter(|key| seen.insert(key.type_id) && unused[&key.type_id])
+    {
+        tracing::warn!(
+            key = key.name,
+            service = %service.id(),
+            "the service does not use this config key, so its value has no effect"
+        );
     }
 }
 
@@ -209,6 +211,8 @@ fn unused_keys(service: &ServiceView<'_>, keys: &[Put]) -> Vec<&'static str> {
         })
         .collect();
     if !missing_traits.is_empty() {
+        // TODO(aws-smithy-lang): Use the shape set that `RuntimeSchemaSet` already walked for the
+        // service, once it exposes one. Then this second walk goes away.
         for shape in Walker::new().walk(*service) {
             missing_traits.retain(|id| !shape.has_trait(id));
             if missing_traits.is_empty() {
@@ -328,6 +332,7 @@ fn runtime_plugins(
 }
 
 const XML_NAMESPACE: ShapeId = ShapeId::from_static("smithy.api#xmlNamespace");
+const AWS_API_SERVICE: ShapeId = ShapeId::from_static("aws.api#service");
 
 // Picks the service specified by the builder, or the model's only service. A specified service
 // is looked up by ID, so only the default case walks the model's shapes.

@@ -22,7 +22,10 @@ use aws_smithy_runtime_api::client::http::{HttpClient, SharedHttpClient};
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
 use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
-use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_runtime_api::client::runtime_plugin::{
+    RuntimePlugin, SharedRuntimePlugin, StaticRuntimePlugin,
+};
 use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use aws_smithy_types::config_bag::Layer;
 use std::any::{type_name, TypeId};
@@ -306,6 +309,88 @@ impl Builder {
                 .or(self.disable_clock_skew_correction),
         }
     }
+
+    // Splits the config into the parts generated clients store the config in. The behavior
+    // version and the `put` values are left out, because a client stores them apart. A
+    // protocol, when one is set, is stored in the layer.
+    pub(crate) fn into_parts(self, name: &'static str) -> ConfigParts {
+        let mut components = RuntimeComponentsBuilder::new(name);
+        components.set_http_client(self.http_client);
+        components.set_sleep_impl(self.sleep_impl);
+        components.set_time_source(self.time_source);
+        components.set_identity_cache(self.identity_cache);
+        for retry_classifier in self.retry_classifiers {
+            components.push_retry_classifier(retry_classifier);
+        }
+        for interceptor in self.interceptors {
+            components.push_interceptor(interceptor);
+        }
+        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
+        // uses SigV4a, as generated clients do.
+        #[cfg(feature = "aws")]
+        if let Some(credentials_provider) = self.credentials_provider {
+            components
+                .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
+        }
+        let mut layer = Layer::new(name);
+        if let Some(protocol) = self.protocol {
+            layer.store_put(protocol);
+        }
+        if let Some(retry_config) = self.retry_config {
+            layer.store_put(retry_config);
+        }
+        if let Some(timeout_config) = self.timeout_config {
+            layer.store_put(timeout_config);
+        }
+        if let Some(retry_partition) = self.retry_partition {
+            layer.store_put(retry_partition);
+        }
+        if let Some(stalled_stream_protection) = self.stalled_stream_protection {
+            layer.store_put(stalled_stream_protection);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(region) = self.region {
+            layer.store_put(region);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(invocation_id_generator) = self.invocation_id_generator {
+            layer.store_put(invocation_id_generator);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(disable_clock_skew_correction) = self.disable_clock_skew_correction {
+            layer.store_put(
+                aws_runtime::service_clock_skew::DisableClockSkewCorrection::from(
+                    disable_clock_skew_correction,
+                ),
+            );
+        }
+        ConfigParts {
+            layer,
+            components,
+            runtime_plugins: self.runtime_plugins,
+        }
+    }
+}
+
+// `ConfigParts` holds the parts of a config: a config layer, runtime components, and the user's
+// runtime plugins.
+pub(crate) struct ConfigParts {
+    pub(crate) layer: Layer,
+    pub(crate) components: RuntimeComponentsBuilder,
+    pub(crate) runtime_plugins: Vec<SharedRuntimePlugin>,
+}
+
+// Returns a plugin with the values set by `put`, in the order they were set. Returns `None` when
+// no value was set.
+pub(crate) fn puts_plugin(puts: &[Put]) -> Option<StaticRuntimePlugin> {
+    if puts.is_empty() {
+        return None;
+    }
+    let mut layer = Layer::new("DynamicClientPuts");
+    for put in puts {
+        (put.store)(&mut layer);
+    }
+    Some(StaticRuntimePlugin::new().with_config(layer.freeze()))
 }
 
 // A value set by `put`. At `build()`, the value is written into a layer by `store`, and the key
