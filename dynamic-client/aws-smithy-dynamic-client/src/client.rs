@@ -19,7 +19,9 @@ use aws_smithy_schema::OperationSchema;
 #[cfg(test)]
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::Document;
-use std::sync::{Arc, OnceLock};
+use std::any::TypeId;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
 use struct_value::StructValue;
 
 mod builder;
@@ -56,6 +58,9 @@ pub struct DynamicClient {
     // The service name is the service's SDK ID, or the service's shape name when the model has
     // no SDK ID. Generated clients use the same service name.
     pub(crate) sdk_id: Arc<str>,
+    // Whether the service never uses each config key set by `put`, keyed by the key's type.
+    // Each key is looked up on its first use, at `build()` or in a call's config override.
+    pub(crate) unused_keys: Arc<Mutex<HashMap<TypeId, bool>>>,
     // The default plugins, then the plugin for the client's config, in the order generated
     // clients apply them. The protocol and the service facts are stored in the config plugin's
     // layer.

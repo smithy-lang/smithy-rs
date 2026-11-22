@@ -25,9 +25,10 @@ use aws_smithy_schema::protocol::{
     ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
 };
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
-use std::collections::HashSet;
+use std::any::TypeId;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 /// A builder for a [`DynamicClient`].
 #[derive(Clone, Debug, Default)]
@@ -134,7 +135,8 @@ impl DynamicClientBuilder {
             .validate_base_client_config(&cfg)
             .map_err(BuildError::invalid_config)?;
         // Runs after the last step that can fail, so a failed build logs no warning.
-        warn_unused_keys(&service_view, &puts);
+        let unused_keys = Mutex::default();
+        warn_unused_keys(&service_view, &puts, &unused_keys);
         let mut operations: Vec<ShapeId> = schemas.operation_ids().cloned().collect();
         operations.sort_by(|a, b| a.name().cmp(b.name()));
         Ok(DynamicClient {
@@ -142,6 +144,7 @@ impl DynamicClientBuilder {
             operation_plugins: operations.iter().map(|_| OnceLock::new()).collect(),
             operations: operations.into(),
             sdk_id: sdk_id(&service_view).into(),
+            unused_keys: Arc::new(unused_keys),
             runtime_plugins,
         })
     }
@@ -159,11 +162,33 @@ fn sdk_id(service: &ServiceView<'_>) -> String {
         .to_owned()
 }
 
-// Logs one warning for each key set by `put` that the service never uses.
-pub(crate) fn warn_unused_keys(service: &ServiceView<'_>, keys: &[Put]) {
-    for key in unused_keys(service, keys) {
+// Logs one warning for each key set by `put` that the service never uses. Whether the service
+// uses a key is found once and kept in `unused`, so a later call with the same key does not walk
+// the service again.
+pub(crate) fn warn_unused_keys(
+    service: &ServiceView<'_>,
+    keys: &[Put],
+    unused: &Mutex<HashMap<TypeId, bool>>,
+) {
+    let mut unused = unused.lock().unwrap_or_else(PoisonError::into_inner);
+    let new: Vec<Put> = keys
+        .iter()
+        .filter(|key| !unused.contains_key(&key.type_id))
+        .cloned()
+        .collect();
+    if !new.is_empty() {
+        let names = unused_keys(service, &new);
+        for key in new {
+            unused.insert(key.type_id, names.contains(&key.name));
+        }
+    }
+    let mut seen = HashSet::new();
+    for key in keys
+        .iter()
+        .filter(|key| seen.insert(key.type_id) && unused[&key.type_id])
+    {
         tracing::warn!(
-            key,
+            key = key.name,
             service = %service.id(),
             "the service does not use this config key, so its value has no effect"
         );

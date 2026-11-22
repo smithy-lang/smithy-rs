@@ -465,6 +465,40 @@ mod tests {
         );
     }
 
+    // A key for a trait no shape of the Sprockets model has.
+    #[derive(Clone, Debug)]
+    struct UnusedKey;
+
+    impl Storable for UnusedKey {
+        type Storer = StoreReplace<Self>;
+    }
+
+    impl ConfigKey for UnusedKey {
+        const APPLIES: &'static [Applies] = &[Applies::Trait(
+            aws_smithy_lang::ShapeId::from_static("smithy.example#unused"),
+        )];
+    }
+
+    #[tokio::test]
+    async fn the_use_of_an_override_key_is_found_once_per_client() {
+        let client = client_with(Config::builder());
+        for _ in 0..2 {
+            client
+                .call("CreateSprocket")
+                .config_override(Config::builder().put(UnusedKey))
+                .send()
+                .await
+                .unwrap();
+        }
+        let unused = client.unused_keys.lock().unwrap().clone();
+        assert_eq!(
+            [(std::any::TypeId::of::<UnusedKey>(), true)]
+                .into_iter()
+                .collect::<std::collections::HashMap<_, _>>(),
+            unused
+        );
+    }
+
     #[cfg(feature = "aws")]
     #[tokio::test]
     async fn a_per_call_region_applies_only_to_that_call() {

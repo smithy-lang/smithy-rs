@@ -79,7 +79,7 @@ pub(super) fn per_call_plugins(
     mut config_override: config::Builder,
 ) -> Vec<SharedRuntimePlugin> {
     let puts = std::mem::take(&mut config_override.puts);
-    warn_unused_keys(&client.service_view(), &puts);
+    warn_unused_keys(&client.service_view(), &puts, &client.unused_keys);
     let ConfigParts {
         layer,
         mut components,
