@@ -6,9 +6,10 @@
 // This module checks an input document against the input schema, before the protocol
 // serializes the document.
 
-use super::target_schema;
+use super::{model_member, target_schema};
 use crate::error::{InputError, InputErrorKind};
 use aws_smithy_lang::runtime_schema::RuntimeSchemaSet;
+use aws_smithy_lang::ShapeId;
 use aws_smithy_schema::{Schema, ShapeType};
 use aws_smithy_types::{Document, Number};
 
@@ -40,21 +41,21 @@ fn check_value(
         (ShapeType::Long, Document::Number(number)) => fits::<i64>(*number, error),
         (ShapeType::List, Document::Array(items)) => {
             let member = schema.member().expect("list schemas have a member");
+            let sparse = is_sparse(schemas, schema);
             for (index, item) in items.iter().enumerate() {
-                if !matches!(item, Document::Null) {
-                    with_segment(path, &index.to_string(), |path| {
-                        check_value(schemas, member, item, path)
-                    })?;
-                }
+                with_segment(path, &index.to_string(), |path| {
+                    check_entry(schemas, member, item, sparse, path)
+                })?;
             }
             Ok(())
         }
         (ShapeType::Map, Document::Object(entries)) => {
             let member = schema.member().expect("map schemas have a value");
+            let sparse = is_sparse(schemas, schema);
             for (key, entry) in entries {
-                if !matches!(entry, Document::Null) {
-                    with_segment(path, key, |path| check_value(schemas, member, entry, path))?;
-                }
+                with_segment(path, key, |path| {
+                    check_entry(schemas, member, entry, sparse, path)
+                })?;
             }
             Ok(())
         }
@@ -74,6 +75,34 @@ fn check_value(
         _ => error(InputErrorKind::WrongType),
     }
 }
+
+// Checks a list item or a map value. Only a `@sparse` list or map takes a null entry, as in a
+// generated client.
+fn check_entry(
+    schemas: &RuntimeSchemaSet,
+    member: &Schema<'_>,
+    entry: &Document,
+    sparse: bool,
+    path: &mut String,
+) -> Result<(), InputError> {
+    match entry {
+        Document::Null if sparse => Ok(()),
+        Document::Null => Err(InputError::new(
+            path.clone(),
+            member,
+            InputErrorKind::WrongType,
+        )),
+        entry => check_value(schemas, member, entry, path),
+    }
+}
+
+// Returns whether the list or map that the member schema `schema` targets has `@sparse`.
+// TODO(aws-smithy-schema): Read `@sparse` from the schema, once runtime schemas carry it.
+fn is_sparse(schemas: &RuntimeSchemaSet, schema: &Schema<'_>) -> bool {
+    model_member(schemas, schema).is_some_and(|member| member.target_shape().has_trait(&SPARSE))
+}
+
+const SPARSE: ShapeId = ShapeId::from_static("smithy.api#sparse");
 
 fn check_members(
     schemas: &RuntimeSchemaSet,
@@ -236,6 +265,15 @@ mod tests {
         let input = object([("shape", shape)]);
         assert_eq!(
             Err(("/shape".to_owned(), InputErrorKind::InvalidUnion)),
+            check(input)
+        );
+    }
+
+    #[test]
+    fn a_null_value_in_a_map_without_sparse_fails() {
+        let input = object([("labels", object([("a", Document::Null)]))]);
+        assert_eq!(
+            Err(("/labels/a".to_owned(), InputErrorKind::WrongType)),
             check(input)
         );
     }
