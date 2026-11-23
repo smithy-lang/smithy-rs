@@ -7,8 +7,7 @@
 
 use super::{Iter, KnowledgeIndex, TopDownIndex};
 use crate::model::Model;
-use crate::relationships::RelationshipIndex;
-use crate::relationships::RelationshipType;
+use crate::relationships::{NodeId, RelationshipIndex, RelationshipType};
 use crate::shape::{MembersView, OperationView, ShapeRef, ShapeType, StructureView};
 use crate::shape_id::ShapeId;
 use crate::traits;
@@ -87,18 +86,17 @@ impl<'m> OperationIndex<'m> {
             || self.bindings(node, kind).next().is_some()
     }
 
-    fn structure(&self, id: &ShapeId) -> Option<u32> {
+    fn structure(&self, id: &ShapeId) -> Option<NodeId> {
         let (node, shape) = self.relationships.lookup(id)?;
         (shape.shape_type() == ShapeType::Structure).then_some(node)
     }
 
     /// Sources of incoming `kind` edges, already sorted by source ID.
-    fn bindings(&self, node: u32, kind: RelationshipType) -> impl Iterator<Item = u32> + 'm {
+    fn bindings(&self, node: NodeId, kind: RelationshipType) -> impl Iterator<Item = NodeId> + 'm {
         self.relationships
-            .index
-            .incoming_edges(node)
-            .filter(move |(_, edge)| *edge == kind)
-            .map(|(source, _)| source)
+            .incoming(node)
+            .filter(move |edge| edge.kind() == kind)
+            .map(|edge| edge.source())
     }
 
     fn operation_bindings(
@@ -136,7 +134,7 @@ impl fmt::Debug for OperationIndex<'_> {
 #[derive(Clone, Copy)]
 pub struct OperationKnowledge<'m> {
     operation: OperationView<'m>,
-    pub(crate) node: u32,
+    pub(crate) node: NodeId,
     relationships: RelationshipIndex<'m>,
 }
 

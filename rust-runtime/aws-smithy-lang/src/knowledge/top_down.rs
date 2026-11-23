@@ -7,7 +7,7 @@
 
 use super::{Iter, KnowledgeIndex};
 use crate::model::Model;
-use crate::relationships::RelationshipIndex;
+use crate::relationships::{NodeId, RelationshipIndex};
 use crate::shape::{OperationView, ResourceView, ServiceView, ShapeType};
 use crate::shape_id::ShapeId;
 use std::collections::HashSet;
@@ -68,18 +68,19 @@ impl<'m> TopDownIndex<'m> {
     }
 
     /// The node of a service or resource.
-    fn entity(&self, id: &ShapeId) -> Option<u32> {
+    fn entity(&self, id: &ShapeId) -> Option<NodeId> {
         let (node, shape) = self.relationships.lookup(id)?;
         matches!(shape.shape_type(), ShapeType::Service | ShapeType::Resource).then_some(node)
     }
 
     /// Every node contained in `start`, excluding `start`, in no particular order.
-    pub(crate) fn closure(&self, start: u32) -> HashSet<u32> {
+    pub(crate) fn closure(&self, start: NodeId) -> HashSet<NodeId> {
         let mut visited = HashSet::new();
         let mut stack = vec![start];
         while let Some(node) = stack.pop() {
-            for (kind, target) in self.relationships.index.outgoing_edges(node) {
-                if kind.is_containment() && target != start && visited.insert(target) {
+            for edge in self.relationships.outgoing(node) {
+                let target = edge.target();
+                if edge.kind().is_containment() && target != start && visited.insert(target) {
                     stack.push(target);
                 }
             }
@@ -88,26 +89,26 @@ impl<'m> TopDownIndex<'m> {
     }
 
     /// Returns `true` if `target` is contained in `start`.
-    pub(crate) fn contains_node(&self, start: u32, target: u32) -> bool {
+    pub(crate) fn contains_node(&self, start: NodeId, target: NodeId) -> bool {
         let mut visited = HashSet::new();
         let mut stack = vec![start];
         while let Some(node) = stack.pop() {
-            for (kind, next) in self.relationships.index.outgoing_edges(node) {
-                if !kind.is_containment() {
+            for edge in self.relationships.outgoing(node) {
+                if !edge.kind().is_containment() {
                     continue;
                 }
-                if next == target {
+                if edge.target() == target {
                     return true;
                 }
-                if visited.insert(next) {
-                    stack.push(next);
+                if visited.insert(edge.target()) {
+                    stack.push(edge.target());
                 }
             }
         }
         false
     }
 
-    fn operations_of(&self, start: u32) -> Iter<OperationView<'m>> {
+    fn operations_of(&self, start: NodeId) -> Iter<OperationView<'m>> {
         let mut operations: Vec<_> = self
             .closure(start)
             .into_iter()
@@ -117,7 +118,7 @@ impl<'m> TopDownIndex<'m> {
         Iter::new(operations)
     }
 
-    fn resources_of(&self, start: u32) -> Iter<ResourceView<'m>> {
+    fn resources_of(&self, start: NodeId) -> Iter<ResourceView<'m>> {
         let mut resources: Vec<_> = self
             .closure(start)
             .into_iter()
@@ -140,9 +141,9 @@ impl fmt::Debug for TopDownIndex<'_> {
     }
 }
 
-fn index_for<'m>(shape: crate::shape::ShapeView<'m>) -> (TopDownIndex<'m>, u32) {
+fn index_for<'m>(shape: crate::shape::ShapeView<'m>) -> (TopDownIndex<'m>, NodeId) {
     let relationships = RelationshipIndex::new(shape.data);
-    let node = relationships.node(shape.id());
+    let node = relationships.expect_node(shape.id());
     (TopDownIndex::new(relationships), node)
 }
 

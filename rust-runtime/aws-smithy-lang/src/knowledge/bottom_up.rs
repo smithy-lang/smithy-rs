@@ -7,8 +7,7 @@
 
 use super::{Iter, KnowledgeIndex, TopDownIndex};
 use crate::model::Model;
-use crate::relationships::RelationshipIndex;
-use crate::relationships::RelationshipType;
+use crate::relationships::{NodeId, RelationshipIndex, RelationshipType};
 use crate::shape::{ResourceView, ServiceView, ShapeRef, ShapeType, ShapeView};
 use crate::shape_id::ShapeId;
 use std::collections::HashSet;
@@ -206,10 +205,10 @@ pub struct BottomUpIndex<'m> {
 
 /// A validated query: a service, an entity contained in it, and the service's closure.
 struct Scope {
-    service: u32,
-    entity: u32,
+    service: NodeId,
+    entity: NodeId,
     /// The service and everything it contains.
-    members: HashSet<u32>,
+    members: HashSet<NodeId>,
 }
 
 impl<'m> BottomUpIndex<'m> {
@@ -334,19 +333,25 @@ impl<'m> BottomUpIndex<'m> {
     fn parents<'s>(
         &self,
         scope: &'s Scope,
-        node: u32,
-    ) -> impl Iterator<Item = (u32, RelationshipType)> + 's
+        node: NodeId,
+    ) -> impl Iterator<Item = (NodeId, RelationshipType)> + 's
     where
         'm: 's,
     {
         self.relationships
-            .index
-            .incoming_edges(node)
-            .filter(move |(source, kind)| kind.is_containment() && scope.members.contains(source))
+            .incoming(node)
+            .filter(move |edge| {
+                edge.kind().is_containment() && scope.members.contains(&edge.source())
+            })
+            .map(|edge| (edge.source(), edge.kind()))
     }
 
-    fn unique_parent_of(&self, scope: &Scope, node: u32) -> Result<u32, AmbiguousParentError> {
-        let mut parents: Vec<u32> = self.parents(scope, node).map(|(p, _)| p).collect();
+    fn unique_parent_of(
+        &self,
+        scope: &Scope,
+        node: NodeId,
+    ) -> Result<NodeId, AmbiguousParentError> {
+        let mut parents: Vec<NodeId> = self.parents(scope, node).map(|(p, _)| p).collect();
         // Parents are sorted by ID, so repeated bindings from one parent are adjacent.
         parents.dedup();
         match parents.as_slice() {
@@ -362,7 +367,7 @@ impl<'m> BottomUpIndex<'m> {
         }
     }
 
-    fn entity(&self, node: u32) -> EntityView<'m> {
+    fn entity(&self, node: NodeId) -> EntityView<'m> {
         EntityView::new(self.relationships.root(node))
     }
 }

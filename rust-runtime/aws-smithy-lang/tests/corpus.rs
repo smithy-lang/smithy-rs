@@ -5,7 +5,7 @@
 
 //! Loads, inspects, and round-trips every Smithy JSON AST model in `aws/sdk/aws-models`.
 
-use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex};
+use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex, ServiceClosureIndex};
 use aws_smithy_lang::relationships::RelationshipIndex;
 use aws_smithy_lang::traits::{self, Documentation, DOCUMENTATION};
 use aws_smithy_lang::traversal::Walker;
@@ -231,6 +231,19 @@ fn corpus_knowledge_invariants() {
             assert!(resource_ids.contains(&direct.to_string()), "{name}");
         }
         assert!(!contained.is_empty(), "{name}");
+
+        // The service closure matches an uncached walk over every relationship.
+        let closure = model
+            .knowledge::<ServiceClosureIndex<'_>>()
+            .get(service.id())
+            .unwrap();
+        let reachable: BTreeSet<String> = Walker::new()
+            .walk(service)
+            .map(|s| s.id().to_string())
+            .collect();
+        let closed: BTreeSet<String> = closure.shapes().map(|s| s.id().to_string()).collect();
+        assert_eq!(closed.len(), closure.len(), "{name}");
+        assert_eq!(closed, reachable, "{name}");
 
         for operation in &contained {
             // Effective errors resolve to @error structures and include every direct error.

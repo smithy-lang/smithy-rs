@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::model::Model;
-use crate::relationships::RelationshipIndex;
 use crate::relationships::RelationshipType::{self, *};
+use crate::relationships::{Edges, RelationshipIndex, Relationships};
 use crate::shape::{OperationView, ShapeRef};
 use crate::shape_id::ShapeId;
 use proptest::prelude::*;
@@ -797,6 +797,175 @@ fn relationships_are_symmetric_and_match_traversal() {
     assert_symmetric(&model());
 }
 
+/// Node IDs number every shape and member densely in model order, and the node queries agree
+/// with the `ShapeId` queries.
+fn assert_nodes(model: &Model) {
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let edges = |edges: Edges<'_>| -> Vec<_> {
+        edges
+            .map(|e| {
+                let source = relationships.shape(e.source()).id().to_string();
+                let target = relationships.shape(e.target()).id().to_string();
+                (source, e.kind(), target)
+            })
+            .collect()
+    };
+    let views = |relationships: Relationships<'_>| -> Vec<_> {
+        relationships
+            .map(|r| {
+                (
+                    r.source().id().to_string(),
+                    r.kind(),
+                    r.target_id().to_string(),
+                )
+            })
+            .collect()
+    };
+    let mut expected = 0;
+    for shape in model.shapes() {
+        let all = std::iter::once(ShapeRef::Shape(shape))
+            .chain(shape.members().iter().map(ShapeRef::Member));
+        for shape in all {
+            let node = relationships.node(shape.id()).unwrap();
+            assert_eq!(node.index(), expected, "{}", shape.id());
+            expected += 1;
+            assert_eq!(relationships.shape(node).id(), shape.id());
+            let outgoing = relationships.outgoing(node);
+            assert_eq!(outgoing.len(), shape.relationships().len());
+            assert_eq!(
+                edges(outgoing),
+                views(relationships.get_outgoing(shape.id()).unwrap())
+            );
+            let incoming = relationships.incoming(node);
+            assert!(incoming.clone().all(|edge| edge.target() == node));
+            assert_eq!(
+                edges(incoming),
+                views(relationships.get_incoming(shape.id()).unwrap())
+            );
+        }
+    }
+    assert_eq!(expected, relationships.node_count());
+}
+
+#[test]
+fn node_queries_match_shape_id_queries() {
+    let model = model();
+    assert_nodes(&model);
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    assert!(relationships
+        .node(&ShapeId::from_static("ex#Missing"))
+        .is_none());
+    assert!(relationships
+        .node(&ShapeId::from_static("ex#Plain$nope"))
+        .is_none());
+    let node = relationships
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    assert_eq!(
+        format!("{:?}", relationships.outgoing(node)),
+        r#"Edges { direction: "outgoing", remaining: 4 }"#
+    );
+    let edge = relationships.outgoing(node).next().unwrap();
+    assert_eq!((edge.source(), edge.kind()), (node, Input));
+    assert_eq!(relationships.shape(edge.target()).id(), "ex#GetThingInput");
+    // Clones share node numbering.
+    let clone = model.clone();
+    let cloned = clone.knowledge::<RelationshipIndex<'_>>();
+    assert_eq!(cloned.shape(node).id(), "ex#GetThing");
+}
+
+#[test]
+#[should_panic(expected = "is not a node of this model, which has 1 nodes")]
+fn node_of_another_model_panics() {
+    let big = model();
+    let node = big
+        .knowledge::<RelationshipIndex<'_>>()
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    let small = Model::assembler()
+        .disable_prelude()
+        .add_json_str(
+            "m",
+            r#"{"smithy":"2.0","shapes":{"ex#A":{"type":"string"}}}"#,
+        )
+        .assemble()
+        .into_result()
+        .unwrap();
+    small.knowledge::<RelationshipIndex<'_>>().shape(node);
+}
+
+/// Every service's closure matches an uncached walk over every relationship.
+fn assert_service_closures(model: &Model) {
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    let mut all = Vec::new();
+    for shape in model.shapes() {
+        all.push(ShapeRef::Shape(shape));
+        all.extend(shape.members().iter().map(ShapeRef::Member));
+    }
+    for service in model.services() {
+        let closure = closures.get(service.id()).unwrap();
+        assert_eq!(closure.service().id(), service.id());
+        let walked: BTreeSet<_> = crate::traversal::Walker::new()
+            .walk(service)
+            .map(|shape| shape.id().to_string())
+            .collect();
+        let shapes: Vec<_> = closure.shapes().map(|s| s.id().to_string()).collect();
+        assert_eq!(shapes.len(), closure.len());
+        assert_eq!(
+            shapes.iter().cloned().collect::<BTreeSet<_>>(),
+            walked,
+            "{}",
+            service.id()
+        );
+        let nodes: Vec<_> = closure.nodes().collect();
+        assert!(nodes.windows(2).all(|w| w[0] < w[1]), "nodes are ascending");
+        for shape in &all {
+            let node = relationships.node(shape.id()).unwrap();
+            let expected = walked.contains(shape.id().as_str());
+            assert_eq!(closure.contains(shape.id()), expected, "{}", shape.id());
+            assert_eq!(closure.contains_node(node), expected, "{}", shape.id());
+        }
+    }
+}
+
+#[test]
+fn service_closure_matches_traversal() {
+    let model = model();
+    assert_service_closures(&model);
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    let closure = closures.get(&ShapeId::from_static("ex#Other")).unwrap();
+    let shapes: Vec<_> = closure.shapes().map(|s| s.id().to_string()).collect();
+    // `ex#SharedRead` is `ex#Shared`'s `read`, and its omitted input and output are `Unit`.
+    assert_eq!(
+        shapes,
+        ["ex#Other", "ex#Shared", "ex#SharedRead", "smithy.api#Unit"]
+    );
+    assert!(!closure.is_empty());
+    assert!(!closure.contains(&ShapeId::from_static("ex#Service")));
+    assert!(!closure.contains(&ShapeId::from_static("ex#Missing")));
+    assert_eq!(
+        format!("{closure:?}"),
+        r#"ServiceClosure { service: ShapeId("ex#Other"), len: 4 }"#
+    );
+    // Errors, inputs, outputs, and their members are in the closure.
+    let service = closures.get(&ShapeId::from_static("ex#Service")).unwrap();
+    for id in [
+        "ex#Common",
+        "ex#NotFound",
+        "ex#GetThingInput$alpha",
+        "smithy.api#Unit",
+    ] {
+        assert!(service.contains(&id.parse().unwrap()), "{id}");
+    }
+    assert!(!service.contains(&ShapeId::from_static("ex#Unbound")));
+    assert!(!service.contains(&ShapeId::from_static("ex#Plain")));
+    // Only services have closures.
+    for id in ["ex#Thing", "ex#GetThing", "ex#Plain", "ex#Missing"] {
+        assert!(closures.get(&id.parse().unwrap()).is_none(), "{id}");
+    }
+}
+
 #[test]
 fn caches_are_shared_by_clones_and_threads() {
     let model = model();
@@ -805,6 +974,12 @@ fn caches_are_shared_by_clones_and_threads() {
     let first = clone.knowledge::<RelationshipIndex<'_>>().index as *const _;
     let second = model.knowledge::<RelationshipIndex<'_>>().index as *const _;
     assert!(std::ptr::eq(first, second));
+    let service = ShapeId::from_static("ex#Service");
+    let closure = |model: &Model| {
+        let closure = model.knowledge::<ServiceClosureIndex<'_>>().get(&service);
+        closure.unwrap().nodes as *const _ as usize
+    };
+    assert_eq!(closure(&clone), closure(&model));
 
     let fresh = Model::from_json_str("m", MODEL).unwrap();
     let addresses: Vec<usize> = std::thread::scope(|scope| {
@@ -828,6 +1003,7 @@ fn caches_are_shared_by_clones_and_threads() {
     assert!(addresses.windows(2).all(|w| w[0] == w[1]));
     // An equivalent model loaded separately has its own cache.
     assert_ne!(addresses[0], first as usize);
+    assert_ne!(closure(&fresh), closure(&model));
 }
 
 #[test]
@@ -865,16 +1041,30 @@ fn send_sync_and_debug() {
     let operations = model.knowledge::<OperationIndex<'_>>();
     let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     let paginated = model.knowledge::<PaginatedIndex<'_>>();
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
     assert(&relationships);
     assert(&top_down);
     assert(&operations);
     assert(&bottom_up);
     assert(&paginated);
+    assert(&closures);
     assert_copy(&relationships);
     assert_copy(&top_down);
     assert_copy(&operations);
     assert_copy(&bottom_up);
     assert_copy(&paginated);
+    assert_copy(&closures);
+    let closure = closures.get(&ShapeId::from_static("ex#Service")).unwrap();
+    assert(&closure);
+    assert_copy(&closure);
+    let node = relationships
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    assert(&node);
+    assert_copy(&node);
+    assert(&relationships.outgoing(node));
+    assert(&relationships.incoming(node).next().unwrap());
+    assert_copy(&relationships.incoming(node).next().unwrap());
     assert(
         &operations
             .get(&ShapeId::from_static("ex#GetThing"))
@@ -1696,7 +1886,10 @@ proptest! {
         let top_down = model.knowledge::<TopDownIndex<'_>>();
         let operations = model.knowledge::<OperationIndex<'_>>();
         let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
+        let closures = model.knowledge::<ServiceClosureIndex<'_>>();
         assert_symmetric(&model);
+        assert_nodes(&model);
+        assert_service_closures(&model);
         let entities: Vec<String> = (0..RESOURCES)
             .map(|r| format!("ex#R{r}"))
             .chain((0..OPS).map(|o| format!("ex#O{o}")))
@@ -1718,6 +1911,15 @@ proptest! {
         for s in 0..SERVICES {
             let service = format!("ex#S{s}");
             let closure = graph.closure(&service);
+            // A service closure reaches operations and resources only through containment.
+            let reached: BTreeSet<String> = closures
+                .get(&id(&service))
+                .unwrap()
+                .shapes()
+                .map(|shape| shape.id().to_string())
+                .filter(|id| id.starts_with("ex#O") || id.starts_with("ex#R"))
+                .collect();
+            prop_assert_eq!(&reached, &closure);
             for entity in &entities {
                 if !closure.contains(entity) {
                     prop_assert!(bottom_up.get_direct_bindings(&id(&service), &id(entity)).is_none());
