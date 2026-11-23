@@ -31,12 +31,14 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -47,7 +49,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
 
 /**
  * Renders the schema-driven walker that reads a structure or union from a `ShapeDeserializer`.
@@ -57,17 +59,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
  * Each member value is assigned directly to its builder field. Calling the by-value `set_*`
  * setters inside those closures would move the entire builder for each member.
  *
- * Constraint validation does not move. A shape that can reach a constrained shape is read into its
- * *unconstrained* representation, exactly as the JSON/CBOR parsers do: nested structures come back as their
- * `Builder`, collections and unions as their `*Unconstrained` types, enums as `String`. Those flow into the
- * builder fields as `MaybeConstrained::Unconstrained` through the existing `From` impls, and the operation
- * input's `build()` validates everything at once, so `ValidationException` field paths stay identical to the
- * generated serde path.
+ * Non-streaming structures and unions get walkers. Walkers for shapes reachable from operation input use
+ * unconstrained representations. The operation input builder validates these values together and preserves
+ * existing `ValidationException` field paths.
  *
- * Only shapes reachable from an operation input get a walker; nothing deserializes outputs or errors on the
- * server. An operation input with an event-stream or streaming-blob member gets a walker into an existing
- * builder ([INTO_FUNCTION_NAME]). The walker reads document-bound streaming blobs into buffered
- * byte streams; streaming glue attaches live REST bodies or event receivers before validation.
+ * Other walkers return public types. They convert closed enums and constrained newtypes with `try_from`.
+ * Conversion failures return `SerdeError`. These walkers do not validate other constraints.
+ *
+ * Streaming operation inputs use [INTO_FUNCTION_NAME] to read document members into an existing builder.
+ * The walker buffers document-bound streaming blobs. Generated glue attaches live REST bodies or event receivers
+ * before validation. A streaming structure outside operation input has no document form, so it has no walker.
  *
  * With the `allowMissingUnionVariant` codegen setting, a union walker returns `Option` and yields `None` for a
  * union object that set no variant, exactly as the generated serde JSON parser does: the enclosing structure member is
@@ -86,6 +87,9 @@ class ServerSchemaDeserializeGenerator(
     private val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
     private val serdeError = smithySchema.resolve("serde::SerdeError").fullyQualifiedName()
     private val allowMissingUnionVariant = codegenContext.settings.codegenConfig.allowMissingUnionVariant
+    private val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
+
+    private val validating = shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
     private val codegenScope =
         arrayOf(
             "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
@@ -99,16 +103,16 @@ class ServerSchemaDeserializeGenerator(
     fun render() {
         when (shape) {
             is StructureShape ->
-                if (shape.isReachableFromOperationInput() && !hasStreamingMember(shape)) {
+                if (!hasStreamingMember(shape)) {
                     renderStructure(shape)
-                } else if (shape.isReachableFromOperationInput()) {
+                } else if (validating) {
                     renderStructureInto(shape)
                     if (!isOperationInput(shape)) {
                         renderStructure(shape)
                     }
                 }
             is UnionShape ->
-                if (shape.isReachableFromOperationInput() && !shape.hasTrait<StreamingTrait>()) {
+                if (!shape.hasTrait<StreamingTrait>()) {
                     renderUnion(shape)
                 }
             else -> {}
@@ -171,18 +175,35 @@ class ServerSchemaDeserializeGenerator(
 
     /** The type the walker returns: the unconstrained representation when the shape needs validation. */
     private fun returnSymbol(shape: Shape) =
-        if (shape.canReachConstrainedShape(model, symbolProvider)) {
+        if (readsUnconstrained(shape)) {
             unconstrainedShapeSymbolProvider.toSymbol(shape)
         } else {
             symbolProvider.toSymbol(shape)
+        }
+
+    private fun readsUnconstrained(shape: Shape) =
+        shape.hasTrait<ShapeReachableFromOperationInputTagTrait>() && shape.canReachConstrainedShape(model, symbolProvider)
+
+    private fun builderSymbol(shape: StructureShape) =
+        if (validating || publicConstrainedTypes) {
+            shape.serverBuilderSymbol(codegenContext)
+        } else {
+            shape.serverBuilderSymbol(symbolProvider, pubCrate = false)
+        }
+
+    private fun buildIsFallible(shape: StructureShape) =
+        if (validating || publicConstrainedTypes) {
+            ServerBuilderGenerator.hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes = validating)
+        } else {
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes.hasFallibleBuilder(shape, symbolProvider)
         }
 
     private fun renderStructure(shape: StructureShape) {
         val symbol = symbolProvider.toSymbol(shape)
         val returnSymbol = returnSymbol(shape)
         val members = shape.allMembers.values.toList()
-        val builderSymbol = shape.serverBuilderSymbol(codegenContext)
-        val unconstrained = shape.canReachConstrainedShape(model, symbolProvider)
+        val builderSymbol = builderSymbol(shape)
+        val unconstrained = readsUnconstrained(shape)
 
         writer.rustTemplate(
             """
@@ -248,6 +269,8 @@ class ServerSchemaDeserializeGenerator(
                 writable {
                     if (unconstrained) {
                         rust("Ok(builder)")
+                    } else if (buildIsFallible(shape)) {
+                        rust("builder.build().map_err(|violation| $serdeError::custom(violation.to_string()))")
                     } else {
                         rust("Ok(builder.build())")
                     }
@@ -341,7 +364,7 @@ class ServerSchemaDeserializeGenerator(
     private fun renderUnion(shape: UnionShape) {
         val symbol = symbolProvider.toSymbol(shape)
         val returnSymbol = returnSymbol(shape)
-        val unconstrained = shape.canReachConstrainedShape(model, symbolProvider)
+        val unconstrained = readsUnconstrained(shape)
         val members = shape.allMembers.values.toList()
 
         writer.rustTemplate(
@@ -425,7 +448,7 @@ class ServerSchemaDeserializeGenerator(
         val target = model.expectShape(member.target)
         val schemaStaticRef = codegenContext.schemaNames.getMemberName(member.id)
         val expr = readExpr(target, "member", schemaStaticRef)
-        val convert = member.targetCanReachConstrainedShape(model, symbolProvider)
+        val convert = validating && member.targetCanReachConstrainedShape(model, symbolProvider)
         val boxed = symbolProvider.toSymbol(member).isRustBoxed()
 
         fun wrap(value: String): String {
@@ -451,15 +474,39 @@ class ServerSchemaDeserializeGenerator(
 
     private fun yieldsOption(target: Shape): Boolean = allowMissingUnionVariant && target is UnionShape
 
-    /**
-     * The read expression for a value of shape [target] whose schema is reachable as [schemaRef]. Collections
-     * that can reach a constrained shape are wrapped in their `*Unconstrained` newtype so the result matches
-     * what the builder field (or the enclosing collection) expects.
-     */
     private fun readExpr(
         target: Shape,
         schemaRef: String,
         schemaStaticRef: String,
+    ): String =
+        when (target) {
+            is StructureShape, is UnionShape -> {
+                val name = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                val read = "$name::$FUNCTION_NAME(deser)?"
+                when {
+                    validating || !readsUnconstrained(target) -> read
+                    // Validate the nested value here. This walker does not have a validating builder.
+                    target is StructureShape -> "($read).build().map_err(|violation| $serdeError::custom(violation.to_string()))?"
+                    else -> tryFromUnconstrained(target, read, yieldsOption(target))
+                }
+            }
+            is CollectionShape -> {
+                val read = listReadExpr(target, schemaRef, schemaStaticRef)
+                if (validating) wrapUnconstrained(target, read) else toPublicType(target, read)
+            }
+            is MapShape -> {
+                val read = mapReadExpr(target, schemaRef, schemaStaticRef)
+                if (validating) wrapUnconstrained(target, read) else toPublicType(target, read)
+            }
+            else -> {
+                val read = simpleReadExpr(target, schemaRef)
+                if (validating) read else toPublicType(target, read)
+            }
+        }
+
+    private fun simpleReadExpr(
+        target: Shape,
+        schemaRef: String,
     ): String =
         when (target) {
             is BooleanShape -> "deser.read_boolean($schemaRef)?"
@@ -471,19 +518,56 @@ class ServerSchemaDeserializeGenerator(
             is DoubleShape -> "deser.read_double($schemaRef)?"
             is BigIntegerShape -> "deser.read_big_integer($schemaRef)?"
             is BigDecimalShape -> "deser.read_big_decimal($schemaRef)?"
-            // Server enums are closed and therefore constrained: the unconstrained value is the raw string.
             is EnumShape, is StringShape -> "deser.read_string($schemaRef)?"
             is BlobShape -> "deser.read_blob($schemaRef)?"
             is TimestampShape -> "deser.read_timestamp($schemaRef)?"
             is DocumentShape -> "deser.read_document($schemaRef)?"
-            is StructureShape, is UnionShape -> {
-                val name = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "$name::$FUNCTION_NAME(deser)?"
-            }
-            is CollectionShape -> wrapUnconstrained(target, listReadExpr(target, schemaRef, schemaStaticRef))
-            is MapShape -> wrapUnconstrained(target, mapReadExpr(target, schemaRef, schemaStaticRef))
             else -> throw IllegalArgumentException("cannot deserialize shape ${target.id} from a schema")
         }
+
+    private fun rawType(target: Shape): RustType? =
+        when (target) {
+            is BlobShape -> RuntimeType.blob(codegenContext.runtimeConfig).toSymbol().rustType()
+            is StringShape -> RustType.String
+            is CollectionShape -> RustType.Vec(RustType.Opaque("_"))
+            is MapShape -> RustType.HashMap(RustType.String, RustType.Opaque("_"))
+            else -> SimpleShapes[target::class]
+        }
+
+    private fun toPublicType(
+        target: Shape,
+        read: String,
+    ): String =
+        if (needsConversion(target)) {
+            val public = symbolProvider.toSymbol(target).rustType().qualifiedName()
+            "$public::try_from($read).map_err(|violation| $serdeError::custom(violation.to_string()))?"
+        } else {
+            read
+        }
+
+    private fun needsConversion(target: Shape): Boolean {
+        val raw = rawType(target) ?: return false
+        val public = symbolProvider.toSymbol(target).rustType()
+        return when (raw) {
+            is RustType.Vec -> public !is RustType.Vec
+            is RustType.HashMap -> public !is RustType.HashMap
+            else -> public != raw
+        }
+    }
+
+    private fun tryFromUnconstrained(
+        target: Shape,
+        read: String,
+        optional: Boolean,
+    ): String {
+        val public = symbolProvider.toSymbol(target).rustType().qualifiedName()
+        val convert = "$public::try_from(v).map_err(|violation| $serdeError::custom(violation.to_string()))"
+        return if (optional) {
+            "($read).map(|v| $convert).transpose()?"
+        } else {
+            "{ let v = $read; $convert? }"
+        }
+    }
 
     private fun wrapUnconstrained(
         target: Shape,
@@ -502,10 +586,10 @@ class ServerSchemaDeserializeGenerator(
     ): String {
         val element = model.expectShape(target.member.target)
         val sparse = target.hasTrait<SparseTrait>()
-        // The closed set of helpers on `ShapeDeserializer` skips a vtable call per element for the common
-        // scalar lists; everything else reads element by element against the list's member schema.
+        // Scalar-list helpers skip one vtable call per element, but they return raw values.
+        // Use them for public types only when the element requires no conversion.
         val helper =
-            if (!sparse) {
+            if (!sparse && (validating || !needsConversion(element))) {
                 when (element) {
                     is StringShape ->
                         if (!isStringEnum(element)) {
@@ -541,16 +625,18 @@ class ServerSchemaDeserializeGenerator(
         val key = model.expectShape(target.key.target)
         val value = model.expectShape(target.value.target)
         val sparse = target.hasTrait<SparseTrait>()
-        if (!sparse && !isStringEnum(key) && value is StringShape && !isStringEnum(value)) {
+        val keyInsert = if (validating) "key" else toPublicType(key, "key")
+        if (!sparse && !isStringEnum(key) && value is StringShape && !isStringEnum(value) &&
+            (validating || (!needsConversion(key) && !needsConversion(value)))
+        ) {
             return "deser.read_string_string_map($schemaRef)?"
         }
-        // Keys are always read as `String`: enum keys make the map constrained, so its unconstrained type
-        // holds `String` keys and validation converts them.
+        // Schema deserializers return map keys as `String`.
         val valueSchemaRef = "${schemaStaticRef}_VALUE"
         val valueRead =
             sparseAware(sparse, readExpr(value, "&$valueSchemaRef", valueSchemaRef), yieldsOption(value), "map")
         return "{ let mut container = ::std::collections::HashMap::new(); " +
-            "deser.read_map($schemaRef, &mut |key, deser| { container.insert(key, $valueRead); Ok(()) })?; container }"
+            "deser.read_map($schemaRef, &mut |key, deser| { container.insert($keyInsert, $valueRead); Ok(()) })?; container }"
     }
 
     /**
