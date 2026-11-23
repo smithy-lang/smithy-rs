@@ -894,10 +894,11 @@ fn node_of_another_model_panics() {
     small.knowledge::<RelationshipIndex<'_>>().shape(node);
 }
 
-/// Every service's closure matches an uncached walk over every relationship.
+/// Every service's closure matches an uncached walk over every relationship, in model order.
 fn assert_service_closures(model: &Model) {
     let relationships = model.knowledge::<RelationshipIndex<'_>>();
     let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    // Every shape and member in model order: each root shape followed by its members.
     let mut all = Vec::new();
     for shape in model.shapes() {
         all.push(ShapeRef::Shape(shape));
@@ -910,14 +911,14 @@ fn assert_service_closures(model: &Model) {
             .walk(service)
             .map(|shape| shape.id().to_string())
             .collect();
+        let expected: Vec<_> = all
+            .iter()
+            .map(|shape| shape.id().to_string())
+            .filter(|id| walked.contains(id))
+            .collect();
         let shapes: Vec<_> = closure.shapes().map(|s| s.id().to_string()).collect();
         assert_eq!(shapes.len(), closure.len());
-        assert_eq!(
-            shapes.iter().cloned().collect::<BTreeSet<_>>(),
-            walked,
-            "{}",
-            service.id()
-        );
+        assert_eq!(shapes, expected, "{}", service.id());
         let nodes: Vec<_> = closure.nodes().collect();
         assert!(nodes.windows(2).all(|w| w[0] < w[1]), "nodes are ascending");
         for shape in &all {

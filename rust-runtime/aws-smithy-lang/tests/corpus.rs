@@ -232,7 +232,8 @@ fn corpus_knowledge_invariants() {
         }
         assert!(!contained.is_empty(), "{name}");
 
-        // The service closure matches an uncached walk over every relationship.
+        // The service closure matches an uncached walk over every relationship, in model order:
+        // each root shape followed by its members.
         let closure = model
             .knowledge::<ServiceClosureIndex<'_>>()
             .get(service.id())
@@ -241,9 +242,17 @@ fn corpus_knowledge_invariants() {
             .walk(service)
             .map(|s| s.id().to_string())
             .collect();
-        let closed: BTreeSet<String> = closure.shapes().map(|s| s.id().to_string()).collect();
+        let expected: Vec<String> = model
+            .shapes()
+            .flat_map(|shape| {
+                std::iter::once(shape.id().to_string())
+                    .chain(shape.members().iter().map(|m| m.id().to_string()))
+            })
+            .filter(|id| reachable.contains(id))
+            .collect();
+        let closed: Vec<String> = closure.shapes().map(|s| s.id().to_string()).collect();
         assert_eq!(closed.len(), closure.len(), "{name}");
-        assert_eq!(closed, reachable, "{name}");
+        assert_eq!(closed, expected, "{name}");
 
         for operation in &contained {
             // Effective errors resolve to @error structures and include every direct error.
