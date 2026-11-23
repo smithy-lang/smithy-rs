@@ -1,0 +1,105 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": true,
+    "events": [
+        {
+            "id": "TraitValue.UnknownMember.smithy.waiters#Acceptor.note",
+            "severity": "WARNING",
+            "shape": "ex#GetOther",
+            "message": "Error validating trait `smithy.waiters#waitable`.OtherReady.acceptors.0: Member `note` does not exist in `smithy.waiters#Acceptor`"
+        },
+        {
+            "id": "TraitValue.UnknownMember.smithy.waiters#PathMatcher.extra",
+            "severity": "WARNING",
+            "shape": "ex#GetOther",
+            "message": "Error validating trait `smithy.waiters#waitable`.OtherReady.acceptors.0.matcher.output: Member `extra` does not exist in `smithy.waiters#PathMatcher`"
+        },
+        {
+            "id": "TraitValue.UnknownMember.smithy.waiters#Waiter.future",
+            "severity": "WARNING",
+            "shape": "ex#GetOther",
+            "message": "Error validating trait `smithy.waiters#waitable`.OtherReady: Member `future` does not exist in `smithy.waiters#Waiter`"
+        }
+    ],
+    "waiters": {
+        "ex#GetOther": [
+            {
+                "name": "OtherReady",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "output": {
+                                "path": "name",
+                                "expected": "x",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#GetThing": [
+            {
+                "name": "Zeta",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            },
+            {
+                "name": "Alpha",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            },
+            {
+                "name": "Mid",
+                "documentation": "Waits until the *thing* exists.",
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 1,
+                "maxDelay": 2147483647,
+                "deprecated": true,
+                "tags": [
+                    "slow",
+                    "legacy"
+                ]
+            }
+        ]
+    }
+}

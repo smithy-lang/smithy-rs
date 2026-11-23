@@ -1,0 +1,102 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "UniqueWaiterNames",
+            "severity": "ERROR",
+            "shape": "ex#GetPart",
+            "message": "`smithy.waiters#waitable` trait waiter name `thingready` case-insensitively conflicts with waiters on other operations in the closure of service, `ex#Service`: [ex#GetThing, ex#ListThings]"
+        },
+        {
+            "id": "UniqueWaiterNames",
+            "severity": "ERROR",
+            "shape": "ex#GetThing",
+            "message": "`smithy.waiters#waitable` trait waiter name `thingready` case-insensitively conflicts with waiters on other operations in the closure of service, `ex#Service`: [ex#GetPart, ex#ListThings]"
+        },
+        {
+            "id": "UniqueWaiterNames",
+            "severity": "ERROR",
+            "shape": "ex#ListThings",
+            "message": "`smithy.waiters#waitable` trait waiter name `thingready` case-insensitively conflicts with waiters on other operations in the closure of service, `ex#Service`: [ex#GetPart, ex#GetThing]"
+        }
+    ],
+    "waiters": {
+        "ex#GetPart": [
+            {
+                "name": "ThingREADY",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#GetThing": [
+            {
+                "name": "ThingReady",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#ListThings": [
+            {
+                "name": "THINGREADY",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#Plain": [
+            {
+                "name": "Unique",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

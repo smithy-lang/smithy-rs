@@ -28,6 +28,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 //  `aws.api#longPoll` Smithy trait once it is available.
 private val LONG_POLLING_OPERATIONS =
     setOf(
+        "com.amazonaws.kinesis#ReceiveDeadLetterQueueRecords",
+        "com.amazonaws.kinesis#ReceiveQueueRecords",
         "com.amazonaws.sqs#ReceiveMessage",
         "com.amazonaws.sfn#GetActivityTask",
         "com.amazonaws.swf#PollForActivityTask",

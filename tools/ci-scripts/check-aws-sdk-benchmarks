@@ -22,4 +22,10 @@ for dir in */; do
         popd
     fi
 done
+
+# Run sdk-perf too, since building it doesn't catch runtime panics
+echo -e "${C_YELLOW}# Running benchmark sdk-perf...${C_RESET}"
+pushd sdk-perf
+cargo run -- --commit-id ci
+popd
 popd

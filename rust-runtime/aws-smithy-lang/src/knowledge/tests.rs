@@ -922,6 +922,561 @@ fn relationship_type_classification() {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Pagination.
+
+/// Valid pagination, shared with the reference-implementation parity test. The file's header
+/// comment lists the cases.
+const PAGINATED: &str = include_str!("../../tests/fixtures/java/paginated/paginated.smithy");
+
+/// Pagination that loads, because the loader does not validate `@paginated`, but cannot be
+/// resolved.
+const UNRESOLVABLE_PAGINATION: &str = r#"
+$version: "2"
+namespace ex
+
+service Plain {
+    operations: [
+        NoInputToken, NoOutputToken, BadInputToken, DottedInputToken, BadPageSize, BadItems,
+        EmptySegment, TrailingDot, NotAStructure, UnitIo, Malformed
+    ]
+}
+
+@paginated(inputToken: "token", outputToken: "token", items: "missing")
+service Defaults {
+    operations: [InheritsBadItems, OverridesBadItems]
+}
+
+@paginated(pageSize: true)
+service BadDefaults {
+    operations: [Marked, Unmarked]
+}
+
+@paginated
+operation NoInputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token")
+operation NoOutputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "nope", outputToken: "token")
+operation BadInputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "nested.token", outputToken: "token")
+operation DottedInputToken {
+    input := { nested: Nested }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token", pageSize: "limit")
+operation BadPageSize {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token", items: "page.missing")
+operation BadItems {
+    input := { token: String }
+    output := { token: String, page: Nested }
+}
+
+@paginated(inputToken: "token", outputToken: "page..token")
+operation EmptySegment {
+    input := { token: String }
+    output := { page: Nested }
+}
+
+@paginated(inputToken: "token", outputToken: "token.")
+operation TrailingDot {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token.next")
+operation NotAStructure {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token")
+operation UnitIo {}
+
+@paginated(inputToken: 1)
+operation Malformed {}
+
+@paginated
+operation InheritsBadItems {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(items: "things")
+operation OverridesBadItems {
+    input := { token: String }
+    output := { token: String, things: Things }
+}
+
+@paginated(inputToken: "token", outputToken: "token")
+operation Marked {
+    input := { token: String }
+    output := { token: String }
+}
+
+operation Unmarked {}
+
+structure Nested {
+    token: String
+}
+
+list Things {
+    member: String
+}
+"#;
+
+fn paginated_model(idl: &str) -> Model {
+    Model::from_idl_str("paginated.smithy", idl).unwrap()
+}
+
+fn pagination<'m>(
+    model: &'m Model,
+    service: &str,
+    operation: &str,
+) -> Result<Option<PaginationInfo<'m>>, PaginationIndexError> {
+    model.knowledge().paginated().get(
+        &id(&format!("ex#{service}")),
+        &id(&format!("ex#{operation}")),
+    )
+}
+
+fn resolved_pagination<'m>(model: &'m Model, service: &str, operation: &str) -> PaginationInfo<'m> {
+    pagination(model, service, operation)
+        .unwrap_or_else(|err| panic!("{service} {operation}: {err}"))
+        .unwrap_or_else(|| panic!("{service} {operation}: not paginated"))
+}
+
+fn pagination_error(model: &Model, service: &str, operation: &str) -> PaginationIndexError {
+    match pagination(model, service, operation) {
+        Err(err) => err,
+        Ok(info) => panic!("{service} {operation}: expected an error, found {info:?}"),
+    }
+}
+
+/// The member IDs a pagination resolves to.
+#[derive(Debug, PartialEq)]
+struct Members {
+    input_token: String,
+    output_token: Vec<String>,
+    page_size: Option<String>,
+    items: Vec<String>,
+}
+
+impl Members {
+    fn of(info: &PaginationInfo<'_>) -> Self {
+        let path = |members: &[crate::shape::MemberView<'_>]| -> Vec<String> {
+            members.iter().map(|m| m.id().to_string()).collect()
+        };
+        Members {
+            input_token: info.input_token_member().id().to_string(),
+            output_token: path(info.output_token_member_path()),
+            page_size: info.page_size_member().map(|m| m.id().to_string()),
+            items: path(info.items_member_path()),
+        }
+    }
+
+    fn new(
+        input_token: &str,
+        output_token: &[&str],
+        page_size: Option<&str>,
+        items: &[&str],
+    ) -> Self {
+        let ex = |name: &str| format!("ex#{name}");
+        Members {
+            input_token: ex(input_token),
+            output_token: output_token.iter().map(|m| ex(m)).collect(),
+            page_size: page_size.map(ex),
+            items: items.iter().map(|m| ex(m)).collect(),
+        }
+    }
+}
+
+/// The effective trait as `(inputToken, outputToken, items, pageSize)`.
+fn effective(info: &PaginationInfo<'_>) -> [Option<String>; 4] {
+    let paginated = info.paginated_trait();
+    [
+        paginated.input_token(),
+        paginated.output_token(),
+        paginated.items(),
+        paginated.page_size(),
+    ]
+    .map(|value| value.map(str::to_owned))
+}
+
+fn owned(values: [Option<&str>; 4]) -> [Option<String>; 4] {
+    values.map(|value| value.map(str::to_owned))
+}
+
+#[test]
+fn paginated_resolves_operation_settings_and_complete_paths() {
+    let model = paginated_model(PAGINATED);
+    // The operation overrides every default of `ex#Service`, and `ex#Bare` has none.
+    for service in ["Service", "Bare"] {
+        let info = resolved_pagination(&model, service, "ListAll");
+        assert_eq!(info.service().id(), &id(&format!("ex#{service}")));
+        assert_eq!(info.operation().id(), "ex#ListAll");
+        assert_eq!(info.input_shape().id(), "ex#ListAllInput");
+        assert_eq!(info.output_shape().id(), "ex#ListAllOutput");
+        assert_eq!(
+            Members::of(&info),
+            Members::new(
+                "ListAllInput$token",
+                &["ListAllOutput$result", "Result$next"],
+                Some("ListAllInput$size"),
+                &["ListAllOutput$result", "Result$items"],
+            ),
+            "{service}"
+        );
+        assert_eq!(
+            effective(&info),
+            owned([
+                Some("token"),
+                Some("result.next"),
+                Some("result.items"),
+                Some("size")
+            ])
+        );
+    }
+}
+
+#[test]
+fn paginated_inherits_each_setting_independently() {
+    let model = paginated_model(PAGINATED);
+    let info = resolved_pagination(&model, "Service", "ListInherited");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "ListInheritedInput$nextToken",
+            &["ListInheritedOutput$nextToken"],
+            Some("ListInheritedInput$maxResults"),
+            &["ListInheritedOutput$things"],
+        )
+    );
+    assert_eq!(
+        effective(&info),
+        owned([
+            Some("nextToken"),
+            Some("nextToken"),
+            Some("things"),
+            Some("maxResults")
+        ])
+    );
+
+    // The input token and page size are overridden; the output token is inherited; neither
+    // trait sets `items`.
+    let info = resolved_pagination(&model, "Service", "ListMixed");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "ListMixedInput$start",
+            &["ListMixedOutput$nextToken"],
+            Some("ListMixedInput$limit"),
+            &[],
+        )
+    );
+    assert_eq!(
+        effective(&info),
+        owned([Some("start"), Some("nextToken"), None, Some("limit")])
+    );
+}
+
+#[test]
+fn paginated_is_service_scoped() {
+    let model = paginated_model(PAGINATED);
+    let in_service = resolved_pagination(&model, "Service", "ListShared");
+    assert_eq!(
+        Members::of(&in_service),
+        Members::new(
+            "ListSharedInput$nextToken",
+            &["ListSharedOutput$nextToken"],
+            Some("ListSharedInput$maxResults"),
+            &["ListSharedOutput$things"],
+        )
+    );
+    let in_other = resolved_pagination(&model, "Other", "ListShared");
+    assert_eq!(
+        Members::of(&in_other),
+        Members::new(
+            "ListSharedInput$cursor",
+            &["ListSharedOutput$page", "Page$cursor"],
+            None,
+            &["ListSharedOutput$things"],
+        )
+    );
+    assert_eq!(in_other.service().id(), "ex#Other");
+
+    // Containment includes operations bound only through resources.
+    let nested = resolved_pagination(&model, "Service", "ListNested");
+    assert_eq!(
+        Members::of(&nested),
+        Members::new(
+            "ListNestedInput$nextToken",
+            &["ListNestedOutput$nextToken"],
+            Some("ListNestedInput$maxResults"),
+            &["ListNestedOutput$things"],
+        )
+    );
+}
+
+#[test]
+fn paginated_is_none_outside_paginated_operations() {
+    let model = paginated_model(PAGINATED);
+    for (service, operation) in [
+        // A service's defaults alone do not make an operation paginated.
+        ("Service", "Unmarked"),
+        // Not contained in the service.
+        ("Other", "ListAll"),
+        ("Bare", "ListNested"),
+        // Missing shapes.
+        ("Missing", "ListAll"),
+        ("Service", "Missing"),
+        // Wrong shape kinds.
+        ("ListAll", "ListAll"),
+        ("Outer", "ListNested"),
+        ("Service", "Service"),
+        ("Service", "Outer"),
+        ("Service", "Page"),
+        ("Service", "Page$cursor"),
+    ] {
+        assert!(
+            pagination(&model, service, operation).unwrap().is_none(),
+            "{service} {operation}"
+        );
+    }
+
+    // Nothing is decoded for an operation that is not paginated in the service.
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    assert!(pagination(&model, "BadDefaults", "Unmarked")
+        .unwrap()
+        .is_none());
+    assert!(pagination(&model, "Defaults", "Malformed")
+        .unwrap()
+        .is_none());
+}
+
+/// The 1-based line of the first line of `source` containing `needle`.
+fn line_of(source: &str, needle: &str) -> u32 {
+    let index = source
+        .lines()
+        .position(|line| line.contains(needle))
+        .unwrap_or_else(|| panic!("`{needle}` is not in the model"));
+    u32::try_from(index + 1).unwrap()
+}
+
+#[test]
+fn paginated_reports_unresolvable_settings_where_they_are_set() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    let traits = |shape: &str| format!("/shapes/ex#{shape}/traits/smithy.api#paginated");
+    for (operation, property, value, reason) in [
+        (
+            "NoInputToken",
+            "inputToken",
+            None,
+            "neither the operation's nor the service's `@paginated` trait sets `inputToken`",
+        ),
+        (
+            "NoOutputToken",
+            "outputToken",
+            None,
+            "neither the operation's nor the service's `@paginated` trait sets `outputToken`",
+        ),
+        (
+            "BadInputToken",
+            "inputToken",
+            Some("nope"),
+            "`inputToken` names `nope`, which is not a member of `ex#BadInputTokenInput`",
+        ),
+        // Input members are never paths.
+        (
+            "DottedInputToken",
+            "inputToken",
+            Some("nested.token"),
+            "`inputToken` names `nested.token`, which is not a member of `ex#DottedInputTokenInput`",
+        ),
+        // A configured page size or items path is not dropped when it does not resolve.
+        (
+            "BadPageSize",
+            "pageSize",
+            Some("limit"),
+            "`pageSize` names `limit`, which is not a member of `ex#BadPageSizeInput`",
+        ),
+        (
+            "BadItems",
+            "items",
+            Some("page.missing"),
+            "`items` path `page.missing`: `missing` is not a member of `ex#Nested`",
+        ),
+        (
+            "EmptySegment",
+            "outputToken",
+            Some("page..token"),
+            "`outputToken` path `page..token` has an empty member name",
+        ),
+        // The reference implementation drops the trailing empty name and resolves `token`.
+        (
+            "TrailingDot",
+            "outputToken",
+            Some("token."),
+            "`outputToken` path `token.` has an empty member name",
+        ),
+        (
+            "NotAStructure",
+            "outputToken",
+            Some("token.next"),
+            "`outputToken` path `token.next`: `ex#NotAStructureOutput$token` targets \
+             `smithy.api#String`, which is not a structure",
+        ),
+        // Omitted input and output are `smithy.api#Unit`, which has no members.
+        (
+            "UnitIo",
+            "inputToken",
+            Some("token"),
+            "`inputToken` names `token`, which is not a member of `smithy.api#Unit`",
+        ),
+    ] {
+        let err = pagination_error(&model, "Plain", operation);
+        assert_eq!(err.service(), "ex#Plain", "{operation}");
+        assert_eq!(err.operation(), &id(&format!("ex#{operation}")), "{operation}");
+        assert_eq!(err.trait_owner(), err.operation(), "{operation}");
+        assert_eq!(err.property(), Some(property), "{operation}");
+        assert_eq!(err.value(), value, "{operation}");
+        assert!(std::error::Error::source(&err).is_none(), "{operation}");
+        // A missing property is reported at the operation's trait; anything else at the
+        // property that sets it.
+        let pointer = match value {
+            None => traits(operation),
+            Some(_) => format!("{}/{property}", traits(operation)),
+        };
+        assert_eq!(err.source_location().pointer(), Some(pointer.as_str()), "{operation}");
+        assert_eq!(
+            err.source_location().line(),
+            Some(line_of(
+                UNRESOLVABLE_PAGINATION,
+                &format!("operation {operation} ")
+            ) - 1),
+            "{operation}"
+        );
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "paginated.smithy:{}:{}: cannot resolve the pagination of `ex#{operation}` in \
+                 service `ex#Plain`: {reason} (at {pointer})",
+                err.source_location().line().unwrap(),
+                err.source_location().column().unwrap(),
+            ),
+        );
+    }
+}
+
+#[test]
+fn paginated_reports_inherited_settings_at_the_service() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    let err = pagination_error(&model, "Defaults", "InheritsBadItems");
+    assert_eq!(err.trait_owner(), "ex#Defaults");
+    assert_eq!(err.property(), Some("items"));
+    assert_eq!(err.value(), Some("missing"));
+    assert_eq!(
+        err.source_location().pointer(),
+        Some("/shapes/ex#Defaults/traits/smithy.api#paginated/items")
+    );
+    assert_eq!(
+        err.source_location().line(),
+        Some(line_of(UNRESOLVABLE_PAGINATION, r#"items: "missing""#))
+    );
+    assert!(
+        err.to_string().contains(
+            "`items` (inherited from `ex#Defaults`) path `missing`: `missing` is not a member \
+             of `ex#InheritsBadItemsOutput`"
+        ),
+        "{err}"
+    );
+
+    // An operation's own value replaces the unresolvable default.
+    let info = resolved_pagination(&model, "Defaults", "OverridesBadItems");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "OverridesBadItemsInput$token",
+            &["OverridesBadItemsOutput$token"],
+            None,
+            &["OverridesBadItemsOutput$things"],
+        )
+    );
+}
+
+#[test]
+fn paginated_reports_malformed_traits() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    for (service, operation, owner, pointer, message) in [
+        (
+            "Plain",
+            "Malformed",
+            "ex#Malformed",
+            "/shapes/ex#Malformed/traits/smithy.api#paginated/inputToken",
+            "expected `inputToken` to be a string, found number",
+        ),
+        // The service's trait is decoded only for operations paginated within it.
+        (
+            "BadDefaults",
+            "Marked",
+            "ex#BadDefaults",
+            "/shapes/ex#BadDefaults/traits/smithy.api#paginated/pageSize",
+            "expected `pageSize` to be a string, found boolean",
+        ),
+    ] {
+        let err = pagination_error(&model, service, operation);
+        assert_eq!(err.trait_owner(), owner, "{operation}");
+        assert_eq!(err.property(), None, "{operation}");
+        assert_eq!(err.value(), None, "{operation}");
+        assert_eq!(
+            err.source_location().pointer(),
+            Some(pointer),
+            "{operation}"
+        );
+        let source = std::error::Error::source(&err)
+            .and_then(|source| source.downcast_ref::<crate::traits::TraitDecodeError>())
+            .expect("the decode error is the source");
+        assert_eq!(source.trait_id(), Some(&crate::traits::PAGINATED));
+        assert_eq!(source.message(), message);
+        assert!(
+            err.to_string().contains(&format!(
+                "cannot resolve the pagination of `ex#{operation}` in service `ex#{service}`: \
+                 invalid `@paginated` trait on `{owner}`: {message} (at {pointer})"
+            )),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn paginated_send_sync_and_debug() {
+    fn assert<T: Send + Sync + Clone + std::fmt::Debug>(_: &T) {}
+    fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
+    let model = paginated_model(PAGINATED);
+    let index = model.knowledge().paginated();
+    assert(&index);
+    assert_eq!(format!("{index:?}"), "PaginatedIndex { .. }");
+    assert(&resolved_pagination(&model, "Service", "ListAll"));
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    assert_error(&pagination_error(&model, "Plain", "NoInputToken"));
+}
+
+// ---------------------------------------------------------------------------------------------
 // Property tests against simple uncached oracles over random acyclic containment graphs.
 
 const LIFECYCLE: [&str; 6] = ["create", "put", "read", "update", "delete", "list"];

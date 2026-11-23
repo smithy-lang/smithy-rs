@@ -46,7 +46,10 @@ object SchemaSerdeAllowlist {
     /**
      * Protocols for which schema-based serde is the sole path (no fallback).
      */
-    private val allowedProtocols: Set<ShapeId> = emptySet()
+    private val allowedProtocols: Set<ShapeId> =
+        setOf(
+            AwsJson1_1Trait.ID,
+        )
 
     /**
      * Service namespaces allowed regardless of protocol.
@@ -58,63 +61,24 @@ object SchemaSerdeAllowlist {
      */
     private val allowedServiceNamespaces: Set<String> =
         setOf(
-            // awsJson1_1 phased rollout
-            "com.amazonaws.ssm",
-            "com.amazonaws.servicediscovery",
-            "com.amazonaws.globalaccelerator",
-            "com.amazonaws.appstream",
-            "com.amazonaws.route53domains",
-            "com.amazonaws.comprehend",
-            "com.amazonaws.iotsecuretunneling",
-            "com.amazonaws.licensemanager",
-            "com.amazonaws.configservice",
-            "com.amazonaws.pi",
-            "com.amazonaws.codedeploy",
-            "com.amazonaws.codecommit",
-            "com.amazonaws.marketplacemetering",
-            "com.amazonaws.translate",
-            "com.amazonaws.transcribe",
-            "com.amazonaws.organizations",
-            "com.amazonaws.cognitoidentity",
-            "com.amazonaws.datasync",
-            "com.amazonaws.sagemaker",
-            "com.amazonaws.athena",
-            "com.amazonaws.storagegateway",
-            "com.amazonaws.codepipeline",
-            "com.amazonaws.ecrpublic",
-            "com.amazonaws.lightsail",
-            "com.amazonaws.fsx",
-            "com.amazonaws.codebuild",
-            "com.amazonaws.firehose",
-            "com.amazonaws.workspaces",
-            "com.amazonaws.acmpca",
-            "com.amazonaws.transfer",
-            "com.amazonaws.cloudhsmv2",
-            "com.amazonaws.acm",
-            "com.amazonaws.kinesis",
-            "com.amazonaws.route53resolver",
-            "com.amazonaws.ecs",
-            "com.amazonaws.cognitoidentityprovider",
-            "com.amazonaws.ecr",
-            "com.amazonaws.kms",
-            "com.amazonaws.cloudwatchlogs",
-            "com.amazonaws.secretsmanager",
-            // Phase 6
-            "com.amazonaws.cloudtrail",
-            "com.amazonaws.resourcegroupstaggingapi",
             // awsJson1_0 phased rollout
             "com.amazonaws.swf",
             "com.amazonaws.opensearchserverless",
             "com.amazonaws.proton",
             "com.amazonaws.cloudcontrol",
             "com.amazonaws.paymentcryptography",
-            // Phase 4
             "com.amazonaws.sfn",
             "com.amazonaws.apprunner",
+            // Phase 5
+            "com.amazonaws.sqs",
+            "com.amazonaws.dynamodb",
             // rpcv2Cbor phased rollout
             "com.amazonaws.marketplaceentitlementservice",
-            // Phase 2
             "com.amazonaws.cloudwatch",
+            // Phase 3
+            "com.amazonaws.appstream",
+            "com.amazonaws.pi",
+            "com.amazonaws.translate",
             // restJson1 phased rollout
             "com.amazonaws.wisdom",
             "com.amazonaws.cleanrooms",
@@ -162,7 +126,6 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.fis",
             "com.amazonaws.bedrock",
             "com.amazonaws.appconfig",
-            // Phase 4
             "com.amazonaws.securityhub",
             "com.amazonaws.account",
             "com.amazonaws.batch",
@@ -176,6 +139,11 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.codeguruprofiler",
             "com.amazonaws.kafka",
             "com.amazonaws.apigateway",
+            // Phase 5
+            "com.amazonaws.apigatewayv2",
+            "com.amazonaws.lambda",
+            "com.amazonaws.resourceexplorer2",
+            "com.amazonaws.eks",
             // restXml phased rollout
             // Phase 1
             "com.amazonaws.cloudfront",
@@ -190,7 +158,7 @@ object SchemaSerdeAllowlist {
             "com.amazonaws.ebs",
             "com.amazonaws.simple",
             "com.amazonaws.bignumbers",
-            // awsJson1_0 / awsJson1_1
+            // awsJson1_0
             "aws.protocoltests.json10",
             // restXml
             "aws.protocoltests.restxml",
@@ -199,10 +167,6 @@ object SchemaSerdeAllowlist {
             // rpcv2Cbor
             "smithy.protocoltests.rpcv2Cbor",
             "aws.protocoltests.rpcv2cbor",
-            // naming obstacle courses (protocol-independent codegen coverage)
-            // "crate",
-            // "casing",
-            // "naming_obs_structs",
             // Namespaces holding services on more than one protocol — uncommenting enables all
             // of them, not just the one being rolled out:
             "aws.protocoltests.misc",
