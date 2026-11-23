@@ -13,17 +13,18 @@ rust-version = "1.94.1"
 
 [features]
 hickory-dns = ["dep:hickory-resolver", "dep:tokio", "tokio/rt"]
+sra = ["dep:priority-queue", "dep:tokio", "tokio/rt-multi-thread", "tokio/macros", "dep:aws-smithy-runtime"]
 
 
 [dependencies]
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client", "rt-tokio"], optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"]}
+priority-queue = { version = "2.7", optional = true }
 tokio = { version = "1.49.0", features = [], optional = true}
-
 
 # hickory-resolver enables some tokio features that break in wasm
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 hickory-resolver = {version = "0.26.3", optional = true}
-
 
 [dev-dependencies]
 criterion = "0.8.2"

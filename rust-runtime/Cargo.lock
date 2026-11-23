@@ -449,9 +449,11 @@ dependencies = [
 name = "aws-smithy-dns"
 version = "0.2.4"
 dependencies = [
+ "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.22.0",
  "criterion 0.8.2",
  "hickory-resolver",
+ "priority-queue",
  "tokio",
 ]
 
@@ -4032,6 +4034,17 @@ checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
 dependencies = [
  "proc-macro2",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "priority-queue"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93980406f12d9f8140ed5abe7155acb10bb1e69ea55c88960b9c2f117445ef96"
+dependencies = [
+ "equivalent",
+ "indexmap 2.14.2",
+ "serde",
 ]
 
 [[package]]
