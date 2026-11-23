@@ -207,10 +207,10 @@ where
 {
     /// A marker value that represents the approximate number of times we've cycled through
     /// the set of healthy addresses when distributing IPs.
-    current_generation: u32,
+    current_generation: u64,
 
     /// Priority queue of IpAddress structs ordered by the generation they were last acquired in
-    healthy_addresses: PriorityQueue<T, Reverse<u32>>,
+    healthy_addresses: PriorityQueue<T, Reverse<u64>>,
 
     /// Priority queue of IpAddress structs ordered by the timepoint that the address should
     /// move from unhealthy back to healthy
@@ -293,22 +293,33 @@ where
         Some(item)
     }
 
-    /// Moves an address from a healthy to unhealthy state
+    /// Moves an address, if present, from a healthy to unhealthy state
+    /// If the address is already unhealthy, extend the duration if appropriate
     fn demote_address(&mut self, address: T, duration: Duration, now: Instant) {
-        self.healthy_addresses.remove(&address);
+        let was_healthy = self.healthy_addresses.remove(&address).is_some();
+        let unhealthy_entry = self.unhealthy_addresses_by_expiration.remove(&address);
+        let was_unhealthy = unhealthy_entry.is_some();
+        let unhealthy_expiration = unhealthy_entry.map_or(now, |record| record.1 .0);
 
-        let expiration = now + duration;
-        self.unhealthy_addresses_by_expiration
-            .push(address, Reverse(expiration));
+        if was_healthy || was_unhealthy {
+            let demotion_expiration_option = now.checked_add(duration);
+            if let Some(demotion_expiration) = demotion_expiration_option {
+                let new_expiration = std::cmp::max(demotion_expiration, unhealthy_expiration);
+
+                self.unhealthy_addresses_by_expiration
+                    .push(address, Reverse(new_expiration));
+            }
+            // else leave it out as if it was banned
+        }
     }
 
     #[cfg(test)]
-    fn current_generation(&self) -> u32 {
+    fn current_generation(&self) -> u64 {
         self.current_generation
     }
 
     #[cfg(test)]
-    fn get_healthy_data(&self, address: T) -> Option<u32> {
+    fn get_healthy_data(&self, address: T) -> Option<u64> {
         if self.healthy_addresses.contains(&address) {
             Some(self.healthy_addresses.get(&address).unwrap().1 .0)
         } else {
@@ -347,7 +358,7 @@ struct HostEntry {
     /// to be in this set while not in either of the generational sets.  This is the fate of
     /// addresses which received a fatal connection error and prevents them from ever being used
     /// (even promoted from unhealthy to healthy by an emergency) as long as they are remembered.
-    addresses_by_ttl: PriorityQueue<IpAddr, Instant>,
+    addresses_by_ttl: PriorityQueue<IpAddr, Reverse<Instant>>,
 
     /// last time we spawned an async resolution task to resolve this name
     last_resolution_timepoint: Option<Instant>,
@@ -401,18 +412,28 @@ impl HostEntry {
             return;
         }
 
-        let expiration_time = (self.config.clock)() + ttl;
-
-        // If we already know about this address, just extend its TTL, regardless of any other
-        // (healthy/unhealthy/banned) status
+        let expiration_time_option = (self.config.clock)().checked_add(ttl);
         if self.addresses_by_ttl.contains(&address) {
-            self.addresses_by_ttl
-                .change_priority(&address, expiration_time);
+            if let Some(expiration_time) = expiration_time_option {
+                // If we already know about this address, just extend its TTL, regardless of any other
+                // (healthy/unhealthy/banned) status
+                self.addresses_by_ttl
+                    .change_priority(&address, Reverse(expiration_time));
+            } else {
+                // unlikely but possible: if we already know about this address but it no longer
+                // has expiration (Instant overflow), then remove it from the ttl priority queue
+                self.addresses_by_ttl.remove(&address);
+            }
             return;
         }
 
-        // track the address by lifetime
-        self.addresses_by_ttl.push(address, expiration_time);
+        if let Some(expiration_time) = expiration_time_option {
+            // track the address by lifetime
+            self.addresses_by_ttl
+                .push(address, Reverse(expiration_time));
+        }
+        // else, if we don't already track this address and it has no expiration, don't bother
+        // tracking expiration
 
         // add it to the correct set
         match address {
@@ -444,7 +465,8 @@ impl HostEntry {
         let now = (self.config.clock)();
 
         while !self.addresses_by_ttl.is_empty() {
-            if self.addresses_by_ttl.peek().unwrap().1 <= &now {
+            let next_expiration = self.addresses_by_ttl.peek().unwrap().1 .0;
+            if next_expiration <= now {
                 let purged = self.addresses_by_ttl.pop().unwrap().0;
                 self.purge_address(purged);
             } else {
@@ -518,7 +540,9 @@ impl HostEntry {
                 .request()
                 .refresh_delay()
                 .unwrap_or(self.config.refresh_delay());
-            if now >= last_resolution_timepoint + refresh_delay && !self.pending_resolution {
+            if now.saturating_duration_since(last_resolution_timepoint) >= refresh_delay
+                && !self.pending_resolution
+            {
                 should_spawn_resolve = true;
             }
         }
@@ -1103,7 +1127,7 @@ mod testing {
         assert!(final_result.is_ok());
 
         let addresses = final_result.unwrap();
-        addresses.contains(&LOCALHOST_IPV6) && addresses.contains(&LOCALHOST_IPV6)
+        addresses.contains(&LOCALHOST_IPV6) && addresses.contains(&LOCALHOST_IPV4)
     }
 
     fn apply_mock_result_to_context(context: &mut HostEntryTestContext) {
@@ -1160,21 +1184,23 @@ mod testing {
         let expected_expiration = context.mock_clock.get_current_time() + ttl;
         assert_eq!(
             expected_expiration,
-            *context
+            context
                 .entry
                 .addresses_by_ttl
                 .get(&LOCALHOST_IPV4)
                 .unwrap()
                 .1
+                 .0
         );
         assert_eq!(
             expected_expiration,
-            *context
+            context
                 .entry
                 .addresses_by_ttl
                 .get(&LOCALHOST_IPV6)
                 .unwrap()
                 .1
+                 .0
         );
 
         // what did our request actually get resolved with?  we expect localhost for both ipv4 and
@@ -1427,7 +1453,7 @@ mod testing {
         for address in addresses {
             assert_eq!(
                 expected_ttl,
-                *context.entry.addresses_by_ttl.get(&address).unwrap().1
+                context.entry.addresses_by_ttl.get(&address).unwrap().1 .0
             );
         }
 
@@ -1484,6 +1510,39 @@ mod testing {
 
         // background resolution function should have been called twice
         assert_eq!(2, context.mock_results.get_call_count());
+    }
+
+    /// Each resolve returns one new address, as a large rotating pool such as S3's does. Once an
+    /// address's TTL has passed, the next successful resolve should drop it.
+    #[test]
+    fn host_entry_address_expires_with_many_resolves_over_time() {
+        let mut context = HostEntryTestContext::default();
+        context.mock_results.set_should_loop(false);
+        let address = |i: u8| IpAddr::V4(Ipv4Addr::new(10, 0, 0, i));
+        for i in 0..100 {
+            context.mock_results.add_result(Ok(vec![address(i)]));
+        }
+
+        // 100 resolves, 6 seconds apart. Address i is returned only by resolve i, at 6i seconds.
+        for _ in 0..100 {
+            let _ = submit_requests(&mut context, 1, 0);
+            apply_mock_result_to_context(&mut context);
+            context.advance_time(DEFAULT_REFRESH_DELAY);
+        }
+
+        // The last successful resolve, at 594 seconds, purged every address whose 60 second TTL
+        // had run out by then. That leaves the addresses from resolves 90 to 99.
+        let live: Vec<IpAddr> = (90..100).map(address).collect();
+        let result_targets = submit_requests(&mut context, 100, 0);
+        for result_target in result_targets {
+            let addresses = result_target.lock().unwrap().take().unwrap().unwrap();
+            assert!(
+                live.contains(&addresses[0]),
+                "{} was last returned by DNS more than a TTL ago",
+                addresses[0]
+            );
+        }
+        assert_eq!(10, context.entry.addresses_by_ttl.len());
     }
 
     fn do_host_entry_fatal_host_event_bans_address(address_to_ban: IpAddr) {
@@ -1869,6 +1928,243 @@ mod testing {
         // addresses
         let result_targets = submit_requests(&mut context, 3, 0);
         assert!(do_results_contain_both_host_sets(result_targets));
+    }
+
+    #[test]
+    fn host_entry_a_later_penalty_does_not_modify_a_fatal_ban() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_multiple(&mut context);
+
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+
+        // Two connections to LOCALHOST_IPV4 fail: one with an error the client treats as fatal,
+        // the other with an ordinary one.
+        for category in [AddressPenaltyCategory::Fatal, AddressPenaltyCategory::Major] {
+            let penalty = HostEventAddressPenalty::builder(category).build();
+            context.entry.handle_host_event(
+                HostEvent::builder(
+                    MOCK_HOST,
+                    LOCALHOST_IPV4,
+                    HostEventInformation::AddressPenalty(penalty),
+                )
+                .build(),
+            );
+        }
+
+        let result_targets = submit_requests(&mut context, 1, 0);
+        let addresses = result_targets[0].lock().unwrap().take().unwrap().unwrap();
+        assert!(
+            !addresses.contains(&LOCALHOST_IPV4),
+            "the banned address was handed out: {addresses:?}"
+        );
+    }
+
+    #[test]
+    fn host_entry_a_penalty_for_an_address_the_cache_has_dropped_does_not_bring_it_back() {
+        let mut context = HostEntryTestContext::default();
+        // Resolves alternate between LOCALHOST and OTHERHOST.
+        initialize_resolution_test_context_multiple(&mut context);
+
+        // t = 0: LOCALHOST is cached until 60 seconds.
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+
+        // t = 60s: the next resolve returns OTHERHOST and purges the expired LOCALHOST addresses.
+        context.advance_time(DEFAULT_CACHE_TTL);
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+        assert!(!context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
+
+        // A pooled connection to LOCALHOST_IPV4, opened before the purge, fails afterwards.
+        let penalty_duration = Duration::from_secs(5);
+        let penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(penalty_duration))
+                .build();
+        context.entry.handle_host_event(
+            HostEvent::builder(
+                MOCK_HOST,
+                LOCALHOST_IPV4,
+                HostEventInformation::AddressPenalty(penalty),
+            )
+            .build(),
+        );
+
+        // t = 65s: the penalty is over, and the refresh delay has not passed, so no resolve runs.
+        context.advance_time(penalty_duration);
+        let result_targets = submit_requests(&mut context, 2, 0);
+        for result_target in result_targets {
+            let addresses = result_target.lock().unwrap().take().unwrap().unwrap();
+            assert!(
+                !addresses.contains(&LOCALHOST_IPV4),
+                "an address the cache had purged was handed out: {addresses:?}"
+            );
+        }
+    }
+
+    fn check_and_apply_penalty_to_localhost(
+        context: &mut HostEntryTestContext,
+        penalty: HostEventAddressPenalty,
+        expected_unhealthy_expiration: Instant,
+    ) {
+        context.entry.handle_host_event(
+            HostEvent::builder(
+                MOCK_HOST,
+                LOCALHOST_IPV4,
+                HostEventInformation::AddressPenalty(penalty),
+            )
+            .build(),
+        );
+
+        let v4addr: Ipv4Addr = LOCALHOST_IPV4.to_string().parse().unwrap();
+        let unhealthy_record = context
+            .entry
+            .ipv4_addresses
+            .unhealthy_addresses_by_expiration
+            .get(&v4addr);
+        assert!(unhealthy_record.is_some());
+        let unhealthy_expiration = unhealthy_record.unwrap().1 .0;
+        assert_eq!(expected_unhealthy_expiration, unhealthy_expiration);
+    }
+
+    #[test]
+    fn host_entry_penalizing_an_unhealthy_address_uses_the_farthest_expiration() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+
+        let major_penalty = HostEventAddressPenalty::builder(AddressPenaltyCategory::Major).build();
+        let initial_expiration_time = context.mock_clock.get_current_time() + DEFAULT_CACHE_TTL;
+        check_and_apply_penalty_to_localhost(&mut context, major_penalty, initial_expiration_time);
+
+        let minor_penalty = HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(
+            Duration::from_secs(2),
+        ))
+        .build();
+        check_and_apply_penalty_to_localhost(&mut context, minor_penalty, initial_expiration_time);
+
+        let long_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(DEFAULT_CACHE_TTL * 2))
+                .build();
+        let long_expiration_time = context.mock_clock.get_current_time() + DEFAULT_CACHE_TTL * 2;
+        check_and_apply_penalty_to_localhost(&mut context, long_penalty, long_expiration_time);
+    }
+
+    #[test]
+    fn host_entry_demote_address_to_max_expiration() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+
+        let max_penalty =
+            HostEventAddressPenalty::builder(AddressPenaltyCategory::Custom(Duration::MAX)).build();
+
+        context.entry.handle_host_event(
+            HostEvent::builder(
+                MOCK_HOST,
+                LOCALHOST_IPV4,
+                HostEventInformation::AddressPenalty(max_penalty),
+            )
+            .build(),
+        );
+
+        // should have been removed completely from the set
+        let v4addr: Ipv4Addr = LOCALHOST_IPV4.to_string().parse().unwrap();
+        assert!(!context
+            .entry
+            .ipv4_addresses
+            .unhealthy_addresses_by_expiration
+            .contains(&v4addr));
+        assert!(!context
+            .entry
+            .ipv4_addresses
+            .healthy_addresses
+            .contains(&v4addr));
+    }
+
+    #[test]
+    fn host_entry_resolve_known_address_to_overflowed_ttl_expiration() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        let _ = submit_requests(&mut context, 1, 0);
+        apply_mock_result_to_context(&mut context);
+
+        // ttl expiration is tracked
+        assert!(context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
+
+        context.advance_time(DEFAULT_REFRESH_DELAY);
+
+        // max duration re-resolve
+        let (request, _) = create_mock_internal_request(Some(Duration::MAX), None);
+        context
+            .entry
+            .handle_resolve_request(request, &context.operation_handler_context);
+
+        apply_mock_result_to_context(&mut context);
+
+        // ttl expiration is no longer tracked
+        assert!(!context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
+    }
+
+    #[test]
+    fn host_entry_resolve_unknown_address_to_overflowed_ttl_expiration() {
+        let mut context = HostEntryTestContext::default();
+        initialize_resolution_test_context_single(&mut context);
+
+        // max duration resolve
+        let (request, result_target) = create_mock_internal_request(Some(Duration::MAX), None);
+        context
+            .entry
+            .handle_resolve_request(request, &context.operation_handler_context);
+
+        apply_mock_result_to_context(&mut context);
+
+        // ttl expiration is not tracked
+        assert!(!context.entry.addresses_by_ttl.contains(&LOCALHOST_IPV4));
+
+        // but the address is healthy
+        let v4addr: Ipv4Addr = LOCALHOST_IPV4.to_string().parse().unwrap();
+        assert!(context
+            .entry
+            .ipv4_addresses
+            .healthy_addresses
+            .contains(&v4addr));
+
+        // and it was the resolve answer
+        let addresses = result_target.lock().unwrap().take().unwrap().unwrap();
+        assert!(addresses.contains(&LOCALHOST_IPV4));
+    }
+
+    #[test]
+    fn host_entry_dont_spawn_resolve_on_next_resolve_overflow() {
+        let mut config_builder = SraResolverConfig::builder();
+        config_builder.with_refresh_delay(Duration::MAX);
+        let mut context = HostEntryTestContext::new(config_builder);
+        initialize_resolution_test_context_single(&mut context);
+
+        // initial resolve
+        let (request, _) = create_mock_internal_request(None, None);
+        context
+            .entry
+            .handle_resolve_request(request, &context.operation_handler_context);
+
+        apply_mock_result_to_context(&mut context);
+
+        context.advance_time(DEFAULT_REFRESH_DELAY);
+
+        // re-resolve
+        let (request, _) = create_mock_internal_request(None, None);
+        context
+            .entry
+            .handle_resolve_request(request, &context.operation_handler_context);
+
+        // doesn't crash and didn't trigger a refresh
+        assert_eq!(1, context.mock_results.get_call_count());
     }
 
     #[test]

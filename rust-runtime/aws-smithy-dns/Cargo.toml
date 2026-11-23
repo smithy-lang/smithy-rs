@@ -13,7 +13,7 @@ rust-version = "1.94.1"
 
 [features]
 hickory-dns = ["dep:hickory-resolver", "dep:tokio", "tokio/rt"]
-sra = ["dep:priority-queue", "dep:tokio", "tokio/rt", "dep:aws-smithy-runtime"]
+sra = ["dep:priority-queue", "dep:tokio", "tokio/rt-multi-thread", "tokio/macros", "dep:aws-smithy-runtime"]
 
 
 [dependencies]
