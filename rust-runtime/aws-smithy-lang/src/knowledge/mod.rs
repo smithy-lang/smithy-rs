@@ -94,10 +94,10 @@
 //! Any type that implements [`KnowledgeIndex`] can be acquired with
 //! [`Model::knowledge`](crate::Model::knowledge), including a type defined in another crate.
 //! There is nothing to register: naming the type selects its constructor. An index can build on
-//! other indexes by acquiring them from the model:
+//! other indexes by acquiring them from the model, and can return [`Iter`] as they do:
 //!
 //! ```
-//! use aws_smithy_lang::knowledge::{KnowledgeIndex, TopDownIndex};
+//! use aws_smithy_lang::knowledge::{Iter, KnowledgeIndex, TopDownIndex};
 //! use aws_smithy_lang::shape::OperationView;
 //! use aws_smithy_lang::{Model, ShapeId};
 //!
@@ -113,7 +113,7 @@
 //! }
 //!
 //! impl<'m> ReadonlyIndex<'m> {
-//!     fn operations(&self, entity: &ShapeId) -> Option<Vec<OperationView<'m>>> {
+//!     fn operations(&self, entity: &ShapeId) -> Option<Iter<OperationView<'m>>> {
 //!         const READONLY: ShapeId = ShapeId::from_static("smithy.api#readonly");
 //!         let operations = self.top_down.get_contained_operations(entity)?;
 //!         Some(operations.filter(|op| op.has_trait(&READONLY)).collect())
@@ -135,9 +135,12 @@
 //! "#)?;
 //!
 //! let readonly = model.knowledge::<ReadonlyIndex<'_>>();
-//! let operations = readonly.operations(&ShapeId::from_static("ex#Things")).unwrap();
-//! assert_eq!(operations.len(), 1);
-//! assert_eq!(operations[0].id(), "ex#GetThing");
+//! let operations: Vec<_> = readonly
+//!     .operations(&ShapeId::from_static("ex#Things"))
+//!     .unwrap()
+//!     .map(|op| op.id().to_string())
+//!     .collect();
+//! assert_eq!(operations, ["ex#GetThing"]);
 //! # Ok::<_, Box<dyn std::error::Error>>(())
 //! ```
 
@@ -192,6 +195,18 @@ pub trait KnowledgeIndex<'m>: Sized {
 }
 
 /// An iterator over the results of a knowledge query.
+///
+/// An index defined in another crate can return the same type: build one from a `Vec` with
+/// [`From`], or by collecting an iterator.
+///
+/// ```
+/// use aws_smithy_lang::knowledge::Iter;
+///
+/// let sorted: Iter<u32> = vec![1, 2, 3].into();
+/// assert_eq!(sorted.len(), 3);
+/// let even: Iter<u32> = (1..=6).filter(|n| n % 2 == 0).collect();
+/// assert_eq!(even.collect::<Vec<_>>(), [2, 4, 6]);
+/// ```
 #[derive(Clone)]
 pub struct Iter<T> {
     inner: std::vec::IntoIter<T>,
@@ -202,6 +217,18 @@ impl<T> Iter<T> {
         Self {
             inner: items.into_iter(),
         }
+    }
+}
+
+impl<T> From<Vec<T>> for Iter<T> {
+    fn from(items: Vec<T>) -> Self {
+        Self::new(items)
+    }
+}
+
+impl<T> FromIterator<T> for Iter<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(items: I) -> Self {
+        Self::new(items.into_iter().collect())
     }
 }
 

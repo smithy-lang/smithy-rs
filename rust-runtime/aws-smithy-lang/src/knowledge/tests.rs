@@ -122,6 +122,33 @@ fn top_down_includes_every_binding_kind_once_sorted() {
         .is_none());
 }
 
+#[test]
+fn top_down_contains() {
+    let model = model();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
+    let contains = |entity, target| top_down.contains(&id(entity), &id(target));
+
+    // Directly, as a lifecycle operation, and through nested resources.
+    assert!(contains("ex#Service", "ex#DirectOp"));
+    assert!(contains("ex#Service", "ex#GetThing"));
+    assert!(contains("ex#Service", "ex#SharedRead"));
+    assert!(contains("ex#Service", "ex#Shared"));
+    assert!(contains("ex#Hidden", "ex#DeepOp"));
+    assert!(contains("ex#Outer", "ex#Inner"));
+
+    // Not contained: another service's operation, a parent's operation, and a parent.
+    assert!(!contains("ex#Hidden", "ex#GetThing"));
+    assert!(!contains("ex#Thing", "ex#DirectOp"));
+    assert!(!contains("ex#Child", "ex#Thing"));
+
+    // The entity itself, an entity that is not a service or resource, and missing shapes.
+    assert!(!contains("ex#Service", "ex#Service"));
+    assert!(!contains("ex#Thing", "ex#Thing"));
+    assert!(!contains("ex#GetThing", "ex#GetThing"));
+    assert!(!contains("ex#Missing", "ex#GetThing"));
+    assert!(!contains("ex#Service", "ex#Missing"));
+}
+
 /// The crate-root example once iterated `service.operations()`, which silently missed every
 /// operation bound through a resource.
 #[test]
@@ -1683,6 +1710,9 @@ proptest! {
             let expected_resources: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#R")).cloned().collect();
             prop_assert_eq!(ops, expected_ops);
             prop_assert_eq!(resources, expected_resources);
+            for entity in &entities {
+                prop_assert_eq!(top_down.contains(&id(&start), &id(entity)), expected.contains(entity));
+            }
         }
 
         for s in 0..SERVICES {

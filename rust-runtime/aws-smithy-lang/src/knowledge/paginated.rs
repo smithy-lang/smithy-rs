@@ -111,7 +111,7 @@ impl<'m> PaginatedIndex<'m> {
         let Some(operation_trait) = operation.get_trait(&traits::PAGINATED) else {
             return Ok(None);
         };
-        if !TopDownIndex::new(self.relationships).contains(service_node, knowledge.node) {
+        if !TopDownIndex::new(self.relationships).contains_node(service_node, knowledge.node) {
             return Ok(None);
         }
 

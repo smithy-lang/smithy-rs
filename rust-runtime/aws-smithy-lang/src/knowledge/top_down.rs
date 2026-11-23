@@ -51,6 +51,22 @@ impl<'m> TopDownIndex<'m> {
         Some(self.resources_of(self.entity(entity)?))
     }
 
+    /// Returns `true` if the service or resource `entity` contains `target`, an operation or
+    /// resource, directly or through any of its resources.
+    ///
+    /// Returns `false` if either shape does not exist, if `entity` is neither a service nor a
+    /// resource, or if `target` is `entity` itself. This is cheaper than searching
+    /// [`get_contained_operations`](Self::get_contained_operations): the walk stops at
+    /// `target` and doesn't build a list.
+    pub fn contains(&self, entity: &ShapeId, target: &ShapeId) -> bool {
+        let (Some(start), Some((target, _))) =
+            (self.entity(entity), self.relationships.lookup(target))
+        else {
+            return false;
+        };
+        self.contains_node(start, target)
+    }
+
     /// The node of a service or resource.
     fn entity(&self, id: &ShapeId) -> Option<u32> {
         let (node, shape) = self.relationships.lookup(id)?;
@@ -72,7 +88,7 @@ impl<'m> TopDownIndex<'m> {
     }
 
     /// Returns `true` if `target` is contained in `start`.
-    pub(crate) fn contains(&self, start: u32, target: u32) -> bool {
+    pub(crate) fn contains_node(&self, start: u32, target: u32) -> bool {
         let mut visited = HashSet::new();
         let mut stack = vec![start];
         while let Some(node) = stack.pop() {

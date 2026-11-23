@@ -11,11 +11,13 @@
 
 #![deny(elided_lifetimes_in_paths)]
 
-use aws_smithy_lang::knowledge::{KnowledgeIndex, OperationIndex, TopDownIndex};
-use aws_smithy_lang::shape::StructureView;
+use aws_smithy_lang::knowledge::{Iter, KnowledgeIndex, OperationIndex, TopDownIndex};
+use aws_smithy_lang::shape::{OperationView, StructureView};
 use aws_smithy_lang::{Model, ShapeId};
 
 const THINGS: ShapeId = ShapeId::from_static("ex#Things");
+const THROTTLED: ShapeId = ShapeId::from_static("ex#Throttled");
+const NOT_FOUND: ShapeId = ShapeId::from_static("ex#NotFound");
 
 fn model() -> Model {
     Model::from_idl_str(
@@ -73,7 +75,7 @@ impl<'m> KnowledgeIndex<'m> for ServiceErrorsIndex<'m> {
 
 impl<'m> ServiceErrorsIndex<'m> {
     /// The errors, sorted by shape ID. `None` if `service` is not a service or resource.
-    fn errors(&self, service: &ShapeId) -> Option<Vec<StructureView<'m>>> {
+    fn errors(&self, service: &ShapeId) -> Option<Iter<StructureView<'m>>> {
         let mut errors = Vec::new();
         for operation in self.top_down.get_contained_operations(service)? {
             let operation = self.operations.get(operation.id()).unwrap();
@@ -81,7 +83,28 @@ impl<'m> ServiceErrorsIndex<'m> {
         }
         errors.sort_by(|a, b| a.id().cmp(b.id()));
         errors.dedup_by(|a, b| a.id() == b.id());
-        Some(errors)
+        Some(errors.into())
+    }
+
+    /// The operations of `service` that can return `error`, sorted by shape ID. `None` if
+    /// `error` is not a structure.
+    fn operations_returning(
+        &self,
+        service: &ShapeId,
+        error: &ShapeId,
+    ) -> Option<Iter<OperationView<'m>>> {
+        let bindings: Vec<_> = self.operations.error_bindings(error)?.collect();
+        // A common error of the service can be returned by every operation in it.
+        if bindings.iter().any(|binding| binding.id() == service) {
+            return self.top_down.get_contained_operations(service);
+        }
+        Some(
+            bindings
+                .into_iter()
+                .filter_map(|binding| binding.as_shape()?.as_operation())
+                .filter(|operation| self.top_down.contains(service, operation.id()))
+                .collect(),
+        )
     }
 }
 
@@ -94,8 +117,11 @@ impl KnowledgeIndex<'_> for OperationCount {
     }
 }
 
-fn ids(errors: &[StructureView<'_>]) -> Vec<String> {
-    errors.iter().map(|e| e.id().to_string()).collect()
+fn ids<T>(items: impl IntoIterator<Item = T>, id: impl Fn(&T) -> &ShapeId) -> Vec<String> {
+    items
+        .into_iter()
+        .map(|item| id(&item).to_string())
+        .collect()
 }
 
 #[test]
@@ -106,10 +132,26 @@ fn index_defined_outside_the_crate() {
         .knowledge::<ServiceErrorsIndex<'_>>()
         .errors(&THINGS)
         .unwrap();
-    assert_eq!(ids(&errors), ["ex#NotFound", "ex#Throttled"]);
+    assert_eq!(ids(errors, |e| e.id()), ["ex#NotFound", "ex#Throttled"]);
 
     let index = model.knowledge::<ServiceErrorsIndex<'_>>();
     assert!(index.errors(&ShapeId::from_static("ex#Missing")).is_none());
+}
+
+#[test]
+fn index_outside_the_crate_can_check_containment() {
+    let model = model();
+    let index = model.knowledge::<ServiceErrorsIndex<'_>>();
+    let operations = |error: &ShapeId| {
+        ids(index.operations_returning(&THINGS, error).unwrap(), |o| {
+            o.id()
+        })
+    };
+    assert_eq!(operations(&THROTTLED), ["ex#GetThing", "ex#Ping"]);
+    assert_eq!(operations(&NOT_FOUND), ["ex#GetThing"]);
+    assert!(index
+        .operations_returning(&THINGS, &ShapeId::from_static("ex#Missing"))
+        .is_none());
 }
 
 #[test]

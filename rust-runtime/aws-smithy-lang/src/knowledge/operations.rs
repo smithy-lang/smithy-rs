@@ -198,7 +198,7 @@ impl<'m> OperationKnowledge<'m> {
     pub fn errors_in(&self, service: &ShapeId) -> Option<Iter<StructureView<'m>>> {
         let (service_node, service) = self.relationships.lookup(service)?;
         let service = service.as_service()?;
-        if !TopDownIndex::new(self.relationships).contains(service_node, self.node) {
+        if !TopDownIndex::new(self.relationships).contains_node(service_node, self.node) {
             return None;
         }
         let ids: IndexSet<&ShapeId> = service
