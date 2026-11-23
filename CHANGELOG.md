@@ -1,4 +1,29 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 23rd, 2026
+===================
+**New this release:**
+- :tada: (server) With `schemaSerde` enabled, server code generation now emits schema-driven
+    walkers for all structures and unions that have a document representation.
+    Walkers are no longer limited to shapes reachable from an operation input.
+    Shapes outside operation input deserialize directly into public types. Closed
+    enums and public constrained newtypes reject invalid values during conversion.
+    Other constraints are not validated for these shapes, which matches client
+    behavior.
+- :tada: (server) With `schemaSerde` enabled, server code generation now emits
+    `crate::type_registry::registry()`, a `TypeRegistry` with an entry for every
+    structure in the service closure, mirroring the client's `Client::registry()`.
+    Each entry carries the shape's schema and a deserializer that reads the shape
+    through its schema walker and validates its constraints, so code that only knows
+    a shape ID at runtime can resolve and deserialize the shape.
+- :tada: (all, [smithy-rs#5034](https://github.com/smithy-lang/smithy-rs/issues/5034), [smithy-rs#3826](https://github.com/smithy-lang/smithy-rs/issues/3826), @FalkWoldmann) Add a `convert-jiff-1-x` feature to `aws-smithy-types-convert` that provides `DateTimeExt::to_jiff` and `DateTimeExt::from_jiff` for converting between `DateTime` and `jiff::Timestamp`.
+- (all, @patrick-immometrica) `AggregatedBytes::to_vec` copies whole segments into a pre-sized `Vec` instead of collecting byte by byte, which makes `ByteStream::collect().await?.to_vec()` much faster for large bodies.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#3826](https://github.com/smithy-lang/smithy-rs/issues/3826), [smithy-rs#5034](https://github.com/smithy-lang/smithy-rs/issues/5034))
+- @patrick-immometrica
+
+
 November 16th, 2026
 ===================
 **New this release:**
