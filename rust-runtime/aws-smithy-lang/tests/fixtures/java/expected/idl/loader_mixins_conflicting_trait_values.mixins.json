@@ -1,0 +1,162 @@
+{
+    "smithy.example#Both": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#B"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "B",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    },
+    "smithy.example#C": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#B"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#mixin": {},
+            "smithy.api#since": "C",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [
+            "smithy.api#mixin",
+            "smithy.api#since"
+        ],
+        "members": []
+    },
+    "smithy.example#ComposedThenSimple": {
+        "mixins": [
+            "smithy.example#D",
+            "smithy.example#A"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "A doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "A",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    },
+    "smithy.example#D": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#B"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#mixin": {},
+            "smithy.api#since": "B",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [
+            "smithy.api#mixin"
+        ],
+        "members": []
+    },
+    "smithy.example#LocalWins": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#B"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "local",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [
+            "smithy.api#since"
+        ],
+        "members": []
+    },
+    "smithy.example#Nested": {
+        "mixins": [
+            "smithy.example#C"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "C",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    },
+    "smithy.example#NestedWithoutOverride": {
+        "mixins": [
+            "smithy.example#D"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "B",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    },
+    "smithy.example#Reversed": {
+        "mixins": [
+            "smithy.example#B",
+            "smithy.example#A"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "A doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "A",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    },
+    "smithy.example#SimpleThenComposed": {
+        "mixins": [
+            "smithy.example#A",
+            "smithy.example#D"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B doc",
+            "smithy.api#internal": {},
+            "smithy.api#since": "B",
+            "smithy.api#tags": [
+                "b"
+            ]
+        },
+        "introduced": [],
+        "members": []
+    }
+}

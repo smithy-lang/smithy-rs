@@ -1,0 +1,143 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#A": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "A doc",
+                "smithy.api#internal": {},
+                "smithy.api#mixin": {},
+                "smithy.api#since": "A",
+                "smithy.api#tags": [
+                    "a"
+                ]
+            }
+        },
+        "smithy.example#B": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#deprecated": {},
+                "smithy.api#documentation": "B doc",
+                "smithy.api#mixin": {},
+                "smithy.api#since": "B",
+                "smithy.api#tags": [
+                    "b"
+                ]
+            }
+        },
+        "smithy.example#Both": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#A"
+                },
+                {
+                    "target": "smithy.example#B"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#C": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#A"
+                },
+                {
+                    "target": "smithy.example#B"
+                }
+            ],
+            "members": {},
+            "traits": {
+                "smithy.api#mixin": {},
+                "smithy.api#since": "C"
+            }
+        },
+        "smithy.example#ComposedThenSimple": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#D"
+                },
+                {
+                    "target": "smithy.example#A"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#D": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#A"
+                },
+                {
+                    "target": "smithy.example#B"
+                }
+            ],
+            "members": {},
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "smithy.example#LocalWins": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#A"
+                },
+                {
+                    "target": "smithy.example#B"
+                }
+            ],
+            "members": {},
+            "traits": {
+                "smithy.api#since": "local"
+            }
+        },
+        "smithy.example#Nested": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#C"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#NestedWithoutOverride": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#D"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#Reversed": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#B"
+                },
+                {
+                    "target": "smithy.example#A"
+                }
+            ],
+            "members": {}
+        },
+        "smithy.example#SimpleThenComposed": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "smithy.example#A"
+                },
+                {
+                    "target": "smithy.example#D"
+                }
+            ],
+            "members": {}
+        }
+    }
+}

@@ -1,0 +1,4 @@
+{
+    "description": "Shapes built in code with a mixin are merged in their declared form, so traits applied to the mixin later reach them, and their inherited members keep their own traits.",
+    "steps": [{"addShapes": "shapes.json"}, {"addFile": "a.smithy"}, {"addTrait": "ex#C$x", "trait": "smithy.api#required", "value": {}}]
+}
