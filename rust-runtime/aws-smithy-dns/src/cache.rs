@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 /// All configuration options for a caching DNS resolver
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ResolverConfig {
     internal_resolver: Option<SharedDnsResolver>,
     runtime: Option<tokio::runtime::Handle>,
@@ -32,7 +32,7 @@ pub struct ResolverConfigBuilder {
 
 impl ResolverConfigBuilder {
     /// Configures what will perform our internal name resolution when the situation requires
-    pub fn with_internal_resolver(&mut self, resolver: SharedDnsResolver) -> &Self {
+    pub fn with_internal_resolver(mut self, resolver: SharedDnsResolver) -> Self {
         self.config.internal_resolver = Some(resolver);
         self
     }
@@ -41,14 +41,14 @@ impl ResolverConfigBuilder {
     /// name resolution lookups.  We may need to split into two if we want to use anything other
     /// than tokio.  The recurrent async processing task requires tokio (mpsc, one-shot, select!),
     /// while the name resolution lookups could use any kind of future-handling runtime.
-    pub fn with_runtime(&mut self, runtime: tokio::runtime::Handle) -> &Self {
+    pub fn with_runtime(mut self, runtime: tokio::runtime::Handle) -> Self {
         self.config.runtime = Some(runtime);
         self
     }
 
     /// Creates a new configuration instance for caching resolvers
-    pub fn build(&self) -> ResolverConfig {
-        self.config.clone()
+    pub fn build(self) -> ResolverConfig {
+        self.config
     }
 }
 
@@ -199,9 +199,16 @@ impl<T> ResolverProcess<T> {
             let internal_resolver = resolver.clone();
             let internal_channel = operation_channel.clone();
             handle.spawn(async move {
-                let result = internal_resolver.resolve_dns(&internal_name).await;
+                let low_level_lookup =
+                    tokio::spawn(
+                        async move { internal_resolver.resolve_dns(&internal_name).await },
+                    );
+                let low_level_result = low_level_lookup
+                    .await
+                    .unwrap_or_else(|e| Err(ResolveDnsError::new(std::io::Error::other(e))));
+
                 let caching_result = ResolverOperation::ResolveResult(
-                    ResolveResultBuilder::new(request, result).build(),
+                    ResolveResultBuilder::new(request, low_level_result).build(),
                 );
                 let strong_channel_option = internal_channel.upgrade();
                 if let Some(strong_channel) = strong_channel_option {
@@ -237,16 +244,12 @@ impl<T> ResolverProcess<T> {
 
         // runs until recv returns None implying all input queue Sender clones are gone
         loop {
-            tokio::select! {
-                operation_result = receiver.recv() => {
-                    match operation_result {
-                        Some(operation) => {
-                            (operation_handler)(context, state, operation);
-                        }
-                        None => {
-                            return;
-                        }
-                    }
+            match receiver.recv().await {
+                Some(operation) => {
+                    (operation_handler)(context, state, operation);
+                }
+                None => {
+                    return;
                 }
             }
         }

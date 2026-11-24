@@ -160,33 +160,33 @@ pub struct SraResolverConfigBuilder {
 
 impl SraResolverConfigBuilder {
     /// Configures what kind of addresses resolution should return
-    pub fn with_address_types(&mut self, address_types: NameResolutionAddressTypes) -> &mut Self {
+    pub fn with_address_types(mut self, address_types: NameResolutionAddressTypes) -> Self {
         self.config.address_types = address_types;
         self
     }
 
     /// Configures the time-to-live for each resolved address
-    pub fn with_resolution_ttl(&mut self, ttl: Duration) -> &mut Self {
+    pub fn with_resolution_ttl(mut self, ttl: Duration) -> Self {
         self.config.resolution_ttl = ttl;
         self
     }
 
     /// Configures the per-name delay between lookups
-    pub fn with_refresh_delay(&mut self, refresh_delay: Duration) -> &mut Self {
+    pub fn with_refresh_delay(mut self, refresh_delay: Duration) -> Self {
         self.config.refresh_delay = refresh_delay;
         self
     }
 
     /// (Test-only) Clock function to use when computing time stamps
     #[cfg(test)]
-    pub fn with_clock(&mut self, clock: ClockFn) -> &mut Self {
+    pub fn with_clock(mut self, clock: ClockFn) -> Self {
         self.config.clock = clock.clone();
         self
     }
 
     /// Creates a new SraResolverConfig instance
     pub fn build(self) -> SraResolverConfig {
-        self.config.clone()
+        self.config
     }
 }
 
@@ -1048,7 +1048,7 @@ mod testing {
     impl HostEntryTestContext {
         fn new(mut config_builder: SraResolverConfigBuilder) -> Self {
             let mock_clock = MockClock::new();
-            config_builder.with_clock(mock_clock.create_clock_wrapper());
+            config_builder = config_builder.with_clock(mock_clock.create_clock_wrapper());
 
             let mock_results = MockResolveFunctionWrapper::new();
             let results_clone = mock_results.clone();
@@ -1102,11 +1102,11 @@ mod testing {
         let result_clone = result.clone();
         let mut request_builder = ResolveRequest::builder(MOCK_HOST);
         if let Some(duration) = ttl_override {
-            request_builder.with_ttl(duration);
+            request_builder = request_builder.with_ttl(duration);
         }
 
         if let Some(duration) = refresh_delay_override {
-            request_builder.with_refresh_delay(duration);
+            request_builder = request_builder.with_refresh_delay(duration);
         }
 
         let internal_request = ResolveRequestInternal {
@@ -1401,8 +1401,7 @@ mod testing {
     }
 
     fn do_address_restricted_lookup_test(address_types: NameResolutionAddressTypes) {
-        let mut restricted_builder = SraResolverConfig::builder();
-        restricted_builder.with_address_types(address_types);
+        let restricted_builder = SraResolverConfig::builder().with_address_types(address_types);
         let mut context = HostEntryTestContext::new(restricted_builder);
         initialize_resolution_test_context_single(&mut context);
 
@@ -2142,8 +2141,7 @@ mod testing {
 
     #[test]
     fn host_entry_dont_spawn_resolve_on_next_resolve_overflow() {
-        let mut config_builder = SraResolverConfig::builder();
-        config_builder.with_refresh_delay(Duration::MAX);
+        let config_builder = SraResolverConfig::builder().with_refresh_delay(Duration::MAX);
         let mut context = HostEntryTestContext::new(config_builder);
         initialize_resolution_test_context_single(&mut context);
 
@@ -2212,5 +2210,61 @@ mod testing {
 
         // background resolution function should have been called two times
         assert_eq!(2, context.mock_results.get_call_count());
+    }
+
+    #[derive(Debug)]
+    struct PanicResolver {
+        is_first_resolve: Arc<Mutex<bool>>,
+    }
+
+    impl PanicResolver {
+        fn new() -> Self {
+            PanicResolver {
+                is_first_resolve: Arc::new(Mutex::new(true)),
+            }
+        }
+    }
+    impl ResolveDns for PanicResolver {
+        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
+            let mut state = self.is_first_resolve.lock().unwrap();
+            let is_first_resolve = *state;
+            *state = false;
+
+            DnsFuture::new(async move {
+                if is_first_resolve {
+                    panic!("oh no");
+                }
+                Ok(vec![LOCALHOST_IPV4])
+            })
+        }
+    }
+
+    #[test]
+    fn sra_resolver_panic_on_first_resolve() {
+        let panic_resolver = SharedDnsResolver::new(PanicResolver::new());
+        let mut mock_clock = MockClock::new();
+        let clock_wrapper = mock_clock.create_clock_wrapper();
+
+        let base_config = ResolverConfig::builder()
+            .with_internal_resolver(panic_resolver)
+            .build();
+        let sra_config = SraResolverConfig::builder()
+            .with_clock(clock_wrapper)
+            .build();
+        let sra_resolver = new_sra_caching_resolver(sra_config, base_config);
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle().clone();
+
+        handle.block_on(async move {
+            let first_result = sra_resolver.resolve_dns("amazon.com").await;
+            assert!(first_result.is_err());
+
+            mock_clock.advance_time(DEFAULT_REFRESH_DELAY);
+
+            let second_result = sra_resolver.resolve_dns("amazon.com").await;
+            assert!(second_result.is_ok());
+            assert_eq!(LOCALHOST_IPV4, second_result.unwrap()[0]);
+        });
     }
 }

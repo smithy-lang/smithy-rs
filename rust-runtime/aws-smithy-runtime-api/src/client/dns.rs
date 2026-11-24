@@ -97,19 +97,19 @@ pub struct ResolveRequestBuilder {
 
 impl ResolveRequestBuilder {
     /// Create a new ResolveRequest instance
-    pub fn build(&self) -> ResolveRequest {
-        self.request.clone()
+    pub fn build(self) -> ResolveRequest {
+        self.request
     }
 
     /// Overrides the resolver's default address TTL value with a different duration.  Only lookups
     /// triggered by this request will have the override TTL applied.
-    pub fn with_ttl(&mut self, ttl: Duration) -> &mut Self {
+    pub fn with_ttl(mut self, ttl: Duration) -> Self {
         self.request.ttl = Some(ttl);
         self
     }
 
     /// Overrides the resolver's minimum delay between low-level resolution attempts.
-    pub fn with_refresh_delay(&mut self, refresh_delay: Duration) -> &mut Self {
+    pub fn with_refresh_delay(mut self, refresh_delay: Duration) -> Self {
         self.request.refresh_delay = Some(refresh_delay);
         self
     }
@@ -167,7 +167,7 @@ pub struct HostEventAddressPenaltyBuilder {
 
 impl HostEventAddressPenaltyBuilder {
     /// Sets the source error that triggered the address penalty
-    pub fn with_source(&mut self, error: BoxError) -> &mut HostEventAddressPenaltyBuilder {
+    pub fn with_source(mut self, error: BoxError) -> HostEventAddressPenaltyBuilder {
         self.penalty.source = Some(error);
         self
     }
