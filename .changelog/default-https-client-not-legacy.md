@@ -24,7 +24,7 @@ aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
 
 **Breaking change:** with `default-features = false`, `features = ["rustls"]` now selects the `hyper` 1.x client on **every** behavior version, not just the old ones, since that spelling used to mean `tls-rustls` and enabled no `default-https-client`. It also builds `aws-lc-rs`/`aws-lc-sys` and its C build dependencies, where the old meaning resolved only `ring`; generated crates offer no `hyper` 1.x + `ring` alternative. Use `legacy-https-client` to keep the previous `ring`-based stack.
 
-**Breaking change:** `aws-config`'s `legacy-client` feature is removed. It gated the pre-`v2026_01_12` behavior versions, which now fall back to the `hyper` 1.x client. For the `hyper` 0.14.x + `rustls` 0.21.x stack, depend on `aws-smithy-runtime` directly:
+**Breaking change:** `aws-config`'s `legacy-client` feature is now a no-op. It supplied the legacy `hyper` 0.14.x client that behavior versions older than `v2026_01_12` selected; those now fall back to `hyper` 1.x, so enabling it no longer gets you that stack. It is still declared, so builds naming it keep resolving. To get the legacy stack, depend on `aws-smithy-runtime` directly:
 
 ```toml
 aws-smithy-runtime = { version = "...", features = ["client", "tls-rustls"] }
