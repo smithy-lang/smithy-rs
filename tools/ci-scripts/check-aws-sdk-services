@@ -15,9 +15,9 @@ CI_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 set -eux
 cd aws-sdk
 
-# Runs before the test suite because it is the one check here that no test can replace: it asserts
-# on resolved features, and the thing it guards -- a non-validated crypto crate re-entering a FIPS
-# build -- changes nothing a test could observe. Takes seconds, so it fails fast.
+# This action is local-only; GitHub Actions dispatches the sibling `check-only-aws-sdk-services`,
+# which runs the same check. Kept here so a local full-SDK run gets it too, and first because it
+# takes seconds and no test can replace it.
 echo "${C_YELLOW}## Checking FIPS crypto isolation...${C_RESET}"
 "${CI_SCRIPTS_DIR}/check-fips-crypto-isolation"
 

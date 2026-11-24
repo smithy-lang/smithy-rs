@@ -88,10 +88,21 @@ direct_parents_of() {
 # Any service crate absent from this SDK is skipped: the smoketest SDK carries a handful of
 # services and the full SDK carries all of them, and this check is useful in both.
 for crate in aws-sdk-dynamodb aws-sdk-s3; do
-    if ! cargo tree -p "${crate}" --no-default-features -e normal >/dev/null 2>&1; then
-        echo -e "${C_YELLOW}## Skipping ${crate}: not in this SDK${C_RESET}"
+    # `cargo pkgid` is the membership probe rather than a `cargo tree` run with feature flags,
+    # which conflates "not in this SDK" with any other resolution failure and would drop a check
+    # silently instead of reporting one.
+    probe_err="$(mktemp)"
+    if ! cargo pkgid -p "${crate}" >/dev/null 2>"${probe_err}"; then
+        if grep -q "did not match any packages" "${probe_err}"; then
+            echo -e "${C_YELLOW}## Skipping ${crate}: not in this SDK${C_RESET}"
+        else
+            fail "${crate}: could not be probed, so it was not checked. cargo said:
+$(cat "${probe_err}")"
+        fi
+        rm -f "${probe_err}"
         continue
     fi
+    rm -f "${probe_err}"
     checked=$((checked + 1))
     echo -e "${C_YELLOW}## Checking ${crate}${C_RESET}"
 

@@ -25,7 +25,7 @@
 //! |---|---|---|
 //! | nothing (the default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
-//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes, for the module it binds |
 //!
 //! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over RustCrypto, so enabling
 //! more than one — which Cargo feature unification does routinely — resolves to the strongest
@@ -42,8 +42,9 @@
 //! fewer targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported
 //! target fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
-//! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
-//! crate's `Cargo.toml` documents the declared floor.
+//! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version. The
+//! floor declared here is `1.18.1`, which resolves `aws-lc-fips-sys` 0.14 -- the AWS-LC-FIPS 4
+//! line. No upper bound, so a minor release can move you to the next module.
 //!
 //! ## What ends up in the dependency tree
 //!
@@ -52,7 +53,7 @@
 //! well, set the `aws_sdk_fips_only` cfg:
 //!
 //! ```sh
-//! RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build --no-default-features --features aws-lc-rs-fips
+//! RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build --features aws-lc-rs-fips
 //! ```
 //!
 //! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" cannot

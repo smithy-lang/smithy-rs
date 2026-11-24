@@ -147,10 +147,9 @@ internal class FipsFeatureTest {
     }
 
     /**
-     * There is no `rustcrypto` feature to assert on. RustCrypto is an unconditional dependency of
-     * `aws-sigv4` and `aws-smithy-checksums`, gated on `cfg(not(aws_sdk_fips_only))`, so a
-     * generated crate neither forwards it nor needs the backend crates declared with their default
-     * features off. Asserting its absence keeps that from being reintroduced by accident.
+     * There is no `rustcrypto` feature to assert on: `aws-sigv4` and `aws-smithy-checksums` declare
+     * those crates without a feature gate, under `cfg(not(aws_sdk_fips_only))`, so a generated crate
+     * has nothing to forward. Asserting its absence keeps one from being reintroduced by accident.
      */
     @Test
     fun `a generated crate has no rustcrypto feature`() {

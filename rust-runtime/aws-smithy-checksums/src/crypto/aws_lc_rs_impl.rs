@@ -59,7 +59,7 @@ macro_rules! aws_lc_rs_digest {
 }
 
 // SHA-1 is not approved for digital signatures under FIPS, but remains available for other
-// uses such as the checksums computed here; AWS-LC exposes it under a name that spells out
-// that caveat.
+// uses such as the checksums computed here. aws-lc-rs names it `SHA1_FOR_LEGACY_USE_ONLY`,
+// following ring's API; its own doc for the constant says only "Deprecated".
 aws_lc_rs_digest!(Sha1 => &digest::SHA1_FOR_LEGACY_USE_ONLY, digest::SHA1_OUTPUT_LEN);
 aws_lc_rs_digest!(Sha256 => &digest::SHA256, digest::SHA256_OUTPUT_LEN);

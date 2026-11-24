@@ -46,9 +46,7 @@ default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/r
 # It covers the hyper 1.x rustls client only. The legacy client, which `connector-hyper-0-14-x`
 # selects whenever `default-https-client` is off and which a `BehaviorVersion` older than
 # v2026_01_12 selects regardless, is rustls 0.21 on `ring`; `client::defaults` warns when a FIPS
-# build resolves to it. `s2n-tls` is not reachable from this crate and has to be installed
-# explicitly; it is AWS-LC-based already, so enabling its own `fips` feature gives FIPS TLS by
-# another route, which `aws-smithy-http-client` does not forward.
+# build resolves to it.
 aws-lc-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
 rt-tokio = ["tokio/rt"]
 

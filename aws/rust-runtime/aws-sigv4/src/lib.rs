@@ -18,7 +18,7 @@
 //! |---|---|---|
 //! | nothing (the default) | the [RustCrypto](https://github.com/RustCrypto) crates | no |
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
-//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
+//! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes, for the module it binds |
 //!
 //! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over RustCrypto, so enabling
 //! more than one — which Cargo feature unification does routinely — resolves to the strongest
@@ -40,8 +40,8 @@
 //!
 //! ## What ends up in the dependency tree
 //!
-//! Selecting an AWS-LC backend changes which implementation runs, but `hmac` and `sha2` are
-//! unconditional dependencies, so they are still compiled. To keep them out of the build as well,
+//! Selecting an AWS-LC backend changes which implementation runs, but `hmac` and `sha2` are not
+//! behind a feature, so they are compiled either way. To keep them out of the build as well,
 //! set the `aws_sdk_fips_only` cfg, which is what their `[target."cfg(not(aws_sdk_fips_only))"]`
 //! declaration responds to:
 //!

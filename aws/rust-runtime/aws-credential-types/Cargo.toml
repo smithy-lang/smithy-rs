@@ -16,6 +16,8 @@ test-util = ["aws-smithy-runtime-api/test-util"]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-auth"] }
+# 1.8.1 is what aws-lc-rs 1.18.1 requires. `cargo minimal-versions check --direct` pins every
+# direct dependency to its declared minimum, so a lower floor here makes that pair unsatisfiable.
 zeroize = "1.8.1"
 
 [dev-dependencies]

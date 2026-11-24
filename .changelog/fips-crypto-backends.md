@@ -8,7 +8,7 @@ bug_fix: false
 ---
 Request signing, request checksums, and TLS can now be routed through the FIPS 140-3 validated build of [AWS-LC](https://github.com/aws/aws-lc) with a single feature on your service crate. This covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing and its SP 800-108 key derivation, and SHA-1/SHA-256 request checksums, which were previously computed by the RustCrypto crates.
 
-**A default build is unchanged, byte for byte.** RustCrypto remains the default backend and is still the only one that builds on every target the SDK supports.
+**A default build signs and checksums exactly as before.** RustCrypto remains the default backend; its SigV4a signatures are pinned byte for byte against the path they replace, and both backends are held to the same known-answer vectors. It stays the default because the AWS-LC backends do not cover every target the SDK builds.
 
 ```toml
 aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }

@@ -110,9 +110,9 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         }
         rustCrate.mergeFeature(Feature("aws-lc-fips", default = false, fipsDeps))
 
-        // There is no counterpart feature for the RustCrypto backend. It is an unconditional dependency of
-        // `aws-sigv4` and `aws-smithy-checksums`, gated on `cfg(not(aws_sdk_fips_only))` rather than on a Cargo
-        // feature, so a consumer who wants it out of the build sets `RUSTFLAGS="--cfg aws_sdk_fips_only"`.
+        // There is no counterpart feature for the RustCrypto backend. `aws-sigv4` and `aws-smithy-checksums`
+        // declare those crates without a feature gate, under `cfg(not(aws_sdk_fips_only))`, so a consumer who
+        // wants them out of the build sets `RUSTFLAGS="--cfg aws_sdk_fips_only"` instead.
         // RUSTFLAGS is global, so that reaches both crates without anything to forward from here.
     }
 
