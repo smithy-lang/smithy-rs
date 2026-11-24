@@ -14,19 +14,11 @@ rust-version = "1.94.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-# aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
-# that keeps RustCrypto the default is `wasm32-unknown-unknown`, which aws-lc-rs does not support.
-#
-# Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
-# `fips` and would make the two arms impossible to enable together -- something `--all-features`
-# does routinely. The arms are siblings rather than stacked, so a FIPS build compiles only the
-# validated library.
+# aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support, and
+# `aws-sigv4`'s manifest for why these name AWS-LC builds rather than aws-lc-rs's own
+# `fips`/`non-fips` pair.
 aws-lc-rs = ["__aws-lc-rs", "aws-lc-rs?/aws-lc-sys"]
 # aws-lc-rs backend on the FIPS 140-3 validated AWS-LC build. Takes precedence over `aws-lc-rs`.
-#
-# Named for the backend rather than `fips`, which on a generated SDK crate would sit next to
-# `Config::use_fips`: that selects a FIPS-compliant *endpoint* and says nothing about which
-# implementation does the cryptography. See the crate docs for target support and build tools.
 aws-lc-rs-fips = ["__aws-lc-rs", "aws-lc-rs?/fips"]
 # Internal: selects the aws-lc-rs backend without naming an AWS-LC build. Use `aws-lc-rs` or
 # `aws-lc-rs-fips`.

@@ -22,9 +22,7 @@ sigv4a = ["aws-sigv4/sigv4a"]
 # `aws-config`; TLS and checksums are reached by other routes, since neither is a dependency
 # of this crate. See `aws-sigv4`'s `aws-lc-rs-fips` feature for the platform requirements.
 #
-# Named for the module it selects rather than `fips`, so that it does not read as a sibling of
-# `Config::use_fips` on a generated SDK crate, which selects a FIPS-compliant *endpoint* and says
-# nothing about which implementation performs the cryptography.
+# Named to match the generated SDK feature; `AwsFluentClientDecorator` says why it is not `fips`.
 aws-lc-fips = ["aws-sigv4/aws-lc-rs-fips"]
 
 [dependencies]

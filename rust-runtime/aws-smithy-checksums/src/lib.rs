@@ -369,8 +369,7 @@ impl Checksum for Sha256 {
     }
 }
 
-// MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
-// RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
+// RustCrypto-only; see the crate docs for why MD5 has no AWS-LC arm.
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]

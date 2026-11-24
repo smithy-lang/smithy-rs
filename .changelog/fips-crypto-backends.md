@@ -28,15 +28,13 @@ Two cases stay regardless, neither of which signs a request or computes a checks
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
-**Which FIPS module you get.** The `1.18.1` floor builds against `aws-lc-fips-sys` 0.14, which is the AWS-LC-FIPS module 4 line. NIST validated module 4 under certificates [#5595](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5595) (dynamic library) and [#5596](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5596) (static library). [aws/aws-lc#3826](https://github.com/aws/aws-lc/pull/3826) is the documentation update for those and is still open, so [FIPS.md](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md) lists module 4 as in process until it merges. Note also that an `aws-lc-fips-sys` release may vendor a later 4.x than a certificate names: 0.14.4 vendors AWS-LC 4.2.0.
+**Which FIPS module you get.** The `1.18.1` floor builds against `aws-lc-fips-sys` 0.14, which is the AWS-LC-FIPS module 4 line. NIST validated module 4 under certificates [#5595](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5595) (dynamic library) and [#5596](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5596) (static library). [aws/aws-lc#3826](https://github.com/aws/aws-lc/pull/3826) is the documentation update for those and is still open, so [FIPS.md](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md) lists module 4 as in process until it merges. Note also that an `aws-lc-fips-sys` release may vendor a later 4.x than a certificate names: 0.14.4 vendors AWS-LC 4.2.0. `aws-lc-rs` moves to a new module in a minor release and Cargo takes that automatically inside `1.x`; we set no upper bound, so bound your own requirement if your compliance posture is tied to one module.
 
-**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. If your compliance posture is tied to a particular module, work out which `aws-lc-rs` versions carry it and bound your own requirement accordingly.
-
-**[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
+**Limits of the guarantee.** TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC. [Full announcement](https://github.com/awslabs/aws-sdk-rust/discussions/1464).
 
 ## Compatibility
 
-Nothing breaks. `default-features = false` means what it always meant on every crate involved, and a build that names no AWS-LC feature gets the same RustCrypto implementations as before. The new features are additive:
+Nothing breaks: `default-features = false` means what it always meant, and the new features are additive.
 
 | crate | from | to | what is new |
 |---|---|---|---|

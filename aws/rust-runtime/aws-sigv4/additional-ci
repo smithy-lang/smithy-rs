@@ -17,9 +17,8 @@ C_RESET='\033[0m'
 # say what to do about it, ahead of the unresolved `crypto::` imports it also causes at the call
 # sites.
 #
-# Asserted here because nothing else can: the condition is a cfg-and-feature combination, invisible
-# to the test suite, and deleting the `compile_error!` breaks no build -- it only makes the failure
-# less legible, a regression with no other symptom.
+# No test can cover this: the trigger is a cfg-and-feature combination, and deleting the
+# `compile_error!` breaks no build.
 echo "### Checking that a build with no crypto backend explains itself"
 
 output="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --color never --no-default-features --features sign-http,http1 2>&1 || true)"

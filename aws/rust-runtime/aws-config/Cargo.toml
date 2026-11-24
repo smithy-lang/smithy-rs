@@ -43,14 +43,11 @@ credentials-login = [
 # TLS for the default HTTPS client, and SigV4/SigV4a signing. Checksums are reached from the
 # generated service crates instead, since `aws-smithy-checksums` is not a dependency here.
 #
-# Named for the backend rather than `fips`, to keep it distinct from `use_fips` /
-# `AWS_USE_FIPS_ENDPOINT`, which select a FIPS-compliant *endpoint* and say nothing about which
-# implementation does the cryptography.
+# Named to match the generated SDK feature, and so distinct from `use_fips` /
+# `AWS_USE_FIPS_ENDPOINT`, which select a FIPS-compliant *endpoint*.
 #
-# The TLS half reaches the hyper 1.x client only. A build that resolves to the legacy client --
-# rustls 0.21 on `ring` -- gets FIPS signing over non-FIPS TLS, and `aws-smithy-runtime` warns for
-# that combination. An explicitly installed HTTP client is likewise untouched; see
-# `aws-smithy-runtime`'s `aws-lc-fips` feature.
+# The TLS half reaches the hyper 1.x client only; see `aws-smithy-runtime`'s `aws-lc-fips` feature
+# for which client a build resolves to, and when it warns.
 #
 # Two things this crate does itself are NOT covered either, because they use RustCrypto directly
 # and have no aws-lc-rs path yet:

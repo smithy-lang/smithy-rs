@@ -53,14 +53,10 @@
 //! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" cannot
 //! be expressed as one. `RUSTFLAGS` is global, so one flag also covers `aws-smithy-checksums`.
 //!
-//! `sigv4a` is unconditional: it declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and `zeroize`
-//! under every backend, with `sha2` arriving under `p256` and `hmac` under `ecdsa`'s RFC 6979 nonce
-//! derivation. None of it performs FIPS-relevant cryptography on an AWS-LC backend. `p256` and
-//! `ecdsa` are the ECDSA implementation for the RustCrypto backend only, and it does not reach
-//! them otherwise; `crypto-bigint` does the 256-bit range check
-//! [`sign::v4a::generate_signing_key`] applies to the derived scalar, the derivation itself going
-//! through the backend. They stay unconditional because a feature cannot be made conditional on
-//! another feature being absent.
+//! `sigv4a` declares `p256` and `ecdsa` under every backend, and they bring `sha2` and `hmac` back
+//! transitively even with the cfg set. Nothing reaches them on an AWS-LC backend -- they are the
+//! RustCrypto ECDSA implementation. `crypto-bigint` does the FIPS 186-5 A.2.2 candidate test in
+//! [`sign::v4a::generate_signing_key`], with the derivation itself going through the backend.
 //!
 //! SigV4 output does not depend on the backend: HMAC-SHA256 is deterministic, and both backends are
 //! held to the same known-answer vectors and signing test suite in source.

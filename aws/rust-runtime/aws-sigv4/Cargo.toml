@@ -59,10 +59,10 @@ ecdsa = { version = "0.17.0", optional = true }
 # so those features name the AWS-LC build rather than defaulting to the non-FIPS one.
 #
 # `1.18` is the line the `rustls` we resolve declares -- it moved there in 0.23.45, above the
-# 0.23.31 floor this repo states -- so signing and TLS ask for the same AWS-LC. Cargo resolves
-# one `aws-lc-rs` 1.x graph-wide regardless, so that is about the requirements agreeing, not about
-# duplicate builds; and about `minimal-versions --direct`, which makes the floor the version CI
-# exercises. Within the line, 1.18.1 rather than 1.18.0 because of the `-sys` requirements:
+# 0.23.31 floor this repo states -- so signing and TLS ask for the same AWS-LC. Cargo resolves one
+# `aws-lc-rs` 1.x graph-wide either way; this is about the declared requirements agreeing, which
+# `minimal-versions --direct` is what exercises. Within the line, 1.18.1 rather than 1.18.0
+# because of the `-sys` requirements:
 #
 #   aws-lc-rs   aws-lc-sys   aws-lc-fips-sys
 #   1.18.0      ^0.44.0      ^0.14.0
@@ -71,16 +71,12 @@ ecdsa = { version = "0.17.0", optional = true }
 # `^0.44.0` cannot reach `aws-lc-sys` 0.45.0, which fixed Clang builds with `-flto` in `CFLAGS`
 # (aws/aws-lc-rs#1211: the assembler flag probe never reaches the assembler under `-flto`), and
 # 0.44.0 is the only 0.44.x; `^0.14.0` admits `aws-lc-fips-sys` 0.14.0 and 0.14.1, which do not
-# build with Clang 20 or newer. So the floor is a build-support choice: the APIs used here compile
-# against 1.16.1, and every line from 1.17.3 up already clears the open `-sys` advisories
-# (`aws-lc-sys` >= 0.39.0 for RUSTSEC-2026-0044 and -0048, >= 0.38.0 for -0045 through -0047;
-# `aws-lc-fips-sys` >= 0.13.13 for -0042, >= 0.13.12 for -0043).
+# build with Clang 20 or newer. The APIs used here compile against 1.16.1, so this is a
+# build-support floor rather than an API one.
 #
-# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4 module, so `<1.18.0`, the FIPS 3
-# module, is unsatisfiable against this floor. aws-lc-rs changes module in a minor release and
-# Cargo takes that automatically inside `1.x`. Do not add an upper bound here: that would deny
-# every consumer the next module. A consumer whose compliance posture is tied to one module bounds
-# their own requirement, which the changelog tells them.
+# 1.18 is also where the FIPS arm moved to the AWS-LC-FIPS 4 module. Do not add an upper bound:
+# that would deny every consumer the next module, and the changelog tells a consumer tied to one
+# module to bound their own requirement.
 aws-lc-rs = { version = "1.18.1", optional = true, default-features = false }
 crypto-bigint = { version = "0.7.10", optional = true }
 subtle = { version = "2.6.0", optional = true }
@@ -141,8 +137,8 @@ required-features = ["sigv4a"]
 # arm, so the `__aws-lc-rs` gate skips the module using `hmac` and `sha2` while both are still
 # compiled. `p256` and `ecdsa` go unused on that backend too, but `sigv4a` has to keep naming them.
 #
-# `development` is a false positive. `tests/sigv4a_mrap.rs` uses `sha2`, but CI runs udeps without
-# `--all-targets`, so it never inspects that test and reports the dev-dependency as unused.
+# `development` is a false positive: udeps runs without `--all-targets`, so it never sees
+# `tests/sigv4a_mrap.rs` use `sha2`.
 [package.metadata.cargo-udeps.ignore]
 normal = ["hmac", "sha2", "p256", "ecdsa"]
 development = ["sha2"]

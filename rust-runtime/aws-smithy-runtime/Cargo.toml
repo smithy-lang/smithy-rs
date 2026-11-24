@@ -36,9 +36,7 @@ default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/r
 # signing and checksums are reached by other routes, since neither `aws-sigv4` nor
 # `aws-smithy-checksums` is a dependency of this crate.
 #
-# Named for the backend rather than `fips`, which on a generated SDK crate would sit next to
-# `Config::use_fips`: that selects a FIPS-compliant *endpoint* and says nothing about which
-# implementation does the cryptography.
+# Named to match the generated SDK feature; `AwsFluentClientDecorator` says why it is not `fips`.
 #
 # The dependency reference is weak on purpose: it makes an `aws-smithy-http-client` build's TLS
 # FIPS without installing that client for a consumer who chose a different one.

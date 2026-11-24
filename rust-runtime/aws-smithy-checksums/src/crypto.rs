@@ -10,8 +10,7 @@
 //! (`aws-lc-rs`, or `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins
 //! if both are enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
-//! MD5 is RustCrypto-only: aws-lc-rs does not expose it and it is not FIPS-approved. No public API
-//! reaches it, since [`crate::ChecksumAlgorithm::Md5`] is deprecated and resolves to CRC-32.
+//! MD5 is RustCrypto-only; the crate docs say why.
 
 use bytes::Bytes;
 use std::fmt::Debug;
