@@ -1,0 +1,40 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "WaitableTrait",
+            "severity": "ERROR",
+            "shape": "ex#GetThing",
+            "message": "Waiter `W`, acceptor 1: The `message` JMESPath expression must resolve to a string or an array of strings, but this expression was statically determined to return a `any` type."
+        }
+    ],
+    "waiters": {
+        "ex#GetThing": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    },
+                    {
+                        "state": "failure",
+                        "matcher": {
+                            "success": false
+                        },
+                        "message": "details.reason"
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}

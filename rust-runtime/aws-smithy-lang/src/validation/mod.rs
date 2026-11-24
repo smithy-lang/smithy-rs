@@ -33,6 +33,7 @@
 //! | `UnitTarget` | Only operation input/output and union, enum, and intEnum members target `smithy.api#Unit`. |
 //! | `ErrorTarget` | Service and operation `errors` target `@error` structures. |
 //! | `ServiceRename` | Service `rename` keys resolve and values are valid, case-insensitively unique identifiers. |
+//! | `LengthTrait` | `@length` has non-negative `min` and `max` values, and `min` is not greater than `max`. |
 //!
 //! ```
 //! use aws_smithy_lang::diagnostic::{Diagnostic, DiagnosticCode, Severity};

@@ -1,0 +1,183 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#AcceptorNotAnObject",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected object, but found string."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#AcceptorsNotAList",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `acceptors` member to be an array, but found object."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#DelayNotANumber",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `minDelay` to be a number; found string"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#DeprecatedNotABoolean",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `deprecated` to be a boolean; found string"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#DocumentationNotAString",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `documentation` to be a string; found number"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#ErrorTypeNotAString",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected string, but found number."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#MatcherNotAnObject",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected object, but found array."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#MessageNotAString",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `message` to be a string; found number"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoAcceptors",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `acceptors`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoComparator",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `comparator`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoExpected",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `expected`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoMatcher",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `matcher`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoMatcherMember",
+            "message": "Error creating trait `smithy.waiters#waitable`: Union value must have exactly one value set"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoPath",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `path`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NoState",
+            "message": "Error creating trait `smithy.waiters#waitable`: Missing expected member `state`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#NotAnObject",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected object, but found array."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#PathMatcherNotAnObject",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected object, but found string."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#PathNotAString",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `path` member to be a string, but found number."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#SuccessNotABoolean",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected boolean, but found string."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#TagNotAString",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected array element 1 to be a string but found number."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#TagsNotAList",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected `tags` to be an array of strings. Found string."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#TwoMatcherMembers",
+            "message": "Error creating trait `smithy.waiters#waitable`: Union value must have exactly one value set"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#UnknownComparator",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected valid path comparator, but found equals"
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#UnknownState",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected one of `failure`, `retry`, `success`; got `done`."
+        },
+        {
+            "id": "Model",
+            "severity": "ERROR",
+            "shape": "ex#WaiterNotAnObject",
+            "message": "Error creating trait `smithy.waiters#waitable`: Expected object, but found string."
+        }
+    ],
+    "waiters": {
+        "ex#AcceptorNotAnObject": null,
+        "ex#AcceptorsNotAList": null,
+        "ex#DelayNotANumber": null,
+        "ex#DeprecatedNotABoolean": null,
+        "ex#DocumentationNotAString": null,
+        "ex#ErrorTypeNotAString": null,
+        "ex#MatcherNotAnObject": null,
+        "ex#MessageNotAString": null,
+        "ex#NoAcceptors": null,
+        "ex#NoComparator": null,
+        "ex#NoExpected": null,
+        "ex#NoMatcher": null,
+        "ex#NoMatcherMember": null,
+        "ex#NoPath": null,
+        "ex#NoState": null,
+        "ex#NotAnObject": null,
+        "ex#PathMatcherNotAnObject": null,
+        "ex#PathNotAString": null,
+        "ex#SuccessNotABoolean": null,
+        "ex#TagNotAString": null,
+        "ex#TagsNotAList": null,
+        "ex#TwoMatcherMembers": null,
+        "ex#UnknownComparator": null,
+        "ex#UnknownState": null,
+        "ex#WaiterNotAnObject": null
+    }
+}

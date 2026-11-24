@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -17,6 +19,8 @@ import java.util.stream.Stream;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.BottomUpIndex;
 import software.amazon.smithy.model.knowledge.OperationIndex;
+import software.amazon.smithy.model.knowledge.PaginatedIndex;
+import software.amazon.smithy.model.knowledge.PaginationInfo;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.SourceLocation;
 import software.amazon.smithy.model.loader.ModelAssembler;
@@ -31,11 +35,17 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.DynamicTrait;
+import software.amazon.smithy.model.traits.PaginatedTrait;
 import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.model.traits.TraitFactory;
 import software.amazon.smithy.model.validation.Severity;
 import software.amazon.smithy.model.validation.ValidatedResult;
 import software.amazon.smithy.model.validation.ValidationEvent;
+import software.amazon.smithy.waiters.Acceptor;
+import software.amazon.smithy.waiters.Matcher;
+import software.amazon.smithy.waiters.PathMatcher;
+import software.amazon.smithy.waiters.WaitableTrait;
+import software.amazon.smithy.waiters.Waiter;
 
 /**
  * Regenerates the expected outcomes for the Java compatibility fixtures.
@@ -58,9 +68,27 @@ import software.amazon.smithy.model.validation.ValidationEvent;
  * of selected shapes, members, and traits. These cover inputs added in code ({@code addShape},
  * {@code addModel}, {@code putMetadata}, {@code addTrait}), which file fixtures cannot express.
  *
+ * <p>For every fixture in {@code paginated/} (a {@code .smithy} or {@code .json} file), writes
+ * the answer of Java's {@code PaginatedIndex} for every service and operation to
+ * {@code expected/paginated/NAME.json}. These fixtures are assembled with full validation and
+ * must have no ERROR or DANGER events.
+ *
+ * <p>For every fixture in {@code waiters/GROUP/} (a {@code .smithy} file), writes to
+ * {@code expected/waiters/GROUP/NAME.json} whether Java accepts it (no ERROR event), its ERROR,
+ * DANGER, and WARNING events, and every operation's waiters as Java's typed
+ * {@code WaitableTrait} decodes them, with defaults applied. These fixtures are assembled with
+ * full validation, plus the trait definitions and validators of {@code smithy-waiters}, which
+ * {@code discoverModels} finds on the classpath.
+ *
+ * <p>Also writes the {@code smithy.api} prelude that {@code aws-smithy-lang} embeds to
+ * {@code src/prelude/prelude-VERSION.json}, three directories above this one.
+ *
  * <p>See README.md for how to run this.
  */
 public final class Regenerate {
+    /** The pinned Smithy version, which every jar on the classpath must have. */
+    private static final String VERSION = "1.74.1";
+    private static final String GENERATOR = "software.amazon.smithy:smithy-model:" + VERSION;
     /** The IDs of the prelude's own shapes. */
     private static final java.util.Set<ShapeId> PRELUDE_IDS = Model.assembler().assemble().unwrap().getShapeIds();
 
@@ -96,7 +124,7 @@ public final class Regenerate {
             }
         }
         ObjectNode.Builder document = ObjectNode.builder()
-                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0");
+                .withMember("generator", GENERATOR);
         ObjectNode.Builder cases = ObjectNode.builder();
         outcomes.forEach(cases::withMember);
         document.withMember("outcomes", cases.build());
@@ -118,6 +146,194 @@ public final class Regenerate {
 
         regenerateIdl(root);
         regenerateAssembly(root);
+        regeneratePaginated(root);
+        regenerateWaiters(root);
+        regeneratePrelude(root);
+    }
+
+    /**
+     * Writes the prelude as Smithy 2.0 JSON AST: every shape in the prelude namespace, as
+     * {@code ModelSerializer} writes it with its prelude shapes.
+     */
+    private static void regeneratePrelude(Path root) throws Exception {
+        Path file = root.resolve("../../../src/prelude").resolve("prelude-" + VERSION + ".json").normalize();
+        ObjectNode serialized = ModelSerializer.builder()
+                .includePrelude(true)
+                .shapeFilter(shape -> shape.getId().getNamespace().equals(Prelude.NAMESPACE))
+                .build()
+                .serialize(Model.assembler().assemble().unwrap());
+        Files.writeString(file, Node.prettyPrintJson(serialized) + "\n");
+    }
+
+    private static void regeneratePaginated(Path root) throws Exception {
+        Path expected = root.resolve("expected").resolve("paginated");
+        Files.createDirectories(expected);
+        List<Path> fixtures = new ArrayList<>();
+        try (Stream<Path> files = Files.list(root.resolve("paginated"))) {
+            files.filter(p -> p.toString().endsWith(".smithy") || p.toString().endsWith(".json"))
+                    .sorted()
+                    .forEach(fixtures::add);
+        }
+        for (Path fixture : fixtures) {
+            // Full validation, including `PaginatedTraitValidator`: the Rust index matches Java
+            // only for valid models. `unwrap` throws on ERROR and DANGER events.
+            Model model = Model.assembler().addImport(fixture).assemble().unwrap();
+            PaginatedIndex index = PaginatedIndex.of(model);
+            // Every pair, so that the Rust test also checks where Java has no answer.
+            ObjectNode answers = byId(model.getServiceShapes().stream(), service -> byId(
+                    model.getOperationShapes().stream(),
+                    operation -> index.getPaginationInfo(service, operation)
+                            .map(Regenerate::pagination)
+                            .orElse(Node.nullNode())));
+            ObjectNode document = ObjectNode.builder()
+                    .withMember("generator", GENERATOR)
+                    .withMember("pagination", answers)
+                    .build();
+            String stem = fixture.getFileName().toString().replaceFirst("\\.(smithy|json)$", "");
+            Files.writeString(expected.resolve(stem + ".json"), Node.prettyPrintJson(document) + "\n");
+        }
+    }
+
+    private static Node pagination(PaginationInfo info) {
+        PaginatedTrait effective = info.getPaginatedTrait();
+        return ObjectNode.builder()
+                .withMember("trait", ObjectNode.builder()
+                        .withMember("inputToken", optionalString(effective.getInputToken()))
+                        .withMember("outputToken", optionalString(effective.getOutputToken()))
+                        .withMember("items", optionalString(effective.getItems()))
+                        .withMember("pageSize", optionalString(effective.getPageSize()))
+                        .build())
+                .withMember("input", info.getInput().getId().toString())
+                .withMember("output", info.getOutput().getId().toString())
+                .withMember("inputTokenMember", info.getInputTokenMember().getId().toString())
+                .withMember("outputTokenMemberPath", ids(info.getOutputTokenMemberPath()))
+                .withMember("pageSizeMember", optionalString(
+                        info.getPageSizeMember().map(member -> member.getId().toString())))
+                .withMember("itemsMemberPath", ids(info.getItemsMemberPath()))
+                .build();
+    }
+
+    private static Node optionalString(Optional<String> value) {
+        return value.<Node>map(Node::from).orElse(Node.nullNode());
+    }
+
+    private static void regenerateWaiters(Path root) throws Exception {
+        for (String group : List.of("valid", "invalid", "differences")) {
+            Path expected = root.resolve("expected").resolve("waiters").resolve(group);
+            Files.createDirectories(expected);
+            List<Path> fixtures = new ArrayList<>();
+            try (Stream<Path> files = Files.list(root.resolve("waiters").resolve(group))) {
+                files.filter(p -> p.toString().endsWith(".smithy")).sorted().forEach(fixtures::add);
+            }
+            for (Path fixture : fixtures) {
+                ValidatedResult<Model> result = Model.assembler()
+                        .discoverModels(Regenerate.class.getClassLoader())
+                        .addImport(fixture)
+                        .assemble();
+                List<ValidationEvent> events = new ArrayList<>();
+                for (ValidationEvent event : result.getValidationEvents()) {
+                    Severity severity = event.getSeverity();
+                    if (severity == Severity.ERROR || severity == Severity.DANGER || severity == Severity.WARNING) {
+                        events.add(event);
+                    }
+                }
+                events.sort(Comparator.comparing((ValidationEvent e) -> e.getShapeId().map(Object::toString).orElse(""))
+                        .thenComparing(ValidationEvent::getId)
+                        .thenComparing(ValidationEvent::getMessage));
+                boolean accepted = events.stream().noneMatch(e -> e.getSeverity() == Severity.ERROR);
+                ObjectNode document = ObjectNode.builder()
+                        .withMember("generator", "software.amazon.smithy:smithy-waiters:" + VERSION)
+                        .withMember("accepted", accepted)
+                        .withMember("events", events.stream().map(Regenerate::event).collect(ArrayNode.collect()))
+                        .withMember("waiters", result.getResult().<Node>map(Regenerate::waitersByOperation)
+                                .orElse(Node.nullNode()))
+                        .build();
+                String stem = fixture.getFileName().toString().replace(".smithy", "");
+                Files.writeString(expected.resolve(stem + ".json"), Node.prettyPrintJson(document) + "\n");
+            }
+        }
+    }
+
+    private static Node event(ValidationEvent event) {
+        return ObjectNode.builder()
+                .withMember("id", event.getId())
+                .withMember("severity", event.getSeverity().toString())
+                .withMember("shape", event.getShapeId().<Node>map(id -> Node.from(id.toString()))
+                        .orElse(Node.nullNode()))
+                .withMember("message", event.getMessage())
+                .build();
+    }
+
+    /** The waiters of every operation, by operation ID, or null for an operation without any. */
+    private static Node waitersByOperation(Model model) {
+        return byId(model.getOperationShapes().stream(), operation -> operation.getTrait(WaitableTrait.class)
+                .<Node>map(Regenerate::waiters)
+                .orElse(Node.nullNode()));
+    }
+
+    /** The waiters in declaration order, as an array so that JSON readers keep the order. */
+    private static Node waiters(WaitableTrait trait) {
+        List<Node> waiters = new ArrayList<>();
+        for (Map.Entry<String, Waiter> entry : trait.getWaiters().entrySet()) {
+            Waiter waiter = entry.getValue();
+            waiters.add(ObjectNode.builder()
+                    .withMember("name", entry.getKey())
+                    .withMember("documentation", optionalString(waiter.getDocumentation()))
+                    .withMember("acceptors", waiter.getAcceptors().stream()
+                            .map(Regenerate::acceptor)
+                            .collect(ArrayNode.collect()))
+                    .withMember("minDelay", waiter.getMinDelay())
+                    .withMember("maxDelay", waiter.getMaxDelay())
+                    .withMember("deprecated", waiter.isDeprecated())
+                    .withMember("tags", waiter.getTags().stream().map(Node::from).collect(ArrayNode.collect()))
+                    .build());
+        }
+        return ArrayNode.fromNodes(waiters);
+    }
+
+    private static Node acceptor(Acceptor acceptor) {
+        Node matcher = acceptor.getMatcher().accept(new Matcher.Visitor<Node>() {
+            @Override
+            public Node visitOutput(Matcher.OutputMember output) {
+                return pathMatcher(output.getValue());
+            }
+
+            @Override
+            public Node visitInputOutput(Matcher.InputOutputMember inputOutput) {
+                return pathMatcher(inputOutput.getValue());
+            }
+
+            @Override
+            public Node visitSuccess(Matcher.SuccessMember success) {
+                return Node.from(success.getValue());
+            }
+
+            @Override
+            public Node visitErrorType(Matcher.ErrorTypeMember errorType) {
+                return Node.from(errorType.getValue());
+            }
+
+            @Override
+            public Node visitUnknown(Matcher.UnknownMember unknown) {
+                // Only in rejected fixtures: an unknown member is a validation error.
+                return unknown.getValue();
+            }
+        });
+        return ObjectNode.builder()
+                .withMember("state", acceptor.getState().toString())
+                .withMember("matcher", ObjectNode.builder()
+                        .withMember(acceptor.getMatcher().getMemberName(), matcher)
+                        .build())
+                .withMember("message", optionalString(acceptor.getMessage()))
+                .build();
+    }
+
+    private static Node pathMatcher(PathMatcher matcher) {
+        return ObjectNode.builder()
+                .withMember("path", matcher.getPath())
+                .withMember("expected", matcher.getExpected())
+                .withMember("comparator", matcher.getComparator().toString())
+                .build();
     }
 
     private static void regenerateIdl(Path root) throws Exception {
@@ -187,7 +403,7 @@ public final class Regenerate {
         ObjectNode.Builder cases = ObjectNode.builder();
         idlOutcomes.forEach(cases::withMember);
         ObjectNode document = ObjectNode.builder()
-                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                .withMember("generator", GENERATOR)
                 .withMember("outcomes", cases.build())
                 .build();
         Files.writeString(idlExpected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
@@ -304,7 +520,7 @@ public final class Regenerate {
         ObjectNode.Builder caseNodes = ObjectNode.builder();
         outcomes.forEach(caseNodes::withMember);
         ObjectNode document = ObjectNode.builder()
-                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                .withMember("generator", GENERATOR)
                 .withMember("outcomes", caseNodes.build())
                 .build();
         Files.writeString(expected.resolve("outcomes.json"), Node.prettyPrintJson(document) + "\n");
@@ -473,7 +689,7 @@ public final class Regenerate {
         }
 
         return ObjectNode.builder()
-                .withMember("generator", "software.amazon.smithy:smithy-model:1.74.0")
+                .withMember("generator", GENERATOR)
                 .withMember("topDown", topDownNode)
                 .withMember("operations", operationsNode)
                 .withMember("structures", structuresNode)

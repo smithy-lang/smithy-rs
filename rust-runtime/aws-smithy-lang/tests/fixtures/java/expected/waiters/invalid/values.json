@@ -1,0 +1,238 @@
+{
+    "generator": "software.amazon.smithy:smithy-waiters:1.74.1",
+    "accepted": false,
+    "events": [
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#DelayOutOfRange",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.maxDelay: integer value must be < 2147483647, but found 2147483648"
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#EmptyAcceptors",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.acceptors: Value provided for `smithy.waiters#Acceptors` must have at least 1 elements, but the provided value only has 0 elements"
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#EmptyTag",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.tags.0: String value provided for `smithy.waiters#NonEmptyString` must be >= 1 characters, but the provided value is only 0 characters."
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#FractionalDelay",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.minDelay: integer shapes must not have floating point values, but found `1.5` provided for `smithy.waiters#WaiterDelay`"
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#LowercaseName",
+            "message": "Error validating trait `smithy.waiters#waitable`.thingReady (map-key): String value provided for `smithy.waiters#WaiterName` must match regular expression: ^[A-Z]+[A-Za-z0-9]*$"
+        },
+        {
+            "id": "TraitValue.Target.InvalidRange",
+            "severity": "ERROR",
+            "shape": "ex#NegativeDelay",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.maxDelay: Value provided for `smithy.waiters#WaiterDelay` must be greater than or equal to 1, but found -1"
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#NoWaiters",
+            "message": "Error validating trait `smithy.waiters#waitable`: Value provided for `smithy.waiters#waitable` must have at least 1 entries, but the provided value only has 0 entries"
+        },
+        {
+            "id": "TraitValue",
+            "severity": "ERROR",
+            "shape": "ex#UnderscoreName",
+            "message": "Error validating trait `smithy.waiters#waitable`.Thing_Ready (map-key): String value provided for `smithy.waiters#WaiterName` must match regular expression: ^[A-Z]+[A-Za-z0-9]*$"
+        },
+        {
+            "id": "TraitValue.UnknownMember.smithy.waiters#Matcher.outputPath",
+            "severity": "ERROR",
+            "shape": "ex#UnknownMatcherMember",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.acceptors.0.matcher: Member `outputPath` does not exist in `smithy.waiters#Matcher`"
+        },
+        {
+            "id": "TraitValue.Target.InvalidRange",
+            "severity": "ERROR",
+            "shape": "ex#ZeroDelay",
+            "message": "Error validating trait `smithy.waiters#waitable`.W.minDelay: Value provided for `smithy.waiters#WaiterDelay` must be greater than or equal to 1, but found 0"
+        }
+    ],
+    "waiters": {
+        "ex#DelayOutOfRange": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": -2147483648,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#EmptyAcceptors": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#EmptyTag": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": [
+                    ""
+                ]
+            }
+        ],
+        "ex#FractionalDelay": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 1,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#LowercaseName": [
+            {
+                "name": "thingReady",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#NegativeDelay": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": -1,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#NoWaiters": [],
+        "ex#UnderscoreName": [
+            {
+                "name": "Thing_Ready",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#UnknownMatcherMember": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "outputPath": {
+                                "path": "a",
+                                "expected": "b",
+                                "comparator": "stringEquals"
+                            }
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 2,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ],
+        "ex#ZeroDelay": [
+            {
+                "name": "W",
+                "documentation": null,
+                "acceptors": [
+                    {
+                        "state": "success",
+                        "matcher": {
+                            "success": true
+                        },
+                        "message": null
+                    }
+                ],
+                "minDelay": 0,
+                "maxDelay": 120,
+                "deprecated": false,
+                "tags": []
+            }
+        ]
+    }
+}
