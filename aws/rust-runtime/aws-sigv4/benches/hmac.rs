@@ -6,9 +6,10 @@
 use aws_sigv4::sign::v4::calculate_signature;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-// Benchmarks the HMAC-SHA256 that SigV4 signature calculation is made of, on whichever crypto
-// backend the crate was built with. It goes through `calculate_signature` rather than the HMAC
-// crate directly so that the numbers follow the selected backend.
+// Benchmarks `calculate_signature` on whichever crypto backend the crate was built with. That is
+// one HMAC-SHA256 plus the hex encode of its tag, so the encode and its allocation are in the
+// number too; going through the public function rather than the HMAC crate directly is what makes
+// it follow the selected backend.
 pub fn hmac(c: &mut Criterion) {
     c.bench_function("hmac", |b| {
         b.iter(|| calculate_signature(b"secret", b"hello, world"))

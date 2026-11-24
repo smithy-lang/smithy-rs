@@ -52,3 +52,20 @@ if ! grep -q "no AWS-LC backend is enabled" <<<"${first_error}"; then
 fi
 
 echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"
+
+# The RustCrypto backend is the default and this crate's `crypto/rustcrypto_impl.rs` is new, but no
+# other CI leg compiles it: they all test with `--all-features`, which enables an AWS-LC arm and
+# leaves that module out. `sigv4a` is named so that `sign::v4a`'s two signature-equality tests run,
+# which only exist on this backend -- AWS-LC randomizes its nonce, so they cannot compare bytes --
+# and which are what show the rewritten signing path still produces what the old one did.
+echo "### Running the test suite on the RustCrypto backend"
+cargo test --features sigv4a
+
+# `--cfg aws_sdk_fips_only` with a backend enabled runs the same tests as without it, so there is
+# nothing to re-run; what is worth asserting is that it still compiles. Only this configuration
+# drops `hmac` and `sha2` from the graph, so a reference to either from outside the gated module --
+# a test target included, which is why `sha2` is also a dev-dependency -- fails here and nowhere
+# else. `check-fips-crypto-isolation` reads the graph with `cargo tree` and never compiles it.
+echo "### Checking that a FIPS-only build compiles without the RustCrypto crates"
+RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --all-targets --no-default-features \
+    --features sign-http,http1,sigv4a,aws-lc-rs-fips

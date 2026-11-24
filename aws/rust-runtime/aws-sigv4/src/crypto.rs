@@ -9,12 +9,13 @@
 //! counter-mode key derivation for SigV4a. Two backends, selected at compile time:
 //! [RustCrypto](https://github.com/RustCrypto) (the default, not FIPS-validated) and
 //! [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
-//! FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins if both are enabled, and
+//! FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins whenever it is enabled, and
 //! `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
 //! What stays outside: [`crate::sign::v4a::generate_signing_key`] assembles the derivation's
-//! fixed-info string and range-checks the result with `crypto-bigint`. Neither step is
-//! cryptography, so neither is routed here.
+//! fixed-info string and applies the FIPS 186-5 A.2.2 candidate test to the result with
+//! `crypto-bigint`. Neither needs a crypto primitive, so on an AWS-LC backend the KDF block runs
+//! inside the module while the loop around it stays in Rust.
 
 /// Size in bytes of a SHA-256 digest, and so of an HMAC-SHA256 tag.
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
@@ -34,8 +35,8 @@ mod aws_lc_rs_impl;
 #[cfg(feature = "__aws-lc-rs")]
 pub(crate) use aws_lc_rs_impl::HmacSha256;
 
-// The RustCrypto backend is only compiled when it is the selected backend, so that enabling
-// `aws-lc-rs` alongside the default features doesn't route signing through RustCrypto.
+// Only the selected backend's module is compiled: the two `HmacSha256` re-exports, and the two
+// `imp` aliases below, would otherwise collide.
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 mod rustcrypto_impl;
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
@@ -54,7 +55,8 @@ use rustcrypto_impl as imp;
 mod tests {
     use super::{sha256, HmacSha256, SHA256_OUTPUT_SIZE};
 
-    // Known-answer tests, so that both backends are held to the same vectors.
+    // Known-answer tests, so whichever backend a build selects is held to the same vectors. Note
+    // that CI only ever runs them against AWS-LC, since it tests with `--all-features`.
     const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     // RFC 4231 test case 2: key "Jefe", data "what do ya want for nothing?".
     const RFC4231_TC2_KEY: &[u8] = b"Jefe";
@@ -132,9 +134,9 @@ mod tests {
         );
     }
 
-    // Whenever the aws-lc-rs feature is enabled it must win, even if the RustCrypto crates are also
-    // enabled (which it is by default). The backend modules are cfg'd so that only the
-    // selected one is compiled, so the module path of `HmacSha256` is the observable signal.
+    // Whenever an aws-lc-rs feature is enabled it must win, even though the RustCrypto crates are
+    // still compiled. The module path of `HmacSha256` is the observable signal, since only the
+    // selected backend's module compiles.
     #[test]
     fn expected_backend_is_selected() {
         let selected = std::any::type_name::<HmacSha256>();
@@ -151,8 +153,9 @@ mod tests {
         }
     }
 
-    // The `aws-lc-rs-fips` feature is only meaningful if the AWS-LC build it selects is actually
-    // the validated one, which is a property of the linked C library rather than of this crate.
+    // `aws-lc-rs-fips` is only meaningful if it links a FIPS build of AWS-LC, which is a property
+    // of the linked C library rather than of this crate. Which module that build is, and whether
+    // that module is certified, is a version question `FIPS_mode()` does not answer.
     #[test]
     #[cfg(feature = "aws-lc-rs-fips")]
     fn fips_module_is_active() {

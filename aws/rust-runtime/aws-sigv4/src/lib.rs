@@ -63,13 +63,13 @@
 //! another feature being absent.
 //!
 //! SigV4 output does not depend on the backend: HMAC-SHA256 is deterministic, and both backends are
-//! held to the same known-answer vectors and signing test suite.
+//! held to the same known-answer vectors and signing test suite in source.
 //!
 //! SigV4a output does. ECDSA leaves the per-signature nonce to the implementation. RustCrypto
 //! derives it per RFC 6979, so the same inputs always produce the same signature and
-//! [`sign::v4a`]'s tests pin those bytes; AWS-LC randomizes it, so signing one input twice yields
-//! two different signatures and those tests verify rather than compare. Both are valid over the
-//! same string to sign.
+//! [`sign::v4a`]'s tests compare it against `p256`'s own signer byte for byte; AWS-LC randomizes
+//! it, so signing one input twice yields two different signatures and those tests verify instead.
+//! Both are valid over the same string to sign.
 
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(

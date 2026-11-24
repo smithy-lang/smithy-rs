@@ -46,8 +46,8 @@ mod aws_lc_rs_impl;
 #[cfg(feature = "__aws-lc-rs")]
 pub(crate) use aws_lc_rs_impl::{Sha1, Sha256};
 
-// The RustCrypto backend is only compiled when it is the selected backend, so that enabling
-// `aws-lc-rs` alongside the default features doesn't pull RustCrypto into the digest path.
+// Only the selected backend's module is compiled: the digest re-exports below, and the two `imp`
+// aliases, would otherwise collide.
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 mod rustcrypto_impl;
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
@@ -57,7 +57,8 @@ pub(crate) use rustcrypto_impl::{Md5, Sha1, Sha256};
 mod tests {
     use super::{Digest, Sha1, Sha256};
 
-    // Known-answer tests, so that both backends are held to the same vectors. The inputs are
+    // Known-answer tests, so whichever backend a build selects is held to the same vectors. Note
+    // that CI only ever runs them against AWS-LC, since it tests with `--all-features`. The inputs are
     // split across two `update` calls to exercise the multi-step path.
     const INPUT_HEAD: &[u8] = b"test ";
     const INPUT_TAIL: &[u8] = b"data";
@@ -84,8 +85,9 @@ mod tests {
         assert_eq!(32, Sha256::output_size());
     }
 
-    // The `aws-lc-rs-fips` feature is only meaningful if the AWS-LC build it selects is actually
-    // the validated one, which is a property of the linked C library rather than of this crate.
+    // `aws-lc-rs-fips` is only meaningful if it links a FIPS build of AWS-LC, which is a property
+    // of the linked C library rather than of this crate. Which module that build is, and whether
+    // that module is certified, is a version question `FIPS_mode()` does not answer.
     #[test]
     #[cfg(feature = "aws-lc-rs-fips")]
     fn fips_module_is_active() {
@@ -93,9 +95,9 @@ mod tests {
             .expect("the `aws-lc-rs-fips` feature must link the FIPS AWS-LC build");
     }
 
-    // Whenever the aws-lc-rs feature is enabled it must win, even if the RustCrypto crates are also
-    // enabled (which it is by default). The backend modules are cfg'd so that only the
-    // selected one is compiled, so the module path of `Sha256` is the observable signal.
+    // Whenever an aws-lc-rs feature is enabled it must win, even though the RustCrypto crates are
+    // still compiled. The module path of `Sha256` is the observable signal, since only the
+    // selected backend's module compiles.
     #[test]
     fn expected_backend_is_selected() {
         let selected = std::any::type_name::<Sha256>();

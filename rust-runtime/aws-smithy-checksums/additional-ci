@@ -47,3 +47,15 @@ if ! grep -q "no AWS-LC backend is enabled" <<<"${first_error}"; then
 fi
 
 echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"
+
+# The RustCrypto backend is the default and `crypto/rustcrypto_impl.rs` is new, but no other CI leg
+# compiles it: they all test with `--all-features`, which enables an AWS-LC arm and leaves that
+# module out. See the equivalent check in `aws-sigv4`.
+echo "### Running the test suite on the RustCrypto backend"
+cargo test
+
+# Only this configuration drops `md-5`, `sha1` and `sha2` from the graph, so a reference to any of
+# them from outside the gated module fails here and nowhere else. Its tests are the same as without
+# the cfg, so this compiles rather than re-running them.
+echo "### Checking that a FIPS-only build compiles without the RustCrypto crates"
+RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --all-targets --features aws-lc-rs-fips

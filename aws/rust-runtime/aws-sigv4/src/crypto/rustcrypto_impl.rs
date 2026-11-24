@@ -56,7 +56,7 @@ pub(crate) fn kdf_ctr_hmac_sha256(secret: &[u8], info: &[u8]) -> [u8; SHA256_OUT
 /// [`crate::sign::v4a::generate_signing_key`].
 ///
 /// # Panics
-/// Panics if `private_key` is not a valid P-256 private key.
+/// Panics if `private_key` is not 32 bytes, or is not a valid P-256 private key.
 #[cfg(feature = "sigv4a")]
 pub(crate) fn ecdsa_p256_sha256_sign_der(private_key: &[u8], message: &[u8]) -> Vec<u8> {
     use ecdsa::hazmat::sign_prehashed_rfc6979;
