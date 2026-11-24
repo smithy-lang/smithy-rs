@@ -6,7 +6,7 @@ breaking: false
 new_feature: true
 bug_fix: false
 ---
-Request signing, request checksums, and TLS can now be routed through the FIPS 140-3 validated build of [AWS-LC](https://github.com/aws/aws-lc-rs) with a single feature on your service crate. This covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing and its SP 800-108 key derivation, and SHA-1/SHA-256 request checksums, which were previously computed by the RustCrypto crates.
+Request signing, request checksums, and TLS can now be routed through the FIPS 140-3 validated build of [AWS-LC](https://github.com/aws/aws-lc) with a single feature on your service crate. This covers SigV4 HMAC-SHA256 signing, SigV4a ECDSA-P256 signing and its SP 800-108 key derivation, and SHA-1/SHA-256 request checksums, which were previously computed by the RustCrypto crates.
 
 **A default build is unchanged, byte for byte.** RustCrypto remains the default backend and is still the only one that builds on every target the SDK supports.
 
@@ -28,7 +28,9 @@ Two cases stay regardless, neither of which signs a request or computes a checks
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
-**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. If your compliance posture is tied to a particular module, check its validation status in [aws/aws-lc](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md), work out which `aws-lc-rs` versions carry it, and bound your own requirement accordingly.
+**Which FIPS module you get.** The `1.18.1` floor builds against `aws-lc-fips-sys` 0.14, which is the AWS-LC-FIPS module 4 line. NIST validated module 4 under certificates [#5595](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5595) (dynamic library) and [#5596](https://csrc.nist.gov/projects/cryptographic-module-validation-program/certificate/5596) (static library). [aws/aws-lc#3826](https://github.com/aws/aws-lc/pull/3826) is the documentation update for those and is still open, so [FIPS.md](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md) lists module 4 as in process until it merges. Note also that an `aws-lc-fips-sys` release may vendor a later 4.x than a certificate names: 0.14.4 vendors AWS-LC 4.2.0.
+
+**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. If your compliance posture is tied to a particular module, work out which `aws-lc-rs` versions carry it and bound your own requirement accordingly.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 
