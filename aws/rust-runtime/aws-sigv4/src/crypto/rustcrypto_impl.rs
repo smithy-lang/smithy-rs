@@ -37,6 +37,19 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
     hasher.finalize_fixed().into()
 }
 
+/// One 256-bit block of the SP 800-108 counter-mode KDF with an HMAC-SHA256 PRF.
+///
+/// With the counter first, one block is HMAC(secret, [1]_32 || info), so build it from the PRF.
+/// The AWS-LC backend calls that module's own KDF instead, which is the reason this is a backend
+/// function at all; adding a KDF crate to mirror it here would be a new dependency for one HMAC.
+#[cfg(feature = "sigv4a")]
+pub(crate) fn kdf_ctr_hmac_sha256(secret: &[u8], info: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
+    let mut mac = HmacSha256::new(secret);
+    mac.update(&1i32.to_be_bytes());
+    mac.update(info);
+    mac.finalize()
+}
+
 /// Signs `message` with `private_key` using ECDSA-P256-SHA256, returning a DER-encoded signature.
 ///
 /// `private_key` is a big-endian P-256 private scalar, as produced by

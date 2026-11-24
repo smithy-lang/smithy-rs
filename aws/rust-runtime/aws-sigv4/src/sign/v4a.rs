@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::crypto::{ecdsa_p256_sha256_sign_der, HmacSha256};
+use crate::crypto::{ecdsa_p256_sha256_sign_der, kdf_ctr_hmac_sha256};
 use aws_smithy_runtime_api::client::identity::Identity;
-use bytes::{BufMut, BytesMut};
+use bytes::BufMut;
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
 use std::io::Write;
 use std::sync::LazyLock;
@@ -68,18 +68,15 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         write!(kdf_context, "{access_key}").unwrap();
         kdf_context.push(*counter);
 
+        // The fixed-info string of the SP 800-108 counter-mode KDF this derivation is built on:
+        // Label || 0x00 || Context || [L]_32, where the context is the access key and the
+        // candidate counter. The KDF puts its own counter in front of this.
         let mut fis = ALGORITHM.to_vec();
         fis.push(0);
         fis.append(&mut kdf_context);
         fis.put_i32(256);
 
-        let mut mac = HmacSha256::new(&input_key);
-
-        let mut buf = BytesMut::new();
-        buf.put_i32(1);
-        buf.put_slice(&fis);
-        mac.update(&buf);
-        let k0 = U256::from_be_bytes(mac.finalize().into());
+        let k0 = U256::from_be_bytes(kdf_ctr_hmac_sha256(&input_key, &fis).into());
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.

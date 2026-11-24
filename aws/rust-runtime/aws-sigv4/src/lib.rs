@@ -57,10 +57,10 @@
 //! under every backend, with `sha2` arriving under `p256` and `hmac` under `ecdsa`'s RFC 6979 nonce
 //! derivation. None of it performs FIPS-relevant cryptography on an AWS-LC backend. `p256` and
 //! `ecdsa` are the ECDSA implementation for the RustCrypto backend only, and it does not reach
-//! them otherwise; `crypto-bigint` does the 256-bit integer math of
-//! [`sign::v4a::generate_signing_key`], which is the key derivation the SigV4a specification
-//! defines rather than a primitive. They stay unconditional because a feature cannot be made
-//! conditional on another feature being absent.
+//! them otherwise; `crypto-bigint` does the 256-bit range check
+//! [`sign::v4a::generate_signing_key`] applies to the derived scalar, the derivation itself going
+//! through the backend. They stay unconditional because a feature cannot be made conditional on
+//! another feature being absent.
 //!
 //! SigV4 output does not depend on the backend: HMAC-SHA256 is deterministic, and both backends are
 //! held to the same known-answer vectors and signing test suite.

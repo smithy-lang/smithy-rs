@@ -5,14 +5,16 @@
 
 //! Internal abstraction over the cryptographic implementations this crate can be built against.
 //!
-//! Covers HMAC-SHA256 and SHA-256 for SigV4, and ECDSA-P256 signing for SigV4a. Two backends,
-//! selected at compile time: [RustCrypto](https://github.com/RustCrypto) (the default, not
-//! FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or
-//! `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins if both are
-//! enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
+//! Covers HMAC-SHA256 and SHA-256 for SigV4, and ECDSA-P256 signing plus the SP 800-108
+//! counter-mode key derivation for SigV4a. Two backends, selected at compile time:
+//! [RustCrypto](https://github.com/RustCrypto) (the default, not FIPS-validated) and
+//! [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or `aws-lc-rs-fips` for the
+//! FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins if both are enabled, and
+//! `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
-//! [`crate::sign::v4a::generate_signing_key`] also does 256-bit integer math with `crypto-bigint`.
-//! That is the KDF the signing spec defines rather than a primitive, so it is not routed here.
+//! What stays outside: [`crate::sign::v4a::generate_signing_key`] assembles the derivation's
+//! fixed-info string and range-checks the result with `crypto-bigint`. Neither step is
+//! cryptography, so neither is routed here.
 
 /// Size in bytes of a SHA-256 digest, and so of an HMAC-SHA256 tag.
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
@@ -39,9 +41,9 @@ mod rustcrypto_impl;
 #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 pub(crate) use rustcrypto_impl::HmacSha256;
 
-#[cfg(feature = "sigv4a")]
-pub(crate) use imp::ecdsa_p256_sha256_sign_der;
 pub(crate) use imp::sha256;
+#[cfg(feature = "sigv4a")]
+pub(crate) use imp::{ecdsa_p256_sha256_sign_der, kdf_ctr_hmac_sha256};
 
 #[cfg(feature = "__aws-lc-rs")]
 use aws_lc_rs_impl as imp;
@@ -102,6 +104,32 @@ mod tests {
                     .expect("signature must be DER encoded"),
             )
             .expect("signature must verify under the derived public key");
+    }
+
+    // Handing the SigV4a derivation to AWS-LC's KDF rests on one claim: with the counter first, a
+    // single block is HMAC(secret, [1]_32 || info). Hold AWS-LC's KDF to its own HMAC to keep that
+    // claim honest, since it is what makes the two backends derive the same key.
+    //
+    // Gated to AWS-LC because on the RustCrypto backend the right-hand side *is* the
+    // implementation. The derived key itself is pinned by
+    // `sign::v4a::tests::derived_key_matches_the_published_test_vector`, on both backends.
+    #[test]
+    #[cfg(all(feature = "sigv4a", feature = "__aws-lc-rs"))]
+    fn kdf_one_block_matches_its_prf() {
+        let secret = b"AWS4AwJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY";
+        // Shaped like the fixed-info string the derivation builds: the algorithm label, a zero
+        // byte, the access key, the candidate counter, then the output length in bits.
+        let info = b"AWS4-ECDSA-P256-SHA256\x00AKIDEXAMPLE\x01\x00\x00\x01\x00";
+
+        let mut hmac = HmacSha256::new(secret);
+        hmac.update(&1i32.to_be_bytes());
+        hmac.update(info);
+
+        assert_eq!(
+            hex::encode(hmac.finalize()),
+            hex::encode(super::kdf_ctr_hmac_sha256(secret, info)),
+            "AWS-LC's counter-mode KDF no longer agrees with its HMAC over one block"
+        );
     }
 
     // Whenever the aws-lc-rs feature is enabled it must win, even if the RustCrypto crates are also

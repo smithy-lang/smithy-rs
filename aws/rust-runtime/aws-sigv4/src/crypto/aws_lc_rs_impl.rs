@@ -39,6 +39,24 @@ pub(crate) fn sha256(data: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
     fixed_size(digest::digest(&digest::SHA256, data).as_ref())
 }
 
+/// One 256-bit block of the SP 800-108 counter-mode KDF with an HMAC-SHA256 PRF.
+///
+/// AWS-LC implements this KDF itself, so the SigV4a key derivation runs inside the module rather
+/// than being assembled in Rust from the module's HMAC. `info` is the fixed-info string; AWS-LC
+/// documents its counter as 32-bit big-endian and placed before that string, which is where the
+/// SigV4a derivation wants it.
+#[cfg(feature = "sigv4a")]
+pub(crate) fn kdf_ctr_hmac_sha256(secret: &[u8], info: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
+    use aws_lc_rs::kdf::{get_kbkdf_ctr_hmac_algorithm, kbkdf_ctr_hmac, KbkdfCtrHmacAlgorithmId};
+
+    let algorithm = get_kbkdf_ctr_hmac_algorithm(KbkdfCtrHmacAlgorithmId::Sha256)
+        .expect("HMAC-SHA256 is always a supported KBKDF PRF");
+    let mut output = [0u8; SHA256_OUTPUT_SIZE];
+    kbkdf_ctr_hmac(algorithm, secret, info, &mut output)
+        .expect("a single 32-byte block with a non-empty secret is always derivable");
+    output
+}
+
 /// Copies a SHA-256-sized slice into an array.
 ///
 /// AWS-LC returns digests and tags as slices of a runtime length, which for these fixed-output
