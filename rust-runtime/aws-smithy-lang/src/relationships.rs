@@ -441,19 +441,33 @@ impl<'a> MemberView<'a> {
 /// in owned data, such as data cached with
 /// [`Model::knowledge_data`](crate::Model::knowledge_data), and resolve them to views with
 /// [`RelationshipIndex::shape`]. [`index`](Self::index) numbers nodes densely from zero, so it
-/// can also key a `Vec` or a bit set sized by [`RelationshipIndex::node_count`].
+/// can also key a `Vec` or a bit set sized by [`RelationshipIndex::node_count`], and
+/// [`from_index`](Self::from_index) turns a position back into a node ID.
 ///
 /// Node IDs follow [`Model::shapes`](crate::Model::shapes) order, with each root shape
 /// immediately followed by its members in member order.
 ///
-/// A node ID is only meaningful for the model whose index produced it, and for clones of that
-/// model. Passing it to another model's index panics or names an unrelated shape.
+/// A node ID is a position in one model's numbering, so other models use the same IDs for
+/// different shapes. It is only meaningful for the model whose index produced it, and for clones
+/// of that model. Passing it to another model's index panics if it is out of range, and
+/// otherwise names an unrelated shape. To match shapes across models, such as two versions of
+/// one service, compare their [`ShapeId`]s, and find each model's node with
+/// [`RelationshipIndex::node`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(u32);
 
 impl NodeId {
-    pub(crate) fn from_index(value: usize) -> Self {
-        Self(index(value))
+    /// The node at `position`: the inverse of [`index`](Self::index).
+    ///
+    /// The position isn't checked against a model here. Methods that take a node check it
+    /// instead, as they do for a node of another model: [`RelationshipIndex::shape`] panics
+    /// unless `position` is less than [`RelationshipIndex::node_count`].
+    ///
+    /// # Panics
+    ///
+    /// If `position` is greater than `u32::MAX`.
+    pub fn from_index(position: usize) -> Self {
+        Self(index(position))
     }
 
     /// The position of this node, from zero up to [`RelationshipIndex::node_count`].

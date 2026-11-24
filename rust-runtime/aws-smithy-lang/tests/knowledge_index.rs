@@ -17,7 +17,7 @@ use aws_smithy_lang::knowledge::{
 };
 use aws_smithy_lang::relationships::{NodeId, RelationshipIndex};
 use aws_smithy_lang::shape::{OperationView, ServiceView, StructureView};
-use aws_smithy_lang::{traits, Model, ShapeId};
+use aws_smithy_lang::{traits, Model, ShapeId, ShapeRef};
 use std::collections::BTreeMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -181,6 +181,51 @@ impl<'m> ErrorServicesIndex<'m> {
     }
 }
 
+/// One flag per node, set for `@error` structures, keyed by node position.
+struct ErrorFlags(Vec<bool>);
+
+impl KnowledgeData for ErrorFlags {
+    fn build_knowledge_data(model: &Model) -> Self {
+        let relationships = model.knowledge::<RelationshipIndex<'_>>();
+        let flags = (0..relationships.node_count())
+            .map(|position| {
+                relationships
+                    .shape(NodeId::from_index(position))
+                    .has_trait(&traits::ERROR)
+            })
+            .collect();
+        Self(flags)
+    }
+}
+
+/// Turns the positions of cached flags back into nodes.
+#[derive(Clone)]
+struct ErrorFlagsIndex<'m> {
+    relationships: RelationshipIndex<'m>,
+    flags: Arc<ErrorFlags>,
+}
+
+impl<'m> KnowledgeIndex<'m> for ErrorFlagsIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self {
+            relationships: model.knowledge::<RelationshipIndex<'_>>(),
+            flags: model.knowledge_data::<ErrorFlags>(),
+        }
+    }
+}
+
+impl<'m> ErrorFlagsIndex<'m> {
+    /// Every `@error` structure, in model order.
+    fn errors(&self) -> impl Iterator<Item = ShapeRef<'m>> + '_ {
+        self.flags
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, &flag)| flag)
+            .map(|(position, _)| self.relationships.shape(NodeId::from_index(position)))
+    }
+}
+
 fn ids<T>(items: impl IntoIterator<Item = T>, id: impl Fn(&T) -> &ShapeId) -> Vec<String> {
     items
         .into_iter()
@@ -257,6 +302,27 @@ fn index_outside_the_crate_can_cache_data_by_node() {
     let clone = model.clone();
     let again = clone.knowledge::<ErrorServicesIndex<'_>>();
     assert!(Arc::ptr_eq(&index.data, &again.data));
+}
+
+#[test]
+fn index_outside_the_crate_can_key_data_by_node_position() {
+    let model = model();
+    let index = model.knowledge::<ErrorFlagsIndex<'_>>();
+    assert_eq!(
+        ids(index.errors(), |e| e.id()),
+        ["ex#Throttled", "ex#NotFound"]
+    );
+
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let node = relationships.node(&NOT_FOUND).unwrap();
+    assert_eq!(NodeId::from_index(node.index()), node);
+}
+
+#[test]
+#[cfg(target_pointer_width = "64")]
+#[should_panic]
+fn node_position_must_fit_in_u32() {
+    NodeId::from_index(u32::MAX as usize + 1);
 }
 
 static COUNTED_BUILDS: AtomicUsize = AtomicUsize::new(0);
