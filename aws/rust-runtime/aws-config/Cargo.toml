@@ -57,7 +57,18 @@ credentials-login = [
 # - `sso` and `credentials-login` hash a start URL / session string with SHA-1 and SHA-256 to
 #   name a cache file (`sso/cache.rs`, `login/cache.rs`). Those are not security functions.
 # Tracked in smithy-rs#4872.
-aws-lc-fips = ["aws-runtime/aws-lc-fips", "aws-smithy-runtime/aws-lc-fips"]
+# Forwarded to the credential-provider crates as well. They are declared `default-features = false`,
+# so their own `aws-lc-fips` never turns on by itself. None has an `@httpChecksum` operation today,
+# so this adds nothing yet; if a model update gives one a checksum, that crate picks up the FIPS
+# digest backend here rather than staying on RustCrypto unnoticed.
+aws-lc-fips = [
+    "aws-runtime/aws-lc-fips",
+    "aws-smithy-runtime/aws-lc-fips",
+    "aws-sdk-sts/aws-lc-fips",
+    "aws-sdk-sso?/aws-lc-fips",
+    "aws-sdk-ssooidc?/aws-lc-fips",
+    "aws-sdk-signin?/aws-lc-fips",
+]
 test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing

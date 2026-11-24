@@ -60,11 +60,14 @@ echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"
 echo "### Running the test suite on the RustCrypto backend"
 cargo test --features sigv4a
 
-# `--cfg aws_sdk_fips_only` with a backend enabled runs the same tests as without it, so there is
-# nothing to re-run; what is worth asserting is that it still compiles. Only this configuration
-# drops `hmac` and `sha2` from the graph, so a reference to either from outside the gated module --
-# a test target included, which is why `sha2` is also a dev-dependency -- fails here and nowhere
-# else. `check-fips-crypto-isolation` reads the graph with `cargo tree` and never compiles it.
-echo "### Checking that a FIPS-only build compiles without the RustCrypto crates"
-RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --all-targets --no-default-features \
-    --features sign-http,http1,sigv4a,aws-lc-rs-fips
+# Only this configuration drops `hmac` and `sha2` from the graph, so a reference to either from
+# outside the gated module -- a test target included, which is why `sha2` is also a dev-dependency
+# -- fails here and nowhere else. `check-fips-crypto-isolation` reads the graph with `cargo tree`
+# and never compiles it.
+#
+# The non-FIPS arm, which is also the only configuration that runs these tests against `aws-lc-sys`
+# rather than `aws-lc-fips-sys`. It exercises the same cfg gates for half the build time, since
+# `aws-lc-sys` needs neither CMake nor Go.
+echo "### Running the suite on AWS-LC with the RustCrypto crates dropped"
+RUSTFLAGS="--cfg aws_sdk_fips_only" cargo test --no-default-features \
+    --features sign-http,http1,sigv4a,aws-lc-rs

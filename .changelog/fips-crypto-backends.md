@@ -12,9 +12,9 @@ Request signing, request checksums, and TLS can now be routed through the FIPS 1
 
 ```toml
 aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }
-# or, for applications that configure through aws-config:
-aws-config = { version = "...", features = ["aws-lc-fips"] }
 ```
+
+One feature on the service crate is all you need: it covers signing, checksums and TLS. `aws-config` has an `aws-lc-fips` feature too, but it reaches only signing and TLS, since checksums are a service-crate dependency -- so enabling it there *instead* is not equivalent.
 
 That routes the cryptography through the validated module but leaves the RustCrypto crates compiled. To keep them out of the build as well, set the `aws_sdk_fips_only` cfg:
 
