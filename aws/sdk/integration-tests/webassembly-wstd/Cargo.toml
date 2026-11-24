@@ -16,8 +16,8 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 [target.'cfg(all(target_family = "wasm", target_env = "p2"))'.dependencies]
-# These tests stay on the RustCrypto backend, which is the default: aws-lc-rs does not build for
-# the WASI targets.
+# These tests stay on the RustCrypto backend, which is the default: aws-lc-rs needs a wasi-sdk
+# toolchain to build for wasip2, and its FIPS build supports no WASM target at all.
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = [
     "behavior-version-latest",
 ] }

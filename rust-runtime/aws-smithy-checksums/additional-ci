@@ -14,7 +14,8 @@ C_RESET='\033[0m'
 
 # `--cfg aws_sdk_fips_only` removes the RustCrypto backend, so that build needs an AWS-LC arm to
 # have any digests at all. The `compile_error!` in `crypto.rs` makes the build that names neither
-# say what to do about it instead of reporting unresolved `crypto::` imports at the call sites.
+# say what to do about it, ahead of the unresolved `crypto::` imports it also causes at the call
+# sites.
 #
 # Asserted here because nothing else can: the condition is a cfg-and-feature combination, invisible
 # to the test suite, and deleting the `compile_error!` breaks no build -- it only makes the failure

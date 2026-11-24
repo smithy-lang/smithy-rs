@@ -33,13 +33,14 @@
 //!
 //! ## Platform support
 //!
-//! RustCrypto is the default because it is the only backend that builds everywhere the SDK does.
-//! Both AWS-LC backends are per-target; see
+//! RustCrypto is the default because the AWS-LC backends do not cover every target the SDK builds.
+//! Both are per-target; see
 //! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
-//! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
-//! `wasm32-unknown-emscripten`. `aws-lc-rs-fips` additionally needs CMake and Go and covers fewer
-//! targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported target
-//! fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//! authoritative table. `aws-lc-rs` needs a C/C++ compiler for the target: it does not support
+//! `wasm32-unknown-unknown`, which this SDK builds, and the WASM targets it does support need a
+//! wasi-sdk or emscripten toolchain. `aws-lc-rs-fips` additionally needs CMake and Go and covers
+//! fewer targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported
+//! target fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
 //! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
 //! crate's `Cargo.toml` documents the declared floor.
@@ -47,16 +48,15 @@
 //! ## What ends up in the dependency tree
 //!
 //! Selecting an AWS-LC backend changes which implementation runs, but `md-5`, `sha1` and `sha2`
-//! are unconditional dependencies, so they are still compiled. To keep them out of the build as
+//! are not behind a feature, so they are compiled either way. To keep them out of the build as
 //! well, set the `aws_sdk_fips_only` cfg:
 //!
 //! ```sh
 //! RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build --no-default-features --features aws-lc-rs-fips
 //! ```
 //!
-//! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" is not
-//! expressible, and making these optional would break every build that lists the default features
-//! explicitly. `RUSTFLAGS` is global, so one flag also covers `aws-sigv4`.
+//! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" cannot
+//! be expressed as one. `RUSTFLAGS` is global, so one flag also covers `aws-sigv4`.
 //!
 //! MD5 is RustCrypto-only, since aws-lc-rs does not expose it and it is not FIPS-approved. No
 //! public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is deprecated and resolves to

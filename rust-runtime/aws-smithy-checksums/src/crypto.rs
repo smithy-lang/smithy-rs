@@ -31,8 +31,9 @@ pub(crate) trait Digest: Default + Debug + Send + Sync {
     fn output_size() -> u64;
 }
 
-// Both backends' dependencies are optional, so a build naming neither has no digests at all. Say
-// so here, rather than letting it surface as unresolved `crypto::` imports at the call sites.
+// `--cfg aws_sdk_fips_only` drops the RustCrypto dependencies, so that configuration needs an
+// AWS-LC arm to have any digests at all. Say so here, so the failure names the fix ahead of the
+// unresolved `crypto::` imports it also causes at the call sites.
 #[cfg(all(aws_sdk_fips_only, not(feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-smithy-checksums was built with `--cfg aws_sdk_fips_only`, which removes the RustCrypto \

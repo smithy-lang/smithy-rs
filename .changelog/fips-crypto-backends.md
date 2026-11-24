@@ -22,9 +22,9 @@ That routes the cryptography through the validated module but leaves the RustCry
 RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build
 ```
 
-`hmac`, `sha2`, `sha1` and `md-5` are declared under `cfg(not(aws_sdk_fips_only))` in `aws-sigv4` and `aws-smithy-checksums`, so that flag drops them from the build and from `cargo tree`. `RUSTFLAGS` is global, so one flag covers both crates. Note it is a cfg rather than a Cargo feature because features are additive: "RustCrypto unless AWS-LC" cannot be expressed as one, and making these optional would break every build that lists the default features explicitly. Also omit `rustls` if you turn default features off, since that is the *legacy* TLS stack and would pull `ring` back in.
+`hmac`, `sha2`, `sha1` and `md-5` are declared under `cfg(not(aws_sdk_fips_only))` in `aws-sigv4` and `aws-smithy-checksums`, so that flag drops them from the build and from `cargo tree -e normal`. (`aws-sigv4` also lists `sha2` as a dev-dependency for one test, so a plain `cargo tree` still shows it.) `RUSTFLAGS` is global, so one flag covers both crates; it is a cfg rather than a feature because features are additive, and "RustCrypto unless AWS-LC" cannot be expressed as one. On a service crate, also omit `rustls` when you turn default features off: that is the *legacy* TLS stack and pulls `ring` in. `aws-config`'s `rustls` is a synonym for `default-https-client` and is unaffected; its legacy stack is `legacy-client`.
 
-Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256`, which brings `sha2` and `hmac` with it but is never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
+Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256` and `ecdsa`, which bring `sha2` and `hmac` with them but are never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
@@ -43,7 +43,7 @@ Nothing breaks. `default-features = false` means what it always meant on every c
 | `aws-sigv4` | 1.6.6 | 1.7.0 | `aws-lc-rs`, `aws-lc-rs-fips` |
 | `aws-smithy-checksums` | 0.65.1 | 0.65.2 | `aws-lc-rs`, `aws-lc-rs-fips` |
 | `aws-runtime` | 1.10.4 | 1.11.0 | `aws-lc-fips` |
-| `aws-config` | 1.13.3 | 1.14.0 | `aws-lc-fips` |
+| `aws-config` | 1.13.4 | 1.14.0 | `aws-lc-fips` |
 | `aws-smithy-runtime` | 1.16.4 | 1.17.0 | `aws-lc-fips` |
 
-The one configuration that does not compile is `--cfg aws_sdk_fips_only` with no AWS-LC feature enabled, since that removes the RustCrypto backend without selecting a replacement. It fails with a message naming the fix rather than on an unresolved import.
+The one configuration that does not compile is `--cfg aws_sdk_fips_only` with no AWS-LC feature enabled, since that removes the RustCrypto backend without selecting a replacement. It fails with a message naming the fix, reported ahead of the unresolved imports that the same missing backend causes.

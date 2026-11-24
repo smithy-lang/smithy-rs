@@ -15,7 +15,7 @@ rust-version = "1.94.1"
 
 [features]
 # aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
-# that keeps RustCrypto the default is WASM, where aws-lc-rs supports only emscripten.
+# that keeps RustCrypto the default is `wasm32-unknown-unknown`, which aws-lc-rs does not support.
 #
 # Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
 # `fips` and would make the two arms impossible to enable together -- something `--all-features`
@@ -73,8 +73,8 @@ tokio = { version = "1.49.0", features = ["macros", "rt"] }
 tracing-test = "0.2.1"
 
 # Needed only for `--all-features`, which CI runs udeps under: that enables an AWS-LC arm, so the
-# cfg routes around these while they are still compiled. They are the live backend in a default
-# build, and absent entirely under `--cfg aws_sdk_fips_only`.
+# `__aws-lc-rs` gate skips the module using these while they are still compiled. They are the live
+# backend in a default build, and absent entirely under `--cfg aws_sdk_fips_only`.
 [package.metadata.cargo-udeps.ignore]
 normal = ["md-5", "sha1", "sha2"]
 

@@ -20,8 +20,8 @@
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
 
 // `--cfg aws_sdk_fips_only` drops the RustCrypto dependencies, so that configuration needs an
-// AWS-LC arm to have any crypto at all. Say so here, rather than letting it surface as unresolved
-// `crypto::` imports at the call sites.
+// AWS-LC arm to have any crypto at all. Say so here, so the failure names the fix ahead of the
+// unresolved `crypto::` imports it also causes at the call sites.
 #[cfg(all(aws_sdk_fips_only, not(feature = "__aws-lc-rs")))]
 compile_error!(
     "aws-sigv4 was built with `--cfg aws_sdk_fips_only`, which removes the RustCrypto backend, but \

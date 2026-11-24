@@ -26,13 +26,14 @@
 //!
 //! ## Platform support
 //!
-//! RustCrypto is the default because it is the only backend that builds everywhere the SDK does.
-//! Both AWS-LC backends are per-target; see
+//! RustCrypto is the default because the AWS-LC backends do not cover every target the SDK builds.
+//! Both are per-target; see
 //! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
-//! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
-//! `wasm32-unknown-emscripten`. `aws-lc-rs-fips` additionally needs CMake and Go and covers fewer
-//! targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported target
-//! fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//! authoritative table. `aws-lc-rs` needs a C/C++ compiler for the target: it does not support
+//! `wasm32-unknown-unknown`, which this SDK builds, and the WASM targets it does support need a
+//! wasi-sdk or emscripten toolchain. `aws-lc-rs-fips` additionally needs CMake and Go and covers
+//! fewer targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported
+//! target fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
 //!
 //! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
 //! crate's `Cargo.toml` documents the declared floor.
@@ -49,9 +50,8 @@
 //!   cargo build --no-default-features --features sign-http,http1,aws-lc-rs-fips
 //! ```
 //!
-//! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" is not
-//! expressible, and making these optional would break every build that lists the default features
-//! explicitly. `RUSTFLAGS` is global, so one flag also covers `aws-smithy-checksums`.
+//! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" cannot
+//! be expressed as one. `RUSTFLAGS` is global, so one flag also covers `aws-smithy-checksums`.
 //!
 //! `sigv4a` is unconditional: it declares `p256`, `ecdsa`, `crypto-bigint`, `subtle` and `zeroize`
 //! under every backend, with `sha2` arriving under `p256` and `hmac` under `ecdsa`'s RFC 6979 nonce

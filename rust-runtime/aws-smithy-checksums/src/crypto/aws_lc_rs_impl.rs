@@ -5,10 +5,10 @@
 
 //! [aws-lc-rs](https://github.com/aws/aws-lc-rs) digest backend.
 //!
-//! With the `aws-lc-rs-fips` feature, these digests are computed by the FIPS 140-3 validated
-//! build of
-//! AWS-LC. With `aws-lc-rs` alone they are computed by the same implementations in a build that
-//! is not operating in FIPS mode.
+//! The feature chooses which AWS-LC library this links: `aws-lc-rs-fips` links `aws-lc-fips-sys`,
+//! the FIPS 140-3 validated build, and `aws-lc-rs` alone links `aws-lc-sys`, which is not. Same
+//! algorithms and same digests, but different snapshots of AWS-LC rather than one library in two
+//! modes.
 
 use super::Digest;
 use aws_lc_rs::digest;
