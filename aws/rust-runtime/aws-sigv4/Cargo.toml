@@ -144,9 +144,7 @@ normal = ["hmac", "sha2", "p256", "ecdsa"]
 development = ["sha2"]
 
 [package.metadata.docs.rs]
-# `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
-all-features = false
-features = ["sign-http", "sign-eventstream", "sigv4a", "http0-compat", "http1", "aws-lc-rs"]
+all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
