@@ -6,8 +6,8 @@
 //! Internal abstraction over the cryptographic implementations this crate can be built against.
 //!
 //! Covers HMAC-SHA256 and SHA-256 for SigV4, and ECDSA-P256 signing for SigV4a. Two backends,
-//! selected at compile time: [RustCrypto](https://github.com/RustCrypto) (`rustcrypto`, default,
-//! not FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or
+//! selected at compile time: [RustCrypto](https://github.com/RustCrypto) (the default, not
+//! FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs) (`aws-lc-rs`, or
 //! `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins if both are
 //! enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
@@ -17,12 +17,14 @@
 /// Size in bytes of a SHA-256 digest, and so of an HMAC-SHA256 tag.
 pub(crate) const SHA256_OUTPUT_SIZE: usize = 32;
 
-// Both backends' dependencies are optional, so a build naming neither has no crypto at all. Say so
-// here, rather than letting it surface as unresolved `crypto::` imports at the call sites.
-#[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
+// `--cfg aws_sdk_fips_only` drops the RustCrypto dependencies, so that configuration needs an
+// AWS-LC arm to have any crypto at all. Say so here, rather than letting it surface as unresolved
+// `crypto::` imports at the call sites.
+#[cfg(all(aws_sdk_fips_only, not(feature = "__aws-lc-rs")))]
 compile_error!(
-    "aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or \
-     `aws-lc-rs-fips` feature."
+    "aws-sigv4 was built with `--cfg aws_sdk_fips_only`, which removes the RustCrypto backend, but \
+     no AWS-LC backend is enabled. Enable the `aws-lc-rs` or `aws-lc-rs-fips` feature, or drop the \
+     cfg."
 );
 
 #[cfg(feature = "__aws-lc-rs")]
@@ -32,9 +34,9 @@ pub(crate) use aws_lc_rs_impl::HmacSha256;
 
 // The RustCrypto backend is only compiled when it is the selected backend, so that enabling
 // `aws-lc-rs` alongside the default features doesn't route signing through RustCrypto.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 mod rustcrypto_impl;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 pub(crate) use rustcrypto_impl::HmacSha256;
 
 #[cfg(feature = "sigv4a")]
@@ -43,7 +45,7 @@ pub(crate) use imp::sha256;
 
 #[cfg(feature = "__aws-lc-rs")]
 use aws_lc_rs_impl as imp;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 use rustcrypto_impl as imp;
 
 #[cfg(test)]
@@ -102,7 +104,7 @@ mod tests {
             .expect("signature must verify under the derived public key");
     }
 
-    // Whenever the aws-lc-rs feature is enabled it must win, even if `rustcrypto` is also
+    // Whenever the aws-lc-rs feature is enabled it must win, even if the RustCrypto crates are also
     // enabled (which it is by default). The backend modules are cfg'd so that only the
     // selected one is compiled, so the module path of `HmacSha256` is the observable signal.
     #[test]

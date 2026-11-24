@@ -6,7 +6,7 @@
 //! Internal abstraction over the digest implementations this crate can be built against.
 //!
 //! Two backends, selected at compile time: [RustCrypto](https://github.com/RustCrypto/hashes)
-//! (`rustcrypto`, default, not FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs)
+//! (the default, not FIPS-validated) and [aws-lc-rs](https://github.com/aws/aws-lc-rs)
 //! (`aws-lc-rs`, or `aws-lc-rs-fips` for the FIPS 140-3 validated build of AWS-LC). aws-lc-rs wins
 //! if both are enabled, and `aws-lc-rs-fips` wins over `aws-lc-rs`.
 //!
@@ -33,10 +33,11 @@ pub(crate) trait Digest: Default + Debug + Send + Sync {
 
 // Both backends' dependencies are optional, so a build naming neither has no digests at all. Say
 // so here, rather than letting it surface as unresolved `crypto::` imports at the call sites.
-#[cfg(not(any(feature = "rustcrypto", feature = "__aws-lc-rs")))]
+#[cfg(all(aws_sdk_fips_only, not(feature = "__aws-lc-rs")))]
 compile_error!(
-    "aws-smithy-checksums requires a digest backend: enable the `rustcrypto` (default), \
-     `aws-lc-rs`, or `aws-lc-rs-fips` feature."
+    "aws-smithy-checksums was built with `--cfg aws_sdk_fips_only`, which removes the RustCrypto \
+     backend, but no AWS-LC backend is enabled. Enable the `aws-lc-rs` or `aws-lc-rs-fips` \
+     feature, or drop the cfg."
 );
 
 #[cfg(feature = "__aws-lc-rs")]
@@ -46,9 +47,9 @@ pub(crate) use aws_lc_rs_impl::{Sha1, Sha256};
 
 // The RustCrypto backend is only compiled when it is the selected backend, so that enabling
 // `aws-lc-rs` alongside the default features doesn't pull RustCrypto into the digest path.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 mod rustcrypto_impl;
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 pub(crate) use rustcrypto_impl::{Md5, Sha1, Sha256};
 
 #[cfg(test)]
@@ -91,7 +92,7 @@ mod tests {
             .expect("the `aws-lc-rs-fips` feature must link the FIPS AWS-LC build");
     }
 
-    // Whenever the aws-lc-rs feature is enabled it must win, even if `rustcrypto` is also
+    // Whenever the aws-lc-rs feature is enabled it must win, even if the RustCrypto crates are also
     // enabled (which it is by default). The backend modules are cfg'd so that only the
     // selected one is compiled, so the module path of `Sha256` is the observable signal.
     #[test]

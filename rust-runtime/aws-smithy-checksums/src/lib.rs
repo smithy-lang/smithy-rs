@@ -21,19 +21,19 @@
 //! SHA-1 and SHA-256 checksums are computed by one of two backends, chosen by feature at
 //! compile time:
 //!
-//! | Feature | Implementation | FIPS 140-3 validated |
+//! | Selected by | Implementation | FIPS 140-3 validated |
 //! |---|---|---|
-//! | `rustcrypto` (default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
+//! | nothing (the default) | the [RustCrypto](https://github.com/RustCrypto/hashes) hashers | no |
 //! | `aws-lc-rs` | [aws-lc-rs](https://github.com/aws/aws-lc-rs) on the standard AWS-LC build | no |
 //! | `aws-lc-rs-fips` | aws-lc-rs on the FIPS build of AWS-LC | yes |
 //!
-//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over `rustcrypto`, so enabling
+//! `aws-lc-rs-fips` takes precedence over `aws-lc-rs`, and either over RustCrypto, so enabling
 //! more than one — which Cargo feature unification does routinely — resolves to the strongest
 //! backend rather than failing to build.
 //!
 //! ## Platform support
 //!
-//! `rustcrypto` is the default because it is the only backend that builds everywhere the SDK does.
+//! RustCrypto is the default because it is the only backend that builds everywhere the SDK does.
 //! Both AWS-LC backends are per-target; see
 //! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
 //! authoritative table. `aws-lc-rs` needs a C/C++ compiler and supports no WASM target other than
@@ -46,18 +46,19 @@
 //!
 //! ## What ends up in the dependency tree
 //!
-//! `md-5`, `sha1` and `sha2` are optional and gated on `rustcrypto`, so an AWS-LC build with the
-//! default features off does not compile them:
+//! Selecting an AWS-LC backend changes which implementation runs, but `md-5`, `sha1` and `sha2`
+//! are unconditional dependencies, so they are still compiled. To keep them out of the build as
+//! well, set the `aws_sdk_fips_only` cfg:
 //!
 //! ```sh
-//! cargo build --no-default-features --features aws-lc-rs-fips
+//! RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build --no-default-features --features aws-lc-rs-fips
 //! ```
 //!
-//! Features are additive and cannot express "on unless AWS-LC is", so dropping RustCrypto has to
-//! be something the build asks for. Leaving the defaults on keeps the three crates compiled; the
-//! AWS-LC backend still wins at the call site.
+//! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" is not
+//! expressible, and making these optional would break every build that lists the default features
+//! explicitly. `RUSTFLAGS` is global, so one flag also covers `aws-sigv4`.
 //!
-//! MD5 is `rustcrypto`-only, since aws-lc-rs does not expose it and it is not FIPS-approved. No
+//! MD5 is RustCrypto-only, since aws-lc-rs does not expose it and it is not FIPS-approved. No
 //! public API reaches MD5 regardless: [`ChecksumAlgorithm::Md5`] is deprecated and resolves to
 //! CRC-32.
 //!
@@ -369,14 +370,14 @@ impl Checksum for Sha256 {
 
 // MD5 is deprecated (`ChecksumAlgorithm::Md5` resolves to CRC-32) and is only available on the
 // RustCrypto backend: aws-lc-rs doesn't expose MD5, and it isn't FIPS-approved.
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 #[allow(dead_code)]
 #[derive(Debug, Default)]
 struct Md5 {
     hasher: crypto::Md5,
 }
 
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 impl Md5 {
     #[warn(dead_code)]
     fn update(&mut self, bytes: &[u8]) {
@@ -395,7 +396,7 @@ impl Md5 {
     }
 }
 
-#[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+#[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
 impl Checksum for Md5 {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
@@ -410,7 +411,7 @@ impl Checksum for Md5 {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     use super::{http::MD5_HEADER_NAME, Md5};
     use super::{
         http::{CRC_32_C_HEADER_NAME, CRC_32_HEADER_NAME, SHA_1_HEADER_NAME, SHA_256_HEADER_NAME},
@@ -510,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     fn test_md5_checksum() {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());

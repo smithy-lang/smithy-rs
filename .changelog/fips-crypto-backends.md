@@ -2,7 +2,7 @@
 applies_to: ["client", "aws-sdk-rust"]
 authors: ["yychen23"]
 references: ["smithy-rs#4681"]
-breaking: true
+breaking: false
 new_feature: true
 bug_fix: false
 ---
@@ -16,16 +16,13 @@ aws-sdk-s3 = { version = "...", features = ["aws-lc-fips"] }
 aws-config = { version = "...", features = ["aws-lc-fips"] }
 ```
 
-That routes the cryptography through the validated module but leaves the RustCrypto crates compiled, since the `rustcrypto` default is still on. To keep them out of the build as well, turn the defaults off and name back the ones you want:
+That routes the cryptography through the validated module but leaves the RustCrypto crates compiled. To keep them out of the build as well, set the `aws_sdk_fips_only` cfg:
 
-```toml
-aws-sdk-dynamodb = { version = "...", default-features = false, features = [
-    "aws-lc-fips",
-    # Omit `rustcrypto`, which is the point, and omit `rustls`, which is the *legacy* TLS stack
-    # and would pull `ring` back in. Check your crate's own `default` list.
-    "default-https-client", "rt-tokio",
-] }
+```sh
+RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build
 ```
+
+`hmac`, `sha2`, `sha1` and `md-5` are declared under `cfg(not(aws_sdk_fips_only))` in `aws-sigv4` and `aws-smithy-checksums`, so that flag drops them from the build and from `cargo tree`. `RUSTFLAGS` is global, so one flag covers both crates. Note it is a cfg rather than a Cargo feature because features are additive: "RustCrypto unless AWS-LC" cannot be expressed as one, and making these optional would break every build that lists the default features explicitly. Also omit `rustls` if you turn default features off, since that is the *legacy* TLS stack and would pull `ring` back in.
 
 Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256`, which brings `sha2` and `hmac` with it but is never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
 
@@ -35,28 +32,16 @@ Two cases stay regardless, neither of which signs a request or computes a checks
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 
-## Breaking changes
+## Compatibility
 
-Cargo features are additive, so "RustCrypto unless AWS-LC is selected" is not expressible; making RustCrypto a `rustcrypto` feature that a FIPS build leaves off is the only way to express its absence. The consequence is that `default-features = false` now drops the crypto backend on four crates. Each affected build fails to compile with a message naming the fix, rather than silently losing cryptography:
+Nothing breaks. `default-features = false` means what it always meant on every crate involved, and a build that names no AWS-LC feature gets the same RustCrypto implementations as before. The new features are additive:
 
-```
-error: aws-sigv4 requires a crypto backend: enable the `rustcrypto` (default), `aws-lc-rs`, or `aws-lc-rs-fips` feature.
-```
-
-| crate | from | to | what to do |
+| crate | from | to | what is new |
 |---|---|---|---|
-| `aws-sigv4` | 1.6.6 | 1.7.0 | add `rustcrypto` to a `--no-default-features` build |
-| `aws-smithy-checksums` | 0.65.1 | 0.65.2 | same |
-| `aws-runtime` | 1.10.4 | 1.11.0 | same; this flag was previously a no-op here |
-| `aws-config` | 1.13.3 | 1.14.0 | same |
+| `aws-sigv4` | 1.6.6 | 1.7.0 | `aws-lc-rs`, `aws-lc-rs-fips` |
+| `aws-smithy-checksums` | 0.65.1 | 0.65.2 | `aws-lc-rs`, `aws-lc-rs-fips` |
+| `aws-runtime` | 1.10.4 | 1.11.0 | `aws-lc-fips` |
+| `aws-config` | 1.13.3 | 1.14.0 | `aws-lc-fips` |
+| `aws-smithy-runtime` | 1.16.4 | 1.17.0 | `aws-lc-fips` |
 
-Generated SDK crates gain a default-on `rustcrypto` feature for the same reason; their `default` list already existed, so only a `default-features = false` build is affected.
-
-```toml
-# before
-aws-sigv4 = { version = "1.6", default-features = false, features = ["sign-http", "http1"] }
-# after
-aws-sigv4 = { version = "1.7", default-features = false, features = ["sign-http", "http1", "rustcrypto"] }
-```
-
-All of these ship below a major deliberately: a major on any one would split the released SDK's dependency graph, since `aws-runtime`'s invocation-id types are public surface of every generated SDK crate and `aws-sigv4`'s `SignableBody` is part of `aws-runtime`'s public API. The [announcement](https://github.com/awslabs/aws-sdk-rust/discussions/1464) has the reasoning.
+The one configuration that does not compile is `--cfg aws_sdk_fips_only` with no AWS-LC feature enabled, since that removes the RustCrypto backend without selecting a replacement. It fails with a message naming the fix rather than on an unresolved import.

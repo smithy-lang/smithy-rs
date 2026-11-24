@@ -147,89 +147,21 @@ internal class FipsFeatureTest {
     }
 
     /**
-     * The `rustcrypto` counterpart to `aws-lc-fips`, asserted on the manifest because neither way
-     * of breaking it shows up as a behavioural failure: drop the generated `rustcrypto` feature
-     * and an ordinary build loses its backend while the FIPS build still succeeds; drop
-     * `default-features = false` and both succeed while the FIPS build quietly compiles RustCrypto
-     * again. A service crate is the last link in the chain that forwards the choice.
+     * There is no `rustcrypto` feature to assert on. RustCrypto is an unconditional dependency of
+     * `aws-sigv4` and `aws-smithy-checksums`, gated on `cfg(not(aws_sdk_fips_only))`, so a
+     * generated crate neither forwards it nor needs the backend crates declared with their default
+     * features off. Asserting its absence keeps that from being reintroduced by accident.
      */
     @Test
-    fun `rustcrypto feature covers signing and checksums for a service with checksum operations`() {
-        val cargoToml = checksumCargoToml()
-
-        // Signing is reached through `aws-runtime` rather than named directly, because that is the
-        // crate that declares `aws-sigv4` with its defaults off.
-        assert(
-            cargoToml.contains("""rustcrypto = ["aws-runtime/rustcrypto", "aws-smithy-checksums/rustcrypto"]"""),
-        ) {
-            "Expected a `rustcrypto` feature forwarding to both backends.\n$cargoToml"
-        }
-    }
-
-    @Test
-    fun `rustcrypto feature omits checksums for a service without checksum operations`() {
-        val cargoToml = plainCargoToml()
-
-        assert(cargoToml.contains("""rustcrypto = ["aws-runtime/rustcrypto"]""")) {
-            "Expected a `rustcrypto` feature covering signing only.\n$cargoToml"
-        }
-    }
-
-    @Test
-    fun `a generated crate names a crypto backend in its default features`() {
-        // Both shapes of service, because the two fan out differently and only one of them names
-        // the checksums backend.
-        val manifests =
-            listOf(
-                "with checksum operations" to checksumCargoToml(),
-                "without checksum operations" to plainCargoToml(),
-            )
-
-        for ((name, cargoToml) in manifests) {
-            // Without this the crate has no crypto at all on a plain `cargo add`, since the
-            // backends it depends on are declared with their defaults off. RustCrypto is the one
-            // that can be a default: it is pure Rust and builds everywhere the SDK does.
-            val defaultFeatures = cargoToml.lines().first { it.startsWith("default = [") }
-            assert(defaultFeatures.contains("\"rustcrypto\"")) {
-                "A generated crate ($name) must default to a crypto backend, but default was: $defaultFeatures"
+    fun `a generated crate has no rustcrypto feature`() {
+        for ((name, cargoToml) in listOf(
+            "with checksum operations" to checksumCargoToml(),
+            "without checksum operations" to plainCargoToml(),
+        )) {
+            assert(!cargoToml.contains("rustcrypto")) {
+                "A generated crate ($name) must not carry a `rustcrypto` feature: the backend is " +
+                    "selected by `cfg(aws_sdk_fips_only)`, not by a Cargo feature.\n$cargoToml"
             }
         }
-    }
-
-    @Test
-    fun `crypto backend crates are declared with their default features off`() {
-        val cargoToml = checksumCargoToml()
-
-        // `aws-runtime` and `aws-sigv4` carry the signing backend, `aws-smithy-checksums` the
-        // digest backend. Each has to be declared with `default-features = false` for the
-        // `aws-lc-fips` feature to be a substitution rather than an addition.
-        for (dependency in listOf("aws-runtime", "aws-sigv4", "aws-smithy-checksums")) {
-            val declaration = dependencyDeclaration(cargoToml, dependency)
-            assert(declaration != null) {
-                "Expected the generated crate to declare `$dependency`.\n$cargoToml"
-            }
-            assert(declaration!!.contains("default-features = false")) {
-                "`$dependency` must be declared with `default-features = false`, otherwise an " +
-                    "`aws-lc-fips` build still compiles the RustCrypto backend. Declaration was:\n$declaration"
-            }
-        }
-    }
-
-    /**
-     * Returns the body of a `[dependencies.<name>]` table, or null if the crate is not declared.
-     * Reads the table form because that is what codegen emits; the published manifests are the
-     * same tables after `fix-manifests` adds version requirements.
-     */
-    private fun dependencyDeclaration(
-        cargoToml: String,
-        name: String,
-    ): String? {
-        val lines = cargoToml.lines()
-        val start = lines.indexOfFirst { it.trim() == "[dependencies.$name]" }
-        if (start < 0) {
-            return null
-        }
-        val body = lines.drop(start + 1).takeWhile { !it.trimStart().startsWith("[") }
-        return body.joinToString("\n")
     }
 }

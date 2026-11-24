@@ -240,7 +240,7 @@ mod tests {
     use super::{
         calculate_signature, generate_signing_key, P256_PRIVATE_KEY_MIN_SIZE, P256_PRIVATE_KEY_SIZE,
     };
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     use p256::ecdsa::signature::Signer;
     use p256::ecdsa::signature::Verifier;
     use p256::ecdsa::{DerSignature, SigningKey};
@@ -280,7 +280,7 @@ mod tests {
     /// Byte-for-byte equality with that path only holds when RustCrypto is the backend, which is
     /// why this is gated: AWS-LC draws a random `k` rather than RFC 6979's deterministic one, so
     /// its signatures differ run to run and can only be checked by verifying them.
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     #[test]
     fn short_keys_match_the_signing_key_path() {
         let key = generate_signing_key("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY");
@@ -329,7 +329,7 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     const CREDENTIALS: &[(&str, &str)] = &[
         (
             "AKIAIOSFODNN7EXAMPLE",
@@ -342,7 +342,7 @@ mod tests {
         ),
     ];
 
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     const STRINGS_TO_SIGN: &[&[u8]] = &[
         b"",
         b"AWS4-ECDSA-P256-SHA256\n20260101T000000Z\n20260101/lambda/aws4_request\n\
@@ -361,7 +361,7 @@ mod tests {
     /// keys, which `short_keys_match_the_signing_key_path` does.
     ///
     /// Gated for the same reason as that test: only the RustCrypto backend signs deterministically.
-    #[cfg(all(feature = "rustcrypto", not(feature = "__aws-lc-rs")))]
+    #[cfg(all(not(aws_sdk_fips_only), not(feature = "__aws-lc-rs")))]
     #[test]
     fn signature_matches_the_signing_key_path() {
         for (access_key, secret_key) in CREDENTIALS {

@@ -10,7 +10,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [features]
-default = ["sign-http", "http1", "rustcrypto"]
+default = ["sign-http", "http1"]
 http0-compat = ["dep:http0"]
 http1 = ["dep:http"]
 # NOTE: this deliberately does not enable `dep:http0`. Signing runs on `http` 1.x via
@@ -19,18 +19,8 @@ http1 = ["dep:http"]
 sign-http = ["dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
 sigv4a = ["dep:p256", "dep:ecdsa", "dep:crypto-bigint", "dep:subtle", "dep:zeroize"]
-# RustCrypto backend (`hmac`, `sha2`): HMAC-SHA256, SHA-256, ECDSA-P256. Default, not
-# FIPS-validated. Those two crates are optional and gated here, which is the only way to express
-# their absence: features are additive, so "RustCrypto unless AWS-LC" is not expressible.
-#
-# This breaks `--no-default-features --features sign-http,http1`, which compiled on 1.6.x and now
-# has no backend. `crypto.rs` emits a `compile_error!` naming the fix. It ships under a minor
-# rather than a major because `aws_runtime::auth::SigningOptions` carries a
-# `payload_override: Option<SignableBody<'static>>`, so a 2.0.0 here would split `SignableBody`
-# for every released client that sets it, and `aws-runtime` is staying on 1.x.
-rustcrypto = ["dep:hmac", "dep:sha2"]
 # aws-lc-rs backend on the non-FIPS AWS-LC build. See the crate docs for target support; the gap
-# that keeps `rustcrypto` the default is WASM, where aws-lc-rs supports only emscripten.
+# that keeps RustCrypto the default is WASM, where aws-lc-rs supports only emscripten.
 #
 # Names aws-lc-rs's `aws-lc-sys` rather than its `non-fips`, which is mutually exclusive with
 # `fips` and would make the two arms impossible to enable together -- something `--all-features`
@@ -59,11 +49,6 @@ hex = "0.4.3"
 http0 = { package = "http" , version = "0.2.12", optional = true }
 http = { version = "1.3.1", optional = true }
 percent-encoding = { version = "2.3.1", optional = true }
-# RustCrypto backend, gated on `rustcrypto` so an AWS-LC build can leave it out. `p256` and `ecdsa`
-# stay behind `sigv4a` instead: features are additive, so `sigv4a` has to keep naming them even
-# when AWS-LC does the signing.
-hmac = { version = "0.13", optional = true }
-sha2 = { version = "0.11", optional = true }
 p256 = { version = "0.14.0", features = ["ecdsa"], optional = true }
 # Only for `ecdsa::hazmat::sign_prehashed_rfc6979`, which `p256` imports privately. No features are
 # named: `p256`'s own feature set already turns on everything used here, so this unifies with the
@@ -102,6 +87,25 @@ time = "0.3.35"
 tracing = "0.1.44"
 zeroize = { version = "^1.8.1", optional = true }
 
+# RustCrypto backend, and the default. Gated on a cfg rather than a Cargo feature so that a build
+# can exclude it entirely -- `RUSTFLAGS="--cfg aws_sdk_fips_only"` drops both crates from the graph
+# and from the build -- without changing what `default-features = false` means. A Cargo feature
+# cannot do this: features are additive, so "RustCrypto unless AWS-LC" is not expressible, and
+# making these optional would break every build that lists the default features explicitly.
+#
+# `RUSTFLAGS` is global, so one flag reaches this crate and `aws-smithy-checksums` together with
+# nothing to forward through `aws-runtime` or a generated SDK crate. `aws-smithy-types` gates its
+# `serde` dependency the same way, on `cfg(aws_sdk_unstable)`.
+#
+# `p256` and `ecdsa` stay behind `sigv4a` instead: that feature has to keep naming them even when
+# AWS-LC does the signing, so they are present in a FIPS build either way.
+[target."cfg(not(aws_sdk_fips_only))".dependencies]
+hmac = "0.13"
+sha2 = "0.11"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_fips_only)'] }
+
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util", "hardcoded-credentials"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "test-util"] }
@@ -113,8 +117,8 @@ proptest = "1.2"
 serde = "1.0.228"
 serde_derive = "1.0.228"
 serde_json = "1.0.146"
-# The SigV4a MRAP test hashes a canonical request itself. Declared here as well as behind
-# `rustcrypto` above so it compiles on an AWS-LC build, where the optional normal dep is absent.
+# The SigV4a MRAP test hashes a canonical request itself. Declared here as well as under the cfg
+# above so it compiles under `--cfg aws_sdk_fips_only`, where that dependency is gone.
 sha2 = "0.11"
 time = { version = "0.3.35", features = ["parsing"] }
 
@@ -129,9 +133,9 @@ name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
 
-# `normal` is needed only for `--all-features`, which CI runs udeps under: it enables `rustcrypto`
-# *and* an AWS-LC arm, so these are compiled while the cfg routes around them. They are the live
-# backend in a default build, and absent entirely from a `--no-default-features` AWS-LC build.
+# `normal` is needed only for `--all-features`, which CI runs udeps under: that enables an AWS-LC
+# arm, so the cfg routes around these while they are still compiled. They are the live backend in
+# a default build, and absent entirely under `--cfg aws_sdk_fips_only`.
 #
 # `development` is a false positive. `tests/sigv4a_mrap.rs` uses `sha2`, but CI runs udeps without
 # `--all-targets`, so it never inspects that test and reports the dev-dependency as unused.
@@ -142,7 +146,7 @@ development = ["sha2"]
 [package.metadata.docs.rs]
 # `all-features` would build aws-lc-fips-sys, which docs.rs cannot. `sdk-lints` exempts this crate.
 all-features = false
-features = ["sign-http", "sign-eventstream", "sigv4a", "http0-compat", "http1", "rustcrypto", "aws-lc-rs"]
+features = ["sign-http", "sign-eventstream", "sigv4a", "http0-compat", "http1", "aws-lc-rs"]
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]

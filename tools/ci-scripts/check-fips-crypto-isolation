@@ -7,12 +7,10 @@
 # Asserts that a FIPS build of a generated service crate compiles no non-validated crypto
 # implementation, and that a default build still compiles one.
 #
-# The failure mode this guards is silent. The RustCrypto crates are optional now, but "optional"
-# only keeps them out if *every* crate on the path declares its dependency with
-# `default-features = false` and forwards the choice -- three declarations deep, from the service
-# crate through `aws-runtime` to `aws-sigv4`. A build that drops the propagation anywhere along it
-# compiles cleanly, behaves correctly, and passes every other test in CI while compiling the
-# implementation the FIPS build was meant to exclude.
+# The failure mode this guards is silent. `cfg(not(aws_sdk_fips_only))` keeps the RustCrypto crates
+# out only if every declaration of them carries that gate; a build that loses it anywhere compiles
+# cleanly, behaves correctly, and passes every other test in CI while compiling the implementation
+# the FIPS build was meant to exclude.
 #
 # It reads resolved features rather than build output, so it needs a lockfile but no compiler, no C
 # toolchain and no `aws-lc-fips-sys` build -- the only check that can assert the FIPS graph on a
@@ -42,8 +40,8 @@ fi
 # `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent. A `sigv4a` FIPS build
 # still compiles them, which is understood and documented: `crypto-bigint` does the integer math
 # of the SigV4a key derivation defined by the signing spec (`subtle` comes along underneath it),
-# and `p256`/`ecdsa` are no longer called but cannot be dropped, because `sigv4a` has to keep
-# declaring them and Cargo features cannot express "only when `rustcrypto` is also on".
+# and `p256`/`ecdsa` are no longer called but cannot be dropped, because the `sigv4a` feature has
+# to keep declaring them whichever backend does the signing.
 FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
 
 # The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is
@@ -96,8 +94,13 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     # which leaves the RustCrypto backend uncompiled in a FIPS build so nothing calls them; a graph
     # is the wrong instrument for "present but unreachable". Note the asymmetry if you change this:
     # `p256` and `ecdsa` are exempt by name above, their `hmac` and `sha2` are not.
+    # `--cfg aws_sdk_fips_only` is what removes the RustCrypto crates. They are unconditional
+    # dependencies of `aws-sigv4` and `aws-smithy-checksums`, gated on `cfg(not(aws_sdk_fips_only))`
+    # rather than on a Cargo feature, so `--features aws-lc-fips` alone selects AWS-LC without
+    # excluding RustCrypto and every assertion below would fail. `cargo tree` honours the cfg the
+    # same way the build does.
     fips_args=(-p "${crate}" --no-default-features --features aws-lc-fips -e normal)
-    fips_tree="$(cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
+    fips_tree="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
 
     # The validated module has to actually be there. Without this, a build that resolved no crypto
     # at all would satisfy every assertion below.
@@ -131,7 +134,7 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
             # A failure to walk is itself a failure: this check cannot conclude anything about a
             # crate it could not invert, and saying nothing would read as a pass.
             invert_err="$(mktemp)"
-            if ! parents="$(cargo tree "${fips_args[@]}" -i "${spec}" 2>"${invert_err}")"; then
+            if ! parents="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" -i "${spec}" 2>"${invert_err}")"; then
                 fail "${crate}: could not determine what pulls in ${spec}, so its presence in the\
  FIPS graph is unexplained. cargo said:
 $(cat "${invert_err}")"
@@ -162,9 +165,9 @@ ${parents}"
         done
     done
 
-    # The other half: an optional backend that nothing forwards leaves a default build with no
-    # crypto, so assert that too. Cheap insurance against "fixing" a FIPS failure by breaking every
-    # ordinary consumer.
+    # The other half: a build without the cfg must still have the RustCrypto backend, since that is
+    # what every ordinary consumer gets. Cheap insurance against "fixing" a FIPS failure by gating
+    # the dependency on something that is never true.
     default_tree="$(cargo tree -p "${crate}" -e normal --prefix none 2>/dev/null | sort -u)"
     for dep in hmac sha2; do
         if ! grep -q "^${dep} " <<<"${default_tree}"; then
