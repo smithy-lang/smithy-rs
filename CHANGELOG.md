@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 24th, 2026
+===================
+**New this release:**
+- :bug: (all, @patrick-immometrica) Fix parsing of quoted header list values that end in an escaped backslash, e.g. `"a,\\",b`. The closing quote was treated as escaped, so the list was split in the wrong place or failed to parse.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @patrick-immometrica
+
+
 November 23rd, 2026
 ===================
 **New this release:**
