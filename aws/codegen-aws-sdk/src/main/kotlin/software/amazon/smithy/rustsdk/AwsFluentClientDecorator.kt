@@ -69,10 +69,10 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
 
-        // Only `default-https-client` (hyper 1.x) is a default feature, mirroring the layout `aws-config` uses.
-        // `rustls` was only ever a proxy for "give me an HTTPS client", so it becomes a synonym for that and
-        // existing call sites keep working. The hyper 0.14.x + rustls 0.21.x stack, which is what pulls in
-        // `http` 0.2.x, moves to the opt-in `legacy-https-client`.
+        // Of these three, only `default-https-client` (hyper 1.x) is on by default, mirroring the layout
+        // `aws-config` uses. `rustls` was only ever a proxy for "give me an HTTPS client", so it becomes a
+        // synonym for that: call sites keep resolving, now onto hyper 1.x. The hyper 0.14.x + rustls 0.21.x
+        // stack, which is what pulls in `http` 0.2.x, moves to the opt-in `legacy-https-client`.
         rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
         rustCrate.mergeFeature(Feature("rustls", default = false, listOf("default-https-client")))
         rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
