@@ -6,7 +6,9 @@ breaking: true
 new_feature: false
 bug_fix: false
 ---
-Generated AWS SDK crates no longer enable the legacy `rustls` feature by default, so a default build no longer compiles the `hyper` 0.14 / `http` 0.2.x stack. Combined with the companion change making `http` 0.2.x opt-in across the runtime crates, `http` 0.2.x is now absent from a generated SDK crate's default dependency tree in **both normal and dev scope**, reachable only through the opt-in features below. A default S3 client drops 12 packages.
+Generated AWS SDK crates no longer enable the legacy `rustls` feature by default, so a default build no longer compiles the `hyper` 0.14 / `http` 0.2.x stack. Combined with the companion change making `http` 0.2.x opt-in across the runtime crates, a crate that depends on a generated SDK crate with default features has no `http` 0.2.x in its dependency tree, in either normal or dev scope. A default S3 client drops 12 packages, and only the 1.x generation resolves: `rustls` 0.23, `rustls-webpki` 0.103, `hyper` 1.x, `http` 1.x.
+
+Several opt-in features still reach `http` 0.2.x: `legacy-https-client` (the `hyper` 0.14.x stack) and `legacy-test-util` (the pre-1.x test helpers) on every crate, and `http-02x` (the deprecated `PresignedRequest::*_http_02x_request` methods) on crates with presignable operations. Crates with integration tests also keep a dev-dependency on `aws-smithy-http-client` with `legacy-test-util`, so `http` 0.2.x stays visible when building the SDK workspace itself. Removing it is tracked in smithy-rs#5067.
 
 This applies to the AWS SDK only. Clients smithy-rs generates for other Smithy services still enable `rustls` by default and still build the legacy stack.
 
