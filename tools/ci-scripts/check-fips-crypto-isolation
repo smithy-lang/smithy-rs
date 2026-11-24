@@ -99,7 +99,14 @@ for crate in aws-sdk-dynamodb aws-sdk-s3; do
     # rather than on a Cargo feature, so `--features aws-lc-fips` alone selects AWS-LC without
     # excluding RustCrypto and every assertion below would fail. `cargo tree` honours the cfg the
     # same way the build does.
-    fips_args=(-p "${crate}" --no-default-features --features aws-lc-fips -e normal)
+    #
+    # `default-https-client` and `rt-tokio` are named because the TLS arm of `aws-lc-fips` is
+    # `aws-smithy-http-client?/rustls-aws-lc-fips`, a weak reference that is a no-op unless
+    # something installs that client. Without them this check asserts on a graph with no HTTPS
+    # client at all -- not the graph anyone ships, and the one configuration where the TLS arm it
+    # is supposed to cover is absent.
+    fips_args=(-p "${crate}" --no-default-features
+        --features aws-lc-fips,default-https-client,rt-tokio,behavior-version-latest -e normal)
     fips_tree="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" --prefix none 2>/dev/null | sort -u)"
 
     # The validated module has to actually be there. Without this, a build that resolved no crypto
@@ -143,13 +150,39 @@ $(cat "${invert_err}")"
             fi
             rm -f "${invert_err}"
 
+            # `aws-lc-sys` is a special case: it is in every FIPS graph that contains rustls, and
+            # not because our backend propagation leaked. rustls's own `aws_lc_rs` feature expands
+            # to `aws-lc-rs/aws-lc-sys`, and `rustls-webpki`'s `aws-lc-rs` feature does the same, so
+            # enabling only `rustls-aws-lc-fips` still compiles the non-FIPS library. aws-lc-rs
+            # links the FIPS one regardless -- `#[cfg(feature = "fips")] extern crate
+            # aws_lc_fips_sys as aws_lc` -- so no non-validated code reaches the binary.
+            #
+            # The reverse tree cannot tell the two cases apart on its own: `aws-sigv4` and
+            # `aws-smithy-checksums` appear under any `aws-lc-rs` they share with rustls even when
+            # all they enable is `aws-lc-rs?/fips`. So attribute it by feature edge instead, and
+            # only accept rustls as the explanation.
+            if [[ "${dep}" == "aws-lc-sys" ]]; then
+                feature_tree="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" \
+                    -e features -i aws-lc-rs 2>/dev/null)"
+                if grep -qE '(rustls|rustls-webpki) feature "aws[-_]lc[-_]rs"' <<<"${feature_tree}"; then
+                    echo "   note: ${spec} is in the FIPS graph because rustls enables"
+                    echo "         aws-lc-rs/aws-lc-sys. aws-lc-rs links aws-lc-fips-sys, so the"
+                    echo "         non-validated library is compiled but never linked."
+                    continue
+                fi
+                fail "${crate}: ${spec} is in the FIPS graph and rustls does not explain it, so\
+ something is selecting the non-FIPS AWS-LC build directly.
+${parents}"
+                continue
+            fi
+
             via_backend=false
             for owner in "${BACKEND_OWNERS[@]}"; do
                 if grep -q "${owner}" <<<"${parents}"; then
                     via_backend=true
                     fail "${crate}: a FIPS build reaches ${spec} through ${owner}. The backend\
- propagation is broken -- check that every declaration on the path sets default-features = false\
- and forwards the backend choice.
+ propagation is broken -- check that every declaration of the RustCrypto crates still carries its\
+ cfg(not(aws_sdk_fips_only)) gate.
 ${parents}"
                 fi
             done
