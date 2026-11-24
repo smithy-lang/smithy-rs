@@ -21,7 +21,7 @@ C_RESET='\033[0m'
 # less legible, a regression with no other symptom.
 echo "### Checking that a build with no digest backend explains itself"
 
-output="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --no-default-features 2>&1 || true)"
+output="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --color never --no-default-features 2>&1 || true)"
 
 if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
     echo -e "${C_RED}A build with no digest backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
@@ -30,8 +30,15 @@ if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
     exit 1
 fi
 
-# The diagnostic has to come first; see the equivalent check in `aws-sigv4`.
-first_error="$(grep -m1 '^error' <<<"${output}")"
+# The diagnostic has to come first; see the equivalent check in `aws-sigv4`, including why this
+# grep needs `|| true` and why the cargo call above passes `--color never`.
+first_error="$(grep -m1 '^error' <<<"${output}" || true)"
+if [[ -z "${first_error}" ]]; then
+    echo -e "${C_RED}No line of the output starts with \`error\`, so which diagnostic came first${C_RESET}" >&2
+    echo -e "${C_RED}could not be determined. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
 if ! grep -q "no AWS-LC backend is enabled" <<<"${first_error}"; then
     echo -e "${C_RED}The digest backend diagnostic must be the first error reported, but the first${C_RESET}" >&2
     echo -e "${C_RED}error was:${C_RESET} ${first_error}" >&2
