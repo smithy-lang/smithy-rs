@@ -1,0 +1,4 @@
+{
+    "description": "Like created_mixins, with the shapes of a model.",
+    "steps": [{"addModel": "shapes.json"}, {"addFile": "a.smithy"}]
+}

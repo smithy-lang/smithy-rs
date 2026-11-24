@@ -351,6 +351,25 @@ operation A {}
 }
 
 #[test]
+fn elided_member_takes_the_property_target_like_the_reference_impl() {
+    // The reference implementation sets the identifier's target, then the property's. It also
+    // rejects a resource whose identifier is a property, which this crate does not check yet.
+    let model = idl(r#"$version: "2"
+namespace ex
+
+resource R {
+    identifiers: { id: String }
+    properties: { id: Integer }
+}
+
+structure S for R {
+    $id
+}
+"#);
+    assert_eq!(target(&model, "ex#S$id"), "smithy.api#Integer");
+}
+
+#[test]
 fn target_elision_in_every_placement() {
     let model = Model::assembler()
         .add_idl_str(
@@ -400,17 +419,21 @@ operation Op { input := for Local { $id }, output := for Remote { $remoteId } }
     );
     assert_eq!(codes(&err), [DiagnosticCode::InvalidProperty]);
 
-    // Mixin-based elision is reported once, as the unsupported mixin.
-    let err =
-        idl_err("namespace ex\n@mixin structure M { id: String }\nstructure S with [M] { $id }\n");
-    assert!(
-        !codes(&err).is_empty()
-            && codes(&err)
-                .iter()
-                .all(|c| *c == DiagnosticCode::UnsupportedFeature),
-        "{:?}",
-        err.diagnostics()
+    // A shape with mixins takes the target from a mixin member, after the bound resource's
+    // identifiers and properties.
+    let model = idl(
+        "namespace ex\n@mixin structure M { id: String, other: Integer }\n\
+         resource R { identifiers: { id: String }, properties: { name: Integer } }\n\
+         structure S for R with [M] { $id\n$name\n$other }\n",
     );
+    assert_eq!(target(&model, "ex#S$id"), "smithy.api#String");
+    assert_eq!(target(&model, "ex#S$name"), "smithy.api#Integer");
+    assert_eq!(target(&model, "ex#S$other"), "smithy.api#Integer");
+    // A name no mixin member has is reported once the mixins resolve.
+    let err = idl_err(
+        "namespace ex\n@mixin structure M { id: String }\nstructure S with [M] { $nope }\n",
+    );
+    assert_eq!(codes(&err), [DiagnosticCode::InvalidProperty]);
 }
 
 #[test]
@@ -869,10 +892,7 @@ fn classify(path: &Path) -> Expected {
     let text = std::fs::read_to_string(path).unwrap();
     let uses_unsupported = text.lines().any(|line| {
         let line = line.trim_start();
-        line.starts_with("$version: \"1")
-            || line.starts_with("@mixin")
-            || line.contains(" with [")
-            || line.starts_with("set ")
+        line.starts_with("$version: \"1") || line.starts_with("set ")
     });
     if uses_unsupported {
         Expected::Unsupported

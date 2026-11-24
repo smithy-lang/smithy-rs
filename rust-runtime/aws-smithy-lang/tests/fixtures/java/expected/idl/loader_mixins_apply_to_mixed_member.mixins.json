@@ -1,0 +1,25 @@
+{
+    "com.example#Thing": {
+        "mixins": [
+            "com.example#Common"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "com.example#Common$description"
+                ],
+                "traits": {
+                    "smithy.api#default": "test",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#default"
+                ],
+                "name": "description",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

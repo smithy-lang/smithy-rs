@@ -1,0 +1,13 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#C": {
+            "type": "structure",
+            "members": {
+                "s": {
+                    "target": "smithy.api#String"
+                }
+            }
+        }
+    }
+}
