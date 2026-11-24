@@ -84,13 +84,14 @@ where
         } else {
             (0, None)
         };
-        let state = MetricsState::new(
+        // Keeps any callbacks registered before the request reached the service.
+        let state = MetricsState::take_over(
+            &mut req,
             self.enabled,
             &self.time_source,
             &self.service,
             concurrent_requests_count,
         );
-        req.extensions_mut().insert(state.clone());
         super::record_request_id(&req);
         MetricsServiceFuture {
             inner: self.inner.call(req),
@@ -618,6 +619,65 @@ mod tests {
         })
         .await;
         assert!(reported.is_some());
+    }
+
+    #[tokio::test]
+    async fn callbacks_registered_before_the_service_are_adopted() {
+        let log = Log::default();
+        let metrics_service = MetricsService::new::<TestService>(service(&log, 1, ok), true);
+        // A layer around the whole service, which registers a callback before the request reaches it.
+        let outer = {
+            let log = log.clone();
+            let mut metrics_service = Some(metrics_service);
+            tower::service_fn(move |mut req: http::Request<()>| {
+                let log = log.clone();
+                req.on_finish(move |metrics| log.lock().unwrap().push((99, metrics.is_some())));
+                metrics_service.take().expect("called once").oneshot(req)
+            })
+        };
+        let response = outer.oneshot(http::Request::new(())).await.unwrap();
+        assert_eq!(logged(&log), [], "callbacks run once the request finishes");
+        response.into_body().collect().await.unwrap();
+        assert_eq!(
+            logged(&log),
+            [(99, true), (0, true)],
+            "callbacks registered earlier run first, with the request's metrics"
+        );
+    }
+
+    /// Serves `request` through a `MetricsService` whose route registers callback `index`, and
+    /// fully sends the response.
+    async fn serve_copy(log: &Log, index: usize, request: http::Request<()>) {
+        let metrics_service = MetricsService::new::<TestService>(service(log, index + 1, ok), true);
+        let response = metrics_service.oneshot(request).await.unwrap();
+        response.into_body().collect().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_first_copy_of_a_request_to_reach_a_service_gets_the_early_callbacks() {
+        let log = Log::default();
+        let mut first = http::Request::new(());
+        first.on_finish({
+            let log = log.clone();
+            move |metrics| log.lock().unwrap().push((99, metrics.is_some()))
+        });
+        // A copy, as a retry or hedging layer around the service would make.
+        let mut second = http::Request::new(());
+        *second.extensions_mut() = first.extensions().clone();
+
+        serve_copy(&log, 0, first).await;
+        assert_eq!(
+            logged(&log),
+            [(99, true), (0, true)],
+            "the early callback receives the first copy's metrics"
+        );
+        log.lock().unwrap().clear();
+        serve_copy(&log, 1, second).await;
+        assert_eq!(
+            logged(&log),
+            [(0, true), (1, true)],
+            "the second copy gets a new state, without the early callback"
+        );
     }
 
     #[test]

@@ -336,6 +336,38 @@ internal class StandardMetricsTest {
                         *scope,
                     )
                 }
+                tokioTest("layer_around_the_service_sees_unrouted_requests") {
+                    rustTemplate(
+                        """
+                        use #{Server}::metrics::Fault;
+                        let config = crate::OutcomeServiceConfig::builder().enable_standard_metrics().build();
+                        let app = crate::OutcomeService::builder(config)
+                            .classify(|_input: crate::input::ClassifyInput| async { Ok(crate::output::ClassifyOutput {}) })
+                            .build()
+                            .expect("service should build");
+                        // Registers its callback before the request reaches the service.
+                        let record = RecordLayer::default();
+                        let app = #{Tower}::Layer::layer(&record, app);
+                        let request = #{Http}::Request::builder()
+                            .method("POST")
+                            .uri("/no-such-operation")
+                            .header("Content-Type", "application/json")
+                            .body(#{Server}::body::Body::empty())
+                            .unwrap();
+                        let response = #{Tower}::ServiceExt::oneshot(app, request).await.unwrap();
+                        assert_eq!(response.status(), #{Http}::StatusCode::NOT_FOUND);
+                        drop(response);
+                        let record = record.0.lock().unwrap();
+                        assert_eq!(record.len(), 1, "the callback runs once");
+                        let metrics = record[0].as_ref().expect("metrics are enabled");
+                        assert!(metrics.operation().is_none(), "the request was not routed");
+                        assert_eq!(metrics.http().status_code(), Some(#{Http}::StatusCode::NOT_FOUND));
+                        let fault = metrics.outcome().and_then(|outcome| outcome.result.as_ref().err()).map(|error| error.fault.clone());
+                        assert_eq!(fault, Some(Fault::Client));
+                        """,
+                        *scope,
+                    )
+                }
             }
         }
     }

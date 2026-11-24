@@ -13,12 +13,14 @@ pub trait RequestExt: sealed::Sealed {
     /// been fully sent or sending it has failed.
     ///
     /// The callback receives the standard server metrics collected for the request, or `None` if
-    /// standard metrics are disabled. Callbacks are invoked in the order they were registered.
+    /// standard metrics are disabled or the request never reached the Smithy service. Callbacks are
+    /// invoked in the order they were registered.
     ///
-    /// This method should be called from a [Layer] or [Plugin] configured via the service's server
-    /// SDK. If this method is called from elsewhere, such as from a [Layer] applied around the
-    /// service rather than through its configuration, the result is a no-op, and the callback will
-    /// never be invoked.
+    /// This method may be called from a [Layer] or [Plugin] configured via the service's server
+    /// SDK, or from a [Layer] applied around the service. A callback registered before the request
+    /// reaches the service is invoked once the request finishes, like any other. If the request
+    /// never reaches the Smithy service, the callback will be invoked with `None` when the request
+    /// is dropped.
     ///
     /// [Layer]: tower::Layer
     /// [Plugin]: crate::plugin::Plugin
@@ -32,10 +34,15 @@ impl<B> RequestExt for http::Request<B> {
     where
         F: FnOnce(Option<RequestMetrics>) + Send + 'static,
     {
-        // `&mut self` not really necessary, but keeping it to avoid tying our hands later.
         match self.extensions().get::<MetricsState>() {
             Some(state) => state.push_callback(Box::new(callback)),
-            None => tracing::debug!("request has no metrics state; `on_finish` callback will not be invoked"),
+            // Provisional metrics state, just to store callbacks until MetricsService takes over
+            // the request.
+            None => {
+                let state = MetricsState::uninitialized();
+                state.push_callback(Box::new(callback));
+                self.extensions_mut().insert(state);
+            }
         }
     }
 }
@@ -73,14 +80,46 @@ mod tests {
     }
 
     #[test]
-    fn drops_callbacks_without_state() {
-        let captured = Arc::new(());
+    fn callbacks_of_a_request_that_never_reaches_a_service_receive_none_when_it_is_dropped() {
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut req = http::Request::new(());
+        for index in 0..2 {
+            let calls = calls.clone();
+            req.on_finish(move |metrics| calls.lock().unwrap().push((index, metrics.is_some())));
+        }
+        assert!(calls.lock().unwrap().is_empty(), "the request holds the callbacks");
+        drop(req);
+        assert_eq!(*calls.lock().unwrap(), [(0, false), (1, false)]);
+    }
+
+    #[test]
+    fn callbacks_run_when_the_last_copy_of_the_request_extensions_is_dropped() {
+        let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let mut req = http::Request::new(());
         req.on_finish({
-            let captured = captured.clone();
-            move |_| drop(captured)
+            let called = called.clone();
+            move |_| called.store(true, std::sync::atomic::Ordering::SeqCst)
         });
-        // The callback, and the clone it captured, were dropped rather than retained.
-        assert_eq!(Arc::strong_count(&captured), 1);
+        let extensions = req.extensions().clone();
+        drop(req);
+        assert!(
+            !called.load(std::sync::atomic::Ordering::SeqCst),
+            "a copy still holds the callback"
+        );
+        drop(extensions);
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn a_panicking_callback_does_not_prevent_the_others() {
+        let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut req = http::Request::new(());
+        req.on_finish(|_| panic!("the callback panicked"));
+        req.on_finish({
+            let called = called.clone();
+            move |_| called.store(true, std::sync::atomic::Ordering::SeqCst)
+        });
+        drop(req);
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
     }
 }
