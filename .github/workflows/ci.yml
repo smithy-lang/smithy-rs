@@ -554,11 +554,11 @@ jobs:
       fail-fast: false
       # We always exclude `aws-smithy-http-server-python`, `aws-smithy-http-server-typescript`, and `aws-smithy-experimental` since they are experimental.
       # We exclude `aws-smithy-http-client` due to FIPS related feature flags and aws-lc-fips target support
-      # `--all-features` turns on every FIPS feature too, and `aws-lc-fips-sys` does not build for these targets,
-      # so on the `--all-features` legs we also exclude the crates that carry one: `aws-smithy-checksums` and
-      # `aws-sigv4` own an AWS-LC backend (`aws-lc-rs-fips`), and `aws-smithy-runtime`/`aws-runtime` forward to one
-      # (`aws-lc-fips`). Excluding a crate drops it from the selected set, which is what keeps `--all-features`
-      # from reaching its FIPS feature.
+      # We exclude `aws-smithy-checksums`, `aws-smithy-runtime`, `aws-sigv4` and `aws-runtime` from the i686 legs, the only ones
+      # passing `--all-features`: that turns on the FIPS features this change adds, and `aws-lc-fips-sys` does not support
+      # i686-unknown-linux-gnu. Only the test leg excludes the two AWS crates, because the AWS build leg passes no features.
+      # Each is still compiled on these legs as a dependency of a selected member, so what they lose is their own tests and
+      # optional features.
       # We exclude `aws-smithy-wasm` because it is only meant to build for WASM targets
       # We exclude `aws-smithy-lang` from tests (it is still built) because its endpoint compiler parity tests are too slow under emulation
       matrix:
