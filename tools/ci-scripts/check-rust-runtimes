@@ -66,9 +66,10 @@ do
         # TLS implementation, alongside the hyper 1.x client.
         if [[ "${runtime_path}" == "rust-runtime" ]]; then
             echo -e "## ${C_YELLOW}Running 'cargo nextest run' on aws-smithy-runtime with the legacy connector but no legacy TLS...${C_RESET}"
-            cargo nextest run --no-tests=pass -p aws-smithy-runtime --lib \
+            cargo nextest run --no-tests=pass -p aws-smithy-runtime \
+                --lib --test old_behavior_version_fallback_warning \
                 --no-default-features \
-                --features client,connector-hyper-0-14-x,default-https-client
+                --features client,test-util,connector-hyper-0-14-x,default-https-client
 
             echo -e "## ${C_YELLOW}Running 'cargo nextest run' on aws-smithy-http-server-metrics in each server mode...${C_RESET}"
             cargo nextest run --no-tests=pass -p aws-smithy-http-server-metrics
