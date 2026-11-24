@@ -29,11 +29,12 @@
 //! RustCrypto is the default because the AWS-LC backends do not cover every target the SDK builds.
 //! Both are per-target; see
 //! [aws-lc-rs platform support](https://aws.github.io/aws-lc-rs/platform_support.html) for the
-//! authoritative table. `aws-lc-rs` needs a C/C++ compiler for the target: it does not support
-//! `wasm32-unknown-unknown`, which this SDK builds, and the WASM targets it does support need a
-//! wasi-sdk or emscripten toolchain. `aws-lc-rs-fips` additionally needs CMake and Go and covers
-//! fewer targets still, notably not i686, WASM, iOS or Android. Enabling either on an unsupported
-//! target fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before this crate is reached.
+//! authoritative table. `aws-lc-rs` needs a C toolchain for the target, libc headers included: it
+//! does not support `wasm32-unknown-unknown`, which this SDK builds, and the WASM targets it does
+//! support need a wasi-sdk or emscripten toolchain. `aws-lc-rs-fips` additionally needs CMake, Go
+//! and Perl, and covers fewer targets still, notably not i686, WASM, iOS or Android. Enabling
+//! either on an unsupported target fails while building `aws-lc-sys` or `aws-lc-fips-sys`, before
+//! this crate is reached.
 //!
 //! Which AWS-LC-FIPS module `aws-lc-rs-fips` binds follows the resolved `aws-lc-rs` version; this
 //! crate's `Cargo.toml` documents the declared floor.

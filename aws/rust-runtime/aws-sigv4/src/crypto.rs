@@ -55,8 +55,8 @@ use rustcrypto_impl as imp;
 mod tests {
     use super::{sha256, HmacSha256, SHA256_OUTPUT_SIZE};
 
-    // Known-answer tests, so whichever backend a build selects is held to the same vectors. Note
-    // that CI only ever runs them against AWS-LC, since it tests with `--all-features`.
+    // Known-answer tests, so whichever backend a build selects is held to the same vectors.
+    // `--all-features` legs cover AWS-LC, `additional-ci` the default backend.
     const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     // RFC 4231 test case 2: key "Jefe", data "what do ya want for nothing?".
     const RFC4231_TC2_KEY: &[u8] = b"Jefe";

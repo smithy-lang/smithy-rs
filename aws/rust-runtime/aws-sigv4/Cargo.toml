@@ -58,7 +58,7 @@ ecdsa = { version = "0.17.0", optional = true }
 # aws-lc-rs backend; see the `aws-lc-rs` and `aws-lc-rs-fips` features. `default-features = false`
 # so those features name the AWS-LC build rather than defaulting to the non-FIPS one.
 #
-# `1.18` is the line the `rustls` we resolve declares -- it moved there in 0.23.45, above the
+# `1.18` is the line the `rustls` we resolve declares -- it moved there in 0.23.44, above the
 # 0.23.31 floor this repo states -- so signing and TLS ask for the same AWS-LC. Cargo resolves one
 # `aws-lc-rs` 1.x graph-wide either way; this is about the declared requirements agreeing, which
 # `minimal-versions --direct` is what exercises. Within the line, 1.18.1 rather than 1.18.0

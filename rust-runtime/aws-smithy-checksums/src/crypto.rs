@@ -56,8 +56,8 @@ pub(crate) use rustcrypto_impl::{Md5, Sha1, Sha256};
 mod tests {
     use super::{Digest, Sha1, Sha256};
 
-    // Known-answer tests, so whichever backend a build selects is held to the same vectors. Note
-    // that CI only ever runs them against AWS-LC, since it tests with `--all-features`. The inputs are
+    // Known-answer tests, so whichever backend a build selects is held to the same vectors.
+    // `--all-features` legs cover AWS-LC, `additional-ci` the default backend. The inputs are
     // split across two `update` calls to exercise the multi-step path.
     const INPUT_HEAD: &[u8] = b"test ";
     const INPUT_TAIL: &[u8] = b"data";
