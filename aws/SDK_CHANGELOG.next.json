@@ -6,20 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Generated endpoint rule-set tests no longer run the validators in `ParamsBuilder::build()`, so a test case with an\ninvalid `Region` reaches the rules instead of panicking with `invalid params`. Requests still run the validators.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "vcjana",
-      "references": [
-        "smithy-rs#4967"
-      ],
-      "since-commit": "0dfaedc760ce77a95a9f5ddaac3c1e6037a4dc0a",
-      "age": 5
-    },
-    {
       "message": "Fix `RequestChecksumCalculation::WhenRequired` ignoring a caller-set checksum algorithm. With `RequestChecksumCalculation::WhenRequired` and trait `requestChecksumRequired: false`, the SDK now calculates a request checksum when the caller sets the modeled request algorithm member. If the member is not set, no checksum is calculated as before.\n",
       "meta": {
         "bug": true,
@@ -31,7 +17,7 @@
         "smithy-rs#4986"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The `credentials-login` feature of `aws-config` now uses `p256` 0.14, addressing RUSTSEC-2026-0387.\nIt previously depended on `p256` 0.13, whose `crypto-bigint` 0.5 dependency has no patched release,\nso the advisory could not be cleared with a lockfile update. The DPoP proofs sent when refreshing a\nlogin session are unchanged.\n",
@@ -45,7 +31,7 @@
         "aws-sdk-rust#1471"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`ByteStream::from_path` and `ByteStream::read_from()` now read files with a 64 KiB buffer by default, up from 4 KiB. On a 64 MiB file this makes reads about 5x faster (174 to 899 MiB/s in the new `bytestream_from_file` benchmark). Each open file stream uses about 60 KiB more memory. To keep the old behavior, call `ByteStream::read_from().buffer_size(4096)`.\n",
@@ -59,7 +45,7 @@
         "smithy-rs#2833"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add `aws_smithy_observability::unit_of_work`, which tells a caller whether a response body was\nvalidated against its checksum. Attach a `Capture` carrying a `checksums::ChecksumCapture` with\n`.customize().interceptor(..)`, read the body, then call `try_outcome()`: it reads `Validated` with\nthe algorithm and computed checksum, `Mismatch` with both checksums, `NotValidated` with a reason,\nor `Incomplete`. The SDK reports through a new stable contract in `aws-smithy-runtime-api`\n(`client::unit_of_work::checksums`), so a capture keeps working when the caller and the SDK resolve\ndifferent releases of `aws-smithy-observability`. `aws-smithy-checksums` adds\n`ChecksumBody::with_completion`.\n",
@@ -74,7 +60,7 @@
         "smithy-rs#4990"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix clock skew correction counting server processing time as clock skew. A long-running call, such\nas a synchronous Lambda `Invoke` over 10 minutes, could make the next request on the same client\nfail with `InvalidSignatureException`. The SDK now compares the response `Date` header to when the\nresponse headers arrived instead of to the midpoint of the request.\n",
@@ -88,7 +74,7 @@
         "smithy-rs#4988"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Removed the `num-integer` dependency from `aws-smithy-types`. `DateTime` now uses `div_euclid` and `rem_euclid` from std, which give the same results here since all divisors are positive.\n",
@@ -102,7 +88,7 @@
         "smithy-rs#4916"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Response checksums are no longer validated on error responses. An error response that carried a\nchecksum header was validated as if it were a success, so a mismatch replaced its modeled error with\na body error that was retried as transient. Error responses now keep their modeled errors.\n",
@@ -116,7 +102,7 @@
         "smithy-rs#4990"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The following AWS SDK clients now use schema-based serialization and\ndeserialization instead of the legacy per-shape `protocol_serde` code.\n\n`awsJson1_1`:\n\n- `aws-sdk-ecr`\n- `aws-sdk-kms`\n- `aws-sdk-cloudwatchlogs`\n- `aws-sdk-secretsmanager`\n\n`awsJson1_0`:\n\n- `aws-sdk-opensearchserverless`\n- `aws-sdk-proton`\n- `aws-sdk-cloudcontrol`\n- `aws-sdk-paymentcryptography`\n\n`rpcv2Cbor`:\n\n- `aws-sdk-cloudwatch`\n\n`restJson1`:\n\n- `aws-sdk-cleanrooms`\n- `aws-sdk-glacier`\n- `aws-sdk-mediapackage`\n- `aws-sdk-networkmanager`\n- `aws-sdk-neptunegraph`\n- `aws-sdk-securitylake`\n- `aws-sdk-marketplacecatalog`\n- `aws-sdk-iot`\n- `aws-sdk-outposts`\n- `aws-sdk-managedblockchainquery`\n- `aws-sdk-mediaconnect`\n- `aws-sdk-vpclattice`\n- `aws-sdk-grafana`\n- `aws-sdk-lexruntimev2`\n- `aws-sdk-ivs`\n- `aws-sdk-amp`\n- `aws-sdk-schemas`\n- `aws-sdk-connectcases`\n- `aws-sdk-medialive`\n- `aws-sdk-ram`\n- `aws-sdk-accessanalyzer`\n- `aws-sdk-signer`\n- `aws-sdk-lexmodelsv2`\n- `aws-sdk-imagebuilder`\n- `aws-sdk-emrcontainers`\n- `aws-sdk-mediaconvert`\n- `aws-sdk-quicksight`\n- `aws-sdk-pipes`\n- `aws-sdk-drs`\n- `aws-sdk-guardduty`\n- `aws-sdk-inspector2`\n- `aws-sdk-pinpoint`\n- `aws-sdk-appsync`\n- `aws-sdk-groundstation`\n- `aws-sdk-resourcegroups`\n- `aws-sdk-bedrockagent`\n- `aws-sdk-transcribestreaming`\n- `aws-sdk-bedrockagentruntime`\n- `aws-sdk-ssooidc`\n- `aws-sdk-connect`\n- `aws-sdk-mq`\n- `aws-sdk-amplify`\n- `aws-sdk-fis`\n- `aws-sdk-bedrock`\n- `aws-sdk-appconfig`\n\nNo change in behavior or public API is expected.\n",
@@ -128,7 +114,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`BigDecimal` now compares and hashes by numeric value instead of by spelling. `\"1e2\"` equals `\"100\"`, `\"1.0\"` equals `\"1.00\"`, `\"+5\"` equals `\"5\"`, and every spelling of zero, such as `\"-0.0\"` and `\"0\"`, is equal. `AsRef<str>` still returns the original string, so serialization doesn't change.\n",
@@ -142,7 +128,7 @@
         "smithy-rs#4863"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix `DateTime` epoch-seconds formatting and parsing of timestamps before 1970 that have fractional seconds. Formatting -0.75 seconds produced `-1.25`, and parsing `-0.75` produced 0.75. Timestamps at or after 1970 are unaffected.\n",
@@ -156,7 +142,7 @@
         "smithy-rs#4960"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Clients for services with operations modeled with `@requestCompression` (such as `aws-sdk-cloudwatch`) no longer enable the `http-body-0-4-x` feature of `aws-smithy-types`. The request compression interceptor only uses `http-body` 1.x, so these clients no longer pull in `http` 0.2 and `http-body` 0.4.\n",
@@ -170,7 +156,7 @@
         "smithy-rs#4484"
       ],
       "since-commit": "751fa5cba87ea760050e663bb01a1bc4f13a5343",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Retry Behavior 2.1, as described in [aws-sdk-rust#1431](https://github.com/awslabs/aws-sdk-rust/discussions/1431), is now on by default. Customers who want the previous retry behavior should pin `BehaviorVersion` to an older version, such as `v2026_01_12`.\n",
@@ -184,7 +170,7 @@
         "smithy-rs#4965"
       ],
       "since-commit": "f7a21b4c5107aaa1b844bc47137b708428537035",
-      "age": 3
+      "age": 4
     },
     {
       "message": "The following AWS SDK clients now use schema-based serialization and\ndeserialization instead of the legacy per-shape `protocol_serde` code.\n\n`awsJson1_1`:\n\n- `aws-sdk-cloudtrail`\n- `aws-sdk-resourcegroupstagging`\n\n`awsJson1_0`:\n\n- `aws-sdk-sfn`\n- `aws-sdk-apprunner`\n\n`restJson1`:\n\n- `aws-sdk-securityhub`\n- `aws-sdk-account`\n- `aws-sdk-batch`\n- `aws-sdk-iotdataplane`\n- `aws-sdk-appmesh`\n- `aws-sdk-elasticsearch`\n- `aws-sdk-greengrass`\n- `aws-sdk-bedrockruntime`\n- `aws-sdk-dsql`\n- `aws-sdk-backup`\n- `aws-sdk-codeguruprofiler`\n- `aws-sdk-kafka`\n- `aws-sdk-apigateway`\n\n`restXml`:\n\n- `aws-sdk-cloudfront`\n\nNo change in behavior or public API is expected.\n",
@@ -196,7 +182,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "8f7b759cf32b0f9c58bd053d5a149243dc98342d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The IMDS client now applies its configured behavior version to token requests as well as metadata requests. Before this fix, a client on a behavior version older than `v2026_11_10` still used Retry Behavior 2.1 for its token requests.\n",
@@ -210,7 +196,7 @@
         "smithy-rs#4969"
       ],
       "since-commit": "8f7b759cf32b0f9c58bd053d5a149243dc98342d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "AWS SDK clients now apply a default `read_timeout`, under `BehaviorVersion::v2026_11_17` and later. It bounds the wait from request dispatch until response headers arrive, which is where an unresponsive peer would otherwise leave a request hanging until the operating system gives up.\n\nThe value depends on the service: 5 minutes generally, 15 minutes for services that legitimately hold a connection open before replying, and none at all where any bound would break normal usage, such as S3 — a large `PutObject` cannot produce response headers until the whole body has been sent.\n\nThis bounds only the wait for response headers, not a transfer that starts and then stalls — stalled stream protection already covers that, and remains on by default.\n\nA `read_timeout` you configure yourself always takes precedence, whether it is longer, shorter, or disabled, and whether you set it on the client or per operation with `config_override`. Prefer setting a longer value over `set_read_timeout(None)`: if a disable is the only field your `TimeoutConfig` specifies, it also clears the 3.1 second connect timeout default, because a config with no field in the \"set\" state stops the merge from reading lower-priority layers. That behavior predates this change.\n\nA read timeout failure is classified as a transient error and is retried, so a single unresponsive connection costs one attempt rather than the operation. To keep the previous behavior for every service, pin `BehaviorVersion` to an earlier version.\n",
@@ -224,7 +210,7 @@
         "smithy-rs#5004"
       ],
       "since-commit": "8f7b759cf32b0f9c58bd053d5a149243dc98342d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "SigV4 now uses the known SHA-256 of an empty payload instead of hashing it for every request without a body, such as GetObject or DeleteObject, and for every chunk of a signed streaming upload.\n",
@@ -238,7 +224,7 @@
         "smithy-rs#5027"
       ],
       "since-commit": "8f7b759cf32b0f9c58bd053d5a149243dc98342d",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The Login credentials provider now refreshes cached tokens against the `signInRegion` recorded in the token cache, when present.\n",
@@ -250,7 +236,7 @@
       "author": "osrs-agent",
       "references": [],
       "since-commit": "743dbd55558372c09fb2920321bb6c77259aa9d1",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Kinesis `ReceiveQueueRecords` and `ReceiveDeadLetterQueueRecords` are now long-polling operations. When an error is retryable, they back off before the next attempt, even if the retry quota is exhausted.\n",
@@ -264,7 +250,7 @@
         "smithy-rs#5055"
       ],
       "since-commit": "743dbd55558372c09fb2920321bb6c77259aa9d1",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The following AWS SDK clients now use schema-based serialization and\ndeserialization instead of the legacy per-shape `protocol_serde` code.\n\n`awsJson1_1` is now fully enabled: every client that uses it, including clients\nadded in the future, uses schema-based serde.\n\nFor other protocols the following were enabled:\n\n`awsJson1_0`:\n\n- `aws-sdk-sqs`\n- `aws-sdk-dynamodb`\n\n`restJson1`:\n\n- `aws-sdk-apigatewayv2`\n- `aws-sdk-lambda`\n- `aws-sdk-resourceexplorer2`\n- `aws-sdk-eks`\n\nNo change in behavior or public API is expected.\n",
@@ -276,7 +262,7 @@
       "author": "landonxjames",
       "references": [],
       "since-commit": "743dbd55558372c09fb2920321bb6c77259aa9d1",
-      "age": 1
+      "age": 2
     },
     {
       "message": "`AggregatedBytes::to_vec` copies whole segments into a pre-sized `Vec` instead of collecting byte by byte, which makes `ByteStream::collect().await?.to_vec()` much faster for large bodies.\n",
@@ -288,7 +274,7 @@
       "author": "patrick-immometrica",
       "references": [],
       "since-commit": "743dbd55558372c09fb2920321bb6c77259aa9d1",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add a `convert-jiff-1-x` feature to `aws-smithy-types-convert` that provides `DateTimeExt::to_jiff` and `DateTimeExt::from_jiff` for converting between `DateTime` and `jiff::Timestamp`.\n",
@@ -303,6 +289,18 @@
         "smithy-rs#3826"
       ],
       "since-commit": "743dbd55558372c09fb2920321bb6c77259aa9d1",
+      "age": 2
+    },
+    {
+      "message": "Fix parsing of quoted header list values that end in an escaped backslash, e.g. `\"a,\\\\\",b`. The closing quote was treated as escaped, so the list was split in the wrong place or failed to parse.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "patrick-immometrica",
+      "references": [],
+      "since-commit": "fc20e8f6a763124b227449c15a74dcc7abd94032",
       "age": 1
     }
   ],

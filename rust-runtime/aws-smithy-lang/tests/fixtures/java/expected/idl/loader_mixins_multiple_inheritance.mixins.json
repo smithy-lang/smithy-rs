@@ -1,0 +1,28 @@
+{
+    "com.example#FinalStructure": {
+        "mixins": [
+            "com.example#MixinA",
+            "com.example#MixinB"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "com.example#MixinA$member",
+                    "com.example#MixinB$member"
+                ],
+                "traits": {
+                    "smithy.api#internal": {},
+                    "smithy.api#pattern": "baz",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#pattern"
+                ],
+                "name": "member",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

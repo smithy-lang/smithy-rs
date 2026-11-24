@@ -1,0 +1,40 @@
+{
+    "smithy.example#SensitiveText": {
+        "mixins": [
+            "smithy.example#SensitiveString"
+        ],
+        "traits": {
+            "smithy.api#pattern": "^[a-zA-Z\\.]*$",
+            "smithy.api#sensitive": {}
+        },
+        "introduced": [
+            "smithy.api#pattern"
+        ],
+        "members": []
+    },
+    "smithy.example#UserDetails": {
+        "mixins": [
+            "smithy.example#BaseUser"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#BaseUser$userId"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "userId",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "username",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}
