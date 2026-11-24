@@ -31,11 +31,7 @@ Two cases stay regardless, neither of which signs a request or computes a checks
 
 `aws-sigv4` and `aws-smithy-checksums` declare `aws-lc-rs = "1.18.1"`, on the same `1.18` line `rustls` declares so that signing, checksums and TLS all ask for the same AWS-LC. If your own manifest pins `aws-lc-rs` below that, raise it.
 
-**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. To stay on the FIPS 4 module today's floor selects, rather than moving to FIPS 5, bound your own requirement:
-
-```toml
-aws-lc-rs = ">=1.18.1, <1.21.0"
-```
+**Pinning the FIPS module.** `aws-lc-rs` moves to a new AWS-LC-FIPS module in a minor release, and Cargo takes that upgrade automatically inside `1.x`. We set no upper bound, so that choice is yours. If your compliance posture is tied to a particular module, check its validation status in [aws/aws-lc](https://github.com/aws/aws-lc/blob/main/crypto/fipsmodule/FIPS.md), work out which `aws-lc-rs` versions carry it, and bound your own requirement accordingly.
 
 **[Full announcement, including platform support and the limits of the FIPS guarantee](https://github.com/awslabs/aws-sdk-rust/discussions/1464).** Read it before treating a build as end-to-end FIPS: TLS is only made FIPS for the hyper 1.x client, `aws-lc-rs-fips` covers a narrower set of targets than `aws-lc-rs` (notably not i686, WASM, iOS or Android), and `aws-config`'s `credentials-login` DPoP signing is not routed through AWS-LC.
 
