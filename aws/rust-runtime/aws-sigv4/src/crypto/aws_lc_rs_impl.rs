@@ -72,6 +72,11 @@ fn fixed_size(bytes: &[u8]) -> [u8; SHA256_OUTPUT_SIZE] {
 /// `private_key` is a big-endian P-256 private scalar, as produced by
 /// [`crate::sign::v4a::generate_signing_key`].
 ///
+/// The key is imported on every call, and that costs more than the signature does: see
+/// [`rfc5915_p256_private_key`] for the two base-point multiplications it takes, or three under
+/// FIPS. Caching a key pair per derived key is the remedy, and would also move the pairwise test
+/// to once per credential.
+///
 /// # Panics
 /// Panics if `private_key` is not 32 bytes, or is not a valid P-256 private key.
 #[cfg(feature = "sigv4a")]
