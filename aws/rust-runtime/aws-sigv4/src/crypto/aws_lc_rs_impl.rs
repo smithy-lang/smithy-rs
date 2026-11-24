@@ -94,9 +94,10 @@ pub(crate) fn ecdsa_p256_sha256_sign_der(private_key: &[u8], message: &[u8]) -> 
 /// aws-lc-rs imports an ECDSA private key from DER, from PKCS#8, or from a raw scalar paired with
 /// its public point. SigV4a's key derivation produces the scalar alone, and the public point costs
 /// a scalar multiplication to obtain, so this wraps the scalar in an RFC 5915 `ECPrivateKey` and
-/// omits the optional `publicKey` field. That does not avoid the multiplication -- AWS-LC derives
-/// the point while parsing either way, and under FIPS also runs a pairwise consistency check -- it
-/// only avoids computing the point here to hand straight back.
+/// omits the optional `publicKey` field. That does not avoid the multiplication: with the field
+/// absent AWS-LC derives the point while parsing, then derives it again for a pairwise consistency
+/// test, and under FIPS runs that test once more. Omitting the field only avoids computing the
+/// point here to hand straight back.
 ///
 /// Every field is fixed size for P-256, so this is a constant prefix and suffix around the scalar
 /// rather than a general-purpose DER writer.
