@@ -105,6 +105,16 @@
             "errors": [],
             "locations": {}
         },
+        "created_mixins": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
+        "created_mixins_model": {
+            "accepted": true,
+            "errors": [],
+            "locations": {}
+        },
         "created_prelude_namespace": {
             "accepted": true,
             "errors": [],
@@ -145,6 +155,15 @@
                 "ex#R": "b.smithy",
                 "ex#R$x": "b.smithy",
                 "ex#R$x@smithy.api#default": "b.smithy"
+            }
+        },
+        "elided_default_sugar_location": {
+            "accepted": true,
+            "errors": [],
+            "locations": {
+                "ex#S": "b.smithy",
+                "ex#S$x": "b.smithy",
+                "ex#S$x@smithy.api#default": "b.smithy"
             }
         },
         "idl_prelude_namespace": {

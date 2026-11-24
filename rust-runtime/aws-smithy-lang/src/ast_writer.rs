@@ -29,7 +29,7 @@ use crate::diagnostic::WriteError;
 use crate::model::Model;
 use crate::node::{Node, NodeSer, NodeValue};
 use crate::prelude;
-use crate::shape::{MemberShape, Shape, TraitMap};
+use crate::shape::{AppliedTrait, MemberShape, Shape};
 use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
 use serde::ser::{SerializeMap, SerializeSeq};
@@ -56,9 +56,10 @@ use std::io::Write;
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 ///
-/// Mixins are not supported yet, so there is no mixin option. When they are, the writer will
-/// offer a choice between preserving mixins (writing the introduced members and traits plus
-/// mixin references) and flattening them, rather than baking either in.
+/// Shapes with mixins are written in their declared form, like the reference implementation's
+/// `ModelSerializer`: their `mixins`, their own traits, and the members they declare rather than
+/// inherit. The own traits of an inherited member are written as a `"type": "apply"` entry for
+/// the member, after its shape.
 #[derive(Debug, Clone, Default)]
 pub struct AstWriter {
     pretty: bool,
@@ -168,19 +169,29 @@ impl Serialize for DocumentSer<'_> {
             map.serialize_entry("metadata", &ObjectSer(metadata.iter().collect(), self.sort))?;
         }
         if !shapes.is_empty() {
-            let shapes = Entries(
-                shapes
-                    .into_iter()
-                    .map(|shape| {
-                        let ser = ShapeSer {
-                            shape,
-                            sort: self.sort,
-                        };
-                        (shape.id().as_str(), ser)
-                    })
-                    .collect(),
-            );
-            map.serialize_entry("shapes", &shapes)?;
+            let mut entries = Vec::with_capacity(shapes.len());
+            for shape in shapes {
+                let sort = self.sort;
+                entries.push((
+                    shape.id().as_str(),
+                    EntrySer::Shape(ShapeSer { shape, sort }),
+                ));
+                // The own traits of inherited members, which the shape does not write. Only shapes
+                // with mixins have inherited members, so the members of other shapes are skipped.
+                if shape.mixins().is_empty() {
+                    continue;
+                }
+                for member in shape.members().filter(|m| m.is_inherited()) {
+                    let traits = TraitsSer::new(member.introduced_traits(), sort);
+                    if !traits.0.is_empty() {
+                        entries.push((member.id().as_str(), EntrySer::Apply(traits)));
+                    }
+                }
+            }
+            if self.sort {
+                entries.sort_by(|a, b| a.0.cmp(b.0));
+            }
+            map.serialize_entry("shapes", &Entries(entries))?;
         }
         map.end()
     }
@@ -236,23 +247,45 @@ impl Serialize for ObjectSer<'_> {
     }
 }
 
-struct TraitsSer<'a>(&'a TraitMap, bool);
+/// Traits, sorted by ID when writing canonical output.
+struct TraitsSer<'a>(Vec<(&'a str, &'a Node)>, bool);
+
+impl<'a> TraitsSer<'a> {
+    fn new(traits: impl Iterator<Item = AppliedTrait<'a>>, sort: bool) -> Self {
+        let entries = traits
+            .map(|applied| (applied.id().as_str(), applied.value()))
+            .collect();
+        Self(ordered(entries, sort), sort)
+    }
+}
 
 impl Serialize for TraitsSer<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let sort = self.1;
-        let entries = ordered(
-            self.0
-                .iter()
-                .map(|(id, value)| (id.as_str(), value))
-                .collect(),
-            sort,
-        );
-        let mut map = serializer.serialize_map(Some(entries.len()))?;
-        for (key, value) in entries {
-            map.serialize_entry(key, &NodeOut(value, sort))?;
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (key, value) in &self.0 {
+            map.serialize_entry(key, &NodeOut(value, self.1))?;
         }
         map.end()
+    }
+}
+
+/// An entry of `shapes`: a shape, or an `apply` entry with the own traits of an inherited member.
+enum EntrySer<'a> {
+    Shape(ShapeSer<'a>),
+    Apply(TraitsSer<'a>),
+}
+
+impl Serialize for EntrySer<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            EntrySer::Shape(shape) => shape.serialize(serializer),
+            EntrySer::Apply(traits) => {
+                let mut map = serializer.serialize_map(Some(2))?;
+                map.serialize_entry("type", "apply")?;
+                map.serialize_entry("traits", traits)?;
+                map.end()
+            }
+        }
     }
 }
 
@@ -304,7 +337,7 @@ impl Serialize for MemberSer<'_> {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("target", member.target.as_str())?;
         if !member.traits.is_empty() {
-            map.serialize_entry("traits", &TraitsSer(&member.traits, self.1))?;
+            map.serialize_entry("traits", &TraitsSer::new(member.traits().iter(), self.1))?;
         }
         map.end()
     }
@@ -321,6 +354,11 @@ impl Serialize for ShapeSer<'_> {
         let member = |m| MemberSer(m, sort);
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("type", self.shape.shape_type().as_str())?;
+        let mixins = self.shape.mixins();
+        if !mixins.is_empty() {
+            // Mixin order is significant, so it is kept even in canonical output.
+            map.serialize_entry("mixins", &RefSet::new(mixins, false))?;
+        }
         match self.shape {
             Shape::List(list) => map.serialize_entry("member", &member(&list.member))?,
             Shape::Map(m) => {
@@ -379,20 +417,21 @@ impl Serialize for ShapeSer<'_> {
                 }
             }
             shape => {
-                if let Some(members) = shape.named_members().filter(|m| !m.is_empty()) {
-                    let members = Entries(
-                        members
-                            .iter()
-                            .map(|(name, m)| (name.as_str(), member(m)))
-                            .collect(),
-                    );
-                    map.serialize_entry("members", &members)?;
+                if let Some(members) = shape.named_members() {
+                    let members: Vec<_> = members
+                        .iter()
+                        .filter(|(_, m)| shape.mixins().is_empty() || !m.is_inherited())
+                        .map(|(name, m)| (name.as_str(), member(m)))
+                        .collect();
+                    if !members.is_empty() {
+                        map.serialize_entry("members", &Entries(members))?;
+                    }
                 }
             }
         }
-        let traits = &self.shape.common().traits;
-        if !traits.is_empty() {
-            map.serialize_entry("traits", &TraitsSer(traits, sort))?;
+        let traits = TraitsSer::new(self.shape.introduced_traits(), sort);
+        if !traits.0.is_empty() {
+            map.serialize_entry("traits", &traits)?;
         }
         map.end()
     }

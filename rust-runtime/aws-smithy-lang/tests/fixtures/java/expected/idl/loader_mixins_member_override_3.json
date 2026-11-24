@@ -1,0 +1,63 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "com.amazon.example#A1": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#private": {},
+                        "smithy.api#tags": [
+                            "a"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "com.amazon.example#A2": {
+            "type": "structure",
+            "members": {
+                "a": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#tags": [
+                            "b"
+                        ]
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        },
+        "com.amazon.example#Valid": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "com.amazon.example#A1"
+                },
+                {
+                    "target": "com.amazon.example#A2"
+                }
+            ],
+            "members": {
+                "c": {
+                    "target": "smithy.api#Integer"
+                }
+            }
+        },
+        "com.amazon.example#Valid$a": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#tags": [
+                    "c"
+                ]
+            }
+        }
+    }
+}

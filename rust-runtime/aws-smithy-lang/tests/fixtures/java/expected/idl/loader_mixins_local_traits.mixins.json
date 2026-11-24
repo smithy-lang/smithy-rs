@@ -1,0 +1,22 @@
+{
+    "smithy.example#PublicShape": {
+        "mixins": [
+            "smithy.example#PrivateMixin"
+        ],
+        "traits": {
+            "smithy.api#sensitive": {}
+        },
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#PrivateMixin$foo"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "foo",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

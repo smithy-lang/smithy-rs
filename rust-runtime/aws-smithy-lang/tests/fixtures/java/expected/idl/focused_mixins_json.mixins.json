@@ -1,0 +1,46 @@
+{
+    "ex#C": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#required"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#D": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "d"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}
