@@ -122,6 +122,14 @@ impl CratesIndex {
         )))
     }
 
+    /// Returns the sparse index at `url`, such as `sparse+http://127.0.0.1:8000/index/`.
+    pub fn sparse(url: &str) -> Result<Self> {
+        Ok(Self(Inner::Real(
+            crates_index::SparseIndex::from_url(url)
+                .with_context(|| format!("failed to initialize the sparse index at {url}"))?,
+        )))
+    }
+
     /// Returns a fake crates.io index from file, panicking if loading fails.
     pub fn fake(path: impl AsRef<Path>) -> Self {
         Self(Inner::Fake(FakeIndex::from_file(path)))

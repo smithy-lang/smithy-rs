@@ -32,6 +32,10 @@ pub struct YankArgs {
     /// Unyank instead, to undo a mistake.
     #[clap(long)]
     undo: bool,
+    /// Yank from this registry in cargo's config instead of crates.io, such as a local test
+    /// registry. Its sparse index URL is read from `CARGO_REGISTRIES_<NAME>_INDEX`, as cargo does.
+    #[clap(long)]
+    registry: Option<String>,
 }
 
 /// The two crates.io calls this subcommand makes.
@@ -43,9 +47,11 @@ trait Registry {
     async fn yank(&self, krate: &CrateVersion, undo: bool) -> Result<()>;
 }
 
-/// crates.io itself: the sparse index that cargo reads, and `cargo yank`.
+/// crates.io itself, or the registry named by `--registry`: the sparse index that cargo reads,
+/// and `cargo yank`.
 struct CratesIo {
     index: Arc<CratesIndex>,
+    registry: Option<String>,
 }
 
 #[async_trait]
@@ -67,6 +73,7 @@ impl Registry for CratesIo {
     async fn yank(&self, krate: &CrateVersion, undo: bool) -> Result<()> {
         cargo::Yank::new(&krate.name, krate.version.to_string())
             .undo(undo)
+            .registry(self.registry.clone())
             .spawn()
             .await
     }
@@ -74,10 +81,30 @@ impl Registry for CratesIo {
 
 pub async fn subcommand_yank(args: &YankArgs) -> Result<()> {
     cargo::confirm_installed_on_path()?;
+    let index = match &args.registry {
+        Some(name) => CratesIndex::sparse(&registry_index_url(name)?)?,
+        None => CratesIndex::real()?,
+    };
     let crates_io = CratesIo {
-        index: Arc::new(CratesIndex::real()?),
+        index: Arc::new(index),
+        registry: args.registry.clone(),
     };
     run(&crates_io, args, std::io::stdin().is_terminal()).await
+}
+
+/// The sparse index URL of a registry in cargo's config, from the variable cargo reads it from,
+/// so the lookups and `cargo yank` go to the same registry.
+fn registry_index_url(name: &str) -> Result<String> {
+    let var = index_url_var(name);
+    std::env::var(&var)
+        .map_err(|_| anyhow!("--registry {name} needs {var}, the registry's sparse index URL"))
+}
+
+fn index_url_var(name: &str) -> String {
+    format!(
+        "CARGO_REGISTRIES_{}_INDEX",
+        name.to_uppercase().replace('-', "_")
+    )
 }
 
 async fn run(registry: &impl Registry, args: &YankArgs, interactive: bool) -> Result<()> {
@@ -337,6 +364,7 @@ mod tests {
             dry_run: false,
             skip_confirmation: true,
             undo: false,
+            registry: None,
         }
     }
 
@@ -428,6 +456,7 @@ mod tests {
         .unwrap();
         let crates_io = CratesIo {
             index: Arc::new(CratesIndex::fake(&path)),
+            registry: None,
         };
         let version = |v: &str| v.parse::<CrateVersion>().unwrap();
         assert!(crates_io
@@ -461,9 +490,28 @@ mod tests {
                 .unwrap()
                 .dry_run
         );
+        assert_eq!(
+            Some("mock"),
+            YankArgs::try_parse_from(["yank", "--registry", "mock", "a@1.0.0"])
+                .unwrap()
+                .registry
+                .as_deref()
+        );
         // A version list is required, and every entry must be name@version.
         assert!(YankArgs::try_parse_from(["yank", "-y"]).is_err());
         assert!(YankArgs::try_parse_from(["yank", "-y", "aws-smithy-types"]).is_err());
+    }
+
+    #[test]
+    fn registry_index_comes_from_the_variable_cargo_reads() {
+        assert_eq!("CARGO_REGISTRIES_MY_MOCK_INDEX", index_url_var("my-mock"));
+        let err = registry_index_url("publisher-yank-test-unset")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("CARGO_REGISTRIES_PUBLISHER_YANK_TEST_UNSET_INDEX"),
+            "{err}"
+        );
     }
 
     /// What `cargo yank` prints for a 429 from crates.io (real cargo against a stub that
