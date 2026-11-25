@@ -32,6 +32,6 @@ aws-sdk-s3 = { version = "...", features = ["legacy-https-client"] }
 aws-smithy-runtime = { version = "...", features = ["client", "tls-rustls"] }
 ```
 
-`aws-smithy-runtime`'s `tls-rustls` no longer enables `aws-smithy-runtime-api/legacy-client`. That feature is now a deprecated no-op: still declared, and still expanding to `client` so `tls-rustls` alone keeps working, but nothing reads it. It will be deleted once no released crate names it. If you enable it directly, switch to `client`.
+`aws-smithy-runtime`'s `tls-rustls` no longer enables `aws-smithy-runtime-api/legacy-client`, which is likewise a deprecated no-op that gates no code. It stays declared, and still expands to `client` so that enabling `legacy-client` by itself keeps compiling. If you enable it directly, switch to `client`.
 
 The advance-notice warning that announced this change is removed, since the change has now happened. A build that expected the legacy client but does not enable it gets the existing fallback warning instead, which reports the substitution rather than predicting it. That warning now fires the first time the substituted client is asked for a connector, once per process, so it no longer repeats for every client and operation and no longer appears for callers who supply their own `http_client`.
