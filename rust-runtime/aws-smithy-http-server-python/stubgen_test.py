@@ -129,6 +129,24 @@ class TestStubgen(unittest.TestCase):
             """,
         )
 
+    def test_rust_raw_identifier_param(self):
+        # `type` is a reserved keyword in Rust, so the code generator emits it
+        # as `r#type` in docstrings. Stubs must use the plain Python name.
+        self.single_mod(
+            """
+            class Foo:
+                '''
+                :param r#type str:
+                :rtype None:
+                '''
+            """,
+            """
+            class Foo:
+                def __init__(self, type: str) -> None:
+                    ...
+            """,
+        )
+
     def test_class_with_static_method(self):
         self.single_mod(
             """
