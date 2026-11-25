@@ -7,9 +7,11 @@ import { App } from "aws-cdk-lib";
 import { Template } from "aws-cdk-lib/assertions";
 import {
     BuildCanaryStack,
+    LEG_WORKFLOW,
+    MAIN_REF,
     METRIC_NAMESPACE,
     ORCHESTRATOR_ENVIRONMENT,
-    MAIN_REF,
+    ORCHESTRATOR_WORKFLOWS,
     RELEASE_REFS,
     RELEASE_TAG_REFS,
 } from "../../lib/smithy-rs/build-canary-stack";
@@ -70,13 +72,22 @@ type Claims = Record<string, string>;
 const RELEASE_TAG = "refs/tags/release-2026-11-16";
 
 /** The claims a job in this repository presents, optionally declaring an environment. */
-function token(ref: string, environment?: string): Claims {
+/**
+ * The claims GitHub puts in a token for a job at `ref`, in `workflow`.
+ *
+ * `workflow` defaults to the leg's, because most cases here model a leg. Every token carries
+ * `job_workflow_ref` -- GitHub sets it for ordinary jobs, not only for reusable workflows -- so a
+ * test that omitted it would be modelling a token that does not exist, and would pass against a
+ * role it should not be able to assume.
+ */
+function token(ref: string, environment?: string, workflow: string = LEG_WORKFLOW): Claims {
     const claims: Claims = {
         [`${CLAIM}:aud`]: "sts.amazonaws.com",
         [`${CLAIM}:repository_owner_id`]: SMITHY_RS.githubOrgId,
         [`${CLAIM}:repository_id`]: SMITHY_RS.githubRepoId,
         [`${CLAIM}:sub`]: `repo:${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}:ref:${ref}`,
         [`${CLAIM}:ref`]: ref,
+        [`${CLAIM}:job_workflow_ref`]: `${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}/.github/workflows/${workflow}@${ref}`,
     };
     if (environment !== undefined) {
         claims[`${CLAIM}:environment`] = environment;
@@ -229,7 +240,7 @@ test("a leg on a release tag can assume the metrics role", () => {
 });
 
 test("the orchestrator on main, inside its environment, can assume its role", () => {
-    const claims = token(MAIN_REF, ORCHESTRATOR_ENVIRONMENT);
+    const claims = token(MAIN_REF, ORCHESTRATOR_ENVIRONMENT, ORCHESTRATOR_WORKFLOWS[0]);
     expect(admits(trustStatements(synth(), "orchestrator"), claims)).toBe(true);
 });
 
@@ -250,6 +261,48 @@ test("nothing on main can assume the leg role, environment or not", () => {
  * around this: under `pull_request_target` and `workflow_call` the workflow definition comes from
  * the base ref, not from the pull request.
  */
+/**
+ * A release tag says *where* a job ran, not *which workflow* it was.
+ *
+ * `manual-canary.yml` and `manual-pull-request-bot.yml` are `workflow_dispatch`, hold
+ * `id-token: write`, and check out a pull request's commit -- and a dispatch can be launched from a
+ * release tag. Without `job_workflow_ref` the token such a job mints satisfies every other
+ * condition on the metrics role, so a pull request's code could write a `Red` datapoint and page
+ * the oncall. The ref condition alone cannot tell the two apart.
+ */
+test("another workflow at a release tag cannot assume either role", () => {
+    const template = synth();
+    for (const workflow of ["manual-canary.yml", "manual-pull-request-bot.yml", "ci-pr.yml"]) {
+        const claims = token(RELEASE_TAG, undefined, workflow);
+        expect(admits(trustStatements(template, "metrics"), claims)).toBe(false);
+        expect(
+            admits(
+                trustStatements(template, "orchestrator"),
+                token(RELEASE_TAG, ORCHESTRATOR_ENVIRONMENT, workflow),
+            ),
+        ).toBe(false);
+    }
+    // And the workflow that is supposed to reach it still does.
+    expect(
+        admits(trustStatements(template, "metrics"), token(RELEASE_TAG, undefined, LEG_WORKFLOW)),
+    ).toBe(true);
+
+    // The split runs the other way too: the leg's workflow must not reach the role that deletes
+    // alarms. The environment condition already refuses a leg, which carries none -- this pins the
+    // second barrier, so that adding `build-canary.yml` to the orchestrator's list cannot pass
+    // unnoticed on the strength of the first.
+    for (const ref of [RELEASE_TAG, MAIN_REF]) {
+        for (const environment of [undefined, ORCHESTRATOR_ENVIRONMENT]) {
+            expect(
+                admits(
+                    trustStatements(template, "orchestrator"),
+                    token(ref, environment, LEG_WORKFLOW),
+                ),
+            ).toBe(false);
+        }
+    }
+});
+
 test("a job on main running a pull request's code cannot assume the metrics role", () => {
     expect(admits(trustStatements(synth(), "metrics"), token(MAIN_REF))).toBe(false);
 });

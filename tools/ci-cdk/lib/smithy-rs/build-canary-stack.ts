@@ -81,6 +81,40 @@ export const MAIN_REF = "refs/heads/main";
 /** {@link RELEASE_REFS} without {@link MAIN_REF}: what the leg role accepts, and all it accepts. */
 export const RELEASE_TAG_REFS = RELEASE_REFS.filter((ref) => ref !== MAIN_REF);
 
+/**
+ * The workflow each role's jobs are defined by, pinned as a `job_workflow_ref` condition.
+ *
+ * {@link RELEASE_REFS} bounds *where* a job ran, which is not the same as *which workflow* it
+ * belongs to: several workflows can run from one ref. `manual-canary.yml` and
+ * `manual-pull-request-bot.yml` are `workflow_dispatch`, check out a pull request's code, and hold
+ * `id-token: write` -- and a dispatch can be launched from a release tag. Without this condition a
+ * token minted by one of those jobs satisfies everything the metrics role checks, so a pull
+ * request's code could write a verdict.
+ *
+ * These files arrive with the canary itself, like the `paging-selftest-*` alarm prefix above.
+ */
+export const LEG_WORKFLOW = "build-canary.yml";
+export const ORCHESTRATOR_WORKFLOWS = ["post-publish-watch.yml", "paging-selftest.yml"];
+
+/**
+ * The `job_workflow_ref` pattern for one workflow, at any ref.
+ *
+ * `@*` deliberately, rather than repeating the tag shape here. The claim is
+ * `OWNER/REPO/.github/workflows/FILE@REF`, so pinning the ref inside it would state a second time
+ * what the `ref` condition already states — and it would make the tag shape depend on how GitHub
+ * renders a ref inside this particular claim, which is the part of its format least worth betting
+ * on. Each condition does one job instead: `ref` bounds *where* a job ran, this bounds *which
+ * workflow* defines it, and together they admit the same set.
+ *
+ * Safe because none of these workflows is a `workflow_call`. For a job in a reusable workflow the
+ * claim names the reusable file at the ref *it* was called at, which can differ from the run's
+ * `ref`; for a top-level job the two always agree. If a leg ever moved into a reusable workflow the
+ * claim would name that file, this pattern would refuse it, and the symptom would be a credentials
+ * error rather than a silent widening.
+ */
+export const jobWorkflowRef = (workflow: string): string =>
+    `${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}/.github/workflows/${workflow}@*`;
+
 export interface Properties extends StackProps {
     githubActionsOidcProvider: OpenIdConnectProvider;
 }
@@ -127,7 +161,8 @@ export class BuildCanaryStack extends Stack {
             ...github,
             // Release tags only, and no environment. Requiring one would mean every leg
             // declaring it, and a release tag is created only by the release automation, so the
-            // ref is enough on its own.
+            // ref is enough on its own. The workflow is pinned separately, because the ref alone
+            // does not say which workflow a job belongs to.
             //
             // `main` is deliberately absent. It is where maintainer-triggered workflows run a pull
             // request's checked-out code in jobs holding `id-token: write` --
@@ -137,6 +172,7 @@ export class BuildCanaryStack extends Stack {
             // and paging the oncall over a pull request. Anything of the canary's that legitimately
             // runs from `main` uses the orchestrator role below, which is environment-gated.
             refs: RELEASE_TAG_REFS,
+            jobWorkflowRefs: [jobWorkflowRef(LEG_WORKFLOW)],
         });
         this.metricsRole.oidcRole.addToPolicy(
             new PolicyStatement({
@@ -161,6 +197,9 @@ export class BuildCanaryStack extends Stack {
             // `main` is here, where it is absent from the leg role, because the environment is
             // what a pull request's code cannot declare.
             refs: RELEASE_REFS,
+            // Two workflows define the orchestrator's jobs, so both are listed. `build-canary.yml`
+            // is deliberately not among them: a leg must never reach the role that deletes alarms.
+            jobWorkflowRefs: ORCHESTRATOR_WORKFLOWS.map(jobWorkflowRef),
         });
         this.orchestratorRole.oidcRole.addToPolicy(
             new PolicyStatement({

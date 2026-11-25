@@ -56,6 +56,13 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
 // to this stack, and the provider is already deployed — the roles the existing workflows assume
 // could not work otherwise.
 //
+// Both of this stack's roles also condition on `job_workflow_ref`, which no local check can
+// exercise: if GitHub does not set that claim for these jobs, or sets it in a shape these patterns
+// do not match, the roles become unassumable. That fails closed -- nothing is admitted wrongly --
+// and it surfaces as a credentials error on the first canary run after the secrets are set, not at
+// deploy time. So the first dispatch of `build-canary.yml` is part of the verification, not a
+// formality.
+//
 // `smithy-rs-canary-stack` needs deploying too, also `--exclusively`, and that one is the risk.
 // It confines the SDK canary's role to the SDK canary's own metric namespace — until it is
 // deployed that role's `PutMetricData` allow has no namespace condition, and a pull request's code

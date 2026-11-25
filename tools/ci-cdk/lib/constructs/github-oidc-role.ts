@@ -44,6 +44,23 @@ export interface Properties {
      * `refs/tags/release-*` or `refs/heads/main`. Matched with `StringLike`, so `*` is a wildcard.
      */
     refs?: string[];
+
+    /**
+     * Only let jobs defined by a matching workflow assume the role, for example
+     * `smithy-lang/smithy-rs/.github/workflows/build-canary.yml@refs/tags/release-*`. Matched with
+     * `StringLike`.
+     *
+     * This is the claim that distinguishes *which workflow* a job belongs to. {@link refs} cannot:
+     * a ref says where a job ran, and several workflows can run from the same ref. A
+     * `workflow_dispatch` workflow that checks out a pull request's code can be launched from a
+     * release tag, so a role trusting release tags alone will accept a token minted by that job.
+     *
+     * Note the asymmetry with the id conditions: this claim carries the repository *name*, so a
+     * rename stops it matching and the role becomes unassumable. That is a fail-closed break --
+     * CI stops rather than letting the wrong caller in -- but it is a second place to update,
+     * alongside `github-repositories.ts`.
+     */
+    jobWorkflowRefs?: string[];
     /**
      * Further jobs that may assume the role, each as a trust statement of its own.
      *
@@ -52,7 +69,7 @@ export interface Properties {
      * `main` cannot say so in one block without requiring the environment on the tag too. Separate
      * statements keep each alternative's conditions to itself.
      */
-    alsoTrust?: { environment?: string; refs?: string[] }[];
+    alsoTrust?: { environment?: string; refs?: string[]; jobWorkflowRefs?: string[] }[];
 }
 
 /**
@@ -143,6 +160,7 @@ export class GitHubOidcRole extends Construct {
         const conditionsFor = (
             environment?: string,
             refs?: string[],
+            jobWorkflowRefs?: string[],
         ): Record<string, Record<string, string | string[]>> => {
             // Reject the shapes that would produce an alternative nobody can match. A trust policy
             // that matches nothing fails closed, which is safe but silent, and a role that cannot
@@ -157,6 +175,12 @@ export class GitHubOidcRole extends Construct {
                 throw new Error(
                     `${properties.name}: refs is an empty array, which no job can match. ` +
                         "Omit it to allow any ref.",
+                );
+            }
+            if (jobWorkflowRefs !== undefined && jobWorkflowRefs.length === 0) {
+                throw new Error(
+                    `${properties.name}: jobWorkflowRefs is an empty array, which no job can ` +
+                        "match. Omit it to allow any workflow.",
                 );
             }
 
@@ -178,11 +202,18 @@ export class GitHubOidcRole extends Construct {
             if (refs !== undefined) {
                 stringLike[`${CLAIM}:ref`] = refs;
             }
+            if (jobWorkflowRefs !== undefined) {
+                stringLike[`${CLAIM}:job_workflow_ref`] = jobWorkflowRefs;
+            }
 
             return { StringEquals: stringEquals, StringLike: stringLike };
         };
 
-        const conditions = conditionsFor(properties.environment, properties.refs);
+        const conditions = conditionsFor(
+            properties.environment,
+            properties.refs,
+            properties.jobWorkflowRefs,
+        );
 
         this.oidcRole = new Role(this, "oidc-role", {
             roleName: `${properties.name}-github-oidc-role`,
@@ -200,7 +231,7 @@ export class GitHubOidcRole extends Construct {
                     principals: [
                         new FederatedPrincipal(
                             properties.oidcProvider.openIdConnectProviderArn,
-                            conditionsFor(trust.environment, trust.refs),
+                            conditionsFor(trust.environment, trust.refs, trust.jobWorkflowRefs),
                         ),
                     ],
                 }),
