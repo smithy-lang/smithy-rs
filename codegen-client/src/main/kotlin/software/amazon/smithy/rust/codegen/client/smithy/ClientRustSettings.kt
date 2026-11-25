@@ -100,10 +100,12 @@ data class ClientCodegenConfig(
      *
      * - adds `rustls` as a *default* feature, which selects `aws-smithy-runtime/tls-rustls`
      * - adds an opt-in `legacy-test-util` feature for the pre-1.x test helpers
-     * - documents a pre-`v2026_01_12` `BehaviorVersion` in the `behavior_version` example
      *
-     * Applies only to clients smithy-rs generates generally; the AWS SDK instead always offers the legacy
-     * stack through the non-default `legacy-https-client` feature.
+     * The AWS SDK does not set this flag, so it gets the `true` default and the `legacy-test-util` feature.
+     * The `rustls` default does not reach it, but not because of this flag: the SDK sets
+     * `includeFluentClient = false`, so `FluentClientDecorator.extras` returns before declaring it, and
+     * `AwsFluentClientDecorator` declares a non-default `rustls` instead. Note that is a bypass, not an
+     * override — `mergeFeature` unions deps and keeps the first `default` flag it saw.
      */
     val includeLegacyClient: Boolean = DEFAULT_ENABLE_LEGACY_CLIENT,
     /**
