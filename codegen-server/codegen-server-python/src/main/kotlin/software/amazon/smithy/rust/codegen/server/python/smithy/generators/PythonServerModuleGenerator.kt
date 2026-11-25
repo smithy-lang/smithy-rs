@@ -130,6 +130,8 @@ class PythonServerModuleGenerator(
             """
             let types = #{pyo3}::types::PyModule::new(py, "types")?;
             types.add_class::<#{SmithyPython}::types::Blob>()?;
+            types.add_class::<#{SmithyPython}::types::BigInteger>()?;
+            types.add_class::<#{SmithyPython}::types::BigDecimal>()?;
             types.add_class::<#{SmithyPython}::types::DateTime>()?;
             types.add_class::<#{SmithyPython}::types::Format>()?;
             types.add_class::<#{SmithyPython}::types::ByteStream>()?;
