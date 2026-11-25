@@ -44,6 +44,10 @@ name = "compile_fail"
 harness = false
 required-features = ["runtime-schema"]
 
+[[test]]
+name = "runtime_type_registry"
+required-features = ["runtime-schema"]
+
 [[bench]]
 name = "model"
 harness = false

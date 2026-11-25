@@ -261,8 +261,44 @@ pub mod http_protocol {
     pub use crate::schema::http_protocol::*;
 }
 
-/// Runtime type and error registries for resolving shapes by `ShapeId`.
 pub mod registry {
+    //! Runtime type and error registries for resolving shapes by `ShapeId`.
+    //!
+    //! # Static and runtime entries
+    //!
+    //! A [`TypeRegistry`] holds two kinds of entries:
+    //!
+    //! - A **static entry** ([`RegistryEntry`]) pairs a `&'static Schema<'static>`
+    //!   with plain function pointers. Generated code registers these.
+    //! - A **runtime entry** ([`RuntimeRegistration`]) is an object that owns or
+    //!   shares its schema and deserialization context, such as a schema set built
+    //!   from a model loaded at runtime. Its schema is borrowed from the
+    //!   registration, so it is not `'static`.
+    //!
+    //! A registry has at most one entry, of either kind, per fully qualified
+    //! shape ID.
+    //!
+    //! The methods that return a [`RegistryEntry`] or a `&'static Schema<'static>`
+    //! see only static entries, because a runtime entry can provide neither:
+    //! [`schema_for`](TypeRegistry::schema_for),
+    //! [`schema_for_fqn`](TypeRegistry::schema_for_fqn),
+    //! [`entry_for`](TypeRegistry::entry_for),
+    //! [`entry_for_fqn`](TypeRegistry::entry_for_fqn),
+    //! [`entry_for_error_code`](TypeRegistry::entry_for_error_code), and
+    //! [`iter`](TypeRegistry::iter), along with the `entry_for*` methods of
+    //! [`ComposedRegistry`].
+    //!
+    //! Every other method covers both kinds. [`resolve`](TypeRegistry::resolve),
+    //! [`resolve_fqn`](TypeRegistry::resolve_fqn), and
+    //! [`resolve_error_code`](TypeRegistry::resolve_error_code) return a
+    //! [`ResolvedEntry`] for an entry of either kind, and
+    //! [`resolved_entries`](TypeRegistry::resolved_entries) iterates every entry.
+    //! Code that may be given a registry with runtime entries, such as one built
+    //! by a dynamic client, should use these.
+    //! [`deserialize_document`](TypeRegistry::deserialize_document), [`reify_error`],
+    //! [`compose`](TypeRegistry::compose), [`len`](TypeRegistry::len), and
+    //! [`is_empty`](TypeRegistry::is_empty) also cover both kinds.
+
     pub use crate::schema::registry::*;
 }
 
