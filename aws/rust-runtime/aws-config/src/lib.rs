@@ -124,6 +124,7 @@ mod json_credentials;
 #[cfg(test)]
 mod test_case;
 
+pub mod credential_daemon;
 pub mod credential_process;
 pub mod default_provider;
 pub mod ecs;

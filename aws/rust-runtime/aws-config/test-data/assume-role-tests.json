@@ -643,5 +643,516 @@
     "output": {
       "Error": "sso-session named `oops` (referenced by profile `A`) was not found"
     }
+  },
+  {
+    "docs": "credential daemon: basic profile",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: wins over static credentials in the same profile",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "aws_access_key_id": "abc123",
+          "aws_secret_access_key": "def456"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: wins over credential_process in the same profile",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "credential_process": "/bin/creds"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: a role profile can use a credential daemon profile as its source profile",
+    "input": {
+      "profiles": {
+        "A": {
+          "role_arn": "arn:aws:iam::123456789:role/RoleA",
+          "source_profile": "B"
+        },
+        "B": {
+          "daemon_credential": "dev"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        },
+        {
+          "AssumeRole": {
+            "role_arn": "arn:aws:iam::123456789:role/RoleA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: a source profile uses the credential daemon ahead of its static credentials",
+    "input": {
+      "profiles": {
+        "A": {
+          "role_arn": "arn:aws:iam::123456789:role/RoleA",
+          "source_profile": "B"
+        },
+        "B": {
+          "daemon_credential": "dev",
+          "aws_access_key_id": "abc123",
+          "aws_secret_access_key": "def456"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        },
+        {
+          "AssumeRole": {
+            "role_arn": "arn:aws:iam::123456789:role/RoleA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: role_arn in a credential daemon profile is an error",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "role_arn": "arn:aws:iam::123456789:role/RoleA",
+          "source_profile": "B"
+        },
+        "B": {
+          "aws_access_key_id": "abc123",
+          "aws_secret_access_key": "def456"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` sets `daemon_credential` together with `role_arn`; a credential daemon profile cannot also assume a role. Put `role_arn` in a separate profile with `source_profile = A`."
+    }
+  },
+  {
+    "docs": "credential daemon: web_identity_token_file in a credential daemon profile is an error",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "web_identity_token_file": "/token.jwt"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has two credential sources, `daemon_credential` and `web_identity_token_file`. Remove one of them."
+    }
+  },
+  {
+    "docs": "credential daemon: an invalid source profile is an error, with no fallback",
+    "input": {
+      "profiles": {
+        "A": {
+          "role_arn": "arn:aws:iam::123456789:role/RoleA",
+          "source_profile": "B"
+        },
+        "B": {
+          "daemon_credential": "a/b",
+          "aws_access_key_id": "abc123",
+          "aws_secret_access_key": "def456"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `B` has an invalid `daemon_credential`"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (empty)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": ""
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (65 characters)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (leading dot)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": ".dev"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (slash)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "a/b"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (space)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "a b"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: invalid name (non-ASCII)",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dév"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "Error": "INVALID_CONFIG: profile `A` has an invalid `daemon_credential`. A credential daemon credential name is 1 to 64 characters"
+    }
+  },
+  {
+    "docs": "credential daemon: valid name `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: valid name `A.b_c-1`",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "A.b_c-1"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "A.b_c-1"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: valid name `dev.`",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev."
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: names are case-sensitive",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "DeV"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "DeV"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: SSO session with account and role are sent to the credential daemon",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_session": "foo",
+          "sso_account_id": "0123",
+          "sso_role_name": "testrole"
+        }
+      },
+      "selected_profile": "A",
+      "sso_sessions": {
+        "foo": {
+          "sso_region": "us-east-7",
+          "sso_start_url": "https://foo.bar"
+        }
+      }
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev",
+            "sso_account_id": "0123",
+            "sso_role_name": "testrole"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: legacy SSO start URL with account and role are sent to the credential daemon",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_start_url": "https://foo.bar",
+          "sso_region": "us-east-7",
+          "sso_account_id": "0123",
+          "sso_role_name": "testrole"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev",
+            "sso_account_id": "0123",
+            "sso_role_name": "testrole"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: SSO account and role without an SSO session are not sent",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_account_id": "0123",
+          "sso_role_name": "testrole"
+        }
+      },
+      "selected_profile": "A"
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "CredentialDaemon": {
+            "credential": "dev"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "docs": "credential daemon: SSO session with only an account is the SSO error",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_session": "foo",
+          "sso_account_id": "0123"
+        }
+      },
+      "selected_profile": "A",
+      "sso_sessions": {
+        "foo": {
+          "sso_region": "us-east-7",
+          "sso_start_url": "https://foo.bar"
+        }
+      }
+    },
+    "output": {
+      "Error": "profile `A` has invalid SSO config: if `sso_account_id` is set, then `sso_role_name` must also be set"
+    }
+  },
+  {
+    "docs": "credential daemon: SSO session with only a role is the SSO error",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_session": "foo",
+          "sso_role_name": "testrole"
+        }
+      },
+      "selected_profile": "A",
+      "sso_sessions": {
+        "foo": {
+          "sso_region": "us-east-7",
+          "sso_start_url": "https://foo.bar"
+        }
+      }
+    },
+    "output": {
+      "Error": "profile `A` has invalid SSO config: if `sso_role_name` is set, then `sso_account_id` must also be set"
+    }
+  },
+  {
+    "docs": "credential daemon: SSO session with only an account gives the SSO provider's earlier errors first",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_session": "oops",
+          "sso_account_id": "0123"
+        }
+      },
+      "selected_profile": "A",
+      "sso_sessions": {}
+    },
+    "output": {
+      "Error": "sso-session named `oops` (referenced by profile `A`) was not found"
+    }
+  },
+  {
+    "docs": "credential daemon: SSO session without account and role resolves as if daemon_credential were absent",
+    "input": {
+      "profiles": {
+        "A": {
+          "daemon_credential": "dev",
+          "sso_session": "foo"
+        }
+      },
+      "selected_profile": "A",
+      "sso_sessions": {
+        "foo": {
+          "sso_region": "us-east-7",
+          "sso_start_url": "https://foo.bar"
+        }
+      }
+    },
+    "output": {
+      "ProfileChain": [
+        {
+          "Sso": {
+            "sso_session": "foo",
+            "sso_region": "us-east-7",
+            "sso_start_url": "https://foo.bar"
+          }
+        }
+      ]
+    }
   }
 ]

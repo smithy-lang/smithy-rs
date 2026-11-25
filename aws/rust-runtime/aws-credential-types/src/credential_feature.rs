@@ -55,6 +55,8 @@ pub enum AwsCredentialFeature {
     CredentialsProfileLogin,
     /// An operation called using credentials resolved from a LoginCredentialsProvider configured explicitly via code
     CredentialsLogin,
+    /// An operation called using credentials resolved from a credential daemon configured via profile
+    CredentialDaemon,
 }
 
 impl Storable for AwsCredentialFeature {
