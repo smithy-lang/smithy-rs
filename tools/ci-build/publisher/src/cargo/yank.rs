@@ -14,6 +14,7 @@ pub struct Yank {
     crate_name: String,
     crate_version: String,
     undo: bool,
+    registry: Option<String>,
 }
 
 impl Yank {
@@ -23,12 +24,19 @@ impl Yank {
             crate_name: crate_name.into(),
             crate_version: crate_version.into(),
             undo: false,
+            registry: None,
         }
     }
 
     /// Unyanks the version instead.
     pub fn undo(mut self, undo: bool) -> Yank {
         self.undo = undo;
+        self
+    }
+
+    /// Yanks from this registry in cargo's config instead of crates.io.
+    pub fn registry(mut self, registry: Option<String>) -> Yank {
+        self.registry = registry;
         self
     }
 }
@@ -45,6 +53,9 @@ impl ShellOperation for Yank {
             .arg(&self.crate_name);
         if self.undo {
             command.arg("--undo");
+        }
+        if let Some(registry) = &self.registry {
+            command.arg("--registry").arg(registry);
         }
         let output = command.output()?;
         if !output.status.success() {
@@ -77,6 +88,7 @@ mod tests {
             crate_name: "aws-sdk-dynamodb".into(),
             crate_version: "0.0.22-alpha".into(),
             undo: false,
+            registry: None,
         }
         .spawn()
         .await
@@ -90,6 +102,7 @@ mod tests {
             crate_name: "something".into(),
             crate_version: "0.0.22-alpha".into(),
             undo: false,
+            registry: None,
         }
         .spawn()
         .await;
@@ -110,6 +123,7 @@ mod tests {
             crate_name: "aws-sigv4".into(),
             crate_version: "0.0.0".into(),
             undo: false,
+            registry: None,
         }
         .spawn()
         .await
@@ -123,8 +137,19 @@ mod tests {
             crate_name: "aws-smithy-types".into(),
             crate_version: "1.7.0".into(),
             undo,
+            registry: None,
         };
         unyank(true).spawn().await.unwrap();
         assert!(unyank(false).spawn().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn registry_passes_registry_only_when_set() {
+        let yank = |registry: Option<&str>| Yank {
+            program: "./fake_cargo/cargo_expects_registry",
+            ..Yank::new("aws-smithy-types", "1.7.0").registry(registry.map(String::from))
+        };
+        yank(Some("mock")).spawn().await.unwrap();
+        assert!(yank(None).spawn().await.is_err());
     }
 }
