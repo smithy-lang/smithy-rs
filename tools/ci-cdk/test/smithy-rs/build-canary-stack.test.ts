@@ -286,19 +286,23 @@ test("another workflow at a release tag cannot assume either role", () => {
     expect(
         admits(trustStatements(template, "metrics"), token(RELEASE_TAG, undefined, LEG_WORKFLOW)),
     ).toBe(true);
+});
 
-    // The split runs the other way too: the leg's workflow must not reach the role that deletes
-    // alarms. The environment condition already refuses a leg, which carries none -- this pins the
-    // second barrier, so that adding `build-canary.yml` to the orchestrator's list cannot pass
-    // unnoticed on the strength of the first.
+/**
+ * The role that deletes alarms must be out of reach of the forty tokens minted per release.
+ *
+ * Two conditions keep it there and either alone would do, which is why both are asserted: the
+ * orchestrator requires its environment, which a leg does not declare, and it requires its own
+ * workflows, which a leg is not one of. Asserting the outcome rather than the mechanism is what
+ * makes this survive a change to either -- an `alsoTrust` alternative granting release tags, for
+ * instance, drops the environment requirement for that alternative and would otherwise pass
+ * unnoticed.
+ */
+test("a leg's token cannot assume the orchestrator role", () => {
+    const statements = trustStatements(synth(), "orchestrator");
     for (const ref of [RELEASE_TAG, MAIN_REF]) {
         for (const environment of [undefined, ORCHESTRATOR_ENVIRONMENT]) {
-            expect(
-                admits(
-                    trustStatements(template, "orchestrator"),
-                    token(ref, environment, LEG_WORKFLOW),
-                ),
-            ).toBe(false);
+            expect(admits(statements, token(ref, environment, LEG_WORKFLOW))).toBe(false);
         }
     }
 });
