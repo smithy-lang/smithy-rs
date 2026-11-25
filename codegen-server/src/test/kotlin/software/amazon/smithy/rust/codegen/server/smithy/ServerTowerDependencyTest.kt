@@ -22,7 +22,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /**
- * Generates servers for HTTP 0.x and 1.x with schemaSerde omitted, disabled, or enabled.
+ * Generates servers for HTTP 0.x and 1.x with schemaSerde omitted or enabled. Explicitly disabling it
+ * parses exactly like omitting it (see `ServerRustSettingsTest`), so it needs no separate server.
  * It compiles and runs Tower middleware that forwards a request and checks the successful response.
  * Generated serde must retain mainline's Tower 0.4 declaration; schema serde uses Tower 0.5 with util.
  * HTTP 1.x servers also exercise the metrics layer and plugin in both serde modes.
@@ -32,13 +33,7 @@ internal class ServerTowerDependencyTest {
     fun `HTTP 0x middleware builds with schema serde omitted`() = checkTowerMiddleware(false, null)
 
     @Test
-    fun `HTTP 0x middleware builds with schema serde disabled`() = checkTowerMiddleware(false, false)
-
-    @Test
     fun `HTTP 1x middleware builds with schema serde omitted`() = checkTowerMiddleware(true, null)
-
-    @Test
-    fun `HTTP 1x middleware builds with schema serde disabled`() = checkTowerMiddleware(true, false)
 
     @Test
     fun `HTTP 1x schema middleware builds with Tower 05`() = checkTowerMiddleware(true, true)
