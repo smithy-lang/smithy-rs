@@ -259,7 +259,7 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
+        protocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -271,7 +271,7 @@ class JsonSerializerGenerator(
         }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
+        protocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,
@@ -302,7 +302,7 @@ class JsonSerializerGenerator(
     }
 
     override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
+        return protocolFunctions.crossOperationFn("serialize_document") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> std::result::Result<#{ByteSlab}, #{Error}> {

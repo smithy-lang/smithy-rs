@@ -209,7 +209,7 @@ open class RpcV2Cbor(
         RuntimeType.cborErrors(runtimeConfig).resolve("parse_error_metadata")
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn(codegenContext, "parse_event_stream_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{DeserializeError}> {
