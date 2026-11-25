@@ -7,9 +7,7 @@ use std::marker::PhantomData;
 
 use metrique::DefaultSink;
 
-use crate::default::DefaultMetricsServiceState;
-use crate::default::DefaultRequestMetricsConfig;
-use crate::default::DefaultResponseMetricsConfig;
+use crate::default::DefaultMetricsConfig;
 use crate::layer::MetricsLayer;
 use crate::layer::SmithyMetrics;
 use crate::traits::InitMetrics;
@@ -18,80 +16,77 @@ use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRs;
-use crate::types::HttpRequest;
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
     () => {
-        /// Disable all default request metrics
-        pub fn disable_default_request_metrics(mut self) -> Self {
-            self.default_req_metrics_config.disable_all = true;
-            self
-        }
-
-        /// Disable all default response metrics
-        pub fn disable_default_response_metrics(mut self) -> Self {
-            self.default_res_metrics_config.disable_all = true;
+        /// Disable all default metrics.
+        ///
+        /// This only stops this layer from publishing them: it does not affect their collection,
+        /// which is enabled by the generated service config builder's `enable_standard_metrics()`
+        /// method, or their availability to other middleware.
+        pub fn disable_default_metrics(mut self) -> Self {
+            self.default_metrics_config.disable_all = true;
             self
         }
 
         /// Disable the default `outstanding_requests` metric
         pub fn disable_default_outstanding_requests_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_outstanding_requests = true;
+            self.default_metrics_config.disable_outstanding_requests = true;
             self
         }
 
         /// Disable the default `request_id` metric
         pub fn disable_default_request_id_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_request_id = true;
+            self.default_metrics_config.disable_request_id = true;
             self
         }
 
-        /// Disable the default `operation_name` metric
+        /// Disable the default `operation` metric
         pub fn disable_default_operation_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_operation = true;
+            self.default_metrics_config.disable_operation = true;
             self
         }
 
-        /// Disable the default `service_name` metric
+        /// Disable the default `service` metric
         pub fn disable_default_service_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_service = true;
+            self.default_metrics_config.disable_service = true;
             self
         }
 
         /// Disable the default `service_version` metric
         pub fn disable_default_service_version_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_service_version = true;
+            self.default_metrics_config.disable_service_version = true;
             self
         }
 
         /// Disable the default `http_status_code` metric
         pub fn disable_default_http_status_code_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_http_status_code = true;
+            self.default_metrics_config.disable_http_status_code = true;
             self
         }
 
         /// Disable the default `success` metric
         pub fn disable_default_success_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_success = true;
+            self.default_metrics_config.disable_success = true;
             self
         }
 
         /// Disable the default `client_error` metric
         pub fn disable_default_client_error_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_client_error = true;
+            self.default_metrics_config.disable_client_error = true;
             self
         }
 
         /// Disable the default `server_error` metric
         pub fn disable_default_server_error_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_server_error = true;
+            self.default_metrics_config.disable_server_error = true;
             self
         }
 
         /// Disable the default `operation_time` metric
         pub fn disable_default_operation_time_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_operation_time = true;
+            self.default_metrics_config.disable_operation_time = true;
             self
         }
     };
@@ -116,8 +111,7 @@ pub struct MetricsLayerBuilder<
 {
     pub init_metrics: Option<Init>,
     pub response_metrics: Option<Res>,
-    pub default_req_metrics_config: DefaultRequestMetricsConfig,
-    pub default_res_metrics_config: DefaultResponseMetricsConfig,
+    pub default_metrics_config: DefaultMetricsConfig,
     pub(crate) _state: PhantomData<State>,
     pub(crate) _close_entry: PhantomData<Entry>,
     pub(crate) _entry_sink: PhantomData<Sink>,
@@ -142,8 +136,7 @@ where
         MetricsLayerBuilder {
             init_metrics: Some(init_metrics),
             response_metrics: self.response_metrics,
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
+            default_metrics_config: self.default_metrics_config,
             _state: PhantomData,
             _close_entry: PhantomData,
             _entry_sink: PhantomData,
@@ -176,8 +169,7 @@ where
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             response_metrics: Some(f),
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
+            default_metrics_config: self.default_metrics_config,
             _state: PhantomData,
             _close_entry: PhantomData,
             _entry_sink: PhantomData,
@@ -218,26 +210,12 @@ macro_rules! impl_build_for_state {
             Res: ResponseMetrics<SmithyMetrics>,
         {
             fn build(self) -> MetricsLayer<SmithyMetrics, Sink, Init, Res> {
-                let default_metrics_extension_fn =
-                    |req: &mut HttpRequest,
-                     metrics: &mut SmithyMetrics,
-                     req_config: DefaultRequestMetricsConfig,
-                     res_config: DefaultResponseMetricsConfig,
-                     service_state: DefaultMetricsServiceState| {
-                        metrics.__macro_init_default_metrics(
-                            req,
-                            req_config,
-                            res_config,
-                            service_state,
-                        );
-                    };
-
                 MetricsLayer {
                     init_metrics: self.init_metrics.expect("init_metrics must be provided"),
                     response_metrics: self.response_metrics,
-                    default_metrics_extension_fn,
-                    default_req_metrics_config: self.default_req_metrics_config,
-                    default_res_metrics_config: self.default_res_metrics_config,
+                    // `SmithyMetrics` has no operation metrics to hand out.
+                    init_extensions: |_req, _metrics| {},
+                    default_metrics_config: self.default_metrics_config,
                     _entry_sink: PhantomData,
                 }
             }
@@ -256,6 +234,7 @@ mod tests {
 
     use super::*;
     use crate::layer::MetricsLayer;
+    use crate::types::HttpRequest;
     use crate::types::HttpResponse;
 
     // Compile-time guarantees that methods exist on the correct states

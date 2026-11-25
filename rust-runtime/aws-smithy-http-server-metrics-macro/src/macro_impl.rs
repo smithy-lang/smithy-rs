@@ -75,7 +75,7 @@ pub(crate) fn smithy_metrics_impl(
     }
 
     fields.named.push(syn::parse_quote! {
-        /// Smithy-provided metrics: default request/response metrics plus the
+        /// Smithy-provided metrics: default metrics plus the
         /// pool that collects heterogeneous child metrics contributed by
         /// middleware, handlers, and libraries during the request. Flattened
         /// into this entry when the request finishes.
@@ -89,6 +89,10 @@ pub(crate) fn smithy_metrics_impl(
         impl aws_smithy_http_server_metrics::default::HasSmithyMetrics for #struct_ident {
             fn smithy_metrics(&self) -> &aws_smithy_http_server_metrics::default::SmithyMetrics {
                 &self.__smithy_metrics
+            }
+
+            fn smithy_metrics_mut(&mut self) -> &mut aws_smithy_http_server_metrics::default::SmithyMetrics {
+                &mut self.__smithy_metrics
             }
         }
     };
@@ -133,12 +137,12 @@ fn generate_ext_trait_impl(
         quote! {
             let inner_slot = metrique::Slot::new(<#ty>::default());
             let outer_slot = metrique::Slot::new(inner_slot);
-            metrics.#field_name = outer_slot;
-            let slotguard = metrics
+            _metrics.#field_name = outer_slot;
+            let slotguard = _metrics
                 .#field_name
                 .open(metrique::OnParentDrop::Discard)
                 .expect("unreachable: the slot was created in this scope and is not opened before this point");
-            req.extensions_mut().insert(aws_smithy_http_server_metrics::operation::MetricsExtension::__macro_new(slotguard));
+            _req.extensions_mut().insert(aws_smithy_http_server_metrics::operation::MetricsExtension::__macro_new(slotguard));
         }
     });
 
@@ -152,28 +156,18 @@ fn generate_ext_trait_impl(
                     Res: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident>,
                 {
                     fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#struct_ident, Sink, Init, Res> {
-                        let default_metrics_extension_fn =
-                            |req: &mut aws_smithy_http_server_metrics::types::HttpRequest,
-                            metrics: &mut #struct_ident,
-                            req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
-                            res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig,
-                            service_state: aws_smithy_http_server_metrics::default::DefaultMetricsServiceState| {
-                                metrics.__smithy_metrics.__macro_init_default_metrics(
-                                    req,
-                                    req_config,
-                                    res_config,
-                                    service_state,
-                                );
-
+                        // Hands out the entry's operation metrics through the request extensions.
+                        let init_extensions =
+                            |_req: &mut aws_smithy_http_server_metrics::types::HttpRequest,
+                            _metrics: &mut #struct_ident| {
                                 #(#operation_insertions)*
                             };
 
                         aws_smithy_http_server_metrics::layer::MetricsLayer::__macro_new(
                             self.init_metrics.expect("init_metrics must be provided"),
                             self.response_metrics,
-                            default_metrics_extension_fn,
-                            self.default_req_metrics_config,
-                            self.default_res_metrics_config,
+                            init_extensions,
+                            self.default_metrics_config,
                         )
                     }
                 }

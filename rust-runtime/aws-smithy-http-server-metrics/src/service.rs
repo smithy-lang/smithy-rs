@@ -6,25 +6,34 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 use std::task::Context;
 use std::task::Poll;
 
+use metrique::AppendAndCloseOnDrop;
 use pin_project_lite::pin_project;
 use tower::Service;
 
-use crate::default::service_counter::ServiceCounterGuard;
-use crate::default::DefaultMetricsServiceCounters;
-use crate::default::DefaultMetricsServiceState;
-use crate::default::DefaultRequestMetricsConfig;
-use crate::default::DefaultResponseMetricsConfig;
+use crate::default::DefaultMetrics;
+use crate::default::DefaultMetricsConfig;
 use crate::default::HasSmithyMetrics;
 use crate::pool::SmithyMetricsPool;
 use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
+use crate::types::aws_smithy_http_server::metrics::RequestExt;
 use crate::types::HttpRequest;
 use crate::types::HttpResponse;
+
+/// A request's metrics entry, shared by the response future, which records response metrics into
+/// it, and the request's finish callback, which records the default metrics and emits it.
+///
+/// The entry is emitted when it is taken out and dropped by the finish callback, or otherwise when
+/// the last reference is dropped.
+type SharedEntry<Entry, Sink> = Arc<Mutex<Option<AppendAndCloseOnDrop<Entry, Sink>>>>;
 
 pin_project! {
     /// Future returned by [`MetricsLayerService`].
@@ -39,10 +48,8 @@ pin_project! {
     {
         #[pin]
         inner: F,
-        metrics: metrique::AppendAndCloseOnDrop<Entry, Sink>,
+        metrics: SharedEntry<Entry, Sink>,
         response_metrics: Option<Res>,
-        default_service_state: DefaultMetricsServiceCounters,
-        outstanding_requests_counter_guard: ServiceCounterGuard
     }
 }
 
@@ -62,7 +69,11 @@ where
         match this.inner.poll(cx) {
             Poll::Ready(Ok(mut res)) => {
                 if let Some(response_metrics) = this.response_metrics {
-                    (response_metrics)(&mut res, this.metrics);
+                    let mut entry = this.metrics.lock().unwrap_or_else(PoisonError::into_inner);
+                    // The entry is gone only if the request has already finished.
+                    if let Some(entry) = entry.as_mut() {
+                        (response_metrics)(&mut res, entry);
+                    }
                 }
 
                 Poll::Ready(Ok(res))
@@ -86,19 +97,11 @@ where
     pub(crate) inner: Ser,
     pub(crate) init_metrics: Init,
     pub(crate) response_metrics: Option<Res>,
-    pub(crate) default_metrics_extension_fn: fn(
-        &mut HttpRequest,
-        &mut Entry,
-        DefaultRequestMetricsConfig,
-        DefaultResponseMetricsConfig,
-        DefaultMetricsServiceState,
-    ),
-    pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
-    pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
-    pub(crate) default_service_counters: DefaultMetricsServiceCounters,
-
+    pub(crate) init_extensions: fn(&mut HttpRequest, &mut Entry),
+    pub(crate) default_metrics_config: DefaultMetricsConfig,
     pub(crate) _entry_sink: PhantomData<Sink>,
 }
+
 impl<Ser, Entry, Sink, Init, Res> Clone for MetricsLayerService<Ser, Entry, Sink, Init, Res>
 where
     Ser: Clone,
@@ -112,15 +115,13 @@ where
             inner: self.inner.clone(),
             init_metrics: self.init_metrics.clone(),
             response_metrics: self.response_metrics.clone(),
-            default_metrics_extension_fn: self.default_metrics_extension_fn,
-            default_req_metrics_config: self.default_req_metrics_config.clone(),
-            default_res_metrics_config: self.default_res_metrics_config.clone(),
-            default_service_counters: self.default_service_counters.clone(),
-
+            init_extensions: self.init_extensions,
+            default_metrics_config: self.default_metrics_config.clone(),
             _entry_sink: PhantomData,
         }
     }
 }
+
 impl<Ser, Entry, Sink, Init, Res> Service<HttpRequest>
     for MetricsLayerService<Ser, Entry, Sink, Init, Res>
 where
@@ -150,30 +151,36 @@ where
         req.extensions_mut()
             .insert(SmithyMetricsPool::new(pool_handle));
 
-        // We increment the outstanding requests and get the count at this layer
-        // (typically outer middleware) so we can get this as close to the time
-        // this request entered the system as possible
-        let (outstanding_requests_counter_guard, outstanding_requests) = self
-            .default_service_counters
-            .outstanding_requests_counter
-            .increment();
+        (self.init_extensions)(&mut req, &mut metrics);
 
-        (self.default_metrics_extension_fn)(
-            &mut req,
-            &mut metrics,
-            self.default_req_metrics_config.clone(),
-            self.default_res_metrics_config.clone(),
-            DefaultMetricsServiceState {
-                outstanding_requests,
-            },
-        );
+        let metrics: SharedEntry<Entry, Sink> = Arc::new(Mutex::new(Some(metrics)));
+        let config = self.default_metrics_config.clone();
+        req.on_finish({
+            let metrics = metrics.clone();
+            move |request_metrics| {
+                // Without standard metrics (disabled, or the request never reached the service),
+                // the entry is left in place. It's emitted once both this callback and the
+                // layer's future have been dropped.
+                let Some(request_metrics) = request_metrics else {
+                    return;
+                };
+                let entry = metrics
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .take();
+                if let Some(mut entry) = entry {
+                    entry.smithy_metrics_mut().default_metrics =
+                        DefaultMetrics::new(&request_metrics, &config);
+                    // Emits the entry.
+                    drop(entry);
+                }
+            }
+        });
 
         MetricsLayerServiceFuture {
             inner: self.inner.call(req),
             metrics,
             response_metrics: self.response_metrics.clone(),
-            default_service_state: self.default_service_counters.clone(),
-            outstanding_requests_counter_guard,
         }
     }
 }

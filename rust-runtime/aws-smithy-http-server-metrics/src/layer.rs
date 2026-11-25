@@ -11,10 +11,7 @@ use metrique_writer::GlobalEntrySink;
 use thiserror::Error;
 use tower::Layer;
 
-use crate::default::DefaultMetricsServiceCounters;
-use crate::default::DefaultMetricsServiceState;
-use crate::default::DefaultRequestMetricsConfig;
-use crate::default::DefaultResponseMetricsConfig;
+use crate::default::DefaultMetricsConfig;
 use crate::default::SmithyMetrics;
 use crate::layer::builder::DefaultMetricsBuildExt;
 use crate::layer::builder::MetricsLayerBuilder;
@@ -38,17 +35,17 @@ pub enum DefaultMetricsLayerError {
     NoSinkAttached,
 }
 
-/// A Tower layer that collects metrics for HTTP requests and responses, allowing you to define
-/// and initialize metrics that can be set throughout a request/response lifecycle.
+/// A Tower layer that publishes metrics for HTTP requests and responses, allowing you to define and
+/// initialize metrics that can be set throughout a request/response lifecycle.
 ///
-/// Default metrics from [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin)
-/// will be folded into metrics from this layer if it is in the service's HTTP plugins.
+/// When standard server metrics have been enabled by calling the generated service config builder's
+/// `enable_standard_metrics()` method, they will be folded into metrics from this layer.
 ///
 /// # Usage
 ///
-/// Typically, this should be layered as the outermost middleware layer, so that the rest of
-/// the request path has access to metrics request extensions added by this, and this has access
-/// to any metrics response extensions added by the response path.
+/// Typically, this should be layered as the outermost middleware layer, so that the rest of the
+/// request path has access to metrics request extensions added by this, and this has access to any
+/// metrics response extensions added by the response path.
 ///
 /// Create a metrics layer using the builder pattern:
 ///
@@ -70,21 +67,29 @@ pub enum DefaultMetricsLayerError {
 ///     .build();
 /// ```
 ///
-/// Then add it to your service as outer middleware, typically layered after any other middleware
-/// to ensure that it is layered at the outermost level:
+/// Then add it to your service as outer middleware, typically layered after any other middleware to
+/// ensure that it is layered at the outermost level:
 ///
 /// ```rust,ignore
-/// let app = app.layer(metrics_layer);
+/// let app = metrics_layer.layer(app);
 /// ```
 ///
-/// If you just want a custom sink with the default metrics, provided
-/// [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin) exists in the HTTP plugins,
-/// use [`new_with_sink()`](MetricsLayer::new_with_sink):
+/// If you just want a custom sink with standard metrics, provided that the generated service config
+/// builder's `enable_standard_metrics()` method has been called, use
+/// [`new_with_sink()`](MetricsLayer::new_with_sink):
 ///
 /// ```rust,ignore
 /// let metrics_layer = MetricsLayer::new_with_sink(my_sink);
-/// let app = app.layer(metrics_layer);
+/// let app = metrics_layer.layer(app);
 /// ```
+///
+/// # Interoperability with other middleware layers
+///
+/// If another middleware layer between `MetricsLayer` and the Smithy service has the effect of
+/// invoking the Smithy service multiple times per request, `MetricsLayer` will only publish metrics
+/// relating to the *first* such invocation. To ensure that metrics are published for all
+/// invocations, ensure that `MetricsLayer` is *inside* the layer that calls its inner service
+/// multiple times.
 #[derive(Debug)]
 pub struct MetricsLayer<
     Entry = SmithyMetrics,
@@ -99,20 +104,22 @@ pub struct MetricsLayer<
 {
     pub(crate) init_metrics: Init,
     pub(crate) response_metrics: Option<Res>,
-    pub(crate) default_metrics_extension_fn: fn(
-        &mut HttpRequest,
-        &mut Entry,
-        DefaultRequestMetricsConfig,
-        DefaultResponseMetricsConfig,
-        DefaultMetricsServiceState,
-    ),
-    pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
-    pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
+    /// Adds request extensions for the entry, such as handles to its operation metrics.
+    pub(crate) init_extensions: fn(&mut HttpRequest, &mut Entry),
+    pub(crate) default_metrics_config: DefaultMetricsConfig,
 
     pub(crate) _entry_sink: PhantomData<Sink>,
 }
 
 impl MetricsLayer {
+    /// Creates a `MetricsLayer` using the global [`ServiceMetrics`] sink and the default metrics
+    /// type ([`SmithyMetrics`]).
+    ///
+    /// For standard server metrics to be included automatically, the `enable_standard_metrics()`
+    /// method must be called on the generated service config builder.
+    ///
+    /// This is a convenience method for when you want to use a default sink with the default
+    /// metrics configuration. For additional control, use [`MetricsLayer::builder()`].
     pub fn new(
     ) -> MetricsLayer<SmithyMetrics, DefaultSink, impl InitMetrics<SmithyMetrics, DefaultSink>>
     {
@@ -133,22 +140,14 @@ where
     pub fn __macro_new(
         init_metrics: Init,
         response_metrics: Option<Res>,
-        default_metrics_extension_fn: fn(
-            &mut HttpRequest,
-            &mut Entry,
-            DefaultRequestMetricsConfig,
-            DefaultResponseMetricsConfig,
-            DefaultMetricsServiceState,
-        ),
-        default_req_metrics_config: DefaultRequestMetricsConfig,
-        default_res_metrics_config: DefaultResponseMetricsConfig,
+        init_extensions: fn(&mut HttpRequest, &mut Entry),
+        default_metrics_config: DefaultMetricsConfig,
     ) -> Self {
         Self {
             init_metrics,
             response_metrics,
-            default_metrics_extension_fn,
-            default_req_metrics_config,
-            default_res_metrics_config,
+            init_extensions,
+            default_metrics_config,
 
             _entry_sink: PhantomData,
         }
@@ -159,14 +158,14 @@ impl<Sink> MetricsLayer<SmithyMetrics, Sink>
 where
     Sink: ThreadSafeEntrySink<SmithyMetrics> + Clone,
 {
-    /// Creates a new metrics layer with the provided sink and default metrics. For default
-    /// metrics to be set automatically, [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin)
-    /// must be added to the service's HTTP plugins.
+    /// Creates a new metrics layer with the provided sink and default metrics type
+    /// ([`SmithyMetrics`]).
+    ///
+    /// For standard server metrics to be included automatically, the `enable_standard_metrics()`
+    /// method must be called on the generated service config builder.
     ///
     /// This is a convenience method for when you want to have a custom sink with the default
-    /// metrics configuration.
-    ///
-    /// For additional control, use [`MetricsLayer::builder()`].
+    /// metrics configuration. For additional control, use [`MetricsLayer::builder()`].
     ///
     /// # Example
     ///
@@ -200,8 +199,7 @@ where
         MetricsLayerBuilder {
             init_metrics: None,
             response_metrics: None,
-            default_req_metrics_config: DefaultRequestMetricsConfig::default(),
-            default_res_metrics_config: DefaultResponseMetricsConfig::default(),
+            default_metrics_config: DefaultMetricsConfig::default(),
             _state: PhantomData,
             _close_entry: PhantomData,
             _entry_sink: PhantomData,
@@ -224,10 +222,8 @@ where
             inner,
             init_metrics: self.init_metrics.clone(),
             response_metrics: self.response_metrics.clone(),
-            default_metrics_extension_fn: self.default_metrics_extension_fn,
-            default_req_metrics_config: self.default_req_metrics_config.clone(),
-            default_res_metrics_config: self.default_res_metrics_config.clone(),
-            default_service_counters: DefaultMetricsServiceCounters::default(),
+            init_extensions: self.init_extensions,
+            default_metrics_config: self.default_metrics_config.clone(),
 
             _entry_sink: PhantomData,
         }
