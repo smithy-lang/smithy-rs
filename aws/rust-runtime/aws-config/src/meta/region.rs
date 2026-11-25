@@ -29,7 +29,9 @@ use tracing::Instrument;
 /// ```
 #[derive(Debug)]
 pub struct RegionProviderChain {
-    providers: Vec<Box<dyn ProvideRegion>>,
+    // The type name of each provider is logged in place of its `Debug` output, which for
+    // providers such as `DefaultRegionChain` runs to more than a kilobyte per log line.
+    providers: Vec<(&'static str, Box<dyn ProvideRegion>)>,
 }
 
 impl RegionProviderChain {
@@ -37,10 +39,10 @@ impl RegionProviderChain {
     ///
     /// The first provider to return a non-optional region will be selected
     pub async fn region(&self) -> Option<Region> {
-        for provider in &self.providers {
+        for (name, provider) in &self.providers {
             if let Some(region) = provider
                 .region()
-                .instrument(tracing::debug_span!("region_provider_chain", provider = ?provider))
+                .instrument(tracing::debug_span!("region_provider_chain", provider = %name))
                 .await
             {
                 return Some(region);
@@ -52,13 +54,14 @@ impl RegionProviderChain {
     /// Create a default provider chain that starts by checking this provider.
     pub fn first_try(provider: impl ProvideRegion + 'static) -> Self {
         RegionProviderChain {
-            providers: vec![Box::new(provider)],
+            providers: vec![(std::any::type_name_of_val(&provider), Box::new(provider))],
         }
     }
 
     /// Add a fallback provider to the region provider chain.
     pub fn or_else(mut self, fallback: impl ProvideRegion + 'static) -> Self {
-        self.providers.push(Box::new(fallback));
+        self.providers
+            .push((std::any::type_name_of_val(&fallback), Box::new(fallback)));
         self
     }
 
@@ -69,8 +72,9 @@ impl RegionProviderChain {
 
     /// Fallback to the default provider
     pub fn or_default_provider(mut self) -> Self {
+        let provider = crate::default_provider::region::default_provider();
         self.providers
-            .push(Box::new(crate::default_provider::region::default_provider()));
+            .push((std::any::type_name_of_val(&provider), Box::new(provider)));
         self
     }
 }
@@ -162,9 +166,10 @@ impl ProvideRegion for &'static str {
 
 #[cfg(test)]
 mod test {
-    use crate::meta::region::RegionProviderChain;
+    use crate::meta::region::{future, ProvideRegion, RegionProviderChain};
     use aws_types::region::Region;
     use futures_util::FutureExt;
+    use tracing_test::traced_test;
 
     #[test]
     fn provider_chain() {
@@ -181,5 +186,34 @@ mod test {
     fn empty_chain() {
         let chain = RegionProviderChain::first_try(None).or_else(None);
         assert_eq!(chain.region().now_or_never().expect("ready"), None);
+    }
+
+    #[derive(Debug)]
+    struct VerboseProvider {
+        _state: &'static str,
+    }
+
+    impl ProvideRegion for VerboseProvider {
+        fn region(&self) -> future::ProvideRegion<'_> {
+            future::ProvideRegion::new(async {
+                tracing::debug!("loading region");
+                None
+            })
+        }
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn chain_span_names_the_provider_type_instead_of_its_debug_output() {
+        let chain = RegionProviderChain::first_try(VerboseProvider {
+            _state: "large provider state",
+        })
+        .or_else(Region::new("us-east-1"));
+        assert_eq!(chain.region().await, Some(Region::new("us-east-1")));
+
+        assert!(logs_contain(
+            "region_provider_chain{provider=aws_config::meta::region::test::VerboseProvider}"
+        ));
+        assert!(!logs_contain("large provider state"));
     }
 }
