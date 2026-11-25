@@ -50,7 +50,7 @@ use super::super::partition::EligibilityGroup;
 use super::{AcquisitionOutcome, AcquisitionStep, EstablishmentPermit};
 use std::collections::{BTreeSet, HashMap};
 use std::num::NonZeroUsize;
-use std::task::{Context, Poll, Waker};
+use std::task::{Poll, Waker};
 
 /// Local waiter identity within one cell.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -527,24 +527,26 @@ impl AcquisitionQueue {
                 self.waiting,
                 WaitingQueueState::Active { head, .. } if head == waiter
             );
-            let demand_updates = if is_head {
+            let (demand_updates, record) = if is_head {
                 let removed = self.pop_head(eligibility_group);
                 debug_assert_eq!(waiter, removed.waiter);
                 let record = self
                     .records
                     .remove(&waiter)
                     .expect("cancelled head waiter disappeared");
-                debug_assert!(matches!(record.state, WaiterState::Waiting { .. }));
                 let retired =
                     DemandSnapshot::inactive(removed.demand.id, removed.demand.version.next());
-                [Some(retired), removed.successor]
+                ([Some(retired), removed.successor], record)
             } else {
-                self.remove_non_head(waiter);
-                [None, None]
+                ([None, None], self.remove_non_head(waiter))
+            };
+            let WaiterState::Waiting { waker, .. } = record.state else {
+                unreachable!("cancelled waiter left the waiting state");
             };
             WaiterCancellation {
                 demand_updates,
                 returned_steps: [None, None],
+                released_waker: waker,
             }
         } else if matches!(state, WaiterState::DeliveryPending { .. }) {
             self.remove_protocol_waiters(waiter);
@@ -558,6 +560,8 @@ impl AcquisitionQueue {
             };
             let waker = waker.take();
             let pending_result = pending_result.take();
+            // The waker stays with the record: the delivery that reserved it
+            // still commits against `DeliveryCancelled` and wakes after unlock.
             record.state = WaiterState::DeliveryCancelled {
                 waker,
                 pending_result,
@@ -565,6 +569,7 @@ impl AcquisitionQueue {
             WaiterCancellation {
                 demand_updates: [None, None],
                 returned_steps: [None, None],
+                released_waker: None,
             }
         } else if matches!(
             state,
@@ -585,14 +590,19 @@ impl AcquisitionQueue {
             return Some(WaiterCancellation {
                 demand_updates: [None, None],
                 returned_steps: [Some(event), None],
+                released_waker: None,
             });
         } else if matches!(state, WaiterState::Launching { .. }) {
             self.assert_consistent();
             self.remove_protocol_waiters(waiter);
-            self.records.remove(&waiter)?;
+            let record = self.records.remove(&waiter)?;
+            let WaiterState::Launching { waker, .. } = record.state else {
+                unreachable!("cancelled launching waiter changed state under the cell lock");
+            };
             return Some(WaiterCancellation {
                 demand_updates: [None, None],
                 returned_steps: [None, None],
+                released_waker: waker,
             });
         } else {
             debug_assert!(matches!(state, WaiterState::DeliveryCancelled { .. }));
@@ -605,6 +615,12 @@ impl AcquisitionQueue {
 
     /// Returns the next event or records the latest waker for a pending waiter.
     ///
+    /// `waker` carries a clone of the polling task's waker, taken before the
+    /// cell lock. On return it holds whichever waker this poll no longer needs —
+    /// the one it displaced, or the incoming clone when the registered waker
+    /// already wakes the same task. The caller drops it after unlocking so that
+    /// a custom raw-waker `drop` callback cannot re-enter a held cell lock.
+    ///
     /// # Panics
     ///
     /// Panics if `waiter` is unknown, was cancelled, or was already consumed
@@ -612,7 +628,7 @@ impl AcquisitionQueue {
     pub(super) fn poll_waiter(
         &mut self,
         waiter: WaiterId,
-        cx: &mut Context<'_>,
+        waker: &mut Option<Waker>,
     ) -> Poll<AcquisitionStep> {
         if matches!(
             self.records.get(&waiter).map(|record| &record.state),
@@ -651,7 +667,7 @@ impl AcquisitionQueue {
             .records
             .get_mut(&waiter)
             .expect("polled a cancelled, consumed, or unknown acquisition waiter");
-        let waker = match &mut record.state {
+        let registered = match &mut record.state {
             WaiterState::Waiting { waker, .. }
             | WaiterState::DeliveryPending { waker, .. }
             | WaiterState::Launching { waker, .. } => waker,
@@ -662,11 +678,16 @@ impl AcquisitionQueue {
                 unreachable!("ready waiter changed state under the cell lock")
             }
         };
-        if waker
+        let incoming = waker
             .as_ref()
-            .is_none_or(|waker| !waker.will_wake(cx.waker()))
+            .expect("poll_waiter requires the caller's waker clone");
+        if registered
+            .as_ref()
+            .is_none_or(|registered| !registered.will_wake(incoming))
         {
-            *waker = Some(cx.waker().clone());
+            // Leaves the displaced waker in `waker` for the caller to drop
+            // after unlocking; never drops it here.
+            *waker = std::mem::replace(registered, waker.take());
         }
         Poll::Pending
     }
@@ -1265,6 +1286,13 @@ pub(super) struct WaiterCancellation {
     pub(super) demand_updates: [Option<DemandSnapshot>; 2],
     /// Intermediate and terminal events returned for cleanup after unlocking.
     pub(super) returned_steps: [Option<AcquisitionStep>; 2],
+    /// The cancelled waiter's own waker, dropped after unlocking.
+    ///
+    /// It is not woken: cancellation means the acquisition future that
+    /// registered it is being discarded. It is carried out only so that a
+    /// raw-waker `drop` callback cannot run, and possibly re-enter the pool,
+    /// while the cell lock is held.
+    pub(super) released_waker: Option<Waker>,
 }
 
 /// Values detached after offering a selected protocol result.
