@@ -38,6 +38,14 @@ function synth(): Template {
     return Template.fromStack(stack);
 }
 
+/** Every statement on the Lambda execution role, which is what the canaries themselves run as. */
+function lambdaStatements(): Statement[] {
+    const policies = Object.values(synth().findResources("AWS::IAM::Policy")).filter((p) =>
+        JSON.stringify(p.Properties.Roles).includes("lambdaexecutionrole"),
+    );
+    expect(policies).toHaveLength(1);
+    return policies[0].Properties.PolicyDocument.Statement as Statement[];
+}
 /** Every `PutMetricData` statement on the role this repository's CI assumes. */
 function metricStatements(): Statement[] {
     const policies = Object.values(synth().findResources("AWS::IAM::Policy")).filter((p) =>
@@ -75,4 +83,23 @@ test("this role may write only to its own namespace", () => {
  */
 test("the two canaries must not share a namespace", () => {
     expect(METRIC_NAMESPACE).not.toEqual(SDK_CANARY_NAMESPACE);
+});
+
+/**
+ * The EC2 grant is the union of two mutually exclusive builds, and has to stay that way.
+ *
+ * `DescribeRegions` belongs to the benchmark, behind `#[cfg(feature = "lambda-benchmark")]`.
+ * `DescribeSpotPriceHistory` and `DescribeVpcs` belong to the paginator canary, which runs in the
+ * default set. A change that narrows the list to whichever build it was written for leaves the
+ * other with a role that cannot make its calls -- and because the deployed policy only changes when
+ * the stack is deployed, the break lands on whoever next deploys rather than on whoever caused it.
+ */
+test("the lambda role keeps every EC2 action the canaries call", () => {
+    const ec2 = lambdaStatements().filter((s) => JSON.stringify(s.Action).includes("ec2:"));
+    const actions = ec2.flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action])).sort();
+    expect(actions).toEqual([
+        "ec2:DescribeRegions",
+        "ec2:DescribeSpotPriceHistory",
+        "ec2:DescribeVpcs",
+    ]);
 });

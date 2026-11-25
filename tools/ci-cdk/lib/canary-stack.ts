@@ -281,10 +281,18 @@ export class CanaryStack extends Stack {
             }),
         );
 
-        // Allow canaries to call EC2
+        // Allow canaries to call EC2. One role serves two mutually exclusive builds, so this list is their **union** and a new
+        // action joins it rather than replacing what is here. `DescribeRegions` is the benchmark's,
+        // reached only under `#[cfg(feature = "lambda-benchmark")]`; the other two are the
+        // paginator canary's, in the default set, and both the `latest` and `release_2023_10_26`
+        // variants call them. Narrowing to one build's needs silently breaks the other.
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ["ec2:DescribeRegions"],
+                actions: [
+                    "ec2:DescribeRegions",
+                    "ec2:DescribeSpotPriceHistory",
+                    "ec2:DescribeVpcs",
+                ],
                 effect: Effect.ALLOW,
                 resources: ["*"],
             }),
