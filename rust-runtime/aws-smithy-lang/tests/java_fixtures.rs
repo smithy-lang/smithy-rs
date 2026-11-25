@@ -6,6 +6,7 @@
 //! Agreement with Java Smithy 1.74.1 on checked-in fixtures. See `fixtures/java/README.md`.
 
 use aws_smithy_lang::diagnostic::{DiagnosticCode, Severity};
+use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex, PaginatedIndex, TopDownIndex};
 use aws_smithy_lang::waiters::{
     self, AcceptorState, MatcherKind, PathComparator, PathMatcher, Waitable,
 };
@@ -184,11 +185,12 @@ fn knowledge_matches_java() {
         )
         .unwrap();
         let model = load(&path).unwrap();
-        let knowledge = model.knowledge();
+        let top_down = model.knowledge::<TopDownIndex<'_>>();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
         let name = path.display();
 
         for (entity, answer) in expected["topDown"].as_object().unwrap() {
-            let top_down = knowledge.top_down();
             let entity: ShapeId = entity.parse().unwrap();
             let actual = json!({
                 "operations": strings(top_down.get_contained_operations(&entity).unwrap().map(|o| o.id().clone())),
@@ -198,7 +200,7 @@ fn knowledge_matches_java() {
         }
 
         for (id, answer) in expected["operations"].as_object().unwrap() {
-            let operation = knowledge.operations().get(&id.parse().unwrap()).unwrap();
+            let operation = operations.get(&id.parse().unwrap()).unwrap();
             let meaningful = |s: Option<aws_smithy_lang::shape::StructureView<'_>>| {
                 s.map_or(Value::Null, |s| Value::from(s.id().to_string()))
             };
@@ -225,7 +227,6 @@ fn knowledge_matches_java() {
         }
 
         for (key, answer) in expected["structures"].as_object().unwrap() {
-            let operations = knowledge.operations();
             let id: &ShapeId = &key.parse().unwrap();
             let actual = json!({
                 "inputBindings": strings(operations.input_bindings(id).unwrap().map(|o| o.id().clone())),
@@ -242,10 +243,7 @@ fn knowledge_matches_java() {
         let mut ambiguous = 0;
         for (service, entities) in expected["bottomUp"].as_object().unwrap() {
             for (entity, java_chain) in entities.as_object().unwrap() {
-                match knowledge
-                    .bottom_up()
-                    .parent_chain(&service.parse().unwrap(), &entity.parse().unwrap())
-                {
+                match bottom_up.parent_chain(&service.parse().unwrap(), &entity.parse().unwrap()) {
                     Ok(chain) => {
                         let chain = chain.unwrap();
                         assert_eq!(
@@ -323,7 +321,7 @@ fn pagination_matches_java() {
             _ => load(&path),
         }
         .unwrap_or_else(|e| panic!("{name}: {:?}", e.diagnostics()));
-        let index = model.knowledge().paginated();
+        let index = model.knowledge::<PaginatedIndex<'_>>();
 
         let answers = expected["pagination"].as_object().unwrap();
         assert_eq!(answers.len(), model.services().count(), "{name}: services");

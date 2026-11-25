@@ -1,0 +1,241 @@
+{
+    "smithy.example#B": {
+        "mixins": [
+            "smithy.example#A"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "B",
+            "smithy.api#mixin": {},
+            "smithy.api#sensitive": {}
+        },
+        "introduced": [
+            "smithy.api#deprecated",
+            "smithy.api#documentation",
+            "smithy.api#mixin"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#A$a"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "A.a"
+                },
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#documentation": "B.b"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "b",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "smithy.example#D": {
+        "mixins": [
+            "smithy.example#C"
+        ],
+        "traits": {
+            "smithy.api#documentation": "D",
+            "smithy.api#externalDocumentation": {
+                "web": "http://example.com"
+            },
+            "smithy.api#mixin": {},
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [
+            "smithy.api#documentation",
+            "smithy.api#externalDocumentation",
+            "smithy.api#mixin"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#C$c"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "I've changed",
+                    "smithy.api#internal": {}
+                },
+                "introduced": [
+                    "smithy.api#documentation",
+                    "smithy.api#internal"
+                ],
+                "name": "c",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#documentation": "D.d"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "d",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "smithy.example#E": {
+        "mixins": [
+            "smithy.example#D"
+        ],
+        "traits": {
+            "smithy.api#documentation": "E",
+            "smithy.api#externalDocumentation": {
+                "web": "http://example.com"
+            },
+            "smithy.api#mixin": {},
+            "smithy.api#since": "X",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [
+            "smithy.api#documentation",
+            "smithy.api#mixin",
+            "smithy.api#since"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#D$c"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "I've changed",
+                    "smithy.api#internal": {}
+                },
+                "introduced": [],
+                "name": "c",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "smithy.example#D$d"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "D.d"
+                },
+                "introduced": [],
+                "name": "d",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#documentation": "E.e"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "e",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "smithy.example#F": {
+        "mixins": [
+            "smithy.example#B",
+            "smithy.example#E"
+        ],
+        "traits": {
+            "smithy.api#deprecated": {},
+            "smithy.api#documentation": "F",
+            "smithy.api#externalDocumentation": {
+                "web": "http://example.com"
+            },
+            "smithy.api#internal": {},
+            "smithy.api#sensitive": {},
+            "smithy.api#since": "X",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [
+            "smithy.api#documentation",
+            "smithy.api#internal"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#B$a"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "I've changed"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "smithy.example#B$b"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "B.b"
+                },
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "smithy.example#E$c"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "I've changed",
+                    "smithy.api#internal": {}
+                },
+                "introduced": [],
+                "name": "c",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "smithy.example#E$d"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "D.d"
+                },
+                "introduced": [],
+                "name": "d",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "smithy.example#E$e"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "E.e"
+                },
+                "introduced": [],
+                "name": "e",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#documentation": "F.f"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "f",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

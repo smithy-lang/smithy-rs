@@ -7,7 +7,7 @@
 
 use crate::assembler::{Format, ModelAssembler};
 use crate::diagnostic::LoadError;
-use crate::knowledge::{Knowledge, KnowledgeCache};
+use crate::knowledge::{KnowledgeCache, KnowledgeData, KnowledgeIndex};
 use crate::node::{Node, NodeObject};
 use crate::shape::{
     MemberView, OperationView, ResourceView, ServiceView, Shape, ShapeExpectationError, ShapeRef,
@@ -258,13 +258,27 @@ impl Model {
         self.data.root_count()
     }
 
-    /// Derived, cached knowledge about the model: complete service and resource closures,
-    /// operation knowledge, parent lookups, and incoming relationships.
+    /// Derived knowledge about the model, as the index `I`: for example,
+    /// `model.knowledge::<TopDownIndex<'_>>()` for complete service and resource closures.
     ///
-    /// Indexes are computed on first use and shared by every clone of this model. See the
-    /// [`knowledge`](crate::knowledge) module.
-    pub fn knowledge(&self) -> Knowledge<'_> {
-        Knowledge::new(&self.data)
+    /// Any [`KnowledgeIndex`] can be acquired this way, including one defined in another crate.
+    /// The built-in indexes are cheap handles over data that is computed on first use and shared
+    /// by every clone of this model. See the [`knowledge`](crate::knowledge) module.
+    pub fn knowledge<'m, I>(&'m self) -> I
+    where
+        I: KnowledgeIndex<'m>,
+    {
+        I::from_model(self)
+    }
+
+    /// Owned data derived from the model, as the type `T`.
+    /// [`KnowledgeData::build_knowledge_data`] runs on first use, and the result is kept until
+    /// this model and every clone of it are dropped.
+    ///
+    /// An index usually calls this from [`KnowledgeIndex::from_model`] and keeps the returned
+    /// `Arc`. See [Caching derived data](crate::knowledge#caching-derived-data).
+    pub fn knowledge_data<T: KnowledgeData>(&self) -> Arc<T> {
+        self.data.knowledge.data(|| T::build_knowledge_data(self))
     }
 
     /// Returns `true` if the model has no root shapes (only possible without the prelude).

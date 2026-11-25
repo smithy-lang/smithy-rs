@@ -1,0 +1,8 @@
+{"smithy": "2.0", "shapes": {
+    "ex#M": {"type": "structure", "traits": {"smithy.api#mixin": {}, "smithy.api#tags": ["m"]},
+             "members": {"x": {"target": "smithy.api#String"}, "y": {"target": "smithy.api#String"}}},
+    "ex#C": {"type": "structure", "mixins": [{"target": "ex#M"}],
+             "traits": {"smithy.api#documentation": "c"},
+             "members": {"z": {"target": "smithy.api#Integer"}}},
+    "ex#C$y": {"type": "apply", "traits": {"smithy.api#required": {}}}
+}}

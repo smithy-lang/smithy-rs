@@ -1,0 +1,51 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#C": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {
+                "z": {
+                    "target": "smithy.api#Integer"
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "c"
+            }
+        },
+        "ex#C$y": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#required": {},
+                "smithy.api#tags": [
+                    "c"
+                ]
+            }
+        },
+        "ex#M": {
+            "type": "structure",
+            "members": {
+                "x": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "later"
+                    }
+                },
+                "y": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {},
+                "smithy.api#tags": [
+                    "m",
+                    "later"
+                ]
+            }
+        }
+    }
+}

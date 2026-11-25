@@ -1,0 +1,31 @@
+{
+    "smithy.example#A": {
+        "mixins": [
+            "smithy.example#B"
+        ],
+        "traits": {
+            "smithy.api#mixin": {}
+        },
+        "introduced": [
+            "smithy.api#mixin"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#B$b"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

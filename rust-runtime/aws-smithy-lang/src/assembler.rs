@@ -11,7 +11,7 @@ use crate::diagnostic::{
     Diagnostic, DiagnosticCode, DiagnosticSet, LoadError, LoadErrorKind, SourceLocation,
 };
 use crate::idl_loader;
-use crate::idl_loader::lower::{self, PendingSyntacticId};
+use crate::idl_loader::lower::{self, ElidedMember, PendingSyntacticId};
 use crate::idl_loader::resolve::DeclarationIndex;
 use crate::idl_loader::syntax::IdlDocument;
 use crate::json_loader::{Document, FirstTrait, JsonLoader, MAX_SUPPORTED_DEPTH};
@@ -30,6 +30,8 @@ use std::fmt;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+mod mixins;
 
 /// Assembles a [`Model`] from any combination of Smithy IDL and JSON AST documents, existing
 /// models, shapes built in code, metadata, and traits, then validates it.
@@ -111,8 +113,31 @@ use std::sync::Arc;
 /// # Ok::<_, Box<dyn std::error::Error>>(())
 /// ```
 ///
-/// Documents using mixins, and shapes marked `@mixin`, are rejected with
-/// [`UnsupportedFeature`](DiagnosticCode::UnsupportedFeature).
+/// # Mixins
+///
+/// Structures, unions, enums, and intEnums may use mixins of the same shape type, defined in any
+/// input. Once every input is merged (including every applied trait), each shape inherits the
+/// members and traits of its mixins, as in the reference implementation:
+///
+/// - Inherited members come first, in mixin order and depth first, then the shape's own. A
+///   member with the name of an inherited one redefines it in place and keeps its declared
+///   target; a different target is an [`InvalidShape`](DiagnosticCode::InvalidShape) error.
+/// - Traits override, and never merge: a later mixin's traits override an earlier one's, and the
+///   traits applied to a shape or member (including with `apply` to an inherited member)
+///   override inherited ones. A mixin's `@mixin` trait, and the `localTraits` it lists, are not
+///   inherited. Traits applied to a mixin reach the shapes that use it.
+/// - An IDL `$name` member of a shape with mixins takes its target from the bound resource's
+///   property or identifier with that name, or else from the mixin member with that name.
+/// - A shape whose mixin is missing or of another type, or whose mixins provide a member with
+///   different targets, is reported and left out, and so is every shape that uses it (as a
+///   shape whose mixin is missing). Shapes in a mixin cycle are reported and left out too, but
+///   the shapes that use them are left out without a diagnostic.
+///
+/// A shape with mixins keeps them, and records which traits are its own (see
+/// [`Shape::introduced_traits`] and [`MemberShape::is_inherited`](crate::shape::MemberShape::is_inherited)).
+/// Shapes with mixins built in code or taken from a model are merged in that declared form, so
+/// traits applied to their mixins reach them too. Mixins of other shape types, and `@mixin` on
+/// them, are rejected with [`UnsupportedFeature`](DiagnosticCode::UnsupportedFeature).
 pub struct ModelAssembler {
     prelude: bool,
     require_trait_definitions: bool,
@@ -503,10 +528,13 @@ impl ModelAssembler {
             input_order: None,
             definition_traits: HashSet::new(),
             duplicates: Vec::new(),
+            mixin_duplicates: HashMap::new(),
             deferred_traits: Vec::new(),
             deferred_applies: Vec::new(),
             pending_applies: IndexMap::new(),
             unclaimed: Vec::new(),
+            inherited_traits: IndexMap::new(),
+            elided: HashMap::new(),
             metadata: NodeObject::new(),
             diagnostics: DiagnosticSet::with_limit(loader.max_diagnostics),
             failure: None,
@@ -572,6 +600,7 @@ impl ModelAssembler {
         merge.apply_deferred_traits();
         merge.finish_duplicates();
         merge.drop_prelude_redefinitions();
+        merge.resolve_mixins();
         merge.restore_input_order();
 
         let Merge {
@@ -668,6 +697,8 @@ pub(crate) struct LoadedDocument {
     /// `(target, trait)` pairs that are part of a shape's definition rather than applied
     /// traits; see [`Merge`]. Always empty for JSON.
     pub(crate) definition_traits: HashSet<(ShapeId, ShapeId)>,
+    /// `$name` members whose targets come from mixins. Always empty for JSON.
+    pub(crate) elided_members: Vec<ElidedMember>,
 }
 
 impl From<Document> for LoadedDocument {
@@ -746,6 +777,9 @@ struct Merge {
     /// Later definitions of shapes in [`shapes`](Self::shapes), holding only their definition
     /// traits, compared by [`finish_duplicates`](Self::finish_duplicates).
     duplicates: Vec<Shape>,
+    /// Later definitions of shapes with mixins, compared by
+    /// [`resolve_mixins`](Self::resolve_mixins) once resolved, by shape ID.
+    mixin_duplicates: HashMap<ShapeId, Vec<mixins::Duplicate>>,
     /// Traits written on IDL shapes, merged by
     /// [`apply_deferred_traits`](Self::apply_deferred_traits) after every other input.
     deferred_traits: Vec<AppliedTrait>,
@@ -759,6 +793,13 @@ struct Merge {
     /// `apply` traits whose target no definition merged so far has, reported by
     /// [`report_unclaimed`](Self::report_unclaimed) if no definition has it at the end.
     unclaimed: Vec<UnclaimedTrait>,
+    /// Traits applied to members that a shape with mixins does not declare, by member ID: the
+    /// members it may inherit. [`resolve_mixins`](Self::resolve_mixins) makes them the
+    /// inherited members' own traits.
+    inherited_traits: IndexMap<ShapeId, TraitMap>,
+    /// The `$name` members of shapes with mixins whose targets come from a mixin, by root shape
+    /// ID and definition.
+    elided: HashMap<ShapeId, Vec<mixins::ElidedMembers>>,
     metadata: NodeObject,
     diagnostics: DiagnosticSet,
     /// The first input-level failure (I/O, syntax, or resource limit).
@@ -817,6 +858,7 @@ impl Merge {
                 diagnostics,
                 syntactic_ids,
                 definition_traits,
+                elided_members,
             }) => {
                 self.diagnostics.extend(diagnostics);
                 self.syntactic_ids.extend(syntactic_ids);
@@ -825,7 +867,16 @@ impl Merge {
                 }
                 // `apply` entries are merged in document order among the definitions.
                 let mut applies = applies.into_iter().peekable();
+                // Where this document defines the shapes with elided members.
+                let elided_roots: HashSet<ShapeId> = elided_members
+                    .iter()
+                    .map(|member| member.id.root())
+                    .collect();
+                let mut definitions = HashMap::new();
                 for (index, mut shape) in shapes.into_values().enumerate() {
+                    if elided_roots.contains(shape.id()) {
+                        definitions.insert(shape.id().clone(), shape.source_location().clone());
+                    }
                     while let Some(entry) = applies.next_if(|entry| entry.shapes_before <= index) {
                         self.apply(entry.apply, defer_traits);
                     }
@@ -844,6 +895,39 @@ impl Merge {
                 }
                 for entry in applies {
                     self.apply(entry.apply, defer_traits);
+                }
+                // Their traits are written on the member, so they are merged like the traits of
+                // the shape's other members. The trait its `= value` sugar applies stays with this definition.
+                for ElidedMember {
+                    id,
+                    location,
+                    traits,
+                    sugar,
+                } in elided_members
+                {
+                    let name = id.member().expect("elided members are members").to_owned();
+                    let root = id.root();
+                    let definition = definitions.get(&root).cloned().unwrap_or_default();
+                    let elided = self.elided.entry(root).or_default();
+                    let index = match elided.iter().position(|e| e.definition == definition) {
+                        Some(index) => index,
+                        None => {
+                            elided.push(mixins::ElidedMembers {
+                                definition,
+                                members: IndexMap::new(),
+                            });
+                            elided.len() - 1
+                        }
+                    };
+                    let declaration = mixins::ElidedDeclaration { location, sugar };
+                    elided[index].members.insert(name, declaration);
+                    self.deferred_traits
+                        .extend(traits.into_iter().map(|(trait_id, value)| AppliedTrait {
+                            target: id.clone(),
+                            id: trait_id,
+                            value,
+                            position: None,
+                        }));
                 }
             }
             Err(err) => self.failed(err),
@@ -926,6 +1010,22 @@ impl Merge {
     /// ignored.
     fn created(&mut self, shape: Shape) {
         if prelude::is_prelude_shape(shape.id()) {
+            return;
+        }
+        if !shape.mixins().is_empty() {
+            // As in the reference implementation, a shape with mixins is merged like a document
+            // definition of its declared form, so that what is applied to its mixins reaches it.
+            let id = shape.id().clone();
+            let declared = declared_form(shape);
+            if self.created.remove(&id) {
+                // It replaces an earlier shape built in code, which nothing has touched yet, so
+                // replacing the entry is the same as adding the first definition. Replacing it in
+                // place is O(1); removing it first with `shift_remove` would be O(n) in the number
+                // of shapes, and its first input order is recorded already.
+                self.shapes[&id] = declared;
+            } else {
+                self.definition(declared, &HashSet::new(), None);
+            }
             return;
         }
         let id = shape.id().clone();
@@ -1116,48 +1216,77 @@ impl Merge {
         self.report_unclaimed();
     }
 
-    /// Compares every repeated definition with the kept one, now that every applied trait is known.
-    /// Like the reference implementation, an equal definition replaces the kept one (so the last of
-    /// equal definitions provides the source locations), with a note; a different one conflicts and
-    /// is dropped.
+    /// Compares every repeated definition with the kept one, now that every applied trait is known
+    /// (see [`compare_duplicate`](Self::compare_duplicate)). Repeated definitions of a shape with
+    /// mixins are compared once they are resolved.
     fn finish_duplicates(&mut self) {
         for duplicate in std::mem::take(&mut self.duplicates) {
             let id = duplicate.id().clone();
             let kept = &self.shapes[&id];
             let duplicate = with_applied_traits(duplicate, kept, &self.definition_traits);
-            let (location, kept_location) = (duplicate.source_location(), kept.source_location());
-            if *kept != duplicate {
-                self.diagnostics.push(
-                    Diagnostic::error(
-                        DiagnosticCode::ShapeConflict,
-                        format!(
-                            "conflicting definitions of `{id}`{}",
-                            built_in_code(location, kept_location)
-                        ),
-                    )
-                    .with_shape_id(id.clone())
-                    .with_source_location(location.clone())
-                    .with_related(kept_location.clone()),
-                );
+            if !kept.mixins().is_empty() && !duplicate.mixins().is_empty() {
+                // The reference implementation compares built shapes, so two definitions that
+                // differ only in what they inherit are compared by what they resolve to (see
+                // `resolve_mixins`). Definitions with different mixins conflict either way.
+                let kept_member_traits =
+                    kept_member_traits(kept, &duplicate, &self.definition_traits);
+                self.mixin_duplicates
+                    .entry(id)
+                    .or_default()
+                    .push(mixins::Duplicate {
+                        shape: duplicate,
+                        kept_member_traits,
+                    });
                 continue;
             }
-            if !is_same_location(location, kept_location) {
-                self.diagnostics.push(
-                    Diagnostic::note(
-                        DiagnosticCode::DuplicateDefinition,
-                        format!("ignoring duplicate but equivalent definition of `{id}`"),
-                    )
-                    .with_shape_id(id.clone())
-                    .with_source_location(location.clone())
-                    .with_related(kept_location.clone()),
-                );
-            }
-            let kept = self
-                .shapes
-                .get_mut(&id)
-                .expect("duplicates have a kept shape");
-            adopt_locations(kept, &duplicate, &self.definition_traits);
+            self.compare_duplicate(duplicate, &[]);
         }
+    }
+
+    /// Compares a later definition with the kept one. Like the reference implementation, an equal
+    /// definition replaces the kept one (so the last of equal definitions provides the source
+    /// locations), with a note; a different one conflicts and is dropped. `sugar_traits` are the
+    /// `(member, trait)` pairs the later definition's `$name` sugar applies, which belong to it
+    /// like definition traits.
+    fn compare_duplicate(&mut self, duplicate: Shape, sugar_traits: &[(ShapeId, ShapeId)]) {
+        let id = duplicate.id().clone();
+        let kept = &self.shapes[&id];
+        let (location, kept_location) = (duplicate.source_location(), kept.source_location());
+        if *kept != duplicate {
+            self.diagnostics.push(
+                Diagnostic::error(
+                    DiagnosticCode::ShapeConflict,
+                    format!(
+                        "conflicting definitions of `{id}`{}",
+                        built_in_code(location, kept_location)
+                    ),
+                )
+                .with_shape_id(id.clone())
+                .with_source_location(location.clone())
+                .with_related(kept_location.clone()),
+            );
+            return;
+        }
+        if !is_same_location(location, kept_location) {
+            self.diagnostics.push(
+                Diagnostic::note(
+                    DiagnosticCode::DuplicateDefinition,
+                    format!("ignoring duplicate but equivalent definition of `{id}`"),
+                )
+                .with_shape_id(id.clone())
+                .with_source_location(location.clone())
+                .with_related(kept_location.clone()),
+            );
+        }
+        let kept = self
+            .shapes
+            .get_mut(&id)
+            .expect("duplicates have a kept shape");
+        let definition_traits = &self.definition_traits;
+        adopt_locations(kept, &duplicate, |member, id| {
+            let pair = (member.clone(), id.clone());
+            definition_traits.contains(&pair) || sugar_traits.contains(&pair)
+        });
     }
 
     /// Drops document definitions of shapes the prelude defines: as in the reference
@@ -1167,6 +1296,34 @@ impl Merge {
         if self.prelude {
             let prelude = prelude::shapes();
             self.shapes.retain(|id, _| !prelude.contains_key(id));
+        }
+    }
+
+    /// Resolves the mixins of every shape that has them (see [`mixins::resolve`]), then reports
+    /// the traits applied to members that no shape declares or inherits.
+    fn resolve_mixins(&mut self) {
+        let mixins::Outcome {
+            unclaimed,
+            duplicates,
+        } = mixins::resolve(mixins::Resolution {
+            shapes: &mut self.shapes,
+            prelude: self.prelude.then(prelude::shapes),
+            inherited_traits: std::mem::take(&mut self.inherited_traits),
+            elided: std::mem::take(&mut self.elided),
+            duplicates: std::mem::take(&mut self.mixin_duplicates),
+            diagnostics: &mut self.diagnostics,
+        });
+        for mixins::ResolvedDuplicate {
+            shape,
+            sugar_traits,
+        } in duplicates
+        {
+            self.compare_duplicate(shape, &sugar_traits);
+        }
+        for (target, traits) in unclaimed {
+            for (id, value) in traits {
+                self.unknown_target(&target, &id, value.source_location().clone());
+            }
         }
     }
 
@@ -1219,13 +1376,6 @@ impl Merge {
             ));
             return;
         }
-        if id == traits::MIXIN {
-            self.diagnostics.push(fail(
-                DiagnosticCode::UnsupportedFeature,
-                format!("applying `{id}` to `{target}` is not supported"),
-            ));
-            return;
-        }
         // As in the reference implementation, only the prelude's own shapes are immutable here;
         // shapes a document added to the namespace accept traits applied in code.
         if self.prelude && prelude::shapes().contains_key(target.root_str()) {
@@ -1269,7 +1419,7 @@ impl Merge {
         value: Node,
         position: Option<usize>,
     ) -> bool {
-        let Some(traits) = trait_map(&mut self.shapes, target) else {
+        let Some(traits) = trait_map(&mut self.shapes, &mut self.inherited_traits, target) else {
             return false;
         };
         // An applied trait replaces a definition trait (an IDL value assignment).
@@ -1360,11 +1510,12 @@ fn first_trait_index(applied: &[AppliedTrait], first: Option<&FirstTrait>) -> us
 
 /// Gives `kept` the source locations of an equal later definition, which the reference
 /// implementation keeps instead: the shape's and its members' locations, and the values (with their
-/// locations) of the traits that are still definition traits.
+/// locations) of the traits that belong to the definition, as `is_definition_trait(member, trait)`
+/// says: definition traits that no applied trait replaced, and the traits of `$name` sugar.
 fn adopt_locations(
     kept: &mut Shape,
     duplicate: &Shape,
-    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+    is_definition_trait: impl Fn(&ShapeId, &ShapeId) -> bool,
 ) {
     kept.common_mut().source = duplicate.source_location().clone();
     for member in kept.members_mut() {
@@ -1373,7 +1524,7 @@ fn adopt_locations(
         };
         member.source = other.source.clone();
         for (id, value) in &other.traits {
-            if definition_traits.contains(&(member.id.clone(), id.clone())) {
+            if is_definition_trait(&member.id, id) {
                 if let Some(slot) = member.traits.get_mut(id) {
                     *slot = value.clone();
                 }
@@ -1412,20 +1563,72 @@ fn with_applied_traits(
     duplicate
 }
 
-/// The traits of a shape or member, for applying a trait.
+/// The applied traits of the members `kept` declares and `duplicate` does not, by member ID: the
+/// traits `duplicate` inherits there (see [`mixins::Duplicate`]).
+fn kept_member_traits(
+    kept: &Shape,
+    duplicate: &Shape,
+    definition_traits: &HashSet<(ShapeId, ShapeId)>,
+) -> IndexMap<ShapeId, TraitMap> {
+    kept.members()
+        .filter(|member| duplicate.member(member.name()).is_none())
+        .map(|member| {
+            let applied = member
+                .traits
+                .iter()
+                .filter(|(id, _)| !definition_traits.contains(&(member.id.clone(), (*id).clone())))
+                .map(|(id, value)| (id.clone(), value.clone()))
+                .collect();
+            (member.id.clone(), applied)
+        })
+        .collect()
+}
+
+/// The traits of a shape or member, for applying a trait. For a member that a shape with mixins
+/// does not declare, the traits held in `inherited_traits` until its mixins are resolved.
 fn trait_map<'a>(
     shapes: &'a mut IndexMap<ShapeId, Shape>,
+    inherited_traits: &'a mut IndexMap<ShapeId, TraitMap>,
     target: &ShapeId,
 ) -> Option<&'a mut TraitMap> {
     let shape = shapes.get_mut(target.root_str())?;
-    match target.member() {
-        None => Some(&mut shape.common_mut().traits),
-        Some(name) => shape
-            .members_mut()
-            .into_iter()
-            .find(|m| m.name() == name)
-            .map(|m| &mut m.traits),
+    let Some(name) = target.member() else {
+        return Some(&mut shape.common_mut().traits);
+    };
+    // One direct lookup: this runs for every trait written on an IDL member. An extra lookup
+    // here made IDL loading about 2% slower.
+    let has_mixins = !shape.mixins().is_empty();
+    match shape.member_mut(name) {
+        Some(member) => Some(&mut member.traits),
+        None => has_mixins.then(|| inherited_traits.entry(target.clone()).or_default()),
     }
+}
+
+/// Turns a shape with resolved mixins (built in code or taken from a model) into its declared
+/// form, as if a document defined it: its own traits, and every member with only its own traits.
+///
+/// Like the reference implementation's `LoaderShapeMap.moveCreatedShapeToOperations`, inherited
+/// members stay as declared members, so resolving the shape again treats them as redefinitions:
+/// a member whose target was changed in code is reported as conflicting with the mixin's, rather
+/// than silently replaced by it, and members keep their source locations.
+fn declared_form(mut shape: Shape) -> Shape {
+    let common = shape.common_mut();
+    if let Some(mixins) = &mut common.mixins {
+        let introduced = std::mem::take(&mut mixins.introduced);
+        common.traits.retain(|id, _| introduced.contains(id));
+    }
+    for member in shape
+        .named_members_mut()
+        .into_iter()
+        .flat_map(|m| m.values_mut())
+    {
+        if let Some(inherited) = member.inherited.take() {
+            member
+                .traits
+                .retain(|id, _| inherited.introduced.contains(id));
+        }
+    }
+    shape
 }
 
 /// Returns `true` if two values were loaded from the same place, like the reference
@@ -1509,23 +1712,49 @@ fn critical_checks(data: &ModelData, diagnostics: &mut DiagnosticSet) {
     for shape in data.shapes.values() {
         let source = shape.source_location();
         if let Some(value) = shape.traits().get(&traits::MIXIN) {
-            let location = if value.source_location().is_none() {
-                source.child(&format!("/traits/{}", traits::MIXIN))
-            } else {
-                value.source_location().clone()
-            };
-            diagnostics.push(
-                Diagnostic::error(
-                    DiagnosticCode::UnsupportedFeature,
-                    format!(
-                        "`{}` is a mixin (`{}`), which is not supported",
-                        shape.id(),
-                        traits::MIXIN
-                    ),
-                )
-                .with_shape_id(shape.id().clone())
-                .with_source_location(location),
-            );
+            if shape.named_members().is_none() {
+                let location = if value.source_location().is_none() {
+                    source.child(&format!("/traits/{}", traits::MIXIN))
+                } else {
+                    value.source_location().clone()
+                };
+                diagnostics.push(
+                    Diagnostic::error(
+                        DiagnosticCode::UnsupportedFeature,
+                        format!(
+                            "{} `{}` is a mixin (`{}`), which is not supported for {} shapes",
+                            shape.shape_type(),
+                            shape.id(),
+                            traits::MIXIN,
+                            shape.shape_type()
+                        ),
+                    )
+                    .with_shape_id(shape.id().clone())
+                    .with_source_location(location),
+                );
+            }
+        }
+        // Mixins resolved during merging, so they exist. Diagnostics point at the `mixins` list:
+        // the loaders drop repeated mixins, so an index into `mixins()` may not be the entry's.
+        for mixin in shape.mixins() {
+            if !data
+                .root(mixin)
+                .is_some_and(|mixin| mixin.traits().contains(&traits::MIXIN))
+            {
+                diagnostics.push(
+                    Diagnostic::error(
+                        DiagnosticCode::InvalidTarget,
+                        format!(
+                            "`{}` uses `{mixin}` as a mixin, but `{mixin}` is not marked with \
+                             `{}`",
+                            shape.id(),
+                            traits::MIXIN
+                        ),
+                    )
+                    .with_shape_id(shape.id().clone())
+                    .with_source_location(source.child("/mixins")),
+                );
+            }
         }
         for_each_reference(shape, |reference| {
             check_reference(data, shape.id(), reference, source, diagnostics)
@@ -1584,6 +1813,16 @@ fn check_reference(
             format!(
                 "{what} targets trait definition `{id}`; trait definitions can only be \
                  referenced by applying them"
+            ),
+        ));
+        return;
+    }
+    if target.traits().contains(&traits::MIXIN) {
+        diagnostics.push(fail(
+            DiagnosticCode::InvalidTarget,
+            format!(
+                "{what} targets mixin `{id}`; mixins can only be referenced by using them as \
+                 mixins"
             ),
         ));
         return;

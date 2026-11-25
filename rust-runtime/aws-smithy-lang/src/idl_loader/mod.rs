@@ -443,7 +443,7 @@ impl<'a> Parser<'a> {
                 | ShapeKindSyntax::IntEnum
                 | ShapeKindSyntax::Set
         ) {
-            ShapeBodySyntax::Members(self.members(kind)?)
+            ShapeBodySyntax::Members(self.members(kind, !mixins.is_empty())?)
         } else {
             ShapeBodySyntax::Properties(self.properties(kind)?)
         };
@@ -524,7 +524,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn members(&mut self, kind: ShapeKindSyntax) -> Result<Vec<MemberSyntax>, IdlParseError> {
+    /// Parses a shape's members. The grammar requires an enum to declare a member, but like the
+    /// reference implementation, an enum with mixins may declare none and inherit them all.
+    fn members(
+        &mut self,
+        kind: ShapeKindSyntax,
+        has_mixins: bool,
+    ) -> Result<Vec<MemberSyntax>, IdlParseError> {
         self.cursor.ws0();
         self.cursor.expect("{", "`{` before shape members")?;
         let mut members = Vec::new();
@@ -542,7 +548,7 @@ impl<'a> Parser<'a> {
                         .cursor
                         .error("annotations must precede a member declaration"));
                 }
-                if is_enum && members.is_empty() {
+                if is_enum && members.is_empty() && !has_mixins {
                     return Err(self.cursor.error("an enum requires at least one member"));
                 }
                 self.cursor.consume("}");
@@ -636,7 +642,7 @@ impl<'a> Parser<'a> {
                     None
                 };
                 let mixins = self.mixins()?;
-                let members = self.members(ShapeKindSyntax::Structure)?;
+                let members = self.members(ShapeKindSyntax::Structure, false)?;
                 PropertyValueSyntax::InlineStructure {
                     annotations,
                     members,

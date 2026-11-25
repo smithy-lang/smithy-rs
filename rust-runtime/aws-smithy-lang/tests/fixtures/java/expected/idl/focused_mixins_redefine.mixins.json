@@ -1,0 +1,168 @@
+{
+    "ex#C": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "m",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#required"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$y"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "y",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "s",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#E": {
+        "mixins": [
+            "ex#EM"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#EM$A"
+                ],
+                "traits": {
+                    "smithy.api#enumValue": "other"
+                },
+                "introduced": [
+                    "smithy.api#enumValue"
+                ],
+                "name": "A",
+                "target": "smithy.api#Unit"
+            },
+            {
+                "mixins": [
+                    "ex#EM$B"
+                ],
+                "traits": {
+                    "smithy.api#enumValue": "bee"
+                },
+                "introduced": [],
+                "name": "B",
+                "target": "smithy.api#Unit"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#enumValue": "C"
+                },
+                "introduced": [
+                    "smithy.api#enumValue"
+                ],
+                "name": "C",
+                "target": "smithy.api#Unit"
+            }
+        ]
+    },
+    "ex#IE": {
+        "mixins": [
+            "ex#IM"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#IM$ONE"
+                ],
+                "traits": {
+                    "smithy.api#enumValue": 1
+                },
+                "introduced": [],
+                "name": "ONE",
+                "target": "smithy.api#Unit"
+            },
+            {
+                "mixins": [],
+                "traits": {
+                    "smithy.api#enumValue": 2
+                },
+                "introduced": [
+                    "smithy.api#enumValue"
+                ],
+                "name": "TWO",
+                "target": "smithy.api#Unit"
+            }
+        ]
+    },
+    "ex#Same": {
+        "mixins": [
+            "ex#SameA",
+            "ex#SameB"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#SameA$x",
+                    "ex#SameB$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "B",
+                    "smithy.api#tags": [
+                        "a"
+                    ]
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#U": {
+        "mixins": [
+            "ex#UM"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#UM$a"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#Integer"
+            }
+        ]
+    }
+}
