@@ -21,12 +21,12 @@ use std::path::PathBuf;
 /// # Example: Using a custom profile file path
 ///
 /// ```no_run,ignore
-/// use aws_runtime::env_config::file::{EnvConfigFiles, SharedConfigFileKind};
+/// use aws_runtime::env_config::file::{EnvConfigFiles, EnvConfigFileKind};
 /// use std::sync::Arc;
 ///
 /// # async fn example() {
 /// let profile_files = EnvConfigFiles::builder()
-///     .with_file(SharedConfigFileKind::Credentials, "some/path/to/credentials-file")
+///     .with_file(EnvConfigFileKind::Credentials, "some/path/to/credentials-file")
 ///     .build();
 /// let sdk_config = aws_config::from_env()
 ///     .profile_files(profile_files)
