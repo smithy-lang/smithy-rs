@@ -204,7 +204,7 @@ pub use owned::{
     Shape, ShapeBuildError, SimpleShape, SimpleShapeBuilder, StructureShape, StructureShapeBuilder,
     UnionShape, UnionShapeBuilder,
 };
-pub(crate) use owned::{Members, TraitMap};
+pub(crate) use owned::{InheritedMember, Members, ShapeMixins, TraitMap};
 pub use view::{
     AppliedTrait, EnumValue, EnumView, IntEnumView, ListView, MapView, MemberView, MembersView,
     OperationView, ResourceView, ServiceView, ShapeExpectationError, ShapeRef, ShapeView,

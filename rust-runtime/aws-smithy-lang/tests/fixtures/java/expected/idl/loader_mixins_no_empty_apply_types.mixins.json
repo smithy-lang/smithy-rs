@@ -1,0 +1,22 @@
+{
+    "smithy.example#MixedStruct": {
+        "mixins": [
+            "smithy.example#MixinStruct"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#MixinStruct$bar"
+                ],
+                "traits": {
+                    "smithy.api#default": null
+                },
+                "introduced": [],
+                "name": "bar",
+                "target": "smithy.api#PrimitiveInteger"
+            }
+        ]
+    }
+}

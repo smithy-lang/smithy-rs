@@ -31,8 +31,8 @@ use crate::node::{Node, NodeObject, NodeValue};
 use crate::shape::owned::Common;
 use crate::shape::{
     EnumShape, IntEnumShape, ListShape, MapShape, MemberShape, Members, OperationShape,
-    ResourceShape, ServiceShape, Shape, ShapeType, SimpleShape, StructureShape, TraitMap,
-    UnionShape,
+    ResourceShape, ServiceShape, Shape, ShapeMixins, ShapeType, SimpleShape, StructureShape,
+    TraitMap, UnionShape,
 };
 use crate::shape_id::ShapeId;
 use indexmap::IndexMap;
@@ -211,6 +211,11 @@ impl AstConverter {
     }
 
     fn ref_list(&self, object: &NodeObject, key: &str) -> Option<Vec<ShapeId>> {
+        self.refs(object, key, Repeats::Reject)
+    }
+
+    /// A list of shape references, `{"target": ...}`, under `key`.
+    fn refs(&self, object: &NodeObject, key: &str, repeats: Repeats) -> Option<Vec<ShapeId>> {
         let Some(node) = object.get(key) else {
             return Some(Vec::new());
         };
@@ -232,9 +237,10 @@ impl AstConverter {
                 ok = false;
                 continue;
             };
-            // These lists are unordered sets in Smithy; a repeated entry is a modeling error,
-            // not something to normalize silently.
             if let Some(&first) = first_index.get(&id) {
+                if repeats == Repeats::Ignore {
+                    continue;
+                }
                 self.diagnostics.borrow_mut().push(
                     Diagnostic::error_at(
                         DiagnosticCode::DuplicateReference,
@@ -359,6 +365,7 @@ impl AstConverter {
             id,
             target: target?,
             traits: traits?,
+            inherited: None,
             source: location,
         })
     }
@@ -565,32 +572,37 @@ impl AstConverter {
             &location,
         );
 
-        match object.get("mixins").map(|m| (m, m.as_array())) {
-            None => {}
-            Some((_, Some([]))) => {}
-            Some((_, Some(_))) => {
+        // Mixins are supported for the shapes with named members; resolving them is the
+        // assembler's job, so a mixin may be defined in any input.
+        let mixins = match object.get("mixins").map(|m| (m, m.as_array())) {
+            Some((_, Some([_, ..])))
+                if !matches!(
+                    shape_type,
+                    ShapeType::Structure | ShapeType::Union | ShapeType::Enum | ShapeType::IntEnum
+                ) =>
+            {
                 self.error(
                     DiagnosticCode::UnsupportedFeature,
-                    format!("`{id}` uses mixins, which are not supported"),
+                    format!("{shape_type} `{id}` uses mixins, which are not supported for {shape_type} shapes"),
                     property("mixins"),
                 );
                 ok = false;
+                Vec::new()
             }
-            Some((other, None)) => {
-                self.error(
-                    DiagnosticCode::InvalidProperty,
-                    format!("`mixins` must be an array, found {}", other.type_name()),
-                    property("mixins"),
-                );
-                ok = false;
-            }
-        }
+            _ => self
+                .refs(&object, "mixins", Repeats::Ignore)
+                .unwrap_or_else(|| {
+                    ok = false;
+                    Vec::new()
+                }),
+        };
 
         let traits = self.traits(object.remove("traits"));
         let traits_ok = traits.is_some();
         let common = Common {
             id: id.clone(),
             traits: traits.unwrap_or_default(),
+            mixins: ShapeMixins::declared(mixins),
             source: location.clone(),
         };
         let shape = self.kind(shape_type, common, &mut object, &location);
@@ -723,6 +735,17 @@ impl AstConverter {
             _ => unreachable!("every root shape type is handled"),
         })
     }
+}
+
+/// What a list of shape references does with an entry it already has.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Repeats {
+    /// Reports it. Lists such as a service's `operations` are unordered sets in Smithy, so a
+    /// repeated entry is a modeling error, not something to normalize silently.
+    Reject,
+    /// Ignores it. A shape's `mixins` are ordered, and like the reference implementation, which
+    /// keeps them in an ordered map, a repeated mixin has no effect.
+    Ignore,
 }
 
 /// Kind-specific JSON AST properties (in addition to `type`, `traits`, and `mixins`).

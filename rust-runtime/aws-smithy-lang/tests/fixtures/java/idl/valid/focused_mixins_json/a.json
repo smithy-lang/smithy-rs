@@ -1,0 +1,6 @@
+{"smithy": "2.0", "shapes": {
+    "ex#C": {"type": "structure", "mixins": [{"target": "ex#M"}]},
+    "ex#C$x": {"type": "apply", "traits": {"smithy.api#required": {}}},
+    "ex#M": {"type": "structure", "traits": {"smithy.api#mixin": {}},
+             "members": {"x": {"target": "smithy.api#String"}}}
+}}

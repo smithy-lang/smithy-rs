@@ -10,7 +10,7 @@
 //! (forward and reverse), the [`knowledge`](crate::knowledge) indexes built on it, and
 //! [`Walker`](crate::traversal::Walker).
 //!
-//! Every ordinary reference in a [`Model`](crate::Model) resolves, so each [`Relationship`]
+//! Every ordinary reference in a [`Model`] resolves, so each [`Relationship`]
 //! always has a target. Applied traits are not relationships: trait definitions may be absent.
 //!
 //! ```
@@ -32,13 +32,13 @@
 //! ```
 
 use crate::diagnostic::{escape_pointer_token, SourceLocation};
-use crate::model::ModelData;
+use crate::knowledge::KnowledgeIndex;
+use crate::model::{Model, ModelData};
 use crate::prelude;
 use crate::shape::{MemberShape, MemberView, Shape, ShapeRef, ShapeType, ShapeView};
 use crate::shape_id::ShapeId;
 use std::fmt;
 use std::iter::FusedIterator;
-use std::ops::Range;
 
 /// The kind of a [`Relationship`].
 #[non_exhaustive]
@@ -435,15 +435,72 @@ impl<'a> MemberView<'a> {
     }
 }
 
-/// A node is a root shape or a member. Nodes are numbered in declaration order (document, then
-/// prelude), each root immediately followed by its members in member order.
-type Node = u32;
+/// A root shape or member of one model, numbered by the model's [`RelationshipIndex`].
+///
+/// A node ID is a small `Copy` value that doesn't borrow the model. An index can store node IDs
+/// in owned data, such as data cached with
+/// [`Model::knowledge_data`](crate::Model::knowledge_data), and resolve them to views with
+/// [`RelationshipIndex::shape`]. [`index`](Self::index) numbers nodes densely from zero, so it
+/// can also key a `Vec` or a bit set sized by [`RelationshipIndex::node_count`], and
+/// [`from_index`](Self::from_index) turns a position back into a node ID.
+///
+/// Node IDs follow [`Model::shapes`](crate::Model::shapes) order, with each root shape
+/// immediately followed by its members in member order.
+///
+/// A node ID is a position in one model's numbering, so other models use the same IDs for
+/// different shapes. It is only meaningful for the model whose index produced it, and for clones
+/// of that model. Passing it to another model's index panics if it is out of range, and
+/// otherwise names an unrelated shape. To match shapes across models, such as two versions of
+/// one service, compare their [`ShapeId`]s, and find each model's node with
+/// [`RelationshipIndex::node`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct NodeId(u32);
 
-#[derive(Clone, Copy)]
-struct Edge {
-    source: Node,
-    target: Node,
+impl NodeId {
+    /// The node at `position`: the inverse of [`index`](Self::index).
+    ///
+    /// The position isn't checked against a model here. Methods that take a node check it
+    /// instead, as they do for a node of another model: [`RelationshipIndex::shape`] panics
+    /// unless `position` is less than [`RelationshipIndex::node_count`].
+    ///
+    /// # Panics
+    ///
+    /// If `position` is greater than `u32::MAX`.
+    pub fn from_index(position: usize) -> Self {
+        Self(index(position))
+    }
+
+    /// The position of this node, from zero up to [`RelationshipIndex::node_count`].
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// A relationship between two nodes: [`Relationship`] without the views.
+///
+/// Returned by [`RelationshipIndex::outgoing`] and [`RelationshipIndex::incoming`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Edge {
+    source: NodeId,
+    target: NodeId,
     kind: RelationshipType,
+}
+
+impl Edge {
+    /// The shape or member the edge starts from.
+    pub fn source(&self) -> NodeId {
+        self.source
+    }
+
+    /// The kind of edge.
+    pub fn kind(&self) -> RelationshipType {
+        self.kind
+    }
+
+    /// The shape or member the edge points to.
+    pub fn target(&self) -> NodeId {
+        self.target
+    }
 }
 
 /// Every ordinary relationship of a model, in both directions.
@@ -451,7 +508,7 @@ struct Edge {
 /// Uses `O(V + E)` memory and stores only indices, never references into the model.
 pub(crate) struct RelationshipData {
     /// The node of each root, indexed by root position.
-    root_nodes: Box<[Node]>,
+    root_nodes: Box<[NodeId]>,
     /// The root position of each node.
     node_roots: Box<[u32]>,
     edges: Box<[Edge]>,
@@ -472,7 +529,7 @@ impl RelationshipData {
         let mut root_nodes = Vec::with_capacity(data.root_count());
         let mut node_roots = Vec::new();
         for (position, shape) in data.declarations().enumerate() {
-            root_nodes.push(index(node_roots.len()));
+            root_nodes.push(NodeId::from_index(node_roots.len()));
             node_roots.extend(std::iter::repeat_n(
                 index(position),
                 shape.member_count() + 1,
@@ -492,7 +549,7 @@ impl RelationshipData {
         let mut outgoing = Vec::with_capacity(nodes + 1);
         outgoing.push(0);
         let mut ids: Vec<&ShapeId> = Vec::with_capacity(nodes);
-        for node in 0..index(nodes) {
+        for node in (0..nodes).map(NodeId::from_index) {
             let shape = this.shape(data, node);
             ids.push(shape.id());
             for relationship in relationships(shape) {
@@ -510,7 +567,7 @@ impl RelationshipData {
         // Counting sort by target, then order each target's edges by source ID and kind.
         let mut incoming_offsets = vec![0u32; nodes + 1];
         for edge in &edges {
-            incoming_offsets[edge.target as usize + 1] += 1;
+            incoming_offsets[edge.target.index() + 1] += 1;
         }
         for n in 0..nodes {
             incoming_offsets[n + 1] += incoming_offsets[n];
@@ -518,7 +575,7 @@ impl RelationshipData {
         let mut fill = incoming_offsets.clone();
         let mut incoming = vec![0u32; edges.len()];
         for (i, edge) in edges.iter().enumerate() {
-            let slot = &mut fill[edge.target as usize];
+            let slot = &mut fill[edge.target.index()];
             incoming[*slot as usize] = index(i);
             *slot += 1;
         }
@@ -526,8 +583,8 @@ impl RelationshipData {
             let range = incoming_offsets[n] as usize..incoming_offsets[n + 1] as usize;
             incoming[range].sort_by(|&a, &b| {
                 let (a, b) = (edges[a as usize], edges[b as usize]);
-                ids[a.source as usize]
-                    .cmp(ids[b.source as usize])
+                ids[a.source.index()]
+                    .cmp(ids[b.source.index()])
                     .then(a.kind.rank().cmp(&b.kind.rank()))
             });
         }
@@ -539,23 +596,39 @@ impl RelationshipData {
         this
     }
 
+    fn node_count(&self) -> usize {
+        self.node_roots.len()
+    }
+
+    /// The position of a node in per-node tables, after checking that it belongs to this model.
+    fn slot(&self, node: NodeId) -> usize {
+        let slot = node.index();
+        assert!(
+            slot < self.node_count(),
+            "{node:?} is not a node of this model, which has {} nodes",
+            self.node_count()
+        );
+        slot
+    }
+
     /// The node of a root shape or member ID.
-    pub(crate) fn node_of(&self, data: &ModelData, id: &ShapeId) -> Option<Node> {
+    pub(crate) fn node_of(&self, data: &ModelData, id: &ShapeId) -> Option<NodeId> {
         let position = data.root_position(id)?;
+        let root = self.root_nodes[position];
         match id.member() {
-            None => Some(self.root_nodes[position]),
+            None => Some(root),
             Some(member) => {
                 let member = data.root_at(position).member_index(member)?;
-                Some(self.root_nodes[position] + 1 + index(member))
+                Some(NodeId(root.0 + 1 + index(member)))
             }
         }
     }
 
     /// The shape or member of a node.
-    pub(crate) fn shape<'m>(&self, data: &'m ModelData, node: Node) -> ShapeRef<'m> {
-        let root = self.node_roots[node as usize];
+    pub(crate) fn shape<'m>(&self, data: &'m ModelData, node: NodeId) -> ShapeRef<'m> {
+        let root = self.node_roots[self.slot(node)];
         let shape = data.root_at(root as usize);
-        match (node - self.root_nodes[root as usize]).checked_sub(1) {
+        match (node.0 - self.root_nodes[root as usize].0).checked_sub(1) {
             None => ShapeRef::Shape(ShapeView::new(data, shape)),
             Some(member) => {
                 let member = shape
@@ -566,36 +639,16 @@ impl RelationshipData {
         }
     }
 
-    fn outgoing_range(&self, node: Node) -> Range<u32> {
-        self.outgoing[node as usize]..self.outgoing[node as usize + 1]
+    fn outgoing_slice(&self, node: NodeId) -> &[Edge] {
+        let slot = self.slot(node);
+        &self.edges[self.outgoing[slot] as usize..self.outgoing[slot + 1] as usize]
     }
 
-    fn incoming_slice(&self, node: Node) -> &[u32] {
-        let start = self.incoming_offsets[node as usize] as usize;
-        let end = self.incoming_offsets[node as usize + 1] as usize;
+    fn incoming_slice(&self, node: NodeId) -> &[u32] {
+        let slot = self.slot(node);
+        let start = self.incoming_offsets[slot] as usize;
+        let end = self.incoming_offsets[slot + 1] as usize;
         &self.incoming[start..end]
-    }
-
-    /// Outgoing `(kind, target)` pairs of a node, in relationship order.
-    pub(crate) fn outgoing_edges(
-        &self,
-        node: Node,
-    ) -> impl Iterator<Item = (RelationshipType, Node)> + '_ {
-        let range = self.outgoing_range(node);
-        self.edges[range.start as usize..range.end as usize]
-            .iter()
-            .map(|edge| (edge.kind, edge.target))
-    }
-
-    /// Incoming `(source, kind)` pairs of a node, sorted by source ID and then kind.
-    pub(crate) fn incoming_edges(
-        &self,
-        node: Node,
-    ) -> impl Iterator<Item = (Node, RelationshipType)> + '_ {
-        self.incoming_slice(node).iter().map(|&edge| {
-            let edge = self.edges[edge as usize];
-            (edge.source, edge.kind)
-        })
     }
 }
 
@@ -603,6 +656,54 @@ impl RelationshipData {
 ///
 /// This indexes every [`RelationshipType`] in both directions, including root-to-member,
 /// member-to-container, and member-to-target edges. Applied traits are not relationships.
+///
+/// # Nodes
+///
+/// The index numbers every root shape and member with a [`NodeId`]. Most callers use the
+/// [`ShapeId`] queries, [`get_outgoing`](Self::get_outgoing) and
+/// [`get_incoming`](Self::get_incoming), which return views. An index that walks the graph or
+/// keeps per-shape data can work with nodes instead: [`node`](Self::node) finds the node of a
+/// shape, [`outgoing`](Self::outgoing) and [`incoming`](Self::incoming) return [`Edge`]s
+/// between nodes without building views, and [`shape`](Self::shape) turns a node back into a
+/// view.
+///
+/// ```
+/// use aws_smithy_lang::relationships::{RelationshipIndex, RelationshipType};
+/// use aws_smithy_lang::{Model, ShapeId};
+///
+/// let model = Model::from_idl_str("m.smithy", r#"
+/// $version: "2"
+/// namespace ex
+///
+/// structure Outer { inner: Inner }
+/// structure Inner { value: String }
+/// "#)?;
+/// let relationships = model.knowledge::<RelationshipIndex<'_>>();
+///
+/// // Every member that can (transitively) contain a value of `ex#Inner`.
+/// let start = relationships.node(&ShapeId::from_static("ex#Inner")).unwrap();
+/// let mut visited = vec![false; relationships.node_count()];
+/// let mut stack = vec![start];
+/// let mut members = Vec::new();
+/// while let Some(node) = stack.pop() {
+///     for edge in relationships.incoming(node) {
+///         let source = edge.source();
+///         let follow = matches!(
+///             edge.kind(),
+///             RelationshipType::MemberTarget | RelationshipType::Member
+///         );
+///         if follow && !visited[source.index()] {
+///             visited[source.index()] = true;
+///             stack.push(source);
+///             if edge.kind() == RelationshipType::MemberTarget {
+///                 members.push(relationships.shape(source).id().to_string());
+///             }
+///         }
+///     }
+/// }
+/// assert_eq!(members, ["ex#Outer$inner"]);
+/// # Ok::<_, Box<dyn std::error::Error>>(())
+/// ```
 #[derive(Clone, Copy)]
 pub struct RelationshipIndex<'m> {
     pub(crate) data: &'m ModelData,
@@ -620,8 +721,7 @@ impl<'m> RelationshipIndex<'m> {
     /// Outgoing relationships of a shape or member, in the same order as
     /// [`ShapeRef::relationships`]. Returns `None` if no such shape or member exists.
     pub fn get_outgoing(&self, shape: &ShapeId) -> Option<Relationships<'m>> {
-        let node = self.index.node_of(self.data, shape)?;
-        Some(self.outgoing_node(node))
+        Some(self.relationships(self.node(shape)?, Direction::Outgoing))
     }
 
     /// Incoming relationships of a shape or member, sorted by source ID and then by
@@ -630,55 +730,99 @@ impl<'m> RelationshipIndex<'m> {
     ///
     /// Returns `None` if no such shape or member exists.
     pub fn get_incoming(&self, shape: &ShapeId) -> Option<Relationships<'m>> {
-        let node = self.index.node_of(self.data, shape)?;
-        Some(self.incoming_node(node))
+        Some(self.relationships(self.node(shape)?, Direction::Incoming))
     }
 
-    pub(crate) fn outgoing_of(&self, shape: ShapeRef<'m>) -> Relationships<'m> {
-        self.outgoing_node(self.node(shape.id()))
+    /// The number of nodes: every root shape and member, including the prelude. Every node's
+    /// [`index`](NodeId::index) is less than this.
+    pub fn node_count(&self) -> usize {
+        self.index.node_count()
     }
 
-    pub(crate) fn incoming_of(&self, shape: ShapeRef<'m>) -> Relationships<'m> {
-        self.incoming_node(self.node(shape.id()))
+    /// The node of a shape or member. Returns `None` if no such shape or member exists.
+    pub fn node(&self, shape: &ShapeId) -> Option<NodeId> {
+        self.index.node_of(self.data, shape)
     }
 
-    /// The node of a shape known to exist in this model.
-    pub(crate) fn node(&self, id: &ShapeId) -> Node {
-        self.index
-            .node_of(self.data, id)
-            .expect("views always belong to their model")
-    }
-
-    pub(crate) fn lookup(&self, id: &ShapeId) -> Option<(Node, ShapeRef<'m>)> {
-        let node = self.index.node_of(self.data, id)?;
-        Some((node, self.shape(node)))
-    }
-
-    pub(crate) fn shape(&self, node: Node) -> ShapeRef<'m> {
+    /// The shape or member of a node.
+    ///
+    /// # Panics
+    ///
+    /// If `node` is not a node of this model. A node of another model may instead name an
+    /// unrelated shape.
+    pub fn shape(&self, node: NodeId) -> ShapeRef<'m> {
         self.index.shape(self.data, node)
     }
 
+    /// Outgoing edges of a node, in the same order as [`get_outgoing`](Self::get_outgoing).
+    ///
+    /// # Panics
+    ///
+    /// If `node` is not a node of this model, as for [`shape`](Self::shape).
+    pub fn outgoing(&self, node: NodeId) -> Edges<'m> {
+        let index: &'m RelationshipData = self.index;
+        Edges {
+            inner: EdgesInner::Outgoing(index.outgoing_slice(node).iter()),
+        }
+    }
+
+    /// Incoming edges of a node, in the same order as [`get_incoming`](Self::get_incoming). Each
+    /// edge keeps its original direction: its [`target`](Edge::target) is `node`.
+    ///
+    /// # Panics
+    ///
+    /// If `node` is not a node of this model, as for [`shape`](Self::shape).
+    pub fn incoming(&self, node: NodeId) -> Edges<'m> {
+        let index: &'m RelationshipData = self.index;
+        Edges {
+            inner: EdgesInner::Incoming {
+                edges: &index.edges,
+                ids: index.incoming_slice(node).iter(),
+            },
+        }
+    }
+
+    pub(crate) fn outgoing_of(&self, shape: ShapeRef<'m>) -> Relationships<'m> {
+        self.relationships(self.expect_node(shape.id()), Direction::Outgoing)
+    }
+
+    pub(crate) fn incoming_of(&self, shape: ShapeRef<'m>) -> Relationships<'m> {
+        self.relationships(self.expect_node(shape.id()), Direction::Incoming)
+    }
+
+    /// The node of a shape known to exist in this model.
+    pub(crate) fn expect_node(&self, id: &ShapeId) -> NodeId {
+        self.node(id).expect("views always belong to their model")
+    }
+
+    pub(crate) fn lookup(&self, id: &ShapeId) -> Option<(NodeId, ShapeRef<'m>)> {
+        let node = self.node(id)?;
+        Some((node, self.shape(node)))
+    }
+
     /// The root shape of a node known to be a root.
-    pub(crate) fn root(&self, node: Node) -> ShapeView<'m> {
+    pub(crate) fn root(&self, node: NodeId) -> ShapeView<'m> {
         self.shape(node)
             .as_shape()
             .expect("containment and binding edges only connect root shapes")
     }
 
-    fn outgoing_node(&self, node: Node) -> Relationships<'m> {
+    fn relationships(&self, node: NodeId, direction: Direction) -> Relationships<'m> {
+        let edges = match direction {
+            Direction::Outgoing => self.outgoing(node),
+            Direction::Incoming => self.incoming(node),
+        };
         Relationships {
             index: *self,
             node,
-            edges: EdgeIds::Outgoing(self.index.outgoing_range(node)),
+            edges,
         }
     }
+}
 
-    fn incoming_node(&self, node: Node) -> Relationships<'m> {
-        Relationships {
-            index: *self,
-            node,
-            edges: EdgeIds::Incoming(self.index.incoming_slice(node).iter()),
-        }
+impl<'m> KnowledgeIndex<'m> for RelationshipIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.data())
     }
 }
 
@@ -690,10 +834,69 @@ impl fmt::Debug for RelationshipIndex<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Direction {
+    Outgoing,
+    Incoming,
+}
+
 #[derive(Clone)]
-enum EdgeIds<'m> {
-    Outgoing(Range<u32>),
-    Incoming(std::slice::Iter<'m, u32>),
+enum EdgesInner<'m> {
+    /// A node's outgoing edges are contiguous.
+    Outgoing(std::slice::Iter<'m, Edge>),
+    /// A node's incoming edges are indices into every edge.
+    Incoming {
+        edges: &'m [Edge],
+        ids: std::slice::Iter<'m, u32>,
+    },
+}
+
+/// An iterator over the [`Edge`]s of a node, returned by [`RelationshipIndex::outgoing`] and
+/// [`RelationshipIndex::incoming`].
+#[derive(Clone)]
+pub struct Edges<'m> {
+    inner: EdgesInner<'m>,
+}
+
+impl Edges<'_> {
+    fn direction(&self) -> &'static str {
+        match self.inner {
+            EdgesInner::Outgoing(_) => "outgoing",
+            EdgesInner::Incoming { .. } => "incoming",
+        }
+    }
+}
+
+impl Iterator for Edges<'_> {
+    type Item = Edge;
+
+    fn next(&mut self) -> Option<Edge> {
+        match &mut self.inner {
+            EdgesInner::Outgoing(edges) => edges.next().copied(),
+            EdgesInner::Incoming { edges, ids } => Some(edges[*ids.next()? as usize]),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = match &self.inner {
+            EdgesInner::Outgoing(edges) => edges.len(),
+            EdgesInner::Incoming { ids, .. } => ids.len(),
+        };
+        (len, Some(len))
+    }
+}
+
+impl ExactSizeIterator for Edges<'_> {}
+
+impl FusedIterator for Edges<'_> {}
+
+impl fmt::Debug for Edges<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Edges")
+            .field("direction", &self.direction())
+            .field("remaining", &self.len())
+            .finish()
+    }
 }
 
 /// An iterator over cached [`Relationship`]s, returned by [`RelationshipIndex`] and by
@@ -702,38 +905,24 @@ enum EdgeIds<'m> {
 pub struct Relationships<'m> {
     index: RelationshipIndex<'m>,
     /// The queried shape: the source of outgoing edges, or the target of incoming edges.
-    node: Node,
-    edges: EdgeIds<'m>,
-}
-
-impl<'m> Relationships<'m> {
-    fn relationship(&self, edge: u32) -> Relationship<'m> {
-        let edge = self.index.index.edges[edge as usize];
-        Relationship::new(
-            self.index.shape(edge.source),
-            edge.kind,
-            self.index.shape(edge.target),
-        )
-    }
+    node: NodeId,
+    edges: Edges<'m>,
 }
 
 impl<'m> Iterator for Relationships<'m> {
     type Item = Relationship<'m>;
 
     fn next(&mut self) -> Option<Relationship<'m>> {
-        let edge = match &mut self.edges {
-            EdgeIds::Outgoing(range) => range.next()?,
-            EdgeIds::Incoming(ids) => *ids.next()?,
-        };
-        Some(self.relationship(edge))
+        let edge = self.edges.next()?;
+        Some(Relationship::new(
+            self.index.shape(edge.source),
+            edge.kind,
+            self.index.shape(edge.target),
+        ))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = match &self.edges {
-            EdgeIds::Outgoing(range) => range.len(),
-            EdgeIds::Incoming(ids) => ids.len(),
-        };
-        (len, Some(len))
+        self.edges.size_hint()
     }
 }
 
@@ -743,13 +932,9 @@ impl FusedIterator for Relationships<'_> {}
 
 impl fmt::Debug for Relationships<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let direction = match self.edges {
-            EdgeIds::Outgoing(_) => "outgoing",
-            EdgeIds::Incoming(_) => "incoming",
-        };
         f.debug_struct("Relationships")
             .field("shape", self.index.shape(self.node).id())
-            .field("direction", &direction)
+            .field("direction", &self.edges.direction())
             .field("remaining", &self.len())
             .finish()
     }

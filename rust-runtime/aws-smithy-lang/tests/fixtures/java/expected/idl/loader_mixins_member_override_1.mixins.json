@@ -1,0 +1,32 @@
+{
+    "com.amazon.example#Valid": {
+        "mixins": [
+            "com.amazon.example#A2",
+            "com.amazon.example#A1"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "com.amazon.example#A2$a",
+                    "com.amazon.example#A1$a"
+                ],
+                "traits": {
+                    "smithy.api#private": {},
+                    "smithy.api#required": {}
+                },
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

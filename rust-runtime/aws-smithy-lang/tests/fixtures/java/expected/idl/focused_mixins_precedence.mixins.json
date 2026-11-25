@@ -1,0 +1,182 @@
+{
+    "ex#D": {
+        "mixins": [
+            "ex#A",
+            "ex#B"
+        ],
+        "traits": {
+            "smithy.api#documentation": "The shape's own documentation wins.",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [
+            "smithy.api#documentation"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "ex#A$a"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#A$shared",
+                    "ex#B$shared"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "B shared",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#documentation",
+                    "smithy.api#required"
+                ],
+                "name": "shared",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#B$b"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#Integer"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "s",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#E": {
+        "mixins": [
+            "ex#A",
+            "ex#B"
+        ],
+        "traits": {
+            "smithy.api#documentation": "B",
+            "smithy.api#tags": [
+                "a"
+            ]
+        },
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#A$a"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "a",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#A$shared",
+                    "ex#B$shared"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "B shared",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#documentation",
+                    "smithy.api#required"
+                ],
+                "name": "shared",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#B$b"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "b",
+                "target": "smithy.api#Integer"
+            }
+        ]
+    },
+    "ex#Leaf": {
+        "mixins": [
+            "ex#Mid",
+            "ex#Other"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#Mid$base"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "base",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#Mid$mid"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "mid",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#Other$other"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "other",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "leaf",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#Mid": {
+        "mixins": [
+            "ex#Base"
+        ],
+        "traits": {
+            "smithy.api#mixin": {}
+        },
+        "introduced": [
+            "smithy.api#mixin"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "ex#Base$base"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "base",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "mid",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}
