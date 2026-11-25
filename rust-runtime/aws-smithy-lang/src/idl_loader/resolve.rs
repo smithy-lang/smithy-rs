@@ -16,13 +16,14 @@ use super::syntax::{
 };
 use crate::prelude;
 use crate::shape::{Shape, ShapeType};
+use crate::shape_id::ShapeId;
 use crate::traits;
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::LazyLock;
 
 /// Shape names and kinds declared by every input of one assembly, plus resource identifiers
-/// for target elision.
+/// and properties for target elision.
 ///
 /// The index only resolves names; [`Merge`](crate::assembler) remains authoritative for
 /// conflicting definitions. When provisional declarations disagree, lowering still picks one
@@ -31,7 +32,28 @@ use std::sync::LazyLock;
 #[derive(Debug, Default)]
 pub(crate) struct DeclarationIndex {
     kinds: HashMap<String, ShapeType>,
-    identifiers: HashMap<String, IndexMap<String, String>>,
+    resources: HashMap<String, ResourceBindings>,
+}
+
+/// The identifiers and properties of a resource, by name, with absolute target shape IDs. A
+/// structure bound to the resource with `for` may elide the targets of members with these names.
+#[derive(Debug, Default)]
+pub(crate) struct ResourceBindings {
+    pub(crate) identifiers: IndexMap<String, String>,
+    pub(crate) properties: IndexMap<String, String>,
+}
+
+impl ResourceBindings {
+    /// The target of a property, or else of an identifier, named `name`. A property wins, as in
+    /// the reference implementation, whose `ApplyResourceBasedTargets` sets the identifier's
+    /// target and then the property's. (A resource whose identifier is also a property is
+    /// invalid anyway.)
+    pub(crate) fn target(&self, name: &str) -> Option<&str> {
+        self.properties
+            .get(name)
+            .or_else(|| self.identifiers.get(name))
+            .map(String::as_str)
+    }
 }
 
 impl DeclarationIndex {
@@ -43,12 +65,16 @@ impl DeclarationIndex {
         }
         self.kinds.insert(id.to_owned(), shape.shape_type());
         if let Shape::Resource(resource) = shape {
-            let identifiers = resource
-                .identifiers
-                .iter()
-                .map(|(name, target)| (name.clone(), target.as_str().to_owned()))
-                .collect();
-            self.identifiers.insert(id.to_owned(), identifiers);
+            let names = |map: &IndexMap<String, ShapeId>| {
+                map.iter()
+                    .map(|(name, target)| (name.clone(), target.as_str().to_owned()))
+                    .collect()
+            };
+            let bindings = ResourceBindings {
+                identifiers: names(&resource.identifiers),
+                properties: names(&resource.properties),
+            };
+            self.resources.insert(id.to_owned(), bindings);
         }
     }
 
@@ -81,8 +107,8 @@ impl DeclarationIndex {
         }
     }
 
-    /// Records the identifiers of an IDL document's resources. Runs after every input's
-    /// names are indexed, because identifier targets are themselves relative shape IDs.
+    /// Records the identifiers and properties of an IDL document's resources. Runs after every
+    /// input's names are indexed, because their targets are themselves relative shape IDs.
     pub(crate) fn add_idl_resources(&mut self, document: &IdlDocument) {
         let Some(scope) = Scope::new(document, self) else {
             return;
@@ -98,26 +124,28 @@ impl DeclarationIndex {
                 continue;
             };
             let id = scope.local(&shape.name.value);
-            if self.identifiers.contains_key(&id) {
+            if self.resources.contains_key(&id) {
                 continue;
             }
-            let mut identifiers = IndexMap::new();
+            let mut bindings = ResourceBindings::default();
             for property in properties {
-                if property.name.value != "identifiers" {
-                    continue;
-                }
+                let names = match property.name.value.as_str() {
+                    "identifiers" => &mut bindings.identifiers,
+                    "properties" => &mut bindings.properties,
+                    _ => continue,
+                };
                 if let PropertyValueSyntax::Node(NodeSyntax::Object(entries, _)) = &property.value {
                     for (name, value) in entries {
                         if let Some(target) = scope.reference(value) {
-                            identifiers.insert(name.value.clone(), target);
+                            names.insert(name.value.clone(), target);
                         }
                     }
                 }
             }
-            resources.push((id, identifiers));
+            resources.push((id, bindings));
         }
-        for (id, identifiers) in resources {
-            self.identifiers.entry(id).or_insert(identifiers);
+        for (id, bindings) in resources {
+            self.resources.entry(id).or_insert(bindings);
         }
     }
 
@@ -129,9 +157,9 @@ impl DeclarationIndex {
             .or_else(|| prelude::shapes().get(id).map(Shape::shape_type))
     }
 
-    /// The identifiers of a resource, if `id` is a known resource.
-    pub(crate) fn identifiers(&self, id: &str) -> Option<&IndexMap<String, String>> {
-        self.identifiers.get(id)
+    /// The identifiers and properties of a resource, if `id` is a known resource.
+    pub(crate) fn resource(&self, id: &str) -> Option<&ResourceBindings> {
+        self.resources.get(id)
     }
 
     fn declares(&self, id: &str) -> bool {

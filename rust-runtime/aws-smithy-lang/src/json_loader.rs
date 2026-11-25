@@ -27,9 +27,9 @@
 //! - **Bounded peak memory.** Using `serde_json::Value` would materialize the whole document
 //!   (about 6 MiB of JSON for EC2) before conversion. Here only one shape's [`Node`] is alive
 //!   at a time, and its trait values move into the declaration without being cloned.
-//! - **Explicit unsupported features.** `set`, mixins, and `@mixin` declarations produce
-//!   `UnsupportedFeature`. They are neither silently accepted nor mixed in with ordinary
-//!   unknown-field errors.
+//! - **Explicit unsupported features.** `set`, and mixins of shape types other than structure,
+//!   union, enum, and intEnum, produce `UnsupportedFeature`. They are neither silently accepted
+//!   nor mixed in with ordinary unknown-field errors.
 //! - **No serde surface.** JSON is converted directly into the crate's owned semantic
 //!   [`Shape`] types, the same types callers build in code. Nothing about
 //!   the JSON AST encoding leaks into the model or the public API.
@@ -627,7 +627,7 @@ mod tests {
     fn unsupported_features() {
         for (shapes, pointer) in [
             (
-                r#""a#A":{"type":"structure","mixins":[{"target":"a#M"}]}"#,
+                r#""a#A":{"type":"string","mixins":[{"target":"a#M"}]}"#,
                 "/shapes/a#A/mixins",
             ),
             (
@@ -643,7 +643,7 @@ mod tests {
             );
             assert_eq!(pointers(&err), [pointer]);
         }
-        let ok = parse(&doc(r#""a#A":{"type":"structure","mixins":[]}"#)).unwrap();
+        let ok = parse(&doc(r#""a#A":{"type":"string","mixins":[]}"#)).unwrap();
         assert_eq!(ok.shapes.len(), 1);
     }
 

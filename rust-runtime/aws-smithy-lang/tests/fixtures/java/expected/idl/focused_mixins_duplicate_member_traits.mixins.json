@@ -1,0 +1,112 @@
+{
+    "ex#AppliedToKept": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "applied"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#AppliedToLater": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "applied"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#Elided": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "elided"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#Kept": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "kept"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#Later": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$x"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "later"
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

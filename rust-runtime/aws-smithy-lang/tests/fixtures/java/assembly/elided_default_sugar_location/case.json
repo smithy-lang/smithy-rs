@@ -1,0 +1,5 @@
+{
+    "description": "Two equal definitions with the same default value sugar on an elided member: the later definition provides the member's location and the default's.",
+    "steps": [{"addFile": "a.smithy"}, {"addFile": "b.smithy"}],
+    "locations": ["ex#S", "ex#S$x", "ex#S$x@smithy.api#default"]
+}
