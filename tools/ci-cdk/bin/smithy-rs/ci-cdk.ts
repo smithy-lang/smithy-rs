@@ -59,19 +59,28 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
 // `smithy-rs-canary-stack` needs deploying too, also `--exclusively`, and that one is the risk.
 // It confines the SDK canary's role to the SDK canary's own metric namespace — until it is
 // deployed that role's `PutMetricData` allow has no namespace condition, and a pull request's code
-// running in `manual-canary.yml` holds its credentials, so it could forge a verdict here. But the
-// same deploy also rewrites a *live* role's trust policy, because `GitHubOidcRole` is shared:
-// `smithy-rs-canary-github-oidc-role` gains exact `repository_owner_id` and `repository_id`
-// conditions it has never had, and every pull request's canary job assumes it. Verify by
-// dispatching `manual-canary.yml` on a pull request straight afterwards; that is the path the new
-// conditions would break.
+// running in `manual-canary.yml` holds its credentials, so it could forge a verdict here. That
+// deploy also restores the EC2 actions the paginator canary calls, which the policy in
+// `canary-stack.ts` had narrowed away. But it rewrites a *live* role's trust policy too, because
+// `GitHubOidcRole` is shared: `smithy-rs-canary-github-oidc-role` gains exact
+// `repository_owner_id` and `repository_id` conditions it has never had, and every pull request's
+// canary job assumes it. Verify by dispatching `manual-canary.yml` on a pull request straight
+// afterwards; that is the path the new conditions would break.
+//
+// `smithy-rs-pull-request-cdn-stack` carries the *same* trust rewrite on
+// `smithy-rs-pull-request-github-oidc-role`, so it carries the same risk and needs the same check.
+// Its check is cheaper, though: the role is assumed in `pull-request-bot.yml`, which is a
+// `workflow_call` reachable from `manual-pull-request-bot.yml` *and* from `ci-pr.yml` on every
+// pull request. So the next pull request after that deploy exercises it without anyone dispatching
+// anything — and if the conditions are wrong, the doc preview and codegen diff fail on every pull
+// request in the repository, not just on a bot run somebody asked for. Watch the next one.
 //
 // Order: the release-tag ruleset enforcing, which is a prerequisite rather than a step and is why
-// `RELEASE_REFS` means anything; then this stack; then `smithy-rs-canary-stack` verified; then the
-// secrets. The roles are inert until the secrets exist and nothing pages until the alarm is armed,
-// so the two deploys are independent — what must not happen is paging secrets being set while the
-// SDK canary's role can still write the build canary's namespace. The pull-request CDN stack's identical trust
-// change can go out whenever.
+// `RELEASE_REFS` means anything; then this stack; then `smithy-rs-canary-stack` verified; then
+// `smithy-rs-pull-request-cdn-stack`, verified by the next pull request; then the secrets. The
+// roles are inert until the secrets exist and nothing pages until the alarm is armed, so the
+// deploys are independent — what must not happen is paging secrets being set while the SDK
+// canary's role can still write the build canary's namespace.
 new BuildCanaryStack(app, "smithy-rs-build-canary-stack", {
     githubActionsOidcProvider: githubActionsOidcProvider,
     env,
