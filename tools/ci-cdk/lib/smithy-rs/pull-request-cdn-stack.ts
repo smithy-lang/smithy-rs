@@ -6,7 +6,9 @@
 import { OpenIdConnectProvider } from "aws-cdk-lib/aws-iam";
 import { Duration, RemovalPolicy, Stack, StackProps, Tags } from "aws-cdk-lib";
 import { CloudFrontS3Cdn } from "../constructs/cloudfront-s3-cdn";
-import { GitHubOidcRole } from "../constructs/github-oidc-role";
+import { GitHubOidcRole, jobWorkflowRef } from "../constructs/github-oidc-role";
+import { SMITHY_RS } from "../github-repositories";
+import { PULL_REQUEST_BOT_WORKFLOW } from "./workflows";
 import { Construct } from "constructs";
 
 export interface Properties extends StackProps {
@@ -25,9 +27,22 @@ export class PullRequestCdnStack extends Stack {
 
         this.smithyRsOidcRole = new GitHubOidcRole(this, "smithy-rs", {
             name: "smithy-rs-pull-request",
-            githubOrg: "smithy-lang",
-            githubRepo: "smithy-rs",
+            ...SMITHY_RS,
             oidcProvider: props.githubActionsOidcProvider,
+            // The only workflow that assumes this role. Without the condition every job in the
+            // repository holding `id-token: write` can take it, including the build canary's
+            // matrix, which builds crates from the open internet.
+            //
+            // A reusable workflow, reached from `ci-pr.yml` on every pull request and from
+            // `manual-pull-request-bot.yml` by hand. The claim names the file a job is defined in
+            // rather than the caller, so one pattern covers both doors.
+            jobWorkflowRefs: [
+                jobWorkflowRef(
+                    SMITHY_RS.githubOrg,
+                    SMITHY_RS.githubRepo,
+                    PULL_REQUEST_BOT_WORKFLOW,
+                ),
+            ],
         });
 
         this.pullRequestCdn = new CloudFrontS3Cdn(this, "pull-request-cdn", {

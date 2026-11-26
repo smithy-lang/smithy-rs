@@ -19,14 +19,45 @@ import {
 import { CfnDirectoryBucket } from "aws-cdk-lib/aws-s3express";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { GitHubOidcRole } from "./constructs/github-oidc-role";
+import { GitHubOidcRole, jobWorkflowRef } from "./constructs/github-oidc-role";
+
+/**
+ * The namespace `canary-runner` writes this canary's metrics to.
+ *
+ * Duplicated from `canary-runner/src/run.rs` rather than imported, because this is CDK and that is
+ * Rust. A disagreement denies every `PutMetricData` the canary makes, so the canary's own failure
+ * metric would stop arriving — which looks like a healthy canary.
+ */
+export const SDK_CANARY_NAMESPACE = "aws-sdk-rust-canary";
 
 export interface OidcProps {
     roleId: string;
     roleName: string;
     roleGithubOrg: string;
     roleGithubRepo: string;
+    /** The organisation's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubOrgId: string;
+    /** The repository's numeric id. Immutable, and what the trust policy authorises on. */
+    roleGithubRepoId: string;
     provider: OpenIdConnectProvider;
+    /**
+     * Only let jobs defined by these workflows assume the role, as bare filenames.
+     *
+     * Without it the role is assumable by every job in the repository that holds
+     * `id-token: write`, this one included: the canary's own matrix builds crates from the open
+     * internet, and `ci.yml` builds a pull request's code. The role grants Lambda
+     * create/invoke/delete, so the set of jobs that can take it is worth stating.
+     *
+     * Filenames rather than full claim patterns, so the organisation and repository come from the
+     * same props that authorise the role and a caller cannot pin another repository's workflow by
+     * mistake.
+     *
+     * Optional because the two deployments differ: this repository's workflows are in this
+     * repository, where a rename is visible, while the SDK's canary role is assumed by workflows in
+     * the SDK's own repository. Leaving it unset there is not a gap -- that role is conditioned on
+     * the SDK repository's id, so no token minted here satisfies it.
+     */
+    jobWorkflows?: string[];
 }
 
 export interface Properties extends StackProps {
@@ -56,11 +87,17 @@ export class CanaryStack extends Stack {
         Tags.of(this).add("stack", id);
 
         if (props.oidcProps) {
-            this.githubOidcRole = new GitHubOidcRole(this, props.oidcProps.roleId, {
-                name: props.oidcProps.roleName,
-                githubOrg: props.oidcProps.roleGithubOrg,
-                githubRepo: props.oidcProps.roleGithubRepo,
-                oidcProvider: props.oidcProps.provider,
+            const oidc = props.oidcProps;
+            this.githubOidcRole = new GitHubOidcRole(this, oidc.roleId, {
+                name: oidc.roleName,
+                githubOrg: oidc.roleGithubOrg,
+                githubRepo: oidc.roleGithubRepo,
+                githubOrgId: oidc.roleGithubOrgId,
+                githubRepoId: oidc.roleGithubRepoId,
+                oidcProvider: oidc.provider,
+                jobWorkflowRefs: oidc.jobWorkflows?.map((workflow) =>
+                    jobWorkflowRef(oidc.roleGithubOrg, oidc.roleGithubRepo, workflow),
+                ),
             });
 
             // Grant permission to create/invoke/delete a canary Lambda
@@ -78,12 +115,26 @@ export class CanaryStack extends Stack {
                 }),
             );
 
-            // Grant permission to put metric data to CloudWatch
+            // Grant permission to put metric data to CloudWatch, in this canary's own namespace
+            // and no other.
+            //
+            // `PutMetricData` has no resource-level permissions, so `*` is the only accepted
+            // resource and `cloudwatch:namespace` is the sole lever available. The condition
+            // matters because every pull request's canary job assumes this role, and
+            // `manual-canary.yml` hands the credentials to the pull request's own checked-out
+            // code -- so an unconditioned allow lets any pull request write to any namespace in
+            // the account, the build canary's included, and page its oncall.
+            //
+            // `canary-runner` writes this one literal and nothing else, in both of this stack's
+            // deployments, so narrowing costs it nothing.
             this.githubOidcRole.oidcRole.addToPolicy(
                 new PolicyStatement({
                     actions: ["cloudwatch:PutMetricData"],
                     effect: Effect.ALLOW,
                     resources: ["*"],
+                    conditions: {
+                        StringEquals: { "cloudwatch:namespace": SDK_CANARY_NAMESPACE },
+                    },
                 }),
             );
         }
@@ -252,10 +303,18 @@ export class CanaryStack extends Stack {
             }),
         );
 
-        // Allow canaries to call EC2
+        // Allow canaries to call EC2. One role serves two mutually exclusive builds, so this list is their **union** and a new
+        // action joins it rather than replacing what is here. `DescribeRegions` is the benchmark's,
+        // reached only under `#[cfg(feature = "lambda-benchmark")]`; the other two are the
+        // paginator canary's, in the default set, and both the `latest` and `release_2023_10_26`
+        // variants call them. Narrowing to one build's needs silently breaks the other.
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ["ec2:DescribeRegions"],
+                actions: [
+                    "ec2:DescribeRegions",
+                    "ec2:DescribeSpotPriceHistory",
+                    "ec2:DescribeVpcs",
+                ],
                 effect: Effect.ALLOW,
                 resources: ["*"],
             }),
