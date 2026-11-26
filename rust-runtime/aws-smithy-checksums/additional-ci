@@ -21,7 +21,8 @@ C_RESET='\033[0m'
 # `compile_error!` breaks no build.
 echo "### Checking that a build with no digest backend explains itself"
 
-output="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --color never --no-default-features 2>&1 || true)"
+# Appended, not assigned: CI exports `RUSTFLAGS=-D warnings`, which assigning would drop.
+output="$(RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo check --color never --no-default-features 2>&1 || true)"
 
 if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
     echo -e "${C_RED}A build with no digest backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
@@ -57,4 +58,4 @@ cargo test
 # them from outside the gated module fails here and nowhere else. The non-FIPS arm is also the only
 # configuration that runs these tests against `aws-lc-sys`; see `aws-sigv4`'s copy.
 echo "### Running the suite on AWS-LC with the RustCrypto crates dropped"
-RUSTFLAGS="--cfg aws_sdk_fips_only" cargo test --features aws-lc-rs
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo test --features aws-lc-rs

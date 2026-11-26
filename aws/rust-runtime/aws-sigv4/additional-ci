@@ -21,7 +21,8 @@ C_RESET='\033[0m'
 # `compile_error!` breaks no build.
 echo "### Checking that a build with no crypto backend explains itself"
 
-output="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo check --color never --no-default-features --features sign-http,http1 2>&1 || true)"
+# Appended, not assigned: CI exports `RUSTFLAGS=-D warnings`, which assigning would drop.
+output="$(RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo check --color never --no-default-features --features sign-http,http1 2>&1 || true)"
 
 if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
     echo -e "${C_RED}A build with no crypto backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
@@ -69,5 +70,5 @@ cargo test --features sigv4a
 # rather than `aws-lc-fips-sys`. It exercises the same cfg gates for half the build time, since
 # `aws-lc-sys` needs neither CMake nor Go.
 echo "### Running the suite on AWS-LC with the RustCrypto crates dropped"
-RUSTFLAGS="--cfg aws_sdk_fips_only" cargo test --no-default-features \
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo test --no-default-features \
     --features sign-http,http1,sigv4a,aws-lc-rs
