@@ -10,12 +10,13 @@
 //! Warning when that plugin is built would be wrong twice over: `default_plugins` runs on every
 //! `Client::from_conf` and every `Operation::build()`, and it runs at `Order::Defaults`, ahead of
 //! the caller's own config. A caller who supplies an `http_client` would be told the default is in
-//! use while their own client serves the traffic.
+//! use while their own client serves the traffic. So the warning lives in the client and fires
+//! when it is asked for a connector, which is the first point at which it is known to be serving.
 //!
-//! The tests go through `Operation` because that second problem is a consequence of plugin
-//! ordering, which a test calling the plugin directly cannot see. They are integration tests so
-//! the library is compiled as a user builds it, and so the process-global `Once` that dedupes the
-//! warning isn't shared with unrelated tests.
+//! That is also what these tests drive, rather than a request: handing out a connector is the
+//! whole trigger, so nothing here opens a socket. Integration tests so the library is compiled as
+//! a user builds it, and so the process-global `Once` that dedupes the warning isn't shared with
+//! unrelated unit tests.
 
 // Only a build that lacks a usable legacy client reaches the fallback, so `tls-rustls` must be
 // off. `tools/ci-scripts/check-rust-runtimes` runs this combination explicitly.
@@ -26,18 +27,16 @@
     not(feature = "tls-rustls")
 ))]
 
-use aws_smithy_http_client::test_util::capture_request;
+use aws_smithy_async::rt::sleep::TokioSleep;
+use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_runtime::client::defaults::default_http_client_plugin_v2;
-use aws_smithy_runtime::client::orchestrator::operation::{Operation, OperationBuilder};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
-use aws_smithy_runtime_api::client::http::HttpClient;
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnectorSettings, SharedHttpClient};
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::body::SdkBody;
-use aws_smithy_types::timeout::TimeoutConfig;
-use std::convert::Infallible;
 
 const FALLBACK_WARNING: &str = "the default hyper 1.x HTTPS client is being used instead";
 
@@ -47,85 +46,46 @@ fn old_behavior_version() -> BehaviorVersion {
     BehaviorVersion::v2024_03_28()
 }
 
-type TestOperation = Operation<String, String, Infallible>;
-type TestOperationBuilder = OperationBuilder<String, String, Infallible>;
-
-/// An endpoint with nothing listening, so a default-client request fails at connect.
-///
-/// Not a fixed port: one can be in use on a developer machine, and with timeouts disabled a
-/// request that does connect waits for a response forever.
-fn closed_port_endpoint() -> String {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind an ephemeral port");
-    let port = listener.local_addr().expect("local address").port();
-    drop(listener);
-    format!("http://127.0.0.1:{port}")
+/// The HTTP client the default plugin installs for `behavior_version`.
+fn default_client(behavior_version: BehaviorVersion) -> SharedHttpClient {
+    default_http_client_plugin_v2(behavior_version)
+        .expect("a default client is available in this build")
+        .runtime_components(&RuntimeComponentsBuilder::new("test"))
+        .http_client()
+        .expect("the plugin installs an HTTP client")
 }
 
-fn operation_builder(behavior_version: BehaviorVersion) -> TestOperationBuilder {
-    Operation::builder()
-        .service_name("test")
-        .operation_name("test")
-        .behavior_version(behavior_version)
-        // Failing at connect is still after the connector was handed out, and the warning with it.
-        .endpoint_url(&closed_port_endpoint())
-        .no_auth()
-        .no_retry()
-        .timeout_config(TimeoutConfig::disabled())
-        .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
-        .deserializer::<_, Infallible>(|_response| Ok("ok".to_string()))
-}
-
-/// Built as generated clients and `aws-config`'s credential providers are: `default_plugins`
-/// first, the caller's HTTP client over it.
-fn operation_with(
-    behavior_version: BehaviorVersion,
-    http_client: impl HttpClient + 'static,
-) -> TestOperation {
-    operation_builder(behavior_version)
-        .http_client(http_client)
+/// Components a connector can actually be built against: `for_tests` installs fakes that panic
+/// when read, and handing out a connector reads the time source and sleep impl.
+fn connector_components() -> RuntimeComponents {
+    RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .with_sleep_impl(Some(TokioSleep::new()))
         .build()
-}
-
-/// Built with no HTTP client of its own, so it runs on whatever the default plugin installed.
-fn operation_on_default_client(behavior_version: BehaviorVersion) -> TestOperation {
-    operation_builder(behavior_version).build()
-}
-
-fn ok_response() -> http_1x::Response<SdkBody> {
-    http_1x::Response::builder()
-        .status(200)
-        .body(SdkBody::empty())
-        .unwrap()
+        .expect("test components are complete")
 }
 
 #[tokio::test]
-async fn fallback_warning_is_emitted_once_and_only_when_the_fallback_is_used() {
+async fn fallback_warns_once_and_only_when_asked_for_a_connector() {
     let (_guard, logs) = capture_test_logs();
     let warnings = || logs.contents().matches(FALLBACK_WARNING).count();
+    let settings = HttpConnectorSettings::builder().build();
+    let components = connector_components();
 
-    // A caller's own client: the fallback is never asked for a connector.
-    for _ in 0..3 {
-        let (http_client, rx) = capture_request(Some(ok_response()));
-        let output = operation_with(old_behavior_version(), http_client)
-            .invoke("hello".to_string())
-            .await
-            .expect("the caller's client returns the canned response");
-        assert_eq!("ok", output);
-        let request = rx.expect_request();
-        assert_eq!(b"hello", request.body().bytes().unwrap());
-    }
+    // Building the plugin happens for every client and every operation, and a caller's own
+    // `http_client` replaces it before any request is sent. So building it must not warn.
+    let fallbacks: Vec<_> = (0..3)
+        .map(|_| default_client(old_behavior_version()))
+        .collect();
     assert_eq!(
         0,
         warnings(),
-        "the caller's own HTTP client served every request, so nothing may claim the default \
-         hyper 1.x client is being used.\n{}",
+        "building the default plugin must not warn.\n{}",
         logs.contents()
     );
 
-    // The default client, but a version that asks for it: nothing was substituted.
-    let _ = operation_on_default_client(BehaviorVersion::latest())
-        .invoke("hello".to_string())
-        .await;
+    // A behavior version that asks for the hyper 1.x client: nothing was substituted.
+    let _ = default_client(BehaviorVersion::latest()).http_connector(&settings, &components);
     assert_eq!(
         0,
         warnings(),
@@ -133,11 +93,9 @@ async fn fallback_warning_is_emitted_once_and_only_when_the_fallback_is_used() {
         logs.contents()
     );
 
-    // The fallback actually serving requests: the one case that warns.
-    for _ in 0..3 {
-        let _ = operation_on_default_client(old_behavior_version())
-            .invoke("hello".to_string())
-            .await;
+    // The substituted client handing out connectors: the one case that warns, once per process.
+    for fallback in &fallbacks {
+        let _ = fallback.http_connector(&settings, &components);
     }
     assert_eq!(
         1,
@@ -154,17 +112,8 @@ async fn fallback_warning_is_emitted_once_and_only_when_the_fallback_is_used() {
 /// rather than breaking a build.
 #[test]
 fn wrapping_the_fallback_does_not_hide_the_real_client() {
-    let metadata_for = |behavior_version| {
-        default_http_client_plugin_v2(behavior_version)
-            .expect("a default client is available in this build")
-            .runtime_components(&RuntimeComponentsBuilder::new("test"))
-            .http_client()
-            .expect("the plugin installs an HTTP client")
-            .connector_metadata()
-    };
-
-    let fallback = metadata_for(old_behavior_version());
-    let latest = metadata_for(BehaviorVersion::latest());
+    let fallback = default_client(old_behavior_version()).connector_metadata();
+    let latest = default_client(BehaviorVersion::latest()).connector_metadata();
     assert!(
         latest.is_some(),
         "precondition: the hyper 1.x client reports connector metadata"
