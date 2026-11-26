@@ -50,14 +50,24 @@ fn old_behavior_version() -> BehaviorVersion {
 type TestOperation = Operation<String, String, Infallible>;
 type TestOperationBuilder = OperationBuilder<String, String, Infallible>;
 
+/// An endpoint with nothing listening, so a default-client request fails at connect.
+///
+/// Not a fixed port: one can be in use on a developer machine, and with timeouts disabled a
+/// request that does connect waits for a response forever.
+fn closed_port_endpoint() -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind an ephemeral port");
+    let port = listener.local_addr().expect("local address").port();
+    drop(listener);
+    format!("http://127.0.0.1:{port}")
+}
+
 fn operation_builder(behavior_version: BehaviorVersion) -> TestOperationBuilder {
     Operation::builder()
         .service_name("test")
         .operation_name("test")
         .behavior_version(behavior_version)
-        // Nothing connects: the default-client cases fail at the transport, after the connector
-        // was handed out and the warning with it.
-        .endpoint_url("http://localhost:1234")
+        // Failing at connect is still after the connector was handed out, and the warning with it.
+        .endpoint_url(&closed_port_endpoint())
         .no_auth()
         .no_retry()
         .timeout_config(TimeoutConfig::disabled())
