@@ -1033,6 +1033,7 @@ dependencies = [
  "httpdate",
  "pretty_assertions",
  "regex-lite",
+ "reqwest",
  "semver",
  "serde",
  "serde_json",
