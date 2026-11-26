@@ -1,0 +1,137 @@
+{
+    "ex#C": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$id"
+                ],
+                "traits": {
+                    "smithy.api#documentation": "c",
+                    "smithy.api#required": {}
+                },
+                "introduced": [
+                    "smithy.api#documentation"
+                ],
+                "name": "id",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$name"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "name",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$other"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "other",
+                "target": "smithy.api#Integer"
+            }
+        ]
+    },
+    "ex#OInput": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {
+            "smithy.api#input": {}
+        },
+        "introduced": [
+            "smithy.api#input"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$id"
+                ],
+                "traits": {
+                    "smithy.api#required": {}
+                },
+                "introduced": [],
+                "name": "id",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$name"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "name",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$other"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "other",
+                "target": "smithy.api#Integer"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "extra",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#S": {
+        "mixins": [
+            "ex#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#M$id"
+                ],
+                "traits": {
+                    "smithy.api#required": {}
+                },
+                "introduced": [],
+                "name": "id",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$name"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "name",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [
+                    "ex#M$other"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "other",
+                "target": "smithy.api#Integer"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "size",
+                "target": "smithy.api#Integer"
+            }
+        ]
+    }
+}

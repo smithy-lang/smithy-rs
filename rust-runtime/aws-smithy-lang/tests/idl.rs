@@ -294,8 +294,7 @@ fn syntactic_shape_ids_resolve_and_warn() {
 
 #[test]
 fn unsupported_constructs_are_reported_precisely() {
-    let err =
-        idl_err("namespace ex\nstring S\nstructure M with [S] {}\nset Old { member: String }\n");
+    let err = idl_err("namespace ex\nstring S\nstring M with [S]\nset Old { member: String }\n");
     assert_eq!(
         codes(&err),
         [
@@ -304,10 +303,10 @@ fn unsupported_constructs_are_reported_precisely() {
         ]
     );
     assert!(err.is_invalid_model());
-    let err = idl_err("namespace ex\n@mixin\nstructure M {}\n");
+    let err = idl_err("namespace ex\n@mixin\nstring M\n");
     assert_eq!(codes(&err), [DiagnosticCode::UnsupportedFeature]);
     // `@mixin` applied with `apply` is caught too.
-    let err = idl_err("namespace ex\nstructure M {}\napply M @mixin\n");
+    let err = idl_err("namespace ex\nstring M\napply M @mixin\n");
     assert_eq!(codes(&err), [DiagnosticCode::UnsupportedFeature]);
 }
 

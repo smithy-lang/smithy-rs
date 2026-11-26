@@ -11,8 +11,10 @@
 //! 1. **Critical checks** run on the assembled shapes before any [`Model`] exists. They cover
 //!    what every `Model` guarantees, so they cannot be disabled: every ordinary reference
 //!    resolves to a root shape of an allowed type, no ordinary reference targets a trait
-//!    definition, resource containment is acyclic, user shapes do not redefine the prelude, and
-//!    unsupported features (such as `@mixin`) are rejected. If any fails, validation stops.
+//!    definition or a mixin, every mixin is marked `@mixin`, resource containment is acyclic, user
+//!    shapes do not redefine the prelude, and unsupported features (such as `@mixin` on shape
+//!    types other than structures, unions, enums, and intEnums) are rejected. If any fails,
+//!    validation stops.
 //! 2. **Validators** then run against the candidate [`Model`]: first the built-in
 //!    `StructuralV1` validators, then custom validators in registration order. Because the
 //!    critical checks passed, validators can use every view and [`knowledge`](crate::knowledge)
@@ -24,13 +26,14 @@
 //! | Validator | Checks |
 //! | --------- | ------ |
 //! | `CaseConflict` | Shape IDs and member names are case-insensitively unique. |
-//! | `TraitDefinition` | Applied traits that resolve are trait definitions; with `require_trait_definitions`, every applied trait resolves. |
+//! | `TraitDefinition` | Applied traits that resolve are trait definitions and not mixins; with `require_trait_definitions`, every applied trait resolves. |
 //! | `MapKey` | Map keys target `string` or `enum`. |
 //! | `UnionMembers` | Unions have at least one member. |
 //! | `EnumMembers` | Enums and intEnums have members that target `smithy.api#Unit` and have valid, unique values. |
 //! | `UnitTarget` | Only operation input/output and union, enum, and intEnum members target `smithy.api#Unit`. |
 //! | `ErrorTarget` | Service and operation `errors` target `@error` structures. |
 //! | `ServiceRename` | Service `rename` keys resolve and values are valid, case-insensitively unique identifiers. |
+//! | `LengthTrait` | `@length` has non-negative `min` and `max` values, and `min` is not greater than `max`. |
 //!
 //! ```
 //! use aws_smithy_lang::diagnostic::{Diagnostic, DiagnosticCode, Severity};

@@ -1,0 +1,26 @@
+{
+    "com.amazon.example#ListFoosInput": {
+        "mixins": [
+            "com.amazon.example#MyMixin"
+        ],
+        "traits": {
+            "smithy.api#input": {}
+        },
+        "introduced": [
+            "smithy.api#input"
+        ],
+        "members": []
+    },
+    "com.amazon.example#ListFoosOutput": {
+        "mixins": [
+            "com.amazon.example#MyMixin"
+        ],
+        "traits": {
+            "smithy.api#output": {}
+        },
+        "introduced": [
+            "smithy.api#output"
+        ],
+        "members": []
+    }
+}

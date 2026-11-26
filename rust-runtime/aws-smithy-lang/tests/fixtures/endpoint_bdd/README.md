@@ -1,7 +1,7 @@
 # Endpoint BDD compiler parity fixtures
 
 `expected/` records every stage of Smithy Java's `CompileBdd.compileBdd` from
-`software.amazon.smithy:smithy-rules-engine:1.73.0`, the version smithy-rs pins in
+`software.amazon.smithy:smithy-rules-engine:1.74.1`, the version smithy-rs pins in
 `gradle/libs.versions.toml`. `tests/endpoint_bdd_java.rs` checks the fixtures against the
 checked-in models and against this crate's codecs, and `src/endpoint_rules/compiler/tests.rs`
 checks that the Rust compiler reproduces each stage exactly. Normal Rust tests never run Java.
@@ -18,7 +18,7 @@ checks that the Rust compiler reproduces each stage exactly. Normal Rust tests n
 - `random-NNN`: seeded rule sets from `Generate.java`'s `RandomRuleSet`. They exercise reused
   assignment names across siblings (SSA renaming), nesting, negation, and binding coalescing.
 
-Java 1.73.0 reproduces every checked-in SDK `endpointBdd` byte for byte (S3 via the rewrite).
+Java 1.74.1 reproduces every checked-in SDK `endpointBdd` byte for byte (S3 via the rewrite).
 The tests fail if a model's rule set or BDD changes without regenerating the fixtures.
 
 ## Format

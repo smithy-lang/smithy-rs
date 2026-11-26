@@ -1,0 +1,38 @@
+{
+    "ex#C": {
+        "mixins": [
+            "other#M"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "other#M$x"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    },
+    "ex#UsesP": {
+        "mixins": [
+            "ex#P"
+        ],
+        "traits": {},
+        "introduced": [],
+        "members": [
+            {
+                "mixins": [
+                    "ex#P$x"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "x",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}

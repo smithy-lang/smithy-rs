@@ -102,6 +102,12 @@ pub(crate) fn serialize() {
         .load::<SharedRequestSerializer>()
         .expect("operation should set a serializer");
     let mut config_bag = ConfigBag::base();
+    config_bag.interceptor_state().store_put(
+        aws_smithy_schema::protocol::SharedClientProtocol::new(
+            aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0()
+                .with_target_prefix("DynamoDB_20120810"),
+        ),
+    );
     let input = Input::erase(input.clone());
 
     let request = serializer

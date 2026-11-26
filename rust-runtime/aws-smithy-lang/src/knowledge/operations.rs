@@ -5,9 +5,9 @@
 
 //! Operation input, output, errors, and reverse bindings.
 
-use super::{Iter, TopDownIndex};
-use crate::relationships::RelationshipIndex;
-use crate::relationships::RelationshipType;
+use super::{Iter, KnowledgeIndex, TopDownIndex};
+use crate::model::Model;
+use crate::relationships::{NodeId, RelationshipIndex, RelationshipType};
 use crate::shape::{MembersView, OperationView, ShapeRef, ShapeType, StructureView};
 use crate::shape_id::ShapeId;
 use crate::traits;
@@ -86,18 +86,17 @@ impl<'m> OperationIndex<'m> {
             || self.bindings(node, kind).next().is_some()
     }
 
-    fn structure(&self, id: &ShapeId) -> Option<u32> {
+    fn structure(&self, id: &ShapeId) -> Option<NodeId> {
         let (node, shape) = self.relationships.lookup(id)?;
         (shape.shape_type() == ShapeType::Structure).then_some(node)
     }
 
     /// Sources of incoming `kind` edges, already sorted by source ID.
-    fn bindings(&self, node: u32, kind: RelationshipType) -> impl Iterator<Item = u32> + 'm {
+    fn bindings(&self, node: NodeId, kind: RelationshipType) -> impl Iterator<Item = NodeId> + 'm {
         self.relationships
-            .index
-            .incoming_edges(node)
-            .filter(move |(_, edge)| *edge == kind)
-            .map(|(source, _)| source)
+            .incoming(node)
+            .filter(move |edge| edge.kind() == kind)
+            .map(|edge| edge.source())
     }
 
     fn operation_bindings(
@@ -119,6 +118,12 @@ impl<'m> OperationIndex<'m> {
     }
 }
 
+impl<'m> KnowledgeIndex<'m> for OperationIndex<'m> {
+    fn from_model(model: &'m Model) -> Self {
+        Self::new(model.knowledge::<RelationshipIndex<'_>>())
+    }
+}
+
 impl fmt::Debug for OperationIndex<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OperationIndex").finish_non_exhaustive()
@@ -129,7 +134,7 @@ impl fmt::Debug for OperationIndex<'_> {
 #[derive(Clone, Copy)]
 pub struct OperationKnowledge<'m> {
     operation: OperationView<'m>,
-    node: u32,
+    pub(crate) node: NodeId,
     relationships: RelationshipIndex<'m>,
 }
 
@@ -191,7 +196,7 @@ impl<'m> OperationKnowledge<'m> {
     pub fn errors_in(&self, service: &ShapeId) -> Option<Iter<StructureView<'m>>> {
         let (service_node, service) = self.relationships.lookup(service)?;
         let service = service.as_service()?;
-        if !TopDownIndex::new(self.relationships).contains(service_node, self.node) {
+        if !TopDownIndex::new(self.relationships).contains_node(service_node, self.node) {
             return None;
         }
         let ids: IndexSet<&ShapeId> = service

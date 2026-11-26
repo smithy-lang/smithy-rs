@@ -33,6 +33,10 @@ pub const MIXIN: ShapeId = ShapeId::from_static("smithy.api#mixin");
 pub const ENUM_VALUE: ShapeId = ShapeId::from_static("smithy.api#enumValue");
 /// `smithy.api#private`
 pub const PRIVATE: ShapeId = ShapeId::from_static("smithy.api#private");
+/// `smithy.api#paginated`
+pub const PAGINATED: ShapeId = ShapeId::from_static("smithy.api#paginated");
+/// `smithy.api#length`
+pub const LENGTH: ShapeId = ShapeId::from_static("smithy.api#length");
 
 /// Converts between a trait's generic [`Node`] value and a typed Rust value.
 ///
@@ -73,12 +77,12 @@ pub trait TraitCodec: Sized {
 }
 
 pub(crate) fn decode<T: TraitCodec>(value: Option<&Node>) -> Result<Option<T>, TraitDecodeError> {
-    match value {
-        None => Ok(None),
-        Some(value) => T::from_node(value)
-            .map(Some)
-            .map_err(|err| err.for_trait(T::ID, value)),
-    }
+    value.map(decode_value).transpose()
+}
+
+/// Decodes an applied trait value, attributing any error to the trait.
+pub(crate) fn decode_value<T: TraitCodec>(value: &Node) -> Result<T, TraitDecodeError> {
+    T::from_node(value).map_err(|err| err.for_trait(T::ID, value))
 }
 
 /// A trait value could not be decoded by a [`TraitCodec`].
@@ -324,6 +328,120 @@ impl TraitCodec for EnumValue {
     }
 }
 
+/// `@paginated`: the input and output members an operation uses to return its results across
+/// several responses.
+///
+/// Every property is optional in the trait value. On a service, the values are defaults for
+/// each operation in the service that has its own `@paginated` trait; combine the two with
+/// [`with_defaults_from`](Self::with_defaults_from).
+///
+/// Decoding checks only the form of the value: each property, when present, must be a
+/// non-empty string. Member names and paths are not resolved; use
+/// [`PaginatedIndex`](crate::knowledge::PaginatedIndex) to resolve an operation's effective
+/// pagination within a service. Unknown properties are ignored, because the reference
+/// implementation reports them only as warnings.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Paginated {
+    input_token: Option<String>,
+    output_token: Option<String>,
+    items: Option<String>,
+    page_size: Option<String>,
+}
+
+impl Paginated {
+    pub(crate) const INPUT_TOKEN: &'static str = "inputToken";
+    pub(crate) const OUTPUT_TOKEN: &'static str = "outputToken";
+    pub(crate) const ITEMS: &'static str = "items";
+    pub(crate) const PAGE_SIZE: &'static str = "pageSize";
+
+    /// The name of the input member that holds the continuation token.
+    pub fn input_token(&self) -> Option<&str> {
+        self.input_token.as_deref()
+    }
+
+    /// The path to the output member that holds the continuation token: member names
+    /// separated by `.`.
+    pub fn output_token(&self) -> Option<&str> {
+        self.output_token.as_deref()
+    }
+
+    /// The path to the output member that holds the paginated results: member names separated
+    /// by `.`.
+    pub fn items(&self) -> Option<&str> {
+        self.items.as_deref()
+    }
+
+    /// The name of the input member that limits the number of results in each response.
+    pub fn page_size(&self) -> Option<&str> {
+        self.page_size.as_deref()
+    }
+
+    /// Returns this value with each omitted property taken from `defaults`, typically the
+    /// containing service's trait. Properties set on `self` always win. With `None`, returns a
+    /// copy of `self`.
+    pub fn with_defaults_from(&self, defaults: Option<&Self>) -> Self {
+        let Some(defaults) = defaults else {
+            return self.clone();
+        };
+        let pick = |own: &Option<String>, default: &Option<String>| {
+            own.as_ref().or(default.as_ref()).cloned()
+        };
+        Self {
+            input_token: pick(&self.input_token, &defaults.input_token),
+            output_token: pick(&self.output_token, &defaults.output_token),
+            items: pick(&self.items, &defaults.items),
+            page_size: pick(&self.page_size, &defaults.page_size),
+        }
+    }
+}
+
+impl TraitCodec for Paginated {
+    const ID: ShapeId = PAGINATED;
+
+    fn from_node(value: &Node) -> Result<Self, TraitDecodeError> {
+        let object = expect_object(value)?;
+        let property = |name: &str| -> Result<Option<String>, TraitDecodeError> {
+            let Some(node) = object.get(name) else {
+                return Ok(None);
+            };
+            match node.as_str() {
+                Some("") => Err(TraitDecodeError::at(
+                    node,
+                    format!("`{name}` must not be empty"),
+                )),
+                Some(s) => Ok(Some(s.to_owned())),
+                None => Err(TraitDecodeError::at(
+                    node,
+                    format!(
+                        "expected `{name}` to be a string, found {}",
+                        node.type_name()
+                    ),
+                )),
+            }
+        };
+        Ok(Paginated {
+            input_token: property(Self::INPUT_TOKEN)?,
+            output_token: property(Self::OUTPUT_TOKEN)?,
+            items: property(Self::ITEMS)?,
+            page_size: property(Self::PAGE_SIZE)?,
+        })
+    }
+
+    fn to_node(&self) -> Node {
+        // The prelude's declaration order, which the reference implementation also uses.
+        let object: NodeObject = [
+            (Self::INPUT_TOKEN, &self.input_token),
+            (Self::OUTPUT_TOKEN, &self.output_token),
+            (Self::ITEMS, &self.items),
+            (Self::PAGE_SIZE, &self.page_size),
+        ]
+        .into_iter()
+        .filter_map(|(name, value)| Some((name, value.clone()?)))
+        .collect();
+        Node::from(object)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,6 +461,13 @@ mod tests {
         check(TraitDefinition::default());
         check(EnumValue::String("A".into()));
         check(EnumValue::Int(-3));
+        check(Paginated::default());
+        check(paginated(
+            Some("token"),
+            Some("result.next"),
+            Some("result.items"),
+            Some("size"),
+        ));
     }
 
     #[test]
@@ -404,5 +529,122 @@ mod tests {
     fn error_is_send_sync() {
         fn assert<T: std::error::Error + Send + Sync + 'static>() {}
         assert::<TraitDecodeError>();
+    }
+
+    fn paginated(
+        input_token: Option<&str>,
+        output_token: Option<&str>,
+        items: Option<&str>,
+        page_size: Option<&str>,
+    ) -> Paginated {
+        Paginated {
+            input_token: input_token.map(str::to_owned),
+            output_token: output_token.map(str::to_owned),
+            items: items.map(str::to_owned),
+            page_size: page_size.map(str::to_owned),
+        }
+    }
+
+    /// Parses `json` as a `@paginated` value located at `/t` in `m.json`.
+    fn paginated_node(json: &str) -> Node {
+        let mut node = crate::node::parse_node(json).unwrap();
+        node.assign_locations(&"m.json".into(), &mut String::from("/t"), None);
+        node
+    }
+
+    #[test]
+    fn paginated_decodes_present_properties_and_ignores_unknown_ones() {
+        let value = paginated_node(
+            r#"{"inputToken": "token", "outputToken": "result.next",
+                "items": "result.items", "pageSize": "size", "future": 1}"#,
+        );
+        let decoded = decode::<Paginated>(Some(&value)).unwrap().unwrap();
+        assert_eq!(decoded.input_token(), Some("token"));
+        assert_eq!(decoded.output_token(), Some("result.next"));
+        assert_eq!(decoded.items(), Some("result.items"));
+        assert_eq!(decoded.page_size(), Some("size"));
+
+        // A service's trait often sets only some properties; an operation's may set none.
+        let decoded = decode::<Paginated>(Some(&paginated_node(r#"{"pageSize": "size"}"#)))
+            .unwrap()
+            .unwrap();
+        assert_eq!(decoded, paginated(None, None, None, Some("size")));
+        let decoded = decode::<Paginated>(Some(&paginated_node("{}")))
+            .unwrap()
+            .unwrap();
+        assert_eq!(decoded, Paginated::default());
+    }
+
+    #[test]
+    fn paginated_rejects_malformed_values_at_the_offending_property() {
+        let err = decode::<Paginated>(Some(&paginated_node(r#""token""#))).unwrap_err();
+        assert_eq!(err.trait_id(), Some(&PAGINATED));
+        assert_eq!(err.source_location().pointer(), Some("/t"));
+        assert!(err.source().is_some());
+
+        for (json, pointer, message) in [
+            (
+                r#"{"inputToken": 1}"#,
+                "/t/inputToken",
+                "expected `inputToken` to be a string, found number",
+            ),
+            (
+                r#"{"outputToken": null}"#,
+                "/t/outputToken",
+                "expected `outputToken` to be a string, found null",
+            ),
+            (
+                r#"{"items": ["a"]}"#,
+                "/t/items",
+                "expected `items` to be a string, found array",
+            ),
+            (
+                r#"{"inputToken": "token", "pageSize": ""}"#,
+                "/t/pageSize",
+                "`pageSize` must not be empty",
+            ),
+        ] {
+            let err = decode::<Paginated>(Some(&paginated_node(json))).unwrap_err();
+            assert_eq!(err.trait_id(), Some(&PAGINATED), "{json}");
+            assert_eq!(err.source_location().pointer(), Some(pointer), "{json}");
+            assert_eq!(err.message(), message, "{json}");
+        }
+    }
+
+    #[test]
+    fn paginated_encodes_in_prelude_declaration_order() {
+        let node = paginated(Some("in"), Some("out"), Some("items"), Some("size")).to_node();
+        let keys: Vec<_> = node.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["inputToken", "outputToken", "items", "pageSize"]);
+        let node = paginated(None, Some("out"), None, None).to_node();
+        let keys: Vec<_> = node.as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["outputToken"]);
+    }
+
+    #[test]
+    fn paginated_operation_values_override_service_defaults() {
+        let service = paginated(
+            Some("serviceIn"),
+            Some("serviceOut"),
+            Some("serviceItems"),
+            Some("serviceSize"),
+        );
+        // Each property is chosen independently.
+        let operation = paginated(Some("in"), None, Some("items"), None);
+        assert_eq!(
+            operation.with_defaults_from(Some(&service)),
+            paginated(
+                Some("in"),
+                Some("serviceOut"),
+                Some("items"),
+                Some("serviceSize")
+            )
+        );
+        assert_eq!(
+            Paginated::default().with_defaults_from(Some(&service)),
+            service
+        );
+        assert_eq!(service.with_defaults_from(Some(&operation)), service);
+        assert_eq!(operation.with_defaults_from(None), operation);
     }
 }

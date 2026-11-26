@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 585466962d8d416ee9b1062783cc447a6fdfe6e1abe42f3d6c177df69506e931 # shrinks to graph = Graph { resources: [GenResource { children: 0, operations: 0, collection: 0, lifecycle: [None, None, None, None, None, None] }, GenResource { children: 0, operations: 0, collection: 0, lifecycle: [None, None, None, None, None, None] }, GenResource { children: 0, operations: 0, collection: 0, lifecycle: [None, None, None, None, None, None] }, GenResource { children: 0, operations: 0, collection: 0, lifecycle: [None, None, None, None, None, None] }, GenResource { children: 0, operations: 0, collection: 0, lifecycle: [None, None, None, None, None, None] }], service_ops: [0, 0], service_resources: [0, 0], service_errors: [0, 1], op_errors: [0, 0, 0, 0, 0, 0] }

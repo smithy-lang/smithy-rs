@@ -100,10 +100,10 @@ fn any_error_means_no_model() {
 }
 
 #[test]
-fn every_mixin_form_is_unsupported() {
+fn mixins_of_unsupported_shape_types_are_rejected() {
     let cases = [
-        r#""a#X":{"type":"structure","mixins":[{"target":"a#M"}]},"a#M":{"type":"structure"}"#,
-        r#""a#M":{"type":"structure","traits":{"smithy.api#mixin":{}}}"#,
+        r#""a#X":{"type":"string","mixins":[{"target":"a#M"}]},"a#M":{"type":"string"}"#,
+        r#""a#M":{"type":"list","member":{"target":"a#M"},"traits":{"smithy.api#mixin":{}}}"#,
         r#""a#M":{"type":"string","traits":{"smithy.api#mixin":{"localTraits":[]}}}"#,
         r#""a#M":{"type":"operation","mixins":[{"target":"a#O"}]},"a#O":{"type":"operation"}"#,
     ];

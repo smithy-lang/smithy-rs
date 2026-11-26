@@ -1,0 +1,91 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "ex#AppliedToKept": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#AppliedToKept$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "applied"
+            }
+        },
+        "ex#AppliedToLater": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#AppliedToLater$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "applied"
+            }
+        },
+        "ex#Elided": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#Elided$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "elided"
+            }
+        },
+        "ex#Kept": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#Kept$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "kept"
+            }
+        },
+        "ex#Later": {
+            "type": "structure",
+            "mixins": [
+                {
+                    "target": "ex#M"
+                }
+            ],
+            "members": {}
+        },
+        "ex#Later$x": {
+            "type": "apply",
+            "traits": {
+                "smithy.api#documentation": "later"
+            }
+        },
+        "ex#M": {
+            "type": "structure",
+            "members": {
+                "x": {
+                    "target": "smithy.api#String"
+                }
+            },
+            "traits": {
+                "smithy.api#mixin": {}
+            }
+        }
+    }
+}

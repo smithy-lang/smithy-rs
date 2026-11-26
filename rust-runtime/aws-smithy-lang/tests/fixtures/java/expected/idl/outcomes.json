@@ -1,5 +1,5 @@
 {
-    "generator": "software.amazon.smithy:smithy-model:1.74.0",
+    "generator": "software.amazon.smithy:smithy-model:1.74.1",
     "outcomes": {
         "danger/focused_unresolved_metadata_id": {
             "accepted": true,
@@ -143,6 +143,253 @@
                 "line": 9,
                 "column": 15,
                 "message": "Trait `documentation` applied to unknown shape `ex#Missing`"
+            }
+        },
+        "invalid/focused_mixins_apply_unknown_member": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_apply_unknown_member.smithy",
+                "line": 11,
+                "column": 14,
+                "message": "Trait `required` applied to unknown shape `ex#C$nope`"
+            }
+        },
+        "invalid/focused_mixins_cycle_dependents": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_cycle_dependents.smithy",
+                "line": 8,
+                "column": 1,
+                "message": "Unable to resolve mixins; cycles detected between this shape and [ex#A]"
+            }
+        },
+        "invalid/focused_mixins_different_definitions": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.smithy",
+                "line": 12,
+                "column": 1,
+                "message": "Conflicting shape definition for `ex#C` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_different_definitions/b.smithy [4, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_different_definitions/a.smithy [12, 1]`. Left mixins: [ex#N], right mixins: [ex#M]; Members differ: [] vs [x]"
+            }
+        },
+        "invalid/focused_mixins_duplicate_elided_unknown": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "b.smithy",
+                "line": 10,
+                "column": 5,
+                "message": "Member target was elided, but no bound resource or mixin contained a matching identifier or member name."
+            }
+        },
+        "invalid/focused_mixins_duplicate_mixin_order": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.smithy",
+                "line": 12,
+                "column": 1,
+                "message": "Conflicting shape definition for `ex#A` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_duplicate_mixin_order/b.smithy [5, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_duplicate_mixin_order/a.smithy [12, 1]`. Left trait smithy.api#documentation differs from right trait. \"1\" vs \"2\""
+            }
+        },
+        "invalid/focused_mixins_elided_default_sugar_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.smithy",
+                "line": 10,
+                "column": 1,
+                "message": "Conflicting shape definition for `ex#S` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_elided_default_sugar_conflict/b.smithy [4, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/focused_mixins_elided_default_sugar_conflict/a.smithy [10, 1]`. Members differ: [x] vs [x]"
+            }
+        },
+        "invalid/focused_mixins_elision_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_elision_conflict.smithy",
+                "line": 15,
+                "column": 5,
+                "message": "Member conflicts with an inherited mixin member: `ex#M$name`"
+            }
+        },
+        "invalid/focused_mixins_elision_unknown": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_elision_unknown.smithy",
+                "line": 11,
+                "column": 5,
+                "message": "Member target was elided, but no bound resource or mixin contained a matching identifier or member name."
+            }
+        },
+        "invalid/focused_mixins_illegal_references": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_illegal_references.smithy",
+                "line": 9,
+                "column": 1,
+                "message": "Illegal INPUT reference to mixin `ex#M`; shapes marked with the mixin trait can only be referenced to apply them as a mixin."
+            }
+        },
+        "invalid/focused_mixins_member_conflict": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_member_conflict.smithy",
+                "line": 11,
+                "column": 5,
+                "message": "Member conflicts with an inherited mixin member: `ex#U$a`"
+            }
+        },
+        "invalid/focused_mixins_member_conflict_applied": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_member_conflict_applied.smithy",
+                "line": 6,
+                "column": 5,
+                "message": "Member conflicts with an inherited mixin member: `ex#B$x`"
+            }
+        },
+        "invalid/focused_mixins_missing": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_missing.smithy",
+                "line": 4,
+                "column": 1,
+                "message": "Cannot apply mixin to ex#U: ex#Nope not found"
+            }
+        },
+        "invalid/focused_mixins_type_mismatch": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "focused_mixins_type_mismatch.smithy",
+                "line": 9,
+                "column": 1,
+                "message": "Mixins may only be mixed into shapes of the same type. The following mixins were applied to the structure shape `ex#S` which are not structure shapes: [`ex#M`]"
+            }
+        },
+        "invalid/loader_mixins_conflict_error": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "a.smithy",
+                "line": 6,
+                "column": 1,
+                "message": "Conflicting shape definition for `smithy.example#A` found at `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/loader_mixins_conflict_error/b.smithy [7, 1]` and `/workplace/lnj/smithy-rs/rust-runtime/aws-smithy-lang/tests/fixtures/java/./idl/invalid/loader_mixins_conflict_error/a.smithy [6, 1]`. Members differ: [b, a] vs [b, a]"
+            }
+        },
+        "invalid/loader_mixins_detects_cycles1": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "model.json",
+                "line": 4,
+                "column": 33,
+                "message": "Unable to resolve mixins; cycles detected between this shape and [smithy.example#UsesMixin]"
+            }
+        },
+        "invalid/loader_mixins_detects_cycles2": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "model.json",
+                "line": 28,
+                "column": 31,
+                "message": "Unable to resolve mixins; cycles detected between this shape and [smithy.example#Mixin3, smithy.example#Mixin2, smithy.example#Mixin1]"
+            }
+        },
+        "invalid/loader_mixins_detects_cycles3": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "model.json",
+                "line": 19,
+                "column": 35,
+                "message": "Unable to resolve mixins; cycles detected between this shape and [smithy.example#Mixin2A, smithy.example#Mixin1A, smithy.example#BadA]"
+            }
+        },
+        "invalid/loader_mixins_detects_invalid_mixin": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "model.json",
+                "line": 7,
+                "column": 29,
+                "message": "Attempted to use smithy.example#A as a mixin, but it is not marked with the mixin trait"
+            }
+        },
+        "invalid/loader_mixins_detects_missing_transitive": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "model.json",
+                "line": 4,
+                "column": 29,
+                "message": "Cannot apply mixin to smithy.example#A: smithy.example#Missing not found"
             }
         },
         "invalid/merge_conflicting_trait": {
@@ -639,6 +886,58 @@
                 "message": "Syntax error at line 1, column 16: Unsupported Smithy version number: 3.0"
             }
         },
+        "invalid/validators_mixins_empty_enum_mixin": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "validators_mixins_empty_enum_mixin.smithy",
+                "line": 6,
+                "column": 1,
+                "message": "enum must have at least one entry"
+            }
+        },
+        "invalid/validators_mixins_illegal_redefined_member": {
+            "accepted": false,
+            "errors": [
+                "Model"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "validators_mixins_illegal_redefined_member.smithy",
+                "line": 18,
+                "column": 5,
+                "message": "Member conflicts with an inherited mixin member: `smithy.example#Foo$foo`"
+            }
+        },
+        "invalid/validators_mixins_trait_applied": {
+            "accepted": false,
+            "errors": [
+                "TraitTarget"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "validators_mixins_trait_applied.smithy",
+                "line": 15,
+                "column": 1,
+                "message": "Trait `smithy.example#mixinTrait` is a mixin and cannot be applied to `smithy.example#InvalidUseOfMixinTrait`."
+            }
+        },
+        "invalid/validators_mixins_used_in_illegal_relationship": {
+            "accepted": false,
+            "errors": [
+                "Target"
+            ],
+            "dangers": [],
+            "firstError": {
+                "file": "validators_mixins_used_in_illegal_relationship.smithy",
+                "line": 11,
+                "column": 5,
+                "message": "Illegal MEMBER_TARGET reference to mixin `smithy.example#Foo`; shapes marked with the mixin trait can only be referenced to apply them as a mixin."
+            }
+        },
         "unsupported/apply_comment_after_keyword": {
             "accepted": true,
             "errors": [],
@@ -654,12 +953,7 @@
             "errors": [],
             "dangers": []
         },
-        "unsupported/spec_inline_mixins": {
-            "accepted": true,
-            "errors": [],
-            "dangers": []
-        },
-        "unsupported/spec_mixin_elision": {
+        "unsupported/focused_mixins_self_reference": {
             "accepted": true,
             "errors": [],
             "dangers": []
@@ -734,6 +1028,56 @@
             "errors": [],
             "dangers": []
         },
+        "valid/focused_mixins_apply": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_duplicate_member_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_duplicate_resolved": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_elided_default_sugar": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_elision": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_json": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_namespaces": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_precedence": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_redefine": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/focused_mixins_repeated": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
         "valid/focused_no_version": {
             "accepted": true,
             "errors": [],
@@ -794,6 +1138,106 @@
             "errors": [],
             "dangers": []
         },
+        "valid/loader_mixins_apply_to_mixed_member": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_conflict_acceptable": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_conflicting_trait_values": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_enum": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_inline_io": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_json_structure": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_json_union": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_local_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_member_apply_other_namespace": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_member_override_1": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_member_override_2": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_member_override_3": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_member_override_4": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_members": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_members_and_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_multiple_inheritance": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_no_empty_apply_types": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_override_traits": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_redefine_member": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/loader_mixins_whitespace": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
         "valid/spec_apply": {
             "accepted": true,
             "errors": [],
@@ -844,6 +1288,11 @@
             "errors": [],
             "dangers": []
         },
+        "valid/spec_inline_mixins": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
         "valid/spec_int_enum": {
             "accepted": true,
             "errors": [],
@@ -865,6 +1314,11 @@
             "dangers": []
         },
         "valid/spec_metadata": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/spec_mixin_elision": {
             "accepted": true,
             "errors": [],
             "dangers": []
@@ -940,6 +1394,11 @@
             "dangers": []
         },
         "valid/spec_use": {
+            "accepted": true,
+            "errors": [],
+            "dangers": []
+        },
+        "valid/validators_mixins_non_empty_enum": {
             "accepted": true,
             "errors": [],
             "dangers": []
