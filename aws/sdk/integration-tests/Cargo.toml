@@ -24,3 +24,9 @@ members = [
     "webassembly-no-os",
     "webassembly-wstd",
 ]
+# Excluded rather than a member on purpose. This crate takes the SDK with default features, and
+# `resolver = "2"` unifies features across members built together, which would switch
+# `default-https-client` back on for `no-default-features` and defeat what it asserts.
+exclude = [
+    "no-http-02x",
+]

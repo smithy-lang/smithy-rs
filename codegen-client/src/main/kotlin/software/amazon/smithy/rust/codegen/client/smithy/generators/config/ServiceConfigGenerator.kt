@@ -306,7 +306,6 @@ class ServiceConfigGenerator(
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val enableUserConfigurableRuntimePlugins = codegenContext.enableUserConfigurableRuntimePlugins
-    private val includeLegacyClient = codegenContext.settings.codegenConfig.includeLegacyClient
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     val codegenScope =
         arrayOf(
@@ -350,7 +349,11 @@ class ServiceConfigGenerator(
 
     private fun behaviorMv() =
         writable {
-            val behaviorVersionExample = if (includeLegacyClient) "v2023_11_09" else "v2026_01_12"
+            // Newest version, and a named one rather than `latest()`: the example above covers
+            // `latest()`, while this one shows pinning. It must stay at or above `v2026_01_12`,
+            // since below that the reader lands on the legacy-client fallback and its warning, and
+            // the newest is the only version that is neither deprecated nor missing later defaults.
+            val behaviorVersionExample = "v2026_11_17"
             val docs = """
                 /// Sets the [`behavior major version`](crate::config::BehaviorVersion).
                 ///

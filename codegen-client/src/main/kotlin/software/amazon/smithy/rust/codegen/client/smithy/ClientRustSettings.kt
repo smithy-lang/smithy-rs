@@ -95,7 +95,18 @@ data class ClientCodegenConfig(
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG,
     val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
-    /** If true, adds `rustls` as a default feature on generated crates (legacy behavior) */
+    /**
+     * If true, keeps the legacy (`hyper` 0.14 + `rustls` 0.21) client reachable from generated crates:
+     *
+     * - adds `rustls` as a *default* feature, which selects `aws-smithy-runtime/tls-rustls`
+     * - adds an opt-in `legacy-test-util` feature for the pre-1.x test helpers
+     *
+     * The AWS SDK does not set this flag, so it gets the `true` default and the `legacy-test-util` feature.
+     * The `rustls` default does not reach it, but not because of this flag: the SDK sets
+     * `includeFluentClient = false`, so `FluentClientDecorator.extras` returns before declaring it, and
+     * `AwsFluentClientDecorator` declares a non-default `rustls` instead. Note that is a bypass, not an
+     * override — `mergeFeature` unions deps and keeps the first `default` flag it saw.
+     */
     val includeLegacyClient: Boolean = DEFAULT_ENABLE_LEGACY_CLIENT,
     /**
      * If true, opts this service out of schema-based serialization/deserialization even when its
