@@ -170,6 +170,13 @@ pub const WATCHER: &str = "watcher";
 /// notice that nothing looked at it.
 pub const RECORD: &str = "record";
 
+/// The job that turns a dispatched run's leg reports into datapoints.
+///
+/// Separate from [`RECORD`], which is the orchestrator's: that one reports a release nothing
+/// looked at, this one a release something looked at and could not say so. A reader deciding
+/// where to start needs them told apart.
+pub const VERDICTS: &str = "verdicts";
+
 /// The datapoints a part of the canary other than a leg writes when it fails in a way that leaves a
 /// release unchecked.
 ///

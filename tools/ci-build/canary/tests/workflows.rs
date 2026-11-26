@@ -20,6 +20,9 @@ use std::path::PathBuf;
 
 use serde_yaml::Value;
 
+use canary::scenarios;
+use canary::toolchain::{self, Version};
+
 const WORKFLOWS: &[&str] = &["build-canary", "post-publish-watch", "paging-selftest"];
 
 /// Ticket severities anything here is allowed to cut.
@@ -1374,9 +1377,9 @@ fn the_self_test_takes_its_credential_exactly_once() {
 #[test]
 fn aws_steps_are_skipped_when_unconfigured() {
     let wf = load("build-canary");
-    let leg = jobs(&wf).get("leg").copied().expect("a leg job");
+    let record = jobs(&wf).get("record").copied().expect("a record job");
     for name in ["Assume the metrics role", "Record the verdict"] {
-        let condition = steps(leg)
+        let condition = steps(record)
             .iter()
             .find(|s| step_name(s) == name)
             .unwrap_or_else(|| panic!("expected a {name:?} step"))
@@ -1388,6 +1391,87 @@ fn aws_steps_are_skipped_when_unconfigured() {
             "{name:?} is not gated on the metrics role being configured: {condition:?}"
         );
     }
+}
+
+/// A job that builds a crate it did not write must not be able to mint a token.
+///
+/// `cargo` runs a dependency's build script with the job's environment, so `id-token: write` on a
+/// leg is `id-token: write` for anything on crates.io. The roles this repository already had
+/// condition only on the repository, so such a token is accepted well past this canary's own
+/// metric. One job that builds nothing records every verdict instead.
+#[test]
+fn no_job_that_builds_a_published_crate_can_mint_a_token() {
+    for name in WORKFLOWS {
+        let wf = load(name);
+        for (job_name, job) in jobs(&wf) {
+            let builds_published_code = steps(job).iter().any(|s| {
+                s.get("run")
+                    .and_then(Value::as_str)
+                    .is_some_and(|r| r.contains("run-leg"))
+            });
+            let can_mint = job
+                .get("permissions")
+                .and_then(|p| p.get("id-token"))
+                .and_then(Value::as_str)
+                == Some("write");
+            assert!(
+                !(builds_published_code && can_mint),
+                "{name}.yml: {job_name} runs a leg and holds id-token:write, so a build script of \
+                 any crate it resolves could mint that token"
+            );
+        }
+    }
+}
+
+/// The legs have to fit in one wave.
+///
+/// The whole matrix finishing is what releases `record`, so a second wave puts every verdict behind
+/// twice as many legs. The 15-minute dispatch tick leaves about that much of the detection budget
+/// for everything after it, and a second wave spends it.
+///
+/// Measured against the widest matrix the crate can generate rather than today's count, so adding a
+/// scenario raises the bound instead of quietly reintroducing the wave.
+#[test]
+fn the_whole_matrix_runs_in_one_wave() {
+    // An MSRV nothing clamps against, so this is the matrix at its widest whatever
+    // `rustc +stable` happens to resolve to on a runner.
+    let floor: Version = "1.0.0".parse().expect("a version");
+    let any_stable: Version = "1.99.0".parse().expect("a version");
+    let widest = toolchain::resolve(any_stable, floor).expect("a span");
+    let legs = scenarios::legs(&widest.kept).len() as u64;
+
+    let wf = load("build-canary");
+    let leg = jobs(&wf).get("leg").copied().expect("a leg job");
+    let max_parallel = leg
+        .get("strategy")
+        .and_then(|s| s.get("max-parallel"))
+        .and_then(Value::as_u64)
+        .expect("the leg job to bound its own parallelism");
+    assert!(
+        max_parallel >= legs,
+        "max-parallel {max_parallel} is under the {legs} legs a release dispatches, so the matrix \
+         runs in waves and nothing is recorded until the last of them finishes"
+    );
+}
+
+/// The recorder reads what the legs uploaded, so it has to wait for all of them.
+///
+/// Without the dependency it starts alongside the matrix, downloads nothing, finds no report and
+/// exits zero: the paging chain cut in the one way that still looks like a clean run.
+#[test]
+fn the_verdicts_are_recorded_only_after_every_leg_has_reported() {
+    let wf = load("build-canary");
+    let record = jobs(&wf).get("record").copied().expect("a record job");
+    let needs: Vec<&str> = record
+        .get("needs")
+        .and_then(Value::as_sequence)
+        .map(|s| s.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    assert!(
+        needs.contains(&"leg"),
+        "the record job does not need the leg job, so it would run before any report exists: \
+         {needs:?}"
+    );
 }
 
 /// A leg has to report before GitHub kills its job, or it emits nothing at all — and an absent

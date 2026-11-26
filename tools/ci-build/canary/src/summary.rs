@@ -215,14 +215,27 @@ pub fn summarize(run: Run, legs: &[Leg], reports: &[Report]) -> RunSummary {
     }
 }
 
+/// What a walk of a downloaded artifact tree found.
+pub struct Scan {
+    /// The reports that parsed, by leg id.
+    pub reports: Vec<Report>,
+    /// Every file named `report.json` that would not parse, and why.
+    ///
+    /// Kept rather than only logged, because two readers want opposite things from them. The record
+    /// folds forty legs into one artifact, where a malformed file must not cost the other
+    /// thirty-nine. The recorder turns reports into datapoints, where a report it cannot read is a
+    /// verdict nobody will hear — the one thing it has to say out loud.
+    pub unreadable: Vec<String>,
+}
+
 /// Read every `report.json` under a directory tree.
 ///
 /// Walks rather than globbing a fixed depth, because the layout is whatever
-/// `actions/download-artifact` produced: one directory per artifact, each containing a report and
-/// possibly the leg's sources. A file that will not parse is reported and skipped — one malformed
-/// report must not cost the record of the other thirty-nine.
-pub fn read_reports(root: &std::path::Path) -> anyhow::Result<Vec<Report>> {
-    let mut out = Vec::new();
+/// `actions/download-artifact` produced: a directory per artifact when several match the pattern,
+/// the files alone at the root when exactly one does.
+pub fn scan_reports(root: &std::path::Path) -> anyhow::Result<Scan> {
+    let mut reports = Vec::new();
+    let mut unreadable = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let entries = match std::fs::read_dir(&dir) {
@@ -241,14 +254,30 @@ pub fn read_reports(root: &std::path::Path) -> anyhow::Result<Vec<Report>> {
                     .map_err(anyhow::Error::from)
                     .and_then(|t| Ok(serde_json::from_str::<Report>(&t)?))
                 {
-                    Ok(report) => out.push(report),
-                    Err(e) => eprintln!("ignoring unreadable {}: {e}", path.display()),
+                    Ok(report) => reports.push(report),
+                    Err(e) => unreadable.push(format!("{}: {e}", path.display())),
                 }
             }
         }
     }
-    out.sort_by(|a, b| a.leg_id.cmp(&b.leg_id));
-    Ok(out)
+    // `read_dir` has no defined order and neither does the walk, so both lists are sorted to make
+    // a record and an error message reproducible.
+    reports.sort_by(|a, b| a.leg_id.cmp(&b.leg_id));
+    unreadable.sort();
+    Ok(Scan {
+        reports,
+        unreadable,
+    })
+}
+
+/// The reports alone, for a reader that would rather have thirty-nine records than none. A file
+/// that will not parse is logged and skipped.
+pub fn read_reports(root: &std::path::Path) -> anyhow::Result<Vec<Report>> {
+    let scan = scan_reports(root)?;
+    for e in &scan.unreadable {
+        eprintln!("ignoring unreadable {e}");
+    }
+    Ok(scan.reports)
 }
 
 #[cfg(test)]
@@ -614,9 +643,47 @@ mod tests {
         assert_eq!(reports[0].leg_id, "new-project--stable");
     }
 
+    /// The same tree, read by the recorder instead. It needs the file named, because a report it
+    /// cannot read is a verdict that will reach no alarm — and silently recording the other
+    /// thirty-nine is how that goes unnoticed.
+    #[test]
+    fn a_malformed_report_is_named_rather_than_only_skipped() {
+        let dir = tempdir("scan-malformed");
+        let root = dir.path();
+
+        let good = root.join("evidence-good");
+        std::fs::create_dir_all(&good).unwrap();
+        std::fs::write(
+            good.join("report.json"),
+            serde_json::to_string(&green_report("new-project--stable")).unwrap(),
+        )
+        .unwrap();
+
+        let bad = root.join("evidence-bad");
+        std::fs::create_dir_all(&bad).unwrap();
+        std::fs::write(bad.join("report.json"), "{ truncated").unwrap();
+
+        let scan = scan_reports(root).unwrap();
+        assert_eq!(scan.reports.len(), 1);
+        assert_eq!(scan.reports[0].leg_id, "new-project--stable");
+        assert_eq!(scan.unreadable.len(), 1, "{:?}", scan.unreadable);
+        assert!(
+            scan.unreadable[0].contains("evidence-bad"),
+            "the message must say which file: {:?}",
+            scan.unreadable[0]
+        );
+    }
+
     #[test]
     fn an_empty_tree_reads_as_no_reports() {
         let dir = tempdir("summary-empty");
         assert!(read_reports(dir.path()).unwrap().is_empty());
+        let scan = scan_reports(dir.path()).unwrap();
+        assert!(scan.reports.is_empty());
+        assert!(
+            scan.unreadable.is_empty(),
+            "a tree with nothing in it has nothing unreadable, which is what a run whose legs \
+             were all superseded looks like"
+        );
     }
 }

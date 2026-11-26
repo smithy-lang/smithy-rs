@@ -125,15 +125,22 @@ enum Command {
         #[arg(long)]
         update: bool,
     },
-    /// Record a leg's verdict as the datapoint an alarm can see.
+    /// Record a dispatched run's leg verdicts as the datapoints an alarm can see.
     ///
     /// Writes nothing for a leg that reached no verdict -- green, or superseded. That silence is
     /// what the alarm's `notBreaching` treatment turns back into `OK`, and writing a zero instead
     /// would make "it passed" indistinguishable from "it died without reporting".
-    EmitVerdict {
-        /// The leg's `report.json`.
+    ///
+    /// Takes a tree of reports rather than one, because it runs once per dispatched run instead of
+    /// once per leg: a leg builds crates from crates.io and cargo runs their build scripts with the
+    /// job's environment, so no leg is given a credential to write its own datapoint.
+    ///
+    /// A verdict it cannot read or cannot write is reported as a release left unchecked, and makes
+    /// this exit non-zero.
+    RecordVerdicts {
+        /// The downloaded artifacts, searched recursively for `report.json`.
         #[arg(long)]
-        report: PathBuf,
+        reports: PathBuf,
         /// The release tag, which is the dimension the alarm watches.
         #[arg(long)]
         tag: String,
@@ -468,45 +475,87 @@ fn main() -> anyhow::Result<()> {
             eprintln!("{manifest}: {movement}");
             println!("{}", serde_json::to_string(&movement)?);
         }
-        Command::EmitVerdict {
-            report,
+        Command::RecordVerdicts {
+            reports,
             tag,
             stable,
             msrv,
             payload_dir,
             dry_run,
         } => {
-            let text = std::fs::read_to_string(&report)
-                .with_context(|| format!("reading {}", report.display()))?;
-            let report: leg::Report = serde_json::from_str(&text)
-                .with_context(|| "parsing the leg report".to_string())?;
-
             let clamped = resolve(&stable, &msrv)?;
             let legs = scenarios::legs(&clamped.kept);
-            let found = find_leg(&legs, &report.leg_id)?;
+            let scan = summary::scan_reports(&reports)?;
 
             let mut emitter = metric::AwsCli {
                 payload_dir,
                 dry_run,
             };
-            let written = metric::record(&tag, found, report.verdict, &mut emitter)?;
 
-            match written.is_empty() {
-                true => eprintln!(
-                    "{}: no verdict, so nothing to record{}",
-                    report.leg_id,
-                    match report.reached_a_verdict() {
-                        true => " (green)",
-                        false => " (superseded, which is not green)",
+            // One call per leg, not one for the matrix. `PutMetricData` rejects a whole request
+            // over a single bad datapoint, so forty in one call would let one malformed report cost
+            // the other thirty-nine -- including the red one worth paging for.
+            let mut lost = scan.unreadable.clone();
+            let mut all = Vec::new();
+            for report in &scan.reports {
+                let found = match find_leg(&legs, &report.leg_id) {
+                    Ok(found) => found,
+                    Err(e) => {
+                        lost.push(format!("{}: {e}", report.leg_id));
+                        continue;
                     }
-                ),
-                false => {
-                    for d in &written {
-                        eprintln!("  {d}");
+                };
+                match metric::record(&tag, found, report.verdict, &mut emitter) {
+                    Ok(written) => {
+                        if written.is_empty() {
+                            eprintln!(
+                                "{}: no verdict, so nothing to record{}",
+                                report.leg_id,
+                                match report.reached_a_verdict() {
+                                    true => " (green)",
+                                    false => " (superseded, which is not green)",
+                                }
+                            );
+                        }
+                        for d in &written {
+                            eprintln!("  {d}");
+                        }
+                        all.extend(written);
                     }
+                    Err(e) => lost.push(format!("{}: {e}", report.leg_id)),
                 }
             }
-            println!("{}", serde_json::to_string(&written)?);
+            eprintln!(
+                "{} report(s), {} datapoint(s)",
+                scan.reports.len(),
+                all.len()
+            );
+
+            if !lost.is_empty() {
+                // A verdict that cannot be read, or cannot be written, leaves the same hole as a
+                // leg that never ran: a published crate nobody checked and no alarm that knows it.
+                // So it goes on the series the release alarm already watches, and reaches the same
+                // oncall by the same path.
+                //
+                // Attempted rather than relied on. If the emitter is what broke, this breaks too --
+                // there is no credential-free way to raise an alarm, and that residue is the same
+                // one a leg writing its own datapoint had.
+                match metric::record_component_failure(
+                    &tag,
+                    metric::VERDICTS,
+                    "verdicts-lost",
+                    &mut emitter,
+                ) {
+                    Ok(written) => {
+                        for d in &written {
+                            eprintln!("  {d}");
+                        }
+                    }
+                    Err(e) => eprintln!("nor could the unchecked datapoint be written: {e}"),
+                }
+                anyhow::bail!("{} leg verdict(s) lost: {}", lost.len(), lost.join("; "));
+            }
+            println!("{}", serde_json::to_string(&all)?);
         }
         Command::EmitWatchFailure {
             report,
