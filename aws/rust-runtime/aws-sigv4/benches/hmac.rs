@@ -3,19 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_sigv4::sign::v4::calculate_signature;
 use criterion::{criterion_group, criterion_main, Criterion};
-use hmac::digest::FixedOutput;
-use hmac::{Hmac, KeyInit, Mac};
-use sha2::Sha256;
 
+// Benchmarks `calculate_signature` on whichever crypto backend the crate was built with. That is
+// one HMAC-SHA256 plus the hex encode of its tag, so the encode and its allocation are in the
+// number too; going through the public function rather than the HMAC crate directly is what makes
+// it follow the selected backend.
 pub fn hmac(c: &mut Criterion) {
     c.bench_function("hmac", |b| {
-        b.iter(|| {
-            let mut mac = Hmac::<Sha256>::new_from_slice(b"secret").unwrap();
-
-            mac.update(b"hello, world");
-            mac.finalize_fixed()
-        })
+        b.iter(|| calculate_signature(b"secret", b"hello, world"))
     });
 }
 

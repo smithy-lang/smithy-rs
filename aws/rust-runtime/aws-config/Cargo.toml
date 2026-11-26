@@ -43,6 +43,36 @@ credentials-login = [
     "p256?/pem",
     "dep:rand",
 ]
+# Route this crate's cryptography through the FIPS 140-3 validated build of AWS-LC in one place:
+# TLS for the default HTTPS client, and SigV4/SigV4a signing. Checksums are reached from the
+# generated service crates instead, since `aws-smithy-checksums` is not a dependency here.
+#
+# Named to match the generated SDK feature, and so distinct from `use_fips` /
+# `AWS_USE_FIPS_ENDPOINT`, which select a FIPS-compliant *endpoint*.
+#
+# The TLS half reaches the hyper 1.x client only; see `aws-smithy-runtime`'s `aws-lc-fips` feature
+# for which client a build resolves to, and when it warns.
+#
+# Two things this crate does itself are NOT covered either, because they use RustCrypto directly
+# and have no aws-lc-rs path yet:
+# - `credentials-login` signs DPoP (RFC 9449) proof JWTs with `p256` ECDSA in `login/dpop.rs`.
+#   That is a real signature in the credential-acquisition path, so a FIPS deployment that uses
+#   `credentials-login` is not fully covered by this feature.
+# - `sso` and `credentials-login` hash a start URL / session string with SHA-1 and SHA-256 to
+#   name a cache file (`sso/cache.rs`, `login/cache.rs`). Those are not security functions.
+# Tracked in smithy-rs#4872.
+# Forwarded to the credential-provider crates as well. They are declared `default-features = false`,
+# so their own `aws-lc-fips` never turns on by itself. None has an `@httpChecksum` operation today,
+# so this adds nothing yet; if a model update gives one a checksum, that crate picks up the FIPS
+# digest backend here rather than staying on RustCrypto unnoticed.
+aws-lc-fips = [
+    "aws-runtime/aws-lc-fips",
+    "aws-smithy-runtime/aws-lc-fips",
+    "aws-sdk-sts/aws-lc-fips",
+    "aws-sdk-sso?/aws-lc-fips",
+    "aws-sdk-ssooidc?/aws-lc-fips",
+    "aws-sdk-signin?/aws-lc-fips",
+]
 test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing
@@ -74,7 +104,7 @@ fastrand = "2.3.0"
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }
 sha1 = { version = "0.10", optional = true }
 hex = { version = "0.4.3", optional = true }
-zeroize = { version = "1", optional = true }
+zeroize = { version = "1.8.1", optional = true }
 
 # implementation detail of SSO OIDC `CreateToken` for SSO token providers
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }

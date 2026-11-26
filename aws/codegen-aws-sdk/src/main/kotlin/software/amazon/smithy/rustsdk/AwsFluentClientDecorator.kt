@@ -76,6 +76,36 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
         rustCrate.mergeFeature(Feature("rustls", default = false, listOf("default-https-client")))
         rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
+
+        // A single switch for routing this crate's cryptography through the FIPS 140-3 validated build of AWS-LC,
+        // so a customer does not have to align a feature on each runtime crate by hand. The three paths arrive by
+        // different routes and no one crate can broker them all: TLS through `aws-smithy-runtime`, signing through
+        // `aws-runtime`, and checksums directly, since `aws-smithy-checksums` is a dependency of neither.
+        //
+        // Named for the backend rather than `fips`, because a bare `fips` here would sit alongside
+        // `Config::use_fips`, which selects a FIPS-compliant *endpoint* and says nothing about which
+        // implementation does the cryptography. A customer pursuing FedRAMP is exactly the person likely to read
+        // one as the other.
+        //
+        // Not a default feature: the validated AWS-LC build is unavailable on some targets the SDK supports (no
+        // WASM, no iOS, no Android) and needs CMake and Go at build time.
+        val fipsDeps =
+            mutableListOf(
+                "aws-smithy-runtime/aws-lc-fips",
+                "aws-runtime/aws-lc-fips",
+            )
+        // Only name the checksums crate for services that actually have checksum operations. Naming it
+        // unconditionally would make the manifest of every other service crate invalid: `dep/feat` requires
+        // `dep` to be a declared dependency, and Cargo rejects a manifest where it isn't.
+        if (serviceHasHttpChecksumOperation(codegenContext)) {
+            fipsDeps += "aws-smithy-checksums/aws-lc-rs-fips"
+        }
+        rustCrate.mergeFeature(Feature("aws-lc-fips", default = false, fipsDeps))
+
+        // There is no counterpart feature for the RustCrypto backend. `aws-sigv4` and `aws-smithy-checksums`
+        // declare those crates without a feature gate, under `cfg(not(aws_sdk_fips_only))`, so a consumer who
+        // wants them out of the build sets `RUSTFLAGS="--cfg aws_sdk_fips_only"` instead.
+        // RUSTFLAGS is global, so that reaches both crates without anything to forward from here.
     }
 
     override fun libRsCustomizations(

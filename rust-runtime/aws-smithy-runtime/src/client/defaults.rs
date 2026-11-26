@@ -18,15 +18,26 @@ use aws_smithy_async::rt::sleep::default_async_sleep;
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
-#[cfg(feature = "default-https-client")]
+// Needed by `FallbackHttpClient`, and by `NonFipsLegacyTlsClient` in a FIPS build that has the
+// legacy client. The latter has no `default-https-client`, so these cannot be gated on it alone.
+#[cfg(any(
+    feature = "default-https-client",
+    all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips")
+))]
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
-#[cfg(feature = "default-https-client")]
+#[cfg(any(
+    feature = "default-https-client",
+    all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips")
+))]
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
-#[cfg(feature = "default-https-client")]
+#[cfg(any(
+    feature = "default-https-client",
+    all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips")
+))]
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponentsBuilder, SharedConfigValidator,
@@ -90,7 +101,8 @@ pub fn default_http_client_plugin_v2(
         ))]
         #[allow(deprecated)]
         {
-            _default = crate::client::http::hyper_014::default_client();
+            _default = crate::client::http::hyper_014::default_client()
+                .map(|legacy| flag_legacy_tls_as_not_fips(legacy, behavior_version));
         }
 
         // takes precedence over legacy connector if enabled
@@ -105,7 +117,8 @@ pub fn default_http_client_plugin_v2(
         #[cfg(feature = "connector-hyper-0-14-x")]
         #[allow(deprecated)]
         {
-            _default = crate::client::http::hyper_014::default_client();
+            _default = crate::client::http::hyper_014::default_client()
+                .map(|legacy| flag_legacy_tls_as_not_fips(legacy, behavior_version));
         }
 
         // Fall back to the latest https stack so that an older behavior version still gets a
@@ -195,6 +208,90 @@ impl HttpClient for FallbackHttpClient {
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
         self.inner.connector_metadata()
     }
+}
+
+/// A selected legacy hyper 0.14.x client, which a FIPS build must be told is not FIPS.
+///
+/// `aws-lc-fips` reaches TLS only through the hyper 1.x client; the legacy client's TLS is
+/// `rustls` 0.21 on `ring`. Warns from here rather than where the client is chosen, for the same
+/// reason as [`FallbackHttpClient`]: that runs for every client and every operation build, ahead
+/// of the caller's own components, so a caller who overrides `http_client` would be told their
+/// TLS is not FIPS when their own client serves the traffic.
+///
+/// Every method must forward to `inner`, including ones `HttpClient` gains later: the legacy
+/// client loads native certs in `validate_base_client_config`, so answering for it defers that
+/// to the first request.
+#[cfg(all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips"))]
+#[derive(Debug)]
+struct NonFipsLegacyTlsClient {
+    inner: SharedHttpClient,
+    behavior_version: BehaviorVersion,
+}
+
+#[cfg(all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips"))]
+impl HttpClient for NonFipsLegacyTlsClient {
+    fn http_connector(
+        &self,
+        settings: &HttpConnectorSettings,
+        components: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        static WARNED: std::sync::Once = std::sync::Once::new();
+        WARNED.call_once(|| {
+            tracing::warn!(
+                behavior_version = ?self.behavior_version,
+                "`aws-lc-fips` is enabled, but this build resolves to the legacy hyper 0.14.x HTTP \
+                 client, whose TLS is rustls 0.21 on ring rather than the FIPS 140-3 validated \
+                 build of AWS-LC, so this build is not end-to-end FIPS. Enable \
+                 `aws-smithy-runtime/default-https-client` to select the hyper 1.x client, and use \
+                 `BehaviorVersion::v2026_01_12()` or later; or drop the legacy stack (the `rustls` \
+                 / `legacy-https-client` feature on your AWS SDK crate, or \
+                 `aws-smithy-runtime/tls-rustls`).",
+            );
+        });
+        self.inner.http_connector(settings, components)
+    }
+
+    fn validate_base_client_config(
+        &self,
+        runtime_components: &RuntimeComponentsBuilder,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        HttpClient::validate_base_client_config(&self.inner, runtime_components, cfg)
+    }
+
+    fn validate_final_config(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        HttpClient::validate_final_config(&self.inner, runtime_components, cfg)
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        self.inner.connector_metadata()
+    }
+}
+
+/// Wrap a selected legacy client so it reports that its TLS is not FIPS.
+#[cfg(all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips"))]
+fn flag_legacy_tls_as_not_fips(
+    client: SharedHttpClient,
+    behavior_version: BehaviorVersion,
+) -> SharedHttpClient {
+    NonFipsLegacyTlsClient {
+        inner: client,
+        behavior_version,
+    }
+    .into_shared()
+}
+
+/// Without `aws-lc-fips` there is no FIPS claim to contradict, so the client passes through.
+#[cfg(all(feature = "connector-hyper-0-14-x", not(feature = "aws-lc-fips")))]
+fn flag_legacy_tls_as_not_fips(
+    client: SharedHttpClient,
+    _behavior_version: BehaviorVersion,
+) -> SharedHttpClient {
+    client
 }
 
 /// Runtime plugin that provides a default async sleep implementation.

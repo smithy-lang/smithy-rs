@@ -10,8 +10,16 @@ C_RESET='\033[0m'
 # shellcheck source=/dev/null
 source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
 
+CI_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 set -eux
 cd aws-sdk
+
+# This action is local-only; GitHub Actions dispatches the sibling `check-only-aws-sdk-services`,
+# which runs the same check. Kept here so a local full-SDK run gets it too, and first because it
+# takes seconds and no test can replace it.
+echo "${C_YELLOW}## Checking FIPS crypto isolation...${C_RESET}"
+"${CI_SCRIPTS_DIR}/check-fips-crypto-isolation"
 
 ENABLE_SMOKETESTS="${ENABLE_SMOKETESTS:-false}"
 

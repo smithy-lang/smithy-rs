@@ -25,6 +25,9 @@ set -eu -o pipefail
 # exercises the `credential_process` provider, which is where the Windows-specific
 # `cmd.exe` handling lives (see the `credential_process` Windows integration
 # tests).
+#
+# This leg deliberately stays on the RustCrypto backend, which is what a build gets by default:
+# `aws-lc-fips` would reintroduce the C toolchain requirement this script exists to avoid.
 
 if [[ ! -d "aws/sdk/build/aws-sdk/sdk" ]]; then
   echo "error: generated SDK not found at 'aws/sdk/build/aws-sdk'." >&2

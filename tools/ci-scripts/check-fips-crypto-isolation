@@ -1,0 +1,283 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Asserts that a FIPS build of a generated service crate compiles no non-validated crypto
+# implementation, and that a default build still compiles one.
+#
+# The failure mode this guards is silent. `cfg(not(aws_sdk_fips_only))` keeps the RustCrypto crates
+# out only if every declaration of them carries that gate; a build that loses it anywhere compiles
+# cleanly, behaves correctly, and passes every other test in CI while compiling the implementation
+# the FIPS build was meant to exclude.
+#
+# It reads resolved features rather than build output, so it needs a lockfile but no compiler, no C
+# toolchain and no `aws-lc-fips-sys` build -- the only check that can assert the FIPS graph on a
+# machine that cannot build the FIPS module.
+#
+# Run from the directory holding the generated SDK workspace. Both full-SDK actions invoke it:
+# `check-only-aws-sdk-services`, which GitHub Actions dispatches, and the local-only
+# `check-aws-sdk-services`.
+
+C_RED='\033[1;31m'
+C_GREEN='\033[1;32m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -u
+
+if [[ ! -f "Cargo.toml" ]]; then
+    echo -e "${C_RED}error: no Cargo.toml here. Run this from the generated SDK workspace root.${C_RESET}" >&2
+    exit 1
+fi
+
+# The crates to account for in a FIPS graph. `hmac`, `sha2`, `sha1` and `md-5` are the RustCrypto
+# backends of `aws-sigv4` and `aws-smithy-checksums`; `ring` and `aws-lc-sys` are the other two
+# crypto libraries that reach an SDK binary, neither of which is the validated module. Presence
+# alone is not the failure -- who reaches them is, which is what the reverse tree below decides.
+#
+# `crypto-bigint`, `subtle`, `p256` and `ecdsa` are deliberately absent. A `sigv4a` FIPS build
+# still compiles them, which is understood and documented: `crypto-bigint` does the integer math
+# of the SigV4a key derivation defined by the signing spec (`subtle` comes along underneath it),
+# and `p256`/`ecdsa` are no longer called but cannot be dropped, because the `sigv4a` feature has
+# to keep declaring them whichever backend does the signing.
+FORBIDDEN_IN_FIPS=(hmac sha2 sha1 md-5 ring aws-lc-sys)
+
+# The two crates that own a RustCrypto backend. A forbidden crate reached through either of them is
+# a propagation failure.
+BACKEND_OWNERS=(aws-sigv4 aws-smithy-checksums)
+
+# Direct declarations triaged as benign, as `service:crate`. A forbidden crate arriving by any
+# other route fails: treating everything unrecognised as benign would certify routes nobody has
+# examined, which is the silent failure described at the top of this file.
+#
+# `aws-sdk-s3` HMACs the credential pair under a `fastrand` salt to key an in-memory LRU of S3
+# Express session credentials. The code there is explicit that the salt need not be
+# cryptographically secure and that the point is to obfuscate a map key, so it is not on a signing
+# or checksum path and AWS-LC would not change what a FIPS build guarantees. Tracked in
+# smithy-rs#4909. The owner check runs first, so a pair listed here cannot mask a propagation
+# regression that happens to land on it.
+#
+# Not benign, and outside the sample: `aws-sdk-s3control` computes `Content-MD5` with `md-5` on its
+# `@httpChecksumRequired` operations, and `aws-sdk-glacier` computes its SHA-256 tree hash with
+# `ring` and installs it as the SigV4 payload hash. Both would fail here as written; sampling
+# either needs a per-crate verdict first.
+BENIGN_DIRECT=(aws-sdk-s3:hmac aws-sdk-s3:sha2)
+
+failures=0
+checked=0
+
+fail() {
+    echo -e "${C_RED}FAIL${C_RESET}: $1" >&2
+    failures=$((failures + 1))
+}
+
+# The crates depending directly on the package spec `$1`, space separated. `cargo tree -i` puts
+# the inverted target at depth 0 and its immediate dependents at depth 1, so `--prefix depth`
+# gives that without parsing tree-drawing characters. Reads `fips_args` from the caller.
+direct_parents_of() {
+    RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" -i "$1" --prefix depth 2>/dev/null \
+        | awk '/^1[^0-9]/ {sub(/^1/, ""); print $1}' | sort -u | tr '\n' ' ' | sed 's/ *$//'
+}
+
+# Representative service crates. Two are needed because the checksums arm of the `aws-lc-fips`
+# feature is generated only for services that model `@httpChecksum`, so a service without one
+# exercises a different fan-out than a service with one.
+#
+# Any service crate absent from this SDK is skipped: the smoketest SDK carries a handful of
+# services and the full SDK carries all of them, and this check is useful in both.
+for crate in aws-sdk-dynamodb aws-sdk-s3; do
+    # `cargo pkgid` is the membership probe rather than a `cargo tree` run with feature flags,
+    # which conflates "not in this SDK" with any other resolution failure and would drop a check
+    # silently instead of reporting one.
+    probe_err="$(mktemp)"
+    if ! cargo pkgid -p "${crate}" >/dev/null 2>"${probe_err}"; then
+        if grep -q "did not match any packages" "${probe_err}"; then
+            echo -e "${C_YELLOW}## Skipping ${crate}: not in this SDK${C_RESET}"
+        else
+            fail "${crate}: could not be probed, so it was not checked. cargo said:
+$(cat "${probe_err}")"
+        fi
+        rm -f "${probe_err}"
+        continue
+    fi
+    rm -f "${probe_err}"
+    checked=$((checked + 1))
+    echo -e "${C_YELLOW}## Checking ${crate}${C_RESET}"
+
+    # Deliberately without `sigv4a`, the one configuration this check cannot assert. `sigv4a` has
+    # to declare `p256` unconditionally, and `sha2` arrives under `p256` while `hmac` arrives under
+    # `ecdsa`'s RFC 6979 nonce derivation, so a `sigv4a` FIPS build compiles two crates on the
+    # forbidden list by a route nothing can close. Adding `sigv4a` here would make this check red
+    # with no fix available. What keeps that honest is the cfg in `aws-sigv4`'s `crypto` module,
+    # which leaves the RustCrypto backend uncompiled in a FIPS build so nothing calls them; a graph
+    # is the wrong instrument for "present but unreachable". Note the asymmetry if you change this:
+    # `p256` and `ecdsa` are exempt by name above, their `hmac` and `sha2` are not.
+    # `--cfg aws_sdk_fips_only` is what removes the RustCrypto crates. They are unconditional
+    # dependencies of `aws-sigv4` and `aws-smithy-checksums`, gated on `cfg(not(aws_sdk_fips_only))`
+    # rather than on a Cargo feature, so `--features aws-lc-fips` alone selects AWS-LC without
+    # excluding RustCrypto and every assertion below would fail. `cargo tree` honours the cfg the
+    # same way the build does.
+    #
+    # `default-https-client` and `rt-tokio` are named because the TLS arm of `aws-lc-fips` is
+    # `aws-smithy-http-client?/rustls-aws-lc-fips`, a weak reference that is a no-op unless
+    # something installs that client. Without them this check asserts on a graph with no HTTPS
+    # client at all -- not the graph anyone ships, and the one configuration where the TLS arm it
+    # is supposed to cover is absent.
+    fips_args=(-p "${crate}" --no-default-features
+        --features aws-lc-fips,default-https-client,rt-tokio,behavior-version-latest -e normal)
+    # Sort separately from the capture so the exit status is cargo's. Piping into `sort -u` would
+    # discard it, and with stderr dropped an unresolvable graph would surface as the "validated
+    # module is absent" failure below -- a compliance-sounding alarm for a lockfile problem.
+    tree_err="$(mktemp)"
+    if ! fips_tree="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" --prefix none 2>"${tree_err}")"; then
+        fail "${crate}: a FIPS build could not be resolved, so nothing below was checked. cargo said:
+$(cat "${tree_err}")"
+        rm -f "${tree_err}"
+        continue
+    fi
+    rm -f "${tree_err}"
+    fips_tree="$(sort -u <<<"${fips_tree}")"
+
+    # The validated module has to actually be there. Without this, a build that resolved no crypto
+    # at all would satisfy every assertion below.
+    if ! grep -q '^aws-lc-fips-sys ' <<<"${fips_tree}"; then
+        fail "${crate}: a FIPS build resolves no aws-lc-fips-sys. The validated module is absent."
+    fi
+
+    for dep in "${FORBIDDEN_IN_FIPS[@]}"; do
+        # Collect every version in the graph, since the reverse walk below has to name one.
+        # `cargo tree -i` takes a package spec, and a bare name is an error rather than a match
+        # once a crate has resolved to two versions. Passing the bare name and discarding that
+        # error would leave the walk with no output to match an owner against, so a real
+        # propagation break would be reported as the benign note at the bottom of this loop.
+        #
+        # `sort -u` on the versions, not just on the tree: `cargo tree` repeats a crate it has
+        # already expanded with a `(*)` marker, which makes that a distinct line, so one crate at
+        # one version arrives here twice and every finding about it would be reported twice.
+        grep -q "^${dep} " <<<"${fips_tree}" || continue
+        versions=()
+        while read -r version; do
+            [[ -n "${version}" ]] && versions+=("${version#v}")
+        done < <(grep "^${dep} " <<<"${fips_tree}" | awk '{print $2}' | sort -u)
+        # Absent is the `continue` above. Present with nothing parseable is a different thing and
+        # is not something to pass over quietly, for the same reason as the invert failure below.
+        if [[ "${#versions[@]}" -eq 0 ]]; then
+            fail "${crate}: ${dep} is in the FIPS graph but no version could be read for it, so\
+ what pulls it in could not be determined."
+            continue
+        fi
+
+        for version in "${versions[@]}"; do
+            spec="${dep}@${version}"
+
+            # Present. Whether that is a failure depends on who reaches it, so walk back up.
+            # A failure to walk is itself a failure: this check cannot conclude anything about a
+            # crate it could not invert, and saying nothing would read as a pass.
+            invert_err="$(mktemp)"
+            if ! parents="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" -i "${spec}" 2>"${invert_err}")"; then
+                fail "${crate}: could not determine what pulls in ${spec}, so its presence in the\
+ FIPS graph is unexplained. cargo said:
+$(cat "${invert_err}")"
+                rm -f "${invert_err}"
+                continue
+            fi
+            rm -f "${invert_err}"
+
+            # `aws-lc-sys` is a special case: it is in every FIPS graph that contains rustls, and
+            # not because our backend propagation leaked. rustls's own `aws_lc_rs` feature expands
+            # to `aws-lc-rs/aws-lc-sys`, and `rustls-webpki`'s `aws-lc-rs` feature does the same, so
+            # enabling only `rustls-aws-lc-fips` still compiles the non-FIPS library. aws-lc-rs
+            # links the FIPS one regardless -- `#[cfg(feature = "fips")] extern crate
+            # aws_lc_fips_sys as aws_lc` -- so no non-validated code reaches the binary.
+            #
+            # The reverse tree cannot tell the two cases apart on its own: `aws-sigv4` and
+            # `aws-smithy-checksums` appear under any `aws-lc-rs` they share with rustls even when
+            # all they enable is `aws-lc-rs?/fips`. So attribute it by feature edge instead.
+            #
+            # Asking only whether a rustls edge exists would accept anything: `fips_args` names
+            # `default-https-client`, so rustls is always in this graph with that feature on. All
+            # three of these have to hold, or rustls does not account for what is here.
+            if [[ "${dep}" == "aws-lc-sys" ]]; then
+                # Nothing but aws-lc-rs reaches it, so no crate pulls the library in on its own.
+                direct_parents="$(direct_parents_of "${spec}")"
+                feature_tree="$(RUSTFLAGS="--cfg aws_sdk_fips_only" cargo tree "${fips_args[@]}" \
+                    -e features -i aws-lc-rs 2>/dev/null)"
+                # A backend crate enabling its own non-FIPS arm would select this library for
+                # signing or checksums rather than for TLS. The closing quote is what keeps this
+                # from matching `aws-lc-rs-fips`.
+                own_arm="$(grep -oE '(aws-sigv4|aws-smithy-checksums) feature "aws-lc-rs"' \
+                    <<<"${feature_tree}" | sort -u | tr '\n' ' ' || true)"
+
+                if [[ "${direct_parents}" == "aws-lc-rs" ]] \
+                    && grep -qE '(rustls|rustls-webpki) feature "aws[-_]lc[-_]rs"' <<<"${feature_tree}" \
+                    && [[ -z "${own_arm}" ]]; then
+                    echo "   note: ${spec} is in the FIPS graph because rustls enables"
+                    echo "         aws-lc-rs/aws-lc-sys. aws-lc-rs links aws-lc-fips-sys, so the"
+                    echo "         non-validated library is compiled but never linked."
+                    continue
+                fi
+                fail "${crate}: ${spec} is in the FIPS graph and rustls does not account for it.\
+ Reached through: ${direct_parents:-nothing}.${own_arm:+ Enabled by: ${own_arm}}
+${parents}"
+                continue
+            fi
+
+            via_backend=false
+            for owner in "${BACKEND_OWNERS[@]}"; do
+                if grep -q "${owner}" <<<"${parents}"; then
+                    via_backend=true
+                    fail "${crate}: a FIPS build reaches ${spec} through ${owner}. The backend\
+ propagation is broken -- check that every declaration of the RustCrypto crates still carries its\
+ cfg(not(aws_sdk_fips_only)) gate.
+${parents}"
+                fi
+            done
+
+            # Not through a backend crate. Benign only if this pair has been triaged AND the
+            # service crate is the only thing reaching it: the triage says that crate declaring it
+            # is harmless, not that the crate may have it by any route. Without the second half, a
+            # gate lost outside the backend crates would be absorbed by an already-listed pair.
+            if [[ "${via_backend}" == "false" ]]; then
+                direct_parents="$(direct_parents_of "${spec}")"
+                if [[ " ${BENIGN_DIRECT[*]} " == *" ${crate}:${dep} "* \
+                    && "${direct_parents}" == "${crate}" ]]; then
+                    echo "   note: ${spec} is declared by ${crate} itself rather than reached"
+                    echo "         through a backend. Triaged as benign: not on a signing or"
+                    echo "         checksum path. smithy-rs#4909 tracks removing it."
+                else
+                    fail "${crate}: ${spec} is in the FIPS graph by a route this check does not\
+ recognise -- neither through ${BACKEND_OWNERS[*]} nor a triaged direct declaration. Reached\
+ through: ${direct_parents:-nothing}. Either a cfg(not(aws_sdk_fips_only)) gate was lost somewhere\
+ else, or this is a new declaration that needs a verdict added to BENIGN_DIRECT.
+${parents}"
+                fi
+            fi
+        done
+    done
+
+    # The other half: a build without the cfg must still have the RustCrypto backend, since that is
+    # what every ordinary consumer gets. Cheap insurance against "fixing" a FIPS failure by gating
+    # the dependency on something that is never true.
+    default_tree="$(cargo tree -p "${crate}" -e normal --prefix none 2>/dev/null | sort -u)"
+    for dep in hmac sha2; do
+        if ! grep -q "^${dep} " <<<"${default_tree}"; then
+            fail "${crate}: a default build resolves no ${dep}. The default build must keep its\
+ RustCrypto backend; it is the only one that works on every target the SDK supports."
+        fi
+    done
+done
+
+if [[ "${checked}" -eq 0 ]]; then
+    echo -e "${C_RED}error: none of the representative service crates are in this SDK.${C_RESET}" >&2
+    echo "This check needs at least one of them to assert anything." >&2
+    exit 1
+fi
+
+if [[ "${failures}" -ne 0 ]]; then
+    echo -e "${C_RED}${failures} FIPS crypto isolation check(s) failed.${C_RESET}" >&2
+    exit 1
+fi
+
+echo -e "${C_GREEN}FIPS crypto isolation checks passed (${checked} service crate(s)).${C_RESET}"

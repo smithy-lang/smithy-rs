@@ -31,6 +31,21 @@ http-02x = [
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014", "aws-smithy-types/http-body-0-4-x"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
+# Route the default HTTPS client's TLS through the FIPS 140-3 validated build of AWS-LC. This is
+# the TLS arm of the top-level `aws-lc-fips` feature on generated SDK crates and on `aws-config`;
+# signing and checksums are reached by other routes, since neither `aws-sigv4` nor
+# `aws-smithy-checksums` is a dependency of this crate.
+#
+# Named to match the generated SDK feature; `AwsFluentClientDecorator` says why it is not `fips`.
+#
+# The dependency reference is weak on purpose: it makes an `aws-smithy-http-client` build's TLS
+# FIPS without installing that client for a consumer who chose a different one.
+#
+# It covers the hyper 1.x rustls client only. The legacy client, which `connector-hyper-0-14-x`
+# selects whenever `default-https-client` is off and which a `BehaviorVersion` older than
+# v2026_01_12 selects regardless, is rustls 0.21 on `ring`; `client::defaults` warns when a FIPS
+# build resolves to it.
+aws-lc-fips = ["aws-smithy-http-client?/rustls-aws-lc-fips"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing

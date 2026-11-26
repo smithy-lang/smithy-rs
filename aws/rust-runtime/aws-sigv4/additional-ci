@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This script contains additional CI checks to run for this specific package
+
+set -e
+
+C_RED='\033[1;31m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+# `--cfg aws_sdk_fips_only` removes the RustCrypto backend, so that build needs an AWS-LC arm to
+# have any crypto at all. The `compile_error!` in `crypto.rs` makes the build that names neither
+# say what to do about it, ahead of the unresolved `crypto::` imports it also causes at the call
+# sites.
+#
+# No test can cover this: the trigger is a cfg-and-feature combination, and deleting the
+# `compile_error!` breaks no build.
+echo "### Checking that a build with no crypto backend explains itself"
+
+# Appended, not assigned: CI exports `RUSTFLAGS=-D warnings`, which assigning would drop.
+output="$(RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo check --color never --no-default-features --features sign-http,http1 2>&1 || true)"
+
+if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
+    echo -e "${C_RED}A build with no crypto backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
+    echo -e "${C_RED}naming the features that fix it. It did not. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
+
+# The diagnostic has to come first, which is the whole value of it: `rustc` reports a
+# `compile_error!` ahead of the unresolved imports that follow from the same missing backend, so
+# the consumer reads the actionable line rather than its consequences.
+#
+# `|| true` because under `set -e` a bare assignment from a failed command substitution ends the
+# script, printing nothing -- a CI failure with no diagnostic. `--color never` above is the other
+# half: cargo's colour codes sit in front of `error` and would stop this matching.
+first_error="$(grep -m1 '^error' <<<"${output}" || true)"
+if [[ -z "${first_error}" ]]; then
+    echo -e "${C_RED}No line of the output starts with \`error\`, so which diagnostic came first${C_RESET}" >&2
+    echo -e "${C_RED}could not be determined. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
+if ! grep -q "no AWS-LC backend is enabled" <<<"${first_error}"; then
+    echo -e "${C_RED}The crypto backend diagnostic must be the first error reported, but the first${C_RESET}" >&2
+    echo -e "${C_RED}error was:${C_RESET} ${first_error}" >&2
+    exit 1
+fi
+
+echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"
+
+# The RustCrypto backend is the default and this crate's `crypto/rustcrypto_impl.rs` is new, but no
+# other CI leg compiles it: they all test with `--all-features`, which enables an AWS-LC arm and
+# leaves that module out. `sigv4a` is named so that `sign::v4a`'s two signature-equality tests run,
+# which only exist on this backend -- AWS-LC randomizes its nonce, so they cannot compare bytes --
+# and which are what show the rewritten signing path still produces what the old one did.
+echo "### Running the test suite on the RustCrypto backend"
+cargo test --features sigv4a
+
+# Only this configuration drops `hmac` and `sha2` from the graph, so a reference to either from
+# outside the gated module -- a test target included, which is why `sha2` is also a dev-dependency
+# -- fails here and nowhere else. `check-fips-crypto-isolation` reads the graph with `cargo tree`
+# and never compiles it.
+#
+# The non-FIPS arm, which is also the only configuration that runs these tests against `aws-lc-sys`
+# rather than `aws-lc-fips-sys`. It exercises the same cfg gates for half the build time, since
+# `aws-lc-sys` needs neither CMake nor Go.
+echo "### Running the suite on AWS-LC with the RustCrypto crates dropped"
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo test --no-default-features \
+    --features sign-http,http1,sigv4a,aws-lc-rs

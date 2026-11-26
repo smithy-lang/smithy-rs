@@ -15,9 +15,11 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 [target.'cfg(target_family = "wasm")'.dependencies]
+# These tests stay on the RustCrypto backend, which is the default: aws-lc-rs supports neither
+# `wasm32-unknown-unknown` nor `wasm32-wasip1`.
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = [
     "rt-tokio",
-    "behavior-version-latest"
+    "behavior-version-latest",
 ] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }

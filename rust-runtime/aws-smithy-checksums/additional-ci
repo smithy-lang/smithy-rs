@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This script contains additional CI checks to run for this specific package
+
+set -e
+
+C_RED='\033[1;31m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+# `--cfg aws_sdk_fips_only` removes the RustCrypto backend, so that build needs an AWS-LC arm to
+# have any digests at all. The `compile_error!` in `crypto.rs` makes the build that names neither
+# say what to do about it, ahead of the unresolved `crypto::` imports it also causes at the call
+# sites.
+#
+# No test can cover this: the trigger is a cfg-and-feature combination, and deleting the
+# `compile_error!` breaks no build.
+echo "### Checking that a build with no digest backend explains itself"
+
+# Appended, not assigned: CI exports `RUSTFLAGS=-D warnings`, which assigning would drop.
+output="$(RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo check --color never --no-default-features 2>&1 || true)"
+
+if ! grep -q "no AWS-LC backend is enabled" <<<"${output}"; then
+    echo -e "${C_RED}A build with no digest backend must fail with the diagnostic from crypto.rs${C_RESET}" >&2
+    echo -e "${C_RED}naming the features that fix it. It did not. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
+
+# The diagnostic has to come first; see the equivalent check in `aws-sigv4`, including why this
+# grep needs `|| true` and why the cargo call above passes `--color never`.
+first_error="$(grep -m1 '^error' <<<"${output}" || true)"
+if [[ -z "${first_error}" ]]; then
+    echo -e "${C_RED}No line of the output starts with \`error\`, so which diagnostic came first${C_RESET}" >&2
+    echo -e "${C_RED}could not be determined. Output was:${C_RESET}" >&2
+    echo "${output}" >&2
+    exit 1
+fi
+if ! grep -q "no AWS-LC backend is enabled" <<<"${first_error}"; then
+    echo -e "${C_RED}The digest backend diagnostic must be the first error reported, but the first${C_RESET}" >&2
+    echo -e "${C_RED}error was:${C_RESET} ${first_error}" >&2
+    exit 1
+fi
+
+echo -e "${C_YELLOW}  ok: ${first_error}${C_RESET}"
+
+# The RustCrypto backend is the default and `crypto/rustcrypto_impl.rs` is new, but no other CI leg
+# compiles it: they all test with `--all-features`, which enables an AWS-LC arm and leaves that
+# module out. See the equivalent check in `aws-sigv4`.
+echo "### Running the test suite on the RustCrypto backend"
+cargo test
+
+# Only this configuration drops `md-5`, `sha1` and `sha2` from the graph, so a reference to any of
+# them from outside the gated module fails here and nowhere else. The non-FIPS arm is also the only
+# configuration that runs these tests against `aws-lc-sys`; see `aws-sigv4`'s copy.
+echo "### Running the suite on AWS-LC with the RustCrypto crates dropped"
+RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only" cargo test --features aws-lc-rs
