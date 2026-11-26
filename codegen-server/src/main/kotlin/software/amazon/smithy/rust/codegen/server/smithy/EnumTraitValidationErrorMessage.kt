@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.InternalTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 fun EnumTrait.validationErrorMessage() =
-    "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [${enumValueSet()}]"
+    "Value at '{path}' failed to satisfy constraint: Member must satisfy enum value set: [${enumValueSet()}]"
 
 fun EnumTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     "Value provided for '${shape.id}' failed to satisfy constraint: Member must satisfy enum value set: [${enumValueSet()}]"
