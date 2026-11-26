@@ -217,6 +217,10 @@ impl HttpClient for FallbackHttpClient {
 /// reason as [`FallbackHttpClient`]: that runs for every client and every operation build, ahead
 /// of the caller's own components, so a caller who overrides `http_client` would be told their
 /// TLS is not FIPS when their own client serves the traffic.
+///
+/// Every method must forward to `inner`, including ones `HttpClient` gains later: the legacy
+/// client loads native certs in `validate_base_client_config`, so answering for it defers that
+/// to the first request.
 #[cfg(all(feature = "connector-hyper-0-14-x", feature = "aws-lc-fips"))]
 #[derive(Debug)]
 struct NonFipsLegacyTlsClient {
