@@ -51,6 +51,9 @@
 //!   cargo build --no-default-features --features sign-http,http1,aws-lc-rs-fips
 //! ```
 //!
+//! `RUSTFLAGS` overrides `.cargo/config.toml`'s `[build] rustflags` rather than adding to it, so
+//! append where a pipeline already sets one: `RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only"`.
+//!
 //! A Cargo feature could not do this: features are additive, so "RustCrypto unless AWS-LC" cannot
 //! be expressed as one. `RUSTFLAGS` is global, so one flag also covers `aws-smithy-checksums`.
 //!

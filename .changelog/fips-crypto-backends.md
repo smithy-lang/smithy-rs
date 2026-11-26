@@ -22,6 +22,15 @@ That routes the cryptography through the validated module but leaves the RustCry
 RUSTFLAGS="--cfg aws_sdk_fips_only" cargo build
 ```
 
+Or, to check it in, `.cargo/config.toml`:
+
+```toml
+[build]
+rustflags = ["--cfg", "aws_sdk_fips_only"]
+```
+
+**These two are alternatives, not additive.** Cargo takes the highest-precedence flag source and ignores the rest, so a `RUSTFLAGS` in the environment -- the `-D warnings` many pipelines set -- silently disables the config form: the build succeeds and `hmac` and `sha2` are back in the graph. Where a pipeline already sets `RUSTFLAGS`, append rather than assign, with `RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_fips_only"`.
+
 `hmac`, `sha2`, `sha1` and `md-5` are declared under `cfg(not(aws_sdk_fips_only))` in `aws-sigv4` and `aws-smithy-checksums`, so that flag drops them from the build and from `cargo tree -e normal`. (`aws-sigv4` also lists `sha2` as a dev-dependency for one test, so a plain `cargo tree` still shows it.) `RUSTFLAGS` is global, so one flag covers both crates; it is a cfg rather than a feature because features are additive, and "RustCrypto unless AWS-LC" cannot be expressed as one. On a service crate, also omit `rustls` when you turn default features off: that is the *legacy* TLS stack and pulls `ring` in. `aws-config`'s `rustls` is a synonym for `default-https-client` and is unaffected; its legacy stack is `legacy-client`.
 
 Two cases stay regardless, neither of which signs a request or computes a checksum: `sigv4a` declares `p256` and `ecdsa`, which bring `sha2` and `hmac` with them but are never called because the backend they serve isn't compiled, and `aws-sdk-s3` declares `hmac` and `sha2` to key an in-memory cache, which obfuscates rather than protects.
