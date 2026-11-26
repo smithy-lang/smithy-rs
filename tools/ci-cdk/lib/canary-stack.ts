@@ -19,7 +19,7 @@ import {
 import { CfnDirectoryBucket } from "aws-cdk-lib/aws-s3express";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { GitHubOidcRole } from "./constructs/github-oidc-role";
+import { GitHubOidcRole, jobWorkflowRef } from "./constructs/github-oidc-role";
 
 /**
  * The namespace `canary-runner` writes this canary's metrics to.
@@ -40,6 +40,24 @@ export interface OidcProps {
     /** The repository's numeric id. Immutable, and what the trust policy authorises on. */
     roleGithubRepoId: string;
     provider: OpenIdConnectProvider;
+    /**
+     * Only let jobs defined by these workflows assume the role, as bare filenames.
+     *
+     * Without it the role is assumable by every job in the repository that holds
+     * `id-token: write`, this one included: the canary's own matrix builds crates from the open
+     * internet, and `ci.yml` builds a pull request's code. The role grants Lambda
+     * create/invoke/delete, so the set of jobs that can take it is worth stating.
+     *
+     * Filenames rather than full claim patterns, so the organisation and repository come from the
+     * same props that authorise the role and a caller cannot pin another repository's workflow by
+     * mistake.
+     *
+     * Optional because the two deployments differ: this repository's workflows are in this
+     * repository, where a rename is visible, while the SDK's canary role is assumed by workflows in
+     * the SDK's own repository. Leaving it unset there is not a gap -- that role is conditioned on
+     * the SDK repository's id, so no token minted here satisfies it.
+     */
+    jobWorkflows?: string[];
 }
 
 export interface Properties extends StackProps {
@@ -69,13 +87,17 @@ export class CanaryStack extends Stack {
         Tags.of(this).add("stack", id);
 
         if (props.oidcProps) {
-            this.githubOidcRole = new GitHubOidcRole(this, props.oidcProps.roleId, {
-                name: props.oidcProps.roleName,
-                githubOrg: props.oidcProps.roleGithubOrg,
-                githubRepo: props.oidcProps.roleGithubRepo,
-                githubOrgId: props.oidcProps.roleGithubOrgId,
-                githubRepoId: props.oidcProps.roleGithubRepoId,
-                oidcProvider: props.oidcProps.provider,
+            const oidc = props.oidcProps;
+            this.githubOidcRole = new GitHubOidcRole(this, oidc.roleId, {
+                name: oidc.roleName,
+                githubOrg: oidc.roleGithubOrg,
+                githubRepo: oidc.roleGithubRepo,
+                githubOrgId: oidc.roleGithubOrgId,
+                githubRepoId: oidc.roleGithubRepoId,
+                oidcProvider: oidc.provider,
+                jobWorkflowRefs: oidc.jobWorkflows?.map((workflow) =>
+                    jobWorkflowRef(oidc.roleGithubOrg, oidc.roleGithubRepo, workflow),
+                ),
             });
 
             // Grant permission to create/invoke/delete a canary Lambda

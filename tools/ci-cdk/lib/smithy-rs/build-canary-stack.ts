@@ -5,7 +5,7 @@
 
 import { Effect, OpenIdConnectProvider, PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { ArnFormat, CfnOutput, Stack, StackProps, Tags } from "aws-cdk-lib";
-import { GitHubOidcRole } from "../constructs/github-oidc-role";
+import { GitHubOidcRole, jobWorkflowRef } from "../constructs/github-oidc-role";
 import { SMITHY_RS } from "../github-repositories";
 import { Construct } from "constructs";
 
@@ -96,24 +96,9 @@ export const RELEASE_TAG_REFS = RELEASE_REFS.filter((ref) => ref !== MAIN_REF);
 export const LEG_WORKFLOW = "build-canary.yml";
 export const ORCHESTRATOR_WORKFLOWS = ["post-publish-watch.yml", "paging-selftest.yml"];
 
-/**
- * The `job_workflow_ref` pattern for one workflow, at any ref.
- *
- * `@*` deliberately, rather than repeating the tag shape here. The claim is
- * `OWNER/REPO/.github/workflows/FILE@REF`, so pinning the ref inside it would state a second time
- * what the `ref` condition already states — and it would make the tag shape depend on how GitHub
- * renders a ref inside this particular claim, which is the part of its format least worth betting
- * on. Each condition does one job instead: `ref` bounds *where* a job ran, this bounds *which
- * workflow* defines it, and together they admit the same set.
- *
- * Safe because none of these workflows is a `workflow_call`. For a job in a reusable workflow the
- * claim names the reusable file at the ref *it* was called at, which can differ from the run's
- * `ref`; for a top-level job the two always agree. If a leg ever moved into a reusable workflow the
- * claim would name that file, this pattern would refuse it, and the symptom would be a credentials
- * error rather than a silent widening.
- */
-export const jobWorkflowRef = (workflow: string): string =>
-    `${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}/.github/workflows/${workflow}@*`;
+/** One of this repository's workflows, as a `job_workflow_ref` pattern. */
+const workflowRef = (workflow: string): string =>
+    jobWorkflowRef(SMITHY_RS.githubOrg, SMITHY_RS.githubRepo, workflow);
 
 export interface Properties extends StackProps {
     githubActionsOidcProvider: OpenIdConnectProvider;
@@ -172,7 +157,7 @@ export class BuildCanaryStack extends Stack {
             // and paging the oncall over a pull request. Anything of the canary's that legitimately
             // runs from `main` uses the orchestrator role below, which is environment-gated.
             refs: RELEASE_TAG_REFS,
-            jobWorkflowRefs: [jobWorkflowRef(LEG_WORKFLOW)],
+            jobWorkflowRefs: [workflowRef(LEG_WORKFLOW)],
         });
         this.metricsRole.oidcRole.addToPolicy(
             new PolicyStatement({
@@ -199,7 +184,7 @@ export class BuildCanaryStack extends Stack {
             refs: RELEASE_REFS,
             // Two workflows define the orchestrator's jobs, so both are listed. `build-canary.yml`
             // is deliberately not among them: a leg must never reach the role that deletes alarms.
-            jobWorkflowRefs: ORCHESTRATOR_WORKFLOWS.map(jobWorkflowRef),
+            jobWorkflowRefs: ORCHESTRATOR_WORKFLOWS.map(workflowRef),
         });
         this.orchestratorRole.oidcRole.addToPolicy(
             new PolicyStatement({

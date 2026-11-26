@@ -15,6 +15,7 @@ import { BuildCanaryStack } from "../../lib/smithy-rs/build-canary-stack";
 import { CanaryStack, OidcProps } from "../../lib/canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 import { SMITHY_RS } from "../../lib/github-repositories";
+import { CANARY_WORKFLOW, MANUAL_CANARY_WORKFLOW } from "../../lib/smithy-rs/workflows";
 
 const app = new App({});
 const env = { region: "us-west-2" };
@@ -33,6 +34,12 @@ const oidcProps: OidcProps = {
     roleGithubOrgId: SMITHY_RS.githubOrgId,
     roleGithubRepoId: SMITHY_RS.githubRepoId,
     provider: githubActionsOidcProvider,
+    // The two workflows that assume this role: `ci.yml` runs the canary on a pull request, and
+    // `manual-canary.yml` is the maintainer-triggered and fork entry point. Both hold
+    // `id-token: write` while a pull request's code is checked out, which is this role's purpose
+    // and not what the condition is for -- it is for every *other* job in the repository that
+    // holds `id-token: write`, the build canary's matrix included.
+    jobWorkflows: [CANARY_WORKFLOW, MANUAL_CANARY_WORKFLOW],
 };
 
 new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
@@ -56,12 +63,12 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
 // to this stack, and the provider is already deployed — the roles the existing workflows assume
 // could not work otherwise.
 //
-// Both of this stack's roles also condition on `job_workflow_ref`, which no local check can
-// exercise: if GitHub does not set that claim for these jobs, or sets it in a shape these patterns
-// do not match, the roles become unassumable. That fails closed -- nothing is admitted wrongly --
-// and it surfaces as a credentials error on the first canary run after the secrets are set, not at
-// deploy time. So the first dispatch of `build-canary.yml` is part of the verification, not a
-// formality.
+// Every role these three stacks deploy conditions on `job_workflow_ref`, and no local check can
+// exercise it: if GitHub does not set that claim for these jobs, or sets it in a shape the patterns
+// do not match, the role becomes unassumable. That fails closed -- nothing is admitted wrongly --
+// and it surfaces as a credentials error on the first run that needs the role, not at deploy time.
+// So the first dispatch of `build-canary.yml` is part of the verification rather than a formality,
+// and so is each check below.
 //
 // `smithy-rs-canary-stack` needs deploying too, also `--exclusively`, and that one is the risk.
 // It confines the SDK canary's role to the SDK canary's own metric namespace — until it is
@@ -70,12 +77,15 @@ new CanaryStack(app, "smithy-rs-canary-stack", {
 // deploy also restores the EC2 actions the paginator canary calls, which the policy in
 // `canary-stack.ts` had narrowed away. But it rewrites a *live* role's trust policy too, because
 // `GitHubOidcRole` is shared: `smithy-rs-canary-github-oidc-role` gains exact
-// `repository_owner_id` and `repository_id` conditions it has never had, and every pull request's
-// canary job assumes it. Verify by dispatching `manual-canary.yml` on a pull request straight
-// afterwards; that is the path the new conditions would break.
+// `repository_owner_id` and `repository_id` conditions it has never had, and a `job_workflow_ref`
+// pin to the two workflows that assume it. Every pull request's canary job assumes that role.
+// Dispatching `manual-canary.yml` on a pull request straight afterwards exercises one of the two;
+// `ci.yml` is the other, and the next pull request covers it. Both are paths the new conditions
+// would break.
 //
 // `smithy-rs-pull-request-cdn-stack` carries the *same* trust rewrite on
-// `smithy-rs-pull-request-github-oidc-role`, so it carries the same risk and needs the same check.
+// `smithy-rs-pull-request-github-oidc-role`, down to the `job_workflow_ref` pin, so it carries the
+// same risk and needs the same check.
 // Its check is cheaper, though: the role is assumed in `pull-request-bot.yml`, which is a
 // `workflow_call` reachable from `manual-pull-request-bot.yml` *and* from `ci-pr.yml` on every
 // pull request. So the next pull request after that deploy exercises it without anyone dispatching

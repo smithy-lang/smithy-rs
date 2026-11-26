@@ -17,14 +17,7 @@ import {
 } from "../../lib/smithy-rs/build-canary-stack";
 import { OidcProviderStack } from "../../lib/oidc-provider-stack";
 import { SMITHY_RS } from "../../lib/github-repositories";
-
-const CLAIM = "token.actions.githubusercontent.com";
-
-interface Statement {
-    Action: string | string[];
-    Resource?: string | string[];
-    Condition?: Record<string, Record<string, string | string[]>>;
-}
+import { CLAIM, Statement, admits, claimsFor, trustStatements } from "../oidc-claims";
 
 function synth(): Template {
     const app = new App();
@@ -57,78 +50,11 @@ function trustFor(
     return roles[0].Properties.AssumeRolePolicyDocument.Statement[0].Condition;
 }
 
-/** Every trust statement on the role whose name ends in `suffix`, in order. */
-function trustStatements(template: Template, suffix: string): Statement[] {
-    const roles = Object.values(template.findResources("AWS::IAM::Role")).filter((r) =>
-        String(r.Properties.RoleName).includes(`-${suffix}-`),
-    );
-    expect(roles).toHaveLength(1);
-    return roles[0].Properties.AssumeRolePolicyDocument.Statement;
-}
-
-/** A job's OIDC claims, as the provider presents them. */
-type Claims = Record<string, string>;
-
 const RELEASE_TAG = "refs/tags/release-2026-11-16";
 
-/** The claims a job in this repository presents, optionally declaring an environment. */
-/**
- * The claims GitHub puts in a token for a job at `ref`, in `workflow`.
- *
- * `workflow` defaults to the leg's, because most cases here model a leg. Every token carries
- * `job_workflow_ref` -- GitHub sets it for ordinary jobs, not only for reusable workflows -- so a
- * test that omitted it would be modelling a token that does not exist, and would pass against a
- * role it should not be able to assume.
- */
-function token(ref: string, environment?: string, workflow: string = LEG_WORKFLOW): Claims {
-    const claims: Claims = {
-        [`${CLAIM}:aud`]: "sts.amazonaws.com",
-        [`${CLAIM}:repository_owner_id`]: SMITHY_RS.githubOrgId,
-        [`${CLAIM}:repository_id`]: SMITHY_RS.githubRepoId,
-        [`${CLAIM}:sub`]: `repo:${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}:ref:${ref}`,
-        [`${CLAIM}:ref`]: ref,
-        [`${CLAIM}:job_workflow_ref`]: `${SMITHY_RS.githubOrg}/${SMITHY_RS.githubRepo}/.github/workflows/${workflow}@${ref}`,
-    };
-    if (environment !== undefined) {
-        claims[`${CLAIM}:environment`] = environment;
-    }
-    return claims;
-}
-
-const escapeRegExp = (literal: string): string => literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/**
- * Whether any of a role's trust statements admits these claims.
- *
- * A small evaluator rather than assertions on the rendered JSON, because what this stack's security
- * turns on is whether a given token can assume a given role, and a condition block read side by
- * side does not answer that. A condition on a claim the token does not carry matches nothing, which
- * is how IAM behaves and is the direction that matters.
- */
-function admits(statements: Statement[], claims: Claims): boolean {
-    // IAM's StringLike: `*` is any sequence of characters, `?` is exactly one. The `?` matters
-    // here -- it is what makes `release-????-??-??` admit a date and refuse `release-test`.
-    const like = (pattern: string, value: string): boolean => {
-        const expression = [...pattern]
-            .map((c) => (c === "*" ? ".*" : c === "?" ? "." : escapeRegExp(c)))
-            .join("");
-        return new RegExp(`^${expression}$`).test(value);
-    };
-
-    return statements.some((statement) => {
-        const condition = statement.Condition ?? {};
-        for (const [key, want] of Object.entries(condition.StringEquals ?? {})) {
-            if (claims[key] !== want) return false;
-        }
-        for (const [key, want] of Object.entries(condition.StringLike ?? {})) {
-            const value = claims[key];
-            if (value === undefined) return false;
-            const patterns = Array.isArray(want) ? want : [want];
-            if (!patterns.some((pattern) => like(pattern, value))) return false;
-        }
-        return true;
-    });
-}
+/** A leg's claims, unless another workflow is named. */
+const token = (ref: string, environment?: string, workflow: string = LEG_WORKFLOW) =>
+    claimsFor(SMITHY_RS, ref, workflow, environment);
 
 const actionsOf = (statements: Statement[]): string[] =>
     statements.flatMap((s) => (Array.isArray(s.Action) ? s.Action : [s.Action]));

@@ -15,6 +15,26 @@ import { Tags } from "aws-cdk-lib";
 /** The OIDC provider's claims appear as IAM condition keys under this prefix. */
 const CLAIM = "token.actions.githubusercontent.com";
 
+/**
+ * The `job_workflow_ref` claim pattern for one of a repository's workflows, at any ref.
+ *
+ * `ref` bounds *where* a job ran, which is not the same as *which workflow* it belongs to: every
+ * workflow in a repository can run from the same ref, so a role conditioned on the repository alone
+ * is assumable by every job in it that holds `id-token: write`.
+ *
+ * `@*` deliberately, rather than repeating a ref pattern. The claim is
+ * `OWNER/REPO/.github/workflows/FILE@REF`, so pinning the ref inside it would state a second time
+ * whatever the `ref` condition states, and would make that bound depend on how GitHub renders a ref
+ * inside this particular claim -- the part of its format least worth betting on.
+ *
+ * For a job defined in a reusable workflow the claim names the *called* file, at the ref it was
+ * called at; `workflow` and `ref` describe the caller. So this pins where a job is written, not how
+ * it was reached, which is what makes one pattern cover a workflow that is both dispatched directly
+ * and called by another.
+ */
+export const jobWorkflowRef = (githubOrg: string, githubRepo: string, workflow: string): string =>
+    `${githubOrg}/${githubRepo}/.github/workflows/${workflow}@*`;
+
 export interface Properties {
     name: string;
     githubOrg: string;
