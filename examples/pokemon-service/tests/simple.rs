@@ -100,10 +100,12 @@ async fn simple_integration_test() {
 async fn health_check() {
     let server = common::run_server().await;
 
-    let url = common::base_url(server.port) + "/ping";
+    let url = common::base_url(server.port) + "/health";
     let uri = url.parse::<hyper::Uri>().expect("invalid URL");
 
-    // Use a regular Hyper client with the REST JSON identification header.
+    // `/health` is served by the `AlbHealthCheckLayer` wrapping the router, and is not a modeled
+    // operation, so we use a regular Hyper HTTP client, with the REST JSON identification header,
+    // to make a request to it.
     let request = hyper::Request::builder()
         .uri(uri)
         .header("content-type", "application/json")
