@@ -362,12 +362,10 @@ jobs:
           action-arguments: featureset 4/4
           label: check-aws-config-featureset-4
           runner: smithy_ubuntu-latest_8-core
-          # This action runs `cargo hack` over aws-config's feature powerset, so
-          # its runtime doubles with every feature added to the crate. Adding
-          # `legacy-client` (#4755) took it from 80 to 160 feature combinations
-          # and pushed it past the default 45 minutes: observed runs have
-          # completed in ~43.5 minutes and been killed at the 45 minute cap. It also hangs
-          # intermittently; the extra 5 minutes lets the action timeout report the hung processes.
+          # This action runs `cargo hack` over aws-config's feature powerset, so its runtime doubles
+          # with every feature added to the crate; `check-aws-config` excludes the ones that gate no
+          # code to hold that down. Above the matrix default because the job also hangs
+          # intermittently, and the headroom lets the action timeout report the hung processes.
           timeout: 65
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core

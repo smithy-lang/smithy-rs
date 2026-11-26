@@ -14,6 +14,10 @@ rust-version = "1.94.1"
 default = []
 client = []
 http-auth = ["dep:zeroize"]
+# Deprecated no-op: #4755 added it as a placeholder gating no code, and nothing reads it now. Stays
+# declared because published `aws-smithy-runtime` 1.14.0 through 1.16.4 all name it in `tls-rustls`, so
+# removing it fails resolution for anyone resolving one of those. Stays `["client"]` only so that enabling
+# this feature alone keeps compiling; nothing here needs that, since every dependant enables `client` itself.
 legacy-client = ["client"]
 test-util = ["aws-smithy-types/test-util", "http-1x"]
 http-02x = ["dep:http-02x"]

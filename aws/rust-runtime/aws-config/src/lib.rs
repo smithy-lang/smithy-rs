@@ -37,7 +37,7 @@
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_defaults(BehaviorVersion::v2023_11_09()).await;
+//! let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -197,7 +197,7 @@ pub async fn load_from_env() -> SdkConfig {
 /// ```no_run
 /// # async fn create_config() {
 /// use aws_config::BehaviorVersion;
-/// let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+/// let config = aws_config::defaults(BehaviorVersion::latest())
 ///     .region("us-east-1")
 ///     .load()
 ///     .await;

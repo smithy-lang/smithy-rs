@@ -1,0 +1,19 @@
+[package]
+name = "no-http-02x"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = """
+Pins the dependency tree a consumer gets from the SDK with default features. CI resolves this
+crate's lockfile and fails if `http` 0.2.x appears in it, which catches a regression from any
+runtime crate rather than only from the codegen that sets the HTTP-client features.
+"""
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+# Normal dependencies, not dev-dependencies: the point is the tree a consumer resolves, and cargo
+# does not resolve a dependency's dev-dependencies. Default features on purpose.
+[dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }

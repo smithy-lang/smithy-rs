@@ -14,4 +14,6 @@ set -e
 # RUSTDOCFLAGS="" cargo +"${RUST_NIGHTLY_VERSION}" check-external-types --config external-types-no-http.toml --no-default-features
 
 echo "### Testing every combination of features (excluding --all-features)"
-cargo hack test --feature-powerset --exclude-all-features
+# `legacy-client` is a deprecated no-op that gates no code, so combinations containing it add
+# nothing but build time.
+cargo hack test --feature-powerset --exclude-all-features --exclude-features legacy-client
