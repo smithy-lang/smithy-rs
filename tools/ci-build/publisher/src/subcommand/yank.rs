@@ -281,6 +281,7 @@ mod tests {
         sent: Mutex<Vec<String>>,
         lag: usize,
         pending: Mutex<HashMap<String, (bool, usize)>>,
+        index_down: bool,
     }
 
     impl FakeRegistry {
@@ -291,11 +292,18 @@ mod tests {
                 sent: Mutex::new(Vec::new()),
                 lag: 0,
                 pending: Mutex::new(HashMap::new()),
+                index_down: false,
             }
         }
 
         fn with_lag(mut self, reads: usize) -> FakeRegistry {
             self.lag = reads;
+            self
+        }
+
+        /// Once a yank is sent, every index read fails.
+        fn index_down_after_yank(mut self) -> FakeRegistry {
+            self.index_down = true;
             self
         }
 
@@ -311,11 +319,19 @@ mod tests {
         fn sent(&self) -> Vec<String> {
             self.sent.lock().unwrap().clone()
         }
+
+        /// Whether the index shows `krate` yanked now, without counting as a read.
+        fn shown(&self, krate: &str) -> bool {
+            self.yanked.lock().unwrap()[krate]
+        }
     }
 
     #[async_trait]
     impl Registry for FakeRegistry {
         async fn is_yanked(&self, krate: &CrateVersion) -> Result<bool> {
+            if self.index_down && !self.sent.lock().unwrap().is_empty() {
+                bail!("index unavailable");
+            }
             let key = krate.to_string();
             let mut pending = self.pending.lock().unwrap();
             if let Some((new, reads_left)) = pending.get_mut(&key) {
@@ -368,7 +384,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn yanks_in_the_given_order_and_skips_versions_already_yanked() {
         let registry =
             FakeRegistry::new(&[("a@1.0.0", false), ("b@1.0.0", true), ("c@1.0.0", false)]);
@@ -378,7 +394,7 @@ mod tests {
         assert_eq!(vec!["yank c@1.0.0", "yank a@1.0.0"], registry.sent());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn checks_every_version_before_yanking_any() {
         let registry = FakeRegistry::new(&[("a@1.0.0", false)]);
         let err = run(&registry, &args(&["a@1.0.0", "a@1.0.1"]), false)
@@ -388,7 +404,7 @@ mod tests {
         assert!(registry.sent().is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn stops_at_the_first_error_and_names_what_is_not_done() {
         let registry =
             FakeRegistry::new(&[("a@1.0.0", false), ("b@1.0.0", false), ("c@1.0.0", false)])
@@ -402,7 +418,7 @@ mod tests {
         assert_eq!(vec!["yank a@1.0.0", "yank b@1.0.0"], registry.sent());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn does_nothing_and_asks_nothing_when_every_version_is_done() {
         let registry = FakeRegistry::new(&[("a@1.0.0", true)]);
         let mut args = args(&["a@1.0.0"]);
@@ -411,16 +427,39 @@ mod tests {
         assert!(registry.sent().is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn dry_run_sends_nothing() {
-        let registry = FakeRegistry::new(&[("a@1.0.0", false)]);
-        let mut args = args(&["a@1.0.0"]);
-        args.dry_run = true;
-        run(&registry, &args, false).await.unwrap();
-        assert!(registry.sent().is_empty());
+        for undo in [false, true] {
+            // The version starts in the other state, so there is something to do.
+            let registry = FakeRegistry::new(&[("a@1.0.0", undo)]);
+            let mut args = args(&["a@1.0.0"]);
+            args.dry_run = true;
+            args.undo = undo;
+            run(&registry, &args, false).await.unwrap();
+            assert!(registry.sent().is_empty(), "undo: {undo}");
+        }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
+    async fn yanks_every_listed_version_of_one_crate() {
+        let registry = FakeRegistry::new(&[("a@1.0.0", false), ("a@1.0.1", false)]);
+        run(&registry, &args(&["a@1.0.0", "a@1.0.1"]), false)
+            .await
+            .unwrap();
+        assert_eq!(vec!["yank a@1.0.0", "yank a@1.0.1"], registry.sent());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn fails_when_the_index_cannot_be_read_after_the_yank() {
+        let registry = FakeRegistry::new(&[("a@1.0.0", false)]).index_down_after_yank();
+        let err = run(&registry, &args(&["a@1.0.0"]), false)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("index unavailable"), "{err}");
+        assert_eq!(vec!["yank a@1.0.0"], registry.sent());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn without_y_and_without_a_terminal_refuses_instead_of_waiting() {
         let registry = FakeRegistry::new(&[("a@1.0.0", false)]);
         let mut args = args(&["a@1.0.0"]);
@@ -430,7 +469,7 @@ mod tests {
         assert!(registry.sent().is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn undo_unyanks_only_versions_that_are_yanked() {
         let registry = FakeRegistry::new(&[("a@1.0.0", true), ("b@1.0.0", false)]);
         let mut args = args(&["a@1.0.0", "b@1.0.0"]);
@@ -497,6 +536,12 @@ mod tests {
                 .registry
                 .as_deref()
         );
+        assert_eq!(
+            None,
+            YankArgs::try_parse_from(["yank", "a@1.0.0"])
+                .unwrap()
+                .registry
+        );
         // A version list is required, and every entry must be name@version.
         assert!(YankArgs::try_parse_from(["yank", "-y"]).is_err());
         assert!(YankArgs::try_parse_from(["yank", "-y", "aws-smithy-types"]).is_err());
@@ -548,6 +593,17 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn retries_after_a_second_when_the_rate_limit_time_has_passed() {
+        let a_minute_ago = httpdate::fmt_http_date(SystemTime::now() - Duration::from_secs(60));
+        let registry = FakeRegistry::new(&[("a@1.0.0", false)])
+            .failing("a@1.0.0", &[&rate_limited(&a_minute_ago)]);
+        let start = tokio::time::Instant::now();
+        run(&registry, &args(&["a@1.0.0"]), false).await.unwrap();
+        assert_eq!(vec!["yank a@1.0.0", "yank a@1.0.0"], registry.sent());
+        assert_eq!(Duration::from_secs(1), start.elapsed());
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn waits_until_the_index_shows_the_change() {
         let registry = FakeRegistry::new(&[("a@1.0.0", false)]).with_lag(3);
         let start = tokio::time::Instant::now();
@@ -555,6 +611,26 @@ mod tests {
         // Three reads still show the old state, one poll interval apart.
         assert_eq!(3 * INDEX_POLL_INTERVAL, start.elapsed());
         assert_eq!(vec!["yank a@1.0.0"], registry.sent());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn waits_until_the_index_shows_every_version() {
+        let registry = FakeRegistry::new(&[("a@1.0.0", false), ("b@1.0.0", false)]).with_lag(3);
+        run(&registry, &args(&["a@1.0.0", "b@1.0.0"]), false)
+            .await
+            .unwrap();
+        assert!(registry.shown("a@1.0.0") && registry.shown("b@1.0.0"));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn undo_waits_until_the_index_shows_the_change() {
+        let registry = FakeRegistry::new(&[("a@1.0.0", true)]).with_lag(3);
+        let mut args = args(&["a@1.0.0"]);
+        args.undo = true;
+        let start = tokio::time::Instant::now();
+        run(&registry, &args, false).await.unwrap();
+        assert_eq!(3 * INDEX_POLL_INTERVAL, start.elapsed());
+        assert!(!registry.shown("a@1.0.0"));
     }
 
     #[tokio::test(start_paused = true)]

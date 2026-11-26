@@ -145,11 +145,17 @@ mod tests {
 
     #[tokio::test]
     async fn registry_passes_registry_only_when_set() {
-        let yank = |registry: Option<&str>| Yank {
-            program: "./fake_cargo/cargo_expects_registry",
+        let yank = |program, registry: Option<&str>| Yank {
+            program,
             ..Yank::new("aws-smithy-types", "1.7.0").registry(registry.map(String::from))
         };
-        yank(Some("mock")).spawn().await.unwrap();
-        assert!(yank(None).spawn().await.is_err());
+        yank("./fake_cargo/cargo_expects_registry", Some("mock"))
+            .spawn()
+            .await
+            .unwrap();
+        yank("./fake_cargo/cargo_expects_plain_yank", None)
+            .spawn()
+            .await
+            .unwrap();
     }
 }
