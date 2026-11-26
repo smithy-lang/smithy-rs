@@ -99,9 +99,10 @@ fun MemberShape.enforceRequired(
         )
     val unwrapped =
         when (codegenContext.model.expectShape(this.target)) {
+            // Only an empty string counts as unset. A whitespace-only value such as the S3 key " " is valid.
             is StringShape ->
                 writable {
-                    rust("#T.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())", field)
+                    rust("#T.filter(|f|!AsRef::<str>::as_ref(f).is_empty())", field)
                 }
 
             else -> field
