@@ -395,19 +395,12 @@ jobs:
       # reaches AWS, which is why every input below arrives through `env`.
       id-token: write
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    # A pattern matching nothing downloads nothing and succeeds. That is what a run whose legs were
-    # all superseded looks like: they upload no evidence, and they reached no verdict to record.
-    - name: Download every leg's report
-      uses: actions/download-artifact@v4
-      with:
-        pattern: evidence-*
-        path: ${{ runner.temp }}/reports
-
+    # The credential comes first, ahead of every step that can fail, because "Report that nothing
+    # was recorded" at the end of this job needs one. A download or a compile that fails with the
+    # role still unassumed would leave this job red and the release unreported -- which is the one
+    # outcome the canary exists to rule out. Neither of these two steps reads the repository, so
+    # nothing stops them running before the checkout.
+    #
     # Off until the role is configured, so this is inert before the stack is deployed. Reads the
     # secret through a step output rather than an `if:` on the secret itself, because an empty
     # `role-to-assume` fails the credentials action rather than skipping it.
@@ -432,6 +425,21 @@ jobs:
         role-to-assume: ${{ secrets.BUILD_CANARY_METRICS_ROLE_ARN }}
         aws-region: us-west-2
 
+    - uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    # A pattern matching nothing downloads nothing and succeeds. That is what a run whose legs were
+    # all superseded looks like: they upload no evidence, and they reached no verdict to record. So
+    # an empty download is not a failure here, and the step below it records nothing -- which is
+    # also why the last step's `failure()` does not fire on a superseded release.
+    - name: Download every leg's report
+      uses: actions/download-artifact@v4
+      with:
+        pattern: evidence-*
+        path: ${{ runner.temp }}/reports
+
     # A green leg and a superseded one record nothing, which is what the alarm's `notBreaching`
     # treatment turns back into OK -- a zero would make "it passed" indistinguishable from "it died
     # without reporting".
@@ -440,6 +448,7 @@ jobs:
     # unchecked on the series the release alarm already watches. Putting forty verdicts behind one
     # job is what makes that reachable, so it is this job's to report.
     - name: Record the verdict
+      id: record
       if: steps.metrics.outputs.configured == 'true'
       working-directory: tools/ci-build/canary
       env:
@@ -463,3 +472,77 @@ jobs:
           --stable "${STABLE}" \
           --msrv "${MSRV}" \
           --payload-dir "${RUNNER_TEMP}/metric"
+
+    # The last resort, and the reason the credential is taken first.
+    #
+    # Every step above can fail, and a job that fails before it has written a datapoint leaves the
+    # release unreported: forty verdicts, a red one possibly among them, visible only as a red job
+    # in a tab nobody is watching. `record-verdicts` reports what it can read and cannot write, but
+    # it cannot report never having run.
+    #
+    # So this depends on nothing the steps above provide -- no repository, no toolchain, no cargo,
+    # no report. The AWS CLI is on the runner image, which the orchestrator's alarm steps already
+    # rely on, and the credential is already assumed.
+    #
+    # Keyed on the recording step's own conclusion, deliberately not on `failure()`. `failure()` is
+    # true when an *ancestor job* failed, and `leg` fails whenever a leg reached a hard verdict --
+    # so a real break would bring this step out on every release and stamp a ticket that correctly
+    # blames a crate with a second datapoint saying the recorder gave up. The condition has to
+    # distinguish "nothing was recorded" from "something red was recorded", and only this job's own
+    # steps can.
+    #
+    # `!cancelled()` rather than `always()` to override the implicit `success()`, so the conclusion
+    # below does the gating: `success` stays quiet, `skipped` means an earlier step failed and the
+    # recorder never ran, `failure` means it ran and could not finish. A skipped step reads as an
+    # empty conclusion if it is absent from the context at all, which is also not `success` -- so
+    # the condition holds either way.
+    #
+    # An all-superseded release does not reach here: its download matched nothing and succeeded, and
+    # the recorder then exits zero having found no verdict to write.
+    - name: Report that nothing was recorded
+      if: ${{ !cancelled() && steps.metrics.outputs.configured == 'true' && steps.record.conclusion != 'success' }}
+      env:
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+
+        # Outside a release there is no `Tag` to carry, and that dimension is the series identity.
+        if [[ -z "${TAG}" ]]; then
+          echo "::notice title=No tag::these legs ran outside a release, so there is no series to write"
+          exit 0
+        fi
+
+        # The first datapoint *is* a leg's alarmed series, which is what makes one alarm cover both
+        # a broken crate and a release nobody could report on. The second says which component gave
+        # up. `the_last_resort_writes_the_series_a_leg_writes` in `tests/workflows.rs` runs this
+        # against the crate's own emitter and compares, because a dimension out of place here is a
+        # datapoint written where no alarm is looking.
+        PAYLOAD="${RUNNER_TEMP}/unchecked.json"
+        python3 - "${TAG}" > "$PAYLOAD" <<'PY'
+        import json, sys
+
+        tag = sys.argv[1]
+
+        def point(dimensions):
+            return {
+                "MetricName": "Red",
+                "Value": 1.0,
+                "Unit": "Count",
+                "Dimensions": [{"Name": n, "Value": v} for n, v in dimensions],
+            }
+
+        json.dump(
+            [
+                point([("Tag", tag)]),
+                point([("Tag", tag), ("Component", "verdicts"), ("Reason", "recorder-failed")]),
+            ],
+            sys.stdout,
+        )
+        PY
+
+        aws cloudwatch put-metric-data \
+          --namespace smithy-rs-build-canary \
+          --metric-data "file://${PAYLOAD}"
+
+        echo "::error title=Verdicts not recorded::this job failed before it could record the \
+        legs' verdicts, so ${TAG} is reported as unchecked"

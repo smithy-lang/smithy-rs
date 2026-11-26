@@ -1423,6 +1423,195 @@ fn no_job_that_builds_a_published_crate_can_mint_a_token() {
     }
 }
 
+/// The last-resort step has to write the series a leg writes.
+///
+/// It builds its payload in the workflow rather than by calling this crate, because the case it
+/// exists for is the one where this crate's binary is not available -- no checkout, no toolchain,
+/// no compile. That makes two separate pieces of code writing one series, and a dimension out of
+/// place is a datapoint no alarm is looking at: silence, in the step whose whole job is to break
+/// silence.
+///
+/// So this runs the workflow's own payload builder and compares what it produces with what
+/// [`canary::metric::component_datapoints`] produces. The reason string is read back out rather
+/// than asserted, because the wording is free; the series identity is not.
+#[test]
+fn the_last_resort_writes_the_series_a_leg_writes() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    const TAG: &str = "release-2026-11-23";
+
+    let wf = load("build-canary");
+    let record = jobs(&wf).get("record").copied().expect("a record job");
+    let step = steps(record)
+        .into_iter()
+        .find(|s| step_name(s) == "Report that nothing was recorded")
+        .expect("a last-resort step in the record job");
+    let run = step
+        .get("run")
+        .and_then(Value::as_str)
+        .expect("a run block");
+
+    // A heredoc, so that a tag is JSON-encoded rather than interpolated into the payload.
+    let body = run
+        .split_once("<<'PY'\n")
+        .expect("the payload to be built by a `PY` heredoc")
+        .1
+        .split_once("\nPY\n")
+        .expect("the heredoc to be terminated")
+        .0;
+
+    // Fed on stdin with the tag as an argument, exactly as the step runs it.
+    let mut child = Command::new("python3")
+        .arg("-")
+        .arg(TAG)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("python3 on PATH; the workflow needs it too");
+    child
+        .stdin
+        .take()
+        .expect("a stdin pipe")
+        .write_all(body.as_bytes())
+        .expect("writing the script");
+    let out = child.wait_with_output().expect("running the script");
+    assert!(
+        out.status.success(),
+        "the payload builder failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let written: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("the step to write parseable JSON");
+    let points = written.as_array().expect("an array of datapoints");
+    assert_eq!(
+        points.len(),
+        2,
+        "one alarmed datapoint and one diagnosis copy: {written}"
+    );
+
+    let reason = points[1]["Dimensions"]
+        .as_array()
+        .expect("dimensions on the diagnosis copy")
+        .iter()
+        .find(|d| d["Name"].as_str() == Some("Reason"))
+        .and_then(|d| d["Value"].as_str())
+        .expect("a Reason dimension on the diagnosis copy")
+        .to_string();
+
+    let expected = serde_json::to_value(canary::metric::component_datapoints(
+        TAG,
+        canary::metric::VERDICTS,
+        &reason,
+    ))
+    .expect("serialising the crate's datapoints");
+
+    assert_eq!(
+        written, expected,
+        "the workflow's payload and the crate's have diverged; the first datapoint is the series \
+         the release alarm watches, so a difference there is a verdict nobody is told about"
+    );
+
+    // The namespace is the only lever inside `PutMetricData` the role is conditioned on, so a
+    // drift here is not a datapoint on the wrong series -- it is a denied call, and silence again.
+    let namespace = run
+        .split_whitespace()
+        .skip_while(|token| *token != "--namespace")
+        .nth(1)
+        .expect("a --namespace argument");
+    assert_eq!(
+        namespace,
+        canary::metric::NAMESPACE,
+        "the last resort writes to a namespace the metrics role does not permit"
+    );
+}
+
+/// The last resort must not fire because a leg went red.
+///
+/// `failure()` is the obvious condition for a step that reports a failure, and it is the wrong one
+/// here: GitHub documents it as true when *any ancestor job* fails, and `leg` fails whenever a leg
+/// reached a hard verdict. A real break would therefore bring this step out on every release and
+/// add "the recorder gave up" to a ticket that correctly blames a published crate -- which spends
+/// the reader's trust on the findings that are true.
+///
+/// So the condition has to be gated on this job's own recording step instead. Asserted rather than
+/// commented because the wrong version is the one that looks right.
+#[test]
+fn the_last_resort_is_not_triggered_by_a_red_leg() {
+    let wf = load("build-canary");
+    let record = jobs(&wf).get("record").copied().expect("a record job");
+    let all = steps(record);
+
+    let recorder = all
+        .iter()
+        .find(|s| step_name(s) == "Record the verdict")
+        .expect("a recording step");
+    let id = recorder
+        .get("id")
+        .and_then(Value::as_str)
+        .expect("the recording step to carry an `id`, so the last resort can read its conclusion");
+
+    let condition = all
+        .iter()
+        .find(|s| step_name(s) == "Report that nothing was recorded")
+        .expect("a last-resort step")
+        .get("if")
+        .and_then(Value::as_str)
+        .expect("the last resort to be conditional");
+
+    assert!(
+        condition.contains(&format!("steps.{id}.conclusion")),
+        "the last resort does not read the recording step's conclusion, so it cannot tell a \
+         release nobody could report on from one a leg reported red: {condition:?}"
+    );
+    assert!(
+        !condition.contains("failure()"),
+        "`failure()` is true when an ancestor job fails, and `leg` fails on every red release, so \
+         this would report a recorder failure alongside every real break: {condition:?}"
+    );
+}
+
+/// The credential has to be taken before anything that can fail.
+///
+/// [`the_last_resort_writes_the_series_a_leg_writes`] checks that the final step writes the right
+/// datapoint. This checks it can write at all: it calls AWS, so it needs the role, and a role
+/// assumed after the download means a failed download leaves the fallback with no credential --
+/// the job red and the release unreported, which is the hole the step was added to close.
+#[test]
+fn the_record_job_takes_its_credential_before_anything_that_can_fail() {
+    let wf = load("build-canary");
+    let record = jobs(&wf).get("record").copied().expect("a record job");
+    let names: Vec<String> = steps(record).iter().map(|s| step_name(s)).collect();
+
+    let index = |name: &str| {
+        names
+            .iter()
+            .position(|n| n == name)
+            .unwrap_or_else(|| panic!("no {name:?} step in the record job; have {names:?}"))
+    };
+
+    let credential = index("Assume the metrics role");
+    for later in [
+        "actions/checkout@v4",
+        "Install Rust",
+        "Download every leg's report",
+        "Record the verdict",
+    ] {
+        assert!(
+            credential < index(later),
+            "{later:?} runs before the role is assumed, so its failure would skip the last resort"
+        );
+    }
+
+    assert_eq!(
+        index("Report that nothing was recorded"),
+        names.len() - 1,
+        "the last resort must be last, or a step after it could fail unreported: {names:?}"
+    );
+}
+
 /// The legs have to fit in one wave.
 ///
 /// The whole matrix finishing is what releases `record`, so a second wave puts every verdict behind
