@@ -294,6 +294,7 @@ class ResponseDeserializerGenerator(
         val streamingMember = outputShape.findStreamingMember(model)!!
         val operationName = symbolProvider.toSymbol(operationShape).name
         val unionTarget = model.expectShape(streamingMember.target, UnionShape::class.java)
+        val unmarshallerDecodeMode = DocumentUnionDecodeMode.appliesToEventStream(codegenContext, unionTarget)
 
         val unmarshallerCtor =
             EventStreamUnmarshallerGenerator(
@@ -302,10 +303,10 @@ class ResponseDeserializerGenerator(
                 operationShape,
                 unionTarget,
                 useSchemaSerde = true,
-                documentUnionDecodeMode = decodeMode(operationShape),
+                documentUnionDecodeMode = unmarshallerDecodeMode,
             ).render()
         val withDecodeMode =
-            if (decodeMode(operationShape)) {
+            if (unmarshallerDecodeMode) {
                 ".with_document_union_decode_mode(${DocumentUnionDecodeMode.BINDING})"
             } else {
                 ""

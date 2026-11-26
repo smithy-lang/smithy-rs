@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -70,6 +71,20 @@ object DocumentUnionDecodeMode {
         return index.reachesUnionVariants(operation.outputShape(model)) ||
             operation.operationErrors(model).any { index.reachesUnionVariants(it) }
     }
+
+    /**
+     * Whether [eventStream]'s shared unmarshaller reads through the mode: one of its events or stream errors can reach
+     * a union with additive `DocumentV2` variants.
+     *
+     * Unlike [applies], this depends only on the event-stream union because the unmarshaller is generated once per
+     * union and can be shared by operations with different modeled errors.
+     */
+    fun appliesToEventStream(
+        codegenContext: ClientCodegenContext,
+        eventStream: UnionShape,
+    ): Boolean =
+        documentV2CompanionsEnabled(codegenContext) &&
+            DocumentV2Index.of(codegenContext.model).reachesUnionVariants(eventStream)
 
     /** Binds [BINDING] to the mode stored in the config bag named [cfg], or the default. */
     fun bind(

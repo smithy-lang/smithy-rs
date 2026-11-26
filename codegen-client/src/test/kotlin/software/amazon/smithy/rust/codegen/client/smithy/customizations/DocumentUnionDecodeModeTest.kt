@@ -539,6 +539,68 @@ class DocumentUnionDecodeModeTest {
     }
 
     @Test
+    fun `a shared event stream unmarshaller does not depend on operation error reachability`() {
+        val model =
+            """
+            ${'$'}version: "2"
+            namespace $SCHEMA_SERDE_NAMESPACE
+
+            use aws.protocols#restJson1
+
+            @restJson1
+            service ChoiceService {
+                version: "1"
+                operations: [A, B]
+            }
+
+            @http(uri: "/a", method: "GET")
+            operation A {
+                output := {
+                    @httpPayload
+                    stream: Events
+                }
+            }
+
+            @http(uri: "/b", method: "GET")
+            operation B {
+                output := {
+                    @httpPayload
+                    stream: Events
+                }
+                errors: [BError]
+            }
+
+            @streaming
+            union Events {
+                chunk: Chunk
+            }
+
+            structure Chunk {
+                value: String
+            }
+
+            @error("client")
+            structure BError {
+                detail: Detail
+            }
+
+            union Detail {
+                json: Document
+            }
+            """.asSmithyModel()
+
+        // The unmarshaller is generated once for `Events`. Whether it needs a decode-mode field and setter must
+        // therefore depend on `Events`, not on whichever operation renders it first. Only B's ordinary modeled error
+        // reaches `Detail`, so neither operation needs to configure the shared event-stream unmarshaller.
+        val crateDir = clientIntegrationTest(model) { _, _ -> }
+        crateDir.resolve("src/event_stream_serde.rs").readText() shouldNotContain
+            "with_document_union_decode_mode"
+        Files.walk(crateDir.resolve("src/operation/b")).use { paths ->
+            paths.filter { it.extension == "rs" }.map { it.readText() }.toList()
+        }.joinToString("\n") shouldContain "pub fn document_union_decode_mode("
+    }
+
+    @Test
     fun `a fluent builder method collision is an error`() {
         val model =
             """
