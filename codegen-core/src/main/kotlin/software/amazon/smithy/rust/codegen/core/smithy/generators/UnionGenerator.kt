@@ -24,6 +24,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -39,6 +42,33 @@ fun CodegenTarget.renderUnknownVariant() =
         CodegenTarget.SERVER -> false
         CodegenTarget.CLIENT -> true
     }
+
+/** Union generator customization sections. */
+sealed class UnionSection(name: String) : Section(name) {
+    abstract val shape: UnionShape
+    abstract val unionSymbol: Symbol
+
+    /** Adds public Rust variants after modeled variants and before the client `Unknown` variant. */
+    data class AdditionalVariants(
+        override val shape: UnionShape,
+        override val unionSymbol: Symbol,
+    ) : UnionSection("AdditionalVariants")
+
+    /** Adds inherent methods after modeled variant accessors and before `is_unknown`. */
+    data class AdditionalMethods(
+        override val shape: UnionShape,
+        override val unionSymbol: Symbol,
+    ) : UnionSection("AdditionalMethods")
+
+    /** Adds arms to the generated per-variant `Debug` match. */
+    data class AdditionalDebugArms(
+        override val shape: UnionShape,
+        override val unionSymbol: Symbol,
+    ) : UnionSection("AdditionalDebugArms")
+}
+
+/** Customizations for [UnionGenerator]. */
+abstract class UnionCustomization : NamedCustomization<UnionSection>()
 
 /**
  * Generate an `enum` for a Smithy Union Shape
@@ -59,6 +89,7 @@ open class UnionGenerator(
     private val writer: RustWriter,
     private val shape: UnionShape,
     private val renderUnknownVariant: Boolean = true,
+    private val customizations: List<UnionCustomization> = emptyList(),
 ) {
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private val unionSymbol = symbolProvider.toSymbol(shape)
@@ -92,6 +123,7 @@ open class UnionGenerator(
                 memberSymbol.expectRustMetadata().renderAttributes(this)
                 writer.renderVariant(symbolProvider, member, memberSymbol)
             }
+            writeCustomizations(customizations, UnionSection.AdditionalVariants(shape, unionSymbol))
             if (renderUnknownVariant) {
                 docs("""The `Unknown` variant represents cases where new union variant was received. Consider upgrading the SDK to the latest available version.""")
                 rust("/// An unknown enum variant")
@@ -123,6 +155,7 @@ open class UnionGenerator(
                     rust("self.as_$funcNamePart().is_ok()")
                 }
             }
+            writeCustomizations(customizations, UnionSection.AdditionalMethods(shape, unionSymbol))
             if (renderUnknownVariant) {
                 rust("/// Returns true if the enum instance is the `Unknown` variant.")
                 rustBlock("pub fn is_unknown(&self) -> bool") {
@@ -161,6 +194,7 @@ open class UnionGenerator(
                             else -> rust("${unionSymbol.name}::$memberName(_) => f.debug_tuple($REDACTION).finish(),")
                         }
                     }
+                    writeCustomizations(customizations, UnionSection.AdditionalDebugArms(shape, unionSymbol))
                     if (renderUnknownVariant) {
                         rust("${unionSymbol.name}::$UNKNOWN_VARIANT_NAME => f.debug_tuple(${UNKNOWN_VARIANT_NAME.dq()}).finish(),")
                     }

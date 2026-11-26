@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -35,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -55,6 +57,12 @@ class EventStreamUnmarshallerGenerator(
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
     private val useSchemaSerde: Boolean = false,
+    /**
+     * Whether the unmarshaller reads events and stream errors through a `DocumentUnionDecodeMode`, set with
+     * `with_document_union_decode_mode`. Only a schema-serde client whose events or stream errors can reach a union
+     * with `DocumentV2` variants sets this.
+     */
+    private val documentUnionDecodeMode: Boolean = false,
 ) {
     private val model = codegenContext.model
     private val builderInstantiator = codegenContext.builderInstantiator()
@@ -87,7 +95,22 @@ class EventStreamUnmarshallerGenerator(
             "UnmarshallMessage" to smithyEventStream.resolve("frame::UnmarshallMessage"),
             "SharedClientProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
             "SerdeError" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerdeError"),
+            "DocumentUnionDecodeMode" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::DocumentUnionDecodeMode"),
         )
+
+    init {
+        check(!documentUnionDecodeMode || (useSchemaSerde && codegenTarget == CodegenTarget.CLIENT)) {
+            "only a schema-serde client unmarshaller reads through a `DocumentUnionDecodeMode`"
+        }
+    }
+
+    /** Returns `Target::deserialize` applied to [deser], a `&mut dyn ShapeDeserializer`, through the mode if any. */
+    private fun schemaDeserialize(deser: String) =
+        if (documentUnionDecodeMode) {
+            "self.document_union_decode_mode.read_with($deser, |deser| #{Target}::deserialize(deser))"
+        } else {
+            "#{Target}::deserialize($deser)"
+        }
 
     fun render(): RuntimeType {
         val unmarshallerType = unionShape.eventStreamUnmarshallerType()
@@ -102,6 +125,29 @@ class EventStreamUnmarshallerGenerator(
     ) {
         val unmarshallerTypeName = unmarshallerType.name
         if (useSchemaSerde) {
+            val decodeModeField =
+                if (documentUnionDecodeMode) {
+                    """
+                    // Used by event variants and stream errors whose payloads go through the codec.
+                    ##[allow(dead_code)]
+                    document_union_decode_mode: #{DocumentUnionDecodeMode},
+                    """
+                } else {
+                    ""
+                }
+            val decodeModeInit = if (documentUnionDecodeMode) ", document_union_decode_mode: #{DocumentUnionDecodeMode}::V1" else ""
+            val decodeModeSetter =
+                if (documentUnionDecodeMode) {
+                    """
+                    /// Sets how events and stream errors read union members that hold documents.
+                    pub fn with_document_union_decode_mode(mut self, mode: #{DocumentUnionDecodeMode}) -> Self {
+                        self.document_union_decode_mode = mode;
+                        self
+                    }
+                    """
+                } else {
+                    ""
+                }
             rustTemplate(
                 """
                 ##[derive(Debug)]
@@ -112,12 +158,14 @@ class EventStreamUnmarshallerGenerator(
                     // operations.
                     ##[allow(dead_code)]
                     protocol: #{SharedClientProtocol},
+                    $decodeModeField
                 }
 
                 impl $unmarshallerTypeName {
                     pub fn new(protocol: #{SharedClientProtocol}) -> Self {
-                        $unmarshallerTypeName { protocol }
+                        $unmarshallerTypeName { protocol$decodeModeInit }
                     }
+                    $decodeModeSetter
                 }
                 """,
                 *codegenScope,
@@ -293,6 +341,20 @@ class EventStreamUnmarshallerGenerator(
                         !it.hasTrait<EventPayloadTrait>() && !it.hasTrait<EventHeaderTrait>()
                     }
                 if (implicitMembers.isNotEmpty() && payloadMember == null) {
+                    if (documentUnionDecodeMode) {
+                        // This path reads the body with the `protocol_serde` parser, which only builds the original
+                        // union variants and would ignore a caller's `DocumentUnionDecodeMode::V2`.
+                        val index = DocumentV2Index.of(model)
+                        implicitMembers.firstOrNull { index.reachesUnionVariants(model.expectShape(it.target)) }
+                            ?.also { member ->
+                                throw CodegenException(
+                                    "Event `${unionStruct.id}` has header members, so its body is read with the " +
+                                        "`protocol_serde` parser, but member `${member.memberName}` can hold a " +
+                                        "union with `DocumentV2` variants, which that parser can't read with " +
+                                        "`DocumentUnionDecodeMode::V2`.",
+                                )
+                            }
+                    }
                     val parser = protocol.structuredDataParser().errorParser(unionStruct)
                     if (parser != null) {
                         rustTemplate(
@@ -387,7 +449,7 @@ class EventStreamUnmarshallerGenerator(
                     let codec = self.protocol.payload_codec()
                         .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
                     let mut deser = codec.create_deserializer(&message.payload()[..]);
-                    #{Target}::deserialize(&mut *deser).map_err(|err| {
+                    ${schemaDeserialize("&mut *deser")}.map_err(|err| {
                         #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
                     })?
                 }
@@ -481,7 +543,7 @@ class EventStreamUnmarshallerGenerator(
                                             let codec = self.protocol.payload_codec()
                                                 .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
                                             let mut deser = codec.create_deserializer(error_body);
-                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                            ${schemaDeserialize("&mut *deser")}.map_err(|err| {
                                                 #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                             })?
                                         };
@@ -501,7 +563,7 @@ class EventStreamUnmarshallerGenerator(
                                             let codec = self.protocol.payload_codec()
                                                 .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
                                             let mut deser = codec.create_deserializer(&message.payload()[..]);
-                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                            ${schemaDeserialize("&mut *deser")}.map_err(|err| {
                                                 #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                             })?
                                         };

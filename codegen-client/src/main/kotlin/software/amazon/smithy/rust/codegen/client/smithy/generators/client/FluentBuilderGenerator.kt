@@ -4,10 +4,12 @@
  */
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocumentUnionDecodeMode
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.documentV2Companions
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.renderDocumentV2FluentMethods
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
@@ -31,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.for
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -87,6 +90,13 @@ class FluentBuilderGenerator(
     private val outputType = symbolProvider.toSymbol(outputShape)
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
+
+    /**
+     * Whether this builder selects the operation's `DocumentUnionDecodeMode`. Builders whose `send()` is overridden,
+     * such as waiters', always read the default.
+     */
+    private val documentUnionDecodeMode =
+        !config.sendOverridden() && DocumentUnionDecodeMode.applies(codegenContext, operation)
 
     private val scope =
         arrayOf(
@@ -161,6 +171,7 @@ class FluentBuilderGenerator(
                         &self.handle.conf,
                         self.config_override,
                     );
+                    #{decode_mode_plugin:W}
                     #{epilogue:W}
                 }
 
@@ -172,6 +183,16 @@ class FluentBuilderGenerator(
                 }
                 """,
                 *scope,
+                "decode_mode_plugin" to
+                    writable {
+                        if (documentUnionDecodeMode) {
+                            DocumentUnionDecodeMode.addPlugin(
+                                runtimeConfig,
+                                "runtime_plugins",
+                                "self.${DocumentUnionDecodeMode.FIELD}",
+                            )(this)
+                        }
+                    },
                 "epilogue" to (
                     handleEventStreamInitialResponse() ?: writable {
                         rustTemplate("#{Operation}::orchestrate(&runtime_plugins, input).await", *scope)
@@ -192,6 +213,22 @@ class FluentBuilderGenerator(
             outputShape.members().find { member ->
                 member.isEventStream(codegenContext.model)
             }!!
+
+        if (documentUnionDecodeMode) {
+            // The initial response is re-read below by the `protocol_serde` parser, which only builds the original
+            // union variants. Reading it that way would ignore a caller's `DocumentUnionDecodeMode::V2`.
+            val index = DocumentV2Index.of(model)
+            outputShape.members()
+                .filter { it != eventStreamMember }
+                .firstOrNull { index.reachesUnionVariants(model.expectShape(it.target)) }
+                ?.also { member ->
+                    throw CodegenException(
+                        "`${operation.id}` reads its initial response with the `protocol_serde` parser, but output " +
+                            "member `${member.memberName}` can hold a union with `DocumentV2` variants, which " +
+                            "that parser can't read with `DocumentUnionDecodeMode::V2`.",
+                    )
+                }
+        }
 
         return writable {
             val eventStreamMemberName = symbolProvider.toMemberName(eventStreamMember)
@@ -269,14 +306,21 @@ class FluentBuilderGenerator(
                 true -> "\nconfig_override: #{Option}<crate::config::Builder>,"
                 else -> ""
             }
+        val decodeMode =
+            if (documentUnionDecodeMode) {
+                "\n${DocumentUnionDecodeMode.FIELD}: #{Option}<#{DocumentUnionDecodeMode}>,"
+            } else {
+                ""
+            }
         rustTemplate(
             """
             pub struct $builderName {
                 handle: #{Arc}<crate::client::Handle>,
-                inner: #{InputBuilder},$configOverride
+                inner: #{InputBuilder},$configOverride$decodeMode
             }
             """,
             *scope,
+            "DocumentUnionDecodeMode" to DocumentUnionDecodeMode.type(runtimeConfig),
         )
     }
 
@@ -287,13 +331,14 @@ class FluentBuilderGenerator(
                     true -> "\nconfig_override: #{None},"
                     else -> ""
                 }
+            val decodeMode = if (documentUnionDecodeMode) "\n${DocumentUnionDecodeMode.FIELD}: #{None}," else ""
             rustTemplate(
                 """
                 /// Creates a new `$builderName`.
                 pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
                     Self {
                         handle,
-                        inner: #{Default}::default(),$configOverride
+                        inner: #{Default}::default(),$configOverride$decodeMode
                     }
                 }
                 """,
@@ -339,18 +384,28 @@ class FluentBuilderGenerator(
             if (config.includePaginators()) {
                 PaginatorGenerator.paginatorType(codegenContext, operation)
                     ?.also { paginatorType ->
+                        val decodeMode =
+                            if (documentUnionDecodeMode) {
+                                ".${DocumentUnionDecodeMode.FIELD}(self.${DocumentUnionDecodeMode.FIELD})"
+                            } else {
+                                ""
+                            }
                         rustTemplate(
                             """
                             /// Create a paginator for this request
                             ///
                             /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
                             pub fn into_paginator(self) -> #{Paginator} {
-                                #{Paginator}::new(self.handle, self.inner)
+                                #{Paginator}::new(self.handle, self.inner)$decodeMode
                             }
                             """,
                             "Paginator" to paginatorType,
                         )
                     }
+            }
+
+            if (documentUnionDecodeMode) {
+                with(DocumentUnionDecodeMode) { renderFluentMethods(codegenContext, operation) }
             }
 
             writeCustomizations(
