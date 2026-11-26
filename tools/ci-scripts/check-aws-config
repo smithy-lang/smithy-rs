@@ -87,14 +87,18 @@ if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
         partition_arg=(--partition "${PARTITION}")
     fi
 
-    # the crate has `allow-compilation` which needs to be deprecated
+    # `allow-compilation` needs to be deprecated. `legacy-client` expands to nothing and gates no
+    # code, so every combination containing it duplicates the one without: excluding it halves the
+    # powerset.
+    excluded_features=allow-compilation,legacy-client
+
     echo "${C_YELLOW}## Checking every combination of features${C_RESET}"
-    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features allow-compilation
+    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features "${excluded_features}"
 
     # This check will check other individual features and no-default-features
     # grouping these features because they don't interact
     echo "${C_YELLOW}## Testing feature powerset (grouped)${C_RESET}"
-    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client
+    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features "${excluded_features}" --group-features rt-tokio,client-hyper,rustls,default-https-client
 fi
 
 popd &>/dev/null
