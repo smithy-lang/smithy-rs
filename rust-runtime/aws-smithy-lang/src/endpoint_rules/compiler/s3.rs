@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Smithy Java's `S3TreeRewriter` (`smithy-aws-endpoints` 1.73.0) with its default
+//! Smithy Java's `S3TreeRewriter` (`smithy-aws-endpoints` 1.74.1) with its default
 //! transforms, which `CompileBddForAws` applies to S3's rule set before compiling it.
 //!
 //! Many S3 Express endpoints differ only in FIPS, dual-stack, and auth-scheme spellings, chosen

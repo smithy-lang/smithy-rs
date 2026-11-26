@@ -8,31 +8,9 @@
 //! These types record syntax only. Nothing evaluates an expression or calls a function.
 //! Equality ignores source locations, like [`Node`](crate::Node) equality.
 
+pub(crate) use crate::diagnostic::Location;
 use crate::diagnostic::SourceLocation;
 use std::fmt;
-
-/// A source location that equality ignores.
-#[derive(Clone, Default)]
-pub(crate) struct Location(pub(crate) SourceLocation);
-
-impl PartialEq for Location {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-// Location not included in equality checks
-impl Eq for Location {}
-// Also not included in hashes
-impl std::hash::Hash for Location {
-    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
-}
-
-impl fmt::Debug for Location {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
 
 /// A rules-engine version, such as `1.1`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

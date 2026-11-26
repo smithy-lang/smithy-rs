@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-types-convert"
-version = "0.61.1"
+version = "0.62.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Conversion of types from aws-smithy-types to other libraries."
 edition = "2021"
@@ -10,6 +10,7 @@ rust-version = "1.94.1"
 
 [features]
 convert-chrono = ["aws-smithy-types", "chrono"]
+convert-jiff-1-x = ["aws-smithy-types", "dep:jiff"]
 convert-time = ["aws-smithy-types", "time"]
 convert-streams = ["aws-smithy-async", "futures-core"]
 
@@ -17,6 +18,7 @@ convert-streams = ["aws-smithy-async", "futures-core"]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"], optional = true }
 aws-smithy-async = { path = "../aws-smithy-async", optional = true }
 chrono = { version = "0.4.35", optional = true, default-features = false, features = ["std"] }
+jiff = { version = "1", optional = true, default-features = false, features = ["std"] }
 time = { version = "0.3.4", optional = true }
 futures-core = { version = "0.3.31", optional = true }
 

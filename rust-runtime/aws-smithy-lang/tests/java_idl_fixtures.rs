@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Agreement with Java Smithy 1.74.0 on checked-in IDL fixtures. See `fixtures/java/README.md`.
+//! Agreement with Java Smithy 1.74.1 on checked-in IDL fixtures. See `fixtures/java/README.md`.
 
 use aws_smithy_lang::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 use aws_smithy_lang::validation::Validated;
@@ -126,6 +126,10 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
     match java_event {
         "Target.UnresolvedShape" => UnresolvedReference,
         "Model.UnresolvedTrait" => UnresolvedReference,
+        // A mixin used other than as a mixin, or a shape without `@mixin` used as one.
+        "Target" => InvalidTarget,
+        // A mixin applied as a trait.
+        "TraitTarget" => InvalidTrait,
         "Model" => match fixture {
             "syntax_duplicate_control"
             | "syntax_duplicate_member"
@@ -157,6 +161,35 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
             // An IDL `apply` outside the prelude namespace to a shape in it.
             "apply_prelude_shape" | "apply_prelude_namespace_shape" => PreludeConflict,
             "unsupported_version" => UnsupportedVersion,
+            // Two definitions of a shape with different mixins or members.
+            "loader_mixins_conflict_error"
+            | "focused_mixins_different_definitions"
+            | "focused_mixins_duplicate_mixin_order"
+            | "focused_mixins_elided_default_sugar_conflict" => ShapeConflict,
+            // Mixin cycles, and members inherited or redefined with different targets.
+            "loader_mixins_detects_cycles1"
+            | "loader_mixins_detects_cycles2"
+            | "loader_mixins_detects_cycles3"
+            | "focused_mixins_cycle_dependents"
+            | "validators_mixins_illegal_redefined_member"
+            | "focused_mixins_elision_conflict"
+            | "focused_mixins_member_conflict"
+            | "focused_mixins_member_conflict_applied" => InvalidShape,
+            // A missing mixin, and the shapes that use the shapes that use it.
+            "loader_mixins_detects_missing_transitive" | "focused_mixins_missing" => {
+                UnresolvedReference
+            }
+            // Mixins of another shape type.
+            "focused_mixins_type_mismatch" => InvalidTarget,
+            // A `$name` member that no bound resource or mixin provides.
+            "focused_mixins_elision_unknown" | "focused_mixins_duplicate_elided_unknown" => {
+                InvalidProperty
+            }
+            // A trait applied to a member that a shape neither declares nor inherits.
+            "focused_mixins_apply_unknown_member" => UnknownShape,
+            // An enum without members and without mixins is a syntax error here, because the
+            // grammar requires a member; Java reports it while building shapes.
+            "validators_mixins_empty_enum_mixin" => IdlSyntax,
             other if other.starts_with("syntax_") => IdlSyntax,
             other => panic!("{other}: map Java's generic `Model` event to a Rust code"),
         },
@@ -164,11 +197,27 @@ fn rust_code(fixture: &str, java_event: &str) -> DiagnosticCode {
     }
 }
 
+/// Codes this crate reports in addition to [`rust_code`]'s, for fixtures where one Java event ID
+/// covers errors that have different codes here.
+fn additional_rust_codes(fixture: &str) -> &'static [DiagnosticCode] {
+    match fixture {
+        // A shape that cannot be built, then the shape that uses it as a mixin, which is missing.
+        "focused_mixins_type_mismatch" | "focused_mixins_member_conflict" => {
+            &[DiagnosticCode::UnresolvedReference]
+        }
+        _ => &[],
+    }
+}
+
 /// The Rust diagnostic code for a fixture Java accepts but this crate deliberately rejects.
 fn intentional_rejection(fixture: &str) -> DiagnosticCode {
     use DiagnosticCode::*;
     match fixture {
-        "spec_inline_mixins" | "spec_mixin_elision" | "spec_mixins" => UnsupportedFeature,
+        // Mixins of shape types other than structure, union, enum, and intEnum.
+        "spec_mixins" => UnsupportedFeature,
+        // A shape that is its own mixin, which the reference implementation drops without a
+        // diagnostic, with the shapes that use it.
+        "focused_mixins_self_reference" => InvalidShape,
         // Unknown properties are errors here; the reference implementation warns and applies
         // the traits.
         "apply_extra_property" => UnknownProperty,
@@ -301,6 +350,7 @@ fn rejected_fixtures_match_java() {
             .errors
             .iter()
             .map(|e| rust_code(outcome.stem(), e))
+            .chain(additional_rust_codes(outcome.stem()).iter().copied())
             .collect();
         // The recorded outcomes list only ERROR events; notes and warnings may accompany them.
         let errors = err
@@ -359,6 +409,118 @@ fn intentional_differences_are_rejected_precisely() {
             err.diagnostics()
         );
     }
+}
+
+/// How this crate resolved mixins, in the form of `expected/idl/NAME.mixins.json` (see
+/// `Regenerate.java`), with an enum member's implicit value written out like the reference
+/// implementation does.
+fn mixin_resolution(model: &Model) -> serde_json::Value {
+    use aws_smithy_lang::shape::AppliedTrait;
+    use serde_json::{json, Map, Value};
+    fn traits<'a>(traits: impl Iterator<Item = AppliedTrait<'a>>) -> Value {
+        let traits: Map<String, Value> = traits
+            .map(|t| {
+                let value = serde_json::from_str(&t.value().to_json_string()).unwrap();
+                (t.id().to_string(), value)
+            })
+            .collect();
+        Value::Object(traits)
+    }
+    fn introduced<'a>(traits: impl Iterator<Item = AppliedTrait<'a>>) -> Value {
+        let mut ids: Vec<String> = traits.map(|t| t.id().to_string()).collect();
+        ids.sort();
+        json!(ids)
+    }
+    let mut shapes = Map::new();
+    for shape in model.non_prelude_shapes() {
+        if shape.mixins().len() == 0 {
+            continue;
+        }
+        let members: Vec<Value> = shape
+            .members()
+            .iter()
+            .map(|member| {
+                let mut resolved = json!({
+                    "name": member.name(),
+                    "target": member.target().as_str(),
+                    "mixins": member.mixins().map(|m| m.id().to_string()).collect::<Vec<_>>(),
+                    "traits": traits(member.traits().iter()),
+                    "introduced": introduced(member.introduced_traits()),
+                });
+                let value = aws_smithy_lang::traits::ENUM_VALUE.to_string();
+                if shape.is_enum() && !member.has_trait(&aws_smithy_lang::traits::ENUM_VALUE) {
+                    resolved["traits"][&value] = json!(member.name());
+                    if !member.is_inherited() {
+                        resolved["introduced"] = json!([value]);
+                    }
+                }
+                resolved
+            })
+            .collect();
+        shapes.insert(
+            shape.id().to_string(),
+            json!({
+                "mixins": shape.mixins().map(|m| m.id().to_string()).collect::<Vec<_>>(),
+                "traits": traits(shape.traits().iter()),
+                "introduced": introduced(shape.introduced_traits()),
+                "members": members,
+            }),
+        );
+    }
+    Value::Object(shapes)
+}
+
+#[test]
+fn mixins_resolve_like_reference_impl() {
+    // The serialized models do not show this: they keep mixins in their declared form, which this
+    // crate resolves the same way when it loads either side.
+    let mut failures = Vec::new();
+    let mut checked = 0;
+    for outcome in outcomes() {
+        if !matches!(outcome.group(), "valid" | "danger") {
+            continue;
+        }
+        let model = assemble(&outcome.name).into_result().unwrap();
+        let mut rust = mixin_resolution(&model);
+        let path = fixtures().join(format!("expected/idl/{}.mixins.json", outcome.stem()));
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            // `Regenerate.java` records every accepted fixture with shapes that use mixins.
+            if rust.as_object().is_some_and(|shapes| !shapes.is_empty()) {
+                failures.push(format!(
+                    "{}: regenerate expected/ (see README.md)",
+                    outcome.name
+                ));
+            }
+            continue;
+        };
+        checked += 1;
+        let mut reference: serde_json::Value = serde_json::from_str(&text).unwrap();
+        // The reference implementation also counts a member's traits from its second and later
+        // mixins as its own (see the README), so own traits are compared only for members with
+        // one mixin.
+        for side in [&mut rust, &mut reference] {
+            for shape in side.as_object_mut().unwrap().values_mut() {
+                for member in shape["members"].as_array_mut().unwrap() {
+                    if member["mixins"].as_array().unwrap().len() > 1 {
+                        member.as_object_mut().unwrap().remove("introduced");
+                    }
+                }
+            }
+        }
+        if rust != reference {
+            failures.push(format!(
+                "{}: mixins resolve differently\n--- rust\n{}\n--- reference\n{}",
+                outcome.name,
+                serde_json::to_string_pretty(&rust).unwrap(),
+                serde_json::to_string_pretty(&reference).unwrap()
+            ));
+        }
+    }
+    assert!(
+        checked > 0,
+        "no fixture records how the reference implementation resolves mixins"
+    );
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
 #[test]

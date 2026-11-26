@@ -6,6 +6,7 @@
 use super::*;
 use crate::model::Model;
 use crate::relationships::RelationshipType::{self, *};
+use crate::relationships::{Edges, RelationshipIndex, Relationships};
 use crate::shape::{OperationView, ShapeRef};
 use crate::shape_id::ShapeId;
 use proptest::prelude::*;
@@ -44,7 +45,7 @@ fn ex(names: &[&str]) -> Vec<String> {
 #[test]
 fn top_down_includes_every_binding_kind_once_sorted() {
     let model = model();
-    let top_down = model.knowledge().top_down();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
     let operations = op_ids(
         top_down
             .get_contained_operations(&ShapeId::from_static("ex#Service"))
@@ -121,6 +122,33 @@ fn top_down_includes_every_binding_kind_once_sorted() {
         .is_none());
 }
 
+#[test]
+fn top_down_contains() {
+    let model = model();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
+    let contains = |entity, target| top_down.contains(&id(entity), &id(target));
+
+    // Directly, as a lifecycle operation, and through nested resources.
+    assert!(contains("ex#Service", "ex#DirectOp"));
+    assert!(contains("ex#Service", "ex#GetThing"));
+    assert!(contains("ex#Service", "ex#SharedRead"));
+    assert!(contains("ex#Service", "ex#Shared"));
+    assert!(contains("ex#Hidden", "ex#DeepOp"));
+    assert!(contains("ex#Outer", "ex#Inner"));
+
+    // Not contained: another service's operation, a parent's operation, and a parent.
+    assert!(!contains("ex#Hidden", "ex#GetThing"));
+    assert!(!contains("ex#Thing", "ex#DirectOp"));
+    assert!(!contains("ex#Child", "ex#Thing"));
+
+    // The entity itself, an entity that is not a service or resource, and missing shapes.
+    assert!(!contains("ex#Service", "ex#Service"));
+    assert!(!contains("ex#Thing", "ex#Thing"));
+    assert!(!contains("ex#GetThing", "ex#GetThing"));
+    assert!(!contains("ex#Missing", "ex#GetThing"));
+    assert!(!contains("ex#Service", "ex#Missing"));
+}
+
 /// The crate-root example once iterated `service.operations()`, which silently missed every
 /// operation bound through a resource.
 #[test]
@@ -150,7 +178,7 @@ fn nested_resource_only_operation_is_found() {
 #[test]
 fn typed_conveniences_match_the_index() {
     let model = model();
-    let top_down = model.knowledge().top_down();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
     for service in model.services() {
         assert_eq!(
             op_ids(service.contained_operations()),
@@ -176,7 +204,7 @@ fn typed_conveniences_match_the_index() {
 #[test]
 fn operation_input_output_and_members() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
 
     let get = operations
         .get(&ShapeId::from_static("ex#GetThing"))
@@ -209,7 +237,7 @@ fn operation_input_output_and_members() {
 #[test]
 fn operation_errors() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
     let get = operations
         .get(&ShapeId::from_static("ex#GetThing"))
         .unwrap();
@@ -261,7 +289,7 @@ fn operation_errors() {
 #[test]
 fn operation_reverse_bindings() {
     let model = model();
-    let operations = model.knowledge().operations();
+    let operations = model.knowledge::<OperationIndex<'_>>();
     assert_eq!(
         op_ids(
             operations
@@ -346,7 +374,7 @@ fn chain_ids(chain: &ParentChain<'_>) -> Vec<String> {
 #[test]
 fn bottom_up_unique_chains() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     assert_eq!(
         parent_ids(
             bottom_up
@@ -422,7 +450,7 @@ fn bottom_up_unique_chains() {
 #[test]
 fn bottom_up_reports_ambiguity() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
 
     // Bound directly to the service and through a resource.
     assert_eq!(
@@ -503,7 +531,7 @@ fn bottom_up_reports_ambiguity() {
 #[test]
 fn bottom_up_is_service_scoped() {
     let model = model();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     // `ex#Shared` is ambiguous in `ex#Service` but has one parent in `ex#Other`.
     assert_eq!(
         parent_ids(
@@ -602,7 +630,7 @@ fn one_parent_binding_twice_is_unique() {
         }}"#,
     )
     .unwrap();
-    let bottom_up = model.knowledge().bottom_up();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
     assert_eq!(
         parent_ids(
             bottom_up
@@ -627,7 +655,7 @@ fn one_parent_binding_twice_is_unique() {
 #[test]
 fn relationship_index_outgoing_and_incoming() {
     let model = model();
-    let relationships = model.knowledge().relationships();
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
     let outgoing: Vec<_> = relationships
         .get_outgoing(&ShapeId::from_static("ex#GetThing"))
         .unwrap()
@@ -720,7 +748,7 @@ fn relationship_index_outgoing_and_incoming() {
 /// Every edge appears exactly once in its source's outgoing list and once in its target's
 /// incoming list.
 fn assert_symmetric(model: &Model) {
-    let relationships = model.knowledge().relationships();
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
     let mut outgoing = BTreeMap::new();
     let mut incoming = BTreeMap::new();
     let count = |map: &mut BTreeMap<(String, u8, String), usize>,
@@ -769,14 +797,190 @@ fn relationships_are_symmetric_and_match_traversal() {
     assert_symmetric(&model());
 }
 
+/// Node IDs number every shape and member densely in model order, and the node queries agree
+/// with the `ShapeId` queries.
+fn assert_nodes(model: &Model) {
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let edges = |edges: Edges<'_>| -> Vec<_> {
+        edges
+            .map(|e| {
+                let source = relationships.shape(e.source()).id().to_string();
+                let target = relationships.shape(e.target()).id().to_string();
+                (source, e.kind(), target)
+            })
+            .collect()
+    };
+    let views = |relationships: Relationships<'_>| -> Vec<_> {
+        relationships
+            .map(|r| {
+                (
+                    r.source().id().to_string(),
+                    r.kind(),
+                    r.target_id().to_string(),
+                )
+            })
+            .collect()
+    };
+    let mut expected = 0;
+    for shape in model.shapes() {
+        let all = std::iter::once(ShapeRef::Shape(shape))
+            .chain(shape.members().iter().map(ShapeRef::Member));
+        for shape in all {
+            let node = relationships.node(shape.id()).unwrap();
+            assert_eq!(node.index(), expected, "{}", shape.id());
+            expected += 1;
+            assert_eq!(relationships.shape(node).id(), shape.id());
+            let outgoing = relationships.outgoing(node);
+            assert_eq!(outgoing.len(), shape.relationships().len());
+            assert_eq!(
+                edges(outgoing),
+                views(relationships.get_outgoing(shape.id()).unwrap())
+            );
+            let incoming = relationships.incoming(node);
+            assert!(incoming.clone().all(|edge| edge.target() == node));
+            assert_eq!(
+                edges(incoming),
+                views(relationships.get_incoming(shape.id()).unwrap())
+            );
+        }
+    }
+    assert_eq!(expected, relationships.node_count());
+}
+
+#[test]
+fn node_queries_match_shape_id_queries() {
+    let model = model();
+    assert_nodes(&model);
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    assert!(relationships
+        .node(&ShapeId::from_static("ex#Missing"))
+        .is_none());
+    assert!(relationships
+        .node(&ShapeId::from_static("ex#Plain$nope"))
+        .is_none());
+    let node = relationships
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    assert_eq!(
+        format!("{:?}", relationships.outgoing(node)),
+        r#"Edges { direction: "outgoing", remaining: 4 }"#
+    );
+    let edge = relationships.outgoing(node).next().unwrap();
+    assert_eq!((edge.source(), edge.kind()), (node, Input));
+    assert_eq!(relationships.shape(edge.target()).id(), "ex#GetThingInput");
+    // Clones share node numbering.
+    let clone = model.clone();
+    let cloned = clone.knowledge::<RelationshipIndex<'_>>();
+    assert_eq!(cloned.shape(node).id(), "ex#GetThing");
+}
+
+#[test]
+#[should_panic(expected = "is not a node of this model, which has 1 nodes")]
+fn node_of_another_model_panics() {
+    let big = model();
+    let node = big
+        .knowledge::<RelationshipIndex<'_>>()
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    let small = Model::assembler()
+        .disable_prelude()
+        .add_json_str(
+            "m",
+            r#"{"smithy":"2.0","shapes":{"ex#A":{"type":"string"}}}"#,
+        )
+        .assemble()
+        .into_result()
+        .unwrap();
+    small.knowledge::<RelationshipIndex<'_>>().shape(node);
+}
+
+/// Every service's closure matches an uncached walk over every relationship, in model order.
+fn assert_service_closures(model: &Model) {
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    // Every shape and member in model order: each root shape followed by its members.
+    let mut all = Vec::new();
+    for shape in model.shapes() {
+        all.push(ShapeRef::Shape(shape));
+        all.extend(shape.members().iter().map(ShapeRef::Member));
+    }
+    for service in model.services() {
+        let closure = closures.get(service.id()).unwrap();
+        assert_eq!(closure.service().id(), service.id());
+        let walked: BTreeSet<_> = crate::traversal::Walker::new()
+            .walk(service)
+            .map(|shape| shape.id().to_string())
+            .collect();
+        let expected: Vec<_> = all
+            .iter()
+            .map(|shape| shape.id().to_string())
+            .filter(|id| walked.contains(id))
+            .collect();
+        let shapes: Vec<_> = closure.shapes().map(|s| s.id().to_string()).collect();
+        assert_eq!(shapes.len(), closure.len());
+        assert_eq!(shapes, expected, "{}", service.id());
+        let nodes: Vec<_> = closure.nodes().collect();
+        assert!(nodes.windows(2).all(|w| w[0] < w[1]), "nodes are ascending");
+        for shape in &all {
+            let node = relationships.node(shape.id()).unwrap();
+            let expected = walked.contains(shape.id().as_str());
+            assert_eq!(closure.contains(shape.id()), expected, "{}", shape.id());
+            assert_eq!(closure.contains_node(node), expected, "{}", shape.id());
+        }
+    }
+}
+
+#[test]
+fn service_closure_matches_traversal() {
+    let model = model();
+    assert_service_closures(&model);
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    let closure = closures.get(&ShapeId::from_static("ex#Other")).unwrap();
+    let shapes: Vec<_> = closure.shapes().map(|s| s.id().to_string()).collect();
+    // `ex#SharedRead` is `ex#Shared`'s `read`, and its omitted input and output are `Unit`.
+    assert_eq!(
+        shapes,
+        ["ex#Other", "ex#Shared", "ex#SharedRead", "smithy.api#Unit"]
+    );
+    assert!(!closure.is_empty());
+    assert!(!closure.contains(&ShapeId::from_static("ex#Service")));
+    assert!(!closure.contains(&ShapeId::from_static("ex#Missing")));
+    assert_eq!(
+        format!("{closure:?}"),
+        r#"ServiceClosure { service: ShapeId("ex#Other"), len: 4 }"#
+    );
+    // Errors, inputs, outputs, and their members are in the closure.
+    let service = closures.get(&ShapeId::from_static("ex#Service")).unwrap();
+    for id in [
+        "ex#Common",
+        "ex#NotFound",
+        "ex#GetThingInput$alpha",
+        "smithy.api#Unit",
+    ] {
+        assert!(service.contains(&id.parse().unwrap()), "{id}");
+    }
+    assert!(!service.contains(&ShapeId::from_static("ex#Unbound")));
+    assert!(!service.contains(&ShapeId::from_static("ex#Plain")));
+    // Only services have closures.
+    for id in ["ex#Thing", "ex#GetThing", "ex#Plain", "ex#Missing"] {
+        assert!(closures.get(&id.parse().unwrap()).is_none(), "{id}");
+    }
+}
+
 #[test]
 fn caches_are_shared_by_clones_and_threads() {
     let model = model();
     let clone = model.clone();
     // Initialize through a clone; the original observes the same cache.
-    let first = clone.knowledge().relationships().index as *const _;
-    let second = model.knowledge().relationships().index as *const _;
+    let first = clone.knowledge::<RelationshipIndex<'_>>().index as *const _;
+    let second = model.knowledge::<RelationshipIndex<'_>>().index as *const _;
     assert!(std::ptr::eq(first, second));
+    let service = ShapeId::from_static("ex#Service");
+    let closure = |model: &Model| {
+        let closure = model.knowledge::<ServiceClosureIndex<'_>>().get(&service);
+        closure.unwrap().nodes as *const _ as usize
+    };
+    assert_eq!(closure(&clone), closure(&model));
 
     let fresh = Model::from_json_str("m", MODEL).unwrap();
     let addresses: Vec<usize> = std::thread::scope(|scope| {
@@ -784,43 +988,39 @@ fn caches_are_shared_by_clones_and_threads() {
             .map(|_| {
                 let model = fresh.clone();
                 scope.spawn(move || {
-                    let top_down = model.knowledge().top_down();
+                    let top_down = model.knowledge::<TopDownIndex<'_>>();
                     let ops = op_ids(
                         top_down
                             .get_contained_operations(&ShapeId::from_static("ex#Service"))
                             .unwrap(),
                     );
                     assert_eq!(ops.len(), 12);
-                    model.knowledge().relationships().index as *const _ as usize
+                    model.knowledge::<RelationshipIndex<'_>>().index as *const _ as usize
                 })
             })
             .collect();
         handles.into_iter().map(|h| h.join().unwrap()).collect()
     });
     assert!(addresses.windows(2).all(|w| w[0] == w[1]));
+    // An equivalent model loaded separately has its own cache.
+    assert_ne!(addresses[0], first as usize);
+    assert_ne!(closure(&fresh), closure(&model));
 }
 
 #[test]
 fn deterministic_across_independent_loads() {
     let snapshot = |model: &Model| {
-        let knowledge = model.knowledge();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
         let mut out = Vec::new();
         for service in model.services() {
             out.push(op_ids(service.contained_operations()));
             for op in service.contained_operations() {
-                if let Some(errors) = knowledge
-                    .operations()
-                    .get(op.id())
-                    .unwrap()
-                    .errors_in(service.id())
-                {
+                if let Some(errors) = operations.get(op.id()).unwrap().errors_in(service.id()) {
                     out.push(ids(errors, |e| e.id()));
                 }
                 out.push(ids(
-                    knowledge
-                        .bottom_up()
-                        .get_ancestors(service.id(), op.id())
-                        .unwrap(),
+                    bottom_up.get_ancestors(service.id(), op.id()).unwrap(),
                     |e| e.id(),
                 ));
             }
@@ -835,32 +1035,52 @@ fn deterministic_across_independent_loads() {
 #[test]
 fn send_sync_and_debug() {
     fn assert<T: Send + Sync + Clone + std::fmt::Debug>(_: &T) {}
+    fn assert_copy<T: Copy>(_: &T) {}
     let model = model();
-    let knowledge = model.knowledge();
-    assert(&knowledge);
-    assert(&knowledge.relationships());
-    assert(&knowledge.top_down());
-    assert(&knowledge.operations());
-    assert(&knowledge.bottom_up());
+    let relationships = model.knowledge::<RelationshipIndex<'_>>();
+    let top_down = model.knowledge::<TopDownIndex<'_>>();
+    let operations = model.knowledge::<OperationIndex<'_>>();
+    let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
+    let paginated = model.knowledge::<PaginatedIndex<'_>>();
+    let closures = model.knowledge::<ServiceClosureIndex<'_>>();
+    assert(&relationships);
+    assert(&top_down);
+    assert(&operations);
+    assert(&bottom_up);
+    assert(&paginated);
+    assert(&closures);
+    assert_copy(&relationships);
+    assert_copy(&top_down);
+    assert_copy(&operations);
+    assert_copy(&bottom_up);
+    assert_copy(&paginated);
+    assert_copy(&closures);
+    let closure = closures.get(&ShapeId::from_static("ex#Service")).unwrap();
+    assert(&closure);
+    assert_copy(&closure);
+    let node = relationships
+        .node(&ShapeId::from_static("ex#GetThing"))
+        .unwrap();
+    assert(&node);
+    assert_copy(&node);
+    assert(&relationships.outgoing(node));
+    assert(&relationships.incoming(node).next().unwrap());
+    assert_copy(&relationships.incoming(node).next().unwrap());
     assert(
-        &knowledge
-            .operations()
+        &operations
             .get(&ShapeId::from_static("ex#GetThing"))
             .unwrap(),
     );
     assert(
-        &knowledge
-            .relationships()
+        &relationships
             .get_incoming(&ShapeId::from_static("ex#Common"))
             .unwrap(),
     );
     assert(
-        &knowledge
-            .top_down()
+        &top_down
             .get_contained_operations(&ShapeId::from_static("ex#Service"))
             .unwrap(),
     );
-    let bottom_up = knowledge.bottom_up();
     assert(
         &bottom_up
             .get_direct_bindings(
@@ -887,7 +1107,6 @@ fn send_sync_and_debug() {
     assert(&err);
     fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
     assert_error(&err);
-    assert_eq!(format!("{knowledge:?}"), "Knowledge { .. }");
 }
 
 #[test]
@@ -919,6 +1138,561 @@ fn relationship_type_classification() {
     ] {
         assert!(!kind.is_containment(), "{kind:?}");
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pagination.
+
+/// Valid pagination, shared with the reference-implementation parity test. The file's header
+/// comment lists the cases.
+const PAGINATED: &str = include_str!("../../tests/fixtures/java/paginated/paginated.smithy");
+
+/// Pagination that loads, because the loader does not validate `@paginated`, but cannot be
+/// resolved.
+const UNRESOLVABLE_PAGINATION: &str = r#"
+$version: "2"
+namespace ex
+
+service Plain {
+    operations: [
+        NoInputToken, NoOutputToken, BadInputToken, DottedInputToken, BadPageSize, BadItems,
+        EmptySegment, TrailingDot, NotAStructure, UnitIo, Malformed
+    ]
+}
+
+@paginated(inputToken: "token", outputToken: "token", items: "missing")
+service Defaults {
+    operations: [InheritsBadItems, OverridesBadItems]
+}
+
+@paginated(pageSize: true)
+service BadDefaults {
+    operations: [Marked, Unmarked]
+}
+
+@paginated
+operation NoInputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token")
+operation NoOutputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "nope", outputToken: "token")
+operation BadInputToken {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "nested.token", outputToken: "token")
+operation DottedInputToken {
+    input := { nested: Nested }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token", pageSize: "limit")
+operation BadPageSize {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token", items: "page.missing")
+operation BadItems {
+    input := { token: String }
+    output := { token: String, page: Nested }
+}
+
+@paginated(inputToken: "token", outputToken: "page..token")
+operation EmptySegment {
+    input := { token: String }
+    output := { page: Nested }
+}
+
+@paginated(inputToken: "token", outputToken: "token.")
+operation TrailingDot {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token.next")
+operation NotAStructure {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(inputToken: "token", outputToken: "token")
+operation UnitIo {}
+
+@paginated(inputToken: 1)
+operation Malformed {}
+
+@paginated
+operation InheritsBadItems {
+    input := { token: String }
+    output := { token: String }
+}
+
+@paginated(items: "things")
+operation OverridesBadItems {
+    input := { token: String }
+    output := { token: String, things: Things }
+}
+
+@paginated(inputToken: "token", outputToken: "token")
+operation Marked {
+    input := { token: String }
+    output := { token: String }
+}
+
+operation Unmarked {}
+
+structure Nested {
+    token: String
+}
+
+list Things {
+    member: String
+}
+"#;
+
+fn paginated_model(idl: &str) -> Model {
+    Model::from_idl_str("paginated.smithy", idl).unwrap()
+}
+
+fn pagination<'m>(
+    model: &'m Model,
+    service: &str,
+    operation: &str,
+) -> Result<Option<PaginationInfo<'m>>, PaginationIndexError> {
+    model.knowledge::<PaginatedIndex<'_>>().get(
+        &id(&format!("ex#{service}")),
+        &id(&format!("ex#{operation}")),
+    )
+}
+
+fn resolved_pagination<'m>(model: &'m Model, service: &str, operation: &str) -> PaginationInfo<'m> {
+    pagination(model, service, operation)
+        .unwrap_or_else(|err| panic!("{service} {operation}: {err}"))
+        .unwrap_or_else(|| panic!("{service} {operation}: not paginated"))
+}
+
+fn pagination_error(model: &Model, service: &str, operation: &str) -> PaginationIndexError {
+    match pagination(model, service, operation) {
+        Err(err) => err,
+        Ok(info) => panic!("{service} {operation}: expected an error, found {info:?}"),
+    }
+}
+
+/// The member IDs a pagination resolves to.
+#[derive(Debug, PartialEq)]
+struct Members {
+    input_token: String,
+    output_token: Vec<String>,
+    page_size: Option<String>,
+    items: Vec<String>,
+}
+
+impl Members {
+    fn of(info: &PaginationInfo<'_>) -> Self {
+        let path = |members: &[crate::shape::MemberView<'_>]| -> Vec<String> {
+            members.iter().map(|m| m.id().to_string()).collect()
+        };
+        Members {
+            input_token: info.input_token_member().id().to_string(),
+            output_token: path(info.output_token_member_path()),
+            page_size: info.page_size_member().map(|m| m.id().to_string()),
+            items: path(info.items_member_path()),
+        }
+    }
+
+    fn new(
+        input_token: &str,
+        output_token: &[&str],
+        page_size: Option<&str>,
+        items: &[&str],
+    ) -> Self {
+        let ex = |name: &str| format!("ex#{name}");
+        Members {
+            input_token: ex(input_token),
+            output_token: output_token.iter().map(|m| ex(m)).collect(),
+            page_size: page_size.map(ex),
+            items: items.iter().map(|m| ex(m)).collect(),
+        }
+    }
+}
+
+/// The effective trait as `(inputToken, outputToken, items, pageSize)`.
+fn effective(info: &PaginationInfo<'_>) -> [Option<String>; 4] {
+    let paginated = info.paginated_trait();
+    [
+        paginated.input_token(),
+        paginated.output_token(),
+        paginated.items(),
+        paginated.page_size(),
+    ]
+    .map(|value| value.map(str::to_owned))
+}
+
+fn owned(values: [Option<&str>; 4]) -> [Option<String>; 4] {
+    values.map(|value| value.map(str::to_owned))
+}
+
+#[test]
+fn paginated_resolves_operation_settings_and_complete_paths() {
+    let model = paginated_model(PAGINATED);
+    // The operation overrides every default of `ex#Service`, and `ex#Bare` has none.
+    for service in ["Service", "Bare"] {
+        let info = resolved_pagination(&model, service, "ListAll");
+        assert_eq!(info.service().id(), &id(&format!("ex#{service}")));
+        assert_eq!(info.operation().id(), "ex#ListAll");
+        assert_eq!(info.input_shape().id(), "ex#ListAllInput");
+        assert_eq!(info.output_shape().id(), "ex#ListAllOutput");
+        assert_eq!(
+            Members::of(&info),
+            Members::new(
+                "ListAllInput$token",
+                &["ListAllOutput$result", "Result$next"],
+                Some("ListAllInput$size"),
+                &["ListAllOutput$result", "Result$items"],
+            ),
+            "{service}"
+        );
+        assert_eq!(
+            effective(&info),
+            owned([
+                Some("token"),
+                Some("result.next"),
+                Some("result.items"),
+                Some("size")
+            ])
+        );
+    }
+}
+
+#[test]
+fn paginated_inherits_each_setting_independently() {
+    let model = paginated_model(PAGINATED);
+    let info = resolved_pagination(&model, "Service", "ListInherited");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "ListInheritedInput$nextToken",
+            &["ListInheritedOutput$nextToken"],
+            Some("ListInheritedInput$maxResults"),
+            &["ListInheritedOutput$things"],
+        )
+    );
+    assert_eq!(
+        effective(&info),
+        owned([
+            Some("nextToken"),
+            Some("nextToken"),
+            Some("things"),
+            Some("maxResults")
+        ])
+    );
+
+    // The input token and page size are overridden; the output token is inherited; neither
+    // trait sets `items`.
+    let info = resolved_pagination(&model, "Service", "ListMixed");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "ListMixedInput$start",
+            &["ListMixedOutput$nextToken"],
+            Some("ListMixedInput$limit"),
+            &[],
+        )
+    );
+    assert_eq!(
+        effective(&info),
+        owned([Some("start"), Some("nextToken"), None, Some("limit")])
+    );
+}
+
+#[test]
+fn paginated_is_service_scoped() {
+    let model = paginated_model(PAGINATED);
+    let in_service = resolved_pagination(&model, "Service", "ListShared");
+    assert_eq!(
+        Members::of(&in_service),
+        Members::new(
+            "ListSharedInput$nextToken",
+            &["ListSharedOutput$nextToken"],
+            Some("ListSharedInput$maxResults"),
+            &["ListSharedOutput$things"],
+        )
+    );
+    let in_other = resolved_pagination(&model, "Other", "ListShared");
+    assert_eq!(
+        Members::of(&in_other),
+        Members::new(
+            "ListSharedInput$cursor",
+            &["ListSharedOutput$page", "Page$cursor"],
+            None,
+            &["ListSharedOutput$things"],
+        )
+    );
+    assert_eq!(in_other.service().id(), "ex#Other");
+
+    // Containment includes operations bound only through resources.
+    let nested = resolved_pagination(&model, "Service", "ListNested");
+    assert_eq!(
+        Members::of(&nested),
+        Members::new(
+            "ListNestedInput$nextToken",
+            &["ListNestedOutput$nextToken"],
+            Some("ListNestedInput$maxResults"),
+            &["ListNestedOutput$things"],
+        )
+    );
+}
+
+#[test]
+fn paginated_is_none_outside_paginated_operations() {
+    let model = paginated_model(PAGINATED);
+    for (service, operation) in [
+        // A service's defaults alone do not make an operation paginated.
+        ("Service", "Unmarked"),
+        // Not contained in the service.
+        ("Other", "ListAll"),
+        ("Bare", "ListNested"),
+        // Missing shapes.
+        ("Missing", "ListAll"),
+        ("Service", "Missing"),
+        // Wrong shape kinds.
+        ("ListAll", "ListAll"),
+        ("Outer", "ListNested"),
+        ("Service", "Service"),
+        ("Service", "Outer"),
+        ("Service", "Page"),
+        ("Service", "Page$cursor"),
+    ] {
+        assert!(
+            pagination(&model, service, operation).unwrap().is_none(),
+            "{service} {operation}"
+        );
+    }
+
+    // Nothing is decoded for an operation that is not paginated in the service.
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    assert!(pagination(&model, "BadDefaults", "Unmarked")
+        .unwrap()
+        .is_none());
+    assert!(pagination(&model, "Defaults", "Malformed")
+        .unwrap()
+        .is_none());
+}
+
+/// The 1-based line of the first line of `source` containing `needle`.
+fn line_of(source: &str, needle: &str) -> u32 {
+    let index = source
+        .lines()
+        .position(|line| line.contains(needle))
+        .unwrap_or_else(|| panic!("`{needle}` is not in the model"));
+    u32::try_from(index + 1).unwrap()
+}
+
+#[test]
+fn paginated_reports_unresolvable_settings_where_they_are_set() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    let traits = |shape: &str| format!("/shapes/ex#{shape}/traits/smithy.api#paginated");
+    for (operation, property, value, reason) in [
+        (
+            "NoInputToken",
+            "inputToken",
+            None,
+            "neither the operation's nor the service's `@paginated` trait sets `inputToken`",
+        ),
+        (
+            "NoOutputToken",
+            "outputToken",
+            None,
+            "neither the operation's nor the service's `@paginated` trait sets `outputToken`",
+        ),
+        (
+            "BadInputToken",
+            "inputToken",
+            Some("nope"),
+            "`inputToken` names `nope`, which is not a member of `ex#BadInputTokenInput`",
+        ),
+        // Input members are never paths.
+        (
+            "DottedInputToken",
+            "inputToken",
+            Some("nested.token"),
+            "`inputToken` names `nested.token`, which is not a member of `ex#DottedInputTokenInput`",
+        ),
+        // A configured page size or items path is not dropped when it does not resolve.
+        (
+            "BadPageSize",
+            "pageSize",
+            Some("limit"),
+            "`pageSize` names `limit`, which is not a member of `ex#BadPageSizeInput`",
+        ),
+        (
+            "BadItems",
+            "items",
+            Some("page.missing"),
+            "`items` path `page.missing`: `missing` is not a member of `ex#Nested`",
+        ),
+        (
+            "EmptySegment",
+            "outputToken",
+            Some("page..token"),
+            "`outputToken` path `page..token` has an empty member name",
+        ),
+        // The reference implementation drops the trailing empty name and resolves `token`.
+        (
+            "TrailingDot",
+            "outputToken",
+            Some("token."),
+            "`outputToken` path `token.` has an empty member name",
+        ),
+        (
+            "NotAStructure",
+            "outputToken",
+            Some("token.next"),
+            "`outputToken` path `token.next`: `ex#NotAStructureOutput$token` targets \
+             `smithy.api#String`, which is not a structure",
+        ),
+        // Omitted input and output are `smithy.api#Unit`, which has no members.
+        (
+            "UnitIo",
+            "inputToken",
+            Some("token"),
+            "`inputToken` names `token`, which is not a member of `smithy.api#Unit`",
+        ),
+    ] {
+        let err = pagination_error(&model, "Plain", operation);
+        assert_eq!(err.service(), "ex#Plain", "{operation}");
+        assert_eq!(err.operation(), &id(&format!("ex#{operation}")), "{operation}");
+        assert_eq!(err.trait_owner(), err.operation(), "{operation}");
+        assert_eq!(err.property(), Some(property), "{operation}");
+        assert_eq!(err.value(), value, "{operation}");
+        assert!(std::error::Error::source(&err).is_none(), "{operation}");
+        // A missing property is reported at the operation's trait; anything else at the
+        // property that sets it.
+        let pointer = match value {
+            None => traits(operation),
+            Some(_) => format!("{}/{property}", traits(operation)),
+        };
+        assert_eq!(err.source_location().pointer(), Some(pointer.as_str()), "{operation}");
+        assert_eq!(
+            err.source_location().line(),
+            Some(line_of(
+                UNRESOLVABLE_PAGINATION,
+                &format!("operation {operation} ")
+            ) - 1),
+            "{operation}"
+        );
+        assert_eq!(
+            err.to_string(),
+            format!(
+                "paginated.smithy:{}:{}: cannot resolve the pagination of `ex#{operation}` in \
+                 service `ex#Plain`: {reason} (at {pointer})",
+                err.source_location().line().unwrap(),
+                err.source_location().column().unwrap(),
+            ),
+        );
+    }
+}
+
+#[test]
+fn paginated_reports_inherited_settings_at_the_service() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    let err = pagination_error(&model, "Defaults", "InheritsBadItems");
+    assert_eq!(err.trait_owner(), "ex#Defaults");
+    assert_eq!(err.property(), Some("items"));
+    assert_eq!(err.value(), Some("missing"));
+    assert_eq!(
+        err.source_location().pointer(),
+        Some("/shapes/ex#Defaults/traits/smithy.api#paginated/items")
+    );
+    assert_eq!(
+        err.source_location().line(),
+        Some(line_of(UNRESOLVABLE_PAGINATION, r#"items: "missing""#))
+    );
+    assert!(
+        err.to_string().contains(
+            "`items` (inherited from `ex#Defaults`) path `missing`: `missing` is not a member \
+             of `ex#InheritsBadItemsOutput`"
+        ),
+        "{err}"
+    );
+
+    // An operation's own value replaces the unresolvable default.
+    let info = resolved_pagination(&model, "Defaults", "OverridesBadItems");
+    assert_eq!(
+        Members::of(&info),
+        Members::new(
+            "OverridesBadItemsInput$token",
+            &["OverridesBadItemsOutput$token"],
+            None,
+            &["OverridesBadItemsOutput$things"],
+        )
+    );
+}
+
+#[test]
+fn paginated_reports_malformed_traits() {
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    for (service, operation, owner, pointer, message) in [
+        (
+            "Plain",
+            "Malformed",
+            "ex#Malformed",
+            "/shapes/ex#Malformed/traits/smithy.api#paginated/inputToken",
+            "expected `inputToken` to be a string, found number",
+        ),
+        // The service's trait is decoded only for operations paginated within it.
+        (
+            "BadDefaults",
+            "Marked",
+            "ex#BadDefaults",
+            "/shapes/ex#BadDefaults/traits/smithy.api#paginated/pageSize",
+            "expected `pageSize` to be a string, found boolean",
+        ),
+    ] {
+        let err = pagination_error(&model, service, operation);
+        assert_eq!(err.trait_owner(), owner, "{operation}");
+        assert_eq!(err.property(), None, "{operation}");
+        assert_eq!(err.value(), None, "{operation}");
+        assert_eq!(
+            err.source_location().pointer(),
+            Some(pointer),
+            "{operation}"
+        );
+        let source = std::error::Error::source(&err)
+            .and_then(|source| source.downcast_ref::<crate::traits::TraitDecodeError>())
+            .expect("the decode error is the source");
+        assert_eq!(source.trait_id(), Some(&crate::traits::PAGINATED));
+        assert_eq!(source.message(), message);
+        assert!(
+            err.to_string().contains(&format!(
+                "cannot resolve the pagination of `ex#{operation}` in service `ex#{service}`: \
+                 invalid `@paginated` trait on `{owner}`: {message} (at {pointer})"
+            )),
+            "{err}"
+        );
+    }
+}
+
+#[test]
+fn paginated_send_sync_and_debug() {
+    fn assert<T: Send + Sync + Clone + std::fmt::Debug>(_: &T) {}
+    fn assert_error<E: std::error::Error + Send + Sync + 'static>(_: &E) {}
+    let model = paginated_model(PAGINATED);
+    let index = model.knowledge::<PaginatedIndex<'_>>();
+    assert(&index);
+    assert_eq!(format!("{index:?}"), "PaginatedIndex { .. }");
+    assert(&resolved_pagination(&model, "Service", "ListAll"));
+    let model = paginated_model(UNRESOLVABLE_PAGINATION);
+    assert_error(&pagination_error(&model, "Plain", "NoInputToken"));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1110,8 +1884,13 @@ proptest! {
     #[test]
     fn knowledge_matches_oracles(graph in graph()) {
         let model = Model::from_json_str("generated", &graph.json()).unwrap();
-        let knowledge = model.knowledge();
+        let top_down = model.knowledge::<TopDownIndex<'_>>();
+        let operations = model.knowledge::<OperationIndex<'_>>();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
+        let closures = model.knowledge::<ServiceClosureIndex<'_>>();
         assert_symmetric(&model);
+        assert_nodes(&model);
+        assert_service_closures(&model);
         let entities: Vec<String> = (0..RESOURCES)
             .map(|r| format!("ex#R{r}"))
             .chain((0..OPS).map(|o| format!("ex#O{o}")))
@@ -1119,19 +1898,30 @@ proptest! {
 
         for start in (0..SERVICES).map(|s| format!("ex#S{s}")).chain((0..RESOURCES).map(|r| format!("ex#R{r}"))) {
             let expected = graph.closure(&start);
-            let ops = op_ids(knowledge.top_down().get_contained_operations(&id(&start)).unwrap());
-            let resources = ids(knowledge.top_down().get_contained_resources(&id(&start)).unwrap(), |r| r.id());
+            let ops = op_ids(top_down.get_contained_operations(&id(&start)).unwrap());
+            let resources = ids(top_down.get_contained_resources(&id(&start)).unwrap(), |r| r.id());
             let expected_ops: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#O")).cloned().collect();
             let expected_resources: Vec<_> = expected.iter().filter(|id| id.starts_with("ex#R")).cloned().collect();
             prop_assert_eq!(ops, expected_ops);
             prop_assert_eq!(resources, expected_resources);
+            for entity in &entities {
+                prop_assert_eq!(top_down.contains(&id(&start), &id(entity)), expected.contains(entity));
+            }
         }
 
         for s in 0..SERVICES {
             let service = format!("ex#S{s}");
             let closure = graph.closure(&service);
+            // A service closure reaches operations and resources only through containment.
+            let reached: BTreeSet<String> = closures
+                .get(&id(&service))
+                .unwrap()
+                .shapes()
+                .map(|shape| shape.id().to_string())
+                .filter(|id| id.starts_with("ex#O") || id.starts_with("ex#R"))
+                .collect();
+            prop_assert_eq!(&reached, &closure);
             for entity in &entities {
-                let bottom_up = knowledge.bottom_up();
                 if !closure.contains(entity) {
                     prop_assert!(bottom_up.get_direct_bindings(&id(&service), &id(entity)).is_none());
                     prop_assert!(bottom_up.parent_chain(&id(&service), &id(entity)).unwrap().is_none());
@@ -1180,7 +1970,7 @@ proptest! {
 
             for o in 0..OPS {
                 let op = format!("ex#O{o}");
-                let errors = knowledge.operations().get(&id(&op)).unwrap().errors_in(&id(&service));
+                let errors = operations.get(&id(&op)).unwrap().errors_in(&id(&service));
                 if !closure.contains(&op) {
                     prop_assert!(errors.is_none());
                     continue;

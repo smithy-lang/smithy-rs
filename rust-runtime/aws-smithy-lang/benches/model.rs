@@ -7,6 +7,8 @@
 //! EC2.
 //! See `benches/README.md` for methodology and the recorded baseline.
 
+use aws_smithy_lang::knowledge::{BottomUpIndex, OperationIndex};
+use aws_smithy_lang::relationships::RelationshipIndex;
 use aws_smithy_lang::traversal::Walker;
 use aws_smithy_lang::{traits, AstWriter, Model, ShapeId};
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
@@ -69,7 +71,7 @@ fn bench(c: &mut Criterion) {
             b.iter_batched(
                 || Model::from_json_slice(name, bytes).unwrap(),
                 |model| {
-                    black_box(model.knowledge().relationships());
+                    black_box(model.knowledge::<RelationshipIndex<'_>>());
                     model
                 },
                 BatchSize::LargeInput,
@@ -80,7 +82,7 @@ fn bench(c: &mut Criterion) {
 
     // The remaining queries run against an initialized cache.
     for (_, model) in &models {
-        model.knowledge().relationships();
+        model.knowledge::<RelationshipIndex<'_>>();
     }
 
     let mut group = c.benchmark_group("contained_operations");
@@ -94,7 +96,7 @@ fn bench(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("incoming_relationships");
     for (name, model) in &models {
-        let relationships = model.knowledge().relationships();
+        let relationships = model.knowledge::<RelationshipIndex<'_>>();
         let string = ShapeId::from_static("smithy.api#String");
         group.bench_function(BenchmarkId::from_parameter(name), |b| {
             b.iter(|| {
@@ -111,7 +113,7 @@ fn bench(c: &mut Criterion) {
     for (name, model) in &models {
         let service = model.services().next().unwrap();
         let input = service.contained_operations().next().unwrap().input();
-        let operations = model.knowledge().operations();
+        let operations = model.knowledge::<OperationIndex<'_>>();
         group.bench_function(BenchmarkId::from_parameter(name), |b| {
             b.iter(|| operations.input_bindings(black_box(input)).unwrap().len())
         });
@@ -122,7 +124,7 @@ fn bench(c: &mut Criterion) {
     for (name, model) in &models {
         let service = model.services().next().unwrap();
         // The deepest operation, to measure the slowest chain lookup.
-        let bottom_up = model.knowledge().bottom_up();
+        let bottom_up = model.knowledge::<BottomUpIndex<'_>>();
         let operation = service
             .contained_operations()
             .max_by_key(|op| {
@@ -250,7 +252,7 @@ fn runtime_schemas(c: &mut Criterion) {
     let mut group = c.benchmark_group("schema/service");
     for (name, model) in &models {
         let service = model.services().next().unwrap().id().clone();
-        model.knowledge().relationships();
+        model.knowledge::<RelationshipIndex<'_>>();
         group.bench_with_input(BenchmarkId::from_parameter(name), model, |b, model| {
             b.iter(|| {
                 RuntimeSchemaSet::builder(black_box(model))

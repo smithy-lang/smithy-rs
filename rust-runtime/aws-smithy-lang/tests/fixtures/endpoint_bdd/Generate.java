@@ -46,7 +46,7 @@ import software.amazon.smithy.rulesengine.transforms.CompileBdd;
  * unpatched Java failed on.
  */
 public final class Generate {
-    private static final String PINNED = "1.73.0";
+    private static final String PINNED = "1.74.1";
     private static final String S3 = "com.amazonaws.s3#AmazonS3";
     private static final String RULE_SET = "smithy.rules#endpointRuleSet";
     private static final String BDD = "smithy.rules#endpointBdd";

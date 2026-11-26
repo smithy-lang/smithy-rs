@@ -6,7 +6,7 @@
 # Regenerates expected/ with the pinned Smithy Java rules engine. See README.md.
 set -euo pipefail
 
-VERSION=1.73.0
+VERSION=1.74.1
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../../../.." && pwd)"
 JARS="${SMITHY_JARS:-$HOME/.gradle/caches/modules-2/files-2.1/software.amazon.smithy}"

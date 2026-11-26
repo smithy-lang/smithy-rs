@@ -1,0 +1,31 @@
+{
+    "smithy.example#MyUnion": {
+        "mixins": [
+            "smithy.example#MyMixin"
+        ],
+        "traits": {
+            "smithy.api#mixin": {}
+        },
+        "introduced": [
+            "smithy.api#mixin"
+        ],
+        "members": [
+            {
+                "mixins": [
+                    "smithy.example#MyMixin$bar"
+                ],
+                "traits": {},
+                "introduced": [],
+                "name": "bar",
+                "target": "smithy.api#String"
+            },
+            {
+                "mixins": [],
+                "traits": {},
+                "introduced": [],
+                "name": "baz",
+                "target": "smithy.api#String"
+            }
+        ]
+    }
+}
