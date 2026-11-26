@@ -27,6 +27,7 @@ function test_tool {
     popd &>/dev/null
 }
 
+test_tool "tools/ci-build/canary" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-build/changelogger" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-build/crate-hasher" "${RUST_STABLE_VERSION}"
 test_tool "tools/ci-build/difftags" "${RUST_STABLE_VERSION}"
