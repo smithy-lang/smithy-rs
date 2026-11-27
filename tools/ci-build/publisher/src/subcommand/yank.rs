@@ -34,6 +34,10 @@ pub struct YankArgs {
     /// Unyank instead, to undo a mistake.
     #[clap(long)]
     undo: bool,
+    /// Skip the warning about crates the yank strands. Finding them reads crates.io's reverse
+    /// dependencies, a page of 100 a second, before the first yank.
+    #[clap(long)]
+    skip_dependents_check: bool,
     /// Yank from this registry in cargo's config instead of crates.io, such as a local test
     /// registry. Its sparse index URL is read from `CARGO_REGISTRIES_<NAME>_INDEX`, as cargo does.
     #[clap(long)]
@@ -236,7 +240,7 @@ async fn run(registry: &impl Registry, args: &YankArgs, interactive: bool) -> Re
     }
     print_plan(&args.crates, &todo, args.undo);
     // An unyank strands nothing.
-    if !args.undo {
+    if !args.undo && !args.skip_dependents_check {
         for warning in stranded_warnings(registry, &todo).await {
             warn!("{warning}");
         }
@@ -699,6 +703,7 @@ mod tests {
             dry_run: false,
             skip_confirmation: true,
             undo: false,
+            skip_dependents_check: false,
             registry: None,
         }
     }
@@ -877,7 +882,9 @@ mod tests {
     fn parses_the_command_line() {
         let args =
             YankArgs::try_parse_from(["yank", "-y", "--undo", "a@1.0.0", "b@2.0.0"]).unwrap();
-        assert!(args.skip_confirmation && args.undo && !args.dry_run);
+        assert!(
+            args.skip_confirmation && args.undo && !args.dry_run && !args.skip_dependents_check
+        );
         assert_eq!(
             vec!["a@1.0.0", "b@2.0.0"],
             args.crates
@@ -889,6 +896,11 @@ mod tests {
             YankArgs::try_parse_from(["yank", "--dry-run", "a@1.0.0"])
                 .unwrap()
                 .dry_run
+        );
+        assert!(
+            YankArgs::try_parse_from(["yank", "--skip-dependents-check", "a@1.0.0"])
+                .unwrap()
+                .skip_dependents_check
         );
         assert_eq!(
             Some("mock"),
@@ -1184,6 +1196,16 @@ mod tests {
             run(&registry, &undo, false).await.unwrap();
             assert_eq!(0, registry.dependents_lookups(), "dry run: {dry_run}");
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn skips_the_dependents_check_when_asked() {
+        let registry = FakeRegistry::new(&[("a@1.0.0", false)]);
+        let mut args = args(&["a@1.0.0"]);
+        args.skip_dependents_check = true;
+        run(&registry, &args, false).await.unwrap();
+        assert_eq!(0, registry.dependents_lookups());
+        assert_eq!(vec!["yank a@1.0.0"], registry.sent());
     }
 
     #[test]
