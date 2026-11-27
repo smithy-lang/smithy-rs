@@ -6,6 +6,7 @@
 // The builder for a dynamic client, and the steps of `build()`.
 
 use super::DynamicClient;
+use crate::auth::DefaultAuthSchemeResolver;
 use crate::config::{self, puts_plugin, Applies, ConfigParts, Put};
 use crate::error::{BuildError, MissingHttpClient};
 use crate::protocol::{detect_protocol, protocol_traits, AWS_QUERY};
@@ -21,6 +22,7 @@ use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponentsBuilder, SharedConfigValidator,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugins, StaticRuntimePlugin};
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_schema::protocol::{
     ServiceShapeName, ServiceShapeNamespace, ServiceVersion, ServiceXmlNamespace,
 };
@@ -109,7 +111,13 @@ impl DynamicClientBuilder {
         {
             return Err(BuildError::missing_service_version(service));
         }
+        // Without a resolver in the config, each call tries its operation's auth schemes from the
+        // model.
+        config
+            .auth_scheme_resolver
+            .get_or_insert_with(|| DefaultAuthSchemeResolver.into_shared());
         let puts = std::mem::take(&mut config.puts);
+        let auth_schemes = std::mem::take(&mut config.auth_schemes);
         let ConfigParts {
             mut layer,
             mut components,
@@ -120,6 +128,14 @@ impl DynamicClientBuilder {
         ));
         layer.store_put(protocol);
         store_service_facts(&mut layer, &service_view);
+        crate::auth::http::store_service_auth(&service_view, &mut components);
+        #[cfg(feature = "aws")]
+        crate::auth::aws::store_service_auth(&service_view, &mut layer, &mut components);
+        // Pushed after the modeled schemes, so a user's scheme replaces a modeled one with the
+        // same ID.
+        for auth_scheme in auth_schemes {
+            components.push_auth_scheme(auth_scheme);
+        }
         let mut runtime_plugins =
             runtime_plugins(components, layer, behavior_version, service.name());
         if let Some(puts) = puts_plugin(&puts) {

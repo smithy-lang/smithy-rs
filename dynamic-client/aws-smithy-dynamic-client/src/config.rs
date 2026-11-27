@@ -7,8 +7,10 @@
 
 pub use aws_smithy_dynamic_client_api::config_key::{Applies, ConfigKey, EndpointBuiltIn};
 
+pub use crate::auth::AuthSchemeParams;
 pub use aws_smithy_runtime::client::identity::IdentityCache;
 pub use aws_smithy_runtime::client::retries::RetryPartition;
+pub use aws_smithy_runtime_api::client::auth::{AuthSchemeId, AuthSchemePreference};
 pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 pub use aws_smithy_types::retry::RetryConfig;
@@ -18,14 +20,21 @@ pub use aws_types::region::Region;
 
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime::client::auth::no_auth::NoAuthRuntimePluginV2;
+use aws_smithy_runtime_api::client::auth::{
+    AuthScheme, ResolveAuthSchemeOptions, SharedAuthScheme, SharedAuthSchemeOptionResolver,
+};
 use aws_smithy_runtime_api::client::http::{HttpClient, SharedHttpClient};
-use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+use aws_smithy_runtime_api::client::identity::{
+    ResolveCachedIdentity, ResolveIdentity, SharedIdentityCache, SharedIdentityResolver,
+};
 use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{
     RuntimePlugin, SharedRuntimePlugin, StaticRuntimePlugin,
 };
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
 use aws_smithy_types::config_bag::Layer;
 use std::any::{type_name, TypeId};
@@ -73,6 +82,10 @@ pub struct Builder {
     pub(crate) timeout_config: Option<TimeoutConfig>,
     pub(crate) retry_partition: Option<RetryPartition>,
     pub(crate) identity_cache: Option<SharedIdentityCache>,
+    pub(crate) identity_resolvers: Vec<(AuthSchemeId, SharedIdentityResolver)>,
+    pub(crate) auth_schemes: Vec<SharedAuthScheme>,
+    pub(crate) auth_scheme_resolver: Option<SharedAuthSchemeOptionResolver>,
+    pub(crate) auth_scheme_preference: Option<AuthSchemePreference>,
     pub(crate) stalled_stream_protection: Option<StalledStreamProtectionConfig>,
     pub(crate) retry_classifiers: Vec<SharedRetryClassifier>,
     pub(crate) interceptors: Vec<SharedInterceptor>,
@@ -82,7 +95,7 @@ pub struct Builder {
     #[cfg(feature = "aws")]
     pub(crate) region: Option<Region>,
     #[cfg(feature = "aws")]
-    pub(crate) credentials_provider: Option<SharedCredentialsProvider>,
+    pub(crate) sigv4a_signing_region_set: Option<aws_types::region::SigningRegionSet>,
     #[cfg(feature = "aws")]
     pub(crate) invocation_id_generator: Option<SharedInvocationIdGenerator>,
     #[cfg(feature = "aws")]
@@ -167,6 +180,137 @@ impl Builder {
         self
     }
 
+    /// Sets the identity resolver for the auth scheme `scheme_id`.
+    ///
+    /// The model specifies auth schemes by trait. The table below gives the scheme ID for each
+    /// trait and the identity its resolver must produce.
+    ///
+    /// | Trait | Scheme ID | Identity |
+    /// |---|---|---|
+    /// | `@httpBearerAuth` | `HTTP_BEARER_AUTH_SCHEME_ID` | [`Token`] |
+    /// | `@httpApiKeyAuth` | `HTTP_API_KEY_AUTH_SCHEME_ID` | [`Token`] |
+    /// | `@httpBasicAuth` | `HTTP_BASIC_AUTH_SCHEME_ID` | [`Login`] |
+    /// | `@aws.auth#sigv4`, `@aws.auth#sigv4a` | `sigv4`, `sigv4a` | AWS credentials |
+    ///
+    /// `Token` and `Login` implement [`ResolveIdentity`], so a fixed value works as its own
+    /// resolver:
+    ///
+    /// ```
+    /// use aws_smithy_dynamic_client::config::Config;
+    /// use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+    /// use aws_smithy_runtime_api::client::identity::http::Token;
+    ///
+    /// let config = Config::builder()
+    ///     .identity_resolver(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("my-token", None))
+    ///     .build();
+    /// ```
+    ///
+    /// A service with both `@httpBearerAuth` and `@httpApiKeyAuth` needs one call for each
+    /// scheme. A later call for the same scheme wins. For AWS credentials,
+    /// [`credentials_provider`](Self::credentials_provider) sets the resolver of both `sigv4`
+    /// and `sigv4a`, and also counts as a call for each.
+    ///
+    /// [`Token`]: aws_smithy_runtime_api::client::identity::http::Token
+    /// [`Login`]: aws_smithy_runtime_api::client::identity::http::Login
+    pub fn identity_resolver(
+        mut self,
+        scheme_id: AuthSchemeId,
+        identity_resolver: impl ResolveIdentity + 'static,
+    ) -> Self {
+        self.identity_resolvers
+            .push((scheme_id, identity_resolver.into_shared()));
+        self
+    }
+
+    /// Adds an auth scheme. Each call adds one more.
+    ///
+    /// The scheme is used for the calls whose operation has the scheme's ID in its auth schemes
+    /// from the model. The ID of a modeled scheme is the shape name of its auth trait, such as
+    /// `customAuth` for `@example#customAuth`. So a scheme for a custom auth trait of the model
+    /// needs no auth scheme resolver. A scheme with the ID of a built-in scheme, such as
+    /// `httpBearerAuth`, replaces the built-in one.
+    ///
+    /// Set the scheme's identity resolver with [`identity_resolver`](Self::identity_resolver),
+    /// or return one from the scheme's own `identity_resolver`.
+    pub fn push_auth_scheme(mut self, auth_scheme: impl AuthScheme + 'static) -> Self {
+        self.auth_schemes.push(auth_scheme.into_shared());
+        self
+    }
+
+    /// Sets the auth scheme resolver. For each call, the resolver returns the auth schemes to
+    /// try, in order.
+    ///
+    /// Without one, each call tries the operation's auth schemes from the model, as listed by
+    /// [`AuthSchemeParams::auth_schemes`]. A resolver gets the same [`AuthSchemeParams`]:
+    ///
+    /// ```
+    /// use aws_smithy_dynamic_client::config::{AuthSchemeParams, Config};
+    /// use aws_smithy_runtime_api::client::auth::{
+    ///     AuthSchemeOption, AuthSchemeOptionResolverParams, AuthSchemeOptionsFuture,
+    ///     ResolveAuthSchemeOptions,
+    /// };
+    /// use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+    /// use aws_smithy_types::config_bag::ConfigBag;
+    ///
+    /// // Tries the operation's auth schemes in reverse order.
+    /// #[derive(Debug)]
+    /// struct Reversed;
+    ///
+    /// impl ResolveAuthSchemeOptions for Reversed {
+    ///     fn resolve_auth_scheme_options_v2<'a>(
+    ///         &'a self,
+    ///         params: &'a AuthSchemeOptionResolverParams,
+    ///         _cfg: &'a ConfigBag,
+    ///         _components: &'a RuntimeComponents,
+    ///     ) -> AuthSchemeOptionsFuture<'a> {
+    ///         let params = params.get::<AuthSchemeParams>().expect("a dynamic client call");
+    ///         let options = params.auth_schemes().iter().rev().cloned();
+    ///         AuthSchemeOptionsFuture::ready(Ok(options.map(AuthSchemeOption::from).collect()))
+    ///     }
+    /// }
+    ///
+    /// let config = Config::builder().auth_scheme_resolver(Reversed).build();
+    /// ```
+    pub fn auth_scheme_resolver(
+        mut self,
+        auth_scheme_resolver: impl ResolveAuthSchemeOptions + 'static,
+    ) -> Self {
+        self.auth_scheme_resolver = Some(auth_scheme_resolver.into_shared());
+        self
+    }
+
+    /// Sets the auth scheme preference. Each call tries the preferred auth schemes first, in the
+    /// preference's order, and then the rest of its auth schemes.
+    ///
+    /// The preference only reorders the auth schemes of a call. A preferred scheme that the call
+    /// does not have is ignored.
+    ///
+    /// ```
+    /// use aws_smithy_dynamic_client::config::Config;
+    /// use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+    ///
+    /// let config = Config::builder()
+    ///     .auth_scheme_preference([HTTP_BEARER_AUTH_SCHEME_ID])
+    ///     .build();
+    /// ```
+    pub fn auth_scheme_preference(
+        mut self,
+        auth_scheme_preference: impl Into<AuthSchemePreference>,
+    ) -> Self {
+        self.auth_scheme_preference = Some(auth_scheme_preference.into());
+        self
+    }
+
+    /// Allows calls with no auth.
+    ///
+    /// Each call tries `noAuth` after the auth schemes of its operation. So a call with no
+    /// identity for any of those schemes is sent with no auth.
+    pub fn allow_no_auth(mut self) -> Self {
+        self.runtime_plugins
+            .push(NoAuthRuntimePluginV2::new().into_shared());
+        self
+    }
+
     /// Sets the stalled stream protection config.
     ///
     /// Without one, the default for the behavior version is used.
@@ -228,14 +372,22 @@ impl Builder {
         self
     }
 
-    /// Sets the provider of the AWS credentials that sign requests.
+    /// Sets the provider of the AWS credentials that sign requests with SigV4 or SigV4a.
+    ///
+    /// The provider is the identity resolver of both `sigv4` and `sigv4a`, as if it were set
+    /// with [`identity_resolver`](Self::identity_resolver) for each. The last call for a scheme
+    /// wins.
     #[cfg(feature = "aws")]
     pub fn credentials_provider(
-        mut self,
+        self,
         credentials_provider: impl ProvideCredentials + 'static,
     ) -> Self {
-        self.credentials_provider = Some(SharedCredentialsProvider::new(credentials_provider));
-        self
+        let credentials_provider = SharedCredentialsProvider::new(credentials_provider);
+        self.identity_resolver(
+            aws_runtime::auth::sigv4::SCHEME_ID,
+            credentials_provider.clone(),
+        )
+        .identity_resolver(aws_runtime::auth::sigv4a::SCHEME_ID, credentials_provider)
     }
 
     /// Sets the generator of the invocation ID sent with each request.
@@ -270,6 +422,9 @@ impl Builder {
         self.interceptors.append(&mut later.interceptors);
         self.runtime_plugins.append(&mut later.runtime_plugins);
         self.puts.append(&mut later.puts);
+        self.identity_resolvers
+            .append(&mut later.identity_resolvers);
+        self.auth_schemes.append(&mut later.auth_schemes);
         Self {
             behavior_version: later.behavior_version.or(self.behavior_version),
             protocol: later.protocol.or(self.protocol),
@@ -288,6 +443,10 @@ impl Builder {
             },
             retry_partition: later.retry_partition.or(self.retry_partition),
             identity_cache: later.identity_cache.or(self.identity_cache),
+            identity_resolvers: self.identity_resolvers,
+            auth_schemes: self.auth_schemes,
+            auth_scheme_resolver: later.auth_scheme_resolver.or(self.auth_scheme_resolver),
+            auth_scheme_preference: later.auth_scheme_preference.or(self.auth_scheme_preference),
             stalled_stream_protection: later
                 .stalled_stream_protection
                 .or(self.stalled_stream_protection),
@@ -298,7 +457,9 @@ impl Builder {
             #[cfg(feature = "aws")]
             region: later.region.or(self.region),
             #[cfg(feature = "aws")]
-            credentials_provider: later.credentials_provider.or(self.credentials_provider),
+            sigv4a_signing_region_set: later
+                .sigv4a_signing_region_set
+                .or(self.sigv4a_signing_region_set),
             #[cfg(feature = "aws")]
             invocation_id_generator: later
                 .invocation_id_generator
@@ -319,18 +480,19 @@ impl Builder {
         components.set_sleep_impl(self.sleep_impl);
         components.set_time_source(self.time_source);
         components.set_identity_cache(self.identity_cache);
+        components.set_auth_scheme_option_resolver(self.auth_scheme_resolver);
         for retry_classifier in self.retry_classifiers {
             components.push_retry_classifier(retry_classifier);
         }
         for interceptor in self.interceptors {
             components.push_interceptor(interceptor);
         }
-        // TODO(dynamic-client): Also set the credentials provider for SigV4a, for a model that
-        // uses SigV4a, as generated clients do.
-        #[cfg(feature = "aws")]
-        if let Some(credentials_provider) = self.credentials_provider {
-            components
-                .set_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, credentials_provider);
+        // Set in order, so the last resolver for a scheme wins.
+        for (scheme_id, identity_resolver) in self.identity_resolvers {
+            components.set_identity_resolver(scheme_id, identity_resolver);
+        }
+        for auth_scheme in self.auth_schemes {
+            components.push_auth_scheme(auth_scheme);
         }
         let mut layer = Layer::new(name);
         if let Some(protocol) = self.protocol {
@@ -348,9 +510,18 @@ impl Builder {
         if let Some(stalled_stream_protection) = self.stalled_stream_protection {
             layer.store_put(stalled_stream_protection);
         }
+        if let Some(auth_scheme_preference) = self.auth_scheme_preference {
+            layer.store_put(auth_scheme_preference);
+        }
+        // The region is also the SigV4 signing region.
         #[cfg(feature = "aws")]
         if let Some(region) = self.region {
+            layer.store_put(aws_types::region::SigningRegion::from(region.clone()));
             layer.store_put(region);
+        }
+        #[cfg(feature = "aws")]
+        if let Some(sigv4a_signing_region_set) = self.sigv4a_signing_region_set {
+            layer.store_put(sigv4a_signing_region_set);
         }
         #[cfg(feature = "aws")]
         if let Some(invocation_id_generator) = self.invocation_id_generator {
@@ -456,7 +627,7 @@ impl From<&SdkConfig> for Builder {
     // TODO(dynamic-client): Copy the other `SdkConfig` settings, such as `endpoint_url`,
     // `use_fips`, `use_dual_stack`, and `app_name`, when the config gets setters for them.
     fn from(sdk_config: &SdkConfig) -> Self {
-        Builder {
+        let builder = Builder {
             behavior_version: sdk_config.behavior_version(),
             protocol: sdk_config.protocol(),
             http_client: sdk_config.http_client(),
@@ -466,10 +637,15 @@ impl From<&SdkConfig> for Builder {
             timeout_config: sdk_config.timeout_config().cloned(),
             identity_cache: sdk_config.identity_cache(),
             stalled_stream_protection: sdk_config.stalled_stream_protection(),
+            auth_scheme_preference: sdk_config.auth_scheme_preference().cloned(),
             region: sdk_config.region().cloned(),
-            credentials_provider: sdk_config.credentials_provider(),
+            sigv4a_signing_region_set: sdk_config.sigv4a_signing_region_set().cloned(),
             disable_clock_skew_correction: sdk_config.disable_clock_skew_correction(),
             ..Default::default()
+        };
+        match sdk_config.credentials_provider() {
+            Some(credentials_provider) => builder.credentials_provider(credentials_provider),
+            None => builder,
         }
     }
 }

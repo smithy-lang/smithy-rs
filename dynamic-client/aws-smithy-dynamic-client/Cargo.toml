@@ -11,8 +11,12 @@ rust-version = "1.94.1"
 
 [features]
 default = ["aws", "default-https-client", "rt-tokio"]
-# The AWS settings: region, credentials provider, and invocation ID generator.
-aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types"]
+# The AWS settings: region, credentials provider, and invocation ID generator. Also the SigV4 and
+# SigV4a auth schemes.
+# TODO(dynamic-client): Default to the AWS-LC crypto backend for SigV4 signing once
+# https://github.com/smithy-lang/smithy-rs/pull/4874 merges. Keep a feature that selects the
+# RustCrypto backend, so WebAssembly builds still work.
+aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types", "aws-runtime/sigv4a"]
 # The default HTTP client, used when the config sets none.
 default-https-client = ["aws-smithy-runtime/default-https-client"]
 # The Tokio sleep, used when the config sets no sleep implementation.
@@ -28,8 +32,8 @@ aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
 aws-smithy-json = { path = "../../rust-runtime/aws-smithy-json" }
 aws-smithy-lang = { path = "../../rust-runtime/aws-smithy-lang", features = ["runtime-schema"] }
 aws-smithy-query = { path = "../../rust-runtime/aws-smithy-query" }
-aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client"] }
-aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "http-auth"] }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-auth"] }
 aws-smithy-schema = { path = "../../rust-runtime/aws-smithy-schema" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }
 aws-smithy-xml = { path = "../../rust-runtime/aws-smithy-xml" }

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::auth;
 use crate::client::warn_unused_keys;
 use crate::config::{self, puts_plugin, ConfigParts};
 use crate::error::DynamicOperationError;
@@ -15,10 +16,7 @@ use aws_smithy_runtime::client::identity::IdentityCache;
 use aws_smithy_runtime::client::retries::classifiers::{
     ModeledAsRetryableClassifier, TransientErrorClassifier,
 };
-use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
-use aws_smithy_runtime_api::client::auth::{
-    AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
-};
+use aws_smithy_runtime_api::client::auth::{AuthSchemeOptionResolverParams, SharedAuthScheme};
 use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
@@ -43,16 +41,21 @@ pub(crate) fn operation_plugin(client: &DynamicClient, operation: &ShapeId) -> S
     // TODO(aws-smithy-lang): Store `SensitiveOutput` for an operation whose output reaches a
     // `@sensitive` shape, as generated clients do, once a `SensitiveIndex` exists. Until then, the
     // orchestrator logs the whole response body at trace level, with any sensitive values in it.
-    // TODO(dynamic-client): Resolve the operation's auth options from the model.
-    layer.store_put(AuthSchemeOptionResolverParams::new(()));
+    let model = client.schemas.model();
+    let operation_view = model
+        .get_shape(operation)
+        .and_then(|shape| shape.as_shape())
+        .and_then(|shape| shape.as_operation())
+        .expect("the client's operations are operation shapes of the model");
+    let auth_params = auth::params(model, &client.service_view(), &operation_view);
+    #[cfg(feature = "aws")]
+    auth::aws::store_operation_auth(&operation_view, auth_params.auth_schemes(), &mut layer);
+    layer.store_put(AuthSchemeOptionResolverParams::new(auth_params));
     // TODO(dynamic-client): Resolve the endpoint from the model's endpoint rules.
     layer.store_put(EndpointResolverParams::new(()));
     let components = RuntimeComponentsBuilder::new("DynamicOperation")
         .with_retry_classifier(TransientErrorClassifier::<DynamicOperationError>::new())
         .with_retry_classifier(ModeledAsRetryableClassifier::<DynamicOperationError>::new())
-        .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
-            StaticAuthSchemeOptionResolver::new(vec![NO_AUTH_SCHEME_ID]),
-        )))
         .with_auth_scheme(SharedAuthScheme::new(NoAuthScheme::new()))
         .with_identity_resolver(
             NO_AUTH_SCHEME_ID,
