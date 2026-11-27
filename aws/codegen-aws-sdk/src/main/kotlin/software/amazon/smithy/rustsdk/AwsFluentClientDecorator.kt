@@ -69,21 +69,13 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
 
-        // NOTE: We enable both rustls and default-https-client as default features. This keeps the legacy hyper+rustls
-        // stack working as is and lets BehaviorVersion control which client you get. In a future release we will
-        // break this and disable the rustls feature by default (and break old BMV versions w.r.t http client default).
-        if (codegenContext.sdkSettings().includeLegacyClient) {
-            rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
-            // `legacy-https-client` names the same hyper 0.14.x + rustls 0.21.x stack that `rustls` selects today. It
-            // exists ahead of the change described above so that a call site which actually wants the legacy stack can
-            // say so by a name whose meaning will not move under it: once `rustls` becomes a synonym for
-            // `default-https-client`, anything already spelled `legacy-https-client` is unaffected.
-            //
-            // Deliberately not a default feature. `rustls` above is what puts the legacy stack in a default build, so
-            // adding this one changes no dependency tree; it only adds a second, stable name for it.
-            rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
-        }
+        // Of these three, only `default-https-client` (hyper 1.x) is on by default, mirroring the layout
+        // `aws-config` uses. `rustls` was only ever a proxy for "give me an HTTPS client", so it becomes a
+        // synonym for that: call sites keep resolving, now onto hyper 1.x. The hyper 0.14.x + rustls 0.21.x
+        // stack, which is what pulls in `http` 0.2.x, moves to the opt-in `legacy-https-client`.
         rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
+        rustCrate.mergeFeature(Feature("rustls", default = false, listOf("default-https-client")))
+        rustCrate.mergeFeature(Feature("legacy-https-client", default = false, listOf("aws-smithy-runtime/tls-rustls")))
     }
 
     override fun libRsCustomizations(

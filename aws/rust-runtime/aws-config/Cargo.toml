@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.13.4"
+version = "1.14.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -24,7 +24,11 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/r
 client-hyper = ["aws-smithy-runtime/default-https-client"]
 rustls = ["client-hyper"]
 default-https-client = ["aws-smithy-runtime/default-https-client"]
-legacy-client = ["aws-smithy-runtime/tls-rustls"]
+# Deprecated no-op. It supplied the legacy `hyper` 0.14.x client that behavior versions older than
+# `v2026_01_12` selected; those now fall back to `hyper` 1.x, so nothing reads it. Kept declared
+# because removing a published feature fails resolution for anyone who names it. For the legacy
+# stack, depend on `aws-smithy-runtime` directly with `features = ["client", "tls-rustls"]`.
+legacy-client = []
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:sha1", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-login = [
     "dep:aws-sdk-signin",

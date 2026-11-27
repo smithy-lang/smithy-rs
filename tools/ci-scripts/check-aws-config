@@ -47,6 +47,24 @@ if [[ "${MODE}" == "all" || "${MODE}" == "base" ]]; then
     echo "${C_YELLOW}## Checking for duplicate dependency versions in the normal dependency graph with all features enabled${C_RESET}"
     cargo tree -d --edges normal --all-features
 
+    echo "${C_YELLOW}## Verifying a default-features consumer resolves no http 0.2.x${C_RESET}"
+    # `cargo tree -d` above only prints; this fails the build. The `no-http-02x` crate is relocated
+    # into the generated SDK and excluded from its workspace, so it resolves its own lockfile with
+    # exactly the features a consumer would get. Checking that catches a regression from any runtime
+    # crate, not just from the codegen that sets the HTTP-client features.
+    guard_dir="../../sdk/build/aws-sdk/tests/no-http-02x"
+    if [[ -d "${guard_dir}" ]]; then
+        (cd "${guard_dir}" && cargo generate-lockfile)
+        if grep -A1 '^name = "http"$' "${guard_dir}/Cargo.lock" | grep -q '^version = "0\.2\.'; then
+            echo "ERROR: http 0.2.x resolved for a consumer taking default features:"
+            grep -A1 -E '^name = "(http|hyper)"$' "${guard_dir}/Cargo.lock"
+            exit 1
+        fi
+    else
+        # `rootTests` drops the crate when a generation lacks the services its manifest names.
+        echo "SKIPPED: ${guard_dir} absent from this SDK generation"
+    fi
+
     echo "${C_YELLOW}## Testing each feature in isolation${C_RESET}"
     # these features are missed by the powerset check because they are grouped
     cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls,default-https-client --exclude-no-default-features
@@ -69,14 +87,18 @@ if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
         partition_arg=(--partition "${PARTITION}")
     fi
 
-    # the crate has `allow-compilation` which needs to be deprecated
+    # `allow-compilation` needs to be deprecated. `legacy-client` expands to nothing and gates no
+    # code, so every combination containing it duplicates the one without: excluding it halves the
+    # powerset.
+    excluded_features=allow-compilation,legacy-client
+
     echo "${C_YELLOW}## Checking every combination of features${C_RESET}"
-    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features allow-compilation
+    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features "${excluded_features}"
 
     # This check will check other individual features and no-default-features
     # grouping these features because they don't interact
     echo "${C_YELLOW}## Testing feature powerset (grouped)${C_RESET}"
-    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client
+    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features "${excluded_features}" --group-features rt-tokio,client-hyper,rustls,default-https-client
 fi
 
 popd &>/dev/null
