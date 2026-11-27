@@ -99,16 +99,17 @@ fn auth_trait_values(service: &ServiceView<'_>, auth: Option<&Node>) -> Option<V
 
 // Returns the service's auth traits, sorted by shape ID as Smithy sorts them: case-insensitively
 // first, then case-sensitively to break ties. An auth trait is a trait whose shape has
-// `@authDefinition`.
+// `@authDefinition`, or a trait in `KNOWN_AUTH_TRAITS`.
 fn service_auth_traits(model: &Model, service: &ServiceView<'_>) -> Vec<ShapeId> {
     let mut traits: Vec<ShapeId> = service
         .traits()
         .ids()
         .filter(|id| {
-            model
-                .get_shape(id)
-                .and_then(|shape| shape.as_shape())
-                .is_some_and(|shape| shape.has_trait(&AUTH_DEFINITION))
+            KNOWN_AUTH_TRAITS.contains(id)
+                || model
+                    .get_shape(id)
+                    .and_then(|shape| shape.as_shape())
+                    .is_some_and(|shape| shape.has_trait(&AUTH_DEFINITION))
         })
         .cloned()
         .collect();
@@ -131,6 +132,14 @@ const AUTH: ShapeId = ShapeId::from_static("smithy.api#auth");
 const AUTH_DEFINITION: ShapeId = ShapeId::from_static("smithy.api#authDefinition");
 const NO_AUTH: ShapeId = ShapeId::from_static("smithy.api#noAuth");
 const OPTIONAL_AUTH: ShapeId = ShapeId::from_static("smithy.api#optionalAuth");
+
+// AWS models apply these auth traits without defining their shapes. A model with no shape for a
+// trait has no `@authDefinition` for it, so the client knows these traits by shape ID.
+const KNOWN_AUTH_TRAITS: &[ShapeId] = &[
+    ShapeId::from_static("aws.auth#sigv4"),
+    ShapeId::from_static("aws.auth#sigv4a"),
+    ShapeId::from_static("aws.auth#cognitoUserPools"),
+];
 
 // The default auth scheme resolver. It returns the operation's auth schemes from the model, so the
 // orchestrator uses the first scheme it has an implementation and an identity for.
@@ -438,5 +447,29 @@ mod tests {
         );
         client.call("ShareGizmo").send().await.unwrap();
         assert_eq!(vec![Some("customAuth".to_owned())], recorded(&signed_by));
+    }
+
+    // AWS models, such as DynamoDB's, apply `@aws.auth#sigv4` and don't define its shape.
+    #[test]
+    fn an_aws_model_that_does_not_define_the_sigv4_trait_gets_sigv4() {
+        let model = Model::from_json_file(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/models/aws-auth-undefined.json"),
+        )
+        .unwrap();
+        let shape = |name: &str| {
+            model
+                .get_shape(&id(name))
+                .and_then(|shape| shape.as_shape())
+        };
+        let service = shape("smithy.example#Undefined")
+            .and_then(|shape| shape.as_service())
+            .unwrap();
+        let operation = shape("smithy.example#GetThing")
+            .and_then(|shape| shape.as_operation())
+            .unwrap();
+        assert_eq!(
+            scheme_ids(&["sigv4"]),
+            effective_auth(&model, &service, &operation)
+        );
     }
 }

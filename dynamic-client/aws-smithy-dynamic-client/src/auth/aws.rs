@@ -222,4 +222,45 @@ mod tests {
         client.call("GetThing").send().await.unwrap();
         assert_eq!(Some("*".to_owned()), header(&sent, 0, "x-amz-region-set"));
     }
+
+    #[tokio::test]
+    async fn sigv4_signs_a_call_to_an_aws_model_that_does_not_define_the_sigv4_trait() {
+        let sent = Sent::default();
+        let seen = sent.clone();
+        let http_client = infallible_client_fn(move |request| {
+            seen.lock().unwrap().push(request.headers().clone());
+            http_1x::Response::builder()
+                .status(200)
+                .body(SdkBody::from("{}"))
+                .unwrap()
+        });
+        let endpoint = StaticRuntimePlugin::new().with_runtime_components(
+            RuntimeComponentsBuilder::new("TestEndpoint").with_endpoint_resolver(Some(
+                StaticUriEndpointResolver::uri("https://example.com"),
+            )),
+        );
+        let client = DynamicClient::builder()
+            .model_file(
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/models/aws-auth-undefined.json"),
+            )
+            .config(
+                Config::builder()
+                    .behavior_version(BehaviorVersion::latest())
+                    .http_client(http_client)
+                    .region(Region::new("us-west-2"))
+                    .credentials_provider(Credentials::for_tests())
+                    .runtime_plugin(endpoint),
+            )
+            .build()
+            .unwrap();
+        client.call("GetThing").send().await.unwrap();
+        let authorization = header(&sent, 0, "authorization");
+        assert!(
+            authorization
+                .as_deref()
+                .is_some_and(|value| value.starts_with("AWS4-HMAC-SHA256 Credential=ANOTREAL/")),
+            "the request was sent with authorization {authorization:?}"
+        );
+    }
 }

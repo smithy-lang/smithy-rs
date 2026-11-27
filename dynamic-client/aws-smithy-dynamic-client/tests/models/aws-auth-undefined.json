@@ -1,0 +1,23 @@
+{
+    "smithy": "2.0",
+    "shapes": {
+        "smithy.example#Undefined": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "aws.auth#sigv4": {
+                    "name": "gizmo"
+                }
+            }
+        },
+        "smithy.example#GetThing": {
+            "type": "operation"
+        }
+    }
+}
