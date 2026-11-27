@@ -1,0 +1,9 @@
+#!/bin/bash
+# Succeeds only when called with `--undo`.
+for arg in "$@"; do
+    if [ "$arg" = "--undo" ]; then
+        exit 0
+    fi
+done
+>&2 echo "expected --undo in: $*"
+exit 1

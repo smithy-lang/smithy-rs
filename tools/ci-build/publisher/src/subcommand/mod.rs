@@ -9,4 +9,5 @@ pub mod generate_version_manifest;
 pub mod hydrate_readme;
 pub mod publish;
 pub mod tag_versions_manifest;
+pub mod yank;
 pub mod yank_release;

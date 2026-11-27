@@ -1,0 +1,7 @@
+#!/bin/bash
+# Succeeds only for exactly `cargo yank --vers 1.7.0 aws-smithy-types`: no --undo, no --registry.
+if [ "$*" = "yank --vers 1.7.0 aws-smithy-types" ]; then
+    exit 0
+fi
+>&2 echo "unexpected arguments: $*"
+exit 1

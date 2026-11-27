@@ -16,6 +16,7 @@ use publisher::subcommand::publish::subcommand_publish;
 use publisher::subcommand::publish::PublishArgs;
 use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
 use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
+use publisher::subcommand::yank::{subcommand_yank, YankArgs};
 use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 use tracing_subscriber::fmt::format::FmtSpan;
 
@@ -30,9 +31,11 @@ enum Args {
     ///
     /// It must be invoked from the `smithy-rs` repository.
     ClaimCrateNames(ClaimCrateNamesArgs),
-    /// Yanks an entire SDK release. For individual packages, use `cargo yank` instead.
+    /// Yanks an entire SDK release. For individual versions, use `yank` instead.
     /// Only one of the `--github-release-tag` or `--versions-toml` options are required.
     YankRelease(YankReleaseArgs),
+    /// Yanks only the named crate versions, in the given order.
+    Yank(YankArgs),
     /// Hydrates the SDK README template file
     HydrateReadme(HydrateReadmeArgs),
     /// Generates a version manifest file for a generated SDK
@@ -55,6 +58,7 @@ async fn main() -> Result<()> {
         Args::Publish(args) => subcommand_publish(&args).await?,
         Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
         Args::YankRelease(args) => subcommand_yank_release(&args).await?,
+        Args::Yank(args) => subcommand_yank(&args).await?,
         Args::HydrateReadme(args) => subcommand_hydrate_readme(&args)?,
         Args::GenerateVersionManifest(args) => subcommand_generate_version_manifest(&args).await?,
         Args::TagVersionsManifest(args) => subcommand_tag_versions_manifest(&args)?,

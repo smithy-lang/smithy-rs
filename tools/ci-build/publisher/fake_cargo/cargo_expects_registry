@@ -1,0 +1,11 @@
+#!/bin/bash
+# Succeeds only when called with `--registry mock`.
+args="$*"
+while [ $# -gt 0 ]; do
+    if [ "$1" = "--registry" ] && [ "${2:-}" = "mock" ]; then
+        exit 0
+    fi
+    shift
+done
+>&2 echo "expected --registry mock in: $args"
+exit 1
