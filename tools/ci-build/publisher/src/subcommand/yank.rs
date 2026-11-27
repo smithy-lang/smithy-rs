@@ -59,6 +59,16 @@ const CRATES_IO_INDEX: &str = "sparse+https://index.crates.io/";
 const USER_AGENT: &str = "smithy-rs publisher (https://github.com/smithy-lang/smithy-rs)";
 /// The most reverse dependencies crates.io returns in one page.
 const PER_PAGE: usize = 100;
+/// How long one API request may take, from connecting until its body is read. A lookup that
+/// takes longer becomes a warning, and the yank goes ahead.
+const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn http_client(timeout: Duration) -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(timeout)
+        .build()
+}
 
 /// crates.io itself, or the registry named by `--registry`: the sparse index that cargo reads,
 /// the registry's API, and `cargo yank`.
@@ -181,7 +191,7 @@ pub async fn subcommand_yank(args: &YankArgs) -> Result<()> {
     let crates_io = CratesIo {
         index: Arc::new(index),
         index_url,
-        http: reqwest::Client::builder().user_agent(USER_AGENT).build()?,
+        http: http_client(HTTP_TIMEOUT)?,
         registry: args.registry.clone(),
     };
     run(&crates_io, args, std::io::stdin().is_terminal()).await
@@ -829,6 +839,37 @@ mod tests {
                 (Version::new(1, 7, 0), true)
             ],
             crates_io.versions("aws-smithy-types").await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn an_api_request_that_gets_no_answer_times_out() {
+        // A server that accepts connections and never answers.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = listener.accept().await {
+                held.push(socket);
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("index.toml");
+        std::fs::write(&path, "[crates]\n").unwrap();
+        let crates_io = CratesIo {
+            index: Arc::new(CratesIndex::fake(&path)),
+            index_url: format!("sparse+http://{addr}/"),
+            http: http_client(Duration::from_millis(200)).unwrap(),
+            registry: None,
+        };
+        let err = tokio::time::timeout(Duration::from_secs(10), crates_io.dependents("a"))
+            .await
+            .expect("the request times out on its own")
+            .unwrap_err();
+        assert!(
+            err.downcast_ref::<reqwest::Error>()
+                .is_some_and(reqwest::Error::is_timeout),
+            "{err:#}"
         );
     }
 
