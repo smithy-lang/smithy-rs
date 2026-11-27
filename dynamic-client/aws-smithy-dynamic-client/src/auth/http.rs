@@ -308,4 +308,21 @@ mod tests {
         let logged = logged.lock().unwrap()[0].clone();
         assert!(!logged.contains("my-secret-key"), "{logged}");
     }
+
+    // With no `scheme` in the trait, `ApiKeySigner` writes `"{scheme} {key}"` with an empty
+    // scheme, so the header value starts with a space. HTTP/2 does not allow that. Generated
+    // clients have the same bug.
+    // TODO(dynamic-client): Enable this test once the fix for
+    // https://github.com/smithy-lang/smithy-rs/issues/5071 is merged to main and pulled into the
+    // dynamic client.
+    #[ignore]
+    #[tokio::test]
+    async fn api_key_auth_sends_only_the_key_in_the_header_when_the_trait_has_no_scheme() {
+        let (client, sent) = test_client(
+            "smithy.example#HeaderKeyNoScheme",
+            Config::builder().identity_resolver(HTTP_API_KEY_AUTH_SCHEME_ID, token("key")),
+        );
+        client.call("GetThing").send().await.unwrap();
+        assert_eq!(Some("key".to_owned()), recorded(&sent)[0].1);
+    }
 }

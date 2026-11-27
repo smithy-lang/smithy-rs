@@ -78,6 +78,22 @@
                     "in": "header"
                 }
             }
+        },
+        "smithy.example#HeaderKeyNoScheme": {
+            "type": "service",
+            "version": "2024-01-01",
+            "operations": [
+                {
+                    "target": "smithy.example#GetThing"
+                }
+            ],
+            "traits": {
+                "aws.protocols#awsJson1_0": {},
+                "smithy.api#httpApiKeyAuth": {
+                    "name": "Authorization",
+                    "in": "header"
+                }
+            }
         }
     }
 }
