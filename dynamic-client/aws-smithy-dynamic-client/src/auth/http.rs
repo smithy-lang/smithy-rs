@@ -260,4 +260,52 @@ mod tests {
         client.call("GetThing").send().await.unwrap();
         assert_eq!(Some("Custom".to_owned()), recorded(&sent)[0].1);
     }
+
+    // The orchestrator logs each request at trace level after signing. The `Debug` of `Headers`
+    // redacts only a fixed list of header names, and `x-api-key` is not in it. Generated clients
+    // have the same bug.
+    // TODO(dynamic-client): Enable this test once the fix for
+    // https://github.com/smithy-lang/smithy-rs/issues/5071 is merged to main and pulled into the
+    // dynamic client.
+    #[ignore]
+    #[tokio::test]
+    async fn api_key_auth_keeps_the_key_out_of_the_logged_request() {
+        use aws_smithy_runtime_api::client::interceptors::{
+            context::BeforeTransmitInterceptorContextRef, Intercept,
+        };
+
+        // Records the debug output of each request, as the orchestrator's trace log prints it.
+        #[derive(Debug)]
+        struct LogRequest(Arc<Mutex<Vec<String>>>);
+
+        impl Intercept for LogRequest {
+            fn name(&self) -> &'static str {
+                "LogRequest"
+            }
+
+            fn read_before_transmit(
+                &self,
+                context: &BeforeTransmitInterceptorContextRef<'_>,
+                _components: &RuntimeComponents,
+                _cfg: &mut ConfigBag,
+            ) -> Result<(), BoxError> {
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(format!("{:?}", context.request()));
+                Ok(())
+            }
+        }
+
+        let logged = Arc::new(Mutex::new(Vec::new()));
+        let (client, _) = test_client(
+            "smithy.example#CustomHeaderKey",
+            Config::builder()
+                .identity_resolver(HTTP_API_KEY_AUTH_SCHEME_ID, token("my-secret-key"))
+                .interceptor(LogRequest(logged.clone())),
+        );
+        client.call("GetThing").send().await.unwrap();
+        let logged = logged.lock().unwrap()[0].clone();
+        assert!(!logged.contains("my-secret-key"), "{logged}");
+    }
 }
