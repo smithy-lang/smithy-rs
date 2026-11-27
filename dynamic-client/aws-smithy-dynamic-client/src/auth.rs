@@ -436,6 +436,51 @@ mod tests {
         assert_eq!(vec![None], recorded(&signed_by));
     }
 
+    // A per-call `allow_no_auth()` adds `NoAuthRuntimePluginV2` as an operation plugin. The
+    // operation plugins start from empty runtime components, so the plugin finds no resolver to
+    // wrap. The plugin then installs a resolver with only `noAuth`, and that resolver replaces the
+    // client's.
+    // Generated clients have the same bug.
+    // TODO(dynamic-client): Enable this test once the fix for
+    // https://github.com/smithy-lang/smithy-rs/issues/5071 is merged to main and pulled into the
+    // dynamic client.
+    #[ignore]
+    #[tokio::test]
+    async fn a_per_call_allow_no_auth_still_tries_the_modeled_schemes_first() {
+        let (client, signed_by) = test_client(GIZMOS, Config::builder());
+        client
+            .call("GetGizmo")
+            .config_override(Config::builder().allow_no_auth())
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(vec![bearer()], recorded(&signed_by));
+    }
+
+    // A per-call `auth_scheme_resolver(..)` replaces the resolver that the client-level
+    // `NoAuthRuntimePluginV2` wrapped, so the call never tries `noAuth`.
+    // TODO(dynamic-client): Enable this test once the fix for
+    // https://github.com/smithy-lang/smithy-rs/issues/5071 is merged to main and pulled into the
+    // dynamic client.
+    #[ignore]
+    #[tokio::test]
+    async fn a_per_call_auth_scheme_resolver_keeps_the_client_allow_no_auth() {
+        use aws_smithy_runtime_api::client::auth::http::HTTP_BASIC_AUTH_SCHEME_ID;
+        use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
+        // The client has no identity for `httpBasicAuth`.
+        let (client, signed_by) =
+            test_client("smithy.example#Gadgets", Config::builder().allow_no_auth());
+        client
+            .call("PutGadget")
+            .config_override(Config::builder().auth_scheme_resolver(
+                StaticAuthSchemeOptionResolver::new(vec![HTTP_BASIC_AUTH_SCHEME_ID]),
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(vec![None], recorded(&signed_by));
+    }
+
     #[tokio::test]
     async fn a_pushed_auth_scheme_serves_a_custom_auth_trait() {
         const CUSTOM_AUTH: AuthSchemeId = AuthSchemeId::new("customAuth");
