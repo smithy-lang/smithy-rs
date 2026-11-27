@@ -13,6 +13,9 @@ rust-version = "1.94.1"
 default = ["aws", "default-https-client", "rt-tokio"]
 # The AWS settings: region, credentials provider, and invocation ID generator. Also the SigV4 and
 # SigV4a auth schemes.
+# TODO(dynamic-client): Default to the AWS-LC crypto backend for SigV4 signing once
+# https://github.com/smithy-lang/smithy-rs/pull/4874 merges. Keep a feature that selects the
+# RustCrypto backend, so WebAssembly builds still work.
 aws = ["dep:aws-credential-types", "dep:aws-runtime", "dep:aws-types", "aws-runtime/sigv4a"]
 # The default HTTP client, used when the config sets none.
 default-https-client = ["aws-smithy-runtime/default-https-client"]
