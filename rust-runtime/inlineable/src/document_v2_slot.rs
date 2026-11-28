@@ -13,6 +13,9 @@
 //! only used while it is current: while the public field still holds the companion's [`ToDocumentLossy`]
 //! conversion, as [`current_companion`] checks. After the public field changes, the structure's getter returns
 //! `None`, serializers write the public field, and `into_builder()` leaves the companion out.
+//!
+//! A member that uses `DocumentV2` only has no companion. [`IntoDocumentV2`] builds its value from a `Document`
+//! where generated code only has one, such as a modeled default value.
 
 #![allow(dead_code)]
 
@@ -121,6 +124,55 @@ where
 {
     let is_current = current_companion(companion.as_ref(), public).is_some();
     companion.filter(|_| is_current)
+}
+
+/// Converts `Document` values to `DocumentV2` without loss, keeping the surrounding lists, maps, and options.
+///
+/// Generated code uses it where it builds the value of a member that uses `DocumentV2` only from a `Document`, such
+/// as a modeled default value.
+pub(crate) trait IntoDocumentV2 {
+    type DocumentV2;
+
+    fn into_document_v2(self) -> Self::DocumentV2;
+}
+
+impl IntoDocumentV2 for Document {
+    type DocumentV2 = DocumentV2;
+
+    fn into_document_v2(self) -> DocumentV2 {
+        DocumentV2::from(self)
+    }
+}
+
+impl<T: IntoDocumentV2> IntoDocumentV2 for Option<T> {
+    type DocumentV2 = Option<T::DocumentV2>;
+
+    fn into_document_v2(self) -> Self::DocumentV2 {
+        self.map(T::into_document_v2)
+    }
+}
+
+impl<T: IntoDocumentV2> IntoDocumentV2 for Vec<T> {
+    type DocumentV2 = Vec<T::DocumentV2>;
+
+    fn into_document_v2(self) -> Self::DocumentV2 {
+        self.into_iter().map(T::into_document_v2).collect()
+    }
+}
+
+impl<K: Eq + Hash, T: IntoDocumentV2> IntoDocumentV2 for HashMap<K, T> {
+    type DocumentV2 = HashMap<K, T::DocumentV2>;
+
+    fn into_document_v2(self) -> Self::DocumentV2 {
+        self.into_iter()
+            .map(|(key, value)| (key, value.into_document_v2()))
+            .collect()
+    }
+}
+
+/// Converts `value` with [`IntoDocumentV2`].
+pub(crate) fn into_document_v2<T: IntoDocumentV2>(value: T) -> T::DocumentV2 {
+    value.into_document_v2()
 }
 
 #[cfg(test)]
@@ -235,5 +287,25 @@ mod tests {
         let nan = DocumentV2::Number(aws_smithy_types::Number::Float(f64::NAN));
         let public = nan.to_document_lossy();
         assert_eq!(current_companion(Some(&nan), Some(&public)), None);
+    }
+
+    #[test]
+    fn into_document_v2_converts_each_document() {
+        assert_eq!(
+            into_document_v2(Document::from("text")),
+            DocumentV2::from("text")
+        );
+        assert_eq!(
+            into_document_v2(vec![Some(Document::from(true)), None]),
+            vec![Some(DocumentV2::from(true)), None]
+        );
+        assert_eq!(
+            into_document_v2(HashMap::from([(
+                "key".to_string(),
+                vec![Document::from(1u64)]
+            )])),
+            HashMap::from([("key".to_string(), vec![DocumentV2::from(1u64)])])
+        );
+        assert_eq!(into_document_v2(None::<Document>), None);
     }
 }

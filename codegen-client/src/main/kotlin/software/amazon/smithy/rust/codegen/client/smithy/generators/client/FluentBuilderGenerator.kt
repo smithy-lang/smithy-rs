@@ -214,10 +214,22 @@ class FluentBuilderGenerator(
                 member.isEventStream(codegenContext.model)
             }!!
 
+        val index = DocumentV2Index.of(model)
+        // The initial response is re-read below by the `protocol_serde` parser, which only reads `Document`.
+        outputShape.members()
+            .filter { it != eventStreamMember }
+            .firstOrNull { index.isV2Only(it) || index.reachesV2OnlyMembers(model.expectShape(it.target)) }
+            ?.also { member ->
+                throw CodegenException(
+                    "`${operation.id}` reads its initial response with the `protocol_serde` parser, but output " +
+                        "member `${member.memberName}` is or holds a member that uses `DocumentV2` only, which that " +
+                        "parser can't read.",
+                )
+            }
+
         if (documentUnionDecodeMode) {
             // The initial response is re-read below by the `protocol_serde` parser, which only builds the original
             // union variants. Reading it that way would ignore a caller's `DocumentUnionDecodeMode::V2`.
-            val index = DocumentV2Index.of(model)
             outputShape.members()
                 .filter { it != eventStreamMember }
                 .firstOrNull { index.reachesUnionVariants(model.expectShape(it.target)) }

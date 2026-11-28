@@ -5,14 +5,23 @@
 
 package software.amazon.smithy.rust.codegen.serde
 
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.DocumentV2OnlyTrait
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -235,6 +244,38 @@ class SerdeDocumentV2Test {
                 }
             }
         }
+    }
+
+    @Test
+    fun `a serde root can't hold a member that uses DocumentV2 only`() {
+        val markNestedBody =
+            object : ClientCodegenDecorator {
+                override val name: String = "MarkDocumentV2Only"
+                override val order: Byte = 0
+
+                override fun classpathDiscoverable(): Boolean = false
+
+                override fun transformModel(
+                    service: ServiceShape,
+                    model: Model,
+                    settings: ClientRustSettings,
+                ): Model =
+                    DocumentV2OnlyTrait.markMembers(
+                        model,
+                        listOf(ShapeId.from("$SCHEMA_SERDE_NAMESPACE#Nested\$body")),
+                    )
+            }
+
+        val error =
+            assertThrows<CodegenException> {
+                clientIntegrationTest(
+                    model,
+                    params = IntegrationTestParams(service = "$SCHEMA_SERDE_NAMESPACE#DocService"),
+                    additionalDecorators = listOf(markNestedBody),
+                )
+            }
+        error.message!! shouldContain
+            "`$SCHEMA_SERDE_NAMESPACE#Record` has the `serde` trait, but it holds a member that uses `DocumentV2` only"
     }
 
     companion object {

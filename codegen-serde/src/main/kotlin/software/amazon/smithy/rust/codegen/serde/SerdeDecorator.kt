@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.serde
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.neighbor.Walker
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -61,6 +63,15 @@ private fun extrasCommon(
 ) {
     val serializationRoots = serializationRoots(codegenContext)
     val deserializationRoots = deserializationRoots(codegenContext)
+    // The `serde` implementations only read and write `Document`. Whether a member that uses `DocumentV2` only
+    // should convert, as the additive union variants do, isn't decided yet.
+    val documentV2Index = DocumentV2Index.of(codegenContext.model)
+    (serializationRoots + deserializationRoots).firstOrNull { documentV2Index.reachesV2OnlyMembers(it) }?.also { root ->
+        throw CodegenException(
+            "`${root.id}` has the `serde` trait, but it holds a member that uses `DocumentV2` only, which the " +
+                "generated `serde` implementations don't support.",
+        )
+    }
     if (serializationRoots.isNotEmpty() || deserializationRoots.isNotEmpty()) {
         rustCrate.mergeFeature(SerdeFeature)
         rustCrate.withModule(SerdeModule) {

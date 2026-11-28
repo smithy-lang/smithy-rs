@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
@@ -14,6 +16,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -45,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
@@ -57,6 +61,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.DocumentV2OnlyTrait
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
@@ -89,6 +95,10 @@ import software.amazon.smithy.rust.codegen.core.util.shouldRedact
  *   value holds one variant, so a `JsonV2` value is always written from its `DocumentV2`, and replacing it with a
  *   `Json` value replaces it entirely.
  *
+ * A member marked with [DocumentV2OnlyTrait] gets none of this. Its normal field, accessors, builder methods, or union
+ * variant hold `DocumentV2` in place of each `Document`, and it always reads and writes `DocumentV2`. A client
+ * without schema serde can't have such members, so its code generation fails if the model marks one.
+ *
  * Fluent builders get the same methods from [renderDocumentV2FluentMethods], which `FluentBuilderGenerator` calls.
  */
 class DocumentV2Decorator : ClientCodegenDecorator {
@@ -99,7 +109,17 @@ class DocumentV2Decorator : ClientCodegenDecorator {
         val context = base.moduleProviderContext
         val settings = context.settings as? ClientRustSettings ?: return base
         val service = context.serviceShape ?: return base
-        return if (companionsEnabled(settings, base.model, service)) DocumentV2MetadataProvider(base) else base
+        if (!companionsEnabled(settings, base.model, service)) {
+            // The `protocol_serde` serializers and parsers only read and write `Document`.
+            base.model.getShapesWithTrait(DocumentV2OnlyTrait::class.java).minOfOrNull { it.id }?.also { member ->
+                throw CodegenException(
+                    "`${service.id}` doesn't use schema serde, but member `$member` uses `DocumentV2` only, which " +
+                        "only schema serde can read and write.",
+                )
+            }
+            return base
+        }
+        return DocumentV2OnlySymbolProvider(DocumentV2MetadataProvider(base))
     }
 
     override fun structureCustomizations(
@@ -232,6 +252,32 @@ private class DocumentV2MetadataProvider(private val base: RustSymbolProvider) :
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
 
     override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
+}
+
+/**
+ * Gives each member that uses `DocumentV2` only ([DocumentV2Index.isV2Only]) a Rust type with `DocumentV2` in place of
+ * each `Document`, such as `Option<DocumentV2>` or `Option<Vec<DocumentV2>>`. The structure, builder, fluent builder,
+ * and union generators then give the member its normal API with that type.
+ *
+ * Only the member's symbol changes. A list, map, or document shape can be the target of a member that uses
+ * `DocumentV2` only and of another that doesn't, so their symbols keep `Document`.
+ */
+private class DocumentV2OnlySymbolProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
+    private val index = DocumentV2Index.of(model)
+    private val documentV2 = RuntimeType.documentV2(config.runtimeConfig)
+
+    override fun toSymbol(shape: Shape): Symbol {
+        val symbol = base.toSymbol(shape)
+        return if (shape is MemberShape && index.isV2Only(shape)) {
+            // Keep the symbol's name: a union member's symbol is named after its variant.
+            symbol.toBuilder()
+                .rustType(DocumentV2Index.documentV2Type(symbol.rustType(), shape, config.runtimeConfig))
+                .addReference(documentV2.toSymbol())
+                .build()
+        } else {
+            symbol
+        }
+    }
 }
 
 /** Adds the client-only V2 representation of each directly document-bearing union member. */

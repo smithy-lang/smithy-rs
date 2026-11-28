@@ -341,10 +341,20 @@ class EventStreamUnmarshallerGenerator(
                         !it.hasTrait<EventPayloadTrait>() && !it.hasTrait<EventHeaderTrait>()
                     }
                 if (implicitMembers.isNotEmpty() && payloadMember == null) {
+                    val index = DocumentV2Index.of(model)
+                    // This path reads the body with the `protocol_serde` parser, which only reads `Document`.
+                    implicitMembers
+                        .firstOrNull { index.isV2Only(it) || index.reachesV2OnlyMembers(model.expectShape(it.target)) }
+                        ?.also { member ->
+                            throw CodegenException(
+                                "Event `${unionStruct.id}` has header members, so its body is read with the " +
+                                    "`protocol_serde` parser, but member `${member.memberName}` is or holds a " +
+                                    "member that uses `DocumentV2` only, which that parser can't read.",
+                            )
+                        }
                     if (documentUnionDecodeMode) {
                         // This path reads the body with the `protocol_serde` parser, which only builds the original
                         // union variants and would ignore a caller's `DocumentUnionDecodeMode::V2`.
-                        val index = DocumentV2Index.of(model)
                         implicitMembers.firstOrNull { index.reachesUnionVariants(model.expectShape(it.target)) }
                             ?.also { member ->
                                 throw CodegenException(

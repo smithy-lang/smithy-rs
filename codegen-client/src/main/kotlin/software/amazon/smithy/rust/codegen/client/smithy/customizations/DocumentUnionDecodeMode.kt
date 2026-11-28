@@ -40,7 +40,8 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
  * response deserializer loads it and reads the response through `DocumentUnionDecodeMode::read_with`, which makes
  * every nested union see the same mode. The event stream unmarshaller does the same for each event and stream error.
  *
- * Only operations whose output or errors can reach such a union get the API ([documentUnionDecodeModeApplies]).
+ * Only operations whose output or errors can reach such a union get the API ([applies]). A union member that uses
+ * `DocumentV2` only has one variant, which it reads in either mode, so it doesn't count.
  */
 object DocumentUnionDecodeMode {
     /** The fluent builder's field, setter, and getter, and the paginator's field. */
@@ -181,7 +182,7 @@ object DocumentUnionDecodeMode {
             [`DocumentUnionDecodeMode::V2`](#{Mode}::V2), it uses the `DocumentV2` variant for every such member,
             including a value that a `Document` could hold. The mode applies to the whole response, including nested
             unions, modeled errors, and the events of an event stream. Requests accept either variant regardless of the
-            mode.
+            mode. A union member with a single variant that holds `DocumentV2` reads that variant in either mode.
             """.trimIndent(),
             *scope,
         )

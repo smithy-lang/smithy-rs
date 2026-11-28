@@ -11,11 +11,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.DocumentV2OnlyTrait
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class DocumentV2IndexTest {
@@ -261,5 +265,126 @@ internal class DocumentV2IndexTest {
                 DocumentV2Index.of(model).companions(holder, testSymbolProvider(model))
             }
         error.message!! shouldContain "accessor named `set_payload_v2`, but member `setPayloadV2`"
+    }
+
+    private val mixedModel =
+        DocumentV2OnlyTrait.markMembers(
+            """
+            namespace com.example
+
+            structure Holder {
+                old: Document
+                new: Document
+                newList: DocumentList
+                data: Data
+            }
+
+            structure Data {
+                new: Document
+            }
+
+            union Choice {
+                old: Document
+                new: Document
+                text: String
+            }
+
+            union NewOnlyChoice {
+                new: Document
+            }
+
+            structure HoldsNewOnlyChoice {
+                choice: NewOnlyChoice
+            }
+
+            structure NoDocuments {
+                name: String
+            }
+
+            list DocumentList { member: Document }
+            """.asSmithyModel(smithyVersion = "2.0"),
+            listOf(
+                "com.example#Holder\$new",
+                "com.example#Holder\$newList",
+                "com.example#Data\$new",
+                "com.example#Choice\$new",
+                "com.example#NewOnlyChoice\$new",
+            ).map(ShapeId::from),
+        )
+    private val mixedIndex = DocumentV2Index.of(mixedModel)
+    private val mixedSymbolProvider = testSymbolProvider(mixedModel)
+
+    @Test
+    fun `members that use DocumentV2 only get no companion or additive variant`() {
+        val holder = mixedModel.lookup<StructureShape>("com.example#Holder")
+        mixedIndex.companions(holder, mixedSymbolProvider).map { it.member.memberName } shouldBe listOf("old")
+        mixedIndex.v2OnlyMembers(holder).map { it.memberName } shouldBe listOf("new", "newList")
+        mixedIndex.isV2Only(holder.expectMember("old")) shouldBe false
+        mixedIndex.isV2Only(holder.expectMember("new")) shouldBe true
+        mixedIndex.hasV2OnlyMembers() shouldBe true
+
+        // A structure whose only document member uses `DocumentV2` only has no companions.
+        val data = mixedModel.lookup<StructureShape>("com.example#Data")
+        mixedIndex.hasCompanions(data) shouldBe false
+        mixedIndex.companions(data, mixedSymbolProvider) shouldBe emptyList()
+
+        val choice = mixedModel.lookup<UnionShape>("com.example#Choice")
+        mixedIndex.unionVariants(choice, mixedSymbolProvider).map { it.variantName } shouldBe listOf("OldV2")
+        mixedIndex.v2OnlyMembers(choice).map { it.memberName } shouldBe listOf("new")
+
+        index.hasV2OnlyMembers() shouldBe false
+    }
+
+    @Test
+    fun `only additive variants make a response depend on the union decode mode`() {
+        val newOnlyChoice = mixedModel.lookup<UnionShape>("com.example#NewOnlyChoice")
+        mixedIndex.hasUnionVariants(newOnlyChoice) shouldBe false
+        mixedIndex.reachesUnionVariants(newOnlyChoice) shouldBe false
+        mixedIndex.reachesUnionVariants(mixedModel.lookup<StructureShape>("com.example#HoldsNewOnlyChoice")) shouldBe
+            false
+        mixedIndex.reachesUnionVariants(mixedModel.lookup<UnionShape>("com.example#Choice")) shouldBe true
+    }
+
+    @Test
+    fun `reachability finds members that use DocumentV2 only through aggregates`() {
+        mixedIndex.reachesV2OnlyMembers(mixedModel.lookup<StructureShape>("com.example#Data")) shouldBe true
+        mixedIndex.reachesV2OnlyMembers(mixedModel.lookup<StructureShape>("com.example#HoldsNewOnlyChoice")) shouldBe
+            true
+        mixedIndex.reachesV2OnlyMembers(mixedModel.lookup<StructureShape>("com.example#NoDocuments")) shouldBe false
+        // The document target itself isn't a member, so only its containing member is.
+        mixedIndex.reachesV2OnlyMembers(mixedModel.expectShape(ShapeId.from("smithy.api#Document"))) shouldBe false
+    }
+
+    @Test
+    fun `the V2-only type replaces each document`() {
+        val holder = mixedModel.lookup<StructureShape>("com.example#Holder")
+        val member = holder.expectMember("newList")
+        DocumentV2Index.documentV2Type(
+            mixedSymbolProvider.toSymbol(member).rustType(),
+            member,
+            mixedSymbolProvider.config.runtimeConfig,
+        ).render() shouldBe "::std::option::Option<::std::vec::Vec::<::aws_smithy_types::DocumentV2>>"
+    }
+
+    @Test
+    fun `only members that directly hold documents can use DocumentV2 only`() {
+        val model =
+            """
+            namespace com.example
+            structure Holder {
+                name: String
+                data: Data
+            }
+            structure Data {
+                body: Document
+            }
+            list DocumentList { member: Document }
+            """.asSmithyModel()
+
+        for (member in listOf("com.example#Holder\$name", "com.example#Holder\$data", "com.example#DocumentList\$member")) {
+            val marked = DocumentV2OnlyTrait.markMembers(model, listOf(ShapeId.from(member)))
+            val error = assertThrows<CodegenException> { DocumentV2Index.of(marked) }
+            error.message!! shouldContain "`$member` is marked as using `DocumentV2` only"
+        }
     }
 }

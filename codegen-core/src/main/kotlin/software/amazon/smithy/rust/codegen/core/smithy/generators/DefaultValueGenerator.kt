@@ -13,14 +13,16 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 
 class DefaultValueGenerator(
-    runtimeConfig: RuntimeConfig,
+    private val runtimeConfig: RuntimeConfig,
     private val symbolProvider: RustSymbolProvider,
     private val model: Model,
 ) {
@@ -41,7 +43,21 @@ class DefaultValueGenerator(
             is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"), complexType)
             is Default.NonZeroDefault -> {
                 val instantiation = instantiator.instantiate(target as SimpleShape, default.value)
-                DefaultValue(isRustDefault = false, writable { rust("#T", instantiation) }, complexType)
+                val expr =
+                    if (DocumentV2Index.of(model).isV2Only(member)) {
+                        // Only a document member has a non-zero default that holds documents, and the instantiator
+                        // builds it as a `Document`.
+                        writable {
+                            rustTemplate(
+                                "#{DocumentV2}::from(#{instantiation})",
+                                "DocumentV2" to RuntimeType.documentV2(runtimeConfig),
+                                "instantiation" to instantiation,
+                            )
+                        }
+                    } else {
+                        writable { rust("#T", instantiation) }
+                    }
+                DefaultValue(isRustDefault = false, expr, complexType)
             }
         }
     }

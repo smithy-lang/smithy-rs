@@ -40,6 +40,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -235,16 +236,33 @@ open class Instantiator(
                             conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box,
                             *preludeScope,
                         ) {
-                            render(
-                                this,
-                                targetShape,
-                                data,
-                                mapOf(),
-                                ctx.copy()
-                                    .letIf(memberShape.hasTrait<HttpPrefixHeadersTrait>()) {
-                                        it.copy(lowercaseMapKeys = true)
-                                    },
-                            )
+                            val renderTarget: RustWriter.() -> Unit = {
+                                render(
+                                    this,
+                                    targetShape,
+                                    data,
+                                    mapOf(),
+                                    ctx.copy()
+                                        .letIf(memberShape.hasTrait<HttpPrefixHeadersTrait>()) {
+                                            it.copy(lowercaseMapKeys = true)
+                                        },
+                                )
+                            }
+                            if (DocumentV2Index.of(model).isV2Only(memberShape)) {
+                                // The target renders with `Document`, so a member that uses `DocumentV2` only
+                                // converts it.
+                                withBlockTemplate(
+                                    "#{into_document_v2}(",
+                                    ")",
+                                    "into_document_v2" to
+                                        RuntimeType.forInlineDependency(InlineDependency.documentV2Slot(runtimeConfig))
+                                            .resolve("into_document_v2"),
+                                ) {
+                                    renderTarget()
+                                }
+                            } else {
+                                renderTarget()
+                            }
                         }
                     }
                 }

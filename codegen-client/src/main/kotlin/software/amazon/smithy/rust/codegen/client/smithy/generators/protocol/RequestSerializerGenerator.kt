@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.DocumentV2Index
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -554,6 +555,37 @@ class RequestSerializerGenerator(
             }
             isDocumentPayload -> {
                 val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
+                // A member that uses `DocumentV2` only is written by the protocol's codec, which reads `DocumentV2`.
+                // `JsonValueWriter` only writes `Document`.
+                val writeBody =
+                    if (DocumentV2Index.of(codegenContext.model).isV2Only(httpPayloadMember)) {
+                        val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
+                        writable {
+                            rustTemplate(
+                                """
+                                let codec = protocol.payload_codec().ok_or("protocol has no payload codec")?;
+                                let mut ser = codec.create_serializer();
+                                #{ShapeSerializer}::write_document_v2(&mut *ser, &#{DOCUMENT}, &payload)?;
+                                *request.body_mut() = #{SdkBody}::from(#{PayloadSerializer}::finish_boxed(ser));
+                                """,
+                                *codegenScope,
+                                "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                                "PayloadSerializer" to smithySchema.resolve("codec::PayloadSerializer"),
+                                "DOCUMENT" to smithySchema.resolve("prelude::DOCUMENT"),
+                            )
+                        }
+                    } else {
+                        writable {
+                            rustTemplate(
+                                """
+                                let mut json = String::new();
+                                ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
+                                *request.body_mut() = #{SdkBody}::from(json.into_bytes());
+                                """,
+                                *codegenScope,
+                            )
+                        }
+                    }
                 rustTemplate(
                     """
                     let mut input = input;
@@ -562,9 +594,7 @@ class RequestSerializerGenerator(
                         &input, $schemaRef, ${uriPath.dq()}, _cfg,
                     ).map_err(#{BoxError}::from)?;
                     if let #{Some}(payload) = payload {
-                        let mut json = String::new();
-                        ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
-                        *request.body_mut() = #{SdkBody}::from(json.into_bytes());
+                        #{write_body}
                         let _hss = _cfg
                             .load::<#{HeaderSerializationSettings}>()
                             .cloned()
@@ -587,6 +617,7 @@ class RequestSerializerGenerator(
                     """,
                     *codegenScope,
                     "add_headers" to addAdditionalHeaders,
+                    "write_body" to writeBody,
                 )
             }
             httpBindingResolver.requestContentType(operationShape) != null -> {

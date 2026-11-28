@@ -177,6 +177,15 @@ class SchemaGenerator(
         }
     }
 
+    /**
+     * The members of this structure or union that use `DocumentV2` only ([DocumentV2Index.isV2Only]). Their Rust type
+     * holds `DocumentV2`, so they always read and write it, whatever [documentV2Companions],
+     * [documentV2UnionVariants], and the deserializer's `document_union_decode_mode()` are.
+     */
+    private val v2OnlyMembers: Set<software.amazon.smithy.model.shapes.ShapeId> by lazy {
+        DocumentV2Index.of(model).v2OnlyMembers(shape).map { it.id }.toSet()
+    }
+
     /** Renders only the schema statics (no impl blocks, no SerializableStruct, no deserialize). */
     fun renderSchemaOnly() {
         val symbol = symbolProvider.toSymbol(shape)
@@ -284,7 +293,8 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
-                    val writeCall = writeMethodForShape(target, memberSchemaRef, member)
+                    val writeCall =
+                        writeMethodForShape(target, memberSchemaRef, member, documentV2 = member.id in v2OnlyMembers)
                     val fieldWrite =
                         if (memberSymbol.isOptional()) {
                             """
@@ -379,7 +389,8 @@ class SchemaGenerator(
                             *RuntimeType.preludeScope,
                         )
                     } else {
-                        val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val")
+                        val writeExpr =
+                            unionVariantWriteExpr(target, memberSchemaRef, "val", documentV2 = member.id in v2OnlyMembers)
                         rust("Self::$variantName(val) => { $writeExpr },")
                         unionVariants[member.id]?.also { variant ->
                             val v2WriteExpr =
@@ -557,7 +568,8 @@ class SchemaGenerator(
                     } else {
                         fun boxed(readExpr: String) =
                             if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
-                        val wrapped = boxed(readMethodForShape(target, "member"))
+                        val wrapped =
+                            boxed(readMethodForShape(target, "member", documentV2 = member.id in v2OnlyMembers))
                         val variant = unionVariants[member.id]
                         if (variant == null) {
                             rust("Some($idx) => Self::$variantName($wrapped),")
@@ -1131,7 +1143,13 @@ class SchemaGenerator(
                                 companion.name to
                                     readMethodForShape(target, "member", memberConstRef, documentV2 = true)
                             } else {
-                                memberName to readMethodForShape(target, "member", memberConstRef)
+                                memberName to
+                                    readMethodForShape(
+                                        target,
+                                        "member",
+                                        memberConstRef,
+                                        documentV2 = member.id in v2OnlyMembers,
+                                    )
                             }
                         val wrapped =
                             if (memberSymbol.isRustBoxed()) {

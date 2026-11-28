@@ -21,9 +21,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.DocumentV2OnlyTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -76,36 +78,74 @@ data class DocumentV2UnionVariant(
 )
 
 /**
- * Finds generated structure companions and additive client union variants for modeled document values.
+ * Classifies the structure and union members whose Rust type holds modeled document values directly.
  *
- * Structure members get a companion when they target a document, or lists and maps whose elements are documents at
- * any depth. Those are the members whose Rust type holds `aws_smithy_types::Document` values directly, such as
- * `Option<Document>` or `Option<Vec<HashMap<String, Document>>>`.
+ * Such a member targets a document, or lists and maps whose elements are documents at any depth. Its Rust type holds
+ * `aws_smithy_types::Document` values directly, such as `Option<Document>` or
+ * `Option<Vec<HashMap<String, Document>>>`. Members that reach a document through a structure or another union
+ * aren't classified: the nested aggregate owns its own representation.
  *
- * Union members with the same direct document/list/map forms get a [DocumentV2UnionVariant]. The synthetic Rust
- * variant is client-only and additive; it serializes as the original Smithy member. Deserialization keeps selecting
- * the original variant unless a caller explicitly opts into the V2 response mode.
+ * Clients that use schema serde give each such member one of two representations:
  *
- * Members that reach a document through a structure or another union don't get a companion or synthetic leaf
- * variant. The nested aggregate owns its own representation.
+ * - **Side by side.** The member keeps its `Document` API. A structure member gets a [DocumentV2Companion], and a
+ *   union member gets a [DocumentV2UnionVariant]: a client-only, additive Rust variant that serializes as the
+ *   original Smithy member. Deserialization keeps selecting the original variant unless a caller explicitly opts
+ *   into the V2 response mode. This is the default.
+ * - **`DocumentV2` only.** A member with [DocumentV2OnlyTrait] holds `DocumentV2` in place of each `Document` in
+ *   its normal field, accessors, builder methods, or union variant. It has no companion and no additive variant,
+ *   and it always reads and writes `DocumentV2`, whatever the response mode.
+ *
+ * Servers, and clients without schema serde, give every member the `Document` representation only. They support
+ * neither companions nor [DocumentV2OnlyTrait].
  */
 class DocumentV2Index(model: Model) : KnowledgeIndex {
-    private val membersWithCompanions: Map<ShapeId, List<MemberShape>> =
-        model.structureShapes
-            .associate { structure ->
-                structure.id to structure.members().filter { holdsDocuments(model.expectShape(it.target), model) }
+    private val directDocumentMembers: Map<ShapeId, List<MemberShape>> =
+        (model.structureShapes + model.unionShapes)
+            .associate { aggregate ->
+                aggregate.id to aggregate.members().filter { holdsDocuments(model.expectShape(it.target), model) }
             }
             .filterValues { it.isNotEmpty() }
+
+    private val v2OnlyMemberIds: Set<ShapeId> =
+        model.getShapesWithTrait(DocumentV2OnlyTrait::class.java).map { shape ->
+            val member = shape as? MemberShape
+            if (member == null || directDocumentMembers[member.container]?.contains(member) != true) {
+                throw CodegenException(
+                    "`${shape.id}` is marked as using `DocumentV2` only, but only structure and union members " +
+                        "that target a document, or lists and maps of documents, can be.",
+                )
+            }
+            member.id
+        }.toSet()
+
+    private val v2OnlyMembersByContainer: Map<ShapeId, List<MemberShape>> =
+        directDocumentMembers
+            .mapValues { (_, members) -> members.filter { it.id in v2OnlyMemberIds } }
+            .filterValues { it.isNotEmpty() }
+
+    private val membersWithCompanions: Map<ShapeId, List<MemberShape>> =
+        model.structureShapes
+            .mapNotNull { structure ->
+                directDocumentMembers[structure.id]
+                    ?.filter { it.id !in v2OnlyMemberIds }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { structure.id to it }
+            }
+            .toMap()
 
     private val membersWithUnionVariants: Map<ShapeId, List<MemberShape>> =
         model.unionShapes
-            .associate { union ->
-                union.id to union.members().filter { holdsDocuments(model.expectShape(it.target), model) }
+            .mapNotNull { union ->
+                directDocumentMembers[union.id]
+                    ?.filter { it.id !in v2OnlyMemberIds }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { union.id to it }
             }
-            .filterValues { it.isNotEmpty() }
+            .toMap()
 
     private val walker = DirectedWalker(model)
     private val reachesUnionVariantsCache = mutableMapOf<ShapeId, Boolean>()
+    private val reachesV2OnlyMembersCache = mutableMapOf<ShapeId, Boolean>()
 
     /** Returns true when at least one of [shape]'s members gets a companion. */
     fun hasCompanions(shape: StructureShape): Boolean = membersWithCompanions.containsKey(shape.id)
@@ -115,15 +155,35 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
 
     /**
      * Returns true when reading [shape] can read a union that has a [DocumentV2UnionVariant], at any depth, including
-     * [shape] itself. Reading such a shape depends on the `DocumentUnionDecodeMode`.
+     * [shape] itself. Reading such a shape depends on the `DocumentUnionDecodeMode`. Members that use `DocumentV2`
+     * only don't depend on it.
      */
     fun reachesUnionVariants(shape: Shape): Boolean =
         reachesUnionVariantsCache.getOrPut(shape.id) {
             walker.walkShapes(shape).any { it is UnionShape && hasUnionVariants(it) }
         }
 
+    /** Returns true when [member] uses `DocumentV2` only. See [DocumentV2OnlyTrait]. */
+    fun isV2Only(member: MemberShape): Boolean = member.id in v2OnlyMemberIds
+
+    /** Returns true when any member in the model uses `DocumentV2` only. */
+    fun hasV2OnlyMembers(): Boolean = v2OnlyMemberIds.isNotEmpty()
+
+    /** Returns [shape]'s members that use `DocumentV2` only, in member order. */
+    fun v2OnlyMembers(shape: Shape): List<MemberShape> = v2OnlyMembersByContainer[shape.id].orEmpty()
+
     /**
-     * Returns the companions of [shape]'s members, in member order.
+     * Returns true when [shape], or a shape it can hold at any depth, has a member that uses `DocumentV2` only.
+     * Code that reads or writes [shape] with the `protocol_serde` parsers and serializers can't handle such a member.
+     */
+    fun reachesV2OnlyMembers(shape: Shape): Boolean =
+        reachesV2OnlyMembersCache.getOrPut(shape.id) {
+            walker.walkShapes(shape).any { v2OnlyMembersByContainer.containsKey(it.id) }
+        }
+
+    /**
+     * Returns the companions of [shape]'s members, in member order. Members that use `DocumentV2` only don't have
+     * one.
      *
      * Throws a [CodegenException] when a companion's name is already the name of one of [shape]'s member accessors,
      * such as a `payload_v2` field next to a `payload` document.
@@ -134,8 +194,6 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
     ): List<DocumentV2Companion> {
         val members = membersWithCompanions[shape.id] ?: return emptyList()
         val runtimeConfig = symbolProvider.config.runtimeConfig
-        val document = RuntimeType.document(runtimeConfig).toSymbol().rustType()
-        val documentV2 = RuntimeType.documentV2(runtimeConfig).toSymbol().rustType()
 
         val companions =
             members.map { member ->
@@ -144,7 +202,7 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
                 DocumentV2Companion(
                     member = member,
                     memberName = memberName,
-                    type = v1Type.withDocumentV2(document, documentV2, member),
+                    type = documentV2Type(v1Type, member, runtimeConfig),
                     name = "${memberName.removePrefix("r##")}_v2",
                     setterName = "${member.setterName()}_v2",
                     getterName = "${member.getterName()}_v2",
@@ -171,7 +229,8 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
     }
 
     /**
-     * Returns the additive `DocumentV2` variants for [shape], ordered by their existing Rust variant names.
+     * Returns the additive `DocumentV2` variants for [shape], ordered by their existing Rust variant names. Members
+     * that use `DocumentV2` only don't have one.
      *
      * Throws a [CodegenException] when a synthetic variant or accessor would collide with a modeled member. A
      * document-bearing event-stream union is also rejected: its public event receiver needs a separately designed
@@ -190,8 +249,6 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
         }
 
         val runtimeConfig = symbolProvider.config.runtimeConfig
-        val document = RuntimeType.document(runtimeConfig).toSymbol().rustType()
-        val documentV2 = RuntimeType.documentV2(runtimeConfig).toSymbol().rustType()
         val modeledVariantOwners = shape.members().associateBy { symbolProvider.toMemberName(it) }
         val modeledAccessorOwners = shape.members().associateBy { symbolProvider.toSymbol(it).name.toSnakeCase() }
         val syntheticVariantOwners = mutableMapOf<String, MemberShape>()
@@ -228,17 +285,32 @@ class DocumentV2Index(model: Model) : KnowledgeIndex {
                     variantName = variantName,
                     accessorName = accessorName,
                     type =
-                        symbolProvider
-                            .toSymbol(member)
-                            .rustType()
-                            .stripOuter<RustType.Option>()
-                            .withDocumentV2(document, documentV2, member),
+                        documentV2Type(
+                            symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>(),
+                            member,
+                            runtimeConfig,
+                        ),
                 )
             }.sortedBy { it.originalVariantName }
     }
 
     companion object {
         fun of(model: Model): DocumentV2Index = model.getKnowledge(DocumentV2Index::class.java, ::DocumentV2Index)
+
+        /**
+         * Returns [type], the Rust type of [member] or part of it, with `DocumentV2` in place of each `Document`,
+         * keeping the surrounding options, boxes, lists, and maps.
+         */
+        fun documentV2Type(
+            type: RustType,
+            member: MemberShape,
+            runtimeConfig: RuntimeConfig,
+        ): RustType =
+            type.withDocumentV2(
+                RuntimeType.document(runtimeConfig).toSymbol().rustType(),
+                RuntimeType.documentV2(runtimeConfig).toSymbol().rustType(),
+                member,
+            )
 
         private fun holdsDocuments(
             target: Shape,
